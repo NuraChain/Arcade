@@ -1,0 +1,37 @@
+import type { Dictionary } from '../en/index.ts';
+import type { wallet as reference } from '../en/wallet.ts';
+
+export const wallet: Pick<Dictionary, keyof typeof reference> = {
+    'wallet.title': 'کیف پولت، صندلی توست.',
+    'wallet.lead': 'بازی‌های نورا روی {chain} اجرا می‌شود. کیف پول را وصل کن، یک بار امضا کن، و میز تو را می‌شناسد. نه ایمیل، نه رمز، نه فرم ثبت‌نام.',
+    'wallet.connect': 'اتصال {wallet}',
+    'wallet.connectGeneric': 'اتصال کیف پول',
+    'wallet.connecting': 'منتظر {wallet}…',
+    'wallet.signing': 'پیام را در {wallet} امضا کن',
+    'wallet.signingLead': 'یک امضا ثابت می‌کند کیف پول مال توست. رایگان است و چیزی جابه‌جا نمی‌شود.',
+    'wallet.connected': 'وصل شده با {address}',
+    'wallet.disconnect': 'قطع کیف پول',
+    'wallet.chainReady': 'روی {chain}',
+    'wallet.chainSwitch': 'از کیف پولت می‌خواهیم به {chain} سوییچ کند.',
+    'wallet.chainUnset': 'مشخصات شبکه هنوز تنظیم نشده — از همان شبکه‌ای که کیف پولت روی آن است استفاده می‌کنیم.',
+    'wallet.free': 'امضا رایگان',
+    'wallet.noGas': 'بدون گس، بدون تراکنش',
+    'wallet.selfCustody': 'کلیدها مال خودت می‌ماند',
+    'wallet.install': 'نصب متامسک',
+    'wallet.installLead': 'هنوز کیف پولی در این مرورگر نیست. راه‌اندازی متامسک یک دقیقه طول می‌کشد — یا با یک صندلی نمایشی پایین‌تر یک چرخی بزن.',
+    'wallet.learn': '{chain} چیست؟',
+    'wallet.error.rejected': 'قبول نکردی. هیچ اتفاقی نیفتاد.',
+    'wallet.error.pending': 'کیف پولت همین حالا پرسیده. بازش کن و جواب بده.',
+    'wallet.error.chain': 'سوییچ شبکه نشد. {chain} را در کیف پولت اضافه کن و دوباره امتحان کن.',
+    'wallet.error.noWallet': 'کیف پولی در این مرورگر پیدا نشد.',
+    'wallet.error.unknown': 'نشد. دوباره امتحان کن.',
+    'wallet.retry': 'دوباره',
+    'wallet.demoTitle': 'فقط داری نگاه می‌کنی؟',
+    'wallet.demoLead': 'به‌جایش یک صندلی نمایشی بردار. همه‌چیز کار می‌کند؛ هیچ‌چیز به زنجیره دست نمی‌زند.',
+    'wallet.demoBadge': 'صندلی نمایشی',
+    'wallet.walletBadge': 'کیف پول',
+    'wallet.address': 'نشانی کیف پول',
+    'wallet.copyAddress': 'کپی نشانی',
+    'wallet.addressCopied': 'نشانی کپی شد',
+    'wallet.explorer': 'دیدن در اکسپلورر'
+};
