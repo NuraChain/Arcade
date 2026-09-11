@@ -1,11 +1,13 @@
 import type { WorldHandle } from '../../world/bridge.ts';
 import { useFocus } from '../../stores/focus.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
+import { useTheme } from '../../stores/theme.store.ts';
 
 export default component WorldCanvas()
 {
     const locale = useLocale();
     const focus = useFocus();
+    const theme = useTheme();
 
     let host: HTMLDivElement | null = null;
     let canvas: HTMLCanvasElement | null = null;
@@ -162,6 +164,12 @@ export default component WorldCanvas()
     {
         const direction = locale.dir();
         world?.setDirection(direction);
+    }
+
+    effect
+    {
+        theme.theme();
+        requestAnimationFrame(() => world?.relight());
     }
 
     <div

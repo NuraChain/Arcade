@@ -14,6 +14,8 @@ export interface WorldHandle
 
     setDirection(direction: 'ltr' | 'rtl'): void;
 
+    relight(): void;
+
     pause(): void;
     resume(): void;
 

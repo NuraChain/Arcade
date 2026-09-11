@@ -60,7 +60,7 @@ export default component MatchmakingPanel(props: { onInvite: () => void })
     <section class="flex flex-col gap-5" aria-live="polite" aria-label={ locale.t(isFound ? 'play.title.found' : 'play.title.searching') }>
         <div class="relative overflow-hidden rounded-panel border border-line bg-field">
             <Show when={ game !== null }>
-                { () => <GameArt game={ game!.id } alt="" ratio="wide" priority sizes="(min-width: 1024px) 48rem, 100vw" class="max-h-[14rem] opacity-80 sm:max-h-[18rem]" /> }
+                { () => <GameArt game={ game!.id } ratio="wide" priority sizes="(min-width: 1024px) 48rem, 100vw" class="max-h-[14rem] opacity-80 sm:max-h-[18rem]" /> }
             </Show>
             <div class="pointer-events-none absolute inset-0 bg-gradient-to-t from-field via-field/60 to-transparent" aria-hidden="true"></div>
             <div class="relative -mt-16 flex flex-col gap-4 p-4 sm:-mt-20 sm:p-6">

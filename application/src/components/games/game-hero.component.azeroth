@@ -21,7 +21,7 @@ export default component GameHero(props: { game: Game; onQuickPlay: () => void }
         : locale.t('games.seats.range', { min: props.game.minPlayers, max: props.game.maxPlayers });
 
     <section class="relative overflow-hidden rounded-panel border border-line bg-field" aria-label={ name }>
-        <GameArt game={ props.game.id } alt="" ratio="wide" priority sizes="(min-width: 1024px) 72rem, 100vw" class="max-h-[22rem] sm:max-h-[26rem]" />
+        <GameArt game={ props.game.id } ratio="wide" priority sizes="(min-width: 1024px) 72rem, 100vw" class="max-h-[22rem] sm:max-h-[26rem]" />
         <div class="pointer-events-none absolute inset-0 bg-gradient-to-t from-field via-field/70 to-transparent" aria-hidden="true"></div>
         <div class="relative -mt-24 flex flex-col gap-4 p-4 sm:-mt-32 sm:p-6">
             <div class="flex flex-wrap items-center gap-2">

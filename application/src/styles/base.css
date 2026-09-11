@@ -69,12 +69,9 @@
 }
 
 @custom-variant coarse (@media (pointer: coarse));
-@custom-variant fine (@media (pointer: fine));
-@custom-variant standalone (@media (display-mode: standalone));
 @custom-variant phone (&:where([data-posture='phone'], [data-posture='phone'] *));
 @custom-variant rail (&:where([data-posture='rail'], [data-posture='rail'] *));
 @custom-variant sidebar (&:where([data-posture='sidebar'], [data-posture='sidebar'] *));
-@custom-variant social (&:where([data-social='true'], [data-social='true'] *));
 
 @utility panel
 {
@@ -93,11 +90,6 @@
     padding-block-end: env(safe-area-inset-bottom, 0px);
 }
 
-@utility safe-x
-{
-    padding-inline: env(safe-area-inset-left, 0px) env(safe-area-inset-right, 0px);
-}
-
 @utility pb-nav
 {
     padding-block-end: calc(var(--nav-h) + env(safe-area-inset-bottom, 0px) + 1rem);
@@ -108,12 +100,6 @@
     background: var(--glass);
     backdrop-filter: blur(18px) saturate(1.2);
     -webkit-backdrop-filter: blur(18px) saturate(1.2);
-}
-
-@utility target
-{
-    min-inline-size: 44px;
-    min-block-size: 44px;
 }
 
 @utility holdable
@@ -153,16 +139,6 @@
 @utility z-banner
 {
     z-index: var(--z-banner);
-}
-
-@utility z-overlay
-{
-    z-index: var(--z-overlay);
-}
-
-@utility z-toast
-{
-    z-index: var(--z-toast);
 }
 
 @utility sheen

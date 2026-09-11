@@ -27,7 +27,7 @@ export default component TablePlaceholder(props: { onLeave: () => void })
     <section class="flex flex-col gap-4" aria-label={ locale.t('play.table.title', { game: gameName }) }>
         <div class="relative overflow-hidden rounded-panel border border-line bg-field">
             <Show when={ game !== null }>
-                { () => <GameArt game={ game!.id } alt="" ratio="wide" priority sizes="(min-width: 1024px) 56rem, 100vw" class="max-h-[24rem] sm:max-h-[30rem]" /> }
+                { () => <GameArt game={ game!.id } ratio="wide" priority sizes="(min-width: 1024px) 56rem, 100vw" class="max-h-[24rem] sm:max-h-[30rem]" /> }
             </Show>
             <div class="pointer-events-none absolute inset-0 bg-gradient-to-t from-field via-field/40 to-transparent" aria-hidden="true"></div>
             <div class="absolute start-3 top-3 flex items-center gap-2">

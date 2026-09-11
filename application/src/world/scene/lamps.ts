@@ -16,6 +16,8 @@ export interface Lamp
 
     setFocus(on: boolean): void;
 
+    setColour(colour: Color): void;
+
     update(time: number, deltaMs: number): void;
 
     level(): number;
@@ -107,6 +109,12 @@ export function createLamp(options: LampOptions): Lamp
         setFocus(on)
         {
             focusTarget = on ? 1 : 0;
+        },
+
+        setColour(colour)
+        {
+            poolMaterial.color.copy(colour);
+            glowMaterial.color.copy(colour);
         },
 
         update(time, deltaMs)

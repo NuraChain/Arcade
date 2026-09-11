@@ -72,17 +72,33 @@ export async function createWorld(options: WorldOptions): Promise<WorldHandle>
 
     const scene = new Scene();
 
-    const sky = readWorldToken('sky', '#0A1216');
-    const fogColour = readWorldToken('fog', '#10222A');
-    const keyColour = readWorldToken('key', '#FFC46A');
-    const fillColour = readWorldToken('fill', '#2B4E5E');
-    const rimColour = readWorldToken('rim', '#7FB4C9');
-    const lampColour = readWorldToken('lamp', '#FFB43D');
-    const stoneColour = readWorldToken('stone', '#33474F');
-    const woodColour = readWorldToken('wood', '#6B4327');
-    const fogDensity = readWorldScalar('fog-density', 1);
-    const lampIntensity = readWorldScalar('lamp-intensity', 1);
-    const environmentIntensity = readWorldScalar('env', 0.35);
+    const palette = (): {
+        sky: Color;
+        fog: Color;
+        key: Color;
+        fill: Color;
+        rim: Color;
+        lamp: Color;
+        stone: Color;
+        fogDensity: number;
+        lampIntensity: number;
+        environmentIntensity: number;
+    } => ({
+        sky: readWorldToken('sky', '#0A1216'),
+        fog: readWorldToken('fog', '#10222A'),
+        key: readWorldToken('key', '#FFC46A'),
+        fill: readWorldToken('fill', '#2B4E5E'),
+        rim: readWorldToken('rim', '#7FB4C9'),
+        lamp: readWorldToken('lamp', '#FFB43D'),
+        stone: readWorldToken('stone', '#33474F'),
+        fogDensity: readWorldScalar('fog-density', 1),
+        lampIntensity: readWorldScalar('lamp-intensity', 1),
+        environmentIntensity: readWorldScalar('env', 0.35)
+    });
+
+    const lit = palette();
+    const { sky, fog: fogColour, key: keyColour, fill: fillColour, rim: rimColour, lamp: lampColour, stone: stoneColour } = lit;
+    const { fogDensity, lampIntensity, environmentIntensity } = lit;
 
     scene.background = new Color(sky);
     scene.fog = new FogExp2(fogColour.getHex(), 0.019 * fogDensity);
@@ -150,7 +166,6 @@ export async function createWorld(options: WorldOptions): Promise<WorldHandle>
         settings,
         lampColour,
         stoneColour,
-        woodColour,
         poolTexture,
         glowTexture: glow
     });
@@ -319,6 +334,21 @@ export async function createWorld(options: WorldOptions): Promise<WorldHandle>
         {
             side = direction === 'rtl' ? 1 : -1;
             rig.setShots(shotsFor());
+        },
+
+        relight()
+        {
+            const next = palette();
+            (scene.background as Color).set(next.sky);
+            (scene.fog as FogExp2).color.set(next.fog);
+            (scene.fog as FogExp2).density = 0.019 * next.fogDensity;
+            key.color.set(next.key);
+            key.intensity = 1.5 * next.lampIntensity;
+            fill.color.set(next.rim);
+            fill.groundColor.set(next.fill);
+            rim.color.set(next.rim);
+            scene.environmentIntensity = next.environmentIntensity;
+            market.relight(next.lamp, next.stone);
         },
 
         pause()

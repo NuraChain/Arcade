@@ -141,7 +141,7 @@ export default component SearchPage()
                                             <li>
                                                 <Link to={ `/app/games/${ game.slug }` } class="flex items-center gap-3 rounded-panel border border-line bg-field p-2 transition-colors hover:border-accent/40">
                                                     <span class="h-14 w-14 shrink-0 overflow-hidden rounded-tile">
-                                                        <GameArt game={ game.id } alt="" ratio="square" sizes="64px" />
+                                                        <GameArt game={ game.id } ratio="square" sizes="64px" />
                                                     </span>
                                                     <span class="flex min-w-0 flex-1 flex-col">
                                                         <span class="truncate text-ui-md font-semibold text-text">{ locale.t(game.nameKey) }</span>

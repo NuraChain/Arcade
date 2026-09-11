@@ -3,7 +3,6 @@ import { GAME_HUE, gameArt, gameArtSet } from './art.ts';
 
 export default component GameArt(props: {
     game: GameId;
-    alt: string;
     ratio?: 'card' | 'wide' | 'square';
     sizes?: string;
     priority?: boolean;
@@ -28,7 +27,7 @@ export default component GameArt(props: {
                 src={ gameArt(props.game, 640) }
                 srcset={ gameArtSet(props.game) }
                 sizes={ props.sizes ?? '(min-width: 1280px) 30vw, (min-width: 768px) 45vw, 100vw' }
-                alt={ props.alt }
+                alt=""
                 class="relative h-full w-full object-cover"
                 loading={ props.priority === true ? 'eager' : 'lazy' }
                 decoding="async"

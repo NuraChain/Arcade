@@ -32,7 +32,7 @@ export default component GameCard(props: {
         props.class ?? ''
     ].filter(Boolean).join(' ') }>
         <Link to={ href } class="relative block" aria-label={ name } prefetch="hover">
-            <GameArt game={ props.game.id } alt="" ratio={ props.compact === true ? 'wide' : 'card' } />
+            <GameArt game={ props.game.id } ratio={ props.compact === true ? 'wide' : 'card' } />
             <span class="absolute start-2.5 top-2.5 flex items-center gap-1.5 rounded-control border border-line/60 bg-void/85 px-2 py-1 text-ui-2xs font-bold text-live backdrop-blur-md">
                 <span class="live-dot" aria-hidden="true"></span>
                 <span class="tally">{ locale.plural('games.live.playing', stats.playersOnline) }</span>

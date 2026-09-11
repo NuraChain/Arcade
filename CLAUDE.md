@@ -122,10 +122,19 @@ and it is not the destructive colour — that is `danger`.
 `rounded-tile` (10px) for rows, `rounded-panel` (14px) for cards, `rounded-sheet` (18px).
 `rounded-full` is reserved for avatars, presence dots and badges.
 
-The `--world-*` tokens in `tokens.css` are read by the WebGL layer, but **only once, at
-`createWorld` time** — `world/render/materials.ts` samples them with `getComputedStyle` and
-nothing re-reads them on a theme change. Switching theme therefore re-skins the page but leaves
-the market lit as it was until the world is rebuilt.
+The `--world-*` tokens carry the market's own palette, and the WebGL layer reads them twice:
+once at `createWorld`, and again through `WorldHandle.relight()` whenever the theme changes
+(`world-canvas.component.azeroth` drives it from `theme.theme()`). `relight` covers everything
+that is a live uniform — sky, fog colour and density, the key/fill/rim lights, environment
+intensity, the lamp pools and glows, and the vertex tint of the plaza slabs and bridges. Both
+`--world-sky` values equal that theme's `--void`, so the canvas and the page share one ground
+and the seam disappears.
+
+What it does **not** touch is the kit itself: felt, walnut, brass, cards, dice and figures are
+baked vertex colours inside the GLBs. Those are real objects — a backgammon board is walnut in
+any light — so they are lit differently by theme but never re-tinted. The lamps stay warm in
+both themes for the same reason: the market is lamplit, and that warmth against a cool ground is
+the whole picture.
 
 ## The product shell
 
