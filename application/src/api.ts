@@ -16,6 +16,13 @@ export type {
     SocialGraph
 } from '../../server/src/schemas.ts';
 
+export type {
+    ClientFrame,
+    PresenceEntry,
+    PresenceState,
+    ServerFrame
+} from '../../server/src/realtime/frames.ts';
+
 export { ApiError, applyFieldErrors } from '@azerothjs/http/api/shared';
 
 async function loadManifest(): Promise<Manifest>
