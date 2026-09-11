@@ -1,0 +1,180 @@
+import { useNavigate } from 'azerothjs';
+
+import { personById } from '../../data/mock/index.ts';
+import Icon from '../../icons/icon.component.azeroth';
+import type { IconName } from '../../icons/registry.ts';
+import ConfirmSheet from '../app/confirm-sheet.component.azeroth';
+import { useChat } from '../../stores/chat.store.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import type { OverlayProps } from '../../stores/overlay.store.ts';
+import { useOverlay } from '../../stores/overlay.store.ts';
+import { useSocial } from '../../stores/social.store.ts';
+import { useToasts } from '../../stores/toasts.store.ts';
+import Avatar from '../ui/avatar.component.azeroth';
+import IconButton from '../ui/icon-button.component.azeroth';
+import ReportSheet from './report-sheet.component.azeroth';
+
+interface Action
+{
+    id: string;
+    icon: IconName;
+    label: string;
+    danger?: boolean;
+    run: () => void;
+}
+
+export default component PersonActions(props: OverlayProps & { personId: string })
+{
+    const locale = useLocale();
+    const social = useSocial();
+    const chat = useChat();
+    const overlay = useOverlay();
+    const toasts = useToasts();
+    const { navigate } = useNavigate();
+
+    derived person = personById(props.personId) ?? null;
+
+    derived name = person === null ? props.personId : locale.text(person.name).split(' ')[0];
+
+    derived muted = social.isMuted(props.personId);
+
+    derived blocked = social.isBlocked(props.personId);
+
+    const confirmBlock = async (): Promise<void> =>
+    {
+        const yes = await overlay.open(
+            ConfirmSheet,
+            { title: locale.t('actions.blockConfirm', { name }), lead: locale.t('actions.blockLead'), confirm: locale.t('actions.block', { name }), destructive: true },
+            { label: locale.t('actions.blockConfirm', { name }) }
+        ).closed;
+        if (yes === true)
+        {
+            social.block(props.personId);
+            toasts.show({ kind: 'warning', text: locale.t('actions.blocked', { name }) });
+        }
+    };
+
+    const copyHandle = async (): Promise<void> =>
+    {
+        const handle = `@${ person?.handle ?? props.personId }`;
+        try
+        {
+            await navigator.clipboard.writeText(handle);
+            toasts.show({ kind: 'success', text: locale.t('actions.handleCopied') });
+        }
+        catch
+        {
+            toasts.show({ kind: 'info', text: handle });
+        }
+    };
+
+    derived actions = ((): Action[] =>
+    {
+        const list: Action[] = [
+            {
+                id: 'message',
+                icon: 'chats',
+                label: locale.t('person.message'),
+                run: () =>
+                {
+                    const id = chat.openDirect(props.personId);
+                    props.close();
+                    navigate(`/app/chats/${ id }`);
+                }
+            },
+            {
+                id: 'profile',
+                icon: 'me',
+                label: locale.t('chat.viewProfile'),
+                run: () =>
+                {
+                    props.close();
+                    navigate(`/app/people/${ person?.handle ?? props.personId }`);
+                }
+            },
+            {
+                id: 'handle',
+                icon: 'at',
+                label: locale.t('actions.copyHandle'),
+                run: () => void copyHandle()
+            },
+            {
+                id: 'mute',
+                icon: muted ? 'sound' : 'sound-off',
+                label: locale.t(muted ? 'actions.unmute' : 'actions.mute', { name }),
+                run: () =>
+                {
+                    social.toggleMute(props.personId);
+                    toasts.show({ kind: 'info', text: locale.t(muted ? 'actions.unmuted' : 'actions.muted', { name }) });
+                }
+            },
+            {
+                id: 'report',
+                icon: 'report',
+                label: locale.t('actions.report', { name }),
+                danger: true,
+                run: () =>
+                {
+                    props.close();
+                    overlay.open(ReportSheet, { personId: props.personId }, { label: locale.t('report.title', { name }) });
+                }
+            }
+        ];
+
+        list.push(blocked
+            ? {
+                id: 'unblock',
+                icon: 'friend-check',
+                label: locale.t('actions.unblock', { name }),
+                run: () =>
+                {
+                    social.unblock(props.personId);
+                    toasts.show({ kind: 'success', text: locale.t('actions.unblocked', { name }) });
+                }
+            }
+            : {
+                id: 'block',
+                icon: 'block',
+                label: locale.t('actions.block', { name }),
+                danger: true,
+                run: () => void confirmBlock()
+            });
+
+        return list;
+    })();
+
+    <div class="flex flex-col gap-1 p-3">
+        <header class="flex items-center gap-3 px-2 pb-2 pt-1">
+            <Avatar person={ person } size="md" />
+            <span class="flex min-w-0 flex-1 flex-col">
+                <span class="truncate text-[15px] font-semibold text-text">{ person === null ? props.personId : locale.text(person.name) }</span>
+                <span class="truncate text-[12px] text-muted">@{ person?.handle ?? props.personId }</span>
+            </span>
+            <IconButton icon="close" label={ locale.t('common.close') } variant="ghost" onClick={ () => props.close() } />
+        </header>
+        <ul class="flex flex-col gap-0.5">
+            <For each={ actions } key={ (action) => action.id } let={ action }>
+                <li>
+                    <button
+                        type="button"
+                        class={ [
+                            'flex min-h-12 w-full cursor-pointer items-center gap-3 rounded-tile px-3 text-start text-[15px] transition-colors hover:bg-raised/70',
+                            action.danger === true ? 'text-madder' : 'text-text'
+                        ].join(' ') }
+                        onClick={ () =>
+                        {
+                            action.run();
+                            if (action.id !== 'message' && action.id !== 'profile' && action.id !== 'report')
+                            {
+                                props.close();
+                            }
+                        } }
+                    >
+                        <Icon name={ action.icon } size={ 18 } />
+                        { action.label }
+                    </button>
+                </li>
+            </For>
+        </ul>
+    </div>
+}

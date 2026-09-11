@@ -1,0 +1,42 @@
+import { Link } from 'azerothjs';
+
+import { personById } from '../../data/mock/index.ts';
+import type { Group, Person } from '../../data/mock/types.ts';
+import { useCatalogue } from '../../stores/catalogue.store.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import { usePresence } from '../../stores/presence.store.ts';
+import AvatarGroup from '../ui/avatar-group.component.azeroth';
+
+export default component GroupCard(props: { group: Group; class?: string })
+{
+    const locale = useLocale();
+    const presence = usePresence();
+    const catalogue = useCatalogue();
+
+    derived members = props.group.members
+        .map((id) => personById(id))
+        .filter((person): person is Person => person !== undefined);
+
+    derived online = members.filter((person) => presence.isOnline(person.id)).length;
+
+    <Link
+        to={ `/app/groups/${ props.group.id }` }
+        class={ [ 'flex items-center gap-3 rounded-panel border border-line bg-field p-3 transition duration-200 hover:border-lamp/40 hover:bg-raised/50', props.class ?? '' ].filter(Boolean).join(' ') }
+        prefetch="hover"
+    >
+        <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-tile bg-raised text-[24px]" aria-hidden="true">{ props.group.emoji }</span>
+        <span class="flex min-w-0 flex-1 flex-col gap-1">
+            <span class="truncate text-[15px] font-semibold text-text">{ locale.text(props.group.name) }</span>
+            <span class="truncate text-[12px] text-muted">
+                { locale.plural('chat.members', members.length) }
+                <Show when={ online > 0 }>
+                    <span class="text-live"> · { locale.plural('chat.online', online) }</span>
+                </Show>
+                <Show when={ props.group.game !== null }>
+                    <span> · { locale.t(catalogue.byId(props.group.game!).nameKey) }</span>
+                </Show>
+            </span>
+        </span>
+        <AvatarGroup people={ members } size="xs" max={ 3 } class="shrink-0" />
+    </Link>
+}

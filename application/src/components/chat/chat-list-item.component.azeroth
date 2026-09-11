@@ -1,0 +1,109 @@
+import { Link } from 'azerothjs';
+
+import { groupById, personById } from '../../data/mock/index.ts';
+import type { Conversation } from '../../data/mock/types.ts';
+import Icon from '../../icons/icon.component.azeroth';
+import { useChat } from '../../stores/chat.store.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import { usePresence } from '../../stores/presence.store.ts';
+import { useSettings } from '../../stores/settings.store.ts';
+import Avatar from '../ui/avatar.component.azeroth';
+import AvatarGroup from '../ui/avatar-group.component.azeroth';
+import Badge from '../ui/badge.component.azeroth';
+import { othersOf, titleOf } from './chat-title.ts';
+
+export default component ChatListItem(props: { conversation: Conversation; me: string; active?: boolean })
+{
+    const locale = useLocale();
+    const chat = useChat();
+    const presence = usePresence();
+    const settings = useSettings();
+
+    derived others = othersOf(props.conversation, props.me);
+
+    derived group = props.conversation.groupId === null ? undefined : groupById(props.conversation.groupId);
+
+    derived last = chat.lastOf(props.conversation.id);
+
+    derived unread = chat.unread(props.conversation.id);
+
+    derived typing = chat.typing(props.conversation.id);
+
+    derived muted = settings.isMuted(props.conversation.id);
+
+    derived preview = ((): string =>
+    {
+        if (typing.length > 0)
+        {
+            const who = personById(typing[0]);
+            return `${ who === undefined ? '' : `${ locale.text(who.name).split(' ')[0] } ` }${ locale.t('chats.typing') }`;
+        }
+        if (last === undefined)
+        {
+            return locale.t('chat.empty');
+        }
+        if (last.kind === 'invite')
+        {
+            return locale.t('chats.invitePreview');
+        }
+        if (last.kind === 'result')
+        {
+            return locale.t('chats.resultPreview');
+        }
+        if (last.kind === 'system')
+        {
+            return locale.t('chats.systemPreview');
+        }
+        const body = locale.text(last.text);
+        return last.from === props.me ? `${ locale.t('chats.you') }${ body }` : body;
+    })();
+
+    <Link
+        to={ `/app/chats/${ props.conversation.id }` }
+        class={ [
+            'flex min-h-16 items-center gap-3 rounded-tile px-2 py-2 transition-colors duration-150 hover:bg-raised/60',
+            props.active === true ? 'bg-raised' : ''
+        ].filter(Boolean).join(' ') }
+        prefetch="hover"
+    >
+        <Show
+            when={ group === undefined && others.length === 1 }
+            fallback={
+                <Show
+                    when={ group !== undefined }
+                    fallback={ <AvatarGroup people={ others } size="sm" max={ 2 } class="w-10 shrink-0" /> }
+                >
+                    { () => <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-raised text-[20px]" aria-hidden="true">{ group!.emoji }</span> }
+                </Show>
+            }
+        >
+            { () => <Avatar person={ others[0] } size="md" presence={ presence.of(others[0].id).state } /> }
+        </Show>
+
+        <span class="flex min-w-0 flex-1 flex-col gap-0.5">
+            <span class="flex items-center gap-1.5">
+                <span class={ [ 'truncate text-[15px]', unread > 0 ? 'font-bold text-text' : 'font-semibold text-text' ].join(' ') }>
+                    { locale.text(titleOf(props.conversation, props.me)) }
+                </span>
+                <Show when={ props.conversation.pinned }>
+                    { () => <Icon name="star" size={ 12 } class="shrink-0 text-lamp" /> }
+                </Show>
+                <Show when={ muted }>
+                    { () => <Icon name="sound-off" size={ 12 } class="shrink-0 text-faint" /> }
+                </Show>
+            </span>
+            <span class={ [ 'truncate text-[13px]', typing.length > 0 ? 'text-live' : (unread > 0 ? 'text-text' : 'text-muted') ].join(' ') }>
+                { preview }
+            </span>
+        </span>
+
+        <span class="flex shrink-0 flex-col items-end gap-1">
+            <Show when={ last !== undefined }>
+                { () => <span class="text-[11px] text-faint">{ locale.relative(last!.at) }</span> }
+            </Show>
+            <Show when={ unread > 0 }>
+                { () => <Badge count={ unread } tone={ muted ? 'neutral' : 'lamp' } label={ locale.plural('common.unread', unread) } /> }
+            </Show>
+        </span>
+    </Link>
+}

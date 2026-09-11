@@ -1,0 +1,87 @@
+import { personById } from '../../data/mock/index.ts';
+import type { Notification, NotificationKind } from '../../data/mock/types.ts';
+import Icon from '../../icons/icon.component.azeroth';
+import type { IconName } from '../../icons/registry.ts';
+import { useDevice } from '../../stores/device.store.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import { useSocial } from '../../stores/social.store.ts';
+import Avatar from '../ui/avatar.component.azeroth';
+import Button from '../ui/button.component.azeroth';
+import IconButton from '../ui/icon-button.component.azeroth';
+
+const ICON: Record<NotificationKind, IconName> = {
+    'friend-request': 'friend-add',
+    invite: 'seat',
+    result: 'trophy',
+    achievement: 'medal',
+    rematch: 'refresh',
+    system: 'info'
+};
+
+export default component NotificationRow(props: {
+    item: Notification;
+    onOpen: (item: Notification) => void;
+    onDismiss: (id: string) => void;
+})
+{
+    const locale = useLocale();
+    const social = useSocial();
+    const device = useDevice();
+
+    derived person = props.item.from === null ? null : (personById(props.item.from) ?? null);
+
+    derived requestId = props.item.kind === 'friend-request' ? props.item.ref.requestId : undefined;
+
+    derived answerable = requestId !== undefined && social.incoming().some((request) => request.id === requestId);
+
+    derived roomy = device.posture() !== 'phone';
+
+    <div class={ [
+        'flex flex-col gap-2 rounded-tile px-2 py-2',
+        props.item.read ? '' : 'bg-lamp/5'
+    ].filter(Boolean).join(' ') }>
+        <div class="flex items-center gap-3">
+            <button type="button" class="flex min-w-0 flex-1 cursor-pointer items-center gap-3 text-start" onClick={ () => props.onOpen(props.item) }>
+                <Show
+                    when={ person !== null }
+                    fallback={
+                        <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-raised text-muted">
+                            <Icon name={ ICON[props.item.kind] } size={ 18 } />
+                        </span>
+                    }
+                >
+                    { () => <Avatar person={ person } size="md" /> }
+                </Show>
+                <span class="flex min-w-0 flex-1 flex-col">
+                    <span class={ [ 'line-clamp-2 text-[14px]', props.item.read ? 'text-muted' : 'text-text' ].join(' ') }>
+                        <Show when={ person !== null }>
+                            { () => <span class="font-semibold text-text">{ locale.text(person!.name) } </span> }
+                        </Show>
+                        { locale.text(props.item.text) }
+                    </span>
+                    <span class="text-[12px] text-faint">{ locale.relative(props.item.at) }</span>
+                </span>
+                <Show when={ !props.item.read }>
+                    { () => <span class="h-2 w-2 shrink-0 rounded-full bg-lamp" aria-hidden="true"></span> }
+                </Show>
+            </button>
+            <Show when={ answerable && roomy }>
+                { () =>
+                    <span class="flex shrink-0 gap-1.5">
+                        <Button variant="primary" size="sm" class="whitespace-nowrap" onClick={ () => social.accept(requestId!) }>{ locale.t('person.accept') }</Button>
+                        <Button variant="ghost" size="sm" class="whitespace-nowrap" onClick={ () => social.decline(requestId!) }>{ locale.t('person.decline') }</Button>
+                    </span>
+                }
+            </Show>
+            <IconButton icon="close" label={ locale.t('notifications.dismiss') } variant="ghost" size="sm" onClick={ () => props.onDismiss(props.item.id) } />
+        </div>
+        <Show when={ answerable && !roomy }>
+            { () =>
+                <div class="flex gap-2 ps-[3.25rem]">
+                    <Button variant="primary" size="sm" class="flex-1 whitespace-nowrap" onClick={ () => social.accept(requestId!) }>{ locale.t('person.accept') }</Button>
+                    <Button variant="ghost" size="sm" class="flex-1 whitespace-nowrap" onClick={ () => social.decline(requestId!) }>{ locale.t('person.decline') }</Button>
+                </div>
+            }
+        </Show>
+    </div>
+}

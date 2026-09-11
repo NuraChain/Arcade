@@ -1,0 +1,82 @@
+import Icon from '../../icons/icon.component.azeroth';
+import type { GameId } from '../../data/games.ts';
+import { useCatalogue } from '../../stores/catalogue.store.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import IconButton from '../ui/icon-button.component.azeroth';
+import Input from '../ui/input.component.azeroth';
+
+export default component Composer(props: {
+    value: string;
+    disabled?: boolean;
+    onInput: (value: string) => void;
+    onSend: () => void;
+    onGame: (game: GameId) => void;
+})
+{
+    const locale = useLocale();
+    const catalogue = useCatalogue();
+
+    state open = false;
+
+    <div class="glass safe-b border-t border-line/60">
+        <Show when={ open && props.disabled !== true }>
+            { () =>
+                <ul class="rail-x flex gap-2 border-b border-line/60 px-3 py-2" aria-label={ locale.t('chat.pickGame') }>
+                    <li class="flex shrink-0 items-center pe-1 text-[12px] font-semibold text-faint">{ locale.t('chat.pickGame') }</li>
+                    <For each={ catalogue.games } key={ (game) => game.id } let={ game }>
+                        <li>
+                            <button
+                                type="button"
+                                class="flex h-9 shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full border border-line bg-field px-3 text-[13px] font-semibold text-text transition-colors hover:border-lamp/60"
+                                onClick={ () =>
+                                {
+                                    open = false;
+                                    props.onGame(game.id);
+                                } }
+                            >
+                                <Icon name="zap" size={ 14 } class="text-lamp" />
+                                { locale.t(game.nameKey) }
+                            </button>
+                        </li>
+                    </For>
+                </ul>
+            }
+        </Show>
+        <form
+            class="flex items-center gap-2 px-3 py-2"
+            onSubmit={ (event) =>
+            {
+                event.preventDefault();
+                props.onSend();
+            } }
+        >
+            <IconButton
+                icon="add"
+                label={ locale.t('chat.gameMenu') }
+                variant={ open ? 'primary' : 'secondary' }
+                pressed={ open }
+                disabled={ props.disabled === true }
+                onClick={ () => open = !open }
+            />
+            <Input
+                value={ props.value }
+                onInput={ props.onInput }
+                placeholder={ locale.t('chat.composer') }
+                label={ locale.t('chat.composer') }
+                disabled={ props.disabled === true }
+                enterkeyhint="send"
+                maxlength={ 500 }
+                class="flex-1"
+                onEnter={ () => props.onSend() }
+            />
+            <IconButton
+                icon="send"
+                label={ locale.t('chat.send') }
+                variant="primary"
+                flip
+                disabled={ props.disabled === true || props.value.trim() === '' }
+                onClick={ () => props.onSend() }
+            />
+        </form>
+    </div>
+}

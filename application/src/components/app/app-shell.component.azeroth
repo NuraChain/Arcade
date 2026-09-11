@@ -3,11 +3,14 @@ import { Outlet, untrack, useHead, useMatch, useRoute, type MountNode } from 'az
 import '../../locales/app-catalogue.ts';
 import { routeMeta } from '../../lib/route-meta.ts';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
+import { useChat } from '../../stores/chat.store.ts';
 import { useConnection } from '../../stores/connection.store.ts';
 import { useDevice } from '../../stores/device.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useOverlay } from '../../stores/overlay.store.ts';
+import { useNotifications } from '../../stores/notifications.store.ts';
 import { usePresence } from '../../stores/presence.store.ts';
+import { useSocial } from '../../stores/social.store.ts';
 import { useShell } from '../../stores/shell.store.ts';
 import BottomNav from './bottom-nav.component.azeroth';
 import ConnectionBanner from './connection-banner.component.azeroth';
@@ -56,7 +59,10 @@ export default component AppShell(props: { children?: MountNode })
         const stops = [
             usePresence().start(),
             useConnection().start(),
-            useCatalogue().start()
+            useCatalogue().start(),
+            useSocial().start(),
+            useChat().start(),
+            useNotifications().start()
         ];
         return () =>
         {

@@ -1,10 +1,10 @@
 import { Link, useMatch, useNavigate } from 'azerothjs';
 
-import { dataset } from '../../data/mock/index.ts';
 import Icon from '../../icons/icon.component.azeroth';
 import { routeMeta } from '../../lib/route-meta.ts';
 import { useDevice } from '../../stores/device.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
+import { useNotifications } from '../../stores/notifications.store.ts';
 import { useAccount } from '../../stores/account.store.ts';
 import { useShell } from '../../stores/shell.store.ts';
 import BrandMark from '../layout/brand-mark.component.azeroth';
@@ -17,6 +17,7 @@ export default component TopBar()
     const device = useDevice();
     const account = useAccount();
     const shell = useShell();
+    const notifications = useNotifications();
     const match = useMatch();
     const { back, replace } = useNavigate();
 
@@ -26,7 +27,7 @@ export default component TopBar()
 
     derived showBack = meta.parent !== undefined || shell.depth() > 0;
 
-    derived unread = dataset().notifications.filter((notification) => !notification.read).length;
+    derived unread = notifications.unread();
 
     derived phone = device.posture() === 'phone';
 

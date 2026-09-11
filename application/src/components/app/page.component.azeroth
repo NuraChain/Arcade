@@ -2,7 +2,7 @@ import { untrack, useRoute, type Child } from 'azerothjs';
 
 import { scrollMemory } from '../../lib/scroll-memory.ts';
 
-export default component Page(props: { children?: Child; padded?: boolean; narrow?: boolean; class?: string; label?: string })
+export default component Page(props: { children?: Child; padded?: boolean; narrow?: boolean; fill?: boolean; class?: string; label?: string })
 {
     const route = useRoute();
 
@@ -39,6 +39,7 @@ export default component Page(props: { children?: Child; padded?: boolean; narro
     >
         <div class={ [
             '@container mx-auto w-full',
+            props.fill === true ? 'h-full' : '',
             props.padded === false ? '' : (props.narrow === true ? 'max-w-[44rem]' : 'max-w-[72rem]')
         ].filter(Boolean).join(' ') }>
             { props.children }

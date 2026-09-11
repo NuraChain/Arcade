@@ -1,0 +1,61 @@
+import { Link } from 'azerothjs';
+
+import type { Person } from '../../data/mock/types.ts';
+import Icon from '../../icons/icon.component.azeroth';
+import { useCatalogue } from '../../stores/catalogue.store.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import { usePresence } from '../../stores/presence.store.ts';
+import { useSocial } from '../../stores/social.store.ts';
+import Avatar from '../ui/avatar.component.azeroth';
+import Button from '../ui/button.component.azeroth';
+
+export default component UserCard(props: { person: Person; onAdd: (id: string) => void })
+{
+    const locale = useLocale();
+    const social = useSocial();
+    const presence = usePresence();
+    const catalogue = useCatalogue();
+
+    derived relation = social.relation(props.person.id);
+
+    derived reason = ((): string =>
+    {
+        const why = social.reasonFor(props.person.id);
+        if (why.kind === 'mutual')
+        {
+            return locale.plural('friends.reason.mutual', why.count);
+        }
+        if (why.kind === 'game')
+        {
+            return locale.t('friends.reason.game', { game: locale.t(catalogue.byId(props.person.favourite).nameKey) });
+        }
+        return locale.t(why.kind === 'region' ? 'friends.reason.region' : 'friends.reason.new');
+    })();
+
+    <article class="flex h-full flex-col items-center gap-2 rounded-panel border border-line bg-field p-4 text-center">
+        <Link to={ `/app/people/${ props.person.handle }` } class="flex flex-col items-center gap-2" prefetch="hover">
+            <Avatar person={ props.person } size="xl" presence={ presence.of(props.person.id).state } />
+            <span class="flex items-center gap-1.5">
+                <span class="max-w-[10rem] truncate text-[15px] font-semibold text-text">{ locale.text(props.person.name) }</span>
+                <Show when={ props.person.minor }>
+                    { () => <Icon name="shield" size={ 13 } class="shrink-0 text-live" /> }
+                </Show>
+            </span>
+        </Link>
+        <p class="line-clamp-2 text-[12px] text-muted">{ reason }</p>
+        <Show
+            when={ relation === 'none' }
+            fallback={
+                <Button variant="secondary" size="sm" block disabled leading={ relation === 'friend' ? 'friend-check' : 'clock' } class="mt-auto">
+                    { locale.t(relation === 'friend' ? 'person.friends' : 'person.added') }
+                </Button>
+            }
+        >
+            { () =>
+                <Button variant="primary" size="sm" block leading="friend-add" class="mt-auto" onClick={ () => props.onAdd(props.person.id) }>
+                    { locale.t('person.add') }
+                </Button>
+            }
+        </Show>
+    </article>
+}

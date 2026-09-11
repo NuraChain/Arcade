@@ -1,0 +1,78 @@
+import { personById } from '../../data/mock/index.ts';
+import type { ReportCategory } from '../../data/mock/types.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import type { OverlayProps } from '../../stores/overlay.store.ts';
+import { useSocial } from '../../stores/social.store.ts';
+import { useToasts } from '../../stores/toasts.store.ts';
+import Button from '../ui/button.component.azeroth';
+import IconButton from '../ui/icon-button.component.azeroth';
+import Toggle from '../ui/switch.component.azeroth';
+
+const CATEGORIES: ReportCategory[] = ['harassment', 'spam', 'cheating', 'inappropriate', 'other'];
+
+export default component ReportSheet(props: OverlayProps & { personId: string })
+{
+    const locale = useLocale();
+    const social = useSocial();
+    const toasts = useToasts();
+
+    state category = 'harassment' as ReportCategory;
+    state alsoBlock = false;
+
+    derived person = personById(props.personId);
+
+    derived name = person === undefined ? props.personId : locale.text(person.name).split(' ')[0];
+
+    const submit = (): void =>
+    {
+        social.report(props.personId, category);
+        if (alsoBlock)
+        {
+            social.block(props.personId);
+        }
+        toasts.show({ kind: 'success', text: locale.t('report.sent') });
+        props.close(true);
+    };
+
+    <div class="flex flex-col gap-5 p-5">
+        <header class="flex items-start justify-between gap-3">
+            <div>
+                <h2 class="font-display text-[22px] font-semibold leading-tight text-text">{ locale.t('report.title', { name }) }</h2>
+                <p class="mt-2 text-[14px] text-muted">{ locale.t('report.lead') }</p>
+            </div>
+            <IconButton icon="close" label={ locale.t('common.close') } variant="ghost" onClick={ () => props.close(false) } />
+        </header>
+
+        <fieldset>
+            <legend class="sr-only">{ locale.t('report.title', { name }) }</legend>
+            <ul class="flex flex-col gap-1">
+                <For each={ CATEGORIES } key={ (entry) => entry } let={ entry }>
+                    <li>
+                        <button
+                            type="button"
+                            class={ [
+                                'flex min-h-12 w-full cursor-pointer items-center gap-3 rounded-tile border px-3 text-start text-[14px] transition-colors',
+                                category === entry ? 'border-madder bg-madder/10 text-text' : 'border-line text-muted hover:bg-raised/60'
+                            ].join(' ') }
+                            aria-pressed={ category === entry }
+                            onClick={ () => category = entry }
+                        >
+                            <span class={ [
+                                'flex h-5 w-5 shrink-0 items-center justify-center rounded-full border',
+                                category === entry ? 'border-madder bg-madder' : 'border-line'
+                            ].join(' ') } aria-hidden="true"></span>
+                            { locale.t(`report.category.${ entry }`) }
+                        </button>
+                    </li>
+                </For>
+            </ul>
+        </fieldset>
+
+        <Toggle checked={ alsoBlock } label={ locale.t('report.alsoBlock') } onChange={ (checked) => alsoBlock = checked } />
+
+        <div class="flex flex-col gap-2 sm:flex-row-reverse">
+            <Button variant="destructive" block leading="report" onClick={ submit }>{ locale.t('report.submit') }</Button>
+            <Button variant="ghost" block onClick={ () => props.close(false) }>{ locale.t('common.cancel') }</Button>
+        </div>
+    </div>
+}
