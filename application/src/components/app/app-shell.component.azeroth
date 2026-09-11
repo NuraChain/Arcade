@@ -11,6 +11,7 @@ import { useOverlay } from '../../stores/overlay.store.ts';
 import { useNotifications } from '../../stores/notifications.store.ts';
 import { usePresence } from '../../stores/presence.store.ts';
 import { useSocial } from '../../stores/social.store.ts';
+import { useWallet } from '../../stores/wallet.store.ts';
 import { useShell } from '../../stores/shell.store.ts';
 import BottomNav from './bottom-nav.component.azeroth';
 import ConnectionBanner from './connection-banner.component.azeroth';
@@ -62,7 +63,8 @@ export default component AppShell(props: { children?: MountNode })
             useCatalogue().start(),
             useSocial().start(),
             useChat().start(),
-            useNotifications().start()
+            useNotifications().start(),
+            useWallet().start()
         ];
         return () =>
         {

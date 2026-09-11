@@ -5,6 +5,8 @@ import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useChat } from '../../stores/chat.store.ts';
 import { useLobby } from '../../stores/lobby.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
+import { useWallet } from '../../stores/wallet.store.ts';
+import { NURA_CHAIN } from '../../data/chain.ts';
 import { useAccount } from '../../stores/account.store.ts';
 import { useSession } from '../../stores/session.store.ts';
 import BrandMark from '../layout/brand-mark.component.azeroth';
@@ -20,6 +22,7 @@ export default component Sidebar()
     const catalogue = useCatalogue();
     const lobby = useLobby();
     const chat = useChat();
+    const wallet = useWallet();
     const { navigate } = useNavigate();
 
     derived user = account.user();
@@ -67,10 +70,22 @@ export default component Sidebar()
                 <Avatar person={ user } size="md" presence="online" />
                 <span class="flex min-w-0 flex-1 flex-col">
                     <span class="truncate text-[14px] font-semibold text-text">{ user === null ? '' : locale.text(user.name) }</span>
-                    <span class="flex items-center gap-1.5 text-[12px] text-live">
-                        <span class="live-dot h-1.5 w-1.5 rounded-full" aria-hidden="true"></span>
-                        { locale.t('common.online') }
-                    </span>
+                    <Show
+                        when={ account.isWallet() }
+                        fallback={
+                            <span class="flex items-center gap-1.5 text-[12px] text-live">
+                                <span class="live-dot h-1.5 w-1.5 rounded-full" aria-hidden="true"></span>
+                                { locale.t('common.online') }
+                            </span>
+                        }
+                    >
+                        { () =>
+                            <span class="flex items-center gap-1.5 text-[12px] text-live">
+                                <Icon name="key" size={ 11 } />
+                                <span class="truncate">{ locale.t('wallet.chainReady', { chain: NURA_CHAIN.name }) }</span>
+                            </span>
+                        }
+                    </Show>
                 </span>
             </Link>
             <button
@@ -78,12 +93,13 @@ export default component Sidebar()
                 class="mt-1 flex h-10 w-full cursor-pointer items-center gap-3 rounded-tile px-3 text-[13px] font-semibold text-muted transition-colors hover:bg-raised/70 hover:text-text"
                 onClick={ () =>
                 {
+                    wallet.disconnect();
                     session.signOut();
                     navigate('/sign-in', { replace: true });
                 } }
             >
                 <Icon name="sign-out" size={ 16 } class="icon-flip" />
-                { locale.t('app.nav.signOut') }
+                { account.isWallet() ? locale.t('wallet.disconnect') : locale.t('app.nav.signOut') }
             </button>
         </div>
     </nav>
