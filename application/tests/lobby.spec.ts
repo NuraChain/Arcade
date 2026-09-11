@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 
-import { buildDataset, resetDataset } from '../src/data/mock/index.ts';
+import { buildDataset, dataset, resetDataset } from '../src/data/mock/index.ts';
 import { defaultTable } from '../src/data/tables.ts';
 import { manualClock, type ManualClock } from '../src/lib/clock.ts';
 import { TIMING, initial } from '../src/lib/matchmaking.ts';
@@ -9,9 +9,29 @@ import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import { planCandidates, planFinish, planInviteReply, planReadiness } from '../src/services/lobby.service.ts';
 import { useLobby } from '../src/stores/lobby.store.ts';
 import { usePresence } from '../src/stores/presence.store.ts';
+import { useRealtime } from '../src/stores/realtime.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
+import { socket } from './fake-realtime.ts';
 
 let clock: ManualClock;
+
+/**
+ * Who is in the building, as the server would say it.
+ *
+ * Matchmaking fills seats from the people the socket reports as online, so a lobby test has to
+ * say who those are. There is no seeded roster any more: with no socket and no snapshot, nobody
+ * is online and nobody is offline either - the app simply has not been told.
+ */
+const crowd = (ids: readonly string[]): void =>
+{
+    socket.deliver({
+        v: 1,
+        t: 'presence',
+        n: 1,
+        full: true,
+        people: ids.map((who) => ({ who, state: 'online' as const, since: 0 }))
+    });
+};
 
 beforeEach(() =>
 {
@@ -29,7 +49,12 @@ beforeEach(() =>
         kind: 'demo',
         isMinor: false
     });
+    useRealtime().reset();
+    socket.reset();
+    useRealtime().start();
+    socket.accept();
     usePresence().reset();
+    crowd(dataset().people.map((person) => person.id));
     useLobby().reset();
 });
 
@@ -145,11 +170,7 @@ describe('lobby store', () =>
 
     it('raises the no-match fallback when nobody arrives, then fills with labelled partners', () =>
     {
-        usePresence().reset();
-        for (const person of buildDataset(5, 100_000).people)
-        {
-            usePresence().setMine(person.id, 'offline');
-        }
+        crowd([]);
         const lobby = useLobby();
         lobby.quick('hokm');
         clock.advance(TIMING.noMatchAfter);

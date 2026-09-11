@@ -61,8 +61,6 @@ export default component PersonPage()
 
     derived relation = person === null ? 'none' : social.relation(person.id);
 
-    derived state = person === null ? null : presence.of(person.id);
-
     derived mutual = person === null || account.user() === null ? 0 : mutualCount(dataset().friends, account.user()!.id, person.id);
 
     derived theirFriends = person === null
@@ -110,7 +108,7 @@ export default component PersonPage()
             { () =>
                 <div class="flex flex-col gap-6">
                     <header class="flex flex-col items-center gap-3 pt-2 text-center">
-                        <Avatar person={ person } size="2xl" presence={ state?.state ?? null } />
+                        <Avatar person={ person } size="2xl" presence={ person === null ? null : presence.dot(person.id) } />
                         <div>
                             <h1 class="title flex items-center justify-center gap-2 text-ui-3xl">
                                 { name }

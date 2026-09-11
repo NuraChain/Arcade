@@ -10,7 +10,7 @@ import { useDevice } from '../../stores/device.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useOverlay } from '../../stores/overlay.store.ts';
 import { useNotifications } from '../../stores/notifications.store.ts';
-import { usePresence } from '../../stores/presence.store.ts';
+import { useRealtime } from '../../stores/realtime.store.ts';
 import { useSettings } from '../../stores/settings.store.ts';
 import { useSocial } from '../../stores/social.store.ts';
 import { useWallet } from '../../stores/wallet.store.ts';
@@ -65,8 +65,12 @@ export default component AppShell(props: { children?: MountNode })
     mount
     {
         shell.resetDepth();
+        // The socket goes up FIRST and, because the teardown below runs in reverse, comes down
+        // LAST. Everything under it - the connection banner, the stores that re-read on a nudge -
+        // holds an unsubscribe against it, and those have to be handed back while there is still
+        // something to hand them back to.
         const stops = [
-            usePresence().start(),
+            useRealtime().start(),
             useConnection().start(),
             useCatalogue().start(),
             useSocial().start(),
@@ -76,9 +80,18 @@ export default component AppShell(props: { children?: MountNode })
         ];
         return () =>
         {
-            for (const stop of stops)
+            // In reverse, and each one on its own. A stop that throws must not strand the sockets,
+            // timers and listeners belonging to every store after it in the list.
+            for (const stop of [...stops].reverse())
             {
-                stop();
+                try
+                {
+                    stop();
+                }
+                catch
+                {
+                    // Nothing useful to do about it here, and the remaining stops still matter.
+                }
             }
         };
     }

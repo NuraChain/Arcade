@@ -92,7 +92,14 @@ export default component FriendsPage()
         overlay.open(PersonActions, { personId: person.id }, { label: locale.t('actions.title') });
     };
 
-    <Page label={ locale.t('app.nav.friends') } onRefresh={ () => presence.refresh() }>
+    <Page
+        label={ locale.t('app.nav.friends') }
+        onRefresh={ () =>
+        {
+            void social.refresh();
+            presence.refresh();
+        } }
+    >
         <header class="pb-4">
             <h1 class="title text-ui-4xl">{ locale.t('app.nav.friends') }</h1>
             <p class="mt-2 text-ui-md text-muted">{ locale.t('friends.lead') }</p>

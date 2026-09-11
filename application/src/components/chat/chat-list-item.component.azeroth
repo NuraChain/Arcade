@@ -92,7 +92,7 @@ export default component ChatListItem(props: { conversation: Conversation; me: s
                     </Show>
                 }
             >
-                { () => <Avatar person={ others[0] } size="md" presence={ presence.of(others[0].id).state } /> }
+                { () => <Avatar person={ others[0] } size="md" presence={ presence.dot(others[0].id) } /> }
             </Show>
 
             <span class="flex min-w-0 flex-1 flex-col gap-0.5">

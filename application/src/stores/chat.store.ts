@@ -5,7 +5,26 @@ import type { Conversation, Message } from '../data/mock/types.ts';
 import { runtime } from '../lib/runtime.ts';
 import { createApiSource, type ChatScope, type ChatSource, type ConversationRow } from '../services/chat.source.ts';
 import { useAccount } from './account.store.ts';
+import { useRealtime } from './realtime.store.ts';
 import { useSocial } from './social.store.ts';
+
+/** How long one `typing` notice keeps somebody in the indicator. */
+export const TYPING_TTL_MS = 4000;
+
+/**
+ * How often this client will say it is typing.
+ *
+ * The gateway meters `typing` at one every three seconds and counts anything faster as a fault,
+ * ten of which end the socket. Half a second of headroom is what keeps a fast typist from being
+ * hung up on.
+ */
+export const TYPING_PING_MS = 3500;
+
+interface Typist
+{
+    who: string;
+    until: number;
+}
 
 let active: ChatSource = createApiSource();
 
@@ -61,7 +80,7 @@ export const useChat = createStore((): ChatApi =>
 
     const [openId, setOpenId] = createSignal('');
     const [seen, setSeen] = createSignal<Record<string, number>>({});
-    const [typing, setTyping] = createSignal<Record<string, string[]>>({});
+    const [typists, setTypists] = createSignal<Record<string, Typist[]>>({});
     const [drafts, setDrafts] = createSignal<Record<string, string>>({});
     const [pins, setPins] = createSignal<Record<string, boolean>>({});
 
@@ -79,16 +98,28 @@ export const useChat = createStore((): ChatApi =>
 
     let inFlight: Promise<void> = Promise.resolve();
 
-    const revalidate = (): Promise<void> =>
+    /**
+     * Re-reads are queued behind one another and split by what actually changed.
+     *
+     * A doorbell about a conversation nobody has open must not refetch the open thread: that is a
+     * request per message per room, and the thread it would replace is the one the reader is
+     * looking at. The list carries the unread counts and the last line, so it is the half that
+     * always has to move.
+     */
+    const queue = (work: () => Promise<unknown>): Promise<void> =>
     {
         inFlight = inFlight
             .catch(() => undefined)
             .then(async () =>
             {
-                await Promise.all([list.refetch(), thread.refetch()]);
+                await work();
             });
         return inFlight;
     };
+
+    const revalidateList = (): Promise<void> => queue(() => list.refetch());
+
+    const revalidate = (): Promise<void> => queue(() => Promise.all([list.refetch(), thread.refetch()]));
 
     const rows = (): ConversationRow[] => list.data() ?? [];
 
@@ -111,6 +142,79 @@ export const useChat = createStore((): ChatApi =>
     };
 
     const publish = (message: Message): Promise<void> => active.post(message).then(revalidate);
+
+    let sweep: (() => void) | null = null;
+
+    const expire = (): void =>
+    {
+        const now = runtime().clock.now();
+        const current = untrack(typists);
+        const next: Record<string, Typist[]> = {};
+        let changed = false;
+
+        for (const [id, entries] of Object.entries(current))
+        {
+            const kept = entries.filter((entry) => entry.until > now);
+            if (kept.length !== entries.length)
+            {
+                changed = true;
+            }
+            if (kept.length > 0)
+            {
+                next[id] = kept;
+            }
+        }
+
+        if (changed)
+        {
+            setTypists(next);
+        }
+    };
+
+    const sweepSoon = (): void =>
+    {
+        sweep?.();
+        sweep = null;
+
+        let earliest = Number.POSITIVE_INFINITY;
+        for (const entries of Object.values(untrack(typists)))
+        {
+            for (const entry of entries)
+            {
+                earliest = Math.min(earliest, entry.until);
+            }
+        }
+        if (earliest === Number.POSITIVE_INFINITY)
+        {
+            return;
+        }
+
+        sweep = runtime().clock.after(Math.max(0, earliest - runtime().clock.now()), () =>
+        {
+            sweep = null;
+            expire();
+            sweepSoon();
+        });
+    };
+
+    /**
+     * A typing notice is a fact with an expiry, not a toggle.
+     *
+     * Nobody sends "I stopped": the sender's tab may have closed, its socket may have dropped, or
+     * they may simply have walked away. Every notice therefore carries its own deadline and the
+     * indicator goes quiet on its own.
+     */
+    const noteTyping = (who: string, conversationId: string): void =>
+    {
+        const now = runtime().clock.now();
+        const current = untrack(typists);
+        const kept = (current[conversationId] ?? []).filter((entry) => entry.who !== who && entry.until > now);
+
+        setTypists({ ...current, [conversationId]: [...kept, { who, until: now + TYPING_TTL_MS }] });
+        sweepSoon();
+    };
+
+    const announced = new Map<string, number>();
 
     /**
      * The message this client is ASKING for. The server decides its id, its time and its author -
@@ -155,13 +259,30 @@ export const useChat = createStore((): ChatApi =>
         totalUnread: () => rows().reduce((sum, row) => sum + unread(row.conversation.id), 0),
         archive: () => active.archive(scope()),
 
-        typing: (id) => typing()[id] ?? [],
+        typing(id)
+        {
+            const now = runtime().clock.now();
+            return (typists()[id] ?? []).filter((entry) => entry.until > now).map((entry) => entry.who);
+        },
 
         draft: (id) => drafts()[id] ?? '',
 
         setDraft(id, text)
         {
             setDrafts({ ...untrack(drafts), [id]: text });
+
+            if (text.trim() === '')
+            {
+                return;
+            }
+
+            const now = runtime().clock.now();
+            if (now - (announced.get(id) ?? 0) < TYPING_PING_MS)
+            {
+                return;
+            }
+            announced.set(id, now);
+            useRealtime().startTyping(id);
         },
 
         async send(id, text)
@@ -172,6 +293,7 @@ export const useChat = createStore((): ChatApi =>
                 return;
             }
             setDrafts({ ...untrack(drafts), [id]: '' });
+            announced.delete(id);
             await publish(asked(id, clean));
         },
 
@@ -191,7 +313,7 @@ export const useChat = createStore((): ChatApi =>
             }
             setSeen({ ...current, [id]: now });
             await client.chat.read({ params: { id } }).catch(() => undefined);
-            await revalidate();
+            await revalidateList();
         },
 
         pinned: (id) => pins()[id] ?? rowOf(id)?.conversation.pinned ?? false,
@@ -208,7 +330,7 @@ export const useChat = createStore((): ChatApi =>
             }
             finally
             {
-                await revalidate();
+                await revalidateList();
                 const cleared = { ...untrack(pins) };
                 delete cleared[id];
                 setPins(cleared);
@@ -218,7 +340,7 @@ export const useChat = createStore((): ChatApi =>
         async openDirect(personId)
         {
             const id = await active.openDirect(untrack(scope), personId, runtime().clock.now());
-            await revalidate();
+            await revalidateList();
             return id;
         },
 
@@ -227,27 +349,52 @@ export const useChat = createStore((): ChatApi =>
         refresh: revalidate,
 
         /**
-         * Nothing ticks any more.
+         * Nothing ticks. It listens.
          *
          * The store used to run an ambient timer that invented messages from people who were not
-         * there, and a per-send timer that typed a reply back. Both were furniture for a product
-         * with no server; with one, the only thing that produces a message is somebody sending
-         * it. Live delivery arrives with the realtime work - until then the list refreshes when
-         * the app asks it to.
+         * there, and a per-send timer that typed a reply back. What replaces both is a doorbell:
+         * the server says a conversation changed, and this goes and re-reads it through the same
+         * route the page would have used, with the same membership, block and watermark rules.
          */
         start()
         {
-            return () => undefined;
+            const live = useRealtime();
+
+            const offNudge = live.onNudge((scope, id) =>
+            {
+                if (scope !== 'chat')
+                {
+                    return;
+                }
+                void (id !== undefined && id === untrack(openId) ? revalidate() : revalidateList());
+            });
+
+            const offTyping = live.onTyping(noteTyping);
+
+            return () =>
+            {
+                offNudge();
+                offTyping();
+                sweep?.();
+                sweep = null;
+            };
         },
 
-        stop: () => undefined,
+        stop()
+        {
+            sweep?.();
+            sweep = null;
+        },
 
         reset()
         {
             active.reset();
+            sweep?.();
+            sweep = null;
+            announced.clear();
             setOpenId('');
             setSeen({});
-            setTyping({});
+            setTypists({});
             setDrafts({});
             setPins({});
             inFlight = Promise.resolve();

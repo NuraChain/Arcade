@@ -3,16 +3,18 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { manualClock, type ManualClock } from '../src/lib/clock.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import { requireAnonymous, requireSession, safeNext } from '../src/lib/guards.ts';
-import { RECONNECT_DELAY, useConnection } from '../src/stores/connection.store.ts';
+import { RESTORED_MS, useConnection } from '../src/stores/connection.store.ts';
 import { postureFor, useDevice } from '../src/stores/device.store.ts';
 import { OVERLAY_SETTLE, useOverlay } from '../src/stores/overlay.store.ts';
 import { useAccount } from '../src/stores/account.store.ts';
+import { useRealtime } from '../src/stores/realtime.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
 import { defaultSettings, useSettings } from '../src/stores/settings.store.ts';
 import { useShell } from '../src/stores/shell.store.ts';
 import { TOAST_DURATION, TOAST_VISIBLE, useToasts } from '../src/stores/toasts.store.ts';
 import { resetDataset } from '../src/data/mock/index.ts';
 import { server } from './fake-api.ts';
+import { socket } from './fake-realtime.ts';
 
 vi.mock('../src/api.ts', async () => await import('./fake-api.ts'));
 
@@ -47,6 +49,8 @@ beforeEach(() =>
     useSettings().reset();
     useToasts().reset();
     useOverlay().reset();
+    useRealtime().reset();
+    socket.reset();
     useConnection().reset();
     useShell().reset();
     useDevice().override(null);
@@ -304,17 +308,97 @@ describe('overlay stack', () =>
 
 describe('connection', () =>
 {
-    it('drops, reconnects and heals on the clock', () =>
+    it('says nothing at all until a socket has actually stood up', () =>
     {
         const connection = useConnection();
-        connection.simulateDrop(1000);
-        expect(connection.state()).toBe('offline');
-        clock.advance(1000);
-        expect(connection.state()).toBe('reconnecting');
-        expect(connection.latency()).toBeGreaterThan(1);
-        clock.advance(RECONNECT_DELAY);
+        const stop = connection.start();
+        const live = useRealtime();
+
+        live.start();
         expect(connection.state()).toBe('online');
-        expect(connection.latency()).toBe(1);
+
+        // Never connected, so there is nothing to have been interrupted. The app is exactly what
+        // it was before the socket existed - a working pull-model app - and it stays quiet.
+        socket.drop();
+        expect(connection.state()).toBe('online');
+
+        stop();
+    });
+
+    it('reports an interruption, then says so when it is over, then goes quiet', () =>
+    {
+        const connection = useConnection();
+        const stop = connection.start();
+        const live = useRealtime();
+
+        live.start();
+        socket.accept();
+        expect(connection.state()).toBe('online');
+
+        socket.drop();
+        expect(connection.state()).toBe('reconnecting');
+
+        // Down, then connecting, then down again: the banner must not follow every flap.
+        clock.advance(1100);
+        expect(connection.state()).toBe('reconnecting');
+
+        socket.accept();
+        expect(connection.state()).toBe('restored');
+
+        clock.advance(RESTORED_MS);
+        expect(connection.state()).toBe('online');
+
+        stop();
+    });
+
+    it('calls it offline when the browser says there is no network', () =>
+    {
+        const connection = useConnection();
+        const stop = connection.start();
+
+        useRealtime().start();
+        socket.accept();
+
+        window.dispatchEvent(new Event('offline'));
+        expect(connection.state()).toBe('offline');
+
+        window.dispatchEvent(new Event('online'));
+        expect(connection.state()).toBe('online');
+
+        stop();
+    });
+
+    it('calls it offline when the client has stopped trying', () =>
+    {
+        const connection = useConnection();
+        const stop = connection.start();
+
+        useRealtime().start();
+        socket.accept();
+        socket.drop(4401);
+
+        expect(connection.state()).toBe('offline');
+        stop();
+    });
+
+    it('stops watching for a recovery once it is stopped', () =>
+    {
+        const connection = useConnection();
+        const stop = connection.start();
+        const live = useRealtime();
+
+        live.start();
+        socket.accept();
+        socket.drop();
+        stop();
+
+        clock.advance(1100);
+        socket.accept();
+
+        // Nothing was listening, so there is no "back online" to show - and the state is simply
+        // what the socket is, which is up.
+        expect(connection.state()).toBe('online');
+        live.stop();
     });
 });
 

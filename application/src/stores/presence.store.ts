@@ -1,10 +1,8 @@
-import { createStore, createSignal, type Getter } from 'azerothjs';
+import { createStore } from 'azerothjs';
 
-import { dataset } from '../data/mock/index.ts';
+import type { PresenceEntry } from '../api.ts';
 import type { GameId } from '../data/games.ts';
-import { GAMES } from '../data/games.ts';
-import { createRandom, hashSeed } from '../lib/random.ts';
-import { runtime } from '../lib/runtime.ts';
+import { useRealtime } from './realtime.store.ts';
 
 export type PresenceState = 'online' | 'away' | 'offline' | 'playing';
 
@@ -13,129 +11,68 @@ export interface Presence
     state: PresenceState;
     game: GameId | null;
     since: number;
+    known: boolean;
 }
 
-export const PRESENCE_TICK_MS = 4000;
-
-const OFFLINE: Presence = { state: 'offline', game: null, since: 0 };
-
-function seedPresence(seed: number, now: number): Map<string, Presence>
-{
-    const map = new Map<string, Presence>();
-    for (const person of dataset().people)
-    {
-        const random = createRandom(hashSeed(seed, 'presence', person.id));
-        const roll = random.next();
-        const state: PresenceState = person.demo || roll < 0.42 ? 'online' : (roll < 0.58 ? 'playing' : (roll < 0.72 ? 'away' : 'offline'));
-        map.set(person.id, {
-            state,
-            game: state === 'playing' ? (random.chance(0.7) ? person.favourite : random.pick(GAMES).id) : null,
-            since: now - random.int(1, 90) * 60000
-        });
-    }
-    return map;
-}
+const UNKNOWN: Presence = { state: 'offline', game: null, since: 0, known: false };
 
 export interface PresenceApi
 {
     of(id: string): Presence;
+
+    /** The dot's state, or null when there is nothing to draw. */
+    dot(id: string): PresenceState | null;
+
     isOnline(id: string): boolean;
-    onlineCount: Getter<number>;
     online(ids: readonly string[]): string[];
-    setMine(id: string, state: PresenceState, game?: GameId | null): void;
     refresh(): void;
-    start(): () => void;
-    stop(): void;
     reset(): void;
 }
 
 export const usePresence = createStore((): PresenceApi =>
 {
-    const [map, setMap] = createSignal<Map<string, Presence>>(seedPresence(runtime().seed, runtime().clock.now()));
-    let tick = 0;
-    let stop: (() => void) | null = null;
+    const live = useRealtime();
 
-    const drift = (): void =>
+    let from: PresenceEntry[] | null = null;
+    let index: Map<string, Presence> | null = null;
+
+    const current = (): Map<string, Presence> | null =>
     {
-        tick += 1;
-        const random = createRandom(hashSeed(runtime().seed, 'drift', tick));
-        const people = dataset().people.filter((person) => !person.demo);
-        const next = new Map(map());
-        const flips = random.int(1, 2);
-        for (let index = 0; index < flips; index += 1)
+        const people = live.presence();
+        if (people === null)
         {
-            const person = random.pick(people);
-            const current = next.get(person.id) ?? OFFLINE;
-            const roll = random.next();
-            const state: PresenceState = current.state === 'offline'
-                ? (roll < 0.6 ? 'online' : 'offline')
-                : (roll < 0.25 ? 'playing' : (roll < 0.5 ? 'online' : (roll < 0.7 ? 'away' : 'offline')));
-            next.set(person.id, {
-                state,
-                game: state === 'playing' ? person.favourite : null,
-                since: runtime().clock.now()
-            });
+            from = null;
+            index = null;
+            return null;
         }
-        setMap(next);
+        if (people !== from)
+        {
+            from = people;
+            index = new Map(people.map((entry) =>
+                [entry.who, { state: entry.state, game: null, since: entry.since, known: true }]));
+        }
+        return index;
+    };
+
+    const of = (id: string): Presence => current()?.get(id) ?? UNKNOWN;
+
+    const up = (id: string): boolean =>
+    {
+        const state = of(id).state;
+        return state === 'online' || state === 'playing';
     };
 
     return {
-        of: (id) => map().get(id) ?? OFFLINE,
-        isOnline: (id) =>
-        {
-            const state = (map().get(id) ?? OFFLINE).state;
-            return state === 'online' || state === 'playing';
-        },
-        onlineCount: () =>
-        {
-            let count = 0;
-            for (const presence of map().values())
-            {
-                if (presence.state === 'online' || presence.state === 'playing')
-                {
-                    count += 1;
-                }
-            }
-            return count;
-        },
-        online: (ids) => ids.filter((id) =>
-        {
-            const state = (map().get(id) ?? OFFLINE).state;
-            return state === 'online' || state === 'playing';
-        }),
-        refresh: drift,
-
-        setMine: (id, state, game) =>
-        {
-            const next = new Map(map());
-            next.set(id, { state, game: game ?? null, since: runtime().clock.now() });
-            setMap(next);
-        },
-
-        start()
-        {
-            if (stop === null)
-            {
-                const cancel = runtime().clock.every(PRESENCE_TICK_MS, drift);
-                stop = () =>
-                {
-                    cancel();
-                    stop = null;
-                };
-            }
-            return stop;
-        },
-
-        stop()
-        {
-            stop?.();
-        },
+        of,
+        dot: (id) => (of(id).known ? of(id).state : null),
+        isOnline: up,
+        online: (ids) => ids.filter(up),
+        refresh: () => live.sync(),
 
         reset()
         {
-            stop?.();
-            tick = 0;
-            setMap(seedPresence(runtime().seed, runtime().clock.now()));
+            from = null;
+            index = null;
         }
     };
 });

@@ -46,10 +46,37 @@ export interface RealtimeApi
      */
     interrupted: Getter<boolean>;
 
+    /** Whether a socket has ever stood up in this session. */
+    everConnected: Getter<boolean>;
+
+    /**
+     * Whether this client has stopped trying.
+     *
+     * A terminal close code is not a network problem and will not heal on its own, so the shell
+     * must be able to tell the difference between "reconnecting" and "this is as good as it gets".
+     */
+    stalled: Getter<boolean>;
+
     presence: Getter<PresenceEntry[] | null>;
-    typing: Getter<{ who: string; id: string; at: number } | null>;
 
     onNudge(listener: (scope: 'chat' | 'social', id: string | undefined) => void): () => void;
+
+    /**
+     * Somebody is typing, right now, in one conversation.
+     *
+     * An event rather than a getter: two people typing in two rooms are two facts, and a single
+     * slot would have one of them overwrite the other. Who is typing where, and for how long, is
+     * the chat store's business - this only says what arrived.
+     */
+    onTyping(listener: (who: string, conversationId: string) => void): () => void;
+
+    /**
+     * Every status change, in order.
+     *
+     * A getter cannot carry a transition, and `connected` after an interruption is a different
+     * event from `connected` on first boot - one of them is worth telling somebody about.
+     */
+    onStatus(listener: (status: RealtimeStatus) => void): () => void;
 
     sync(): void;
     setState(state: 'online' | 'away'): void;
@@ -82,10 +109,12 @@ export const useRealtime = createStore((): RealtimeApi =>
 {
     const [status, setStatus] = createSignal<RealtimeStatus>('idle');
     const [everConnected, setEverConnected] = createSignal(false);
+    const [stalled, setStalled] = createSignal(false);
     const [presence, setPresence] = createSignal<PresenceEntry[] | null>(null);
-    const [typing, setTyping] = createSignal<{ who: string; id: string; at: number } | null>(null);
 
     const listeners = new Set<(scope: 'chat' | 'social', id: string | undefined) => void>();
+    const watchers = new Set<(status: RealtimeStatus) => void>();
+    const typists = new Set<(who: string, conversationId: string) => void>();
     const pending = new Map<string, { scope: 'chat' | 'social'; id: string | undefined }>();
 
     let close: (() => void) | null = null;
@@ -96,6 +125,15 @@ export const useRealtime = createStore((): RealtimeApi =>
     let suppressUntil = 0;
     let wanted = false;
     let watching: (() => void) | null = null;
+
+    const announce = (next: RealtimeStatus): void =>
+    {
+        setStatus(next);
+        for (const watcher of watchers)
+        {
+            watcher(next);
+        }
+    };
 
     const clearRetry = (): void =>
     {
@@ -158,7 +196,10 @@ export const useRealtime = createStore((): RealtimeApi =>
 
         if (frame.t === 'typing')
         {
-            setTyping({ who: frame.who, id: frame.id, at: runtime().clock.now() });
+            for (const typist of typists)
+            {
+                typist(frame.who, frame.id);
+            }
         }
     };
 
@@ -194,14 +235,14 @@ export const useRealtime = createStore((): RealtimeApi =>
             return;
         }
 
-        setStatus('connecting');
+        announce('connecting');
 
         close = active.open({
             onOpen()
             {
                 connectedAt = runtime().clock.now();
                 setEverConnected(true);
-                setStatus('connected');
+                announce('connected');
             },
 
             onFrame: receive,
@@ -210,11 +251,12 @@ export const useRealtime = createStore((): RealtimeApi =>
             {
                 close = null;
                 setPresence(null);
-                setStatus('down');
+                announce('down');
 
                 if (TERMINAL.has(code))
                 {
                     wanted = false;
+                    setStalled(true);
                     return;
                 }
 
@@ -286,21 +328,33 @@ export const useRealtime = createStore((): RealtimeApi =>
         close?.();
         close = null;
         watching?.();
-        setStatus('idle');
+        announce('idle');
         setPresence(null);
-        setTyping(null);
     };
 
     return {
         status,
         interrupted: () => everConnected() && status() === 'down',
+        everConnected,
+        stalled,
         presence,
-        typing,
 
         onNudge(listener)
         {
             listeners.add(listener);
             return () => listeners.delete(listener);
+        },
+
+        onTyping(listener)
+        {
+            typists.add(listener);
+            return () => typists.delete(listener);
+        },
+
+        onStatus(listener)
+        {
+            watchers.add(listener);
+            return () => watchers.delete(listener);
         },
 
         sync: () => active.send({ t: 'sync' }),
@@ -313,7 +367,7 @@ export const useRealtime = createStore((): RealtimeApi =>
             suppressUntil = runtime().clock.now() + ms;
             close?.();
             close = null;
-            setStatus('down');
+            announce('down');
             attempt = 0;
             schedule();
         },
@@ -327,6 +381,7 @@ export const useRealtime = createStore((): RealtimeApi =>
 
             wanted = true;
             attempt = 0;
+            setStalled(false);
             watchEnvironment();
             open();
             return teardown;
@@ -338,6 +393,9 @@ export const useRealtime = createStore((): RealtimeApi =>
         {
             teardown();
             listeners.clear();
+            watchers.clear();
+            typists.clear();
+            setStalled(false);
             attempt = 0;
             suppressUntil = 0;
             connectedAt = 0;

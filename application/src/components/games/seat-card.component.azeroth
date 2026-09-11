@@ -100,7 +100,7 @@ export default component SeatCard(props: {
                         <Avatar
                             person={ person }
                             size="lg"
-                            presence={ pending || person === null ? null : presence.of(person.id).state }
+                            presence={ pending || person === null ? null : presence.dot(person.id) }
                             class={ pending ? 'opacity-60' : '' }
                         />
                     }

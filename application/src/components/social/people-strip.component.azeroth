@@ -13,9 +13,13 @@ export default component PeopleStrip(props: { people: Person[]; label: string; c
     const presence = usePresence();
     const catalogue = useCatalogue();
 
-    const status = (id: string): string =>
+    const status = (person: Person): string =>
     {
-        const current = presence.of(id);
+        const current = presence.of(person.id);
+        if (!current.known)
+        {
+            return `@${ person.handle }`;
+        }
         if (current.state === 'playing' && current.game !== null)
         {
             return locale.t(catalogue.byId(current.game).nameKey);
@@ -27,9 +31,9 @@ export default component PeopleStrip(props: { people: Person[]; label: string; c
         <For each={ props.people } key={ (person) => person.id } let={ person }>
             <div class="shrink-0 snap-start">
                 <Link to={ `/app/people/${ person.handle }` } class="flex w-[4.75rem] flex-col items-center gap-1.5 rounded-tile py-1 text-center" prefetch="hover">
-                    <Avatar person={ person } size="lg" presence={ presence.of(person.id).state } />
+                    <Avatar person={ person } size="lg" presence={ presence.dot(person.id) } />
                     <span class="w-full truncate text-ui-xs font-semibold text-text">{ locale.text(person.name).split(' ')[0] }</span>
-                    <span class="w-full truncate text-ui-2xs text-faint">{ status(person.id) }</span>
+                    <span class="w-full truncate text-ui-2xs text-faint">{ status(person) }</span>
                 </Link>
             </div>
         </For>

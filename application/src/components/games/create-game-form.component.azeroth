@@ -194,10 +194,10 @@ export default component CreateGameForm(props: { game: Game; onCreated: (tableId
                             aria-pressed={ invitees.includes(person.id) }
                             onClick={ () => toggleInvite(person.id) }
                         >
-                            <Avatar person={ person } size="sm" presence={ presence.of(person.id).state } />
+                            <Avatar person={ person } size="sm" presence={ presence.dot(person.id) } />
                             <span class="flex min-w-0 flex-1 flex-col">
                                 <span class="truncate text-ui-base font-semibold text-text">{ locale.text(person.name) }</span>
-                                <span class="truncate text-ui-xs text-muted">{ presence.isOnline(person.id) ? locale.t('common.online') : locale.t('common.offline') }</span>
+                                <span class="truncate text-ui-xs text-muted">@{ person.handle }</span>
                             </span>
                             <span class={ [
                                 'flex h-6 w-6 items-center justify-center rounded-full border transition-colors',

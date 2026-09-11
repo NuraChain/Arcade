@@ -360,16 +360,26 @@ describe('what arrives on the socket', () =>
         expect(live.presence()).toBeNull();
     });
 
-    it('stamps a typing notice with the clock, not with the sender', () =>
+    it('hands a typing notice to every listener, and keeps no slot of its own', () =>
     {
         const live = useRealtime();
+        const heard = vi.fn();
+        const stop = live.onTyping(heard);
+
         live.start();
         socket.accept();
 
-        clock.advance(500);
         socket.deliver({ v: 1, t: 'typing', n: 1, who: 'sara.k', id: 'c-1' });
+        socket.deliver({ v: 1, t: 'typing', n: 2, who: 'reza.t', id: 'c-2' });
 
-        expect(live.typing()).toEqual({ who: 'sara.k', id: 'c-1', at: 1_000_500 });
+        // Two people typing in two rooms are two facts. A single signal would have kept one.
+        expect(heard).toHaveBeenCalledTimes(2);
+        expect(heard).toHaveBeenNthCalledWith(1, 'sara.k', 'c-1');
+        expect(heard).toHaveBeenNthCalledWith(2, 'reza.t', 'c-2');
+
+        stop();
+        socket.deliver({ v: 1, t: 'typing', n: 3, who: 'mina', id: 'c-1' });
+        expect(heard).toHaveBeenCalledTimes(2);
     });
 
     it('ignores a frame it has no use for rather than treating it as a fault', () =>
@@ -381,7 +391,6 @@ describe('what arrives on the socket', () =>
         socket.deliver({ v: 1, t: 'hello', n: 1, rt: 'nura-rt/v1', self: 'alex', at: 0 });
 
         expect(live.presence()).toBeNull();
-        expect(live.typing()).toBeNull();
         expect(live.status()).toBe('connected');
     });
 });

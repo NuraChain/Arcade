@@ -1,111 +1,154 @@
 import { createStore, createSignal, type Getter } from 'azerothjs';
 
 import { runtime } from '../lib/runtime.ts';
+import { useRealtime } from './realtime.store.ts';
 
-export type ConnectionState = 'online' | 'offline' | 'reconnecting';
+export type ConnectionState = 'online' | 'reconnecting' | 'offline' | 'restored';
 
-export const RECONNECT_DELAY = 1800;
+/** How long "Back online" stays up. Long enough to read, short enough not to become furniture. */
+export const RESTORED_MS = 2500;
 
 export interface ConnectionApi
 {
     state: Getter<ConnectionState>;
-    latency: Getter<number>;
     simulateDrop(ms: number): void;
     start(): () => void;
     stop(): void;
     reset(): void;
 }
 
+/**
+ * What the shell says about the connection, and nothing it cannot see.
+ *
+ * The version this replaces invented all of it: a `latency` that no request ever measured, a
+ * fixed 1800ms "reconnecting" animation that had nothing to do with a reconnection, and a state
+ * machine driven entirely by `window.online`. Every value here is now either the socket's own
+ * status or `navigator.onLine`, both of which are measurements.
+ *
+ * It deliberately does NOT report the socket's every flap. Between drop and retry the socket is
+ * `down`, during the retry it is `connecting`, and at the first backoff rung it alternates once a
+ * second - a banner that followed it would strobe. `offline` means something that will not fix
+ * itself: the browser says there is no network, or the client has stopped trying. Everything else
+ * in between is one steady `reconnecting`.
+ */
 export const useConnection = createStore((): ConnectionApi =>
 {
-    const [state, setState] = createSignal<ConnectionState>('online');
-    const [latency, setLatency] = createSignal(1);
-    const pending = new Set<() => void>();
+    const live = useRealtime();
+
+    const [restored, setRestored] = createSignal(false);
+    const [offline, setOffline] = createSignal(false);
+
+    let clearRestored: (() => void) | null = null;
+    let unwatch: (() => void) | null = null;
     let stopListeners: (() => void) | null = null;
 
-    const later = (ms: number, fn: () => void): void =>
+    const forget = (): void =>
     {
-        const cancel = runtime().clock.after(ms, () =>
-        {
-            pending.delete(cancel);
-            fn();
-        });
-        pending.add(cancel);
+        clearRestored?.();
+        clearRestored = null;
+        setRestored(false);
     };
 
-    const recover = (): void =>
+    const troubled = (): boolean =>
     {
-        if (state() === 'online')
+        if (!live.everConnected())
         {
-            return;
+            return false;
         }
-        setState('reconnecting');
-        setLatency(2.5);
-        later(RECONNECT_DELAY, () =>
-        {
-            setState('online');
-            setLatency(1);
-        });
+        const status = live.status();
+        return status === 'down' || status === 'connecting';
     };
 
-    const drop = (): void =>
+    const state = (): ConnectionState =>
     {
-        for (const cancel of pending)
+        if (offline() || live.stalled())
         {
-            cancel();
+            return 'offline';
         }
-        pending.clear();
-        setState('offline');
+        if (troubled())
+        {
+            return 'reconnecting';
+        }
+        return restored() ? 'restored' : 'online';
     };
 
     return {
         state,
-        latency,
 
-        simulateDrop(ms)
-        {
-            drop();
-            later(ms, recover);
-        },
+        simulateDrop: (ms) => live.simulateDrop(ms),
 
         start()
         {
-            if (stopListeners !== null || typeof window === 'undefined')
+            if (typeof window === 'undefined')
             {
-                return stopListeners ?? (() => undefined);
+                return () => undefined;
             }
-            const onOffline = (): void => drop();
-            const onOnline = (): void => recover();
-            window.addEventListener('offline', onOffline);
-            window.addEventListener('online', onOnline);
-            if (typeof navigator !== 'undefined' && navigator.onLine === false)
+
+            if (unwatch === null)
             {
-                drop();
+                let seenTrouble = false;
+                unwatch = live.onStatus((status) =>
+                {
+                    if (status === 'down' || status === 'connecting')
+                    {
+                        seenTrouble = live.everConnected();
+                        forget();
+                        return;
+                    }
+                    if (status === 'connected' && seenTrouble)
+                    {
+                        seenTrouble = false;
+                        setRestored(true);
+                        clearRestored = runtime().clock.after(RESTORED_MS, () =>
+                        {
+                            clearRestored = null;
+                            setRestored(false);
+                        });
+                    }
+                });
             }
-            stopListeners = () =>
+
+            if (stopListeners === null)
             {
-                window.removeEventListener('offline', onOffline);
-                window.removeEventListener('online', onOnline);
-                stopListeners = null;
+                const went = (): void => setOffline(true);
+                const came = (): void => setOffline(false);
+
+                window.addEventListener('offline', went);
+                window.addEventListener('online', came);
+                setOffline(typeof navigator !== 'undefined' && navigator.onLine === false);
+
+                stopListeners = () =>
+                {
+                    window.removeEventListener('offline', went);
+                    window.removeEventListener('online', came);
+                    stopListeners = null;
+                };
+            }
+
+            return () =>
+            {
+                unwatch?.();
+                unwatch = null;
+                stopListeners?.();
+                forget();
             };
-            return stopListeners;
         },
 
         stop()
         {
+            unwatch?.();
+            unwatch = null;
             stopListeners?.();
+            forget();
         },
 
         reset()
         {
+            unwatch?.();
+            unwatch = null;
             stopListeners?.();
-            for (const cancel of pending)
-            {
-                cancel();
-            }
-            pending.clear();
-            setState('online');
-            setLatency(1);
+            forget();
+            setOffline(false);
         }
     };
 });

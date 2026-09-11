@@ -9,7 +9,7 @@ import ResultPanel, { durationText } from '../src/components/games/result-panel.
 import RollLog from '../src/components/games/roll-log.component.azeroth';
 import { gameArt, gameArtSet } from '../src/components/games/art.ts';
 import { GAMES } from '../src/data/games.ts';
-import { resetDataset } from '../src/data/mock/index.ts';
+import { dataset, resetDataset } from '../src/data/mock/index.ts';
 import { defaultTable } from '../src/data/tables.ts';
 import { manualClock, type ManualClock } from '../src/lib/clock.ts';
 import { TIMING } from '../src/lib/matchmaking.ts';
@@ -19,8 +19,10 @@ import { useCatalogue } from '../src/stores/catalogue.store.ts';
 import { useLobby } from '../src/stores/lobby.store.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
 import { usePresence } from '../src/stores/presence.store.ts';
+import { useRealtime } from '../src/stores/realtime.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
 import { useSettings } from '../src/stores/settings.store.ts';
+import { socket } from './fake-realtime.ts';
 
 type Rendered = HTMLElement;
 
@@ -52,7 +54,21 @@ beforeEach(() =>
         kind: 'demo',
         isMinor: false
     });
+    useRealtime().reset();
+    socket.reset();
+    useRealtime().start();
+    socket.accept();
     usePresence().reset();
+
+    // Matchmaking seats the people the socket says are here, so the test has to fill the room.
+    socket.deliver({
+        v: 1,
+        t: 'presence',
+        n: 1,
+        full: true,
+        people: dataset().people.map((person) => ({ who: person.id, state: 'online' as const, since: 0 }))
+    });
+
     useCatalogue().reset();
     useSettings().reset();
     useLobby().reset();
@@ -62,6 +78,7 @@ afterEach(() =>
 {
     cleanup();
     useLobby().reset();
+    useRealtime().reset();
 });
 
 describe('game artwork', () =>

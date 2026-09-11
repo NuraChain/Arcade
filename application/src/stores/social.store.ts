@@ -6,6 +6,7 @@ import { personById } from '../data/mock/index.ts';
 import type { FriendRequest, Person, Report, ReportCategory } from '../data/mock/types.ts';
 import type { reasonFor } from '../services/social.service.ts';
 import { useAccount } from './account.store.ts';
+import { useRealtime } from './realtime.store.ts';
 
 export type Relation = 'me' | 'friend' | 'incoming' | 'outgoing' | 'blocked' | 'none';
 
@@ -284,7 +285,25 @@ export const useSocial = createStore((): SocialApi =>
         loading: () => graph.loading(),
         refresh: revalidate,
 
-        start: () => () => undefined,
+        /**
+         * One doorbell, one re-read of the graph.
+         *
+         * Only the graph: the suggestion and directory reads are expensive, they are gated behind
+         * `want()` for exactly that reason, and nothing the server nudges about - a request, an
+         * acceptance, a block, a mute, a privacy change - moves either of them. The frame carries
+         * no content, so what lands here is the same answer the page would have asked for.
+         */
+        start()
+        {
+            return useRealtime().onNudge((scope) =>
+            {
+                if (scope === 'social')
+                {
+                    void graph.refetch().catch(() => undefined);
+                }
+            });
+        },
+
         stop: () => undefined,
 
         reset()

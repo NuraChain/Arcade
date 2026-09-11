@@ -88,11 +88,15 @@ export default component ChatPage()
             return '';
         }
         const state = presence.of(only.id);
+        if (!state.known)
+        {
+            return `@${ only.handle }`;
+        }
         if (state.state === 'playing' && state.game !== null)
         {
             return locale.t('common.playing', { game: locale.t(catalogue.byId(state.game).nameKey) });
         }
-        return state.state === 'offline' ? locale.relative(state.since) : locale.t(state.state === 'away' ? 'common.away' : 'common.online');
+        return locale.t(state.state === 'away' ? 'common.away' : 'common.online');
     })();
 
     useHead({ title: () => title });
@@ -188,7 +192,7 @@ export default component ChatPage()
                                 <Show when={ others.length === 1 } fallback={ <AvatarGroup people={ others } size="sm" max={ 2 } class="w-9 shrink-0" /> }>
                                     { () =>
                                         <Link to={ `/app/people/${ others[0].handle }` } class="flex h-11 w-10 shrink-0 items-center justify-center">
-                                            <Avatar person={ others[0] } size="sm" presence={ presence.of(others[0].id).state } />
+                                            <Avatar person={ others[0] } size="sm" presence={ presence.dot(others[0].id) } />
                                         </Link>
                                     }
                                 </Show>

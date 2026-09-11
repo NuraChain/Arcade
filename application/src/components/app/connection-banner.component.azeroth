@@ -1,27 +1,46 @@
 import Icon from '../../icons/icon.component.azeroth';
+import type { IconName } from '../../icons/registry.ts';
+import type { MessageKey } from '../../locales/en.ts';
 import Spinner from '../ui/spinner.component.azeroth';
+import type { ConnectionState } from '../../stores/connection.store.ts';
 import { useConnection } from '../../stores/connection.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
+
+interface Notice
+{
+    tone: string;
+    icon: IconName | null;
+    text: MessageKey;
+    urgent: boolean;
+}
+
+const NOTICES: Record<Exclude<ConnectionState, 'online'>, Notice> =
+{
+    offline: { tone: 'bg-madder/15 text-madder', icon: 'wifi-off', text: 'connection.offline', urgent: true },
+    reconnecting: { tone: 'bg-accent/15 text-accent', icon: null, text: 'connection.reconnecting', urgent: false },
+    restored: { tone: 'bg-live/15 text-live', icon: 'selected', text: 'connection.restored', urgent: false }
+};
 
 export default component ConnectionBanner()
 {
     const connection = useConnection();
     const locale = useLocale();
 
-    <Show when={ connection.state() !== 'online' }>
+    derived state = connection.state();
+
+    derived notice = state === 'online' ? null : NOTICES[state];
+
+    <Show when={ notice !== null }>
         { () =>
             <div
-                class={ [
-                    'z-banner flex items-center justify-center gap-2 px-4 py-2 text-ui-sm font-semibold',
-                    connection.state() === 'offline' ? 'bg-madder/15 text-madder' : 'bg-accent/15 text-accent'
-                ].join(' ') }
+                class={ [ 'z-banner flex items-center justify-center gap-2 px-4 py-2 text-ui-sm font-semibold', notice!.tone ].join(' ') }
                 role="status"
-                aria-live="assertive"
+                aria-live={ notice!.urgent ? 'assertive' : 'polite' }
             >
-                <Show when={ connection.state() === 'offline' } fallback={ <Spinner size={ 14 } /> }>
-                    { () => <Icon name="wifi-off" size={ 16 } /> }
+                <Show when={ notice!.icon !== null } fallback={ <Spinner size={ 14 } /> }>
+                    { () => <Icon name={ notice!.icon! } size={ 16 } /> }
                 </Show>
-                <span>{ connection.state() === 'offline' ? locale.t('connection.offline') : locale.t('connection.reconnecting') }</span>
+                <span>{ locale.t(notice!.text) }</span>
             </div>
         }
     </Show>
