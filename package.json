@@ -18,6 +18,7 @@
         "test:shuffle": "npm run test:shuffle --workspace application",
         "assets": "node tools/blender/build.mjs",
         "assets:poster": "node tools/blender/build.mjs --poster-only",
+        "art": "node tools/blender/art.mjs",
         "qa": "node tools/qa/matrix.mjs",
         "preview": "node tools/preview.mjs"
     },
