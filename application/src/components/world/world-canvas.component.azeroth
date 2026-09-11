@@ -1,0 +1,187 @@
+import type { WorldHandle } from '../../world/bridge.ts';
+import { useFocus } from '../../stores/focus.store.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+
+export default component WorldCanvas()
+{
+    const locale = useLocale();
+    const focus = useFocus();
+
+    let host: HTMLDivElement | null = null;
+    let canvas: HTMLCanvasElement | null = null;
+
+    state ready = false;
+
+    let world: WorldHandle | null = null;
+
+    mount
+    {
+        ready = true;
+
+        const reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+        let disposed = false;
+        let detach: (() => void) | null = null;
+
+        const start = async (): Promise<void> =>
+        {
+            if (host === null || canvas === null)
+            {
+                return;
+            }
+
+            const { createWorld } = await import('../../world/world.ts');
+
+            if (disposed)
+            {
+                return;
+            }
+
+            const handle = await createWorld({
+                canvas,
+                host,
+                assetBase: '/world',
+                reducedMotion: reduce.matches,
+                callbacks:
+                {
+                    onHover: (id) => focus.focus(id),
+                    onFailed: (reason) => console.warn(`[world] ${ reason }; keeping the static page.`)
+                }
+            });
+
+            if (disposed)
+            {
+                handle.dispose();
+                return;
+            }
+
+            world = handle;
+
+            const container = host.parentElement;
+
+            const readProgress = (): void =>
+            {
+                if (container === null)
+                {
+                    return;
+                }
+                const total = container.offsetHeight - window.innerHeight;
+                if (total <= 0)
+                {
+                    return;
+                }
+                const passed = -container.getBoundingClientRect().top;
+                handle.setProgress(Math.min(Math.max(passed / total, 0), 1));
+            };
+
+            let queued = false;
+            const onScroll = (): void =>
+            {
+                if (!queued)
+                {
+                    queued = true;
+                    requestAnimationFrame(() =>
+                    {
+                        queued = false;
+                        readProgress();
+                    });
+                }
+            };
+
+            const onPointer = (event: PointerEvent): void =>
+            {
+                const rect = canvas!.getBoundingClientRect();
+                handle.setPointer(
+                    ((event.clientX - rect.left) / rect.width) * 2 - 1,
+                    -(((event.clientY - rect.top) / rect.height) * 2 - 1)
+                );
+            };
+
+            const onLeave = (): void =>
+            {
+                handle.setPointer(0, 0);
+                focus.focus(null);
+            };
+
+            const visibility = new IntersectionObserver((entries) =>
+            {
+                if (entries[0].isIntersecting)
+                {
+                    handle.resume();
+                }
+                else
+                {
+                    handle.pause();
+                }
+            }, { threshold: 0 });
+            visibility.observe(host);
+
+            const onMotionChange = (): void => handle.setReducedMotion(reduce.matches);
+
+            window.addEventListener('scroll', onScroll, { passive: true });
+            window.addEventListener('resize', onScroll, { passive: true });
+            canvas.addEventListener('pointermove', onPointer, { passive: true });
+            canvas.addEventListener('pointerleave', onLeave, { passive: true });
+            reduce.addEventListener('change', onMotionChange);
+
+            readProgress();
+            handle.setDirection(locale.dir());
+
+            detach = (): void =>
+            {
+                window.removeEventListener('scroll', onScroll);
+                window.removeEventListener('resize', onScroll);
+                canvas?.removeEventListener('pointermove', onPointer);
+                canvas?.removeEventListener('pointerleave', onLeave);
+                reduce.removeEventListener('change', onMotionChange);
+                visibility.disconnect();
+            };
+        };
+
+        void start().catch((error) =>
+        {
+            console.warn('[world] the market did not start; keeping the static page.', error);
+        });
+
+        return () =>
+        {
+            disposed = true;
+            detach?.();
+            world?.dispose();
+            world = null;
+        };
+    }
+
+    effect
+    {
+        const id = focus.game();
+        world?.focusTable(id);
+    }
+
+    effect
+    {
+        const direction = locale.dir();
+        world?.setDirection(direction);
+    }
+
+    <div
+        ref={ (element) => host = element }
+        class="stage bg-void"
+        role="img"
+        aria-label={ locale.t('a11y.scene') }
+    >
+        <Show when={ ready }>
+            { () =>
+                <canvas
+                    ref={ (element) => canvas = element }
+                    class="block h-full w-full"
+                    aria-hidden="true"
+                ></canvas>
+            }
+        </Show>
+
+        <Show when={ ready }>
+            { () => <div class="scrim"></div> }
+        </Show>
+    </div>
+}
