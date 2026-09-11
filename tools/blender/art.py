@@ -14,7 +14,7 @@ ART = os.path.abspath(os.path.join(HERE, '..', '..', 'application', 'public', 'a
 ONLY = os.environ.get('NURA_ART')
 
 GAMES = {
-    'hokm': ('table-card', 1.25, 1.0, 0.42),
+    'hokm': ('table-card', 0.88, 0.62, 0.42),
     'poker': ('table-poker', 1.35, 1.05, 0.35),
     'backgammon': ('table-board', 0.95, 0.78, 0.5),
     'ludo': ('table-board', 0.9, 0.75, 0.5)
