@@ -1,17 +1,209 @@
 import { useHead } from 'azerothjs';
 
 import Page from '../../components/app/page.component.azeroth';
+import RecordStrip from '../../components/games/record-strip.component.azeroth';
+import Avatar from '../../components/ui/avatar.component.azeroth';
+import Button from '../../components/ui/button.component.azeroth';
+import Chip from '../../components/ui/chip.component.azeroth';
 import EmptyState from '../../components/ui/empty-state.component.azeroth';
+import Progress from '../../components/ui/progress.component.azeroth';
+import SectionHeading from '../../components/ui/section-heading.component.azeroth';
+import Tabs from '../../components/ui/tabs.component.azeroth';
+import { NURA_CHAIN } from '../../data/chain.ts';
+import { GAMES } from '../../data/games.ts';
+import { ACHIEVEMENTS } from '../../data/mock/achievements.ts';
+import Icon from '../../icons/icon.component.azeroth';
+import { shortAddress } from '../../lib/wallet.ts';
+import { useAccount } from '../../stores/account.store.ts';
+import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
+import { useSocial } from '../../stores/social.store.ts';
+import { useToasts } from '../../stores/toasts.store.ts';
 
 export default component MePage()
 {
     const locale = useLocale();
+    const account = useAccount();
+    const catalogue = useCatalogue();
+    const social = useSocial();
+    const toasts = useToasts();
 
     useHead({ title: () => locale.t('app.nav.me') });
 
-    <Page>
-        <h1 class="text-[clamp(1.75rem,5vw,2.5rem)]">{ locale.t('app.nav.me') }</h1>
-        <EmptyState icon="sparkles" title={ locale.t('state.emptyTitle') } />
+    state tab = 'overview';
+
+    derived user = account.user();
+
+    derived totals = user === null
+        ? { played: 0, won: 0 }
+        : GAMES.reduce((sum, game) => ({ played: sum.played + user!.stats[game.id].played, won: sum.won + user!.stats[game.id].won }), { played: 0, won: 0 });
+
+    derived nextLevel = user === null ? 1 : user.level + 1;
+
+    derived levelFloor = user === null ? 0 : Math.round(((user.level / 1.6) ** 2));
+
+    derived levelCeiling = Math.round(((nextLevel / 1.6) ** 2));
+
+    derived items = [
+        { id: 'overview', label: locale.t('person.tab.overview') },
+        { id: 'games', label: locale.t('person.tab.games') },
+        { id: 'achievements', label: locale.t('person.tab.achievements'), count: user?.achievements.length }
+    ];
+
+    const share = async (): Promise<void> =>
+    {
+        const link = `${ window.location.origin }/app/people/${ user?.handle ?? '' }`;
+        try
+        {
+            await navigator.clipboard.writeText(link);
+            toasts.show({ kind: 'success', text: locale.t('me.shared') });
+        }
+        catch
+        {
+            toasts.show({ kind: 'info', text: link });
+        }
+    };
+
+    <Page label={ locale.t('app.nav.me') }>
+        <Show
+            when={ user !== null }
+            fallback={ <EmptyState icon="me" title={ locale.t('person.notFound') } action={ locale.t('app.nav.home') } to="/app" class="py-12" /> }
+        >
+            { () =>
+                <div class="flex flex-col gap-6">
+                    <header class="flex flex-col items-center gap-3 pt-2 text-center">
+                        <Avatar person={ user } size="2xl" presence="online" ring />
+                        <div>
+                            <h1 class="text-[clamp(1.75rem,6vw,2.5rem)] leading-none">{ locale.text(user!.name) }</h1>
+                            <p class="mt-1 text-[14px] text-muted">@{ user!.handle }</p>
+                        </div>
+                        <ul class="flex flex-wrap justify-center gap-2" aria-label={ locale.t('person.tab.overview') }>
+                            <Show
+                                when={ account.isWallet() }
+                                fallback={ <li><Chip icon="people" tone="lamp">{ locale.t('wallet.demoBadge') }</Chip></li> }
+                            >
+                                { () =>
+                                    <li>
+                                        <Chip icon="key" tone="live">
+                                            <span class="tally">{ shortAddress(account.address() ?? '') }</span>
+                                        </Chip>
+                                    </li>
+                                }
+                            </Show>
+                            <li><Chip icon="star"><span class="tally">{ locale.t('me.level', { level: user!.level }) }</span></Chip></li>
+                            <li><Chip icon="games">{ locale.t('person.favourite', { game: locale.t(catalogue.byId(user!.favourite).nameKey) }) }</Chip></li>
+                        </ul>
+                    </header>
+
+                    <section class="rounded-panel border border-line bg-field p-4">
+                        <Progress
+                            value={ Math.max(0, totals.played - levelFloor) }
+                            max={ Math.max(1, levelCeiling - levelFloor) }
+                            tone="lamp"
+                            glow
+                            label={ locale.t('me.xp', { current: locale.n(Math.max(0, totals.played - levelFloor)), next: locale.n(Math.max(1, levelCeiling - levelFloor)), level: nextLevel }) }
+                        />
+                        <p class="tally mt-2 text-[12px] text-faint">
+                            { locale.t('me.xp', { current: locale.n(Math.max(0, totals.played - levelFloor)), next: locale.n(Math.max(1, levelCeiling - levelFloor)), level: nextLevel }) }
+                        </p>
+                    </section>
+
+                    <Show when={ !account.isWallet() }>
+                        { () =>
+                            <section class="rounded-panel border border-lamp/40 bg-lamp/5 p-4">
+                                <h2 class="flex items-center gap-2 font-display text-[20px] font-semibold text-text">
+                                    <Icon name="key" size={ 18 } class="text-lamp" />
+                                    { locale.t('me.keepSeat.title') }
+                                </h2>
+                                <p class="mt-1 text-[14px] text-muted">{ locale.t('me.keepSeat.lead') }</p>
+                                <Button variant="primary" block class="mt-4" leading="key" to="/app/me/settings">{ locale.t('me.keepSeat.action') }</Button>
+                            </section>
+                        }
+                    </Show>
+
+                    <div class="flex flex-wrap items-center justify-center gap-2">
+                        <Button variant="secondary" leading="settings" to="/app/me/settings">{ locale.t('me.settings') }</Button>
+                        <Button variant="outline" leading="share" onClick={ () => void share() }>{ locale.t('me.share') }</Button>
+                    </div>
+
+                    <Tabs items={ items } value={ tab } label={ locale.t('app.nav.me') } onChange={ (id) => tab = id } />
+
+                    <Show when={ tab === 'overview' }>
+                        { () =>
+                            <div class="flex flex-col gap-6">
+                                <RecordStrip record={ { played: totals.played, won: totals.won, streak: user!.stats[user!.favourite].streak } } />
+                                <section>
+                                    <SectionHeading title={ locale.t('person.friends') } />
+                                    <p class="tally rounded-panel border border-line bg-field p-4 text-[15px] text-text">
+                                        { locale.plural('friends.count', social.friends().length) }
+                                    </p>
+                                </section>
+                                <Show when={ account.isWallet() }>
+                                    { () =>
+                                        <section>
+                                            <SectionHeading title={ locale.t('wallet.address') } />
+                                            <div class="flex items-center gap-3 rounded-panel border border-line bg-field p-4">
+                                                <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-live/15 text-live">
+                                                    <Icon name="key" size={ 18 } />
+                                                </span>
+                                                <span class="flex min-w-0 flex-1 flex-col">
+                                                    <code class="tally truncate text-[14px] text-text">{ account.address() }</code>
+                                                    <span class="text-[12px] text-muted">{ locale.t('wallet.chainReady', { chain: NURA_CHAIN.name }) }</span>
+                                                </span>
+                                            </div>
+                                        </section>
+                                    }
+                                </Show>
+                            </div>
+                        }
+                    </Show>
+
+                    <Show when={ tab === 'games' }>
+                        { () =>
+                            <ul class="flex flex-col gap-2" aria-label={ locale.t('person.tab.games') }>
+                                <For each={ GAMES } key={ (game) => game.id } let={ game }>
+                                    <li class="flex items-center gap-3 rounded-panel border border-line bg-field p-3">
+                                        <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-tile bg-raised text-muted">
+                                            <Icon name={ game.category === 'cards' ? 'cards' : 'dice' } size={ 18 } />
+                                        </span>
+                                        <span class="flex min-w-0 flex-1 flex-col">
+                                            <span class="truncate text-[15px] font-semibold text-text">{ locale.t(game.nameKey) }</span>
+                                            <span class="tally text-[12px] text-muted">
+                                                { locale.t('game.record.played') } { locale.n(user!.stats[game.id].played) } · { locale.t('game.record.won') } { locale.n(user!.stats[game.id].won) }
+                                            </span>
+                                        </span>
+                                        <Button variant="secondary" size="sm" class="shrink-0 whitespace-nowrap" to={ `/app/games/${ game.slug }` }>{ locale.t('person.play') }</Button>
+                                    </li>
+                                </For>
+                            </ul>
+                        }
+                    </Show>
+
+                    <Show when={ tab === 'achievements' }>
+                        { () =>
+                            <ul class="grid grid-cols-2 gap-2 @lg:grid-cols-3" aria-label={ locale.t('person.tab.achievements') }>
+                                <For each={ ACHIEVEMENTS } key={ (achievement) => achievement.id } let={ achievement }>
+                                    <li class={ [
+                                        'flex flex-col items-center gap-1.5 rounded-panel border p-3 text-center',
+                                        user!.achievements.includes(achievement.id) ? 'border-lamp/40 bg-lamp/5' : 'border-line bg-field opacity-60'
+                                    ].join(' ') }>
+                                        <span class={ [
+                                            'flex h-11 w-11 items-center justify-center rounded-full',
+                                            user!.achievements.includes(achievement.id) ? 'bg-lamp/20 text-lamp' : 'bg-raised text-faint'
+                                        ].join(' ') }>
+                                            <Icon name={ achievement.icon } size={ 20 } />
+                                        </span>
+                                        <span class="text-[13px] font-semibold text-text">{ locale.text(achievement.name) }</span>
+                                        <span class="text-[11px] text-muted">
+                                            { user!.achievements.includes(achievement.id) ? locale.text(achievement.blurb) : locale.t('person.achievements.locked') }
+                                        </span>
+                                    </li>
+                                </For>
+                            </ul>
+                        }
+                    </Show>
+                </div>
+            }
+        </Show>
     </Page>
 }
