@@ -1,0 +1,58 @@
+import { Link } from 'azerothjs';
+
+import type { Game, GameId } from '../../data/games.ts';
+import { useCatalogue } from '../../stores/catalogue.store.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import Button from '../ui/button.component.azeroth';
+import GameArt from './game-art.component.azeroth';
+
+export default component GameCard(props: {
+    game: Game;
+    compact?: boolean;
+    class?: string;
+    onQuickPlay: (game: GameId) => void;
+})
+{
+    const locale = useLocale();
+    const catalogue = useCatalogue();
+
+    derived name = locale.t(props.game.nameKey);
+
+    derived stats = catalogue.stats(props.game.id);
+
+    derived seats = props.game.minPlayers === props.game.maxPlayers
+        ? locale.plural('common.players', props.game.maxPlayers)
+        : locale.t('games.seats.range', { min: props.game.minPlayers, max: props.game.maxPlayers });
+
+    derived href = `/app/games/${ props.game.slug }`;
+
+    <article class={ [
+        'group relative flex flex-col overflow-hidden rounded-panel border border-line bg-field',
+        'transition duration-200 ease-[var(--ease-ui)] hover:border-lamp/40 hover:shadow-2',
+        props.class ?? ''
+    ].filter(Boolean).join(' ') }>
+        <Link to={ href } class="relative block" aria-label={ name } prefetch="hover">
+            <GameArt game={ props.game.id } alt="" ratio={ props.compact === true ? 'wide' : 'card' } />
+            <span class="absolute start-3 top-3 flex items-center gap-1.5 rounded-full bg-void/70 px-2.5 py-1 text-[12px] font-semibold text-live backdrop-blur-sm">
+                <span class="live-dot" aria-hidden="true"></span>
+                <span class="tally">{ locale.plural('games.live.playing', stats.playersOnline) }</span>
+            </span>
+        </Link>
+        <div class={ [ 'flex flex-1 flex-col gap-3', props.compact === true ? 'p-3' : 'p-4' ].join(' ') }>
+            <div class="min-w-0">
+                <Link to={ href } class="font-display text-[20px] font-semibold leading-tight text-text hover:underline">{ name }</Link>
+                <Show when={ props.compact !== true }>
+                    <p class="mt-1 line-clamp-2 text-[13px] text-muted">{ locale.t(props.game.blurbKey) }</p>
+                </Show>
+            </div>
+            <div class="mt-auto flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+                <span class="tally min-w-0 flex-1 truncate text-[12px] text-faint">
+                    { seats } · { locale.t('games.live.wait', { seconds: stats.waitSeconds }) }
+                </span>
+                <Button variant="primary" size="sm" leading="zap" class="shrink-0 whitespace-nowrap" onClick={ () => props.onQuickPlay(props.game.id) }>
+                    { locale.t('app.nav.quickPlay') }
+                </Button>
+            </div>
+        </div>
+    </article>
+}

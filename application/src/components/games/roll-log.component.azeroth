@@ -1,0 +1,74 @@
+import { personById } from '../../data/mock/index.ts';
+import Icon from '../../icons/icon.component.azeroth';
+import type { RollEntry } from '../../services/lobby.service.ts';
+import { useLobby } from '../../stores/lobby.store.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import Button from '../ui/button.component.azeroth';
+
+export default component RollLog(props: { rolls: RollEntry[]; verification: string | null; onCopy: (code: string) => void })
+{
+    const locale = useLocale();
+    const lobby = useLobby();
+
+    state open = false;
+
+    const who = (id: string): string =>
+    {
+        if (id === lobby.me())
+        {
+            return locale.t('common.you');
+        }
+        if (id.startsWith('bot-'))
+        {
+            return locale.t('play.lobby.bot');
+        }
+        const person = personById(id);
+        return person === undefined ? id : locale.text(person.name).split(' ')[0];
+    };
+
+    <section class="rounded-panel border border-line bg-field" aria-label={ locale.t('play.result.rollLog') }>
+        <button
+            type="button"
+            class="flex w-full cursor-pointer items-center gap-3 px-4 py-3 text-start"
+            aria-expanded={ open }
+            aria-controls="roll-log-body"
+            onClick={ () => open = !open }
+        >
+            <span class="flex h-9 w-9 items-center justify-center rounded-full bg-live/15 text-live">
+                <Icon name="dice" size={ 18 } />
+            </span>
+            <span class="flex min-w-0 flex-1 flex-col">
+                <span class="text-[15px] font-semibold text-text">{ locale.t('play.result.rollLog') }</span>
+                <span class="truncate text-[12px] text-muted">{ locale.t('play.result.rollLogLead') }</span>
+            </span>
+            <Icon name="chevron-down" size={ 18 } class={ [ 'text-muted transition-transform duration-200', open ? 'rotate-180' : '' ].filter(Boolean).join(' ') } />
+        </button>
+        <Show when={ open }>
+            <div id="roll-log-body" class="border-t border-line/60 px-4 pb-4">
+                <ol class="mt-3 grid max-h-64 grid-cols-1 gap-1 overflow-y-auto sm:grid-cols-2">
+                    <For each={ props.rolls } key={ (roll) => roll.turn } let={ roll }>
+                        <li class="flex items-center gap-3 rounded-tile px-2 py-1.5 text-[13px] odd:bg-raised/40">
+                            <span class="tally w-14 shrink-0 text-faint">{ locale.t('play.result.turn', { turn: roll.turn }) }</span>
+                            <span class="min-w-0 flex-1 truncate text-text">{ who(roll.playerId) }</span>
+                            <span class="tally flex gap-1" aria-label={ `${ roll.dice[0] } · ${ roll.dice[1] }` }>
+                                <span class="flex h-6 w-6 items-center justify-center rounded-[0.35rem] bg-text font-semibold text-void">{ locale.n(roll.dice[0]) }</span>
+                                <span class="flex h-6 w-6 items-center justify-center rounded-[0.35rem] bg-text font-semibold text-void">{ locale.n(roll.dice[1]) }</span>
+                            </span>
+                        </li>
+                    </For>
+                </ol>
+                <Show when={ props.verification !== null }>
+                    { () =>
+                        <div class="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-tile border border-dashed border-line px-3 py-2">
+                            <span class="flex flex-col">
+                                <span class="label text-[11px] text-faint">{ locale.t('play.result.verification') }</span>
+                                <code class="tally text-[14px] font-semibold text-text">{ props.verification! }</code>
+                            </span>
+                            <Button variant="outline" size="sm" leading="copy" onClick={ () => props.onCopy(props.verification!) }>{ locale.t('play.result.copyCode') }</Button>
+                        </div>
+                    }
+                </Show>
+            </div>
+        </Show>
+    </section>
+}

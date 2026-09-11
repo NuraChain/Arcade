@@ -1,0 +1,26 @@
+import type { Game, GameId } from '../../data/games.ts';
+import GameCard from './game-card.component.azeroth';
+
+export default component GameGrid(props: {
+    games: Game[];
+    compact?: boolean;
+    label: string;
+    class?: string;
+    onQuickPlay: (game: GameId) => void;
+})
+{
+    <ul
+        class={ [
+            'grid gap-4',
+            props.compact === true ? 'grid-cols-1 @sm:grid-cols-2 @2xl:grid-cols-3' : 'grid-cols-1 @md:grid-cols-2 @4xl:grid-cols-4',
+            props.class ?? ''
+        ].filter(Boolean).join(' ') }
+        aria-label={ props.label }
+    >
+        <For each={ props.games } key={ (game) => game.id } let={ game }>
+            <li class="flex">
+                <GameCard game={ game } compact={ props.compact } class="flex-1" onQuickPlay={ props.onQuickPlay } />
+            </li>
+        </For>
+    </ul>
+}

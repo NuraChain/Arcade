@@ -1,0 +1,53 @@
+import type { Game } from '../../data/games.ts';
+import Icon from '../../icons/icon.component.azeroth';
+import { useCatalogue } from '../../stores/catalogue.store.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import Button from '../ui/button.component.azeroth';
+import Chip from '../ui/chip.component.azeroth';
+import GameArt from './game-art.component.azeroth';
+import LiveStats from './live-stats.component.azeroth';
+
+export default component GameHero(props: { game: Game; onQuickPlay: () => void })
+{
+    const locale = useLocale();
+    const catalogue = useCatalogue();
+
+    derived rules = catalogue.rules(props.game.id);
+
+    derived name = locale.t(props.game.nameKey);
+
+    derived seats = props.game.minPlayers === props.game.maxPlayers
+        ? locale.plural('common.players', props.game.maxPlayers)
+        : locale.t('games.seats.range', { min: props.game.minPlayers, max: props.game.maxPlayers });
+
+    <section class="relative overflow-hidden rounded-panel border border-line bg-field" aria-label={ name }>
+        <GameArt game={ props.game.id } alt="" ratio="wide" priority sizes="(min-width: 1024px) 72rem, 100vw" class="max-h-[22rem] sm:max-h-[26rem]" />
+        <div class="pointer-events-none absolute inset-0 bg-gradient-to-t from-field via-field/70 to-transparent" aria-hidden="true"></div>
+        <div class="relative -mt-24 flex flex-col gap-4 p-4 sm:-mt-32 sm:p-6">
+            <div class="flex flex-wrap items-center gap-2">
+                <Chip icon={ props.game.category === 'cards' ? 'cards' : 'dice' }>{ locale.t(props.game.categoryKey) }</Chip>
+                <Chip icon="people"><span class="tally">{ seats }</span></Chip>
+                <Show when={ rules.partners }>{ () => <Chip icon="versus">{ locale.t('games.partners') }</Chip> }</Show>
+                <Show when={ rules.stakes === 'play-money' }>{ () => <Chip icon="coins" tone="lamp">{ locale.t('games.stakes.playMoney') }</Chip> }</Show>
+            </div>
+            <div>
+                <h1 class="text-[clamp(2.25rem,7vw,3.5rem)] leading-none">{ name }</h1>
+                <p class="mt-2 max-w-[52ch] text-[15px] text-muted sm:text-[17px]">{ locale.t(props.game.blurbKey) }</p>
+            </div>
+            <LiveStats game={ props.game.id } />
+            <div class="hidden gap-3 sm:flex">
+                <Button variant="primary" size="lg" leading="zap" onClick={ () => props.onQuickPlay() }>{ locale.t('app.nav.quickPlay') }</Button>
+                <Button variant="outline" size="lg" leading="add" to={ `/app/games/${ props.game.slug }/create` }>{ locale.t('games.create') }</Button>
+            </div>
+            <ul class="flex flex-wrap gap-2" aria-label={ locale.t('game.modes') }>
+                <For each={ [...rules.modes] } key={ (mode) => mode } let={ mode }>
+                    <li class="flex items-center gap-2 rounded-full border border-line bg-void/40 px-3 py-1.5 text-[12px] text-muted">
+                        <Icon name={ mode === 'live' ? 'zap' : 'clock' } size={ 13 } class={ mode === 'live' ? 'text-live' : '' } />
+                        <span class="font-semibold text-text">{ locale.t(mode === 'live' ? 'games.mode.live' : 'games.mode.turns') }</span>
+                        <span class="hidden sm:inline">{ locale.t(mode === 'live' ? 'games.mode.liveHint' : 'games.mode.turnsHint') }</span>
+                    </li>
+                </For>
+            </ul>
+        </div>
+    </section>
+}

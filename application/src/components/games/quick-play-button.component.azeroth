@@ -1,0 +1,40 @@
+import Icon from '../../icons/icon.component.azeroth';
+import { useLocale } from '../../stores/locale.store.ts';
+
+export default component QuickPlayButton(props: {
+    detail: string;
+    title?: string;
+    size?: 'hero' | 'md';
+    loading?: boolean;
+    class?: string;
+    onClick: () => void;
+})
+{
+    const locale = useLocale();
+
+    derived hero = props.size !== 'md';
+
+    <button
+        type="button"
+        class={ [
+            'sheen group relative flex w-full cursor-pointer items-center gap-4 overflow-hidden rounded-panel bg-lamp text-start text-void shadow-glow-lamp',
+            'transition duration-200 ease-[var(--ease-ui)] hover:brightness-105 active:scale-[0.99] disabled:cursor-wait disabled:brightness-90',
+            hero ? 'p-5' : 'p-3.5',
+            props.class ?? ''
+        ].filter(Boolean).join(' ') }
+        disabled={ props.loading === true }
+        aria-busy={ props.loading === true }
+        onClick={ () => props.onClick() }
+    >
+        <span class={ [ 'flex shrink-0 items-center justify-center rounded-full bg-void/15', hero ? 'h-14 w-14' : 'h-11 w-11' ].join(' ') }>
+            <Icon name="zap" size={ hero ? 28 : 22 } />
+        </span>
+        <span class="flex min-w-0 flex-1 flex-col">
+            <span class={ [ 'font-display font-semibold leading-tight', hero ? 'text-[26px]' : 'text-[19px]' ].join(' ') }>
+                { props.title ?? locale.t('app.nav.quickPlay') }
+            </span>
+            <span class="tally text-[13px] font-semibold leading-snug opacity-80">{ props.detail }</span>
+        </span>
+        <Icon name="forward" size={ 22 } class="icon-flip shrink-0 transition-transform duration-200 group-hover:translate-x-0.5 rtl:group-hover:-translate-x-0.5" />
+    </button>
+}

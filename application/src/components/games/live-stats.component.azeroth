@@ -1,0 +1,31 @@
+import type { GameId } from '../../data/games.ts';
+import Icon from '../../icons/icon.component.azeroth';
+import { useCatalogue } from '../../stores/catalogue.store.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+
+export default component LiveStats(props: { game: GameId; compact?: boolean; class?: string })
+{
+    const locale = useLocale();
+    const catalogue = useCatalogue();
+
+    derived stats = catalogue.stats(props.game);
+
+    <ul class={ [ 'flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] text-muted', props.class ?? '' ].filter(Boolean).join(' ') }>
+        <li class="flex items-center gap-1.5 font-semibold text-live">
+            <span class="live-dot" aria-hidden="true"></span>
+            <span class="tally">{ locale.plural('games.live.playing', stats.playersOnline) }</span>
+        </li>
+        <Show when={ props.compact !== true }>
+            <li class="flex items-center gap-1.5">
+                <Icon name="seat" size={ 14 } />
+                <span class="tally">{ locale.plural('games.live.tables', stats.tablesOpen) }</span>
+            </li>
+        </Show>
+        <Show when={ props.compact !== true }>
+            <li class="flex items-center gap-1.5">
+                <Icon name="timer" size={ 14 } />
+                <span class="tally">{ locale.t('games.live.wait', { seconds: stats.waitSeconds }) }</span>
+            </li>
+        </Show>
+    </ul>
+}

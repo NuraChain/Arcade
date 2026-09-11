@@ -1,0 +1,119 @@
+import { personById } from '../../data/mock/index.ts';
+import Icon from '../../icons/icon.component.azeroth';
+import type { Seat } from '../../lib/matchmaking.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import { usePresence } from '../../stores/presence.store.ts';
+import Avatar from '../ui/avatar.component.azeroth';
+
+export default component SeatCard(props: {
+    seat: Seat;
+    me: string;
+    canInvite: boolean;
+    onInvite?: () => void;
+})
+{
+    const locale = useLocale();
+    const presence = usePresence();
+
+    derived filled = props.seat.playerId !== null;
+
+    derived pending = !filled && props.seat.invitedId !== null;
+
+    derived personId = props.seat.playerId ?? props.seat.invitedId;
+
+    derived person = personId === null ? null : (personById(personId) ?? null);
+
+    derived name = props.seat.bot
+        ? locale.t('play.lobby.bot')
+        : (props.seat.playerId === props.me ? locale.t('common.you') : (person === null ? (personId ?? '') : locale.text(person.name)));
+
+    derived tag = ((): { text: string; tone: string } | null =>
+    {
+        if (props.seat.bot)
+        {
+            return { text: locale.t('play.lobby.bot'), tone: 'bg-raised text-muted' };
+        }
+        if (pending)
+        {
+            return { text: locale.t('play.lobby.invited'), tone: 'bg-lamp/15 text-lamp' };
+        }
+        if (!filled)
+        {
+            return null;
+        }
+        return props.seat.ready
+            ? { text: locale.t('play.lobby.readyTag'), tone: 'bg-live/15 text-live' }
+            : { text: locale.t('play.lobby.notReady'), tone: 'bg-raised text-muted' };
+    })();
+
+    derived shell = [
+        'relative flex min-h-[9.5rem] flex-col items-center justify-center gap-2 rounded-panel border p-3 text-center transition-colors duration-200',
+        filled && props.seat.ready ? 'border-live/50 bg-live/5 shadow-glow-live' : '',
+        filled && !props.seat.ready ? 'border-line bg-field' : '',
+        !filled && pending ? 'border-dashed border-lamp/50 bg-field' : '',
+        !filled && !pending ? 'border-dashed border-line bg-void/40' : ''
+    ].filter(Boolean).join(' ');
+
+    <Show
+        when={ filled || pending }
+        fallback={
+            <Show
+                when={ props.canInvite }
+                fallback={
+                    <div class={ shell } aria-label={ locale.t('play.lobby.open') }>
+                        <span class="flex h-14 w-14 items-center justify-center rounded-full border border-dashed border-line text-faint">
+                            <Icon name="seat" size={ 22 } />
+                        </span>
+                        <span class="text-[13px] font-semibold text-muted">{ locale.t('play.lobby.open') }</span>
+                    </div>
+                }
+            >
+                { () =>
+                    <button type="button" class={ [ shell, 'cursor-pointer hover:border-lamp/60 hover:bg-raised/40' ].join(' ') } onClick={ () => props.onInvite?.() }>
+                        <span class="flex h-14 w-14 items-center justify-center rounded-full border border-dashed border-line text-lamp">
+                            <Icon name="friend-add" size={ 22 } />
+                        </span>
+                        <span class="text-[13px] font-semibold text-lamp">{ locale.t('play.lobby.invite') }</span>
+                        <span class="text-[12px] text-faint">{ locale.t('play.lobby.open') }</span>
+                    </button>
+                }
+            </Show>
+        }
+    >
+        { () =>
+            <div class={ shell }>
+                <Show when={ props.seat.host }>
+                    <span class="absolute start-2 top-2 flex items-center gap-1 rounded-full bg-lamp/15 px-2 py-0.5 text-[11px] font-semibold text-lamp">
+                        <Icon name="star" size={ 11 } />
+                        { locale.t('play.lobby.host') }
+                    </span>
+                </Show>
+                <Show
+                    when={ !props.seat.bot }
+                    fallback={
+                        <span class="flex h-14 w-14 items-center justify-center rounded-full bg-raised text-muted" role="img" aria-label={ locale.t('play.lobby.bot') }>
+                            <Icon name="bot" size={ 26 } />
+                        </span>
+                    }
+                >
+                    { () =>
+                        <Avatar
+                            person={ person }
+                            size="lg"
+                            presence={ pending || person === null ? null : presence.of(person.id).state }
+                            class={ pending ? 'opacity-60' : '' }
+                        />
+                    }
+                </Show>
+                <span class={ [ 'w-full truncate text-[14px] font-semibold', pending ? 'text-muted' : 'text-text' ].join(' ') }>{ name }</span>
+                <Show when={ tag !== null }>
+                    { () =>
+                        <span class={ [ 'rounded-full px-2 py-0.5 text-[11px] font-semibold', tag!.tone, pending ? 'animate-pulse motion-reduce:animate-none' : '' ].filter(Boolean).join(' ') }>
+                            { tag!.text }
+                        </span>
+                    }
+                </Show>
+            </div>
+        }
+    </Show>
+}

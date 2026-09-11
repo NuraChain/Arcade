@@ -1,0 +1,151 @@
+import { personById } from '../../data/mock/index.ts';
+import type { Person } from '../../data/mock/types.ts';
+import Icon from '../../icons/icon.component.azeroth';
+import { TIMING } from '../../lib/matchmaking.ts';
+import { createRandom, hashSeed } from '../../lib/random.ts';
+import { runtime } from '../../lib/runtime.ts';
+import type { MessageKey } from '../../locales/en.ts';
+import { useAccount } from '../../stores/account.store.ts';
+import { useCatalogue } from '../../stores/catalogue.store.ts';
+import { useLobby } from '../../stores/lobby.store.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import Avatar from '../ui/avatar.component.azeroth';
+import Button from '../ui/button.component.azeroth';
+import Chip from '../ui/chip.component.azeroth';
+import Progress from '../ui/progress.component.azeroth';
+import Spinner from '../ui/spinner.component.azeroth';
+import GameArt from './game-art.component.azeroth';
+
+export default component MatchmakingPanel(props: { onInvite: () => void })
+{
+    const locale = useLocale();
+    const lobby = useLobby();
+    const account = useAccount();
+    const catalogue = useCatalogue();
+
+    state now = runtime().clock.now();
+
+    mount
+    {
+        return runtime().clock.every(1000, () => now = runtime().clock.now());
+    }
+
+    derived current = lobby.state();
+
+    derived game = current.intent === null ? null : catalogue.byId(current.intent.game);
+
+    derived gameName = game === null ? '' : locale.t(game.nameKey);
+
+    derived found = current.seats.filter((seat) => seat.playerId !== null).length;
+
+    derived total = current.seats.length;
+
+    derived missing = Math.max(0, total - found);
+
+    derived elapsed = Math.max(0, Math.floor((now - current.startedAt) / 1000));
+
+    derived etaSeconds = Math.round((current.intent === null ? 0 : TIMING.eta[current.intent.game] * 2) / 1000);
+
+    derived user = account.user();
+
+    derived band = locale.t(`skill.${ user?.skill ?? 'regular' }` as MessageKey);
+
+    derived region = locale.t(`region.${ user?.region ?? 'me' }` as MessageKey);
+
+    derived ping = 18 + createRandom(hashSeed(runtime().seed, 'ping', current.tableId ?? '')).int(0, 42);
+
+    derived seated = current.seats.map((seat) => (seat.playerId === null ? null : (personById(seat.playerId) ?? null)));
+
+    derived isFound = current.phase === 'found';
+
+    <section class="flex flex-col gap-5" aria-live="polite" aria-label={ locale.t(isFound ? 'play.title.found' : 'play.title.searching') }>
+        <div class="relative overflow-hidden rounded-panel border border-line bg-field">
+            <Show when={ game !== null }>
+                { () => <GameArt game={ game!.id } alt="" ratio="wide" priority sizes="(min-width: 1024px) 48rem, 100vw" class="max-h-[14rem] opacity-80 sm:max-h-[18rem]" /> }
+            </Show>
+            <div class="pointer-events-none absolute inset-0 bg-gradient-to-t from-field via-field/60 to-transparent" aria-hidden="true"></div>
+            <div class="relative -mt-16 flex flex-col gap-4 p-4 sm:-mt-20 sm:p-6">
+                <div class="flex items-center gap-3">
+                    <Show when={ !isFound } fallback={ <span class="flex h-10 w-10 items-center justify-center rounded-full bg-live text-void"><Icon name="check-circle" size={ 22 } /></span> }>
+                        { () => <Spinner size={ 28 } label={ locale.t('play.title.searching') } class="text-lamp" /> }
+                    </Show>
+                    <div class="min-w-0">
+                        <h2 class="font-display text-[26px] font-semibold leading-none text-text">{ gameName }</h2>
+                        <p class="mt-1 text-[14px] text-muted">
+                            { isFound ? locale.t('play.found.lead') : locale.plural('play.search.lead', missing) }
+                        </p>
+                    </div>
+                </div>
+
+                <Progress value={ found } max={ total } tone={ isFound ? 'live' : 'lamp' } glow label={ locale.t('play.search.seats', { found, total }) } />
+
+                <ul class="flex flex-wrap items-center gap-3" aria-label={ locale.t('play.search.seats', { found, total }) }>
+                    <For each={ current.seats } key={ (seat) => seat.index } let={ seat } index={ index }>
+                        <li class="flex flex-col items-center gap-1">
+                            <Show
+                                when={ seat.playerId !== null }
+                                fallback={ <span class="h-14 w-14 animate-pulse rounded-full border border-dashed border-line bg-raised/50 motion-reduce:animate-none" aria-hidden="true"></span> }
+                            >
+                                { () =>
+                                    <Show
+                                        when={ !seat.bot }
+                                        fallback={ <span class="flex h-14 w-14 items-center justify-center rounded-full bg-raised text-muted" role="img" aria-label={ locale.t('play.lobby.bot') }><Icon name="bot" size={ 26 } /></span> }
+                                    >
+                                        { () => <Avatar person={ seated[index] as Person | null } size="lg" ring={ seat.playerId === current.me } /> }
+                                    </Show>
+                                }
+                            </Show>
+                            <span class="max-w-[4.5rem] truncate text-[11px] text-muted">
+                                { seat.playerId === current.me
+                                    ? locale.t('common.you')
+                                    : (seat.bot ? locale.t('play.lobby.bot') : (seated[index] === null ? '' : locale.text(seated[index]!.name).split(' ')[0])) }
+                            </span>
+                        </li>
+                    </For>
+                </ul>
+
+                <div class="flex flex-wrap gap-2">
+                    <Chip icon="target">{ locale.t('play.search.band', { band }) }</Chip>
+                    <Chip icon="signal"><span class="tally">{ locale.t('play.search.region', { region, ping }) }</span></Chip>
+                    <Chip icon="shield"><span class="tally">{ locale.t('play.search.reliability', { score: user?.reliability ?? 100 }) }</span></Chip>
+                </div>
+
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <p class="tally text-[13px] text-faint">
+                        { locale.t('play.search.eta', { seconds: etaSeconds }) } · { locale.plural('common.seconds', elapsed) }
+                    </p>
+                    <Show when={ !isFound }>
+                        <Button variant="ghost" size="sm" leading="close" onClick={ () => lobby.cancel() }>{ locale.t('play.search.cancel') }</Button>
+                    </Show>
+                </div>
+            </div>
+        </div>
+
+        <Show when={ current.noMatch && !isFound }>
+            <div class="rounded-panel border border-lamp/40 bg-lamp/5 p-4 sm:p-5">
+                <h3 class="flex items-center gap-2 font-display text-[20px] font-semibold text-text">
+                    <Icon name="clock" size={ 18 } class="text-lamp" />
+                    { locale.t('play.search.slow') }
+                </h3>
+                <p class="mt-1 text-[14px] text-muted">{ locale.t('play.search.slowLead') }</p>
+                <div class="mt-4 flex flex-col gap-2">
+                    <Button variant="primary" block leading="friend-add" onClick={ () => props.onInvite() }>{ locale.t('play.search.inviteFriend') }</Button>
+                    <Button variant="secondary" block leading="bot" onClick={ () => lobby.fillWithBots() }>{ locale.t('play.search.practice') }</Button>
+                    <p class="px-1 text-[12px] text-faint">{ locale.t('play.search.practiceHint') }</p>
+                    <Button variant="outline" block leading="refresh" onClick={ () => lobby.keepWaiting() }>{ locale.t('play.search.keepWaiting') }</Button>
+                    <Show
+                        when={ !lobby.notify() }
+                        fallback={
+                            <p class="flex items-center gap-2 px-1 pt-1 text-[13px] text-live">
+                                <Icon name="bell" size={ 14 } />
+                                { locale.t('play.search.notified', { game: gameName }) }
+                            </p>
+                        }
+                    >
+                        { () => <Button variant="ghost" block leading="bell" onClick={ () => lobby.notifyWhenFull() }>{ locale.t('play.search.notify') }</Button> }
+                    </Show>
+                </div>
+            </div>
+        </Show>
+    </section>
+}
