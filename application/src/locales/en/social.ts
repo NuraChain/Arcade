@@ -152,7 +152,6 @@ export const social = {
     'chat.loadFailed': 'Could not load this conversation.',
     'chat.line.invite': 'A table is open',
     'chat.line.result': 'The game is over',
-    'chat.line.system': 'Something changed here',
     'chat.blocked': 'You blocked this person.',
     'chat.notFound': 'No such conversation.',
     'chat.today': 'Today',

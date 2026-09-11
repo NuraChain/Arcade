@@ -414,6 +414,22 @@ The browser renders a line through `lib/lines.ts`, which declares the keys it kn
 key renders as NOTHING rather than as its own name, because an old client meeting a new server is
 a designed state and not an excuse to print an internal identifier on the screen.
 
+**`LINE_KEYS` grows when a domain starts WRITING a line, never before.** `chat.line.system` was
+declared with no producer and had to be given copy - "Something changed here" - which is filler
+standing in for a sentence nobody has written. It was removed; the group work adds its own keys
+with the lines that actually occur.
+
+**That shape exists for one reason, and `tests/lines.spec.ts` is the proof**: a sentence the
+server authored is composed at DISPLAY time, so switching language re-renders it in place. The
+version this replaces stored bilingual strings in the chat store, which could not follow a switch
+at all. A message somebody TYPED does not change - words are words - and seeing both behaviours
+in one thread is what the design is for.
+
+**A message carries `dir="auto"`.** Fixture conversations are single-language now, so an English
+sentence inside a Persian page is the normal case rather than an artefact, and a paragraph that
+inherits the page direction puts its full stop on the wrong end. The direction of a message
+follows its CONTENT; the direction of the UI around it does not.
+
 **History pages by keyset**, `(created_at, id)` descending. An OFFSET page repeats or skips a line
 every time a message arrives at the other end while somebody is scrolling up, and
 `chat.db.spec.ts` has a test that does exactly that and expects the page not to move.

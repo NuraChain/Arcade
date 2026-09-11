@@ -133,6 +133,7 @@ export default component MessageBubble(props: { message: Message; me: string; sh
                     </Show>
                     <span
                         ref={ (element) => bubble = element }
+                        dir="auto"
                         class={ [
                             'rounded-tile px-3 py-2 text-ui-base leading-snug',
                             mine ? 'bg-accent text-accent-ink' : 'bg-raised text-text'

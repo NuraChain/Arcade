@@ -155,7 +155,6 @@ export const social: Pick<Dictionary, keyof typeof reference> = {
     'chat.loadFailed': 'این گفتگو بارگذاری نشد.',
     'chat.line.invite': 'یک میز باز است',
     'chat.line.result': 'بازی تمام شد',
-    'chat.line.system': 'اینجا چیزی عوض شد',
     'chat.blocked': 'این شخص را مسدود کرده‌ای.',
     'chat.notFound': 'چنین گفت‌وگویی نداریم.',
     'chat.today': 'امروز',

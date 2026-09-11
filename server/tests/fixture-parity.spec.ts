@@ -80,7 +80,7 @@ describe('the fixtures and the mock agree about who exists', () =>
         // Mirrors `LINE_KEYS` in `application/src/lib/lines.ts`. A key the client cannot render
         // shows as nothing, which is a designed state for an old client meeting a new server -
         // but not one the fixtures should be exercising on purpose.
-        const known = new Set(['chat.line.invite', 'chat.line.result', 'chat.line.system']);
+        const known = new Set(['chat.line.invite', 'chat.line.result']);
 
         for (const thread of THREAD_FIXTURES)
         {

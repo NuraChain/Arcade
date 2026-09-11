@@ -108,7 +108,7 @@ export default component ChatListItem(props: { conversation: Conversation; me: s
                     </Show>
                 </span>
                 <span class={ [ 'truncate text-ui-sm', typing.length > 0 ? 'text-live' : (unread > 0 ? 'text-text' : 'text-muted') ].join(' ') }>
-                    { preview }
+                    <span dir="auto">{ preview }</span>
                 </span>
             </span>
 
