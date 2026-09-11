@@ -67,11 +67,95 @@
     }
 }
 
+@custom-variant coarse (@media (pointer: coarse));
+@custom-variant fine (@media (pointer: fine));
+@custom-variant standalone (@media (display-mode: standalone));
+@custom-variant phone (&:where([data-posture='phone'], [data-posture='phone'] *));
+@custom-variant rail (&:where([data-posture='rail'], [data-posture='rail'] *));
+@custom-variant sidebar (&:where([data-posture='sidebar'], [data-posture='sidebar'] *));
+@custom-variant social (&:where([data-social='true'], [data-social='true'] *));
+
 @utility panel
 {
     background: var(--field);
     border: 1px solid var(--line);
     border-radius: 0.875rem;
+}
+
+@utility safe-t
+{
+    padding-block-start: env(safe-area-inset-top, 0px);
+}
+
+@utility safe-b
+{
+    padding-block-end: env(safe-area-inset-bottom, 0px);
+}
+
+@utility safe-x
+{
+    padding-inline: env(safe-area-inset-left, 0px) env(safe-area-inset-right, 0px);
+}
+
+@utility pb-nav
+{
+    padding-block-end: calc(var(--nav-h) + env(safe-area-inset-bottom, 0px) + 1rem);
+}
+
+@utility glass
+{
+    background: var(--glass);
+    backdrop-filter: blur(18px) saturate(1.2);
+    -webkit-backdrop-filter: blur(18px) saturate(1.2);
+}
+
+@utility target
+{
+    min-inline-size: 44px;
+    min-block-size: 44px;
+}
+
+@utility live-dot
+{
+    background: var(--live);
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--live) 25%, transparent);
+}
+
+@utility z-nav
+{
+    z-index: var(--z-nav);
+}
+
+@utility z-topbar
+{
+    z-index: var(--z-topbar);
+}
+
+@utility z-banner
+{
+    z-index: var(--z-banner);
+}
+
+@utility z-overlay
+{
+    z-index: var(--z-overlay);
+}
+
+@utility z-toast
+{
+    z-index: var(--z-toast);
+}
+
+@utility sheen
+{
+    background-image: linear-gradient(
+        110deg,
+        transparent 30%,
+        color-mix(in oklab, white 22%, transparent) 50%,
+        transparent 70%
+    );
+    background-size: 200% 100%;
+    animation: var(--animate-sheen);
 }
 
 @utility label
