@@ -79,7 +79,9 @@ export default component PlayPage()
 
     derived railVisible = chatAvailable && railOpen;
 
-    derived layout = railVisible ? 'grid gap-5 @4xl:grid-cols-[minmax(0,1fr)_20rem]' : 'grid gap-5';
+    derived railShare = Math.round(settings.settings().railWidth * 100);
+
+    derived layout = railVisible ? 'grid gap-4 @4xl:grid-cols-[minmax(0,1fr)_var(--rail-share)]' : 'grid gap-4';
 
     useHead({ title: () => title });
 
@@ -208,7 +210,7 @@ export default component PlayPage()
             }
         >
             { () =>
-                <div class={ layout }>
+                <div class={ layout } style={ `--rail-share: ${ railShare }%` }>
                     <div class="min-w-0">
                         <Show when={ phase === 'searching' || phase === 'found' }>
                             { () => <MatchmakingPanel onInvite={ openInvite } /> }

@@ -50,6 +50,8 @@ export const me = {
 
     'settings.appearance.theme': 'Theme',
     'settings.appearance.language': 'Language',
+    'settings.appearance.rail': 'Table chat width',
+    'settings.appearance.railHint': 'How much of a wide table the chat rail takes. The table always keeps the rest.',
     'settings.appearance.motion': 'Your device asks for less motion — we listen.',
 
     'settings.premium.title': 'Nura Premium',

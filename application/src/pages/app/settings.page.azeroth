@@ -6,6 +6,7 @@ import LanguageSwitch from '../../components/layout/language-switch.component.az
 import ThemeSwitch from '../../components/layout/theme-switch.component.azeroth';
 import Button from '../../components/ui/button.component.azeroth';
 import SectionHeading from '../../components/ui/section-heading.component.azeroth';
+import Slider from '../../components/ui/slider.component.azeroth';
 import Toggle from '../../components/ui/switch.component.azeroth';
 import { NURA_CHAIN } from '../../data/chain.ts';
 import { personById } from '../../data/mock/index.ts';
@@ -245,6 +246,17 @@ export default component SettingsPage()
                         <span class="text-ui-md font-semibold text-text">{ locale.t('settings.appearance.language') }</span>
                         <LanguageSwitch />
                     </div>
+                    <Slider
+                        value={ current.railWidth }
+                        min={ 0.22 }
+                        max={ 0.45 }
+                        step={ 0.01 }
+                        ticks={ [0.22, 0.3, 0.38, 0.45] }
+                        label={ locale.t('settings.appearance.rail') }
+                        hint={ locale.t('settings.appearance.railHint') }
+                        valueText={ locale.n(current.railWidth, { style: 'percent' }) }
+                        onChange={ (value) => settings.update({ railWidth: value }) }
+                    />
                     <Show when={ device.reducedMotion() }>
                         { () =>
                             <p class="flex items-center gap-2 text-ui-xs text-muted">

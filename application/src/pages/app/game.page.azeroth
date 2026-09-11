@@ -8,10 +8,12 @@ import PeopleStrip from '../../components/social/people-strip.component.azeroth'
 import Avatar from '../../components/ui/avatar.component.azeroth';
 import Button from '../../components/ui/button.component.azeroth';
 import EmptyState from '../../components/ui/empty-state.component.azeroth';
+import Pagination from '../../components/ui/pagination.component.azeroth';
 import SectionHeading from '../../components/ui/section-heading.component.azeroth';
 import { dataset, personById } from '../../data/mock/index.ts';
 import type { Person } from '../../data/mock/types.ts';
 import Icon from '../../icons/icon.component.azeroth';
+import { slice } from '../../lib/pagination.ts';
 import type { MessageKey } from '../../locales/en.ts';
 import { useAccount } from '../../stores/account.store.ts';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
@@ -19,6 +21,8 @@ import { useLobby } from '../../stores/lobby.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { usePresence } from '../../stores/presence.store.ts';
 import { useShell } from '../../stores/shell.store.ts';
+
+const BOARD_PAGE = 6;
 
 export default component GamePage()
 {
@@ -63,12 +67,15 @@ export default component GamePage()
             .filter((person) => presence.of(person.id).state === 'playing' && presence.of(person.id).game === game!.id);
     })();
 
-    derived leaders = game === null
+    state boardPage = 1;
+
+    derived allLeaders = game === null
         ? []
         : [...dataset().people]
             .filter((person) => person.stats[game!.id].won > 0)
-            .sort((a, b) => b.stats[game!.id].won - a.stats[game!.id].won)
-            .slice(0, 5);
+            .sort((a, b) => b.stats[game!.id].won - a.stats[game!.id].won);
+
+    derived leaders = slice(allLeaders, BOARD_PAGE, boardPage);
 
     derived ruleKeys = game === null ? [] : [1, 2, 3].map((index) => `game.rules.${ game!.id }.${ index }` as MessageKey);
 
@@ -124,13 +131,20 @@ export default component GamePage()
                                 <ol class="flex flex-col gap-1 rounded-panel border border-line bg-field p-2">
                                     <For each={ leaders } key={ (person) => person.id } let={ person } index={ index }>
                                         <li class="flex items-center gap-3 rounded-tile px-2 py-1.5">
-                                            <span class={ [ 'tally w-6 text-center text-ui-sm font-bold', index === 0 ? 'text-accent' : 'text-faint' ].join(' ') }>{ locale.n(index + 1) }</span>
+                                            <span class={ [ 'tally w-6 text-center text-ui-sm font-bold', index === 0 && boardPage === 1 ? 'text-accent' : 'text-faint' ].join(' ') }>{ locale.n((boardPage - 1) * BOARD_PAGE + index + 1) }</span>
                                             <Avatar person={ person } size="sm" presence={ presence.of(person.id).state } />
                                             <span class="min-w-0 flex-1 truncate text-ui-base font-semibold text-text">{ locale.text(person.name) }</span>
                                             <span class="tally text-ui-sm text-muted">{ locale.plural('game.leaderboard.wins', person.stats[game!.id].won) }</span>
                                         </li>
                                     </For>
                                 </ol>
+                                <Pagination
+                                    total={ allLeaders.length }
+                                    size={ BOARD_PAGE }
+                                    page={ boardPage }
+                                    label={ locale.t('game.leaderboard') }
+                                    onPage={ (page) => boardPage = page }
+                                />
                             </section>
                         </div>
 

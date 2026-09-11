@@ -53,6 +53,8 @@ export const me: Pick<Dictionary, keyof typeof reference> = {
 
     'settings.appearance.theme': 'پوسته',
     'settings.appearance.language': 'زبان',
+    'settings.appearance.rail': 'عرض گفت‌وگوی میز',
+    'settings.appearance.railHint': 'چقدر از میز عریض را ریل گفت‌وگو بگیرد. بقیه همیشه برای میز می‌ماند.',
     'settings.appearance.motion': 'دستگاهت حرکت کمتری خواسته — ما گوش می‌دهیم.',
 
     'settings.premium.title': 'نورا ویژه',

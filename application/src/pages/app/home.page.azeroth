@@ -7,6 +7,7 @@ import ActivityItem from '../../components/social/activity-item.component.azerot
 import PeopleStrip from '../../components/social/people-strip.component.azeroth';
 import Button from '../../components/ui/button.component.azeroth';
 import Chip from '../../components/ui/chip.component.azeroth';
+import Pagination from '../../components/ui/pagination.component.azeroth';
 import SectionHeading from '../../components/ui/section-heading.component.azeroth';
 import type { Game, GameId } from '../../data/games.ts';
 import { dataset, personById } from '../../data/mock/index.ts';
@@ -18,6 +19,8 @@ import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useLobby } from '../../stores/lobby.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { usePresence } from '../../stores/presence.store.ts';
+
+const ACTIVITY_PAGE = 6;
 
 export default component HomePage()
 {
@@ -66,7 +69,9 @@ export default component HomePage()
         return [favourite, ...rest].slice(0, 3);
     })();
 
-    derived activity = ((): Activity[] =>
+    state activityPage = 1;
+
+    derived allActivity = ((): Activity[] =>
     {
         if (user === null)
         {
@@ -75,9 +80,10 @@ export default component HomePage()
         const circle = new Set(dataset().friends[user.id] ?? []);
         return dataset().activity
             .filter((entry) => circle.has(entry.personId))
-            .sort((a, b) => b.at - a.at)
-            .slice(0, 8);
+            .sort((a, b) => b.at - a.at);
     })();
+
+    derived activity = allActivity.slice(0, activityPage * ACTIVITY_PAGE);
 
     derived table = lobby.state();
 
@@ -200,6 +206,14 @@ export default component HomePage()
                         </ul>
                     }
                 </Show>
+                <Pagination
+                    total={ allActivity.length }
+                    size={ ACTIVITY_PAGE }
+                    page={ activityPage }
+                    mode="more"
+                    label={ locale.t('home.activity.title') }
+                    onPage={ (page) => activityPage = page }
+                />
             </section>
         </div>
     </Page>
