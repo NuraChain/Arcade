@@ -31,3 +31,6 @@ __pycache__/
 *.pyc
 
 tools/qa/out/
+
+# Playwright matrix screenshots and reports.
+tools/qa/out/

@@ -17,6 +17,11 @@
         "test:watch": "npm run test:watch --workspace application",
         "test:shuffle": "npm run test:shuffle --workspace application",
         "assets": "node tools/blender/build.mjs",
-        "assets:poster": "node tools/blender/build.mjs --poster-only"
+        "assets:poster": "node tools/blender/build.mjs --poster-only",
+        "qa": "node tools/qa/matrix.mjs",
+        "preview": "node tools/preview.mjs"
+    },
+    "devDependencies": {
+        "playwright": "^1.63.0"
     }
 }
