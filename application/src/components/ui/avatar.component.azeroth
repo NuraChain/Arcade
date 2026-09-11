@@ -6,7 +6,12 @@ export type Presence = 'online' | 'away' | 'offline' | 'playing' | null;
 
 export function initialsOf(name: string): string
 {
-    const parts = name.trim().split(/\s+/).filter(Boolean);
+    const trimmed = name.trim();
+    if (/^0x/i.test(trimmed))
+    {
+        return trimmed.slice(2, 4).toUpperCase();
+    }
+    const parts = trimmed.split(/\s+/).filter(Boolean);
     if (parts.length === 0)
     {
         return '?';

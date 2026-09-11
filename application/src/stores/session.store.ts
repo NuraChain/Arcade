@@ -6,17 +6,26 @@ const STORAGE_KEY = 'nura-games.session';
 
 export const GUEST_PREFIX = 'guest-';
 
+export const WALLET_PREFIX = 'wallet-';
+
+export type SessionKind = 'wallet' | 'demo' | 'guest';
+
 export interface SessionRecord
 {
     id: string;
     handle: string;
+    kind?: SessionKind;
+    address?: string;
 }
 
 export function isSessionRecord(value: unknown): value is SessionRecord
 {
-    return typeof value === 'object' && value !== null
-        && typeof (value as SessionRecord).id === 'string'
-        && typeof (value as SessionRecord).handle === 'string';
+    const record = value as SessionRecord | null;
+    return typeof record === 'object' && record !== null
+        && typeof record.id === 'string'
+        && typeof record.handle === 'string'
+        && (record.kind === undefined || record.kind === 'wallet' || record.kind === 'demo' || record.kind === 'guest')
+        && (record.address === undefined || typeof record.address === 'string');
 }
 
 function restore(): SessionRecord | null
