@@ -23,6 +23,14 @@ export function forPaths(matches: (pathname: string) => boolean, wrapper: Handle
 }
 
 /** Whether a path is metered: the api and the realtime upgrade, never pages or assets. */
+/**
+ * Whether a path is metered.
+ *
+ * `/ws` is still here and a test pins it, but once the realtime gateway registers its upgrade
+ * listener this entry only ever catches a plain non-upgrade GET - which `mountPages` would 404
+ * anyway. The real handshake meter is `realtime/handshake-limit.ts`, because an upgraded socket
+ * never reaches a middleware.
+ */
 export function isMetered(pathname: string): boolean
 {
     return pathname.startsWith('/api/') || pathname === '/api' || pathname === '/ws';

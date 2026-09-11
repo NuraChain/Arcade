@@ -5,6 +5,7 @@ import type { Logger } from '@azerothjs/logger';
 import type { DataSource } from 'typeorm';
 
 import { buildApi } from './api.ts';
+import type { Ports } from './ports.ts';
 import type { ServerConfig } from './env.ts';
 import { buildPorts } from './services.ts';
 
@@ -14,6 +15,16 @@ export interface AppDeps
     config: ServerConfig;
     log: Logger;
     observe?: RequestObserver;
+
+    /**
+     * The port implementations, built once by the caller.
+     *
+     * Optional so a test can construct an App with nothing but a fake DataSource, and so this
+     * file keeps its own default. The composition root passes its single instance in, because
+     * the realtime gateway has to hold the SAME one - a second `buildPorts` is a second hub
+     * reference, and only one of them would ever be told about a write.
+     */
+    ports?: Ports;
 
     /**
      * Serving the built client from this process. Absent in development, where vite owns the
@@ -50,7 +61,7 @@ export function buildApp(deps: AppDeps): App
         );
     });
 
-    const api = buildApi(buildPorts(deps.db, deps.config));
+    const api = buildApi(deps.ports ?? buildPorts(deps.db, deps.config));
 
     register(app, api, { prefix: '/api' });
 

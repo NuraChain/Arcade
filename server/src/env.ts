@@ -53,6 +53,22 @@ export function loadServerConfig()
          */
         apiRateMax: num('API_RATE_MAX', { default: 600 }),
 
+        /**
+         * Handshakes a minute per address for `/ws`.
+         *
+         * Its own budget, not `apiRateMax`: once an upgrade listener is registered, `isMetered`
+         * never sees the handshake at all - the upgrade is taken off the request path before any
+         * middleware runs. Generous, because a refused handshake writes a console error the page
+         * cannot suppress and `npm run qa` fails on a dirty console.
+         */
+        wsHandshakeMax: num('WS_HANDSHAKE_MAX', { default: 300 }),
+
+        /** Sockets this process will hold at once, across every account. */
+        wsMaxConnections: num('WS_MAX_CONNECTIONS', { default: 2000 }),
+
+        /** Sockets ONE account may hold. Tabs are cheap; a thousand of them is not. */
+        wsAccountMax: num('WS_ACCOUNT_MAX', { default: 16 }),
+
         clientDir: str('CLIENT_DIR', { default: '../application/dist' }),
         ssrEntry: str('SSR_ENTRY', { default: '../application/dist-server/entry.server.js' }),
 

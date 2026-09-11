@@ -49,6 +49,11 @@ if (config.env === 'development')
 // One self-contained SSR bundle carries both the route table and the renderer, so importing it
 // gives the kit everything it needs. Only when this process is the one serving the browser -
 // under `azeroth dev` vite does that, and there is no bundle to import.
+// ONE instance, shared by the API and - from the realtime work - by the gateway. It used to
+// be built twice here, once for the manifest and once inside `buildApp`, and neither survived
+// the expression it was created in.
+const ports = buildPorts(dataSource, config);
+
 const ssr = config.servePages
     ? await import(pathToFileURL(config.ssrEntry).href) as { routes: PageRoute[]; renderPage: PageRenderer }
     : undefined;
@@ -57,6 +62,7 @@ const app = buildApp({
     db: dataSource,
     config,
     log,
+    ports,
     observe: logRequests(log),
     pages: ssr === undefined
         ? undefined
@@ -67,7 +73,7 @@ const app = buildApp({
 
             // Embedded into every served page, so the typed client boots synchronously instead
             // of spending a round trip on /api/_manifest before its first call.
-            manifest: manifestOf(buildApi(buildPorts(dataSource, config))),
+            manifest: manifestOf(buildApi(ports)),
 
             // Negotiated per request from the cookie `setLocale()` writes, then Accept-Language.
             // `prefix` routing is what search engines want and is recorded as broken in
@@ -89,7 +95,20 @@ const handler = pipeline(
 const served = await serve(handler, { port: config.port });
 
 handleShutdownSignals(served, {
+    /**
+     * The window where connections are still live.
+     *
+     * Sockets get closed HERE, with a close frame carrying a code, because after this the
+     * framework destroys what is left and the other end sees 1006 - indistinguishable from the
+     * network failing. The database must still be up while that drain runs.
+     */
     beforeShutdown: async () =>
+    {
+        log.info('draining');
+    },
+
+    /** Nothing is connected any more, so the pool can go. */
+    beforeExit: async () =>
     {
         await dataSource.destroy();
         log.info('database closed');
