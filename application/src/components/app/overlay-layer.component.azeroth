@@ -19,7 +19,7 @@ export default component OverlayLayer(props: { entry: OverlayEntry })
 
     const kind = untrack(() => (props.entry.kind === 'auto' ? (device.posture() === 'phone' ? 'sheet' : 'modal') : props.entry.kind));
 
-    const drag = createDrag({ threshold: 96, velocity: 0.6 });
+    const drag = createDrag({ threshold: 96, velocity: 0.6, allowNegative: true });
 
     state detent = 0;
 
@@ -42,7 +42,7 @@ export default component OverlayLayer(props: { entry: OverlayEntry })
             return;
         }
         panel.style.transition = offset === null ? '' : 'none';
-        panel.style.transform = offset === null ? '' : `translateY(${ offset }px)`;
+        panel.style.transform = offset === null ? '' : `translateY(${ Math.max(0, offset) }px)`;
     };
 
     const settleAt = (index: number): void =>

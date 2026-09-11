@@ -110,9 +110,9 @@ export default component Page(props: { children?: Child; padded?: boolean; narro
         tabindex="-1"
         aria-label={ props.label }
     >
-        <Show when={ props.onRefresh !== undefined }>
+        <Show when={ props.onRefresh !== undefined && device.coarse() }>
             { () =>
-                <div class="pull-indicator" style={ `--pull:${ indicator }px` } aria-hidden={ !busy }>
+                <div class="pull-indicator" style={ `--pull:${ indicator }` } aria-hidden={ !busy }>
                     <span class={ [
                         'flex h-9 w-9 items-center justify-center rounded-full border border-line bg-lifted text-muted shadow-2 transition-colors duration-150',
                         armed || busy ? 'border-accent/60 text-accent' : ''

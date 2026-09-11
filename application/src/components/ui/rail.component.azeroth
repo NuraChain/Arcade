@@ -13,6 +13,8 @@ export default component Rail(props: { children?: Child; label: string; class?: 
     state atStart = true;
     state atEnd = true;
 
+    derived scrolls = !(atStart && atEnd);
+
     let scroller: HTMLElement | null = null;
 
     const measure = (): void =>
@@ -56,10 +58,10 @@ export default component Rail(props: { children?: Child; label: string; class?: 
     >
         <div
             ref={ (element) => scroller = element }
-            class={ [ 'rail-x flex snap-x scroll-px-4 gap-2.5', props.inner ?? '' ].filter(Boolean).join(' ') }
+            class={ [ 'rail-x flex snap-x gap-2.5', props.inner ?? '' ].filter(Boolean).join(' ') }
             role="group"
             aria-label={ props.label }
-            tabindex="0"
+            tabindex={ scrolls ? '0' : undefined }
             onScroll={ measure }
             onKeyDown={ (event) =>
             {
@@ -74,7 +76,7 @@ export default component Rail(props: { children?: Child; label: string; class?: 
         >
             { props.children }
         </div>
-        <Show when={ !device.coarse() && !(atStart && atEnd) }>
+        <Show when={ scrolls && !device.coarse() }>
             { () =>
                 <div class="rail-arrows" aria-hidden="true">
                     <button type="button" class="rail-arrow" tabindex="-1" disabled={ atStart } onClick={ () => step(-1) }>

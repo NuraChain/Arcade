@@ -22,7 +22,7 @@ export default component Composer(props: {
     <div class="glass safe-b border-t border-line/60">
         <Show when={ open && props.disabled !== true }>
             { () =>
-                <Rail label={ locale.t('chat.pickGame') } class="border-b border-line/60 py-2" inner="items-center px-3">
+                <Rail label={ locale.t('chat.pickGame') } class="border-b border-line/60 py-2" inner="items-center px-3 scroll-px-3">
                     <span class="flex shrink-0 items-center pe-1 text-ui-xs font-semibold text-faint">{ locale.t('chat.pickGame') }</span>
                     <For each={ catalogue.games } key={ (game) => game.id } let={ game }>
                         <button

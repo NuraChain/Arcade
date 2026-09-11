@@ -28,14 +28,14 @@
     justify-content: center;
     block-size: 0;
     pointer-events: none;
-    translate: 0 calc(var(--pull, 0px) - 2.75rem);
-    opacity: calc(var(--pull, 0px) / 72);
+    translate: 0 calc(var(--pull, 0) * 1px - 2.75rem);
+    opacity: calc(var(--pull, 0) / 72);
     transition: translate 180ms var(--ease-reveal), opacity 180ms var(--ease-ui);
 }
 
 .pull-indicator .pull-arrow
 {
-    rotate: calc(var(--pull, 0px) * 2.6deg);
+    rotate: calc(var(--pull, 0) * 2.6deg);
 }
 
 #app-main > .page-forward-leave-active,
