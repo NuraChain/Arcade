@@ -1,0 +1,17 @@
+import { useHead } from 'azerothjs';
+
+import Page from '../../components/app/page.component.azeroth';
+import EmptyState from '../../components/ui/empty-state.component.azeroth';
+import { useLocale } from '../../stores/locale.store.ts';
+
+export default component HomePage()
+{
+    const locale = useLocale();
+
+    useHead({ title: () => locale.t('app.nav.home') });
+
+    <Page>
+        <h1 class="text-[clamp(1.75rem,5vw,2.5rem)]">{ locale.t('app.nav.home') }</h1>
+        <EmptyState icon="sparkles" title={ locale.t('state.emptyTitle') } />
+    </Page>
+}

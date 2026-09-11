@@ -1,0 +1,57 @@
+import { Portal } from 'azerothjs';
+
+import { isInside } from '../../lib/focus.ts';
+import { useOverlay } from '../../stores/overlay.store.ts';
+import OverlayLayer from './overlay-layer.component.azeroth';
+
+export default component OverlayHost()
+{
+    const overlay = useOverlay();
+
+    mount
+    {
+        const onKeyDown = (event: KeyboardEvent): void =>
+        {
+            if (event.key !== 'Escape')
+            {
+                return;
+            }
+            const top = overlay.top();
+            if (top !== null && top.dismissible)
+            {
+                event.preventDefault();
+                top.props.close();
+            }
+        };
+        const onFocusIn = (event: FocusEvent): void =>
+        {
+            const top = overlay.top();
+            if (top === null)
+            {
+                return;
+            }
+            const layer = document.querySelector<HTMLElement>(`[data-overlay-layer='${ top.id }']`);
+            if (layer !== null && !isInside(layer, event.target as Node | null))
+            {
+                layer.querySelector<HTMLElement>('[role="dialog"]')?.focus();
+            }
+        };
+        document.addEventListener('keydown', onKeyDown);
+        document.addEventListener('focusin', onFocusIn);
+        return () =>
+        {
+            document.removeEventListener('keydown', onKeyDown);
+            document.removeEventListener('focusin', onFocusIn);
+        };
+    }
+
+    <Portal>
+        <div class="overlay-root" data-overlay-root>
+            <For each={ overlay.items() } key={ (entry) => entry.id } let={ entry }>
+                <div class="contents">
+                    <OverlayLayer entry={ entry } />
+                </div>
+            </For>
+        </div>
+    </Portal>
+}

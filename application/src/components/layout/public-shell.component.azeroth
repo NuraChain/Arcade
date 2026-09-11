@@ -1,0 +1,28 @@
+import { Outlet, type MountNode } from 'azerothjs';
+
+import { useLocale } from '../../stores/locale.store.ts';
+import SiteFooter from './site-footer.component.azeroth';
+import SiteHeader from './site-header.component.azeroth';
+
+export default component PublicShell(props: { children?: MountNode })
+{
+    const locale = useLocale();
+
+    <div class="min-h-dvh bg-void text-text">
+
+        <a
+            href="#main"
+            class="sr-only rounded-full bg-lamp px-4 py-2 text-[14px] font-semibold text-void focus:not-sr-only focus:absolute focus:start-4 focus:top-4 focus:z-50"
+        >
+            { locale.t('a11y.skip') }
+        </a>
+
+        <SiteHeader />
+
+        <main id="main">
+            <Outlet children={ props.children } />
+        </main>
+
+        <SiteFooter />
+    </div>
+}

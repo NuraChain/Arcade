@@ -1,0 +1,60 @@
+import { dataset, personById } from '../../data/mock/index.ts';
+import type { Person } from '../../data/mock/types.ts';
+import { useCatalogue } from '../../stores/catalogue.store.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import { usePresence } from '../../stores/presence.store.ts';
+import { useAccount } from '../../stores/account.store.ts';
+import Avatar from '../ui/avatar.component.azeroth';
+import Button from '../ui/button.component.azeroth';
+import SectionHeading from '../ui/section-heading.component.azeroth';
+
+export default component SocialPanel()
+{
+    const locale = useLocale();
+    const account = useAccount();
+    const presence = usePresence();
+    const catalogue = useCatalogue();
+
+    derived friends = ((): Person[] =>
+    {
+        const user = account.user();
+        if (user === null)
+        {
+            return [];
+        }
+        const ids = presence.online(dataset().friends[user.id] ?? []);
+        return ids.map((id) => personById(id)).filter((person): person is Person => person !== undefined);
+    })();
+
+    derived totals = catalogue.totals();
+
+    <aside class="safe-t safe-b flex h-dvh w-[var(--social-w)] flex-col gap-6 overflow-y-auto border-s border-line/60 bg-field px-4 py-5" aria-label={ locale.t('app.nav.friends') }>
+        <section>
+            <SectionHeading title={ locale.plural('common.friendsOnline', friends.length) } more={ locale.t('common.seeAll') } to="/app/friends" />
+            <ul class="flex flex-col gap-1">
+                <For each={ friends } key={ (person) => person.id } let={ person }>
+                    <li class="flex items-center gap-3 rounded-tile p-1.5">
+                        <Avatar person={ person } size="md" presence={ presence.of(person.id).state } />
+                        <span class="flex min-w-0 flex-1 flex-col">
+                            <span class="truncate text-[14px] font-semibold text-text">{ locale.text(person.name) }</span>
+                            <span class="truncate text-[12px] text-muted">
+                                { presence.of(person.id).state === 'playing' && presence.of(person.id).game !== null
+                                    ? locale.t('common.playing', { game: locale.t(catalogue.byId(presence.of(person.id).game!).nameKey) })
+                                    : locale.t('common.online') }
+                            </span>
+                        </span>
+                        <Button variant="secondary" size="sm" to={ `/app/people/${ person.handle }` }>{ locale.t('app.nav.quickPlay') }</Button>
+                    </li>
+                </For>
+            </ul>
+        </section>
+
+        <section class="rounded-panel border border-line bg-void/40 p-4">
+            <p class="label text-[12px] text-faint">{ locale.t('people.stat.open') }</p>
+            <p class="tally font-display text-[28px] font-semibold text-text">{ locale.n(totals.tablesOpen) }</p>
+            <p class="mt-1 text-[13px] text-muted">
+                <span class="tally">{ locale.n(totals.playersOnline) }</span> { locale.t('common.online').toLowerCase() }
+            </p>
+        </section>
+    </aside>
+}

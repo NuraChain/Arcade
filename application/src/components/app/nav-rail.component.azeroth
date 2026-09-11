@@ -1,0 +1,45 @@
+import { Link } from 'azerothjs';
+
+import Icon from '../../icons/icon.component.azeroth';
+import { useLocale } from '../../stores/locale.store.ts';
+import { useAccount } from '../../stores/account.store.ts';
+import Avatar from '../ui/avatar.component.azeroth';
+import { NAV, SECONDARY } from './nav-items.ts';
+
+export default component NavRail()
+{
+    const locale = useLocale();
+    const account = useAccount();
+
+    <nav class="safe-t safe-b flex h-dvh w-[var(--rail-w)] flex-col items-center border-e border-line/60 bg-field py-3" aria-label={ locale.t('app.nav.primary') }>
+        <Link to="/app" class="lit mb-4 flex h-10 w-10 items-center justify-center rounded-full bg-lamp text-void" aria-label={ locale.t('app.nav.home') }>
+            <Icon name="games" size={ 18 } />
+        </Link>
+        <ul class="flex flex-col items-center gap-1">
+            <For each={ NAV } key={ (item) => item.tab } let={ item }>
+                <li>
+                    <Link to={ item.to } end={ item.end } activeClass="is-active" prefetch="hover" class="nav-item flex w-16 flex-col items-center gap-1 rounded-tile py-2 text-[11px] font-semibold text-muted">
+                        <span class="nav-pill flex h-8 w-12 items-center justify-center rounded-full transition-colors duration-200">
+                            <Icon name={ item.icon } size={ 22 } />
+                        </span>
+                        <span>{ locale.t(item.labelKey) }</span>
+                    </Link>
+                </li>
+            </For>
+        </ul>
+        <ul class="mt-auto flex flex-col items-center gap-1">
+            <For each={ SECONDARY } key={ (item) => item.tab } let={ item }>
+                <li>
+                    <Link to={ item.to } activeClass="is-active" class="nav-item flex h-11 w-11 items-center justify-center rounded-full text-muted" aria-label={ locale.t(item.labelKey) }>
+                        <Icon name={ item.icon } size={ 20 } />
+                    </Link>
+                </li>
+            </For>
+            <li class="mt-2">
+                <Link to="/app/me" class="flex h-11 w-11 items-center justify-center rounded-full" aria-label={ locale.t('app.nav.me') }>
+                    <Avatar person={ account.user() } size="sm" presence="online" />
+                </Link>
+            </li>
+        </ul>
+    </nav>
+}

@@ -1,9 +1,16 @@
 import { bootClient } from '@azerothjs/kit/client';
 
 import App from './App.azeroth';
+import { setRuntime } from './lib/runtime.ts';
 
 if (import.meta.env.DEV)
 {
+    const seed = Number(new URLSearchParams(window.location.search).get('seed'));
+    if (Number.isFinite(seed) && seed > 0)
+    {
+        setRuntime({ seed });
+    }
+
     try
     {
         const { installDevtools } = await import('@azerothjs/devtools');

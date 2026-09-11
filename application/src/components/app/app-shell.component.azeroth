@@ -1,0 +1,106 @@
+import { Outlet, untrack, useHead, useMatch, useRoute, type MountNode } from 'azerothjs';
+
+import '../../locales/app-catalogue.ts';
+import { routeMeta } from '../../lib/route-meta.ts';
+import { useCatalogue } from '../../stores/catalogue.store.ts';
+import { useConnection } from '../../stores/connection.store.ts';
+import { useDevice } from '../../stores/device.store.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import { useOverlay } from '../../stores/overlay.store.ts';
+import { usePresence } from '../../stores/presence.store.ts';
+import { useShell } from '../../stores/shell.store.ts';
+import BottomNav from './bottom-nav.component.azeroth';
+import ConnectionBanner from './connection-banner.component.azeroth';
+import NavRail from './nav-rail.component.azeroth';
+import OverlayHost from './overlay-host.component.azeroth';
+import Sidebar from './sidebar.component.azeroth';
+import SocialPanel from './social-panel.component.azeroth';
+import ToastHost from './toast-host.component.azeroth';
+import TopBar from './top-bar.component.azeroth';
+
+export default component AppShell(props: { children?: MountNode })
+{
+    const device = useDevice();
+    const overlay = useOverlay();
+    const shell = useShell();
+    const locale = useLocale();
+    const route = useRoute();
+    const match = useMatch();
+
+    useHead({ titleTemplate: `%s · ${ locale.t('app.title') }` });
+
+    let seen = untrack(() => route().key);
+
+    effect
+    {
+        const location = route();
+        if (location.key === seen)
+        {
+            return;
+        }
+        seen = location.key;
+        if (location.navigationKind === 'push')
+        {
+            shell.notePush();
+        }
+        else if (location.navigationKind === 'pop')
+        {
+            shell.notePop();
+        }
+    }
+
+    mount
+    {
+        shell.resetDepth();
+        const stops = [
+            usePresence().start(),
+            useConnection().start(),
+            useCatalogue().start()
+        ];
+        return () =>
+        {
+            for (const stop of stops)
+            {
+                stop();
+            }
+        };
+    }
+
+    derived posture = device.posture();
+
+    derived immersive = routeMeta(match()).immersive === true;
+
+    derived showBottomNav = posture === 'phone' && !device.keyboardOpen() && !immersive;
+
+    <div class="contents">
+        <div
+            id="app-shell"
+            data-posture={ posture }
+            data-social={ device.social() ? 'true' : 'false' }
+            inert={ overlay.blocking() }
+            class={ [
+                'grid h-dvh min-h-0 bg-void text-text',
+                posture === 'phone' ? 'grid-cols-1' : '',
+                posture === 'rail' ? 'grid-cols-[var(--rail-w)_1fr]' : '',
+                posture === 'sidebar' && !device.social() ? 'grid-cols-[var(--sidebar-w)_1fr]' : '',
+                posture === 'sidebar' && device.social() ? 'grid-cols-[var(--sidebar-w)_1fr_var(--social-w)]' : ''
+            ].filter(Boolean).join(' ') }
+        >
+            <Show when={ posture === 'rail' }>{ () => <NavRail /> }</Show>
+            <Show when={ posture === 'sidebar' }>{ () => <Sidebar /> }</Show>
+
+            <div class="flex h-dvh min-h-0 min-w-0 flex-col">
+                <Show when={ !immersive || posture !== 'phone' }>{ () => <TopBar /> }</Show>
+                <ConnectionBanner />
+                <main id="app-main" class="relative min-h-0 flex-1 overflow-hidden">
+                    <Outlet children={ props.children } />
+                </main>
+                <Show when={ showBottomNav }>{ () => <BottomNav /> }</Show>
+            </div>
+
+            <Show when={ posture === 'sidebar' && device.social() }>{ () => <SocialPanel /> }</Show>
+        </div>
+        <OverlayHost />
+        <ToastHost />
+    </div>
+}

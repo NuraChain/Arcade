@@ -1,0 +1,28 @@
+import Icon from '../../icons/icon.component.azeroth';
+import Spinner from '../ui/spinner.component.azeroth';
+import { useConnection } from '../../stores/connection.store.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+
+export default component ConnectionBanner()
+{
+    const connection = useConnection();
+    const locale = useLocale();
+
+    <Show when={ connection.state() !== 'online' }>
+        { () =>
+            <div
+                class={ [
+                    'z-banner flex items-center justify-center gap-2 px-4 py-2 text-[13px] font-semibold',
+                    connection.state() === 'offline' ? 'bg-madder/15 text-madder' : 'bg-lamp/15 text-lamp'
+                ].join(' ') }
+                role="status"
+                aria-live="assertive"
+            >
+                <Show when={ connection.state() === 'offline' } fallback={ <Spinner size={ 14 } /> }>
+                    { () => <Icon name="wifi-off" size={ 16 } /> }
+                </Show>
+                <span>{ connection.state() === 'offline' ? locale.t('connection.offline') : locale.t('connection.reconnecting') }</span>
+            </div>
+        }
+    </Show>
+}

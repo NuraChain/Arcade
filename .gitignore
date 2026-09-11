@@ -29,3 +29,5 @@ tools/blender/preview.png
 
 __pycache__/
 *.pyc
+
+tools/qa/out/

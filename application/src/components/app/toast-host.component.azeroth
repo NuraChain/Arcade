@@ -1,0 +1,69 @@
+import { Portal } from 'azerothjs';
+
+import Icon from '../../icons/icon.component.azeroth';
+import type { IconName } from '../../icons/registry.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import { useToasts, type ToastKind } from '../../stores/toasts.store.ts';
+
+const ICON: Record<ToastKind, IconName> = {
+    info: 'info',
+    success: 'check-circle',
+    warning: 'alert',
+    error: 'error-circle',
+    live: 'zap'
+};
+
+const TONE: Record<ToastKind, string> = {
+    info: 'text-muted',
+    success: 'text-win',
+    warning: 'text-lamp',
+    error: 'text-madder',
+    live: 'text-live'
+};
+
+export default component ToastHost()
+{
+    const toasts = useToasts();
+    const locale = useLocale();
+
+    <Portal>
+        <div class="toast-root" role="region" aria-label={ locale.t('toast.region') } aria-live="polite">
+            <For each={ toasts.items() } key={ (toast) => toast.id } let={ toast }>
+                <div
+                    class="pointer-events-auto flex w-full max-w-[26rem] animate-toast-in items-center gap-3 rounded-panel border border-line bg-raised px-3 py-2.5 shadow-3 motion-reduce:animate-none"
+                    role="status"
+                    onPointerEnter={ () => toasts.pause(toast.id) }
+                    onPointerLeave={ () => toasts.resume(toast.id) }
+                >
+                    <span class={ [ 'shrink-0', TONE[toast.kind] ].join(' ') } aria-hidden="true">
+                        <Icon name={ ICON[toast.kind] } size={ 18 } />
+                    </span>
+                    <span class="min-w-0 flex-1 text-[14px] text-text">{ toast.text }</span>
+                    <Show when={ toast.action !== null }>
+                        { () =>
+                            <button
+                                type="button"
+                                class="shrink-0 cursor-pointer rounded-full px-2 py-1 text-[13px] font-bold text-lamp hover:underline"
+                                onClick={ () =>
+                                {
+                                    toast.action?.run();
+                                    toasts.dismiss(toast.id);
+                                } }
+                            >
+                                { toast.action?.label }
+                            </button>
+                        }
+                    </Show>
+                    <button
+                        type="button"
+                        class="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full text-faint hover:bg-field hover:text-text"
+                        aria-label={ locale.t('toast.dismiss') }
+                        onClick={ () => toasts.dismiss(toast.id) }
+                    >
+                        <Icon name="close" size={ 16 } />
+                    </button>
+                </div>
+            </For>
+        </div>
+    </Portal>
+}

@@ -1,0 +1,119 @@
+import { Dynamic, untrack } from 'azerothjs';
+
+import { firstTabbable, focusQuietly } from '../../lib/focus.ts';
+import { runtime } from '../../lib/runtime.ts';
+import { createDrag } from '../../lib/swipe.ts';
+import { useDevice } from '../../stores/device.store.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import { useOverlay, type OverlayEntry } from '../../stores/overlay.store.ts';
+
+export default component OverlayLayer(props: { entry: OverlayEntry })
+{
+    const overlay = useOverlay();
+    const device = useDevice();
+    const locale = useLocale();
+
+    const kind = untrack(() => (props.entry.kind === 'auto' ? (device.posture() === 'phone' ? 'sheet' : 'modal') : props.entry.kind));
+
+    const drag = createDrag({ threshold: 96, velocity: 0.6 });
+
+    let panel: HTMLElement | null = null;
+    let returnTo: HTMLElement | null = null;
+
+    derived phaseClass = props.entry.phase === 'opening'
+        ? `${ kind }-enter-from`
+        : (props.entry.phase === 'closing' ? `${ kind }-leave-to` : '');
+
+    mount
+    {
+        returnTo = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+        requestAnimationFrame(() => overlay.opened(props.entry.id));
+        if (panel !== null)
+        {
+            focusQuietly(firstTabbable(panel) ?? panel);
+        }
+        return () =>
+        {
+            if (returnTo !== null && returnTo.isConnected)
+            {
+                focusQuietly(returnTo);
+            }
+        };
+    }
+
+    <div class="overlay-layer" data-overlay-layer={ props.entry.id } data-kind={ kind }>
+        <div
+            class="overlay-scrim"
+            onClick={ () => (props.entry.dismissible ? props.entry.props.close() : undefined) }
+        ></div>
+        <div
+            ref={ (element) => panel = element }
+            role="dialog"
+            aria-modal="true"
+            aria-label={ props.entry.label }
+            tabindex="-1"
+            class={ [ kind, phaseClass ].filter(Boolean).join(' ') }
+            onTransitionEnd={ (event) =>
+            {
+                if (event.target === panel && props.entry.phase === 'closing')
+                {
+                    overlay.settle(props.entry.id);
+                }
+            } }
+        >
+            <Show when={ kind === 'sheet' }>
+                { () =>
+                    <div
+                        class="sheet-handle flex shrink-0 cursor-grab justify-center pt-2.5 pb-1"
+                        aria-label={ locale.t('overlay.handle') }
+                        onPointerDown={ (event) =>
+                        {
+                            (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+                            drag.start(event.clientY, runtime().clock.now());
+                            if (panel !== null)
+                            {
+                                panel.style.transition = 'none';
+                            }
+                        } }
+                        onPointerMove={ (event) =>
+                        {
+                            if (!drag.active() || panel === null)
+                            {
+                                return;
+                            }
+                            const frame = drag.move(event.clientY, runtime().clock.now());
+                            panel.style.transform = `translateY(${ frame.offset }px)`;
+                        } }
+                        onPointerUp={ () =>
+                        {
+                            const frame = drag.end(runtime().clock.now());
+                            if (panel !== null)
+                            {
+                                panel.style.transition = '';
+                                panel.style.transform = '';
+                            }
+                            if (frame.dismiss && props.entry.dismissible)
+                            {
+                                props.entry.props.close();
+                            }
+                        } }
+                        onPointerCancel={ () =>
+                        {
+                            drag.end(runtime().clock.now());
+                            if (panel !== null)
+                            {
+                                panel.style.transition = '';
+                                panel.style.transform = '';
+                            }
+                        } }
+                    >
+                        <span class="h-1.5 w-10 rounded-full bg-line" aria-hidden="true"></span>
+                    </div>
+                }
+            </Show>
+            <div class="sheet-body">
+                <Dynamic component={ props.entry.component } props={ props.entry.props } />
+            </div>
+        </div>
+    </div>
+}

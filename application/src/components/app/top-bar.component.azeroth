@@ -1,0 +1,87 @@
+import { Link, useMatch, useNavigate } from 'azerothjs';
+
+import { dataset } from '../../data/mock/index.ts';
+import Icon from '../../icons/icon.component.azeroth';
+import { routeMeta } from '../../lib/route-meta.ts';
+import { useDevice } from '../../stores/device.store.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import { useAccount } from '../../stores/account.store.ts';
+import { useShell } from '../../stores/shell.store.ts';
+import BrandMark from '../layout/brand-mark.component.azeroth';
+import Avatar from '../ui/avatar.component.azeroth';
+import IconButton from '../ui/icon-button.component.azeroth';
+
+export default component TopBar()
+{
+    const locale = useLocale();
+    const device = useDevice();
+    const account = useAccount();
+    const shell = useShell();
+    const match = useMatch();
+    const { back, replace } = useNavigate();
+
+    derived meta = routeMeta(match());
+
+    derived title = shell.title() ?? (meta.title === undefined ? '' : locale.t(meta.title));
+
+    derived showBack = meta.parent !== undefined || shell.depth() > 0;
+
+    derived unread = dataset().notifications.filter((notification) => !notification.read).length;
+
+    derived phone = device.posture() === 'phone';
+
+    const goBack = (): void =>
+    {
+        if (shell.depth() > 0)
+        {
+            back();
+            return;
+        }
+        replace(meta.parent ?? '/app');
+    };
+
+    <header class="glass z-topbar safe-t sticky top-0 border-b border-line/60">
+        <div class="mx-auto flex h-[var(--topbar-h)] w-full max-w-[72rem] items-center gap-1 px-2 sm:px-4 lg:px-6">
+            <Show
+                when={ showBack }
+                fallback={
+                    <Show when={ phone }>
+                        { () =>
+                            <Link to="/app" class="flex h-11 items-center gap-2 rounded-full ps-2 pe-3" aria-label={ locale.t('app.nav.home') }>
+                                <span class="lit flex h-7 w-7 items-center justify-center rounded-full bg-lamp text-void">
+                                    <Icon name="games" size={ 15 } />
+                                </span>
+                                <BrandMark class="text-[16px] text-text" />
+                            </Link>
+                        }
+                    </Show>
+                }
+            >
+                { () => <IconButton icon="back" label={ locale.t('app.nav.back') } flip onClick={ goBack } /> }
+            </Show>
+
+            <h1 class={ [
+                'label min-w-0 flex-1 truncate text-[17px] font-semibold text-text',
+                showBack ? 'text-start' : (phone ? 'sr-only' : 'text-start')
+            ].join(' ') }>
+                { title }
+            </h1>
+
+            <Show when={ !phone }>
+                { () =>
+                    <Link to="/app/search" class="me-1 flex h-10 w-56 items-center gap-2 rounded-full border border-line bg-field px-3 text-[14px] text-faint transition-colors hover:border-lamp/60 hover:text-muted">
+                        <Icon name="search" size={ 16 } />
+                        <span class="truncate">{ locale.t('app.nav.search') }</span>
+                    </Link>
+                }
+            </Show>
+            <Show when={ phone }>
+                { () => <IconButton icon="search" label={ locale.t('app.nav.search') } to="/app/search" /> }
+            </Show>
+            <IconButton icon="bell" label={ locale.t('app.nav.notifications') } to="/app/notifications" count={ unread } />
+            <Link to="/app/me" class="ms-1 flex h-11 w-11 items-center justify-center rounded-full" aria-label={ locale.t('app.nav.me') }>
+                <Avatar person={ account.user() } size="sm" />
+            </Link>
+        </div>
+    </header>
+}
