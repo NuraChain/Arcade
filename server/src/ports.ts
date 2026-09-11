@@ -105,7 +105,8 @@ export interface SocialPort
 
     setMute(me: string, kind: MuteSubject, subjectId: string, muted: boolean): Promise<void>;
 
-    report(me: string, againstId: string, category: string): Promise<string>;
+    report(me: string, handle: string, category: string): Promise<string>;
+    reports(me: string): Promise<{ id: string; against: string; category: string; status: string; at: string }[]>;
 
     privacy(me: string): Promise<Privacy>;
     setPrivacy(me: string, wanted: { allowStrangerMessages: boolean; showOnline: boolean }): Promise<Privacy>;

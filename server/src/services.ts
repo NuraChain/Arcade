@@ -70,6 +70,29 @@ export function buildPorts(db: DataSource, config: ServerConfig): Ports
         return message;
     };
 
+    /**
+     * A handle, as the uuid the tables are keyed on.
+     *
+     * Every person-taking route goes through here, so "the wire speaks handles" is one
+     * translation at the edge rather than a rule each route is trusted to remember.
+     */
+    const mustResolve = async (handle: string): Promise<string> =>
+    {
+        const row = await social.personByHandle(handle);
+        if (row === null)
+        {
+            throw new NotFoundError('No account with that name.');
+        }
+        return row.id;
+    };
+
+    const asRequest = (row: { id: string; from_user: string; to_user: string; created_at: Date }, handles: Map<string, string>) => ({
+        id: row.id,
+        from: handles.get(row.from_user) ?? '',
+        to: handles.get(row.to_user) ?? '',
+        at: row.created_at.toISOString()
+    });
+
     const asConversation = (row: ConversationRow): ConversationSummary =>
     {
         const summary: ConversationSummary = {
@@ -148,7 +171,10 @@ export function buildPorts(db: DataSource, config: ServerConfig): Ports
     const seenBy = (viewer: PersonRow, row: PersonRow, relation: Parameters<typeof maySeeOnline>[2]): PersonSummary =>
     {
         const summary: PersonSummary = {
-            id: row.id,
+            // The handle, not the uuid. The browser keys people by handle - it is the public
+            // identifier, it is what the URL carries, and it is what a message's author is - so
+            // the wire says the same thing everywhere rather than two names for one person.
+            id: row.handle,
             handle: row.handle,
             displayName: row.display_name,
             hue: row.hue,
@@ -228,22 +254,19 @@ export function buildPorts(db: DataSource, config: ServerConfig): Ports
                     social.mutes(me)
                 ]);
 
+                // A request names two people, and the wire names people by handle - so the two
+                // uuids on the row have to be resolved before it leaves.
+                const handles = await social.handlesOf([
+                    ...requests.incoming.flatMap((row) => [row.from_user, row.to_user]),
+                    ...requests.outgoing.flatMap((row) => [row.from_user, row.to_user])
+                ]);
+
                 return {
                     // A friend's presence is always visible to them, which is why the relation is
                     // passed as 'friend' rather than looked up again per row.
                     friends: friends.map((row) => seenBy(viewer, row, 'friend')),
-                    incoming: requests.incoming.map((row) => ({
-                        id: row.id,
-                        from: row.from_user,
-                        to: row.to_user,
-                        at: row.created_at.toISOString()
-                    })),
-                    outgoing: requests.outgoing.map((row) => ({
-                        id: row.id,
-                        from: row.from_user,
-                        to: row.to_user,
-                        at: row.created_at.toISOString()
-                    })),
+                    incoming: requests.incoming.map((row) => asRequest(row, handles)),
+                    outgoing: requests.outgoing.map((row) => asRequest(row, handles)),
                     blocked: blocked.map((row) => seenBy(viewer, row, 'blocked')),
                     mutes
                 };
@@ -292,14 +315,29 @@ export function buildPorts(db: DataSource, config: ServerConfig): Ports
                 };
             },
 
-            sendRequest: (me, otherId) => social.sendRequest(me, otherId),
+            sendRequest: async (me, handle) => social.sendRequest(me, await mustResolve(handle)),
             answerRequest: (me, requestId, outcome) => social.answerRequest(me, requestId, outcome),
-            withdrawRequest: (me, otherId) => social.withdrawRequest(me, otherId),
-            removeFriend: (me, otherId) => social.removeFriend(me, otherId),
-            block: (me, otherId) => social.block(me, otherId),
-            unblock: (me, otherId) => social.unblock(me, otherId),
+            withdrawRequest: async (me, handle) => social.withdrawRequest(me, await mustResolve(handle)),
+            removeFriend: async (me, handle) => social.removeFriend(me, await mustResolve(handle)),
+            block: async (me, handle) => social.block(me, await mustResolve(handle)),
+            unblock: async (me, handle) => social.unblock(me, await mustResolve(handle)),
             setMute: (me, kind, subjectId, muted) => social.setMute(me, kind, subjectId, muted),
-            report: (me, againstId, category) => social.report(me, againstId, category as Parameters<typeof social.report>[2]),
+
+            report: async (me, handle, category) =>
+                social.report(me, await mustResolve(handle), category as Parameters<typeof social.report>[2]),
+
+            async reports(me)
+            {
+                const rows = await social.reportsBy(me);
+                const handles = await social.handlesOf(rows.map((row) => row.against));
+                return rows.map((row) => ({
+                    id: row.id,
+                    against: handles.get(row.against) ?? '',
+                    category: row.category,
+                    status: row.status,
+                    at: row.created_at.toISOString()
+                }));
+            },
 
             async privacy(me)
             {

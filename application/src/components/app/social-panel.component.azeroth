@@ -32,6 +32,11 @@ export default component SocialPanel()
 
     derived friends = peopleOf(presence.online(social.friends()));
 
+    mount
+    {
+        social.want('suggestions');
+    }
+
     derived suggestions = friends.length > 0 ? [] : social.suggestions().slice(0, 4);
 
     derived totals = catalogue.totals();

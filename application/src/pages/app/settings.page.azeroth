@@ -67,6 +67,11 @@ export default component SettingsPage()
 
     derived muted = allMuted.slice(0, mutedPage * SAFETY_PAGE);
 
+    mount
+    {
+        social.want('reports');
+    }
+
     derived allReports = [...social.reports()].sort((a, b) => b.at - a.at);
 
     derived reports = allReports.slice(0, reportsPage * SAFETY_PAGE);

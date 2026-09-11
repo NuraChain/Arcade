@@ -27,6 +27,7 @@ import {
     privacy,
     privacyInput,
     reportInput,
+    reportList,
     reportResult,
     requestResult,
     sendInput,
@@ -295,6 +296,11 @@ export function buildApi(ports: Ports)
                 async (context) => ({
                     id: await ports.social.report(context.principal.userId, context.input.id, context.input.category)
                 })),
+
+            /** What I have reported, and where each one got to. Mine only - never anyone else's. */
+            reports: routes.get('/reports', { output: reportList }, async (context) => ({
+                reports: await ports.social.reports(context.principal.userId)
+            })),
 
             privacy: routes.get('/privacy', { output: privacy },
                 (context) => ports.social.privacy(context.principal.userId)),

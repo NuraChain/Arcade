@@ -57,6 +57,11 @@ export default component FriendsPage()
 
     derived outgoing = social.outgoing();
 
+    mount
+    {
+        social.want('suggestions');
+    }
+
     derived allSuggestions = social.suggestions();
 
     derived suggestions = allSuggestions.slice(0, suggestPage * SUGGEST_PAGE);

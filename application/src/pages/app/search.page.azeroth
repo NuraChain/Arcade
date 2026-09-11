@@ -16,6 +16,7 @@ import Icon from '../../icons/icon.component.azeroth';
 import { useChat } from '../../stores/chat.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useSearch, SEARCH_SCOPES, type SearchScope } from '../../stores/search.store.ts';
+import { useSocial } from '../../stores/social.store.ts';
 
 const PEOPLE_PAGE = 8;
 const MESSAGE_PAGE = 10;
@@ -25,7 +26,13 @@ export default component SearchPage()
     const locale = useLocale();
     const search = useSearch();
     const chat = useChat();
+    const social = useSocial();
     const { navigate } = useNavigate();
+
+    mount
+    {
+        social.want('people');
+    }
 
     useHead({ title: () => locale.t('app.nav.search') });
 

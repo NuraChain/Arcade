@@ -179,6 +179,7 @@ export const messageRefusal = enumOf(['blocked', 'strangers-off', 'minor-safety'
  * sent, and a filter it was trusted to apply is a filter one code path forgets.
  */
 export const personSummary = object({
+    /** The HANDLE. Every person reference on this wire is one - see the identity notes. */
     id: string(),
     handle: string(),
     displayName: string(),
@@ -244,6 +245,16 @@ export const reportCategory = enumOf(['harassment', 'spam', 'cheating', 'inappro
 export const reportInput = object({ id: string(), category: reportCategory });
 
 export const reportResult = object({ id: string() });
+
+export const reportEntry = object({
+    id: string(),
+    against: string(),
+    category: reportCategory,
+    status: enumOf(['received', 'reviewed', 'actioned']),
+    at: string()
+});
+
+export const reportList = object({ reports: array(reportEntry) });
 
 /**
  * The two switches an account controls, and the one it does not.

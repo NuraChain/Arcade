@@ -32,6 +32,12 @@ export default component DiscoverPage()
 
     derived user = account.user();
 
+    mount
+    {
+        social.want('suggestions');
+        social.want('people');
+    }
+
     derived suggestions = social.suggestions().slice(0, 8);
 
     derived playing = social.people()

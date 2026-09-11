@@ -83,7 +83,7 @@ const handler = pipeline(
 
     // Scoped to /api and /ws. Wrapping the whole handler would meter the forty static assets a
     // cold page load pulls, and a visitor would start taking 429s on their own JavaScript.
-    apiRateLimit({ trustProxy: config.env === 'production' })
+    apiRateLimit({ limit: config.apiRateMax, trustProxy: config.env === 'production' })
 );
 
 const served = await serve(handler, { port: config.port });

@@ -250,6 +250,18 @@ export function createSocialService(db: DataSource)
             return rowsOf<PersonRow>(fallback).map((row) => ({ person: row, mutual: 0 }));
         },
 
+        /** uuid to handle, for the several places a row names somebody the wire must not. */
+        async handlesOf(ids: readonly string[]): Promise<Map<string, string>>
+        {
+            const wanted = [...new Set(ids)];
+            if (wanted.length === 0)
+            {
+                return new Map();
+            }
+            const rows = await db.query('select id, handle from users where id = any($1::uuid[])', [wanted]);
+            return new Map(rowsOf<{ id: string; handle: string }>(rows).map((row) => [row.id, row.handle]));
+        },
+
         /** How many friends two accounts share. One number, for the "why this person" line. */
         async mutualWith(me: string, others: readonly string[]): Promise<Map<string, number>>
         {

@@ -43,6 +43,16 @@ export function loadServerConfig()
          */
         rpcUrl: str('NURA_RPC_URL', { default: '' }),
 
+        /**
+         * Requests per minute per address, for `/api` and `/ws`.
+         *
+         * A number rather than a constant because the responsive matrix pulls six hundred pages
+         * as fast as it can from ONE address - that is abusive traffic by any honest measure, and
+         * the limiter is right to refuse it. A load run raises this deliberately instead of the
+         * product shipping a limit shaped around a test.
+         */
+        apiRateMax: num('API_RATE_MAX', { default: 600 }),
+
         clientDir: str('CLIENT_DIR', { default: '../application/dist' }),
         ssrEntry: str('SSR_ENTRY', { default: '../application/dist-server/entry.server.js' }),
 

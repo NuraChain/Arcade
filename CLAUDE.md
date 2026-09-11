@@ -66,7 +66,10 @@ session key it could write into `localStorage` — the cookie is HttpOnly — an
 a database with no demo rows fails on the first line rather than touring 600 signed-out pages.
 
 **The matrix is a load generator, not a visitor.** It pulls 600 pages as fast as it can from one
-address, so anything metered per IP will refuse it. That is why the rate limit is scoped to
+address, so anything metered per IP will refuse it - and now that a page load makes real API
+calls, it does. Run it against a server started with `API_RATE_MAX` raised
+(`API_RATE_MAX=20000 SERVE_PAGES=true NODE_ENV=production npm start`); the limit is configuration
+for exactly this reason, rather than the product shipping a limit shaped around a test. That is why the rate limit is scoped to
 `/api` and `/ws` in `server/src/http/rate-limit.ts` rather than wrapped around the whole handler:
 a page load pulls forty static assets, a file served from disk with an ETag costs almost nothing,
 and one budget cannot be right for both. Metering the cheap thing at the rate the expensive thing
@@ -356,10 +359,30 @@ muted conversations and games in `settings.store.ts` - three spellings of one id
 feature had to remember all three. `settings.store.ts` is now only what this DEVICE prefers:
 sound, haptics, the rail, notification categories. Nothing in it belongs to the account.
 
-**What is still on the mock:** friends, requests and suggestions are read from
-`data/mock/index.ts` by `social.store.ts`, while mutes and privacy come from the server. The
-re-keying that used to block it is done - every id is a handle now - so this is a straight swap
-onto routes that already exist and are already tested.
+**The whole graph is the server's now.** `social.store.ts` reads friends, both request
+directions, blocks, the directory, suggestions, mutes, privacy and my own reports from the API,
+and every one of them is a handle. The browser's mock is a PROFILE cache - portrait, favourite
+game, region, statistics - joined by handle, because no domain owns those fields yet.
+
+Two behaviours went away with it, and both were furniture:
+
+- **Nobody answers a friend request on a timer.** `planRequestReply` used to accept for them
+  after a few seconds. A request now sits pending until the other person answers it.
+- **Nothing walks a report to "reviewed".** The client used to move its own report along on a
+  20-second timer. It says what was filed and waits, because nothing in a browser knows what
+  moderation did.
+
+**Blocking ends the friendship, and unblocking does not restore it.** The block deletes both
+friendship rows inside the same transaction, so afterwards there is nothing left to disagree
+about; getting back to friends means asking again. Worth knowing before writing a test that
+blocks the same person twice and wonders why the second one measures nothing.
+
+**Three of the reads are LAZY, and pages ask for them.** `graph` and `privacy` are fetched on
+boot because the shell reads both on every route. The directory, the suggestions and my reports
+are not - that would be three more requests on every navigation for three lists that two pages
+between them ever show - so a page calls `social.want('people' | 'suggestions' | 'reports')` in
+its `mount`. The responsive matrix is what found this: nine API calls per page over six hundred
+pages took the rate limiter out, and the limiter was right.
 
 ## People are handles
 

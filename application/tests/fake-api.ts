@@ -2,7 +2,12 @@ import { ApiError, applyFieldErrors } from '@azerothjs/http/api/shared';
 
 import { handleFromAddress, handleFromName } from '../../server/src/domains/identity/handle.ts';
 import type { Account, ChatMessage, ConversationSummary, MuteSubject, Privacy } from '../../server/src/schemas.ts';
-import { THREAD_FIXTURES } from '../../server/src/db/seed-fixtures.ts';
+import {
+    FRIENDSHIP_FIXTURES,
+    PEOPLE_FIXTURES,
+    REQUEST_FIXTURES,
+    THREAD_FIXTURES
+} from '../../server/src/db/seed-fixtures.ts';
 
 export type Refusal = 'challenge-unreachable' | 'bad-signature' | 'wallet-unreachable' | 'guest-taken';
 
@@ -38,6 +43,13 @@ export const server =
     messages: [] as ChatMessage[],
     refuseSend: null as string | null,
 
+    /** The graph, from the same fixtures the development server seeds. */
+    friends: [] as string[],
+    incoming: [] as { id: string; from: string; to: string; at: string }[],
+    outgoing: [] as { id: string; from: string; to: string; at: string }[],
+    blocks: [] as string[],
+    reports: [] as { id: string; against: string; category: string; status: string; at: string }[],
+
     reset(): void
     {
         server.account = null;
@@ -54,6 +66,7 @@ export const server =
         server.me = 'alex';
         server.refuseSend = null;
         loadFixtures();
+        loadGraph();
     }
 };
 
@@ -116,7 +129,48 @@ function loadFixtures(): void
     }
 }
 
+/**
+ * The social graph for whoever `server.me` is, from the fixtures.
+ *
+ * Handles all the way through, exactly as the real wire does - there is no uuid anywhere in a
+ * payload the browser sees, so a test that passes here is a test that would pass against the
+ * server.
+ */
+function loadGraph(): void
+{
+    server.friends = FRIENDSHIP_FIXTURES
+        .filter(([a, b]) => a === server.me || b === server.me)
+        .map(([a, b]) => (a === server.me ? b : a));
+
+    const asRequest = (request: { from: string; to: string; minutesAgo: number }, index: number) => ({
+        id: `req-${ index }`,
+        from: request.from,
+        to: request.to,
+        at: new Date(1_700_000_000_000 - request.minutesAgo * 60_000).toISOString()
+    });
+
+    server.incoming = REQUEST_FIXTURES.map(asRequest).filter((request) => request.to === server.me);
+    server.outgoing = REQUEST_FIXTURES.map(asRequest).filter((request) => request.from === server.me);
+    server.blocks = [];
+    server.reports = [];
+}
+
+const reachable = (handle: string): boolean => !server.blocks.includes(handle) && handle !== server.me;
+
+const personWire = (handle: string) =>
+{
+    const person = PEOPLE_FIXTURES.find((one) => one.handle === handle);
+    return {
+        id: handle,
+        handle,
+        displayName: person?.displayName ?? handle,
+        hue: person?.hue ?? 0,
+        isMinor: person?.isMinor ?? false
+    };
+};
+
 loadFixtures();
+loadGraph();
 
 export function demoAccount(handle: string): Account | undefined
 {
@@ -269,7 +323,111 @@ export const client =
         async graph()
         {
             server.calls.push('social.graph');
-            return { friends: [], incoming: [], outgoing: [], blocked: [], mutes: [...server.mutes] };
+            return {
+                friends: server.friends.filter(reachable).map(personWire),
+                incoming: server.incoming.filter((request) => reachable(request.from)),
+                outgoing: server.outgoing.filter((request) => reachable(request.to)),
+                blocked: server.blocks.map(personWire),
+                mutes: [...server.mutes]
+            };
+        },
+
+        async people()
+        {
+            server.calls.push('social.people');
+            return { people: PEOPLE_FIXTURES.map((one) => one.handle).filter(reachable).map(personWire) };
+        },
+
+        async suggestions()
+        {
+            server.calls.push('social.suggestions');
+            const known = new Set([...server.friends, ...server.incoming.map((one) => one.from), ...server.outgoing.map((one) => one.to)]);
+            return {
+                suggestions: PEOPLE_FIXTURES
+                    .map((one) => one.handle)
+                    .filter((handle) => reachable(handle) && !known.has(handle))
+                    .map((handle) => ({ person: personWire(handle), mutual: 0 }))
+            };
+        },
+
+        async request({ input }: { input: { id: string } })
+        {
+            server.calls.push('social.request');
+            counter += 1;
+            server.outgoing.push({
+                id: `req-out-${ counter }`,
+                from: server.me,
+                to: input.id,
+                at: new Date(1_700_000_000_000).toISOString()
+            });
+            return { outcome: 'sent' as const };
+        },
+
+        async answer({ input }: { input: { id: string; outcome: 'accepted' | 'declined' } })
+        {
+            server.calls.push('social.answer');
+            const request = server.incoming.find((one) => one.id === input.id);
+            server.incoming = server.incoming.filter((one) => one.id !== input.id);
+            if (request !== undefined && input.outcome === 'accepted')
+            {
+                server.friends.push(request.from);
+            }
+            return { ok: true };
+        },
+
+        async withdraw({ input }: { input: { id: string } })
+        {
+            server.calls.push('social.withdraw');
+            server.outgoing = server.outgoing.filter((one) => one.to !== input.id);
+            return { ok: true };
+        },
+
+        async unfriend({ input }: { input: { id: string } })
+        {
+            server.calls.push('social.unfriend');
+            server.friends = server.friends.filter((one) => one !== input.id);
+            return { ok: true };
+        },
+
+        async block({ input }: { input: { id: string } })
+        {
+            server.calls.push('social.block');
+            if (!server.blocks.includes(input.id))
+            {
+                server.blocks.push(input.id);
+            }
+            server.friends = server.friends.filter((one) => one !== input.id);
+            server.incoming = server.incoming.filter((one) => one.from !== input.id);
+            server.outgoing = server.outgoing.filter((one) => one.to !== input.id);
+            return { ok: true };
+        },
+
+        async unblock({ input }: { input: { id: string } })
+        {
+            server.calls.push('social.unblock');
+            server.blocks = server.blocks.filter((one) => one !== input.id);
+            return { ok: true };
+        },
+
+        async report({ input }: { input: { id: string; category: string } })
+        {
+            server.calls.push('social.report');
+            counter += 1;
+            const id = `report-${ counter }`;
+            server.reports.push({
+                id,
+                against: input.id,
+                category: input.category,
+                status: 'received',
+                at: new Date(1_700_000_000_000).toISOString()
+            });
+            return { id };
+        },
+
+        async reports()
+        {
+            server.calls.push('social.reports');
+            return { reports: [...server.reports] };
         },
 
         async privacy(): Promise<Privacy>

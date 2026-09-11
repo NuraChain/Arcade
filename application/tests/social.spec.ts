@@ -135,36 +135,52 @@ describe('social plans', () =>
 
 describe('social store', () =>
 {
-    it('sends a request and hears back on the clock alone', () =>
+    it('sends a request and waits, because nobody answers on a timer', async () =>
     {
         const social = useSocial();
+        await social.refresh();
+
         const target = 'sina.g';
         expect(social.relation(target)).toBe('none');
-        social.add(target);
+
+        await social.add(target);
         expect(social.relation(target)).toBe('outgoing');
-        clock.advance(20_000);
-        expect(['friend', 'none']).toContain(social.relation(target));
+
+        // The mock used to accept for them after a few seconds. A request now sits there until
+        // the other person answers it, which is what a friend request is.
+        clock.advance(60_000);
+        await social.refresh();
+        expect(social.relation(target)).toBe('outgoing');
+
+        await social.withdraw(target);
+        expect(social.relation(target)).toBe('none');
     });
 
-    it('accepts an incoming request and keeps the person as a friend', () =>
+    it('accepts an incoming request and keeps the person as a friend', async () =>
     {
         const social = useSocial();
+        await social.refresh();
+
         const request = social.incoming()[0];
         expect(request).toBeDefined();
-        social.accept(request.id);
+
+        await social.accept(request.id);
         expect(social.friends()).toContain(request.from);
         expect(social.incoming().some((entry) => entry.id === request.id)).toBe(false);
     });
 
-    it('blocks everywhere: friends, conversations and suggestions all lose them', async () =>
+    it('blocks everywhere: friends, people and suggestions all lose them', async () =>
     {
         const social = useSocial();
         const chat = useChat();
+        social.want('people');
+        social.want('suggestions');
+        await social.refresh();
         await chat.refresh();
         expect(social.friends()).toContain('sara.k');
         expect(chat.conversations().some((conversation) => conversation.id === 'c-sara')).toBe(true);
 
-        social.block('sara.k');
+        await social.block('sara.k');
         await chat.refresh();
 
         expect(social.friends()).not.toContain('sara.k');
@@ -173,31 +189,40 @@ describe('social store', () =>
         expect(social.people().some((person) => person.id === 'sara.k')).toBe(false);
         expect(social.suggestions().some((person) => person.id === 'sara.k')).toBe(false);
 
-        social.unblock('sara.k');
-        await chat.refresh();
+        await social.unblock('sara.k');
         expect(social.relation('sara.k')).toBe('none');
         expect(social.people().some((person) => person.id === 'sara.k')).toBe(true);
     });
 
-    it('never caps the block list', () =>
+    it('never caps the block list', async () =>
     {
         const social = useSocial();
+        social.want('people');
         for (const person of buildDataset(9, 900_000).people)
         {
-            social.block(person.id);
+            if (person.id !== 'alex')
+            {
+                await social.block(person.id);
+            }
         }
-        expect(social.blocked().length).toBe(24);
+        expect(social.blocked().length).toBe(23);
         expect(social.friends().length).toBe(0);
+        expect(social.people().length).toBe(0);
     });
 
-    it('reports separately from blocking, and moves the report to reviewed', () =>
+    it('reports separately from blocking, and leaves the outcome to the server', async () =>
     {
         const social = useSocial();
-        const id = social.report('nima.f', 'harassment');
+        social.want('reports');
+        const id = await social.report('nima.f', 'harassment');
+
         expect(social.isBlocked('nima.f')).toBe(false);
-        expect(social.reports()[0].status).toBe('received');
-        clock.advance(20_000);
-        expect(social.reports().find((report) => report.id === id)?.status).toBe('reviewed');
+        expect(social.reports().find((report) => report.id === id)?.status).toBe('received');
+
+        // The client used to walk the report to 'reviewed' on a timer. Nothing in a browser
+        // decides what moderation did with a report; it says what was filed and waits.
+        clock.advance(60_000);
+        expect(social.reports().find((report) => report.id === id)?.status).toBe('received');
     });
 
     it('mutes a person without unfriending them', async () =>
@@ -554,9 +579,13 @@ describe('search store', () =>
         expect(search.recents()).toEqual([]);
     });
 
-    it('narrows to one kind when a scope is chosen', () =>
+    it('narrows to one kind when a scope is chosen', async () =>
     {
         const search = useSearch();
+        const social = useSocial();
+        social.want('people');
+        await social.refresh();
+
         search.setQuery('sara.k');
         search.setScope('people');
         const results = search.results();
