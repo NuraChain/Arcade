@@ -1,0 +1,31 @@
+node_modules/
+dist/
+dist-server/
+.azeroth/
+coverage/
+logs/
+*.tsbuildinfo
+.env
+*.local
+.DS_Store
+Thumbs.db
+.idea
+.vscode
+.claude/settings.local.json
+
+# Playwright / Chrome DevTools MCP scratch output (snapshots, traces) - never part of the app.
+.playwright-mcp/
+
+# Blender writes these beside a .blend when a script saves one. The asset pipeline is
+# script-in / GLB-out and never needs a .blend, so any that appear are scratch.
+*.blend1
+tools/blender/scratch/
+
+# Cycles review renders and browser screenshots. Every asset script writes previews here so a
+# model can be judged before it ships; the GLBs in application/public/world are the deliverable.
+tools/blender/out/
+tools/blender/preview.png
+*-browser.png
+
+__pycache__/
+*.pyc

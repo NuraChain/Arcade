@@ -1,0 +1,22 @@
+{
+    "name": "nura-games",
+    "private": true,
+    "version": "0.1.0",
+    "type": "module",
+    "engines": {
+        "node": ">=24"
+    },
+    "workspaces": [
+        "application"
+    ],
+    "scripts": {
+        "dev": "npm run dev --workspace application",
+        "build": "npm run build --workspace application",
+        "check": "npm run check --workspace application",
+        "test": "npm run test --workspace application",
+        "test:watch": "npm run test:watch --workspace application",
+        "test:shuffle": "npm run test:shuffle --workspace application",
+        "assets": "node tools/blender/build.mjs",
+        "assets:poster": "node tools/blender/build.mjs --poster-only"
+    }
+}

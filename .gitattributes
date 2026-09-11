@@ -1,0 +1,11 @@
+* text=auto eol=lf
+
+*.glb binary
+*.webp binary
+*.png binary
+*.jpg binary
+*.woff2 binary
+*.blend binary
+
+package-lock.json -diff
+application/public/world/* linguist-generated
