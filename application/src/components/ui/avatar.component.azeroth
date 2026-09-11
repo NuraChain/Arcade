@@ -1,0 +1,87 @@
+import type { Person } from '../../data/mock/types.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import { AVATAR_DOT, AVATAR_SIZE, type AvatarSize } from './variants.ts';
+
+export type Presence = 'online' | 'away' | 'offline' | 'playing' | null;
+
+export function initialsOf(name: string): string
+{
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0)
+    {
+        return '?';
+    }
+    if (parts.length === 1)
+    {
+        return parts[0].slice(0, 1).toUpperCase();
+    }
+    return (parts[0].slice(0, 1) + parts[parts.length - 1].slice(0, 1)).toUpperCase();
+}
+
+export default component Avatar(props: {
+    person: Person | null;
+    size?: AvatarSize;
+    presence?: Presence;
+    ring?: boolean;
+    class?: string;
+})
+{
+    const locale = useLocale();
+
+    state failed = false;
+
+    derived size = props.size ?? 'md';
+
+    derived name = props.person === null ? '' : locale.text(props.person.name);
+
+    derived portrait = props.person !== null && props.person.portrait !== null && !failed ? `/art/avatars/${ props.person.portrait }.webp` : null;
+
+    derived hue = props.person === null ? 200 : props.person.hue;
+
+    derived dotClass = props.presence === 'online' || props.presence === 'playing'
+        ? 'bg-live'
+        : (props.presence === 'away' ? 'bg-lamp' : 'bg-faint');
+
+    <span
+        class={ [
+            'relative inline-flex shrink-0 select-none items-center justify-center overflow-visible rounded-full align-middle font-semibold text-text',
+            AVATAR_SIZE[size],
+            props.ring === true ? 'ring-2 ring-lamp ring-offset-2 ring-offset-field' : '',
+            props.class ?? ''
+        ].filter(Boolean).join(' ') }
+        style={ `--hue: ${ hue }` }
+        role="img"
+        aria-label={ name }
+    >
+        <span
+            class="flex h-full w-full items-center justify-center overflow-hidden rounded-full"
+            style="background: color-mix(in oklab, hsl(var(--hue) 52% 38%) 85%, var(--field))"
+        >
+            <Show when={ portrait !== null } fallback={ <span aria-hidden="true">{ initialsOf(name) }</span> }>
+                { () =>
+                    <img
+                        src={ portrait! }
+                        alt=""
+                        class="h-full w-full object-cover"
+                        loading="lazy"
+                        decoding="async"
+                        onError={ () => failed = true }
+                    />
+                }
+            </Show>
+        </span>
+        <Show when={ props.presence !== undefined && props.presence !== null }>
+            { () =>
+                <span
+                    class={ [
+                        'absolute -bottom-0.5 -end-0.5 rounded-full ring-field',
+                        AVATAR_DOT[size],
+                        dotClass,
+                        props.presence === 'playing' ? 'animate-pulse-live motion-reduce:animate-none' : ''
+                    ].filter(Boolean).join(' ') }
+                    aria-hidden="true"
+                ></span>
+            }
+        </Show>
+    </span>
+}

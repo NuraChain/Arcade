@@ -1,0 +1,44 @@
+import type { NavigateTarget } from 'azerothjs';
+
+import Icon from '../../icons/icon.component.azeroth';
+import type { IconName } from '../../icons/registry.ts';
+import Button from './button.component.azeroth';
+
+export default component EmptyState(props: {
+    icon?: IconName;
+    title: string;
+    lead?: string;
+    action?: string;
+    to?: NavigateTarget;
+    tone?: 'lamp' | 'live';
+    class?: string;
+    onAction?: () => void;
+})
+{
+    <div class={ [ 'flex flex-col items-center px-6 py-10 text-center', props.class ?? '' ].filter(Boolean).join(' ') }>
+        <Show when={ props.icon !== undefined }>
+            { () =>
+                <span
+                    class={ [
+                        'mb-4 flex h-14 w-14 items-center justify-center rounded-full',
+                        props.tone === 'live' ? 'bg-live/15 text-live' : 'bg-lamp/15 text-lamp'
+                    ].join(' ') }
+                    aria-hidden="true"
+                >
+                    <Icon name={ props.icon! } size={ 26 } />
+                </span>
+            }
+        </Show>
+        <p class="font-display text-[22px] font-semibold text-text">{ props.title }</p>
+        <Show when={ props.lead !== undefined }>
+            { () => <p class="mt-1.5 max-w-[34ch] text-[14px] text-muted">{ props.lead }</p> }
+        </Show>
+        <Show when={ props.action !== undefined }>
+            { () =>
+                <div class="mt-5">
+                    <Button variant="primary" size="md" to={ props.to } onClick={ props.onAction }>{ props.action }</Button>
+                </div>
+            }
+        </Show>
+    </div>
+}

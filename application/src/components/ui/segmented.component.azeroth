@@ -1,0 +1,44 @@
+import Icon from '../../icons/icon.component.azeroth';
+import type { IconName } from '../../icons/registry.ts';
+
+export interface SegmentItem
+{
+    id: string;
+    label: string;
+    icon?: IconName;
+}
+
+export default component Segmented(props: {
+    items: SegmentItem[];
+    value: string;
+    label: string;
+    onChange: (id: string) => void;
+    block?: boolean;
+    class?: string;
+})
+{
+    <div
+        class={ [
+            'inline-flex items-center gap-0.5 rounded-full border border-line bg-field p-0.5',
+            props.block === true ? 'w-full' : '',
+            props.class ?? ''
+        ].filter(Boolean).join(' ') }
+        role="group"
+        aria-label={ props.label }
+    >
+        <For each={ props.items } key={ (item) => item.id } let={ item }>
+            <button
+                type="button"
+                class={ [
+                    'flex h-9 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-full px-3 text-[13px] font-semibold transition-colors duration-150',
+                    props.value === item.id ? 'bg-raised text-text shadow-1' : 'cursor-pointer text-muted hover:text-text'
+                ].join(' ') }
+                aria-pressed={ props.value === item.id }
+                onClick={ () => props.onChange(item.id) }
+            >
+                <Show when={ item.icon !== undefined }>{ () => <Icon name={ item.icon! } size={ 15 } /> }</Show>
+                <span class="truncate">{ item.label }</span>
+            </button>
+        </For>
+    </div>
+}

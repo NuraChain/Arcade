@@ -1,0 +1,20 @@
+export default component Skeleton(props: { lines?: number; avatar?: boolean; class?: string })
+{
+    derived count = Math.max(1, props.lines ?? 2);
+
+    derived rows = Array.from({ length: count }, (_, index) => index);
+
+    <div class={ [ 'flex animate-pulse items-start gap-3 motion-reduce:animate-none', props.class ?? '' ].filter(Boolean).join(' ') } aria-hidden="true">
+        <Show when={ props.avatar === true }>
+            { () => <span class="h-10 w-10 shrink-0 rounded-full bg-raised"></span> }
+        </Show>
+        <div class="flex min-w-0 flex-1 flex-col gap-2 py-1">
+            <For each={ rows } key={ (row) => row } let={ row }>
+                <span
+                    class="block h-3 rounded-full bg-raised"
+                    style={ `width: ${ row === 0 ? 60 : (row === count - 1 ? 40 : 85) }%` }
+                ></span>
+            </For>
+        </div>
+    </div>
+}

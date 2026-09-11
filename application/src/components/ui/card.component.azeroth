@@ -1,0 +1,41 @@
+import { Link, type Child, type NavigateTarget } from 'azerothjs';
+
+export default component Card(props: {
+    children?: Child;
+    to?: NavigateTarget;
+    padded?: boolean;
+    glow?: 'lamp' | 'live' | null;
+    class?: string;
+    label?: string;
+    onClick?: () => void;
+})
+{
+    derived interactive = props.to !== undefined || props.onClick !== undefined;
+
+    derived shell = [
+        'block rounded-panel border border-line bg-field text-start text-text',
+        props.padded === false ? '' : 'p-4',
+        props.glow === 'lamp' ? 'shadow-glow-lamp border-lamp/40' : '',
+        props.glow === 'live' ? 'shadow-glow-live border-live/40' : '',
+        interactive ? 'cursor-pointer transition duration-200 ease-[var(--ease-ui)] hover:border-line hover:bg-raised/70 active:scale-[0.99]' : '',
+        props.class ?? ''
+    ].filter(Boolean).join(' ');
+
+    <Show
+        when={ props.to !== undefined }
+        fallback={
+            <Show
+                when={ props.onClick !== undefined }
+                fallback={ <div class={ shell }>{ props.children }</div> }
+            >
+                { () =>
+                    <button type="button" class={ [ shell, 'w-full' ].join(' ') } aria-label={ props.label } onClick={ () => props.onClick?.() }>
+                        { props.children }
+                    </button>
+                }
+            </Show>
+        }
+    >
+        { () => <Link to={ props.to! } class={ shell } aria-label={ props.label }>{ props.children }</Link> }
+    </Show>
+}

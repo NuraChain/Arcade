@@ -1,0 +1,52 @@
+import type { Child } from 'azerothjs';
+
+import Icon from '../../icons/icon.component.azeroth';
+import type { IconName } from '../../icons/registry.ts';
+import { TONE_SOFT, type Tone } from './variants.ts';
+
+export default component Chip(props: {
+    children?: Child;
+    icon?: IconName;
+    selected?: boolean;
+    tone?: Tone;
+    disabled?: boolean;
+    class?: string;
+    onClick?: () => void;
+})
+{
+    derived interactive = props.onClick !== undefined;
+
+    derived shell = [
+        'inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3.5 text-[13px] font-semibold',
+        'transition duration-150 ease-[var(--ease-ui)]',
+        props.selected === true
+            ? 'border-lamp bg-lamp/15 text-lamp'
+            : (props.tone !== undefined ? `border-transparent ${ TONE_SOFT[props.tone] }` : 'border-line bg-field text-muted'),
+        interactive && props.disabled !== true ? 'cursor-pointer hover:border-lamp/60 hover:text-text active:scale-[0.97]' : '',
+        props.disabled === true ? 'opacity-50' : '',
+        props.class ?? ''
+    ].filter(Boolean).join(' ');
+
+    <Show
+        when={ interactive }
+        fallback={
+            <span class={ shell }>
+                <Show when={ props.icon !== undefined }>{ () => <Icon name={ props.icon! } size={ 14 } /> }</Show>
+                { props.children }
+            </span>
+        }
+    >
+        { () =>
+            <button
+                type="button"
+                class={ shell }
+                aria-pressed={ props.selected === true }
+                disabled={ props.disabled === true }
+                onClick={ () => props.onClick?.() }
+            >
+                <Show when={ props.icon !== undefined }>{ () => <Icon name={ props.icon! } size={ 14 } /> }</Show>
+                { props.children }
+            </button>
+        }
+    </Show>
+}

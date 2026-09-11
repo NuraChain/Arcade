@@ -1,0 +1,26 @@
+import type { Child } from 'azerothjs';
+
+import Icon from '../../icons/icon.component.azeroth';
+
+export default component ListItemBody(props: {
+    leading?: Child;
+    trailing?: Child;
+    title: string;
+    subtitle?: string;
+    chevron?: boolean;
+})
+{
+    <span class="flex min-w-0 flex-1 items-center gap-3">
+        <Show when={ props.leading !== undefined }>{ () => <span class="shrink-0">{ props.leading }</span> }</Show>
+        <span class="flex min-w-0 flex-1 flex-col">
+            <span class="truncate text-[15px] font-semibold text-text">{ props.title }</span>
+            <Show when={ props.subtitle !== undefined }>
+                { () => <span class="truncate text-[13px] text-muted">{ props.subtitle }</span> }
+            </Show>
+        </span>
+        <Show when={ props.trailing !== undefined }>{ () => <span class="shrink-0">{ props.trailing }</span> }</Show>
+        <Show when={ props.chevron === true }>
+            { () => <Icon name="chevron-right" size={ 18 } class="icon-flip shrink-0 text-faint" /> }
+        </Show>
+    </span>
+}

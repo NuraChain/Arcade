@@ -1,0 +1,51 @@
+import { Link, type Child, type NavigateTarget } from 'azerothjs';
+
+import ListItemBody from './list-item-body.component.azeroth';
+
+export default component ListItem(props: {
+    leading?: Child;
+    trailing?: Child;
+    title: string;
+    subtitle?: string;
+    to?: NavigateTarget;
+    chevron?: boolean;
+    active?: boolean;
+    class?: string;
+    onClick?: () => void;
+})
+{
+    derived interactive = props.to !== undefined || props.onClick !== undefined;
+
+    derived shell = [
+        'flex min-h-14 w-full items-center gap-3 rounded-tile px-3 py-2 text-start',
+        interactive ? 'cursor-pointer transition-colors duration-150 hover:bg-raised/70 active:bg-raised' : '',
+        props.active === true ? 'bg-raised' : '',
+        props.class ?? ''
+    ].filter(Boolean).join(' ');
+
+    <Show
+        when={ props.to !== undefined }
+        fallback={
+            <Show
+                when={ props.onClick !== undefined }
+                fallback={
+                    <div class={ shell }>
+                        <ListItemBody leading={ props.leading } trailing={ props.trailing } title={ props.title } subtitle={ props.subtitle } chevron={ props.chevron } />
+                    </div>
+                }
+            >
+                { () =>
+                    <button type="button" class={ shell } onClick={ () => props.onClick?.() }>
+                        <ListItemBody leading={ props.leading } trailing={ props.trailing } title={ props.title } subtitle={ props.subtitle } chevron={ props.chevron } />
+                    </button>
+                }
+            </Show>
+        }
+    >
+        { () =>
+            <Link to={ props.to! } class={ shell }>
+                <ListItemBody leading={ props.leading } trailing={ props.trailing } title={ props.title } subtitle={ props.subtitle } chevron={ props.chevron } />
+            </Link>
+        }
+    </Show>
+}

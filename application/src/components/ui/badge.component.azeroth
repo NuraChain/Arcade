@@ -1,0 +1,21 @@
+import { useLocale } from '../../stores/locale.store.ts';
+import { TONE_FILL, type Tone } from './variants.ts';
+
+export default component Badge(props: { count: number; max?: number; tone?: Tone; label?: string })
+{
+    const locale = useLocale();
+
+    derived limit = props.max ?? 99;
+
+    derived text = props.count > limit ? `${ locale.n(limit) }+` : locale.n(props.count);
+
+    <span
+        class={ [
+            'tally inline-flex h-4.5 min-w-4.5 items-center justify-center rounded-full px-1 text-[10px] font-bold leading-none',
+            TONE_FILL[props.tone ?? 'lamp']
+        ].join(' ') }
+        aria-label={ props.label }
+    >
+        { text }
+    </span>
+}

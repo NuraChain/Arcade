@@ -1,0 +1,18 @@
+export default component Spinner(props: { size?: number; label?: string; class?: string })
+{
+    derived size = props.size ?? 20;
+
+    <svg
+        class={ [ 'animate-spin motion-reduce:animate-none', props.class ?? '' ].filter(Boolean).join(' ') }
+        width={ size }
+        height={ size }
+        viewBox="0 0 24 24"
+        fill="none"
+        role={ props.label === undefined ? undefined : 'status' }
+        aria-label={ props.label }
+        aria-hidden={ props.label === undefined }
+    >
+        <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-opacity="0.25" stroke-width="2.5"></circle>
+        <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"></path>
+    </svg>
+}

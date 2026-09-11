@@ -1,0 +1,36 @@
+import type { Child } from 'azerothjs';
+
+import { useLocale } from '../../stores/locale.store.ts';
+
+export default component Field(props: {
+    children?: Child;
+    id: string;
+    label: string;
+    hint?: string;
+    error?: string | null;
+    optional?: boolean;
+    class?: string;
+})
+{
+    const locale = useLocale();
+
+    <div class={ [ 'flex flex-col gap-1.5', props.class ?? '' ].filter(Boolean).join(' ') }>
+        <label for={ props.id } class="flex items-baseline justify-between gap-3 text-[13px] font-semibold text-text">
+            <span>{ props.label }</span>
+            <Show when={ props.optional === true }>
+                { () => <span class="text-[12px] font-normal text-faint">{ locale.t('common.optional') }</span> }
+            </Show>
+        </label>
+        { props.children }
+        <Show
+            when={ props.error !== undefined && props.error !== null }
+            fallback={
+                <Show when={ props.hint !== undefined }>
+                    { () => <p id={ `${ props.id }-hint` } class="text-[12px] text-muted">{ props.hint }</p> }
+                </Show>
+            }
+        >
+            { () => <p id={ `${ props.id }-error` } class="text-[12px] font-medium text-madder" role="alert">{ props.error }</p> }
+        </Show>
+    </div>
+}

@@ -1,0 +1,19 @@
+import type { NavigateTarget } from 'azerothjs';
+import { Link } from 'azerothjs';
+
+import Icon from '../../icons/icon.component.azeroth';
+
+export default component SectionHeading(props: { title: string; more?: string; to?: NavigateTarget; id?: string; class?: string })
+{
+    <div class={ [ 'mb-3 flex items-end justify-between gap-3', props.class ?? '' ].filter(Boolean).join(' ') }>
+        <h2 id={ props.id } class="font-ui text-[13px] font-bold uppercase tracking-[0.08em] text-faint [font-variation-settings:normal] [letter-spacing:0.08em]">{ props.title }</h2>
+        <Show when={ props.more !== undefined && props.to !== undefined }>
+            { () =>
+                <Link to={ props.to! } class="flex items-center gap-0.5 text-[13px] font-semibold text-lamp hover:underline">
+                    { props.more }
+                    <Icon name="chevron-right" size={ 14 } class="icon-flip" />
+                </Link>
+            }
+        </Show>
+    </div>
+}

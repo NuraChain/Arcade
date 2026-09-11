@@ -1,0 +1,28 @@
+import Input from './input.component.azeroth';
+
+export default component SearchInput(props: {
+    value: string;
+    onInput: (value: string) => void;
+    placeholder: string;
+    label: string;
+    autofocus?: boolean;
+    class?: string;
+    onEnter?: () => void;
+})
+{
+    <div role="search" class={ props.class }>
+        <Input
+            value={ props.value }
+            onInput={ props.onInput }
+            type="search"
+            leading="search"
+            clearable
+            placeholder={ props.placeholder }
+            label={ props.label }
+            autofocus={ props.autofocus }
+            enterkeyhint="search"
+            autocomplete="off"
+            onEnter={ props.onEnter }
+        />
+    </div>
+}

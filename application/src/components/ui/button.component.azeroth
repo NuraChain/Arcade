@@ -1,62 +1,100 @@
-import type { Child } from 'azerothjs';
+import { Link, type Child, type NavigateTarget } from 'azerothjs';
 
 import Icon from '../../icons/icon.component.azeroth';
 import type { IconName } from '../../icons/registry.ts';
+import Spinner from './spinner.component.azeroth';
 import { BUTTON_SIZE, BUTTON_VARIANT, type ButtonSize, type ButtonVariant } from './variants.ts';
 
 export default component Button(props: {
     children?: Child;
-
-    
     href?: string;
-
+    to?: NavigateTarget;
     variant?: ButtonVariant;
     size?: ButtonSize;
-
-    
     icon?: IconName;
-
-    
+    leading?: IconName;
     block?: boolean;
-
     disabled?: boolean;
-
+    loading?: boolean;
+    submit?: boolean;
+    label?: string;
+    class?: string;
     onClick?: () => void;
 })
 {
+    derived inert = props.disabled === true || props.loading === true;
+
     derived shell = [
-        'inline-flex items-center justify-center rounded-full font-semibold',
-        'transition duration-150 ease-[var(--ease-ui)]',
+        'relative inline-flex select-none items-center justify-center rounded-full font-semibold',
+        'transition duration-150 ease-[var(--ease-ui)] active:scale-[0.98]',
         'disabled:cursor-not-allowed disabled:opacity-50',
         BUTTON_VARIANT[props.variant ?? 'outline'],
         BUTTON_SIZE[props.size ?? 'md'],
         props.block === true ? 'w-full' : '',
-        props.disabled === true ? '' : 'cursor-pointer'
+        inert ? '' : 'cursor-pointer',
+        props.class ?? ''
+    ].filter(Boolean).join(' ');
+
+    derived contentClass = [
+        'inline-flex items-center justify-center gap-[inherit]',
+        props.loading === true ? 'invisible' : ''
     ].filter(Boolean).join(' ');
 
     <Show
-        when={ props.href !== undefined }
+        when={ props.to !== undefined }
         fallback={
-            <button
-                type="button"
-                class={ shell }
-                disabled={ props.disabled === true }
-                onClick={ () => (props.disabled === true ? undefined : props.onClick?.()) }
+            <Show
+                when={ props.href !== undefined }
+                fallback={
+                    <button
+                        type={ props.submit === true ? 'submit' : 'button' }
+                        class={ shell }
+                        disabled={ inert }
+                        aria-busy={ props.loading === true }
+                        aria-label={ props.label }
+                        onClick={ () => (inert ? undefined : props.onClick?.()) }
+                    >
+                        <span class={ contentClass }>
+                            <Show when={ props.leading !== undefined }>
+                                { () => <Icon name={ props.leading! } size={ 16 } /> }
+                            </Show>
+                            { props.children }
+                            <Show when={ props.icon !== undefined }>
+                                { () => <Icon name={ props.icon! } size={ 16 } class="icon-flip" /> }
+                            </Show>
+                        </span>
+                        <Show when={ props.loading === true }>
+                            <span class="absolute inset-0 flex items-center justify-center">
+                                <Spinner size={ 18 } />
+                            </span>
+                        </Show>
+                    </button>
+                }
             >
-                { props.children }
-                <Show when={ props.icon !== undefined }>
-                    { () => <Icon name={ props.icon! } size={ 16 } class="icon-flip" /> }
-                </Show>
-            </button>
+                { () =>
+                    <a href={ props.href } class={ shell } aria-label={ props.label }>
+                        <Show when={ props.leading !== undefined }>
+                            { () => <Icon name={ props.leading! } size={ 16 } /> }
+                        </Show>
+                        { props.children }
+                        <Show when={ props.icon !== undefined }>
+                            { () => <Icon name={ props.icon! } size={ 16 } class="icon-flip" /> }
+                        </Show>
+                    </a>
+                }
+            </Show>
         }
     >
         { () =>
-            <a href={ props.href } class={ shell }>
+            <Link to={ props.to! } class={ shell } aria-label={ props.label } onClick={ () => props.onClick?.() }>
+                <Show when={ props.leading !== undefined }>
+                    { () => <Icon name={ props.leading! } size={ 16 } /> }
+                </Show>
                 { props.children }
                 <Show when={ props.icon !== undefined }>
                     { () => <Icon name={ props.icon! } size={ 16 } class="icon-flip" /> }
                 </Show>
-            </a>
+            </Link>
         }
     </Show>
 }
