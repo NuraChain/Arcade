@@ -8,10 +8,13 @@ import { fileURLToPath } from 'node:url';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ASSETS = join(HERE, 'assets');
 const OUT = resolve(HERE, '..', '..', 'application', 'public', 'world');
+const ART = resolve(HERE, '..', '..', 'application', 'public', 'art', 'games');
 
 const KIT_BUDGET_BYTES = 4.5 * 1024 * 1024;
 const ASSET_BUDGET_BYTES = 320 * 1024;
 const SET_BUDGET_BYTES = 600 * 1024;
+const CARD_BUDGET_BYTES = 60 * 1024;
+const HERO_BUDGET_BYTES = 110 * 1024;
 const ATLAS_BUDGET_BYTES = { 'atlas-2048.webp': 500 * 1024, 'atlas-1024.webp': 160 * 1024, 'wood-512.webp': 60 * 1024, 'wood-normal-512.webp': 80 * 1024 };
 
 const CANDIDATES = [
@@ -134,6 +137,23 @@ if (total > KIT_BUDGET_BYTES)
 {
     console.error('\nThe kit is over its budget. Reduce geometry before adding more assets.');
     failed += 1;
+}
+
+
+if (existsSync(ART))
+{
+    console.log('\n  game artwork');
+    for (const name of readdirSync(ART).filter((file) => file.endsWith('.webp')).sort())
+    {
+        const size = statSync(join(ART, name)).size;
+        const budget = name.includes('-1280') ? HERO_BUDGET_BYTES : CARD_BUDGET_BYTES;
+        const over = size > budget;
+        console.log(`  ${ name.padEnd(24) }${ human(size).padStart(10) }${ over ? '  OVER BUDGET' : '' }`);
+        if (over)
+        {
+            failed += 1;
+        }
+    }
 }
 
 process.exit(failed > 0 ? 1 : 0);
