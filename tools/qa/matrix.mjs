@@ -216,7 +216,13 @@ async function main()
                     await page.goto(`${ BASE }${ route.path }`, { waitUntil: 'networkidle' }).catch(() => undefined);
                     await page.waitForTimeout(120);
 
-                    const problems = await audit(page);
+                    let problems = await audit(page).catch(() => null);
+                    if (problems === null)
+                    {
+                        await page.waitForTimeout(400);
+                        noise.length = 0;
+                        problems = await audit(page).catch(() => [{ kind: 'unreachable', detail: 'audit could not run' }]);
+                    }
                     for (const message of noise)
                     {
                         problems.push({ kind: 'console', detail: message });

@@ -43,6 +43,7 @@ export interface PresenceApi
     onlineCount: Getter<number>;
     online(ids: readonly string[]): string[];
     setMine(id: string, state: PresenceState, game?: GameId | null): void;
+    refresh(): void;
     start(): () => void;
     stop(): void;
     reset(): void;
@@ -102,6 +103,8 @@ export const usePresence = createStore((): PresenceApi =>
             const state = (map().get(id) ?? OFFLINE).state;
             return state === 'online' || state === 'playing';
         }),
+        refresh: drift,
+
         setMine: (id, state, game) =>
         {
             const next = new Map(map());

@@ -6,11 +6,12 @@ import Icon from '../../icons/icon.component.azeroth';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useLobby } from '../../stores/lobby.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
+import { attachHold } from '../../lib/hold.ts';
 import { useToasts } from '../../stores/toasts.store.ts';
 import Avatar from '../ui/avatar.component.azeroth';
 import Button from '../ui/button.component.azeroth';
 
-export default component MessageBubble(props: { message: Message; me: string; showAuthor: boolean })
+export default component MessageBubble(props: { message: Message; me: string; showAuthor: boolean; onHold?: (personId: string) => void })
 {
     const locale = useLocale();
     const catalogue = useCatalogue();
@@ -19,6 +20,17 @@ export default component MessageBubble(props: { message: Message; me: string; sh
     const { navigate } = useNavigate();
 
     derived mine = props.message.from === props.me;
+
+    let bubble: HTMLElement | null = null;
+
+    mount
+    {
+        if (bubble === null || props.onHold === undefined || props.message.from === props.me)
+        {
+            return;
+        }
+        return attachHold(bubble, () => props.onHold?.(props.message.from));
+    }
 
     derived person = personById(props.message.from) ?? null;
 
@@ -100,10 +112,13 @@ export default component MessageBubble(props: { message: Message; me: string; sh
                     <Show when={ !mine && props.showAuthor }>
                         { () => <span class="px-1 text-ui-2xs font-semibold text-muted">{ firstName }</span> }
                     </Show>
-                    <span class={ [
-                        'rounded-tile px-3 py-2 text-ui-base leading-snug',
-                        mine ? 'bg-accent text-accent-ink' : 'bg-raised text-text'
-                    ].join(' ') }>
+                    <span
+                        ref={ (element) => bubble = element }
+                        class={ [
+                            'rounded-tile px-3 py-2 text-ui-base leading-snug',
+                            mine ? 'bg-accent text-accent-ink' : 'bg-raised text-text'
+                        ].join(' ') }
+                    >
                         { locale.text(props.message.text) }
                     </span>
                     <span class="px-1 text-ui-2xs text-faint">{ locale.relative(props.message.at) }</span>

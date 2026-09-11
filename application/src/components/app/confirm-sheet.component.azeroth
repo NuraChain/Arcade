@@ -1,3 +1,4 @@
+import { haptic } from '../../lib/haptics.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import type { OverlayProps } from '../../stores/overlay.store.ts';
 import Button from '../ui/button.component.azeroth';
@@ -20,7 +21,14 @@ export default component ConfirmSheet(props: OverlayProps & {
             </Show>
         </div>
         <div class="flex flex-col gap-2 sm:flex-row-reverse">
-            <Button variant={ props.destructive === true ? 'destructive' : 'primary' } block onClick={ () => props.close(true) }>{ props.confirm }</Button>
+            <Button variant={ props.destructive === true ? 'destructive' : 'primary' } block onClick={ () =>
+            {
+                if (props.destructive === true)
+                {
+                    haptic('warn');
+                }
+                props.close(true);
+            } }>{ props.confirm }</Button>
             <Button variant="ghost" block onClick={ () => props.close(false) }>{ props.cancel ?? locale.t('common.cancel') }</Button>
         </div>
     </div>

@@ -116,6 +116,12 @@
     min-block-size: 44px;
 }
 
+@utility holdable
+{
+    -webkit-touch-callout: none;
+    user-select: none;
+}
+
 @utility rail-x
 {
     overflow-x: auto;

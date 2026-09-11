@@ -1,6 +1,7 @@
 import { Outlet, untrack, useHead, useMatch, useRoute, type MountNode } from 'azerothjs';
 
 import '../../locales/app-catalogue.ts';
+import { setHaptics } from '../../lib/haptics.ts';
 import { routeMeta } from '../../lib/route-meta.ts';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useChat } from '../../stores/chat.store.ts';
@@ -10,6 +11,7 @@ import { useLocale } from '../../stores/locale.store.ts';
 import { useOverlay } from '../../stores/overlay.store.ts';
 import { useNotifications } from '../../stores/notifications.store.ts';
 import { usePresence } from '../../stores/presence.store.ts';
+import { useSettings } from '../../stores/settings.store.ts';
 import { useSocial } from '../../stores/social.store.ts';
 import { useWallet } from '../../stores/wallet.store.ts';
 import { useShell } from '../../stores/shell.store.ts';
@@ -26,6 +28,7 @@ import TopBar from './top-bar.component.azeroth';
 export default component AppShell(props: { children?: MountNode })
 {
     const device = useDevice();
+    const settings = useSettings();
     const overlay = useOverlay();
     const shell = useShell();
     const locale = useLocale();
@@ -35,6 +38,11 @@ export default component AppShell(props: { children?: MountNode })
     useHead({ titleTemplate: `%s · ${ locale.t('app.title') }` });
 
     let seen = untrack(() => route().key);
+
+    effect
+    {
+        setHaptics(settings.settings().haptics && device.coarse() && !device.reducedMotion());
+    }
 
     effect
     {

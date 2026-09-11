@@ -4,6 +4,7 @@ import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import IconButton from '../ui/icon-button.component.azeroth';
 import Input from '../ui/input.component.azeroth';
+import Rail from '../ui/rail.component.azeroth';
 
 export default component Composer(props: {
     value: string;
@@ -21,25 +22,23 @@ export default component Composer(props: {
     <div class="glass safe-b border-t border-line/60">
         <Show when={ open && props.disabled !== true }>
             { () =>
-                <ul class="rail-x flex gap-2 border-b border-line/60 px-3 py-2" aria-label={ locale.t('chat.pickGame') }>
-                    <li class="flex shrink-0 items-center pe-1 text-ui-xs font-semibold text-faint">{ locale.t('chat.pickGame') }</li>
+                <Rail label={ locale.t('chat.pickGame') } class="border-b border-line/60 py-2" inner="items-center px-3">
+                    <span class="flex shrink-0 items-center pe-1 text-ui-xs font-semibold text-faint">{ locale.t('chat.pickGame') }</span>
                     <For each={ catalogue.games } key={ (game) => game.id } let={ game }>
-                        <li>
-                            <button
-                                type="button"
-                                class="flex h-9 shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full border border-line bg-field px-3 text-ui-sm font-semibold text-text transition-colors hover:border-accent/60"
-                                onClick={ () =>
-                                {
-                                    open = false;
-                                    props.onGame(game.id);
-                                } }
-                            >
-                                <Icon name="zap" size={ 14 } class="text-accent" />
-                                { locale.t(game.nameKey) }
-                            </button>
-                        </li>
+                        <button
+                            type="button"
+                            class="flex h-9 shrink-0 cursor-pointer snap-start items-center gap-1.5 whitespace-nowrap rounded-control border border-line bg-field px-3 text-ui-sm font-semibold text-text transition-colors hover:border-accent/60"
+                            onClick={ () =>
+                            {
+                                open = false;
+                                props.onGame(game.id);
+                            } }
+                        >
+                            <Icon name="zap" size={ 14 } class="text-accent" />
+                            { locale.t(game.nameKey) }
+                        </button>
                     </For>
-                </ul>
+                </Rail>
             }
         </Show>
         <form

@@ -8,6 +8,7 @@ import GroupCard from '../../components/social/group-card.component.azeroth';
 import Chip from '../../components/ui/chip.component.azeroth';
 import EmptyState from '../../components/ui/empty-state.component.azeroth';
 import IconButton from '../../components/ui/icon-button.component.azeroth';
+import Rail from '../../components/ui/rail.component.azeroth';
 import SearchInput from '../../components/ui/search-input.component.azeroth';
 import SectionHeading from '../../components/ui/section-heading.component.azeroth';
 import Icon from '../../icons/icon.component.azeroth';
@@ -49,15 +50,15 @@ export default component SearchPage()
             />
         </header>
 
-        <ul class="rail-x -mx-4 mb-5 flex gap-2 px-4 sm:mx-0 sm:px-0" aria-label={ locale.t('search.scope.all') }>
+        <Rail label={ locale.t('search.scope.all') } class="-mx-4 mb-5 sm:mx-0" inner="px-4 sm:px-0">
             <For each={ SEARCH_SCOPES } key={ (scope) => scope } let={ scope }>
-                <li>
+                <div class="shrink-0 snap-start">
                     <Chip selected={ search.scope() === scope } onClick={ () => search.setScope(scope as SearchScope) }>
                         { locale.t(`search.scope.${ scope }`) }
                     </Chip>
-                </li>
+                </div>
             </For>
-        </ul>
+        </Rail>
 
         <Show
             when={ query.trim() !== '' }

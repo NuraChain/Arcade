@@ -60,6 +60,13 @@ export const app: Pick<Dictionary, keyof typeof reference> = {
     'toast.region': 'اعلان‌ها',
     'toast.more': '{count} مورد دیگر…',
 
+    'app.refreshing': 'در حال تازه‌سازی…',
+    'app.pull': 'برای تازه‌سازی بکش',
+    'app.railWider': 'پهن‌تر',
+    'app.railNarrower': 'باریک‌تر',
+    'app.scrollBack': 'پیمایش به عقب',
+    'app.scrollOn': 'پیمایش به جلو',
+
     'overlay.close': 'بستن',
     'overlay.handle': 'برای بستن به پایین بکش',
 

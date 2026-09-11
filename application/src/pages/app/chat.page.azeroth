@@ -195,6 +195,7 @@ export default component ChatPage()
                                             message={ message }
                                             me={ me }
                                             showAuthor={ index === 0 || messages[index - 1].from !== message.from }
+                                            onHold={ (personId) => overlay.open(PersonActions, { personId }, { label: locale.t('actions.title') }) }
                                         />
                                     </div>
                                 </For>

@@ -10,6 +10,7 @@ export const NOTIFICATION_CATEGORIES: NotificationCategory[] = ['invites', 'requ
 export interface Settings
 {
     sound: boolean;
+    haptics: boolean;
     railWidth: number;
     railOpen: boolean;
     notifications: Record<NotificationCategory, boolean>;
@@ -25,6 +26,7 @@ export function defaultSettings(): Settings
 {
     return {
         sound: false,
+        haptics: true,
         railWidth: 0.3,
         railOpen: true,
         notifications: { invites: true, requests: true, results: true, messages: true, achievements: true },

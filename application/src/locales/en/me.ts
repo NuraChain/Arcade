@@ -47,6 +47,8 @@ export const me = {
     'settings.notifications.messages': 'Messages',
     'settings.notifications.achievements': 'Achievements',
     'settings.notifications.sound': 'Sound at the table',
+    'settings.notifications.haptics': 'Vibration',
+    'settings.notifications.hapticsHint': 'A short buzz when a table is ready, a hand is won, or a gesture lands.',
 
     'settings.appearance.theme': 'Theme',
     'settings.appearance.language': 'Language',

@@ -232,6 +232,16 @@ export default component SettingsPage()
                         label={ locale.t('settings.notifications.sound') }
                         onChange={ (checked) => settings.update({ sound: checked }) }
                     />
+                    <Show when={ device.coarse() }>
+                        { () =>
+                            <Toggle
+                                checked={ current.haptics }
+                                label={ locale.t('settings.notifications.haptics') }
+                                description={ locale.t('settings.notifications.hapticsHint') }
+                                onChange={ (checked) => settings.update({ haptics: checked }) }
+                            />
+                        }
+                    </Show>
                 </div>
             </section>
 

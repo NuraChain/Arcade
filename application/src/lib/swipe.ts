@@ -23,6 +23,7 @@ export interface Drag
     end(at: number): DragFrame;
     active(): boolean;
     axis(): DragAxis | null;
+    speed(): number;
 }
 
 const IDLE: DragFrame = { offset: 0, axis: null, dismiss: false };
@@ -97,12 +98,17 @@ export function createDrag(options: DragOptions): Drag
             }
             tracking = false;
             const stale = at - lastAt > 160;
+            if (stale)
+            {
+                speed = 0;
+            }
             const offset = clamp(last - (wanted === 'y' ? originY : originX));
-            const flick = !stale && (signed ? Math.abs(speed) : speed) >= options.velocity;
+            const flick = (signed ? Math.abs(speed) : speed) >= options.velocity;
             return { offset, axis: locked, dismiss: Math.abs(offset) >= options.threshold || flick };
         },
 
         active: () => tracking,
-        axis: () => locked
+        axis: () => locked,
+        speed: () => speed
     };
 }

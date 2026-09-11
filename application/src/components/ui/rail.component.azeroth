@@ -1,0 +1,90 @@
+import { type Child } from 'azerothjs';
+
+import Icon from '../../icons/icon.component.azeroth';
+import { stepAlong } from '../../lib/snap.ts';
+import { useDevice } from '../../stores/device.store.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+
+export default component Rail(props: { children?: Child; label: string; class?: string; inner?: string })
+{
+    const device = useDevice();
+    const locale = useLocale();
+
+    state atStart = true;
+    state atEnd = true;
+
+    let scroller: HTMLElement | null = null;
+
+    const measure = (): void =>
+    {
+        if (scroller === null)
+        {
+            return;
+        }
+        const travelled = Math.abs(scroller.scrollLeft);
+        const extent = scroller.scrollWidth - scroller.clientWidth;
+        atStart = travelled <= 1;
+        atEnd = extent <= 1 || travelled >= extent - 1;
+    };
+
+    const step = (direction: 1 | -1): void =>
+    {
+        if (scroller === null)
+        {
+            return;
+        }
+        const page = Math.max(120, Math.round(scroller.clientWidth * 0.8));
+        const target = stepAlong(Math.abs(scroller.scrollLeft), scroller.scrollWidth, page, direction);
+        scroller.scrollTo({ left: target * (locale.dir() === 'rtl' ? -1 : 1), behavior: device.reducedMotion() ? 'auto' : 'smooth' });
+    };
+
+    mount
+    {
+        measure();
+        const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
+        if (observer !== null && scroller !== null)
+        {
+            observer.observe(scroller);
+        }
+        return () => observer?.disconnect();
+    }
+
+    <div
+        class={ [ 'rail', props.class ?? '' ].filter(Boolean).join(' ') }
+        data-start={ atStart ? 'true' : 'false' }
+        data-end={ atEnd ? 'true' : 'false' }
+    >
+        <div
+            ref={ (element) => scroller = element }
+            class={ [ 'rail-x flex snap-x scroll-px-4 gap-2.5', props.inner ?? '' ].filter(Boolean).join(' ') }
+            role="group"
+            aria-label={ props.label }
+            tabindex="0"
+            onScroll={ measure }
+            onKeyDown={ (event) =>
+            {
+                const forward = event.key === (locale.dir() === 'rtl' ? 'ArrowLeft' : 'ArrowRight');
+                const backward = event.key === (locale.dir() === 'rtl' ? 'ArrowRight' : 'ArrowLeft');
+                if (forward || backward)
+                {
+                    event.preventDefault();
+                    step(forward ? 1 : -1);
+                }
+            } }
+        >
+            { props.children }
+        </div>
+        <Show when={ !device.coarse() && !(atStart && atEnd) }>
+            { () =>
+                <div class="rail-arrows" aria-hidden="true">
+                    <button type="button" class="rail-arrow" tabindex="-1" disabled={ atStart } onClick={ () => step(-1) }>
+                        <Icon name="chevron-right" size={ 16 } class="icon-flip rotate-180" />
+                    </button>
+                    <button type="button" class="rail-arrow" tabindex="-1" disabled={ atEnd } onClick={ () => step(1) }>
+                        <Icon name="chevron-right" size={ 16 } class="icon-flip" />
+                    </button>
+                </div>
+            }
+        </Show>
+    </div>
+}

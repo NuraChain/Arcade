@@ -1,15 +1,66 @@
-import { untrack, useRoute, type Child } from 'azerothjs';
+import { untrack, useMatch, useNavigate, useRoute, type Child } from 'azerothjs';
 
+import Icon from '../../icons/icon.component.azeroth';
+import { attachGestures, PULL_ARM } from '../../lib/gestures.ts';
+import { haptic } from '../../lib/haptics.ts';
+import { routeMeta } from '../../lib/route-meta.ts';
+import { runtime } from '../../lib/runtime.ts';
 import { scrollMemory } from '../../lib/scroll-memory.ts';
+import { useDevice } from '../../stores/device.store.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import { useShell } from '../../stores/shell.store.ts';
+import Spinner from '../ui/spinner.component.azeroth';
 
-export default component Page(props: { children?: Child; padded?: boolean; narrow?: boolean; fill?: boolean; class?: string; label?: string })
+export default component Page(props: { children?: Child; padded?: boolean; narrow?: boolean; fill?: boolean; class?: string; label?: string; onRefresh?: () => void })
 {
     const route = useRoute();
+    const match = useMatch();
+    const device = useDevice();
+    const locale = useLocale();
+    const shell = useShell();
+    const { back, replace } = useNavigate();
 
     const key = untrack(() => route().key);
     const restored = untrack(() => route().navigationKind === 'pop');
 
+    state pull = 0;
+    state armed = false;
+    state busy = false;
+    state slide = 0;
+
     let root: HTMLElement | null = null;
+    let release: (() => void) | null = null;
+    let settle: (() => void) | null = null;
+
+    derived meta = routeMeta(match());
+
+    derived leaving = meta.parent !== undefined || shell.depth() > 0;
+
+    derived indicator = busy ? PULL_ARM : pull;
+
+    const refresh = (): void =>
+    {
+        if (busy || props.onRefresh === undefined)
+        {
+            return;
+        }
+        haptic('select');
+        busy = true;
+        props.onRefresh();
+        settle?.();
+        settle = runtime().clock.after(620, () => busy = false);
+    };
+
+    const exit = (): void =>
+    {
+        haptic('tick');
+        if (shell.depth() > 0)
+        {
+            back();
+            return;
+        }
+        replace(meta.parent ?? '/app');
+    };
 
     mount
     {
@@ -17,8 +68,28 @@ export default component Page(props: { children?: Child; padded?: boolean; narro
         {
             root.scrollTop = scrollMemory.take(key) ?? 0;
         }
+        if (root !== null)
+        {
+            release = attachGestures(root, {
+                rtl: () => locale.dir() === 'rtl',
+                refresh: props.onRefresh === undefined ? undefined : refresh,
+                back: device.posture() === 'phone' && leaving ? exit : undefined,
+                onPull: (distance, ready) =>
+                {
+                    if (ready && !armed)
+                    {
+                        haptic('tick');
+                    }
+                    pull = distance;
+                    armed = ready;
+                },
+                onSlide: (distance) => slide = distance
+            });
+        }
         return () =>
         {
+            release?.();
+            settle?.();
             if (root !== null)
             {
                 scrollMemory.save(key, root.scrollTop);
@@ -30,13 +101,29 @@ export default component Page(props: { children?: Child; padded?: boolean; narro
         ref={ (element) => root = element }
         class={ [
             'page bar bg-void',
+            slide > 0 ? 'is-sliding' : '',
             props.padded === false ? '' : 'px-4 pt-4 sm:px-6 lg:px-8 phone:pb-nav rail:pb-8 sidebar:pb-8',
             props.class ?? ''
         ].filter(Boolean).join(' ') }
+        style={ slide > 0 ? `--slide:${ slide }px` : undefined }
         data-route-focus
         tabindex="-1"
         aria-label={ props.label }
     >
+        <Show when={ props.onRefresh !== undefined }>
+            { () =>
+                <div class="pull-indicator" style={ `--pull:${ indicator }px` } aria-hidden={ !busy }>
+                    <span class={ [
+                        'flex h-9 w-9 items-center justify-center rounded-full border border-line bg-lifted text-muted shadow-2 transition-colors duration-150',
+                        armed || busy ? 'border-accent/60 text-accent' : ''
+                    ].filter(Boolean).join(' ') }>
+                        <Show when={ busy } fallback={ <Icon name="refresh" size={ 17 } class="pull-arrow" /> }>
+                            { () => <Spinner size={ 17 } label={ locale.t('app.refreshing') } /> }
+                        </Show>
+                    </span>
+                </div>
+            }
+        </Show>
         <div class={ [
             '@container mx-auto w-full',
             props.fill === true ? 'h-full' : '',

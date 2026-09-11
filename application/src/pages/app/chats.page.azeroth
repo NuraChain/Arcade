@@ -1,6 +1,7 @@
 import { useHead } from 'azerothjs';
 
 import Page from '../../components/app/page.component.azeroth';
+import ChatActions from '../../components/chat/chat-actions.component.azeroth';
 import ChatListItem from '../../components/chat/chat-list-item.component.azeroth';
 import { titleOf } from '../../components/chat/chat-title.ts';
 import EmptyState from '../../components/ui/empty-state.component.azeroth';
@@ -10,11 +11,15 @@ import type { Conversation } from '../../data/mock/types.ts';
 import { fold } from '../../services/search.service.ts';
 import { useChat } from '../../stores/chat.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
+import { useOverlay } from '../../stores/overlay.store.ts';
+import { usePresence } from '../../stores/presence.store.ts';
 
 export default component ChatsPage()
 {
     const locale = useLocale();
     const chat = useChat();
+    const overlay = useOverlay();
+    const presence = usePresence();
 
     useHead({ title: () => locale.t('app.nav.chats') });
 
@@ -38,9 +43,11 @@ export default component ChatsPage()
                 || chat.messagesOf(conversation.id).some((message) => fold(locale.text(message.text)).includes(needle)));
         return [...matched].sort((a, b) =>
         {
-            if (a.pinned !== b.pinned)
+            const pinA = chat.pinned(a.id);
+            const pinB = chat.pinned(b.id);
+            if (pinA !== pinB)
             {
-                return a.pinned ? -1 : 1;
+                return pinA ? -1 : 1;
             }
             return (chat.lastOf(b.id)?.at ?? 0) - (chat.lastOf(a.id)?.at ?? 0);
         });
@@ -53,7 +60,7 @@ export default component ChatsPage()
         { id: 'games', label: locale.t('chats.tab.games') }
     ];
 
-    <Page label={ locale.t('app.nav.chats') }>
+    <Page label={ locale.t('app.nav.chats') } onRefresh={ () => presence.refresh() }>
         <header class="pb-4">
             <h1 class="title text-ui-4xl">{ locale.t('app.nav.chats') }</h1>
             <p class="mt-2 text-ui-md text-muted">{ locale.t('chats.lead') }</p>
@@ -86,7 +93,11 @@ export default component ChatsPage()
                 <ul class="flex flex-col gap-0.5" aria-label={ locale.t('app.nav.chats') }>
                     <For each={ filtered } key={ (conversation) => conversation.id } let={ conversation }>
                         <li>
-                            <ChatListItem conversation={ conversation } me={ mine } />
+                            <ChatListItem
+                                conversation={ conversation }
+                                me={ mine }
+                                onHold={ () => overlay.open(ChatActions, { conversationId: conversation.id }, { label: locale.t('chats.actions') }) }
+                            />
                         </li>
                     </For>
                 </ul>

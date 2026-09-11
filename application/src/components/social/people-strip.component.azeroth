@@ -5,6 +5,7 @@ import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { usePresence } from '../../stores/presence.store.ts';
 import Avatar from '../ui/avatar.component.azeroth';
+import Rail from '../ui/rail.component.azeroth';
 
 export default component PeopleStrip(props: { people: Person[]; label: string; class?: string })
 {
@@ -22,15 +23,15 @@ export default component PeopleStrip(props: { people: Person[]; label: string; c
         return current.state === 'away' ? locale.t('common.away') : locale.t('common.online');
     };
 
-    <ul class={ [ 'rail-x -mx-4 flex snap-x gap-3 px-4 pb-1 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8', props.class ?? '' ].filter(Boolean).join(' ') } aria-label={ props.label }>
+    <Rail label={ props.label } class={ [ '-mx-4 sm:-mx-6 lg:-mx-8', props.class ?? '' ].filter(Boolean).join(' ') } inner="gap-3 px-4 pb-1 sm:px-6 lg:px-8">
         <For each={ props.people } key={ (person) => person.id } let={ person }>
-            <li class="snap-start">
+            <div class="shrink-0 snap-start">
                 <Link to={ `/app/people/${ person.handle }` } class="flex w-[4.75rem] flex-col items-center gap-1.5 rounded-tile py-1 text-center" prefetch="hover">
                     <Avatar person={ person } size="lg" presence={ presence.of(person.id).state } />
                     <span class="w-full truncate text-ui-xs font-semibold text-text">{ locale.text(person.name).split(' ')[0] }</span>
                     <span class="w-full truncate text-ui-2xs text-faint">{ status(person.id) }</span>
                 </Link>
-            </li>
+            </div>
         </For>
-    </ul>
+    </Rail>
 }

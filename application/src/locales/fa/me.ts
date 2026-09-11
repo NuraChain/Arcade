@@ -50,6 +50,8 @@ export const me: Pick<Dictionary, keyof typeof reference> = {
     'settings.notifications.messages': 'پیام‌ها',
     'settings.notifications.achievements': 'نشان‌ها',
     'settings.notifications.sound': 'صدا سر میز',
+    'settings.notifications.haptics': 'لرزش',
+    'settings.notifications.hapticsHint': 'یک لرزش کوتاه وقتی میز آماده می‌شود، دستی برده می‌شود یا حرکتی می‌نشیند.',
 
     'settings.appearance.theme': 'پوسته',
     'settings.appearance.language': 'زبان',

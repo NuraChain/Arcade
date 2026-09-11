@@ -1,0 +1,127 @@
+import { useNavigate } from 'azerothjs';
+
+import { groupById } from '../../data/mock/index.ts';
+import Icon from '../../icons/icon.component.azeroth';
+import type { IconName } from '../../icons/registry.ts';
+import { useChat } from '../../stores/chat.store.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import type { OverlayProps } from '../../stores/overlay.store.ts';
+import { useSettings } from '../../stores/settings.store.ts';
+import IconButton from '../ui/icon-button.component.azeroth';
+import { othersOf, titleOf } from './chat-title.ts';
+
+interface Action
+{
+    id: string;
+    icon: IconName;
+    label: string;
+    run: () => void;
+}
+
+export default component ChatActions(props: OverlayProps & { conversationId: string })
+{
+    const locale = useLocale();
+    const chat = useChat();
+    const settings = useSettings();
+    const { navigate } = useNavigate();
+
+    derived conversation = chat.conversation(props.conversationId) ?? null;
+
+    derived title = conversation === null ? props.conversationId : locale.text(titleOf(conversation, chat.me()));
+
+    derived pinned = chat.pinned(props.conversationId);
+
+    derived muted = settings.isMuted(props.conversationId);
+
+    derived unread = chat.unread(props.conversationId);
+
+    derived actions = ((): Action[] =>
+    {
+        const list: Action[] = [
+            {
+                id: 'pin',
+                icon: 'star',
+                label: locale.t(pinned ? 'chats.unpin' : 'chats.pin'),
+                run: () => chat.togglePin(props.conversationId)
+            },
+            {
+                id: 'mute',
+                icon: muted ? 'sound' : 'sound-off',
+                label: locale.t(muted ? 'chat.unmute' : 'chat.mute'),
+                run: () => settings.toggleMutedConversation(props.conversationId)
+            }
+        ];
+
+        if (unread > 0)
+        {
+            list.push({
+                id: 'read',
+                icon: 'selected',
+                label: locale.t('chats.markRead'),
+                run: () => chat.markRead(props.conversationId)
+            });
+        }
+
+        const group = conversation?.groupId === null || conversation?.groupId === undefined ? undefined : groupById(conversation.groupId);
+        if (group !== undefined)
+        {
+            list.push({
+                id: 'group',
+                icon: 'people',
+                label: locale.t('chat.openGroup'),
+                run: () =>
+                {
+                    props.close();
+                    navigate(`/app/groups/${ group.id }`);
+                }
+            });
+        }
+        else
+        {
+            const others = conversation === null ? [] : othersOf(conversation, chat.me());
+            if (others.length === 1)
+            {
+                list.push({
+                    id: 'profile',
+                    icon: 'me',
+                    label: locale.t('chat.viewProfile'),
+                    run: () =>
+                    {
+                        props.close();
+                        navigate(`/app/people/${ others[0].handle }`);
+                    }
+                });
+            }
+        }
+
+        return list;
+    })();
+
+    <div class="flex flex-col gap-1 p-3">
+        <header class="flex items-center gap-3 px-2 pb-2 pt-1">
+            <span class="min-w-0 flex-1 truncate text-ui-md font-semibold text-text">{ title }</span>
+            <IconButton icon="close" label={ locale.t('common.close') } variant="ghost" onClick={ () => props.close() } />
+        </header>
+        <ul class="flex flex-col gap-0.5">
+            <For each={ actions } key={ (action) => action.id } let={ action }>
+                <li>
+                    <button
+                        type="button"
+                        class="flex min-h-12 w-full cursor-pointer items-center gap-3 rounded-tile px-3 text-start text-ui-md text-text transition-colors hover:bg-raised/70"
+                        onClick={ () =>
+                        {
+                            action.run();
+                            if (action.id !== 'group' && action.id !== 'profile')
+                            {
+                                props.close();
+                            }
+                        } }
+                    >
+                        <Icon name={ action.icon } size={ 18 } />
+                        { action.label }
+                    </button>
+                </li>
+            </For>
+        </ul>
+    </div>
+}

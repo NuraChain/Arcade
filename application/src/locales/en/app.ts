@@ -57,6 +57,13 @@ export const app = {
     'toast.region': 'Notifications',
     'toast.more': '{count} more…',
 
+    'app.refreshing': 'Refreshing…',
+    'app.pull': 'Pull to refresh',
+    'app.railWider': 'Wider',
+    'app.railNarrower': 'Narrower',
+    'app.scrollBack': 'Scroll back',
+    'app.scrollOn': 'Scroll forward',
+
     'overlay.close': 'Close',
     'overlay.handle': 'Drag down to close',
 

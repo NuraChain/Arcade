@@ -117,7 +117,14 @@ export default component HomePage()
         navigate(`/app/play/${ table.phase === 'result' ? lobby.rematch() : lobby.quick(last.game, last.config) }`);
     };
 
-    <Page label={ locale.t('app.nav.home') }>
+    <Page
+        label={ locale.t('app.nav.home') }
+        onRefresh={ () =>
+        {
+            presence.refresh();
+            catalogue.refresh();
+        } }
+    >
         <div class="flex flex-col gap-8">
             <header>
                 <h1 class="title text-ui-3xl">{ greeting }</h1>

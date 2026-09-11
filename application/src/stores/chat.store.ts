@@ -27,6 +27,8 @@ export interface ChatApi
     send(id: string, text: string): string;
     sendInvite(id: string, game: GameId, tableId: string): string;
     markRead(id: string): void;
+    pinned(id: string): boolean;
+    togglePin(id: string): void;
     openDirect(personId: string): string;
     forGroup(groupId: string): string | undefined;
     start(): () => void;
@@ -46,6 +48,7 @@ export const useChat = createStore((): ChatApi =>
     const [read, setRead] = createSignal<Record<string, number>>({});
     const [typing, setTyping] = createSignal<Record<string, string[]>>({});
     const [drafts, setDrafts] = createSignal<Record<string, string>>({});
+    const [pins, setPins] = createSignal<Record<string, boolean>>({});
 
     const timers = new Set<() => void>();
     let stopAmbient: (() => void) | null = null;
@@ -230,6 +233,15 @@ export const useChat = createStore((): ChatApi =>
             setRead({ ...current, [id]: runtime().clock.now() });
         },
 
+        pinned: (id) => pins()[id] ?? conversations().find((entry) => entry.id === id)?.pinned ?? false,
+
+        togglePin(id)
+        {
+            const current = untrack(pins);
+            const seeded = untrack(conversations).find((entry) => entry.id === id)?.pinned ?? false;
+            setPins({ ...current, [id]: !(current[id] ?? seeded) });
+        },
+
         openDirect(personId)
         {
             const me = meId();
@@ -289,6 +301,7 @@ export const useChat = createStore((): ChatApi =>
             setRead({});
             setTyping({});
             setDrafts({});
+            setPins({});
         }
     };
 });

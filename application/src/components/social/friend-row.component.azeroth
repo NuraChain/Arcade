@@ -1,6 +1,7 @@
 import { Link } from 'azerothjs';
 
 import type { Person } from '../../data/mock/types.ts';
+import { attachHold } from '../../lib/hold.ts';
 import Icon from '../../icons/icon.component.azeroth';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
@@ -13,11 +14,23 @@ export default component FriendRow(props: {
     subtitle?: string;
     actions?: Child;
     class?: string;
+    onHold?: () => void;
 })
 {
     const locale = useLocale();
     const presence = usePresence();
     const catalogue = useCatalogue();
+
+    let row: HTMLElement | null = null;
+
+    mount
+    {
+        if (row === null || props.onHold === undefined)
+        {
+            return;
+        }
+        return attachHold(row, () => props.onHold?.());
+    }
 
     derived state = presence.of(props.person.id);
 
@@ -27,7 +40,14 @@ export default component FriendRow(props: {
             ? locale.t('common.online')
             : (state.state === 'away' ? locale.t('common.away') : locale.relative(state.since))));
 
-    <div class={ [ 'flex min-h-14 coarse:min-h-16 items-center gap-3 rounded-tile px-2 py-2 transition-colors duration-150 hover:bg-raised/60', props.class ?? '' ].filter(Boolean).join(' ') }>
+    <div
+        ref={ (element) => row = element }
+        class={ [
+            'flex min-h-14 items-center gap-3 rounded-tile px-2 py-2 transition-colors duration-150 hover:bg-raised/60 coarse:min-h-16',
+            props.onHold === undefined ? '' : 'holdable',
+            props.class ?? ''
+        ].filter(Boolean).join(' ') }
+    >
         <Link to={ `/app/people/${ props.person.handle }` } class="flex min-h-11 min-w-0 flex-1 items-center gap-3" prefetch="hover">
             <Avatar person={ props.person } size="md" presence={ state.state } />
             <span class="flex min-w-0 flex-1 flex-col">

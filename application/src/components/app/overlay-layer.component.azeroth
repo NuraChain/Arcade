@@ -1,11 +1,15 @@
 import { Dynamic, untrack } from 'azerothjs';
 
 import { firstTabbable, focusQuietly } from '../../lib/focus.ts';
+import { haptic } from '../../lib/haptics.ts';
 import { runtime } from '../../lib/runtime.ts';
+import { settleIndex } from '../../lib/snap.ts';
 import { createDrag } from '../../lib/swipe.ts';
 import { useDevice } from '../../stores/device.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useOverlay, type OverlayEntry } from '../../stores/overlay.store.ts';
+
+const HALF = 0.46;
 
 export default component OverlayLayer(props: { entry: OverlayEntry })
 {
@@ -17,12 +21,41 @@ export default component OverlayLayer(props: { entry: OverlayEntry })
 
     const drag = createDrag({ threshold: 96, velocity: 0.6 });
 
+    state detent = 0;
+
     let panel: HTMLElement | null = null;
+    let body: HTMLElement | null = null;
     let returnTo: HTMLElement | null = null;
+    let points: number[] = [];
 
     derived phaseClass = props.entry.phase === 'opening'
         ? `${ kind }-enter-from`
         : (props.entry.phase === 'closing' ? `${ kind }-leave-to` : '');
+
+    const stops = (height: number): number[] =>
+        (height >= device.height() * 0.6 ? [0, Math.round(height * HALF), height] : [0, height]);
+
+    const paint = (offset: number | null): void =>
+    {
+        if (panel === null)
+        {
+            return;
+        }
+        panel.style.transition = offset === null ? '' : 'none';
+        panel.style.transform = offset === null ? '' : `translateY(${ offset }px)`;
+    };
+
+    const settleAt = (index: number): void =>
+    {
+        paint(null);
+        if (index === points.length - 1)
+        {
+            props.entry.props.close();
+            return;
+        }
+        haptic('tick');
+        detent = points[index];
+    };
 
     mount
     {
@@ -30,7 +63,7 @@ export default component OverlayLayer(props: { entry: OverlayEntry })
         requestAnimationFrame(() => overlay.opened(props.entry.id));
         if (panel !== null)
         {
-            focusQuietly(firstTabbable(panel) ?? panel);
+            focusQuietly(firstTabbable(body ?? panel) ?? panel);
         }
         return () =>
         {
@@ -53,6 +86,7 @@ export default component OverlayLayer(props: { entry: OverlayEntry })
             aria-label={ props.entry.label }
             tabindex="-1"
             class={ [ kind, phaseClass ].filter(Boolean).join(' ') }
+            style={ detent > 0 ? `--detent:${ detent }px` : undefined }
             onTransitionEnd={ (event) =>
             {
                 if (event.target === panel && props.entry.phase === 'closing')
@@ -63,55 +97,48 @@ export default component OverlayLayer(props: { entry: OverlayEntry })
         >
             <Show when={ kind === 'sheet' }>
                 { () =>
-                    <div
+                    <button
+                        type="button"
                         class="sheet-handle flex shrink-0 cursor-grab justify-center pt-2.5 pb-1"
                         aria-label={ locale.t('overlay.handle') }
+                        onClick={ () => (props.entry.dismissible ? props.entry.props.close() : undefined) }
                         onPointerDown={ (event) =>
                         {
                             (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+                            points = stops(panel?.offsetHeight ?? 0);
                             drag.start(event.clientX, event.clientY, runtime().clock.now());
-                            if (panel !== null)
-                            {
-                                panel.style.transition = 'none';
-                            }
+                            paint(detent);
                         } }
                         onPointerMove={ (event) =>
                         {
-                            if (!drag.active() || panel === null)
+                            if (!drag.active())
                             {
                                 return;
                             }
                             const frame = drag.move(event.clientX, event.clientY, runtime().clock.now());
-                            panel.style.transform = `translateY(${ frame.offset }px)`;
+                            paint(detent + frame.offset);
                         } }
                         onPointerUp={ () =>
                         {
+                            if (!drag.active())
+                            {
+                                return;
+                            }
                             const frame = drag.end(runtime().clock.now());
-                            if (panel !== null)
-                            {
-                                panel.style.transition = '';
-                                panel.style.transform = '';
-                            }
-                            if (frame.dismiss && props.entry.dismissible)
-                            {
-                                props.entry.props.close();
-                            }
+                            const index = settleIndex(detent + frame.offset, drag.speed(), points);
+                            settleAt(props.entry.dismissible ? index : Math.min(index, points.length - 2));
                         } }
                         onPointerCancel={ () =>
                         {
                             drag.end(runtime().clock.now());
-                            if (panel !== null)
-                            {
-                                panel.style.transition = '';
-                                panel.style.transform = '';
-                            }
+                            paint(null);
                         } }
                     >
-                        <span class="h-1.5 w-10 rounded-full bg-line" aria-hidden="true"></span>
-                    </div>
+                        <span class="h-1.5 w-10 rounded-full bg-line-strong" aria-hidden="true"></span>
+                    </button>
                 }
             </Show>
-            <div class="sheet-body">
+            <div ref={ (element) => body = element } class="sheet-body">
                 <Dynamic component={ props.entry.component } props={ props.entry.props } />
             </div>
         </div>

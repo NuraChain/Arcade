@@ -31,6 +31,7 @@ export interface CatalogueApi
     stats(id: GameId): LiveStats;
     totals: Getter<{ tablesOpen: number; playersOnline: number }>;
     featured: Getter<GameId>;
+    refresh(): void;
     start(): () => void;
     stop(): void;
     reset(): void;
@@ -84,6 +85,8 @@ export const useCatalogue = createStore((): CatalogueApi =>
             return { tablesOpen, playersOnline };
         },
         featured: () => GAMES[Math.floor(runtime().clock.now() / (24 * 3600000)) % GAMES.length].id,
+
+        refresh: drift,
 
         start()
         {

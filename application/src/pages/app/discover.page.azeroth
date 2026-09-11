@@ -58,7 +58,14 @@ export default component DiscoverPage()
         navigate(`/app/play/${ lobby.quick(game) }`);
     };
 
-    <Page label={ locale.t('app.nav.discover') }>
+    <Page
+        label={ locale.t('app.nav.discover') }
+        onRefresh={ () =>
+        {
+            presence.refresh();
+            catalogue.refresh();
+        } }
+    >
         <header class="pb-5">
             <h1 class="title text-ui-4xl">{ locale.t('app.nav.discover') }</h1>
             <p class="mt-2 text-ui-md text-muted">{ locale.t('discover.lead') }</p>

@@ -12,6 +12,7 @@ import EmptyState from '../../components/ui/empty-state.component.azeroth';
 import IconButton from '../../components/ui/icon-button.component.azeroth';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useDevice } from '../../stores/device.store.ts';
+import { haptic } from '../../lib/haptics.ts';
 import { useLobby } from '../../stores/lobby.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useOverlay } from '../../stores/overlay.store.ts';
@@ -39,6 +40,8 @@ export default component PlayPage()
     derived current = lobby.state();
 
     derived phase = current.phase;
+
+    let lastPhase = untrack(() => current.phase);
 
     derived live = lobby.tableId() === (params().id ?? '') && phase !== 'idle';
 
@@ -94,6 +97,27 @@ export default component PlayPage()
     {
         navigate(game === null ? '/app/games' : `/app/games/${ game.slug }`, { replace: true });
     };
+
+    effect
+    {
+        const now = phase;
+        if (now !== lastPhase)
+        {
+            lastPhase = now;
+            if (now === 'found')
+            {
+                haptic('ready');
+            }
+            else if (now === 'playing')
+            {
+                haptic('select');
+            }
+            else if (now === 'result')
+            {
+                haptic('win');
+            }
+        }
+    }
 
     effect
     {
