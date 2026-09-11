@@ -18,8 +18,8 @@ const COLUMNS: FooterColumn[] = [
     {
         headingKey: 'footer.product',
         links: [
-            { href: '#games', labelKey: 'nav.games' },
-            { href: '#crew', labelKey: 'nav.rooms' }
+            { href: '/#games', labelKey: 'nav.games' },
+            { href: '/#crew', labelKey: 'nav.rooms' }
         ]
     },
     {
@@ -67,7 +67,7 @@ export default component SiteFooter()
 
         <div class="mx-auto w-full max-w-[80rem] border-t border-line px-5 py-6 sm:px-8">
             
-            <p class="text-ui-sm text-faint"><span class="tally">{ locale.n(year) }</span> { locale.t('brand.name') }. { locale.t('footer.rights') }</p>
+            <p class="text-ui-sm text-faint"><span class="tally">{ locale.n(year, { useGrouping: false }) }</span> { locale.t('brand.name') }. { locale.t('footer.rights') }</p>
         </div>
     </footer>
 }

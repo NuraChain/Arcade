@@ -34,5 +34,17 @@ export const wallet: Pick<Dictionary, keyof typeof reference> = {
     'wallet.address': 'نشانی کیف پول',
     'wallet.copyAddress': 'کپی نشانی',
     'wallet.addressCopied': 'نشانی کپی شد',
-    'wallet.explorer': 'دیدن در اکسپلورر'
+    'wallet.explorer': 'دیدن در اکسپلورر',
+
+    'wallet.choose': 'یک کیف پول وصل کن',
+    'wallet.chooseLead': 'همانی را انتخاب کن که استفاده می‌کنی. امضا رایگان است و تنها قدم همین است.',
+    'wallet.chooseClose': 'بستن',
+    'wallet.missing': 'در این مرورگر نیست',
+    'wallet.getIt': 'نصبش کن',
+    'wallet.nuraOnly': 'کیف پول نورا فقط داخل مرورگر خودش معرفی می‌شود. این کد را اسکن کن تا نشانی روی گوشی‌ات بیاید، بعد از داخل کیف پول بازش کن.',
+    'wallet.nuraHow': 'راه استفاده از کیف پول نورا',
+    'wallet.qrOf': 'کد QR برای {url}',
+    'wallet.copyLink': 'کپی نشانی',
+    'wallet.linkCopied': 'نشانی کپی شد',
+    'wallet.otherWays': 'صندلی مهمان و نمایشی'
 };

@@ -1,15 +1,23 @@
 import Button from '../ui/button.component.azeroth';
 import Icon from '../../icons/icon.component.azeroth';
+import { useConnect } from '../../stores/connect.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useScroll } from '../../stores/scroll.store.ts';
 import BrandMark from './brand-mark.component.azeroth';
 import LanguageSwitch from './language-switch.component.azeroth';
 import ThemeSwitch from './theme-switch.component.azeroth';
 
-export default component SiteHeader()
+/**
+ * The site chrome, on every public page.
+ *
+ * `cta` exists for the sign-in page, which IS the connect surface - a header button that opened a
+ * wallet chooser on top of a wallet chooser would be two doors to one room.
+ */
+export default component SiteHeader(props: { cta?: boolean })
 {
     const locale = useLocale();
     const scroll = useScroll();
+    const connect = useConnect();
 
     state open = false;
 
@@ -36,13 +44,19 @@ export default component SiteHeader()
             <nav class="hidden items-center gap-2 sm:flex" aria-label={ locale.t('nav.menu') }>
                 <ThemeSwitch />
                 <LanguageSwitch />
-                <Button href="#join" variant="primary" size="sm">{ locale.t('nav.play') }</Button>
+                <Show when={ props.cta !== false }>
+                    { () =>
+                        <Button variant="primary" size="sm" leading="wallet" onClick={ () => connect.show() }>
+                            { locale.t('nav.connect') }
+                        </Button>
+                    }
+                </Show>
             </nav>
 
             
             <button
                 type="button"
-                class="flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border border-line bg-field text-muted transition-colors duration-150 hover:border-accent hover:text-text sm:hidden"
+                class="flex h-11 w-11 cursor-pointer items-center justify-center rounded-full border border-line bg-field text-muted transition-colors duration-150 hover:border-accent hover:text-text sm:hidden"
                 aria-label={ open ? locale.t('nav.close') : locale.t('nav.menu') }
                 aria-expanded={ open }
                 onClick={ () => open = !open }
@@ -57,7 +71,23 @@ export default component SiteHeader()
                     <ThemeSwitch />
                     <LanguageSwitch />
                 </div>
-                <Button href="#join" variant="primary" size="md" block>{ locale.t('nav.play') }</Button>
+                <Show when={ props.cta !== false }>
+                    { () =>
+                        <Button
+                            variant="primary"
+                            size="md"
+                            leading="wallet"
+                            block
+                            onClick={ () =>
+                            {
+                                open = false;
+                                connect.show();
+                            } }
+                        >
+                            { locale.t('nav.connect') }
+                        </Button>
+                    }
+                </Show>
             </div>
         </Show>
     </header>

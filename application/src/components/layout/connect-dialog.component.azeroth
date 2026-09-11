@@ -1,0 +1,339 @@
+import { Portal } from 'azerothjs';
+
+import { NURA_CHAIN } from '../../data/chain.ts';
+import Icon from '../../icons/icon.component.azeroth';
+import type { IconName } from '../../icons/registry.ts';
+import { focusQuietly } from '../../lib/focus.ts';
+import { qrOf } from '../../lib/qr.ts';
+import {
+    announcedWallets,
+    discoverWallets,
+    type AnnouncedWallet,
+    type WalletFailure
+} from '../../lib/wallet.ts';
+import type { MessageKey } from '../../locales/en.ts';
+import '../../locales/wallet-catalogue.ts';
+import { useAccount } from '../../stores/account.store.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import { useWallet } from '../../stores/wallet.store.ts';
+import Button from '../ui/button.component.azeroth';
+import IconButton from '../ui/icon-button.component.azeroth';
+import Spinner from '../ui/spinner.component.azeroth';
+
+interface Choice
+{
+    /** The EIP-6963 identifier, matched exactly or as the parent of a variant like `.flask`. */
+    rdns: string;
+
+    /** A product name, not a translated string: MetaMask is MetaMask in Persian too. */
+    name: string;
+
+    glyph: IconName;
+
+    /** Where to get it. Empty for a wallet that cannot be installed into this browser. */
+    site: string;
+}
+
+/**
+ * Nura Wallet has no install page on purpose.
+ *
+ * It injects its provider only into pages loaded inside its OWN in-app browser, and it registers
+ * no url scheme, so there is nothing a desktop browser can be sent to. A row that offered to
+ * "install" it, or that called connect and waited, would be a button that lies. It expands into a
+ * panel explaining how to reach it instead.
+ */
+const NURA = 'net.nurachain.wallet';
+
+const CHOICES: Choice[] = [
+    { rdns: 'io.metamask', name: 'MetaMask', glyph: 'wallet', site: 'https://metamask.io/download/' },
+    { rdns: 'com.trustwallet.app', name: 'Trust Wallet', glyph: 'wallet', site: 'https://trustwallet.com/download' },
+    { rdns: NURA, name: 'Nura Wallet', glyph: 'games', site: '' }
+];
+
+const ERRORS: Record<WalletFailure, MessageKey> = {
+    'no-wallet': 'wallet.error.noWallet',
+    'rejected': 'wallet.error.rejected',
+    'pending': 'wallet.error.pending',
+    'chain': 'wallet.error.chain',
+    'unavailable': 'wallet.error.unknown',
+    'unknown': 'wallet.error.unknown'
+};
+
+const ROW = 'flex min-h-14 w-full items-center gap-3 rounded-tile border border-line bg-field px-3 py-2.5 text-start';
+
+const LIVE = `${ ROW } cursor-pointer transition-colors duration-150 hover:border-accent/60 hover:bg-raised/60`;
+
+/**
+ * `navigate` arrives as a prop rather than from `useNavigate()`.
+ *
+ * This component is fetched on demand and rendered through a `<Portal>`, and the router context
+ * does not reach it there - `useNavigate()` inside it throws "found no router". The shell that
+ * opens it is a layout route and has the router, so it hands the one function down. Nothing about
+ * the dialog needs the rest of the router.
+ */
+export default component ConnectDialog(props: { close: () => void; navigate: (to: string) => void })
+{
+    const locale = useLocale();
+    const wallet = useWallet();
+    const account = useAccount();
+
+    state present: AnnouncedWallet[] = [];
+    state leaving = false;
+    state entering = true;
+    state busy = '';
+    state showNura = false;
+    state copied = false;
+
+    let panel: HTMLElement | null = null;
+    let returnTo: HTMLElement | null = null;
+
+    // The closing transition animates transform AND opacity, so transitionend fires twice, and
+    // the first one takes this component down - which leaves the second reading `props` off a
+    // disposed instance. The callback is captured once, here, and fired at most once.
+    const finish = props.close;
+    let gone = false;
+
+    const dismiss = (): void =>
+    {
+        if (busy !== '')
+        {
+            return;
+        }
+        leaving = true;
+    };
+
+    mount
+    {
+        returnTo = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+
+        const stopDiscovery = discoverWallets(() => present = announcedWallets());
+        present = announcedWallets();
+
+        const onKeyDown = (event: KeyboardEvent): void =>
+        {
+            if (event.key === 'Escape')
+            {
+                event.preventDefault();
+                dismiss();
+            }
+        };
+        document.addEventListener('keydown', onKeyDown);
+
+        requestAnimationFrame(() =>
+        {
+            entering = false;
+
+            // The dialog itself, not its first tabbable - which is the close button, whose
+            // tooltip would then open across the heading the moment the dialog appeared.
+            if (panel !== null)
+            {
+                focusQuietly(panel);
+            }
+        });
+
+        return () =>
+        {
+            document.removeEventListener('keydown', onKeyDown);
+            stopDiscovery();
+            if (returnTo !== null && returnTo.isConnected)
+            {
+                focusQuietly(returnTo);
+            }
+        };
+    }
+
+    derived here = typeof window === 'undefined' ? '' : window.location.origin;
+
+    derived code = here === '' ? null : qrOf(here);
+
+    derived failure = wallet.failure();
+
+    const found = (choice: Choice): AnnouncedWallet | undefined =>
+        present.find((one) => one.rdns === choice.rdns || one.rdns.startsWith(`${ choice.rdns }.`));
+
+    const enter = async (choice: Choice, announced: AnnouncedWallet): Promise<void> =>
+    {
+        if (busy !== '')
+        {
+            return;
+        }
+        busy = choice.rdns;
+        wallet.adopt(announced.provider);
+
+        const established = await wallet.connect();
+        busy = '';
+
+        if (established === null)
+        {
+            return;
+        }
+        account.adoptWallet(established);
+        props.navigate('/app');
+    };
+
+    const copyLink = async (): Promise<void> =>
+    {
+        try
+        {
+            await navigator.clipboard.writeText(here);
+            copied = true;
+        }
+        catch
+        {
+            copied = false;
+        }
+    };
+
+    <Portal>
+        <div class="overlay-root">
+            <div class="overlay-layer" data-kind="modal">
+                <div class="overlay-scrim" onClick={ () => dismiss() }></div>
+
+                <div
+                    ref={ (element) => panel = element }
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label={ locale.t('wallet.choose') }
+                    tabindex="-1"
+                    class={ [ 'modal', entering ? 'modal-enter-from' : '', leaving ? 'modal-leave-to' : '' ].filter(Boolean).join(' ') }
+                    onTransitionEnd={ (event) =>
+                    {
+                        if (event.target !== panel || !leaving || gone)
+                        {
+                            return;
+                        }
+                        gone = true;
+                        finish();
+                    } }
+                >
+                    <header class="flex items-start justify-between gap-3 border-b border-line p-5">
+                        <span class="flex min-w-0 flex-col gap-1">
+                            <h2 class="title text-ui-xl text-text">{ locale.t('wallet.choose') }</h2>
+                            <p class="text-ui-sm text-muted">{ locale.t('wallet.chooseLead') }</p>
+                        </span>
+                        <IconButton icon="close" label={ locale.t('wallet.chooseClose') } onClick={ () => dismiss() } />
+                    </header>
+
+                    <div class="sheet-body flex flex-col gap-3 p-5">
+                        <ul class="flex flex-col gap-2.5">
+                            <For each={ CHOICES } key={ (choice) => choice.rdns } let={ choice }>
+                                <li>
+                                    <Show when={ found(choice) !== undefined }>
+                                        { () =>
+                                            <button
+                                                type="button"
+                                                class={ LIVE }
+                                                disabled={ busy !== '' }
+                                                onClick={ () => void enter(choice, found(choice)!) }
+                                            >
+                                                <span class="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-control bg-sunk text-accent">
+                                                    <Show
+                                                        when={ found(choice)!.icon !== '' }
+                                                        fallback={ <Icon name={ choice.glyph } size={ 18 } /> }
+                                                    >
+                                                        { () => <img src={ found(choice)!.icon } alt="" class="h-9 w-9 object-cover" /> }
+                                                    </Show>
+                                                </span>
+                                                <span class="flex min-w-0 flex-1 flex-col">
+                                                    <span class="truncate text-ui-base font-semibold text-text">{ found(choice)!.name }</span>
+                                                    <span class="truncate text-ui-xs text-muted">{ locale.t('wallet.free') }</span>
+                                                </span>
+                                                <Show
+                                                    when={ busy === choice.rdns }
+                                                    fallback={ <Icon name="forward" size={ 16 } class="icon-flip shrink-0 text-accent" /> }
+                                                >
+                                                    { () => <Spinner size={ 16 } /> }
+                                                </Show>
+                                            </button>
+                                        }
+                                    </Show>
+
+                                    <Show when={ found(choice) === undefined && choice.rdns === NURA }>
+                                        { () =>
+                                            <button
+                                                type="button"
+                                                class={ LIVE }
+                                                aria-expanded={ showNura }
+                                                aria-label={ locale.t('wallet.nuraHow') }
+                                                onClick={ () => showNura = !showNura }
+                                            >
+                                                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-control bg-sunk text-faint">
+                                                    <Icon name={ choice.glyph } size={ 18 } />
+                                                </span>
+                                                <span class="flex min-w-0 flex-1 flex-col">
+                                                    <span class="truncate text-ui-base font-semibold text-text">{ choice.name }</span>
+                                                    <span class="truncate text-ui-xs text-faint">{ locale.t('wallet.missing') }</span>
+                                                </span>
+                                                <Icon
+                                                    name="chevron-down"
+                                                    size={ 16 }
+                                                    class={ [ 'shrink-0 text-accent transition-transform duration-150', showNura ? 'rotate-180' : '' ].filter(Boolean).join(' ') }
+                                                />
+                                            </button>
+                                        }
+                                    </Show>
+
+                                    <Show when={ found(choice) === undefined && choice.rdns !== NURA }>
+                                        { () =>
+                                            <div class={ ROW }>
+                                                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-control bg-sunk text-faint">
+                                                    <Icon name={ choice.glyph } size={ 18 } />
+                                                </span>
+                                                <span class="flex min-w-0 flex-1 flex-col">
+                                                    <span class="truncate text-ui-base font-semibold text-text">{ choice.name }</span>
+                                                    <span class="truncate text-ui-xs text-faint">{ locale.t('wallet.missing') }</span>
+                                                </span>
+                                                <a
+                                                    href={ choice.site }
+                                                    target="_blank"
+                                                    rel="noreferrer noopener"
+                                                    class="flex min-h-11 shrink-0 items-center rounded-control px-2 text-ui-sm font-semibold text-accent"
+                                                >
+                                                    { locale.t('wallet.getIt') }
+                                                </a>
+                                            </div>
+                                        }
+                                    </Show>
+                                </li>
+                            </For>
+                        </ul>
+
+                        <Show when={ showNura && code !== null }>
+                            { () =>
+                                <div class="flex flex-col items-center gap-3 rounded-panel border border-line bg-sunk p-4 text-center">
+                                    <p class="max-w-[38ch] text-ui-sm text-muted">{ locale.t('wallet.nuraOnly') }</p>
+                                    <svg
+                                        viewBox={ `-2 -2 ${ code!.size + 4 } ${ code!.size + 4 }` }
+                                        class="h-40 w-40 rounded-control bg-white p-1"
+                                        role="img"
+                                        aria-label={ locale.t('wallet.qrOf', { url: here }) }
+                                    >
+                                        <path d={ code!.path } fill="#000000" />
+                                    </svg>
+                                    <p class="w-full truncate text-ui-xs text-faint" dir="ltr">{ here }</p>
+                                    <Button variant="outline" size="sm" leading="copy" onClick={ () => void copyLink() }>
+                                        { locale.t(copied ? 'wallet.linkCopied' : 'wallet.copyLink') }
+                                    </Button>
+                                </div>
+                            }
+                        </Show>
+
+                        <Show when={ failure !== null }>
+                            { () =>
+                                <p role="alert" class="rounded-tile bg-danger/10 px-3 py-2 text-ui-sm text-danger">
+                                    { locale.t(ERRORS[failure!], { chain: NURA_CHAIN.name }) }
+                                </p>
+                            }
+                        </Show>
+                    </div>
+
+                    <footer class="border-t border-line p-4">
+                        <Button href="/sign-in" variant="ghost" size="md" block leading="people">
+                            { locale.t('wallet.otherWays') }
+                        </Button>
+                    </footer>
+                </div>
+            </div>
+        </div>
+    </Portal>
+}

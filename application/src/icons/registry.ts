@@ -65,6 +65,7 @@ import {
     Users,
     Volume2,
     VolumeX,
+    Wallet,
     WifiOff,
     X,
     Zap,
@@ -139,6 +140,7 @@ export const ICONS = {
     'verified': BadgeCheck,
     'versus': Swords,
     'voice': Mic,
+    'wallet': Wallet,
     'wifi-off': WifiOff,
     'zap': Zap
 } satisfies Record<string, IconNode>;

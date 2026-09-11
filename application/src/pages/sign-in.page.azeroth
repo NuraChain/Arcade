@@ -1,9 +1,8 @@
 import { useHead, useNavigate, useQuery } from 'azerothjs';
 
 import WalletPanel from '../components/app/wallet-panel.component.azeroth';
-import BrandMark from '../components/layout/brand-mark.component.azeroth';
-import LanguageSwitch from '../components/layout/language-switch.component.azeroth';
-import ThemeSwitch from '../components/layout/theme-switch.component.azeroth';
+import SiteFooter from '../components/layout/site-footer.component.azeroth';
+import SiteHeader from '../components/layout/site-header.component.azeroth';
 import Avatar from '../components/ui/avatar.component.azeroth';
 import Button from '../components/ui/button.component.azeroth';
 import Divider from '../components/ui/divider.component.azeroth';
@@ -69,20 +68,9 @@ export default component SignInPage()
         <div class="pointer-events-none absolute -top-40 start-1/2 h-[32rem] w-[32rem] -translate-x-1/2 rounded-full bg-accent/15 blur-3xl" aria-hidden="true"></div>
         <div class="pointer-events-none absolute -bottom-48 -end-24 h-[26rem] w-[26rem] rounded-full bg-live/10 blur-3xl" aria-hidden="true"></div>
 
-        <header class="safe-t relative mx-auto flex w-full max-w-[64rem] items-center justify-between px-5 py-5 sm:px-8">
-            <a href="/" class="flex min-w-0 shrink items-center gap-2.5 rounded-full" aria-label={ locale.t('app.nav.landing') }>
-                <span class="lit flex h-8 w-8 items-center justify-center rounded-control bg-accent text-accent-ink">
-                    <Icon name="games" size={ 16 } />
-                </span>
-                <BrandMark class="whitespace-nowrap text-ui-lg text-text sm:text-ui-lg" />
-            </a>
-            <div class="flex shrink-0 items-center gap-2">
-                <ThemeSwitch />
-                <LanguageSwitch />
-            </div>
-        </header>
+        <SiteHeader cta={ false } />
 
-        <main id="main" class="safe-b relative mx-auto flex w-full max-w-[40rem] flex-col px-5 pb-12 pt-2 sm:px-8 sm:pt-6">
+        <main id="main" class="safe-b relative mx-auto flex w-full max-w-[40rem] flex-col px-5 pb-12 pt-24 sm:px-8 sm:pt-28">
             <h1 class="sr-only">{ locale.t('wallet.title') }</h1>
 
             <WalletPanel
@@ -170,5 +158,7 @@ export default component SignInPage()
                 }
             </Show>
         </main>
+
+        <SiteFooter />
     </div>
 }

@@ -7,6 +7,7 @@ export const landing = {
     'nav.games': 'Games',
     'nav.rooms': 'Rooms',
     'nav.play': 'Pull up a chair',
+    'nav.connect': 'Connect wallet',
     'nav.menu': 'Menu',
     'nav.close': 'Close menu',
 

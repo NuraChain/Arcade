@@ -31,5 +31,17 @@ export const wallet = {
     'wallet.address': 'Wallet address',
     'wallet.copyAddress': 'Copy address',
     'wallet.addressCopied': 'Address copied',
-    'wallet.explorer': 'View on explorer'
+    'wallet.explorer': 'View on explorer',
+
+    'wallet.choose': 'Connect a wallet',
+    'wallet.chooseLead': 'Pick the one you use. Signing is free, and it is the only step.',
+    'wallet.chooseClose': 'Close',
+    'wallet.missing': 'Not in this browser',
+    'wallet.getIt': 'Get it',
+    'wallet.nuraOnly': 'Nura Wallet announces itself only inside its own in-app browser. Scan this to get the link on your phone, then open it from the wallet.',
+    'wallet.nuraHow': 'How to use Nura Wallet',
+    'wallet.qrOf': 'QR code for {url}',
+    'wallet.copyLink': 'Copy link',
+    'wallet.linkCopied': 'Link copied',
+    'wallet.otherWays': 'Guest and demo seats'
 };
