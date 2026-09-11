@@ -1,9 +1,13 @@
 import { createStore, createSignal, type Getter } from 'azerothjs';
 
+import { runtime } from '../lib/runtime.ts';
 import { remember } from '../lib/storage.ts';
+import { pickText, type LocalizedText } from '../lib/text.ts';
 
-import { en, type Dictionary, type MessageKey } from '../locales/en.ts';
-import { fa } from '../locales/fa.ts';
+import type { MessageKey } from '../locales/en.ts';
+import { landing as enLanding } from '../locales/en/landing.ts';
+import { landing as faLanding } from '../locales/fa/landing.ts';
+import { interpolate, relativeUnit, resolveMessage, type Message, type MessageVars } from '../locales/format.ts';
 
 export type Locale = 'en' | 'fa';
 
@@ -24,7 +28,17 @@ export const LOCALE_TAG: Record<Locale, string> = {
     fa: 'fa-IR'
 };
 
-const CATALOG: Record<Locale, Dictionary> = { en, fa };
+type Catalogue = Partial<Record<MessageKey, Message>>;
+
+const CATALOG: Record<Locale, Catalogue> = { en: { ...enLanding }, fa: { ...faLanding } };
+
+export function registerCatalogue(pages: Record<Locale, Catalogue>): void
+{
+    for (const locale of LOCALES)
+    {
+        Object.assign(CATALOG[locale], pages[locale]);
+    }
+}
 
 const STORAGE_KEY = 'nura-games.locale';
 
@@ -43,20 +57,43 @@ function initial(): Locale
     return isLocale(stamped) ? stamped : 'en';
 }
 
+const formatters = new Map<string, unknown>();
+
+function cached<T>(kind: string, tag: string, options: unknown, build: () => T): T
+{
+    const key = `${ kind }|${ tag }|${ JSON.stringify(options ?? null) }`;
+    const existing = formatters.get(key);
+    if (existing !== undefined)
+    {
+        return existing as T;
+    }
+    const built = build();
+    formatters.set(key, built);
+    return built;
+}
+
 export interface LocaleApi
 {
     locale: Getter<Locale>;
     dir: Getter<'ltr' | 'rtl'>;
+    tag: Getter<string>;
     setLocale(next: Locale): void;
 
-    t(key: MessageKey): string;
+    t(key: MessageKey, vars?: MessageVars): string;
+    plural(key: MessageKey, count: number, vars?: MessageVars): string;
 
-    n(value: number): string;
+    n(value: number, options?: Intl.NumberFormatOptions): string;
+    relative(at: number | Date, now?: number): string;
+    date(at: number | Date, options?: Intl.DateTimeFormatOptions): string;
+    list(items: readonly string[], options?: Intl.ListFormatOptions): string;
+    text(value: LocalizedText | string): string;
 }
 
 export const useLocale = createStore((): LocaleApi =>
 {
     const [locale, setSignal] = createSignal<Locale>(initial());
+
+    const tag = (): string => LOCALE_TAG[locale()];
 
     const apply = (next: Locale): void =>
     {
@@ -70,15 +107,42 @@ export const useLocale = createStore((): LocaleApi =>
         remember(STORAGE_KEY, next);
     };
 
+    const numbers = (options?: Intl.NumberFormatOptions): Intl.NumberFormat =>
+        cached('number', tag(), options, () => new Intl.NumberFormat(tag(), options));
+
+    const rules = (): Intl.PluralRules =>
+        cached('plural', tag(), null, () => new Intl.PluralRules(tag()));
+
+    const n = (value: number, options?: Intl.NumberFormatOptions): string => numbers(options).format(value);
+
+    const t = (key: MessageKey, vars?: MessageVars): string =>
+    {
+        const message = CATALOG[locale()][key] ?? CATALOG.en[key] ?? key;
+        return interpolate(resolveMessage(message, vars, rules()), vars, (value) => n(value));
+    };
+
     return {
         locale,
         dir: () => LOCALE_DIR[locale()],
+        tag,
         setLocale: (next) =>
         {
             setSignal(next);
             apply(next);
         },
-        t: (key) => CATALOG[locale()][key],
-        n: (value) => new Intl.NumberFormat(LOCALE_TAG[locale()]).format(value)
+        t,
+        plural: (key, count, vars) => t(key, { ...vars, count }),
+        n,
+        relative: (at, now) =>
+        {
+            const stamp = at instanceof Date ? at.getTime() : at;
+            const { unit, value } = relativeUnit(stamp - (now ?? runtime().clock.now()));
+            return cached('relative', tag(), null, () => new Intl.RelativeTimeFormat(tag(), { numeric: 'auto' })).format(value, unit);
+        },
+        date: (at, options) =>
+            cached('date', tag(), options, () => new Intl.DateTimeFormat(tag(), options)).format(at),
+        list: (items, options) =>
+            cached('list', tag(), options, () => new Intl.ListFormat(tag(), options)).format(items),
+        text: (value) => pickText(value, locale())
     };
 });

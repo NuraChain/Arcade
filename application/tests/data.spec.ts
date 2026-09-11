@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest';
 
 import { GAMES, SEAT_GAP, TABLE_OVAL, TABLE_RADIUS, gameBySlug, seatAround } from '../src/data/games.ts';
-import { en } from '../src/locales/en.ts';
+import { en, type Dictionary } from '../src/locales/en.ts';
 import { fa } from '../src/locales/fa.ts';
+import { messageText } from '../src/locales/format.ts';
 
 describe('games catalogue', () =>
 {
@@ -112,18 +113,42 @@ describe('message catalogues', () =>
     it('translates every English key into Persian with a different string', () =>
     {
         const copied = (Object.keys(en) as Array<keyof typeof en>).filter((key) =>
-            en[key] !== '' && en[key] === fa[key]);
+            messageText(en[key]) !== '' && messageText(en[key]) === messageText(fa[key]));
 
         expect(copied, `untranslated: ${ copied.join(', ') }`).toEqual([]);
     });
 
+    it('spells the same plural forms in both languages', () =>
+    {
+        for (const key of Object.keys(en) as Array<keyof typeof en>)
+        {
+            const english = en[key];
+            const persian = fa[key];
+            expect(typeof persian, `${ key } changes shape between languages`).toBe(typeof english);
+            if (typeof english !== 'string' && typeof persian !== 'string')
+            {
+                expect(Object.keys(persian).sort(), `${ key } plural forms`).toEqual(Object.keys(english).sort());
+            }
+        }
+    });
+
+    it('keeps every placeholder a key uses in both languages', () =>
+    {
+        const placeholders = (text: string): string[] => (text.match(/\{[a-zA-Z0-9_]+\}/g) ?? []).sort();
+        for (const key of Object.keys(en) as Array<keyof typeof en>)
+        {
+            expect(placeholders(messageText(fa[key])), key).toEqual(placeholders(messageText(en[key])));
+        }
+    });
+
     it('keeps the brand mark assembling to the full name in both languages', () =>
     {
-        const compose = (d: typeof en): string => `${ d['brand.lead'] } ${ d['brand.accent'] } ${ d['brand.trail'] }`
-            .replace(/\s+/g, ' ')
-            .trim();
+        const compose = (d: Dictionary): string =>
+            `${ messageText(d['brand.lead']) } ${ messageText(d['brand.accent']) } ${ messageText(d['brand.trail']) }`
+                .replace(/\s+/g, ' ')
+                .trim();
 
         expect(compose(en)).toBe(en['brand.name']);
-        expect(compose(fa)).toBe(fa['brand.name']);
+        expect(compose(fa)).toBe(messageText(fa['brand.name']));
     });
 });

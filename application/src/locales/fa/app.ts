@@ -1,0 +1,69 @@
+import type { Dictionary } from '../en/index.ts';
+import type { app as reference } from '../en/app.ts';
+
+export const app: Pick<Dictionary, keyof typeof reference> = {
+    'app.title': 'بازی‌های نورا',
+
+    'app.nav.home': 'خانه',
+    'app.nav.games': 'بازی‌ها',
+    'app.nav.friends': 'دوستان',
+    'app.nav.chats': 'گفت‌وگوها',
+    'app.nav.me': 'من',
+    'app.nav.discover': 'کشف',
+    'app.nav.search': 'جست‌وجو',
+    'app.nav.notifications': 'اعلان‌ها',
+    'app.nav.settings': 'تنظیمات',
+    'app.nav.back': 'بازگشت',
+    'app.nav.primary': 'ناوبری اصلی',
+    'app.nav.signOut': 'خروج',
+    'app.nav.landing': 'بازگشت به بازار',
+    'create.title': 'ساختن میز',
+    'app.nav.quickPlay': 'بازی سریع',
+
+    'signIn.title': 'بیا سر میز.',
+    'signIn.lead': 'انتخاب کن امروز چه کسی باشی. این یک نسخهٔ نمایشی است: بدون گذرواژه، بدون حساب — صندلی مال توست.',
+    'signIn.continue': 'نشستن به نام {name}',
+    'signIn.custom': 'یا نام خودت را بگو',
+    'signIn.handle': 'نام تو',
+    'signIn.handleHint': 'دست‌کم سه حرف. دوستانت این نام را سر میز می‌بینند.',
+    'signIn.handleShort': 'نام باید دست‌کم سه حرف داشته باشد.',
+    'signIn.minor': 'زیر ۱۸ سال: پیام غریبه‌ها خاموش، فیلترها قفل.',
+    'signIn.demo': 'هویت نمایشی',
+    'signIn.welcome': 'خوش برگشتی، {name}',
+
+    'common.cancel': 'لغو',
+    'common.confirm': 'تأیید',
+    'common.save': 'ذخیره',
+    'common.done': 'انجام شد',
+    'common.more': 'بیشتر',
+    'common.retry': 'دوباره تلاش کن',
+    'common.loading': 'در حال بارگذاری…',
+    'common.close': 'بستن',
+    'common.clear': 'پاک کردن',
+    'common.seeAll': 'همه',
+    'common.you': 'تو',
+    'common.online': 'آنلاین',
+    'common.offline': 'آفلاین',
+    'common.away': 'دور از دسترس',
+    'common.playing': 'در حال بازی {game}',
+    'common.players': { one: '{count} بازیکن', other: '{count} بازیکن' },
+    'common.friendsOnline': { one: '{count} دوست آنلاین', other: '{count} دوست آنلاین' },
+    'common.unread': { one: '{count} خوانده‌نشده', other: '{count} خوانده‌نشده' },
+    'common.optional': 'اختیاری',
+
+    'toast.dismiss': 'بستن',
+    'toast.region': 'اعلان‌ها',
+
+    'overlay.close': 'بستن',
+    'overlay.handle': 'برای بستن به پایین بکش',
+
+    'connection.offline': 'آفلاین هستی. میزها تا برگشتنت صبر می‌کنند.',
+    'connection.reconnecting': 'اتصال قطع شد. در حال اتصال دوباره…',
+    'connection.restored': 'دوباره آنلاین شدی.',
+
+    'state.errorTitle': 'این بخش بارگذاری نشد.',
+    'state.errorLead': 'اگر ادامه داشت، اتصالت را بررسی کن.',
+    'state.emptyTitle': 'هنوز چیزی اینجا نیست.',
+    'state.notFoundTitle': 'اینجا میزی نیست.',
+    'state.notFoundLead': 'این پیوند به جایی اشاره می‌کند که هرگز ساخته نشده است.'
+};
