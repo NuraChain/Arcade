@@ -299,6 +299,45 @@ component's whole premise is the server's answer (the create form exists to offe
 counts), do not mount it until `catalogue.loading()` is false. Reading inside an event handler is
 fine: by click time the answer is in.
 
+## Reading chat
+
+`chat.store.ts` reads through `services/chat.source.ts` and nothing else. That interface is the
+whole seam the server slots into: `conversations`, `thread`, `post`, `openDirect`, `archive`.
+Today `createLocalSource()` implements it over the mock; `setChatSource()` swaps it, which is how
+the failure states are tested and how the API implementation will arrive.
+
+**Two reads, two shapes, and the split is the point.** The LIST carries a row per conversation —
+the conversation, its last message, its unread count — and the THREAD carries the messages of the
+one conversation that is open. So `unread()`, `lastOf()` and `totalUnread` are answered from the
+list, never by loading every thread; under E2EE the server cannot count unread messages by reading
+them, so it has to be a column on the row, and the client has to ask for it that way.
+
+Both are `createResource`. The list's source is the `ChatScope` (who I am, who I have blocked), so
+blocking somebody refetches it rather than filtering a stale copy. The thread's source is the open
+conversation id, and returning `null` while nothing is open is the framework's documented way to
+skip a fetch — which is why `messages()` is `[]` on the chats list rather than the last thread you
+happened to visit. `chat.page.azeroth` calls `openThread` in an effect and `closeThread` on
+teardown; no page loads anything by hand.
+
+**A failed fetch keeps the data it already had.** `createResource` retains the last resolved value
+and reports the failure alongside it, so the failure SCREEN is gated on having nothing to show
+(`failed && all.length === 0`). A dropped connection must not blank a list that is still perfectly
+readable — the connection banner is what says the network is the problem.
+
+**`chats.page` filters what the list row holds** — the title and the last message — and its search
+box says "Search conversations" because that is what it does. Full-text search over messages is
+`search.store.ts`, and it reads `chat.archive()`: the messages THIS DEVICE holds. That is the
+honest shape for E2EE, where a server-side message index cannot exist, and it is the one call site
+PR 15 changes when the archive becomes the locally decrypted one.
+
+**Sending is not optimistic yet.** `send` posts to the source and revalidates, so the message
+appears when the source acknowledges it. With a local source that is the same microtask.
+
+**Do not put `await import()` inside a spec.** Resolving a module mid-run races the other workers
+resolving `@azerothjs/testing` through its junction, and `npm run test:shuffle` starts failing
+three or six FILES at a time with `Failed to resolve import` — a resolution error that looks
+nothing like the isolation bug the gate is meant to catch. Import at the top of the file.
+
 ## The chat wire format — `nura-e2ee/v1`
 
 Written down before any of it is implemented, because a wire format decided while coding is a

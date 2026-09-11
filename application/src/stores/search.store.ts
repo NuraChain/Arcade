@@ -84,7 +84,7 @@ export const useSearch = createStore((): SearchApi =>
             : [];
         const messages = want('chats')
             ? ranked(
-                chat.conversations().flatMap((conversation) => chat.messagesOf(conversation.id)),
+                chat.archive(),
                 needle,
                 (message) => [locale.text(message.text), personById(message.from)?.handle ?? '']
             ).slice(0, 30)

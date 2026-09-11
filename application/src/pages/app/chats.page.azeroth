@@ -6,6 +6,7 @@ import ChatListItem from '../../components/chat/chat-list-item.component.azeroth
 import { titleOf } from '../../components/chat/chat-title.ts';
 import EmptyState from '../../components/ui/empty-state.component.azeroth';
 import SearchInput from '../../components/ui/search-input.component.azeroth';
+import Skeleton from '../../components/ui/skeleton.component.azeroth';
 import Tabs from '../../components/ui/tabs.component.azeroth';
 import type { Conversation } from '../../data/mock/types.ts';
 import { fold } from '../../services/search.service.ts';
@@ -28,6 +29,10 @@ export default component ChatsPage()
 
     derived all = chat.conversations();
 
+    derived loading = chat.listLoading();
+
+    derived failed = chat.listError() !== null;
+
     derived mine = chat.me();
 
     derived filtered = ((): Conversation[] =>
@@ -39,8 +44,12 @@ export default component ChatsPage()
             || (tab === 'games' && conversation.kind === 'game'));
         const matched = needle === ''
             ? byTab
-            : byTab.filter((conversation) => fold(locale.text(titleOf(conversation, mine))).includes(needle)
-                || chat.messagesOf(conversation.id).some((message) => fold(locale.text(message.text)).includes(needle)));
+            : byTab.filter((conversation) =>
+            {
+                const last = chat.lastOf(conversation.id);
+                return fold(locale.text(titleOf(conversation, mine))).includes(needle)
+                    || (last !== undefined && fold(locale.text(last.text)).includes(needle));
+            });
         return [...matched].sort((a, b) =>
         {
             const pinA = chat.pinned(a.id);
@@ -76,20 +85,8 @@ export default component ChatsPage()
 
         <Tabs items={ items } value={ tab } label={ locale.t('app.nav.chats') } class="mb-3" onChange={ (id) => tab = id } />
 
-        <Show
-            when={ filtered.length > 0 }
+        <Switch
             fallback={
-                <EmptyState
-                    icon="chats"
-                    title={ locale.t(all.length === 0 ? 'chats.empty' : 'chats.emptyFiltered') }
-                    lead={ all.length === 0 ? locale.t('chats.emptyLead') : undefined }
-                    action={ locale.t('app.nav.friends') }
-                    to="/app/friends"
-                    class="py-10"
-                />
-            }
-        >
-            { () =>
                 <ul class="flex flex-col gap-0.5" aria-label={ locale.t('app.nav.chats') }>
                     <For each={ filtered } key={ (conversation) => conversation.id } let={ conversation }>
                         <li>
@@ -102,6 +99,40 @@ export default component ChatsPage()
                     </For>
                 </ul>
             }
-        </Show>
+        >
+            <Match when={ loading }>
+                <ul class="flex flex-col gap-0.5" aria-label={ locale.t('common.loading') } aria-busy="true">
+                    <For each={ [0, 1, 2, 3, 4] } key={ (row) => row } let={ row }>
+                        <li class="flex items-center gap-3 rounded-tile px-3 py-3">
+                            <Skeleton class="h-11 w-11 shrink-0 rounded-full" />
+                            <span class="flex min-w-0 flex-1 flex-col gap-2">
+                                <Skeleton class="h-3.5 w-32" />
+                                <Skeleton class={ row % 2 === 0 ? 'h-3 w-56' : 'h-3 w-40' } />
+                            </span>
+                        </li>
+                    </For>
+                </ul>
+            </Match>
+            <Match when={ failed && all.length === 0 }>
+                <EmptyState
+                    icon="refresh"
+                    title={ locale.t('chats.loadFailed') }
+                    lead={ locale.t('chats.loadFailedLead') }
+                    action={ locale.t('common.retry') }
+                    onAction={ () => void chat.refresh() }
+                    class="py-10"
+                />
+            </Match>
+            <Match when={ filtered.length === 0 }>
+                <EmptyState
+                    icon="chats"
+                    title={ locale.t(all.length === 0 ? 'chats.empty' : 'chats.emptyFiltered') }
+                    lead={ all.length === 0 ? locale.t('chats.emptyLead') : undefined }
+                    action={ locale.t('app.nav.friends') }
+                    to="/app/friends"
+                    class="py-10"
+                />
+            </Match>
+        </Switch>
     </Page>
 }

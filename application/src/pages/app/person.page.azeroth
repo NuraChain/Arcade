@@ -98,7 +98,7 @@ export default component PersonPage()
     {
         if (person !== null)
         {
-            navigate(`/app/chats/${ chat.openDirect(person.id) }`);
+            void chat.openDirect(person.id).then((id) => navigate(`/app/chats/${ id }`));
         }
     };
 

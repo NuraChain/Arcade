@@ -1,26 +1,45 @@
-import { createStore, createSignal, untrack, type Getter } from 'azerothjs';
+import { createStore, createResource, createSignal, untrack, type Getter } from 'azerothjs';
 
 import type { GameId } from '../data/games.ts';
-import { dataset, personById } from '../data/mock/index.ts';
 import type { Conversation, Message } from '../data/mock/types.ts';
 import { createRandom, hashSeed } from '../lib/random.ts';
 import { runtime } from '../lib/runtime.ts';
 import type { LocalizedText } from '../lib/text.ts';
 import { planAmbient, planReply } from '../services/chat.service.ts';
+import { createLocalSource, type ChatScope, type ChatSource, type ConversationRow } from '../services/chat.source.ts';
 import { useAccount } from './account.store.ts';
 import { useSocial } from './social.store.ts';
 
 export const AMBIENT_TICK_MS = 24000;
 
+let active: ChatSource = createLocalSource();
+
+export function setChatSource(next: ChatSource | null): void
+{
+    active = next ?? createLocalSource();
+}
+
 export interface ChatApi
 {
     me: Getter<string>;
+
     conversations: Getter<Conversation[]>;
-    messagesOf(id: string): Message[];
+    listLoading: Getter<boolean>;
+    listError: Getter<unknown>;
     conversation(id: string): Conversation | undefined;
+
+    openThread(id: string): void;
+    closeThread(): void;
+    openId: Getter<string>;
+    messages: Getter<Message[]>;
+    threadLoading: Getter<boolean>;
+    threadError: Getter<unknown>;
+
     lastOf(id: string): Message | undefined;
     unread(id: string): number;
     totalUnread: Getter<number>;
+    archive(): Message[];
+
     typing(id: string): string[];
     draft(id: string): string;
     setDraft(id: string, text: string): void;
@@ -29,8 +48,9 @@ export interface ChatApi
     markRead(id: string): void;
     pinned(id: string): boolean;
     togglePin(id: string): void;
-    openDirect(personId: string): string;
+    openDirect(personId: string): Promise<string>;
     forGroup(groupId: string): string | undefined;
+    refresh(): Promise<void>;
     start(): () => void;
     stop(): void;
     reset(): void;
@@ -43,12 +63,38 @@ export const useChat = createStore((): ChatApi =>
 
     const meId = (): string => account.user()?.id ?? 'you';
 
-    const [extra, setExtra] = createSignal<Conversation[]>([]);
-    const [posted, setPosted] = createSignal<Message[]>([]);
-    const [read, setRead] = createSignal<Record<string, number>>({});
+    const scope = (): ChatScope => ({ me: meId(), blocked: social.blocked() });
+
+    const [openId, setOpenId] = createSignal('');
+    const [seen, setSeen] = createSignal<Record<string, number>>({});
     const [typing, setTyping] = createSignal<Record<string, string[]>>({});
     const [drafts, setDrafts] = createSignal<Record<string, string>>({});
     const [pins, setPins] = createSignal<Record<string, boolean>>({});
+
+    const list = createResource(
+        scope,
+        (current, signal) => active.conversations(current, signal),
+        { name: 'chat.conversations' }
+    );
+
+    const thread = createResource(
+        () => (openId() === '' ? null : { id: openId(), scope: scope() }),
+        (current, signal) => active.thread(current.id, current.scope, signal),
+        { name: 'chat.thread' }
+    );
+
+    let inFlight: Promise<void> = Promise.resolve();
+
+    const revalidate = (): Promise<void> =>
+    {
+        inFlight = inFlight
+            .catch(() => undefined)
+            .then(async () =>
+            {
+                await Promise.all([list.refetch(), thread.refetch()]);
+            });
+        return inFlight;
+    };
 
     const timers = new Set<() => void>();
     let stopAmbient: (() => void) | null = null;
@@ -74,29 +120,27 @@ export const useChat = createStore((): ChatApi =>
         timers.clear();
     };
 
-    const conversations = (): Conversation[] =>
+    const rows = (): ConversationRow[] => list.data() ?? [];
+
+    const rowOf = (id: string): ConversationRow | undefined => rows().find((row) => row.conversation.id === id);
+
+    const conversations = (): Conversation[] => rows().map((row) => row.conversation);
+
+    const messages = (): Message[] => thread.data() ?? [];
+
+    const lastOf = (id: string): Message | undefined => rowOf(id)?.last ?? undefined;
+
+    const unread = (id: string): number =>
     {
-        const me = meId();
-        return [...dataset().conversations, ...extra()]
-            .filter((conversation) => conversation.participants.includes(me))
-            .filter((conversation) => conversation.kind !== 'direct' || social.visible(conversation.participants).length === conversation.participants.length);
+        const row = rowOf(id);
+        if (row === undefined)
+        {
+            return 0;
+        }
+        return (seen()[id] ?? 0) >= (row.last?.at ?? 0) ? 0 : row.unread;
     };
 
-    const messagesOf = (id: string): Message[] => [...dataset().messages, ...posted()]
-        .filter((message) => message.conversationId === id)
-        .filter((message) => !social.isBlocked(message.from))
-        .sort((a, b) => a.at - b.at);
-
-    const conversation = (id: string): Conversation | undefined => conversations().find((entry) => entry.id === id);
-
-    const lastReadAt = (id: string): number => read()[id] ?? conversation(id)?.lastReadAt ?? 0;
-
-    const unread = (id: string): number => messagesOf(id).filter((message) => message.from !== meId() && message.at > lastReadAt(id)).length;
-
-    const push = (message: Message): void =>
-    {
-        setPosted([...untrack(posted), message]);
-    };
+    const publish = (message: Message): Promise<void> => active.post(message).then(revalidate);
 
     const setTypingFor = (id: string, who: string[]): void =>
     {
@@ -105,14 +149,14 @@ export const useChat = createStore((): ChatApi =>
 
     const scheduleReply = (id: string): void =>
     {
-        const current = conversation(id);
+        const current = untrack(() => rowOf(id))?.conversation;
         if (current === undefined)
         {
             return;
         }
         counter += 1;
         const seed = hashSeed(runtime().seed, 'chat', id, counter);
-        const plan = planReply(current, meId(), createRandom(seed));
+        const plan = planReply(current, untrack(meId), createRandom(seed));
         if (plan === null || social.isBlocked(plan.from))
         {
             return;
@@ -124,7 +168,7 @@ export const useChat = createStore((): ChatApi =>
             {
                 setTypingFor(id, []);
                 counter += 1;
-                push({
+                void publish({
                     id: `m-live-${ counter }`,
                     conversationId: id,
                     from: plan.from,
@@ -140,13 +184,13 @@ export const useChat = createStore((): ChatApi =>
     const ambient = (): void =>
     {
         ambientTick += 1;
-        const plan = planAmbient(conversations(), meId(), createRandom(hashSeed(runtime().seed, 'ambient', ambientTick)));
+        const plan = planAmbient(untrack(conversations), untrack(meId), createRandom(hashSeed(runtime().seed, 'ambient', ambientTick)));
         if (plan === null || social.isBlocked(plan.from))
         {
             return;
         }
         counter += 1;
-        push({
+        void publish({
             id: `m-ambient-${ counter }`,
             conversationId: plan.conversationId,
             from: plan.from,
@@ -157,21 +201,47 @@ export const useChat = createStore((): ChatApi =>
         });
     };
 
+    const mine = (id: string, kind: Message['kind'], text: LocalizedText | string, ref: Message['ref']): Message =>
+    {
+        counter += 1;
+        return {
+            id: `m-${ kind }-${ counter }`,
+            conversationId: id,
+            from: untrack(meId),
+            kind,
+            text,
+            at: runtime().clock.now(),
+            ref
+        };
+    };
+
     return {
         me: meId,
-        conversations,
-        messagesOf,
-        conversation,
 
-        lastOf(id)
+        conversations,
+        listLoading: () => list.loading(),
+        listError: () => list.error(),
+        conversation: (id) => rowOf(id)?.conversation,
+
+        openThread(id)
         {
-            const all = messagesOf(id);
-            return all[all.length - 1];
+            setOpenId(id);
         },
 
-        unread,
+        closeThread()
+        {
+            setOpenId('');
+        },
 
-        totalUnread: () => conversations().reduce((sum, entry) => sum + unread(entry.id), 0),
+        openId,
+        messages,
+        threadLoading: () => thread.loading(),
+        threadError: () => thread.error(),
+
+        lastOf,
+        unread,
+        totalUnread: () => rows().reduce((sum, row) => sum + unread(row.conversation.id), 0),
+        archive: () => active.archive(scope()),
 
         typing: (id) => typing()[id] ?? [],
 
@@ -189,87 +259,52 @@ export const useChat = createStore((): ChatApi =>
             {
                 return '';
             }
-            counter += 1;
-            const message: Message = {
-                id: `m-mine-${ counter }`,
-                conversationId: id,
-                from: meId(),
-                kind: 'text',
-                text: clean,
-                at: runtime().clock.now(),
-                ref: null
-            };
-            push(message);
+            const message = mine(id, 'text', clean, null);
+            void publish(message);
             setDrafts({ ...untrack(drafts), [id]: '' });
-            setRead({ ...untrack(read), [id]: message.at });
+            setSeen({ ...untrack(seen), [id]: message.at });
             scheduleReply(id);
             return message.id;
         },
 
         sendInvite(id, game, tableId)
         {
-            counter += 1;
-            const message: Message = {
-                id: `m-invite-${ counter }`,
-                conversationId: id,
-                from: meId(),
-                kind: 'invite',
-                text: { en: 'Table open', fa: 'میز باز است' } as LocalizedText,
-                at: runtime().clock.now(),
-                ref: { game, tableId }
-            };
-            push(message);
-            setRead({ ...untrack(read), [id]: message.at });
+            const message = mine(id, 'invite', { en: 'Table open', fa: 'میز باز است' } as LocalizedText, { game, tableId });
+            void publish(message);
+            setSeen({ ...untrack(seen), [id]: message.at });
             return message.id;
         },
 
         markRead(id)
         {
-            const current = untrack(read);
-            if (current[id] !== undefined && runtime().clock.now() - current[id] < 1000)
+            const current = untrack(seen);
+            const now = runtime().clock.now();
+            if (current[id] !== undefined && now - current[id] < 1000)
             {
                 return;
             }
-            setRead({ ...current, [id]: runtime().clock.now() });
+            setSeen({ ...current, [id]: now });
         },
 
-        pinned: (id) => pins()[id] ?? conversations().find((entry) => entry.id === id)?.pinned ?? false,
+        pinned: (id) => pins()[id] ?? rowOf(id)?.conversation.pinned ?? false,
 
         togglePin(id)
         {
             const current = untrack(pins);
-            const seeded = untrack(conversations).find((entry) => entry.id === id)?.pinned ?? false;
+            const seeded = untrack(() => rowOf(id))?.conversation.pinned ?? false;
             setPins({ ...current, [id]: !(current[id] ?? seeded) });
         },
 
-        openDirect(personId)
+        async openDirect(personId)
         {
-            const me = meId();
-            const existing = conversations().find((entry) => entry.kind === 'direct'
-                && entry.participants.length === 2
-                && entry.participants.includes(personId)
-                && entry.participants.includes(me));
-            if (existing !== undefined)
-            {
-                return existing.id;
-            }
-            const person = personById(personId);
-            const id = `c-new-${ personId }`;
-            setExtra([...untrack(extra), {
-                id,
-                kind: 'direct',
-                participants: [me, personId],
-                groupId: null,
-                tableId: null,
-                game: person?.favourite ?? null,
-                title: null,
-                pinned: false,
-                lastReadAt: runtime().clock.now()
-            }]);
+            const id = await active.openDirect(untrack(scope), personId, runtime().clock.now());
+            await revalidate();
             return id;
         },
 
-        forGroup: (groupId) => conversations().find((entry) => entry.groupId === groupId)?.id,
+        forGroup: (groupId) => rows().find((row) => row.conversation.groupId === groupId)?.conversation.id,
+
+        refresh: revalidate,
 
         start()
         {
@@ -296,12 +331,14 @@ export const useChat = createStore((): ChatApi =>
             clearTimers();
             counter = 0;
             ambientTick = 0;
-            setExtra([]);
-            setPosted([]);
-            setRead({});
+            active.reset();
+            setOpenId('');
+            setSeen({});
             setTyping({});
             setDrafts({});
             setPins({});
+            inFlight = Promise.resolve();
+            void list.refetch();
         }
     };
 });

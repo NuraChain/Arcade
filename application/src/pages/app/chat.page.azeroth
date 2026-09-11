@@ -56,7 +56,11 @@ export default component ChatPage()
 
     derived title = conversation === null ? locale.t('chat.notFound') : locale.text(titleOf(conversation, me));
 
-    derived messages = conversation === null ? [] : chat.messagesOf(id);
+    derived messages = chat.messages();
+
+    derived loading = chat.threadLoading();
+
+    derived failed = chat.threadError() !== null;
 
     derived shown = messages.slice(Math.max(0, messages.length - visible));
 
@@ -95,7 +99,12 @@ export default component ChatPage()
 
     mount
     {
-        return shell.claimTitle(() => title);
+        const release = shell.claimTitle(() => title);
+        return () =>
+        {
+            release();
+            chat.closeThread();
+        };
     }
 
     effect
@@ -111,6 +120,11 @@ export default component ChatPage()
     {
         params();
         visible = WINDOW;
+    }
+
+    effect
+    {
+        chat.openThread(id);
     }
 
     const showEarlier = (): void =>
@@ -221,11 +235,8 @@ export default component ChatPage()
                                 </div>
                             }
                         </Show>
-                        <Show
-                            when={ messages.length > 0 }
-                            fallback={ <p class="m-auto text-center text-ui-base text-muted">{ locale.t('chat.empty') }</p> }
-                        >
-                            { () =>
+                        <Switch
+                            fallback={
                                 <For each={ shown } key={ (message) => message.id } let={ message } index={ index }>
                                     <div>
                                         <MessageBubble
@@ -237,7 +248,22 @@ export default component ChatPage()
                                     </div>
                                 </For>
                             }
-                        </Show>
+                        >
+                            <Match when={ loading }>
+                                <p class="m-auto text-center text-ui-base text-muted">{ locale.t('common.loading') }</p>
+                            </Match>
+                            <Match when={ failed && messages.length === 0 }>
+                                <div class="m-auto flex flex-col items-center gap-3 text-center">
+                                    <p class="text-ui-base text-muted">{ locale.t('chat.loadFailed') }</p>
+                                    <Button variant="outline" size="sm" leading="refresh" onClick={ () => void chat.refresh() }>
+                                        { locale.t('common.retry') }
+                                    </Button>
+                                </div>
+                            </Match>
+                            <Match when={ messages.length === 0 }>
+                                <p class="m-auto text-center text-ui-base text-muted">{ locale.t('chat.empty') }</p>
+                            </Match>
+                        </Switch>
                         <Show when={ typing.length > 0 }>
                             { () =>
                                 <p class="flex items-center gap-2 ps-10 text-ui-xs text-live">

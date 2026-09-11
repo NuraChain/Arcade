@@ -77,9 +77,8 @@ export default component PersonActions(props: OverlayProps & { personId: string 
                 label: locale.t('person.message'),
                 run: () =>
                 {
-                    const id = chat.openDirect(props.personId);
                     props.close();
-                    navigate(`/app/chats/${ id }`);
+                    void chat.openDirect(props.personId).then((id) => navigate(`/app/chats/${ id }`));
                 }
             },
             {

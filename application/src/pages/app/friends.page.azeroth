@@ -79,7 +79,7 @@ export default component FriendsPage()
 
     const message = (person: Person): void =>
     {
-        navigate(`/app/chats/${ chat.openDirect(person.id) }`);
+        void chat.openDirect(person.id).then((id) => navigate(`/app/chats/${ id }`));
     };
 
     const more = (person: Person): void =>
