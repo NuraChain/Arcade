@@ -82,6 +82,15 @@ the first run of this matrix showed, as 808 console errors and 377 pages that ne
 
 ## House rules
 
+**`framework-bugs.md` is not in this repository.** It is a register of defects in a DEPENDENCY,
+not part of this product, and it lives on the desktop
+(`C:/Users/IntelligentQuantum/Desktop/framework-bugs.md`). `.gitignore` holds the name so it
+cannot come back by accident. Nothing goes in it without a minimal reproduction proving the
+framework is responsible, and a suspicion that turns out to be ours goes in its "NOT framework
+bugs" table so nobody re-investigates it.
+
+## House rules
+
 **No comments in code.** Names and structure carry the meaning. This file, and the tests, are
 where reasoning is written down.
 

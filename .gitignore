@@ -34,3 +34,7 @@ tools/qa/out/
 
 # Playwright matrix screenshots and reports.
 tools/qa/out/
+
+# The register of AzerothJS defects found while building this. It is notes ABOUT a dependency,
+# not part of this product, and it is kept on the desktop rather than in the repository.
+framework-bugs.md
