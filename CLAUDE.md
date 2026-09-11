@@ -220,6 +220,73 @@ any light — so they are lit differently by theme but never re-tinted. The lamp
 both themes for the same reason: the market is lamplit, and that warmth against a cool ground is
 the whole picture.
 
+## The chat wire format — `nura-e2ee/v1`
+
+Written down before any of it is implemented, because a wire format decided while coding is a
+wire format nobody can review. `GET /api/meta` reports the version the client must speak.
+
+**Only user-authored text is sealed.** A message is one of four kinds, and the line is absolute:
+
+| kind | body | who can read it |
+|---|---|---|
+| `text` | ciphertext | the conversation's member devices |
+| `system` | `{ key, params }` | the server — it authored it |
+| `invite` | `{ key, params }` | the server — it authored it |
+| `result` | `{ key, params }` | the server — it authored it |
+
+The server generates the last three, so it must be able to read them; they are structured data
+rendered through the message catalogue at display time, never prose. That also fixes a real defect:
+the hardcoded bilingual strings in `chat.store.ts` today cannot follow a language switch.
+
+**Keys.** One AES-256-GCM key per `(conversation, epoch)`. An epoch is a frozen set of member
+devices; any membership change mints the next one. The epoch key is wrapped once per recipient
+device over ephemeral ECDH P-256. Each message is sealed under a per-sender key derived from the
+epoch key by HKDF and signed by the sending device with ECDSA P-256 — members share the epoch key,
+so without a per-message signature any member could forge another's line.
+
+There is no ratchet. Forward secrecy is epoch-coarse and post-compromise security arrives only at
+revocation. Both are stated in the privacy copy rather than implied away.
+
+**Device identity** is client-derived and self-certifying:
+
+```
+deviceId = base64url(SHA-256(exchangeSpki || signingSpki)).slice(0, 22)
+```
+
+so the server cannot mint an id for keys it does not hold. A device is authorised by a SIWE-shaped
+`personal_sign`, with an ERC-1271 `eth_call` branch for contract wallets. Guest accounts have no
+wallet, so their devices are `attested: 'server'` — and `attested` is a REQUIRED prop on the trust
+badge, so a server-asserted device cannot be rendered as wallet-verified by forgetting to say so.
+
+**The envelope**, with its AAD fields joined by `` in exactly this order:
+
+```
+'nura-e2ee/v1' ␟ 'msg' ␟ conversationId ␟ epoch ␟ seq ␟ messageId
+               ␟ senderAccountId ␟ senderDeviceId ␟ kind ␟ clientAt
+```
+
+Binding `kind` stops the server relabelling a fabricated row as a person's words; binding
+`clientAt` stops it re-dating one; binding `senderDeviceId` stops it re-attributing one.
+
+**No wallet-signature-derived backup key.** A deterministic `personal_sign` over a fixed string is
+an unrevocable, phishable, remote skeleton key to the entire archive. Recovery is a *generated*
+120-bit phrase only; a user-chosen passphrase is refused, because PBKDF2 is the only KDF
+`SubtleCrypto` offers and it is weak enough against GPUs that a human-chosen phrase is a real
+break.
+
+**No plaintext key bytes at rest.** Keys are non-extractable `CryptoKey`s; IndexedDB holds vault
+ciphertext. The honest claim is *"no key bytes at rest"*, not *"key bytes never exist"* — they
+exist in memory at three moments (minting, wrapping, backup) and the buffers are zeroed after.
+
+**What the server still sees**, stated rather than buried: who is in a conversation, who sent a
+message, when, and how large it was. E2EE hides content, not the social graph.
+
+**What it costs**, and these are consequences, not regrets: no server-side message search — the
+index is per device, over the archive that device can decrypt; push notifications are contentless;
+moderation sees only the excerpt a reporter chooses to disclose; a device that loses its keys and
+its recovery phrase cannot get the history back, and the UI says so plainly rather than showing an
+empty thread.
+
 ## The product shell
 
 Everything behind `/sign-in` and `/app/*` is client-rendered and lazily chunked; the landing
