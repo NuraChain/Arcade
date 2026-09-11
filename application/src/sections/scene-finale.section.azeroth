@@ -1,0 +1,15 @@
+import Button from '../components/ui/button.component.azeroth';
+import { useLocale } from '../stores/locale.store.ts';
+
+export default component SceneFinale()
+{
+    const locale = useLocale();
+
+    <section id="join" class="relative flex min-h-dvh items-center justify-center py-24 text-center" aria-labelledby="finale-title">
+        <div class="mx-auto flex w-full max-w-[46rem] flex-col items-center gap-5 px-5 sm:px-8">
+            <h2 id="finale-title" class="text-[clamp(2.5rem,8vw,4.5rem)] text-text">{ locale.t('finale.title') }</h2>
+            <p class="max-w-[42ch] text-[clamp(1rem,2.2vw,1.125rem)] text-muted">{ locale.t('finale.lead') }</p>
+            <Button href="#join" variant="primary" size="lg">{ locale.t('finale.cta') }</Button>
+        </div>
+    </section>
+}

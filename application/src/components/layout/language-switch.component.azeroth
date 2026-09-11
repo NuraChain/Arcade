@@ -1,0 +1,31 @@
+import { LOCALES, LOCALE_LABEL, useLocale, type Locale } from '../../stores/locale.store.ts';
+
+export default component LanguageSwitch()
+{
+    const locale = useLocale();
+
+    const press = (next: Locale): void =>
+    {
+        if (locale.locale() !== next)
+        {
+            locale.setLocale(next);
+        }
+    };
+
+    <div class="flex items-center gap-0.5 rounded-full border border-line bg-field p-0.5" role="group" aria-label={ locale.t('locale.label') }>
+        <For each={ LOCALES } key={ (name) => name } let={ name }>
+            <button
+                type="button"
+                lang={ name }
+                class={ [
+                    'flex h-8 items-center justify-center rounded-full px-3 text-[13px] font-semibold transition-colors duration-150',
+                    locale.locale() === name ? 'cursor-default bg-raised text-lamp' : 'cursor-pointer text-muted hover:text-text'
+                ].join(' ') }
+                aria-pressed={ locale.locale() === name }
+                onClick={ () => press(name) }
+            >
+                { LOCALE_LABEL[name] }
+            </button>
+        </For>
+    </div>
+}

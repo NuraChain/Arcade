@@ -1,0 +1,73 @@
+import { useLocale } from '../../stores/locale.store.ts';
+import type { MessageKey } from '../../locales/en.ts';
+import BrandMark from './brand-mark.component.azeroth';
+
+interface FooterLink
+{
+    href: string;
+    labelKey: MessageKey;
+}
+
+interface FooterColumn
+{
+    headingKey: MessageKey;
+    links: FooterLink[];
+}
+
+const COLUMNS: FooterColumn[] = [
+    {
+        headingKey: 'footer.product',
+        links: [
+            { href: '#games', labelKey: 'nav.games' },
+            { href: '#crew', labelKey: 'nav.rooms' }
+        ]
+    },
+    {
+        headingKey: 'footer.company',
+        links: [
+            { href: '/about', labelKey: 'footer.about' },
+            { href: '/contact', labelKey: 'footer.contact' }
+        ]
+    },
+    {
+        headingKey: 'footer.legal',
+        links: [
+            { href: '/privacy', labelKey: 'footer.privacy' },
+            { href: '/terms', labelKey: 'footer.terms' }
+        ]
+    }
+];
+
+export default component SiteFooter()
+{
+    const locale = useLocale();
+
+    const year = new Date().getFullYear();
+
+    <footer class="relative z-10 border-t border-line bg-void">
+        <div class="mx-auto grid w-full max-w-[80rem] gap-10 px-5 py-14 sm:grid-cols-[1.5fr_repeat(3,1fr)] sm:px-8">
+            <div class="flex flex-col gap-3">
+                <BrandMark class="text-[18px] text-text" />
+                <p class="max-w-[28ch] text-[14px] text-muted">{ locale.t('footer.tagline') }</p>
+            </div>
+
+            <For each={ COLUMNS } key={ (column) => column.headingKey } let={ column }>
+                <div class="flex flex-col gap-3">
+                    <h2 class="label text-[13px] text-faint">{ locale.t(column.headingKey) }</h2>
+                    <ul class="flex flex-col gap-2">
+                        <For each={ column.links } key={ (link) => link.href } let={ link }>
+                            <li>
+                                <a href={ link.href } class="text-[14px] text-muted transition-colors duration-150 hover:text-lamp">{ locale.t(link.labelKey) }</a>
+                            </li>
+                        </For>
+                    </ul>
+                </div>
+            </For>
+        </div>
+
+        <div class="mx-auto w-full max-w-[80rem] border-t border-line px-5 py-6 sm:px-8">
+            
+            <p class="text-[13px] text-faint"><span class="tally">{ locale.n(year) }</span> { locale.t('brand.name') }. { locale.t('footer.rights') }</p>
+        </div>
+    </footer>
+}

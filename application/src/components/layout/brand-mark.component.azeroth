@@ -1,0 +1,11 @@
+import { useLocale } from '../../stores/locale.store.ts';
+
+export default component BrandMark(props: { class?: string })
+{
+    const locale = useLocale();
+
+    const lead = (): string => locale.t('brand.lead') === '' ? '' : `${ locale.t('brand.lead') } `;
+    const trail = (): string => locale.t('brand.trail') === '' ? '' : ` ${ locale.t('brand.trail') }`;
+
+    <span class={ `font-display font-semibold tracking-tight ${ props.class ?? '' }` }>{ lead() }<span class="text-lamp">{ locale.t('brand.accent') }</span>{ trail() }</span>
+}

@@ -1,0 +1,32 @@
+import Icon from '../../icons/icon.component.azeroth';
+import type { IconName } from '../../icons/registry.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import { THEMES, THEME_LABEL, useTheme, type Theme } from '../../stores/theme.store.ts';
+
+const THEME_ICON: Record<Theme, IconName> = {
+    dark: 'theme-dusk',
+    light: 'theme-dawn'
+};
+
+export default component ThemeSwitch()
+{
+    const locale = useLocale();
+    const theme = useTheme();
+
+    <div class="flex items-center gap-0.5 rounded-full border border-line bg-field p-0.5" role="group" aria-label={ locale.t('theme.label') }>
+        <For each={ THEMES } key={ (name) => name } let={ name }>
+            <button
+                type="button"
+                class={ [
+                    'flex h-8 w-8 items-center justify-center rounded-full transition-colors duration-150',
+                    theme.theme() === name ? 'cursor-default bg-raised text-lamp' : 'cursor-pointer text-muted hover:text-text'
+                ].join(' ') }
+                aria-label={ locale.t(THEME_LABEL[name]) }
+                aria-pressed={ theme.theme() === name }
+                onClick={ () => (theme.theme() === name ? undefined : theme.setTheme(name)) }
+            >
+                <Icon name={ THEME_ICON[name] } size={ 15 } />
+            </button>
+        </For>
+    </div>
+}

@@ -1,0 +1,62 @@
+import type { Child } from 'azerothjs';
+
+import Icon from '../../icons/icon.component.azeroth';
+import type { IconName } from '../../icons/registry.ts';
+import { BUTTON_SIZE, BUTTON_VARIANT, type ButtonSize, type ButtonVariant } from './variants.ts';
+
+export default component Button(props: {
+    children?: Child;
+
+    
+    href?: string;
+
+    variant?: ButtonVariant;
+    size?: ButtonSize;
+
+    
+    icon?: IconName;
+
+    
+    block?: boolean;
+
+    disabled?: boolean;
+
+    onClick?: () => void;
+})
+{
+    derived shell = [
+        'inline-flex items-center justify-center rounded-full font-semibold',
+        'transition duration-150 ease-[var(--ease-ui)]',
+        'disabled:cursor-not-allowed disabled:opacity-50',
+        BUTTON_VARIANT[props.variant ?? 'outline'],
+        BUTTON_SIZE[props.size ?? 'md'],
+        props.block === true ? 'w-full' : '',
+        props.disabled === true ? '' : 'cursor-pointer'
+    ].filter(Boolean).join(' ');
+
+    <Show
+        when={ props.href !== undefined }
+        fallback={
+            <button
+                type="button"
+                class={ shell }
+                disabled={ props.disabled === true }
+                onClick={ () => (props.disabled === true ? undefined : props.onClick?.()) }
+            >
+                { props.children }
+                <Show when={ props.icon !== undefined }>
+                    { () => <Icon name={ props.icon! } size={ 16 } class="icon-flip" /> }
+                </Show>
+            </button>
+        }
+    >
+        { () =>
+            <a href={ props.href } class={ shell }>
+                { props.children }
+                <Show when={ props.icon !== undefined }>
+                    { () => <Icon name={ props.icon! } size={ 16 } class="icon-flip" /> }
+                </Show>
+            </a>
+        }
+    </Show>
+}

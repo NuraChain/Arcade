@@ -1,0 +1,48 @@
+import Icon from '../icons/icon.component.azeroth';
+import type { IconName } from '../icons/registry.ts';
+import type { MessageKey } from '../locales/en.ts';
+import { useLocale } from '../stores/locale.store.ts';
+
+interface Point
+{
+    icon: IconName;
+    titleKey: MessageKey;
+    bodyKey: MessageKey;
+}
+
+const POINTS: Point[] = [
+    { icon: 'versus', titleKey: 'compete.ladder.title', bodyKey: 'compete.ladder.body' },
+    { icon: 'trophy', titleKey: 'compete.season.title', bodyKey: 'compete.season.body' }
+];
+
+export default component SceneCompete()
+{
+    const locale = useLocale();
+
+    <section class="relative flex min-h-dvh items-center py-24" aria-labelledby="compete-title">
+        <div class="mx-auto w-full max-w-[80rem] px-5 sm:px-8">
+            <div class="flex flex-col gap-3">
+                
+                <p class="flex items-center gap-2 text-[13px] font-semibold text-madder">
+                    <span class="h-2 w-2 rounded-full bg-madder motion-safe:animate-pulse" aria-hidden="true"></span>
+                    { locale.t('compete.live') }
+                </p>
+
+                <h2 id="compete-title" class="max-w-[14ch] text-[clamp(2rem,6vw,3.5rem)] text-text">{ locale.t('compete.title') }</h2>
+                <p class="max-w-[48ch] text-[16px] text-muted">{ locale.t('compete.lead') }</p>
+            </div>
+
+            <ul class="mt-10 flex flex-col gap-8 sm:mt-12 sm:grid sm:max-w-[46rem] sm:grid-cols-2 sm:gap-10">
+                <For each={ POINTS } key={ (point) => point.titleKey } let={ point }>
+                    <li class="flex flex-col gap-3">
+                        <span class="flex h-9 w-9 items-center justify-center rounded-full border border-line text-lamp">
+                            <Icon name={ point.icon } size={ 17 } />
+                        </span>
+                        <h3 class="label text-[15px] text-text">{ locale.t(point.titleKey) }</h3>
+                        <p class="max-w-[36ch] text-[14px] text-muted">{ locale.t(point.bodyKey) }</p>
+                    </li>
+                </For>
+            </ul>
+        </div>
+    </section>
+}
