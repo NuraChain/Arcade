@@ -1,0 +1,121 @@
+@theme
+{
+    
+    --font-display: 'Fraunces Variable', Georgia, 'Times New Roman', serif;
+    --font-ui: 'Hanken Grotesk Variable', 'Segoe UI', system-ui, ui-sans-serif, sans-serif;
+    --font-persian: 'Vazirmatn Variable', Vazirmatn, 'Segoe UI', Tahoma, ui-sans-serif, sans-serif;
+
+    
+    --ease-reveal: cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-ui: cubic-bezier(0.22, 0.61, 0.36, 1);
+
+    --animate-lift: lift 600ms cubic-bezier(0.16, 1, 0.3, 1) both;
+    --animate-warm: warm 900ms cubic-bezier(0.16, 1, 0.3, 1) both;
+
+    
+    --animate-beckon: beckon 2.6s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+
+    @keyframes lift
+    {
+        from
+        {
+            opacity: 0;
+            transform: translateY(14px);
+        }
+    }
+
+    
+    @keyframes warm
+    {
+        from
+        {
+            opacity: 0;
+            filter: brightness(0.4);
+        }
+    }
+
+    @keyframes beckon
+    {
+        0%, 100%
+        {
+            transform: translateY(0);
+        }
+        50%
+        {
+            transform: translateY(5px);
+        }
+    }
+}
+
+:root,
+:root[data-theme='dark']
+{
+    color-scheme: dark;
+
+    --void: #0A1216;
+    --field: #12242B;
+    --raised: #1B333C;
+    --line: #24424D;
+    --text: #F2EADC;
+    --muted: #93A8AF;
+    --faint: #5F7880;
+
+    --lamp: #FFB43D;
+    --madder: #D6455C;
+
+    --world-sky: #0A1216;
+    --world-fog: #10222A;
+    --world-key: #FFC46A;
+    --world-fill: #2B4E5E;
+    --world-rim: #7FB4C9;
+    --world-lamp-intensity: 1;
+    --world-fog-density: 1;
+    --world-env: 0.35;
+}
+
+:root[data-theme='light']
+{
+    color-scheme: light;
+
+    --void: #F4F1EC;
+    --field: #FFFFFF;
+    --raised: #EAE5DC;
+    --line: #D8D1C5;
+    --text: #14201C;
+    --muted: #566B66;
+    --faint: #6E7F78;
+
+    --lamp: #A35F00;
+    --madder: #B02138;
+
+    --world-sky: #DCE4E2;
+    --world-fog: #C9D6D4;
+    --world-key: #FFE0B0;
+    --world-fill: #A9BFC4;
+    --world-rim: #FFFFFF;
+    --world-lamp-intensity: 0.35;
+    --world-fog-density: 0.6;
+    --world-env: 0.7;
+}
+
+:root
+{
+    --world-felt: #1D5647;
+    --world-wood: #6B4327;
+    --world-brass: #B98A3C;
+    --world-ivory: #E8DCC4;
+    --world-enamel: #C96F5A;
+}
+
+@theme inline
+{
+    --color-void: var(--void);
+    --color-field: var(--field);
+    --color-raised: var(--raised);
+    --color-line: var(--line);
+    --color-text: var(--text);
+    --color-muted: var(--muted);
+    --color-faint: var(--faint);
+    --color-lamp: var(--lamp);
+    --color-madder: var(--madder);
+}

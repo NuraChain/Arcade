@@ -1,0 +1,153 @@
+@layer base
+{
+    html
+    {
+        background: var(--void);
+        color: var(--text);
+        font-family: var(--font-ui);
+        line-height: 1.6;
+        -webkit-font-smoothing: antialiased;
+    }
+
+    
+    html:lang(fa)
+    {
+        --font-display: var(--font-persian);
+        --font-ui: var(--font-persian);
+
+        line-height: 1.85;
+    }
+
+    
+    h1, h2, h3
+    {
+        font-family: var(--font-display);
+        font-variation-settings: 'WONK' 1;
+        font-weight: 600;
+        letter-spacing: -0.02em;
+        line-height: 1.08;
+        text-wrap: balance;
+    }
+
+    
+    html:lang(fa) h1,
+    html:lang(fa) h2,
+    html:lang(fa) h3
+    {
+        font-variation-settings: normal;
+        letter-spacing: normal;
+        line-height: 1.4;
+    }
+
+    
+    :focus-visible
+    {
+        outline: 2px solid var(--lamp);
+        outline-offset: 3px;
+        border-radius: 3px;
+    }
+
+    
+    body
+    {
+        overflow-anchor: none;
+    }
+}
+
+@media (prefers-reduced-motion: reduce)
+{
+    *,
+    *::before,
+    *::after
+    {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+
+@utility panel
+{
+    background: var(--field);
+    border: 1px solid var(--line);
+    border-radius: 0.875rem;
+}
+
+@utility label
+{
+    font-family: var(--font-ui);
+    font-variation-settings: normal;
+    font-weight: 600;
+    letter-spacing: normal;
+    line-height: 1.4;
+}
+
+@utility tally
+{
+    font-variant-numeric: tabular-nums;
+    direction: ltr;
+    unicode-bidi: isolate;
+}
+
+@utility lit
+{
+    box-shadow: 0 0 0 1px color-mix(in oklab, var(--lamp) 40%, transparent),
+                0 8px 40px -12px color-mix(in oklab, var(--lamp) 55%, transparent);
+}
+
+@utility scrim
+{
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(
+        to top,
+        var(--void) 0%,
+        color-mix(in oklab, var(--void) 82%, transparent) 30%,
+        color-mix(in oklab, var(--void) 34%, transparent) 55%,
+        transparent 78%
+    );
+}
+
+@media (min-width: 40rem)
+{
+    .scrim
+    {
+        background: linear-gradient(
+            to right,
+            var(--void) 0%,
+            color-mix(in oklab, var(--void) 78%, transparent) 26%,
+            color-mix(in oklab, var(--void) 30%, transparent) 48%,
+            transparent 66%
+        );
+    }
+}
+
+@utility stage
+{
+    position: sticky;
+    top: 0;
+    height: 100dvh;
+    width: 100%;
+    overflow: hidden;
+}
+
+[dir='rtl'] .icon-flip
+{
+    transform: scaleX(-1);
+}
+
+@media (min-width: 40rem)
+{
+    [dir='rtl'] .scrim
+    {
+        background: linear-gradient(
+            to left,
+            var(--void) 0%,
+            color-mix(in oklab, var(--void) 78%, transparent) 26%,
+            color-mix(in oklab, var(--void) 30%, transparent) 48%,
+            transparent 66%
+        );
+    }
+}

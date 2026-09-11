@@ -1,0 +1,9 @@
+@import 'tailwindcss';
+
+@import '@fontsource-variable/fraunces/wonk.css';
+@import '@fontsource-variable/hanken-grotesk';
+
+@import '@fontsource-variable/vazirmatn';
+
+@import './styles/tokens.css';
+@import './styles/base.css';
