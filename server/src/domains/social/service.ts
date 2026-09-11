@@ -1,7 +1,7 @@
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '@azerothjs/http';
 import type { DataSource } from 'typeorm';
 
-import { firstRow, rowsOf } from '../../lib/rows.ts';
+import { affectedBy, firstRow, rowsOf } from '../../lib/rows.ts';
 import type { MuteSubject } from '../../entities/mute.entity.ts';
 import type { ReportCategory } from '../../entities/report.entity.ts';
 import { clampPrivacy, mayDiscover, mayMessage, maySeeOnline, maySendRequest, type Party, type Relation } from './policy.ts';
@@ -248,6 +248,62 @@ export function createSocialService(db: DataSource)
                 [me, limit]
             );
             return rowsOf<PersonRow>(fallback).map((row) => ({ person: row, mutual: 0 }));
+        },
+
+        /**
+         * The relationship sets one connection reasons with, in one round trip.
+         *
+         * Loaded once per bind and cached with a ceiling, because the alternative is a query per
+         * presence decision per viewer per frame. The ceiling is what bounds how long a stale
+         * edge can matter if a write ever forgets to tell the hub.
+         */
+        async edgesFor(userId: string): Promise<{ party: Party; friends: Set<string>; blocks: Set<string> } | null>
+        {
+            const mine = await person(userId);
+            if (mine === null)
+            {
+                return null;
+            }
+
+            const rows = await db.query(
+                `select 'friend' as kind, f.friend_id as other from friendships f where f.user_id = $1
+                 union all
+                 select 'block' as kind, b.blocked_id as other from blocks b where b.user_id = $1
+                 union all
+                 select 'block' as kind, b.user_id as other from blocks b where b.blocked_id = $1`,
+                [userId]
+            );
+
+            const friends = new Set<string>();
+            const blocks = new Set<string>();
+            for (const row of rowsOf<{ kind: string; other: string }>(rows))
+            {
+                (row.kind === 'friend' ? friends : blocks).add(row.other);
+            }
+            return { party: partyOf(mine), friends, blocks };
+        },
+
+        /**
+         * Records that these people were seen, at most once a minute for the whole process.
+         *
+         * Presence itself never touches Postgres - it is the socket's business - but
+         * `last_seen_at` is what somebody offline is shown as, and nothing wrote that column
+         * until now, which is why `personSummary.lastSeenAt` was always absent. The WHERE clause
+         * makes a repeat within the minute affect zero rows rather than rewriting the table.
+         */
+        async touchSeen(userIds: readonly string[]): Promise<number>
+        {
+            if (userIds.length === 0)
+            {
+                return 0;
+            }
+            const result = await db.query(
+                `update users set last_seen_at = now()
+                 where id = any($1::uuid[])
+                   and (last_seen_at is null or last_seen_at < now() - interval '1 minute')`,
+                [[...userIds]]
+            );
+            return affectedBy(result);
         },
 
         /** uuid to handle, for the several places a row names somebody the wire must not. */

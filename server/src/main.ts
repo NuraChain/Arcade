@@ -16,6 +16,12 @@ import { seedReference } from './db/seed-reference.ts';
 import { loadServerConfig } from './env.ts';
 import { apiRateLimit } from './http/rate-limit.ts';
 import { createServerLogger } from './logger.ts';
+import { createChatService } from './domains/chat/service.ts';
+import { createIdentityService } from './domains/identity/service.ts';
+import { createSocialService } from './domains/social/service.ts';
+import { attachRealtime } from './realtime/gateway.ts';
+import { createHub } from './realtime/hub.ts';
+import { SESSION_TTL_SECONDS } from './http/auth.ts';
 
 try
 {
@@ -49,10 +55,50 @@ if (config.env === 'development')
 // One self-contained SSR bundle carries both the route table and the renderer, so importing it
 // gives the kit everything it needs. Only when this process is the one serving the browser -
 // under `azeroth dev` vite does that, and there is no bundle to import.
-// ONE instance, shared by the API and - from the realtime work - by the gateway. It used to
-// be built twice here, once for the manifest and once inside `buildApp`, and neither survived
-// the expression it was created in.
-const ports = buildPorts(dataSource, config);
+/**
+ * The hub, and the ports that tell it what changed.
+ *
+ * Built in this order on purpose: the hub needs domain services to answer its questions, and
+ * `buildPorts` needs the hub to notify after a write. The services are cheap closures over the
+ * DataSource, so building a second set here costs nothing and keeps the cycle from existing.
+ */
+const social = createSocialService(dataSource);
+const chat = createChatService(dataSource, social);
+const identity = createIdentityService(dataSource, {
+    origin: config.origin,
+    chainId: config.chainId,
+    rpcUrl: config.rpcUrl,
+    sessionTtlSeconds: SESSION_TTL_SECONDS
+});
+
+const hub = createHub({
+    now: () => Date.now(),
+    accountMax: config.wsAccountMax,
+
+    async edgesFor(userId)
+    {
+        const loaded = await social.edgesFor(userId);
+        if (loaded === null)
+        {
+            return { party: { id: userId, isMinor: false, allowStrangerMessages: false, showOnline: false }, friends: new Set(), blocks: new Set(), loadedAt: Date.now() };
+        }
+        return { ...loaded, loadedAt: Date.now() };
+    },
+
+    recipientsOf: (conversationId) => chat.recipients(conversationId),
+    aliveSessions: (ids) => identity.aliveSessions(ids),
+
+    touchSeen: (ids) =>
+    {
+        void social.touchSeen(ids).catch((error) => log.debug('last-seen touch failed', { error }));
+    },
+
+    report: (error, where) => log.error('realtime failure', { where, error })
+});
+
+// ONE instance, shared by the API and by the gateway. It used to be built twice here, once for
+// the manifest and once inside `buildApp`, and neither survived the expression it was created in.
+const ports = buildPorts(dataSource, config, hub);
 
 const ssr = config.servePages
     ? await import(pathToFileURL(config.ssrEntry).href) as { routes: PageRoute[]; renderPage: PageRenderer }
@@ -94,6 +140,11 @@ const handler = pipeline(
 
 const served = await serve(handler, { port: config.port });
 
+// IMMEDIATELY after `serve`, with nothing awaited in between: until the upgrade listener is
+// registered, an Upgrade-flagged request falls through to `mountPages`' catch-all, and every
+// awaited statement here widens that window from a tick into however long the await takes.
+const detachRealtime = attachRealtime(served.server, { ports, hub, config, log });
+
 handleShutdownSignals(served, {
     /**
      * The window where connections are still live.
@@ -104,7 +155,13 @@ handleShutdownSignals(served, {
      */
     beforeShutdown: async () =>
     {
-        log.info('draining');
+        // A close FRAME with a code, before anything is destroyed. `detach()` destroys what is
+        // left, and a destroyed socket reaches the other end as 1006 - indistinguishable from the
+        // network failing, which sends every client into a reconnect backoff for a restart they
+        // were told about.
+        hub.closeAll(1001, 'Server restarting');
+        detachRealtime();
+        log.info('sockets closed');
     },
 
     /** Nothing is connected any more, so the pool can go. */

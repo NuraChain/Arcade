@@ -17,7 +17,20 @@ import type { Account, ChatMessage, ConversationSummary, PersonSummary } from '.
  * SERVER-ONLY. This is the first file in the chain that may touch the DataSource and the
  * entities, and nothing the browser imports may ever reach it.
  */
-export function buildPorts(db: DataSource, config: ServerConfig): Ports
+/**
+ * What the realtime layer needs to be told, and nothing about how it says it.
+ *
+ * A structural type rather than the `Hub` itself, so this file does not import the gateway and
+ * the client-safe line stays where it is: `api.ts` never learns a socket exists.
+ */
+export interface WriteListener
+{
+    chatChanged(conversationId: string): void;
+    socialChanged(...userIds: string[]): void;
+    sessionsRevoked(sessionIds: readonly string[]): void;
+}
+
+export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteListener): Ports
 {
     // Secure cookies require TLS, and the browser silently drops a Secure cookie on plain http -
     // which in development is every request. Decided from configuration, never from a header a
@@ -233,8 +246,22 @@ export function buildPorts(db: DataSource, config: ServerConfig): Ports
                 return { token: result.token, account: present(row!) };
             },
 
-            signOut: (sessionId) => identity.signOut(sessionId),
-            signOutEverywhere: (userId) => identity.signOutEverywhere(userId),
+            async signOut(sessionId)
+            {
+                await identity.signOut(sessionId);
+                live?.sessionsRevoked([sessionId]);
+            },
+
+            async signOutEverywhere(userId)
+            {
+                const ended = await identity.signOutEverywhere(userId);
+
+                // Every socket this account holds, not only the one that asked. Signing out
+                // everywhere that leaves a live socket open is the feature not working.
+                live?.socialChanged(userId);
+                live?.sessionsRevoked(await identity.sessionsOf(userId));
+                return ended;
+            },
             claimHandle: (userId, handle) => identity.claimHandle(userId, handle)
         },
 
@@ -315,12 +342,50 @@ export function buildPorts(db: DataSource, config: ServerConfig): Ports
                 };
             },
 
-            sendRequest: async (me, handle) => social.sendRequest(me, await mustResolve(handle)),
-            answerRequest: (me, requestId, outcome) => social.answerRequest(me, requestId, outcome),
-            withdrawRequest: async (me, handle) => social.withdrawRequest(me, await mustResolve(handle)),
-            removeFriend: async (me, handle) => social.removeFriend(me, await mustResolve(handle)),
-            block: async (me, handle) => social.block(me, await mustResolve(handle)),
-            unblock: async (me, handle) => social.unblock(me, await mustResolve(handle)),
+            // Every one of these moves who may see or reach whom, so every one of them tells the
+            // hub - including `setPrivacy` below, which writes the very column `maySeeOnline`
+            // reads. A write that forgets leaves a cached edge standing until its ceiling.
+            async sendRequest(me, handle)
+            {
+                const other = await mustResolve(handle);
+                const outcome = await social.sendRequest(me, other);
+                live?.socialChanged(me, other);
+                return outcome;
+            },
+
+            async answerRequest(me, requestId, outcome)
+            {
+                await social.answerRequest(me, requestId, outcome);
+                live?.socialChanged(me);
+            },
+
+            async withdrawRequest(me, handle)
+            {
+                const other = await mustResolve(handle);
+                await social.withdrawRequest(me, other);
+                live?.socialChanged(me, other);
+            },
+
+            async removeFriend(me, handle)
+            {
+                const other = await mustResolve(handle);
+                await social.removeFriend(me, other);
+                live?.socialChanged(me, other);
+            },
+
+            async block(me, handle)
+            {
+                const other = await mustResolve(handle);
+                await social.block(me, other);
+                live?.socialChanged(me, other);
+            },
+
+            async unblock(me, handle)
+            {
+                const other = await mustResolve(handle);
+                await social.unblock(me, other);
+                live?.socialChanged(me, other);
+            },
             setMute: (me, kind, subjectId, muted) => social.setMute(me, kind, subjectId, muted),
 
             report: async (me, handle, category) =>
@@ -356,6 +421,7 @@ export function buildPorts(db: DataSource, config: ServerConfig): Ports
             async setPrivacy(me, wanted)
             {
                 const row = await social.setPrivacy(me, wanted);
+                live?.socialChanged(me);
                 return {
                     allowStrangerMessages: row.allow_stranger_messages,
                     showOnline: row.show_online,
@@ -385,11 +451,25 @@ export function buildPorts(db: DataSource, config: ServerConfig): Ports
 
             async send(me, conversationId, body)
             {
-                return asMessage(await chat.send(me, conversationId, body));
+                const message = asMessage(await chat.send(me, conversationId, body));
+                live?.chatChanged(conversationId);
+                return message;
             },
 
-            markRead: (me, conversationId) => chat.markRead(me, conversationId),
-            setPinned: (me, conversationId, pinned) => chat.setPinned(me, conversationId, pinned),
+            async markRead(me, conversationId)
+            {
+                await chat.markRead(me, conversationId);
+
+                // Nobody is excluded, including the person who just read it: their OTHER tabs are
+                // the ones that would otherwise keep showing the badge.
+                live?.chatChanged(conversationId);
+            },
+
+            async setPinned(me, conversationId, pinned)
+            {
+                await chat.setPinned(me, conversationId, pinned);
+                live?.chatChanged(conversationId);
+            },
 
             async openDirect(me, handle)
             {
@@ -398,7 +478,9 @@ export function buildPorts(db: DataSource, config: ServerConfig): Ports
                 {
                     throw new NotFoundError('No account with that name.');
                 }
-                return chat.openDirect(me, other.id);
+                const conversationId = await chat.openDirect(me, other.id);
+                live?.chatChanged(conversationId);
+                return conversationId;
             }
         }
     };

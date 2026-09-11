@@ -113,8 +113,42 @@ export function createChatService(db: DataSource, social: SocialService)
         return row;
     };
 
+    /**
+     * The members of a conversation, with both directions of a block removed.
+     *
+     * The same rule `mustBeMember` and `list` apply, spelled once: a block hides the thread, not
+     * only the person. A realtime fan-out that recomputed membership for itself would be a third
+     * copy, and the one that decides who is TOLD about a message is the worst place for a copy to
+     * drift.
+     *
+     * A malformed id answers `[]` rather than reaching a uuid comparison - Postgres raises 22P02,
+     * which a nudge would turn into a 500 on a path nobody is watching.
+     */
+    const recipients = async (conversationId: string): Promise<string[]> =>
+    {
+        if (!UUID.test(conversationId))
+        {
+            return [];
+        }
+
+        const rows = await db.query(
+            `select cm.user_id
+             from conversation_members cm
+             where cm.conversation_id = $1
+               and not exists (select 1
+                                 from conversation_members other
+                                 join blocks b on (b.user_id = cm.user_id and b.blocked_id = other.user_id)
+                                               or (b.user_id = other.user_id and b.blocked_id = cm.user_id)
+                                where other.conversation_id = cm.conversation_id
+                                  and other.user_id <> cm.user_id)`,
+            [conversationId]
+        );
+        return rowsOf<{ user_id: string }>(rows).map((row) => row.user_id);
+    };
+
     return {
         membership,
+        recipients,
 
         /**
          * Every conversation I am in, each with what the list needs and nothing more.

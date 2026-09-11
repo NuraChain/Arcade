@@ -331,6 +331,42 @@ export function createIdentityService(db: DataSource, config: IdentityConfig)
             return { token, principal: principalOf(user, sessionId) };
         },
 
+        /** Every live session id for an account, so the gateway can close each one by code. */
+        async sessionsOf(userId: string): Promise<string[]>
+        {
+            const rows = await db.query(
+                'select id from sessions where user_id = $1 and revoked_at is null',
+                [userId]
+            );
+            return rowsOf<{ id: string }>(rows).map((row) => row.id);
+        },
+
+        /**
+         * Which of these sessions are still usable, in ONE query.
+         *
+         * The realtime sweep asks about every bound connection at once. A per-connection check
+         * would be a query per socket per sweep, which is how a presence system becomes the
+         * database's busiest reader for an answer that is almost always "yes".
+         */
+        async aliveSessions(sessionIds: readonly string[]): Promise<Set<string>>
+        {
+            if (sessionIds.length === 0)
+            {
+                return new Set();
+            }
+            const rows = await db.query(
+                `select s.id
+                 from sessions s
+                 join users u on u.id = s.user_id
+                 where s.id = any($1::uuid[])
+                   and s.revoked_at is null
+                   and s.expires_at > now()
+                   and u.is_suspended = false`,
+                [[...sessionIds]]
+            );
+            return new Set(rowsOf<{ id: string }>(rows).map((row) => row.id));
+        },
+
         /** Ends this session only. Other devices stay signed in. */
         async signOut(sessionId: string): Promise<void>
         {
