@@ -92,7 +92,7 @@ export default component Tooltip(props: {
 
     <span
         ref={ (element) => host = element }
-        class={ [ 'inline-flex', props.class ?? '' ].filter(Boolean).join(' ') }
+        class={ [ 'inline-flex shrink-0', props.class ?? '' ].filter(Boolean).join(' ') }
         aria-describedby={ shown ? tipId : undefined }
         onPointerEnter={ (event) => (event.pointerType === 'mouse' ? show(false) : undefined) }
         onPointerLeave={ () => hide() }

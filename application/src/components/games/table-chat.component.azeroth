@@ -62,7 +62,7 @@ export default component TableChat(props: { onClose?: () => void; class?: string
                 send();
             } }
         >
-            <Input value={ draft } onInput={ (value) => draft = value } placeholder={ locale.t('play.table.say') } label={ locale.t('play.table.say') } enterkeyhint="send" maxlength={ 240 } class="flex-1" onEnter={ send } />
+            <Input value={ draft } onInput={ (value) => draft = value } placeholder={ locale.t('play.table.say') } label={ locale.t('play.table.say') } enterkeyhint="send" maxlength={ 240 } class="min-w-0 flex-1" onEnter={ send } />
             <IconButton icon="send" label={ locale.t('play.table.send') } variant="primary" flip disabled={ draft.trim() === '' } onClick={ send } />
         </form>
     </section>

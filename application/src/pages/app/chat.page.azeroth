@@ -134,7 +134,7 @@ export default component ChatPage()
         >
             { () =>
                 <div class="flex h-full min-h-0 flex-col">
-                    <header class="glass safe-t z-topbar sticky top-0 flex items-center gap-2 border-b border-line/60 px-2 py-2">
+                    <header class="glass safe-t z-topbar sticky top-0 flex items-center gap-1 border-b border-line px-1.5 py-1.5">
                         <Show when={ phone }>
                             { () => <IconButton icon="back" label={ locale.t('app.nav.back') } flip to="/app/chats" /> }
                         </Show>
@@ -143,7 +143,7 @@ export default component ChatPage()
                             fallback={
                                 <Show when={ others.length === 1 } fallback={ <AvatarGroup people={ others } size="sm" max={ 2 } class="w-9 shrink-0" /> }>
                                     { () =>
-                                        <Link to={ `/app/people/${ others[0].handle }` } class="flex h-11 w-11 shrink-0 items-center justify-center">
+                                        <Link to={ `/app/people/${ others[0].handle }` } class="flex h-11 w-10 shrink-0 items-center justify-center">
                                             <Avatar person={ others[0] } size="sm" presence={ presence.of(others[0].id).state } />
                                         </Link>
                                     }
@@ -151,7 +151,7 @@ export default component ChatPage()
                             }
                         >
                             { () =>
-                                <Link to={ `/app/groups/${ group!.id }` } class="flex h-11 w-11 shrink-0 items-center justify-center" aria-label={ locale.t('chat.openGroup') }>
+                                <Link to={ `/app/groups/${ group!.id }` } class="flex h-11 w-10 shrink-0 items-center justify-center" aria-label={ locale.t('chat.openGroup') }>
                                     <GroupCrest group={ group! } size="sm" />
                                 </Link>
                             }
