@@ -62,12 +62,12 @@ describe('lobby service plans', () =>
     {
         const seats = [
             { index: 0, playerId: 'alex', invitedId: null, ready: false, host: true, bot: false },
-            { index: 1, playerId: 'sara', invitedId: null, ready: false, host: false, bot: false },
+            { index: 1, playerId: 'sara.k', invitedId: null, ready: false, host: false, bot: false },
             { index: 2, playerId: 'bot-1', invitedId: null, ready: true, host: false, bot: true },
             { index: 3, playerId: null, invitedId: null, ready: false, host: false, bot: false }
         ];
         const plan = planReadiness(seats, 'alex', createRandom(3));
-        expect(plan.map((arrival) => arrival.playerId)).toEqual(['sara']);
+        expect(plan.map((arrival) => arrival.playerId)).toEqual(['sara.k']);
     });
 
     it('replies to an invite within a few seconds and mostly says yes', () =>
@@ -86,13 +86,13 @@ describe('lobby service plans', () =>
     it('writes a roll log for dice games only, with every roll in range', () =>
     {
         const base = initial('alex');
-        const dice = planFinish({ ...base, phase: 'playing', players: ['alex', 'sara'], intent: { game: 'backgammon', config: defaultTable('backgammon'), seats: 2, mode: 'quick', invitees: [] } }, createRandom(4));
+        const dice = planFinish({ ...base, phase: 'playing', players: ['alex', 'sara.k'], intent: { game: 'backgammon', config: defaultTable('backgammon'), seats: 2, mode: 'quick', invitees: [] } }, createRandom(4));
         expect(dice.rolls.length).toBeGreaterThan(10);
         expect(dice.rolls.every((roll) => roll.dice.every((value) => value >= 1 && value <= 6))).toBe(true);
         expect(dice.result.winners.length).toBe(1);
-        expect(Object.keys(dice.result.scores).sort()).toEqual(['alex', 'sara']);
+        expect(Object.keys(dice.result.scores).sort()).toEqual(['alex', 'sara.k']);
         expect(dice.verification).toMatch(/^[0-9A-F]+-[0-9A-F]+$/);
-        const cards = planFinish({ ...base, phase: 'playing', players: ['alex', 'sara', 'reza', 'mina'], intent: { game: 'hokm', config: defaultTable('hokm'), seats: 4, mode: 'quick', invitees: [] } }, createRandom(4));
+        const cards = planFinish({ ...base, phase: 'playing', players: ['alex', 'sara.k', 'reza.t', 'mina'], intent: { game: 'hokm', config: defaultTable('hokm'), seats: 4, mode: 'quick', invitees: [] } }, createRandom(4));
         expect(cards.rolls).toEqual([]);
     });
 });
@@ -163,9 +163,9 @@ describe('lobby store', () =>
     it('hosts a private table, hears back from the invitees, and lets the host start', () =>
     {
         const lobby = useLobby();
-        lobby.host('ludo', { ...defaultTable('ludo'), seats: 4 }, ['sara', 'reza', 'mina']);
+        lobby.host('ludo', { ...defaultTable('ludo'), seats: 4 }, ['sara.k', 'reza.t', 'mina']);
         expect(lobby.phase()).toBe('lobby');
-        expect(lobby.seats().map((seat) => seat.invitedId)).toEqual([null, 'sara', 'reza', 'mina']);
+        expect(lobby.seats().map((seat) => seat.invitedId)).toEqual([null, 'sara.k', 'reza.t', 'mina']);
         clock.advance(10_000);
         const seated = lobby.seats().filter((seat) => seat.playerId !== null && seat.playerId !== 'alex').length;
         expect(seated).toBeGreaterThan(0);

@@ -26,7 +26,9 @@ change is done.
 
 `npm test` runs with **no Postgres**, and that promise is why the database-backed suite is opt-in:
 `npm run test:db --workspace server` with `TEST_DATABASE_URL` pointing at a database you do not
-mind losing. It truncates before every test, so it owns whatever it is pointed at. Everything that
+mind losing. It truncates before every test, so it owns whatever it is pointed at - which is also
+why it runs `--no-file-parallelism`: two spec files truncating the same tables from two workers
+deadlock each other, and the failure reads like a product bug rather than a test one. Everything that
 is a claim about the DATABASE lives there - mirrored writes, partial unique indexes, CHECK
 constraints, the races - because a fake DataSource can only prove that the fake agrees with the
 code.
@@ -355,10 +357,65 @@ feature had to remember all three. `settings.store.ts` is now only what this DEV
 sound, haptics, the rail, notification categories. Nothing in it belongs to the account.
 
 **What is still on the mock:** friends, requests and suggestions are read from
-`data/mock/index.ts` by `social.store.ts`, while mutes and privacy come from the server. That
-seam is deliberate. Moving the graph now means re-keying people from mock ids to server ids while
-conversations still reference mock ids - the translation would be written once and deleted one PR
-later. People and conversations get re-keyed together, in one cutover, when chat moves.
+`data/mock/index.ts` by `social.store.ts`, while mutes and privacy come from the server. The
+re-keying that used to block it is done - every id is a handle now - so this is a straight swap
+onto routes that already exist and are already tested.
+
+## People are handles
+
+**The client's person id IS the handle.** `person.id === person.handle` for all twenty-four mock
+people, the wire speaks handles wherever it names somebody - a conversation's members, a message's
+author - and `server/tests/fixture-parity.spec.ts` fails if that stops being true.
+
+The alternative was projecting the server's uuid and re-keying the browser at boot, which needs
+every `personById` call site to be correct across an async window where the ids change underneath
+it. A handle is already the public identifier, already the URL key, and already unique
+case-insensitively in the database. The one thing it is not is immutable - somebody can rename
+themselves - and the answer is that a rename refetches, which is what the client does anyway.
+
+The server still keys everything on uuid internally. Handles are the EDGE.
+
+## Chat is the server's
+
+`server/src/domains/chat/` owns conversations, membership and messages; the browser reads them
+through `createApiSource()` and nothing else. The local source that stood in for it is gone.
+
+**`pinned` and `last_read_at` are per MEMBER.** The mock kept both on the conversation, which
+meant one person pinning a thread pinned it for everybody in it. Unread is a count of messages
+after my own watermark - which is also the only way to count them once the bodies are sealed and
+the server cannot read one.
+
+**A message is words XOR a line.** `body` for what somebody typed, `payload` `{ key, params }` for
+the three kinds the server authors, and a CHECK constraint so a row can never be both or neither.
+The browser renders a line through `lib/lines.ts`, which declares the keys it knows; an unknown
+key renders as NOTHING rather than as its own name, because an old client meeting a new server is
+a designed state and not an excuse to print an internal identifier on the screen.
+
+**History pages by keyset**, `(created_at, id)` descending. An OFFSET page repeats or skips a line
+every time a message arrives at the other end while somebody is scrolling up, and
+`chat.db.spec.ts` has a test that does exactly that and expects the page not to move.
+
+**A conversation you are not in answers exactly as one that does not exist**, and so does a
+malformed id - which is not only tidiness. Postgres raises 22P02 when a path parameter that is not
+a uuid is compared against one, and that surfaces as a 500, so any visitor could turn a typo in the
+address bar into a server error. `membership()` checks the shape before the query.
+
+**A block hides the thread, not just the person.** The membership row stays - unblocking has to
+give the conversation back - so the list and every read filter on the block instead.
+
+**Nothing invents a message any more.** The store used to run an ambient timer that wrote lines
+from people who were not there, and a per-send timer that typed a reply back; both are deleted.
+Until the realtime work lands, the only thing that produces a message is somebody sending one, and
+the list refreshes when the app asks it to.
+
+**Development fixtures** live in `server/src/db/seed-fixtures.ts` and refuse to run outside
+development. They seed the same twenty-four people, friendships and conversations the mock
+describes, so the demo tour still opens onto a populated room. `tests/fake-api.ts` imports the
+same file, so the browser specs and the server agree about who exists by construction. Deleting
+that file is how the mock finally goes away.
+
+Each fixture conversation is written in ONE language, because a real message is one language. The
+bilingual strings were a mock convenience the wire format does not have.
 
 ## Reading chat
 

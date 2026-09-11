@@ -7,6 +7,10 @@ import {
     achievementList,
     ack,
     answerInput,
+    chatMessage,
+    conversationList,
+    conversationRef,
+    cursorQuery,
     challenge,
     challengeInput,
     demoSignIn,
@@ -14,8 +18,10 @@ import {
     guestSignIn,
     handleInput,
     handleResult,
+    messagePage,
     muteInput,
     personList,
+    pinInput,
     personRef,
     personView,
     privacy,
@@ -23,6 +29,7 @@ import {
     reportInput,
     reportResult,
     requestResult,
+    sendInput,
     serverInfo,
     sessionState,
     signOutResult,
@@ -301,6 +308,52 @@ export function buildApi(ports: Ports)
              */
             setPrivacy: routes.post('/privacy', { input: privacyInput, output: privacy },
                 (context) => ports.social.setPrivacy(context.principal.userId, context.input))
+        })),
+
+        /**
+         * Conversations and what was said in them.
+         *
+         * Guarded at the feature for the same reason the social routes are: there is no
+         * signed-out view of a conversation, and a route added later should be protected by
+         * default rather than by remembering.
+         *
+         * Nothing here takes a member list or an author - the session decides who is asking, and
+         * membership decides what they may see. A conversation this account is not in answers
+         * exactly as one that does not exist, so an id cannot be probed for existence.
+         */
+        chat: feature('/chat', [session], (routes) => ({
+            list: routes.get('/', { output: conversationList }, async (context) => ({
+                conversations: await ports.chat.list(context.principal.userId)
+            })),
+
+            messages: routes.get(
+                '/:id/messages',
+                { output: messagePage, query: cursorQuery },
+                (context) => ports.chat.messages(context.principal.userId, context.params.id, context.query.cursor)
+            ),
+
+            send: routes.post(
+                '/:id/messages',
+                { input: sendInput, output: chatMessage },
+                (context) => ports.chat.send(context.principal.userId, context.params.id, context.input.body)
+            ),
+
+            read: routes.post('/:id/read', { output: ack }, async (context) =>
+            {
+                await ports.chat.markRead(context.principal.userId, context.params.id);
+                return { ok: true };
+            }),
+
+            pin: routes.post('/:id/pin', { input: pinInput, output: ack }, async (context) =>
+            {
+                await ports.chat.setPinned(context.principal.userId, context.params.id, context.input.pinned);
+                return { ok: true };
+            }),
+
+            /** Opens - or finds - the direct conversation with somebody, by handle. */
+            direct: routes.post('/direct', { input: conversationRef, output: conversationRef }, async (context) => ({
+                id: await ports.chat.openDirect(context.principal.userId, context.input.id)
+            }))
         }))
     };
 }

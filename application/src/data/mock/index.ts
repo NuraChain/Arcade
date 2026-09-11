@@ -46,17 +46,17 @@ const SKILL_PLAYED: Record<Skill, [number, number]> = {
 const SKILL_WIN_RATE: Record<Skill, number> = { new: 0.3, casual: 0.42, regular: 0.5, sharp: 0.57, expert: 0.64 };
 
 const FRIENDS: Record<string, string[]> = {
-    alex: ['sara', 'reza', 'parisa', 'farhad', 'dariush', 'nima', 'omid', 'niloufar', 'babak', 'leila', 'yasmin', 'tara'],
-    sara: ['alex', 'leila', 'mahsa', 'mina', 'babak', 'elham', 'maya', 'shirin'],
-    kian: ['roya', 'yasmin', 'hamed', 'tara']
+    'alex': ['sara.k', 'reza.t', 'parisa', 'farhad', 'dariush', 'nima.f', 'omid.j', 'nilou', 'babak.r', 'leila.a', 'yas', 'tara.y'],
+    'sara.k': ['alex', 'leila.a', 'mahsa', 'mina', 'babak.r', 'elham.b', 'maya.c', 'shirin'],
+    'kian16': ['roya.m', 'yas', 'hamed.z', 'tara.y']
 };
 
 const REQUESTS: Array<{ from: string; to: string; minutesAgo: number }> = [
     { from: 'mahsa', to: 'alex', minutesAgo: 35 },
-    { from: 'hamed', to: 'alex', minutesAgo: 620 },
-    { from: 'alex', to: 'maya', minutesAgo: 900 },
-    { from: 'arash', to: 'sara', minutesAgo: 80 },
-    { from: 'peyman', to: 'kian', minutesAgo: 200 }
+    { from: 'hamed.z', to: 'alex', minutesAgo: 620 },
+    { from: 'alex', to: 'maya.c', minutesAgo: 900 },
+    { from: 'arash', to: 'sara.k', minutesAgo: 80 },
+    { from: 'peyman', to: 'kian16', minutesAgo: 200 }
 ];
 
 function buildPerson(seed: PersonSeed, now: number, datasetSeed: number): Person
@@ -188,10 +188,10 @@ function buildNotifications(requests: FriendRequest[], now: number): Notificatio
         });
     }
     notifications.push(
-        { id: 'n-invite-sara', kind: 'invite', at: now - 13 * MINUTE, read: false, from: 'sara', text: { en: 'invited you to backgammon', fa: 'تو را به تخته‌نرد دعوت کرد' }, ref: { game: 'backgammon', tableId: 't-c-sara-5', conversationId: 'c-sara', personId: 'sara' } },
-        { id: 'n-invite-babak', kind: 'invite', at: now - 38 * MINUTE, read: false, from: 'sara', text: { en: 'opened a Hokm table in Friday Night Crew', fa: 'در اکیپ جمعه‌شب یک میز حکم باز کرد' }, ref: { game: 'hokm', tableId: 't-c-friday-5', conversationId: 'c-friday', personId: 'sara' } },
-        { id: 'n-result-reza', kind: 'result', at: now - 1488 * MINUTE, read: true, from: 'reza', text: { en: 'You won the backgammon game against Reza', fa: 'بازی تخته‌نرد با رضا را بردی' }, ref: { game: 'backgammon', tableId: 't-c-reza-3', personId: 'reza' } },
-        { id: 'n-rematch-tara', kind: 'rematch', at: now - 280 * MINUTE, read: true, from: 'tara', text: { en: 'wants a Ludo rematch', fa: 'بازی مجدد منچ می‌خواهد' }, ref: { game: 'ludo', conversationId: 'c-lunch', personId: 'tara' } },
+        { id: 'n-invite-sara', kind: 'invite', at: now - 13 * MINUTE, read: false, from: 'sara.k', text: { en: 'invited you to backgammon', fa: 'تو را به تخته‌نرد دعوت کرد' }, ref: { game: 'backgammon', tableId: 't-c-sara-5', conversationId: 'c-sara', personId: 'sara.k' } },
+        { id: 'n-invite-babak', kind: 'invite', at: now - 38 * MINUTE, read: false, from: 'sara.k', text: { en: 'opened a Hokm table in Friday Night Crew', fa: 'در اکیپ جمعه‌شب یک میز حکم باز کرد' }, ref: { game: 'hokm', tableId: 't-c-friday-5', conversationId: 'c-friday', personId: 'sara.k' } },
+        { id: 'n-result-reza', kind: 'result', at: now - 1488 * MINUTE, read: true, from: 'reza.t', text: { en: 'You won the backgammon game against Reza', fa: 'بازی تخته‌نرد با رضا را بردی' }, ref: { game: 'backgammon', tableId: 't-c-reza-3', personId: 'reza.t' } },
+        { id: 'n-rematch-tara', kind: 'rematch', at: now - 280 * MINUTE, read: true, from: 'tara.y', text: { en: 'wants a Ludo rematch', fa: 'بازی مجدد منچ می‌خواهد' }, ref: { game: 'ludo', conversationId: 'c-lunch', personId: 'tara.y' } },
         { id: 'n-ach-streak', kind: 'achievement', at: now - 2 * DAY, read: true, from: null, text: { en: 'Achievement unlocked: On a roll', fa: 'دستاورد باز شد: روی دور' }, ref: { achievementId: 'streak-3' } },
         { id: 'n-system-fair', kind: 'system', at: now - 5 * DAY, read: true, from: null, text: { en: 'Every dice table now keeps a roll log you can open after the game.', fa: 'حالا هر میز تاس یک گزارش پرتاب دارد که بعد از بازی می‌توانی بازش کنی.' }, ref: {} }
     );

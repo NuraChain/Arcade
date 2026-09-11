@@ -8,6 +8,9 @@ import type {
     PersonSummary,
     PersonView,
     Privacy,
+    ChatMessage,
+    ConversationSummary,
+    MessagePage,
     ServerInfo,
     SocialGraph
 } from './schemas.ts';
@@ -108,6 +111,18 @@ export interface SocialPort
     setPrivacy(me: string, wanted: { allowStrangerMessages: boolean; showOnline: boolean }): Promise<Privacy>;
 }
 
+export interface ChatPort
+{
+    list(me: string): Promise<ConversationSummary[]>;
+    messages(me: string, conversationId: string, cursor: string | undefined): Promise<MessagePage>;
+    send(me: string, conversationId: string, body: string): Promise<ChatMessage>;
+    markRead(me: string, conversationId: string): Promise<void>;
+    setPinned(me: string, conversationId: string, pinned: boolean): Promise<void>;
+
+    /** The direct conversation with a handle, created if this is the first word between them. */
+    openDirect(me: string, handle: string): Promise<string>;
+}
+
 /** Every port the API declaration may reach. One member per domain. */
 export interface Ports
 {
@@ -115,4 +130,5 @@ export interface Ports
     catalogue: CataloguePort;
     identity: IdentityPort;
     social: SocialPort;
+    chat: ChatPort;
 }

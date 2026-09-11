@@ -1,5 +1,5 @@
-import { dataset, personById } from '../data/mock/index.ts';
-import type { Conversation, Message } from '../data/mock/types.ts';
+import { client } from '../api.ts';
+import type { Conversation, Message, MessageKind } from '../data/mock/types.ts';
 
 export interface ChatScope
 {
@@ -14,6 +14,18 @@ export interface ConversationRow
     unread: number;
 }
 
+/**
+ * Where a conversation comes from.
+ *
+ * One interface, and the store talks to nothing else. `createApiSource` is the only
+ * implementation the product ships; a test substitutes its own through `setChatSource` to drive
+ * the states - loading, refused, offline - that a working server does not produce on demand.
+ *
+ * The `scope` argument is what the caller KNOWS rather than what the source needs: the session
+ * cookie already says who is asking, so the API implementation ignores it. It is still passed,
+ * because a source that had to guess who it was serving would be a source that could serve the
+ * wrong person.
+ */
 export interface ChatSource
 {
     conversations(scope: ChatScope, signal: AbortSignal): Promise<ConversationRow[]>;
@@ -26,86 +38,115 @@ export interface ChatSource
 
 const byAt = (a: Message, b: Message): number => a.at - b.at;
 
-export function createLocalSource(): ChatSource
+/**
+ * The SERVER's chat, behind the same interface the local one implements.
+ *
+ * Two translations happen here and nowhere else. A server message is `body` XOR
+ * `{ key, params }`; the client's `Message` still carries the mock's `text` field, so a payload
+ * arrives as `line` and the bubble renders it through the catalogue. And a conversation's
+ * members are HANDLES, which is what the client keys people by since the people themselves became
+ * the server's.
+ *
+ * `archive` is what this DEVICE has fetched. Under `nura-e2ee/v1` there is no server-side
+ * message index to ask, so search is over the history this browser has actually seen - and saying
+ * so is the honest version of a feature that cannot be what it was.
+ */
+export function createApiSource(): ChatSource
 {
-    const posted: Message[] = [];
-    const extra: Conversation[] = [];
+    const archive = new Map<string, Message>();
 
-    const every = (): Message[] => [...dataset().messages, ...posted];
+    const remember = (message: Message): Message =>
+    {
+        archive.set(message.id, message);
+        return message;
+    };
 
-    const allowed = (scope: ChatScope) => (message: Message): boolean => !scope.blocked.includes(message.from);
+    const asMessage = (wire: {
+        id: string;
+        conversationId: string;
+        kind: string;
+        from?: string;
+        body?: string;
+        payload?: { key: string; params: Record<string, string | undefined> };
+        at: string;
+    }): Message =>
+    {
+        const params = Object.fromEntries(
+            Object.entries(wire.payload?.params ?? {}).filter((entry): entry is [string, string] => entry[1] !== undefined)
+        );
 
-    const rooms = (scope: ChatScope): Conversation[] => [...dataset().conversations, ...extra]
-        .filter((conversation) => conversation.participants.includes(scope.me))
-        .filter((conversation) => conversation.kind !== 'direct'
-            || conversation.participants.every((id) => id === scope.me || !scope.blocked.includes(id)));
+        return remember({
+            id: wire.id,
+            conversationId: wire.conversationId,
+            from: wire.from ?? '',
+            kind: wire.kind as MessageKind,
+            text: wire.body ?? '',
+            ...(wire.payload === undefined ? {} : { line: { key: wire.payload.key, params } }),
+            at: Date.parse(wire.at),
+            ref: wire.payload === undefined
+                ? null
+                : {
+                    ...(params.game === undefined ? {} : { game: params.game as NonNullable<Message['ref']>['game'] }),
+                    ...(params.tableId === undefined ? {} : { tableId: params.tableId }),
+                    ...(params.winner === undefined ? {} : { winnerId: params.winner })
+                }
+        });
+    };
 
-    const within = (id: string, scope: ChatScope): Message[] => every()
-        .filter((message) => message.conversationId === id)
-        .filter(allowed(scope))
-        .sort(byAt);
+    const asConversation = (wire: {
+        id: string;
+        kind: string;
+        members: string[];
+        game?: string;
+        title?: string;
+        groupId?: string;
+        tableId?: string;
+        pinned: boolean;
+    }): Conversation => ({
+        id: wire.id,
+        kind: wire.kind as Conversation['kind'],
+        participants: wire.members,
+        groupId: wire.groupId ?? null,
+        tableId: wire.tableId ?? null,
+        game: (wire.game ?? null) as Conversation['game'],
+        title: null,
+        pinned: wire.pinned,
+        lastReadAt: 0
+    });
 
     return {
-        async conversations(scope)
+        async conversations()
         {
-            return rooms(scope).map((conversation) =>
-            {
-                const messages = within(conversation.id, scope);
-                const last = messages[messages.length - 1] ?? null;
-                return {
-                    conversation,
-                    last,
-                    unread: messages.filter((message) => message.from !== scope.me && message.at > conversation.lastReadAt).length
-                };
-            });
+            const answer = await client.chat.list();
+            return answer.conversations.map((row) => ({
+                conversation: asConversation(row),
+                last: row.last === undefined ? null : asMessage(row.last),
+                unread: row.unread
+            }));
         },
 
-        async thread(id, scope)
+        async thread(id)
         {
-            return within(id, scope);
+            const page = await client.chat.messages({ params: { id }, query: {} });
+            return page.messages.map(asMessage);
         },
 
         async post(message)
         {
-            posted.push(message);
+            await client.chat.send({ params: { id: message.conversationId }, input: { body: String(message.text) } });
         },
 
-        async openDirect(scope, personId, at)
+        async openDirect(_scope, personId)
         {
-            const existing = rooms(scope).find((conversation) => conversation.kind === 'direct'
-                && conversation.participants.length === 2
-                && conversation.participants.includes(personId)
-                && conversation.participants.includes(scope.me));
-            if (existing !== undefined)
-            {
-                return existing.id;
-            }
-
-            const id = `c-new-${ personId }`;
-            extra.push({
-                id,
-                kind: 'direct',
-                participants: [scope.me, personId],
-                groupId: null,
-                tableId: null,
-                game: personById(personId)?.favourite ?? null,
-                title: null,
-                pinned: false,
-                lastReadAt: at
-            });
-            return id;
+            const answer = await client.chat.direct({ input: { id: personId } });
+            return answer.id;
         },
 
-        archive(scope)
-        {
-            const mine = new Set(rooms(scope).map((conversation) => conversation.id));
-            return every().filter((message) => mine.has(message.conversationId)).filter(allowed(scope)).sort(byAt);
-        },
+        archive: () => [...archive.values()].sort(byAt),
 
         reset()
         {
-            posted.length = 0;
-            extra.length = 0;
+            archive.clear();
         }
     };
 }

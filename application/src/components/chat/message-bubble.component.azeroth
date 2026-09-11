@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'azerothjs';
 import { personById } from '../../data/mock/index.ts';
 import type { Message } from '../../data/mock/types.ts';
 import Icon from '../../icons/icon.component.azeroth';
+import { isLineKey } from '../../lib/lines.ts';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useLobby } from '../../stores/lobby.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
@@ -35,6 +36,24 @@ export default component MessageBubble(props: { message: Message; me: string; sh
     derived person = personById(props.message.from) ?? null;
 
     derived firstName = person === null ? props.message.from : locale.text(person.name).split(' ')[0];
+
+    /**
+     * What this line SAYS.
+     *
+     * A server-authored message carries a catalogue key rather than prose, and the set of keys
+     * this client knows how to render is declared in `lib/lines.ts`. A key it has never heard of
+     * renders as nothing rather than as its own name: an older client meeting a newer server is a
+     * designed state, not a crash and not a leak of an internal identifier onto the screen.
+     */
+    derived said = ((): string =>
+    {
+        const line = props.message.line;
+        if (line === undefined)
+        {
+            return locale.text(props.message.text);
+        }
+        return isLineKey(line.key) ? locale.t(line.key, line.params) : '';
+    })();
 
     derived game = props.message.ref?.game === undefined ? null : catalogue.byId(props.message.ref.game);
 
@@ -82,7 +101,7 @@ export default component MessageBubble(props: { message: Message; me: string; sh
                                         })
                                         : locale.t(mine ? 'chat.invite.titleMine' : 'chat.invite.title', { name: firstName, game: game === null ? '' : locale.t(game.nameKey) }) }
                                 </span>
-                                <span class="truncate text-ui-xs text-muted">{ locale.text(props.message.text) }</span>
+                                <span class="truncate text-ui-xs text-muted">{ said }</span>
                             </span>
                         </div>
                         <Show when={ props.message.kind === 'invite' }>
@@ -93,7 +112,7 @@ export default component MessageBubble(props: { message: Message; me: string; sh
             >
                 { () =>
                     <p class="mx-auto max-w-[26rem] rounded-full bg-raised/60 px-3 py-1 text-center text-ui-xs text-muted">
-                        { locale.text(props.message.text) }
+                        { said }
                     </p>
                 }
             </Show>
@@ -119,7 +138,7 @@ export default component MessageBubble(props: { message: Message; me: string; sh
                             mine ? 'bg-accent text-accent-ink' : 'bg-raised text-text'
                         ].join(' ') }
                     >
-                        { locale.text(props.message.text) }
+                        { said }
                     </span>
                     <span class="px-1 text-ui-2xs text-faint">{ locale.relative(props.message.at) }</span>
                 </div>

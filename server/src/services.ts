@@ -1,13 +1,15 @@
+import { NotFoundError } from '@azerothjs/http';
 import type { DataSource } from 'typeorm';
 
 import { createCatalogueService } from './domains/catalogue/service.ts';
+import { createChatService, type ConversationRow, type MessageRow } from './domains/chat/service.ts';
 import { createIdentityService } from './domains/identity/service.ts';
 import { maySeeOnline } from './domains/social/policy.ts';
 import { createSocialService, type PersonRow } from './domains/social/service.ts';
 import type { ServerConfig } from './env.ts';
 import { readSessionToken, SESSION_TTL_SECONDS } from './http/auth.ts';
 import type { Ports } from './ports.ts';
-import type { Account, PersonSummary } from './schemas.ts';
+import type { Account, ChatMessage, ConversationSummary, PersonSummary } from './schemas.ts';
 
 /**
  * Builds the real implementations behind `Ports`.
@@ -23,6 +25,90 @@ export function buildPorts(db: DataSource, config: ServerConfig): Ports
     const secureCookies = config.origin.startsWith('https://');
 
     const social = createSocialService(db);
+    const chat = createChatService(db, social);
+
+    /**
+     * The cursor, as one opaque string.
+     *
+     * The client never takes it apart - it hands back the last one it was given - which is what
+     * lets the keyset change shape later without a client release.
+     */
+    const encodeCursor = (at: Date, id: string): string =>
+        Buffer.from(`${ at.toISOString() }|${ id }`, 'utf8').toString('base64url');
+
+    const decodeCursor = (cursor: string | undefined): { at: Date; id: string } | null =>
+    {
+        if (cursor === undefined || cursor === '')
+        {
+            return null;
+        }
+        const [at, id] = Buffer.from(cursor, 'base64url').toString('utf8').split('|');
+        const when = new Date(at ?? '');
+        return id === undefined || Number.isNaN(when.getTime()) ? null : { at: when, id };
+    };
+
+    const asMessage = (row: MessageRow): ChatMessage =>
+    {
+        const message: ChatMessage = {
+            id: row.id,
+            conversationId: row.conversation_id,
+            kind: row.kind,
+            at: row.created_at.toISOString()
+        };
+        if (row.sender !== null)
+        {
+            message.from = row.sender;
+        }
+        if (row.body !== null)
+        {
+            message.body = row.body;
+        }
+        if (row.payload !== null)
+        {
+            message.payload = row.payload as ChatMessage['payload'];
+        }
+        return message;
+    };
+
+    const asConversation = (row: ConversationRow): ConversationSummary =>
+    {
+        const summary: ConversationSummary = {
+            id: row.id,
+            kind: row.kind,
+            members: row.members,
+            pinned: row.pinned,
+            unread: row.unread
+        };
+        if (row.game !== null)
+        {
+            summary.game = row.game;
+        }
+        if (row.title !== null)
+        {
+            summary.title = row.title;
+        }
+        if (row.group_id !== null)
+        {
+            summary.groupId = row.group_id;
+        }
+        if (row.table_id !== null)
+        {
+            summary.tableId = row.table_id;
+        }
+        if (row.last_id !== null && row.last_at !== null && row.last_kind !== null)
+        {
+            summary.last = asMessage({
+                id: row.last_id,
+                conversation_id: row.id,
+                kind: row.last_kind,
+                body: row.last_body,
+                payload: row.last_payload,
+                sender: row.last_from,
+                created_at: row.last_at
+            });
+        }
+        return summary;
+    };
 
     const identity = createIdentityService(db, {
         origin: config.origin,
@@ -237,6 +323,44 @@ export function buildPorts(db: DataSource, config: ServerConfig): Ports
                     showOnline: row.show_online,
                     isMinor: row.is_minor
                 };
+            }
+        },
+
+        chat: {
+            async list(me)
+            {
+                return (await chat.list(me)).map(asConversation);
+            },
+
+            async messages(me, conversationId, cursor)
+            {
+                const page = await chat.messages(me, conversationId, decodeCursor(cursor));
+                const oldest = page.messages[0];
+                return {
+                    messages: page.messages.map(asMessage),
+                    hasMore: page.hasMore,
+                    ...(page.hasMore && oldest !== undefined
+                        ? { cursor: encodeCursor(oldest.created_at, oldest.id) }
+                        : {})
+                };
+            },
+
+            async send(me, conversationId, body)
+            {
+                return asMessage(await chat.send(me, conversationId, body));
+            },
+
+            markRead: (me, conversationId) => chat.markRead(me, conversationId),
+            setPinned: (me, conversationId, pinned) => chat.setPinned(me, conversationId, pinned),
+
+            async openDirect(me, handle)
+            {
+                const other = await social.personByHandle(handle);
+                if (other === null)
+                {
+                    throw new NotFoundError('No account with that name.');
+                }
+                return chat.openDirect(me, other.id);
             }
         }
     };

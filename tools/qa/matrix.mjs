@@ -47,7 +47,7 @@ const ROUTES = [
     { id: 'friends', path: '/app/friends' },
     { id: 'person', path: '/app/people/sara.k' },
     { id: 'chats', path: '/app/chats' },
-    { id: 'chat', path: '/app/chats/c-friday' },
+    { id: 'chat', path: '/app/chats/:conversation' },
     { id: 'group', path: '/app/groups/g-balcony' },
     { id: 'discover', path: '/app/discover' },
     { id: 'search', path: '/app/search' },
@@ -184,6 +184,19 @@ async function main()
     const executablePath = process.env.QA_CHROME ?? cachedChromium();
     const browser = await chromium.launch(executablePath === undefined ? {} : { executablePath });
     const storageState = await signedIn(browser);
+
+    // The chat route needs a conversation that exists. Conversation ids are the server's now, so
+    // the matrix asks for one instead of naming a fixture id that used to be a slug.
+    const openable = await browser.newContext({ storageState });
+    const inbox = await openable.request.get(`${ BASE }/api/chat/`);
+    const conversations = inbox.ok() ? (await inbox.json()).conversations : [];
+    await openable.close();
+
+    if (conversations.length === 0)
+    {
+        throw new Error('qa: the signed-in account has no conversations. Are the development fixtures seeded?');
+    }
+    const conversation = conversations[0].id;
     const failures = [];
     const rows = [];
     let cells = 0;
@@ -230,7 +243,8 @@ async function main()
                     const label = `${ locale }-${ width }${ landscape ? 'l' : 'p' }-${ route.id }`;
                     cells += 1;
 
-                    await page.goto(`${ BASE }${ route.path }`, { waitUntil: 'networkidle' }).catch(() => undefined);
+                    const target = route.path.replace(':conversation', conversation);
+                    await page.goto(`${ BASE }${ target }`, { waitUntil: 'networkidle' }).catch(() => undefined);
                     await page.waitForTimeout(120);
 
                     let problems = await audit(page).catch(() => null);

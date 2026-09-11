@@ -7,7 +7,7 @@ import { fold, rank, ranked } from '../src/services/search.service.ts';
 import { mutualCount, planRequestReply, rankSuggestions } from '../src/services/social.service.ts';
 import { createRandom } from '../src/lib/random.ts';
 import { setChatSource, useChat } from '../src/stores/chat.store.ts';
-import { createLocalSource, type ChatSource } from '../src/services/chat.source.ts';
+import { createApiSource, type ChatSource } from '../src/services/chat.source.ts';
 import { server } from './fake-api.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
 import { useNotifications } from '../src/stores/notifications.store.ts';
@@ -138,7 +138,7 @@ describe('social store', () =>
     it('sends a request and hears back on the clock alone', () =>
     {
         const social = useSocial();
-        const target = 'sina';
+        const target = 'sina.g';
         expect(social.relation(target)).toBe('none');
         social.add(target);
         expect(social.relation(target)).toBe('outgoing');
@@ -161,24 +161,22 @@ describe('social store', () =>
         const social = useSocial();
         const chat = useChat();
         await chat.refresh();
-        expect(social.friends()).toContain('sara');
+        expect(social.friends()).toContain('sara.k');
         expect(chat.conversations().some((conversation) => conversation.id === 'c-sara')).toBe(true);
 
-        social.block('sara');
+        social.block('sara.k');
         await chat.refresh();
 
-        expect(social.friends()).not.toContain('sara');
-        expect(social.relation('sara')).toBe('blocked');
-        expect(social.visible(['sara', 'reza'])).toEqual(['reza']);
-        expect(social.people().some((person) => person.id === 'sara')).toBe(false);
-        expect(chat.conversations().some((conversation) => conversation.id === 'c-sara')).toBe(false);
-        expect(social.suggestions().some((person) => person.id === 'sara')).toBe(false);
+        expect(social.friends()).not.toContain('sara.k');
+        expect(social.relation('sara.k')).toBe('blocked');
+        expect(social.visible(['sara.k', 'reza.t'])).toEqual(['reza.t']);
+        expect(social.people().some((person) => person.id === 'sara.k')).toBe(false);
+        expect(social.suggestions().some((person) => person.id === 'sara.k')).toBe(false);
 
-        social.unblock('sara');
+        social.unblock('sara.k');
         await chat.refresh();
-        expect(social.relation('sara')).toBe('none');
-        expect(social.people().some((person) => person.id === 'sara')).toBe(true);
-        expect(chat.conversations().some((conversation) => conversation.id === 'c-sara')).toBe(true);
+        expect(social.relation('sara.k')).toBe('none');
+        expect(social.people().some((person) => person.id === 'sara.k')).toBe(true);
     });
 
     it('never caps the block list', () =>
@@ -195,8 +193,8 @@ describe('social store', () =>
     it('reports separately from blocking, and moves the report to reviewed', () =>
     {
         const social = useSocial();
-        const id = social.report('nima', 'harassment');
-        expect(social.isBlocked('nima')).toBe(false);
+        const id = social.report('nima.f', 'harassment');
+        expect(social.isBlocked('nima.f')).toBe(false);
         expect(social.reports()[0].status).toBe('received');
         clock.advance(20_000);
         expect(social.reports().find((report) => report.id === id)?.status).toBe('reviewed');
@@ -205,27 +203,27 @@ describe('social store', () =>
     it('mutes a person without unfriending them', async () =>
     {
         const social = useSocial();
-        await social.toggleMute('person', 'reza');
-        expect(social.isMuted('person', 'reza')).toBe(true);
-        expect(social.friends()).toContain('reza');
+        await social.toggleMute('person', 'reza.t');
+        expect(social.isMuted('person', 'reza.t')).toBe(true);
+        expect(social.friends()).toContain('reza.t');
 
-        await social.toggleMute('person', 'reza');
-        expect(social.isMuted('person', 'reza')).toBe(false);
+        await social.toggleMute('person', 'reza.t');
+        expect(social.isMuted('person', 'reza.t')).toBe(false);
     });
 
     it('mutes a person, a conversation and a game through one mechanism', async () =>
     {
         const social = useSocial();
-        await social.toggleMute('person', 'reza');
+        await social.toggleMute('person', 'reza.t');
         await social.toggleMute('conversation', 'c-friday');
         await social.toggleMute('game', 'poker');
 
-        expect(social.isMuted('person', 'reza')).toBe(true);
+        expect(social.isMuted('person', 'reza.t')).toBe(true);
         expect(social.isMuted('conversation', 'c-friday')).toBe(true);
         expect(social.isMuted('game', 'poker')).toBe(true);
 
-        // Same id, different kind: a conversation called 'reza' is not the person.
-        expect(social.isMuted('conversation', 'reza')).toBe(false);
+        // Same id, different kind: a conversation called 'reza.t' is not the person.
+        expect(social.isMuted('conversation', 'reza.t')).toBe(false);
         expect(social.mutes().length).toBe(3);
     });
 
@@ -233,12 +231,12 @@ describe('social store', () =>
     {
         const social = useSocial();
         server.refuseMute = true;
-        await social.toggleMute('person', 'reza').catch(() => undefined);
-        expect(social.isMuted('person', 'reza')).toBe(false);
+        await social.toggleMute('person', 'reza.t').catch(() => undefined);
+        expect(social.isMuted('person', 'reza.t')).toBe(false);
 
         server.refuseMute = false;
-        await social.toggleMute('person', 'reza');
-        expect(social.isMuted('person', 'reza')).toBe(true);
+        await social.toggleMute('person', 'reza.t');
+        expect(social.isMuted('person', 'reza.t')).toBe(true);
     });
 
     it('takes the privacy switches from the server, and a minor cannot turn strangers on', async () =>
@@ -259,37 +257,69 @@ describe('social store', () =>
 
 describe('chat store', () =>
 {
-    it('sends a message, shows the other side typing, then delivers a reply', async () =>
+    it('sends a message and shows what the server stored, not what was typed', async () =>
     {
         const chat = useChat();
         chat.openThread('c-reza');
         await chat.refresh();
         const before = chat.messages().length;
 
-        chat.send('c-reza', 'One more tonight?');
+        await chat.send('c-reza', 'One more tonight?');
         await chat.refresh();
+
         expect(chat.messages().length).toBe(before + 1);
         expect(chat.draft('c-reza')).toBe('');
 
-        clock.advance(2600);
-        expect(chat.typing('c-reza').length).toBe(1);
+        const last = chat.messages()[chat.messages().length - 1];
+        expect(last.from).toBe('alex');
+        expect(last.text).toBe('One more tonight?');
 
-        clock.advance(3400);
-        expect(chat.typing('c-reza').length).toBe(0);
-        await chat.refresh();
-        expect(chat.messages().length).toBe(before + 2);
-        expect(chat.lastOf('c-reza')?.from).toBe('reza');
+        // The id and the time are the SERVER's. The client asked with neither.
+        expect(last.id).not.toBe('');
+        expect(chat.lastOf('c-reza')?.id).toBe(last.id);
     });
 
-    it('refuses to send whitespace', async () =>
+    it('nothing invents a message any more', async () =>
     {
         const chat = useChat();
         chat.openThread('c-reza');
         await chat.refresh();
         const before = chat.messages().length;
 
-        expect(chat.send('c-reza', '   ')).toBe('');
+        chat.start();
+        clock.advance(10 * 60_000);
         await chat.refresh();
+
+        expect(chat.messages().length).toBe(before);
+        expect(chat.typing('c-reza')).toEqual([]);
+        expect(clock.pending()).toBe(0);
+    });
+
+    it('refuses to send whitespace, without asking the server', async () =>
+    {
+        const chat = useChat();
+        chat.openThread('c-reza');
+        await chat.refresh();
+        const before = chat.messages().length;
+
+        await chat.send('c-reza', '   ');
+        expect(server.calls).not.toContain('chat.send');
+
+        await chat.refresh();
+        expect(chat.messages().length).toBe(before);
+    });
+
+    it('says so when the server refuses a message', async () =>
+    {
+        const chat = useChat();
+        chat.openThread('c-reza');
+        await chat.refresh();
+        const before = chat.messages().length;
+
+        server.refuseSend = 'They are not taking messages from people they have not added.';
+        await chat.send('c-reza', 'hello?').catch(() => undefined);
+        await chat.refresh();
+
         expect(chat.messages().length).toBe(before);
     });
 
@@ -333,47 +363,70 @@ describe('chat store', () =>
         expect(chat.openId()).toBe('');
         expect(chat.unread('c-sara')).toBeGreaterThan(0);
         expect(chat.totalUnread()).toBeGreaterThanOrEqual(chat.unread('c-sara'));
+        expect(server.calls).not.toContain('chat.messages');
+    });
 
-        chat.markRead('c-sara');
+    it('marks read on the server, and the count comes back zero', async () =>
+    {
+        const chat = useChat();
+        await chat.refresh();
+        expect(chat.unread('c-sara')).toBeGreaterThan(0);
+
+        await chat.markRead('c-sara');
+        expect(server.calls).toContain('chat.read');
         expect(chat.unread('c-sara')).toBe(0);
+    });
+
+    it('pins for me, on the server', async () =>
+    {
+        const chat = useChat();
+        await chat.refresh();
+        const before = chat.pinned('c-reza');
+
+        await chat.togglePin('c-reza');
+        expect(server.calls).toContain('chat.pin');
+        expect(chat.pinned('c-reza')).toBe(!before);
     });
 
     it('opens one direct conversation per person and reuses it', async () =>
     {
         const chat = useChat();
         await chat.refresh();
-        const first = await chat.openDirect('maya');
-        const second = await chat.openDirect('maya');
+        const first = await chat.openDirect('maya.c');
+        const second = await chat.openDirect('maya.c');
         expect(first).toBe(second);
-        expect(chat.conversation(first)?.participants).toEqual(['alex', 'maya']);
-        expect(await chat.openDirect('sara')).toBe('c-sara');
+        expect(chat.conversation(first)?.participants).toEqual(['alex', 'maya.c']);
+        expect(await chat.openDirect('sara.k')).toBe('c-sara');
     });
 
-    it('posts a table invite that carries the game and the table id', async () =>
+    it('renders a server-authored line as a key and its parameters, never as prose', async () =>
+    {
+        const chat = useChat();
+        chat.openThread('c-sara');
+        await chat.refresh();
+
+        const invite = chat.messages().find((message) => message.kind === 'invite');
+        expect(invite).toBeDefined();
+        expect(invite!.line?.key).toBe('chat.line.invite');
+        expect(invite!.line?.params.game).toBe('backgammon');
+        expect(invite!.ref?.game).toBe('backgammon');
+
+        // The words are empty on purpose: a line the server wrote carries no prose to quote.
+        expect(invite!.text).toBe('');
+    });
+
+    it('leaves blocking to the server, which stops listing the conversation', async () =>
     {
         const chat = useChat();
         await chat.refresh();
-        chat.sendInvite('c-friday', 'hokm', 't-abc');
+        expect(chat.conversations().some((conversation) => conversation.id === 'c-sara')).toBe(true);
+
+        // The client does not filter a thread out of a list it did not build. Blocking is a
+        // write, and what comes back next is the answer - which social.db.spec.ts proves the
+        // real server gives.
+        server.conversations = server.conversations.filter((row) => !row.members.includes('sara.k'));
         await chat.refresh();
-
-        const last = chat.lastOf('c-friday')!;
-        expect(last.kind).toBe('invite');
-        expect(last.ref?.game).toBe('hokm');
-        expect(last.ref?.tableId).toBe('t-abc');
-    });
-
-    it('drops messages from someone I blocked', async () =>
-    {
-        const chat = useChat();
-        const social = useSocial();
-        chat.openThread('c-friday');
-        await chat.refresh();
-
-        expect(chat.messages().filter((message) => message.from === 'sara').length).toBeGreaterThan(0);
-
-        social.block('sara');
-        await chat.refresh();
-        expect(chat.messages().some((message) => message.from === 'sara')).toBe(false);
+        expect(chat.conversations().some((conversation) => conversation.id === 'c-sara')).toBe(false);
     });
 
     it('searches only the archive this device holds', async () =>
@@ -416,14 +469,14 @@ describe('chat store', () =>
     it('recovers on the next refresh once the source answers again', async () =>
     {
         let answering = false;
-        const local = createLocalSource();
+        const live = createApiSource();
         const flaky: ChatSource = {
-            conversations: (scope, signal) => answering ? local.conversations(scope, signal) : Promise.reject(new Error('offline')),
-            thread: (id, scope, signal) => answering ? local.thread(id, scope, signal) : Promise.reject(new Error('offline')),
-            post: (message) => local.post(message),
-            openDirect: (scope, personId, at) => local.openDirect(scope, personId, at),
-            archive: (scope) => local.archive(scope),
-            reset: () => local.reset()
+            conversations: (scope, signal) => answering ? live.conversations(scope, signal) : Promise.reject(new Error('offline')),
+            thread: (id, scope, signal) => answering ? live.thread(id, scope, signal) : Promise.reject(new Error('offline')),
+            post: (message) => live.post(message),
+            openDirect: (scope, personId, at) => live.openDirect(scope, personId, at),
+            archive: (scope) => live.archive(scope),
+            reset: () => live.reset()
         };
 
         setChatSource(flaky);
@@ -441,7 +494,7 @@ describe('chat store', () =>
     {
         const chat = useChat();
         await chat.refresh();
-        chat.send('c-reza', 'hello');
+        await chat.send('c-reza', 'hello');
         chat.reset();
         expect(clock.pending()).toBe(0);
     });
@@ -475,7 +528,7 @@ describe('notifications store', () =>
     it('pushes a live notification and lets it be dismissed', () =>
     {
         const notifications = useNotifications();
-        const id = notifications.push({ kind: 'invite', from: 'reza', text: { en: 'opened a table', fa: 'یک میز باز کرد' } });
+        const id = notifications.push({ kind: 'invite', from: 'reza.t', text: { en: 'opened a table', fa: 'یک میز باز کرد' } });
         expect(notifications.items().some((item) => item.id === id)).toBe(true);
         notifications.remove(id);
         expect(notifications.items().some((item) => item.id === id)).toBe(false);
@@ -504,7 +557,7 @@ describe('search store', () =>
     it('narrows to one kind when a scope is chosen', () =>
     {
         const search = useSearch();
-        search.setQuery('sara');
+        search.setQuery('sara.k');
         search.setScope('people');
         const results = search.results();
         expect(results.people.length).toBeGreaterThan(0);

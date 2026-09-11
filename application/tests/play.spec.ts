@@ -117,7 +117,7 @@ describe('LobbyPanel', () =>
     it('shows one seat per seat, names the host, and offers the practice fill only to the host', async () =>
     {
         const lobby = useLobby();
-        lobby.host('hokm', { ...defaultTable('hokm'), seats: 4 }, ['sara']);
+        lobby.host('hokm', { ...defaultTable('hokm'), seats: 4 }, ['sara.k']);
         const locale = useLocale();
 
         const { container } = renderTest(() => LobbyPanel({ onInvite: noop, onCopyLink: noop, onLeave: noop }) as Rendered);
@@ -160,7 +160,7 @@ describe('RollLog', () =>
     {
         const rolls = [
             { turn: 1, playerId: 'alex', dice: [3, 5] as [number, number] },
-            { turn: 2, playerId: 'sara', dice: [6, 1] as [number, number] }
+            { turn: 2, playerId: 'sara.k', dice: [6, 1] as [number, number] }
         ];
         const onCopy = vi.fn();
         const { container } = renderTest(() => RollLog({ rolls, verification: 'ABC123-4F2', onCopy }) as Rendered);

@@ -1,22 +1,17 @@
 import { createStore, createResource, createSignal, untrack, type Getter } from 'azerothjs';
 
-import type { GameId } from '../data/games.ts';
+import { client } from '../api.ts';
 import type { Conversation, Message } from '../data/mock/types.ts';
-import { createRandom, hashSeed } from '../lib/random.ts';
 import { runtime } from '../lib/runtime.ts';
-import type { LocalizedText } from '../lib/text.ts';
-import { planAmbient, planReply } from '../services/chat.service.ts';
-import { createLocalSource, type ChatScope, type ChatSource, type ConversationRow } from '../services/chat.source.ts';
+import { createApiSource, type ChatScope, type ChatSource, type ConversationRow } from '../services/chat.source.ts';
 import { useAccount } from './account.store.ts';
 import { useSocial } from './social.store.ts';
 
-export const AMBIENT_TICK_MS = 24000;
-
-let active: ChatSource = createLocalSource();
+let active: ChatSource = createApiSource();
 
 export function setChatSource(next: ChatSource | null): void
 {
-    active = next ?? createLocalSource();
+    active = next ?? createApiSource();
 }
 
 export interface ChatApi
@@ -43,11 +38,10 @@ export interface ChatApi
     typing(id: string): string[];
     draft(id: string): string;
     setDraft(id: string, text: string): void;
-    send(id: string, text: string): string;
-    sendInvite(id: string, game: GameId, tableId: string): string;
-    markRead(id: string): void;
+    send(id: string, text: string): Promise<void>;
+    markRead(id: string): Promise<void>;
     pinned(id: string): boolean;
-    togglePin(id: string): void;
+    togglePin(id: string): Promise<void>;
     openDirect(personId: string): Promise<string>;
     forGroup(groupId: string): string | undefined;
     refresh(): Promise<void>;
@@ -96,30 +90,6 @@ export const useChat = createStore((): ChatApi =>
         return inFlight;
     };
 
-    const timers = new Set<() => void>();
-    let stopAmbient: (() => void) | null = null;
-    let counter = 0;
-    let ambientTick = 0;
-
-    const later = (ms: number, fn: () => void): void =>
-    {
-        const cancel = runtime().clock.after(ms, () =>
-        {
-            timers.delete(cancel);
-            fn();
-        });
-        timers.add(cancel);
-    };
-
-    const clearTimers = (): void =>
-    {
-        for (const cancel of timers)
-        {
-            cancel();
-        }
-        timers.clear();
-    };
-
     const rows = (): ConversationRow[] => list.data() ?? [];
 
     const rowOf = (id: string): ConversationRow | undefined => rows().find((row) => row.conversation.id === id);
@@ -142,78 +112,20 @@ export const useChat = createStore((): ChatApi =>
 
     const publish = (message: Message): Promise<void> => active.post(message).then(revalidate);
 
-    const setTypingFor = (id: string, who: string[]): void =>
-    {
-        setTyping({ ...untrack(typing), [id]: who });
-    };
-
-    const scheduleReply = (id: string): void =>
-    {
-        const current = untrack(() => rowOf(id))?.conversation;
-        if (current === undefined)
-        {
-            return;
-        }
-        counter += 1;
-        const seed = hashSeed(runtime().seed, 'chat', id, counter);
-        const plan = planReply(current, untrack(meId), createRandom(seed));
-        if (plan === null || social.isBlocked(plan.from))
-        {
-            return;
-        }
-        later(plan.typingAfter, () =>
-        {
-            setTypingFor(id, [plan.from]);
-            later(plan.typingFor, () =>
-            {
-                setTypingFor(id, []);
-                counter += 1;
-                void publish({
-                    id: `m-live-${ counter }`,
-                    conversationId: id,
-                    from: plan.from,
-                    kind: 'text',
-                    text: plan.text,
-                    at: runtime().clock.now(),
-                    ref: null
-                });
-            });
-        });
-    };
-
-    const ambient = (): void =>
-    {
-        ambientTick += 1;
-        const plan = planAmbient(untrack(conversations), untrack(meId), createRandom(hashSeed(runtime().seed, 'ambient', ambientTick)));
-        if (plan === null || social.isBlocked(plan.from))
-        {
-            return;
-        }
-        counter += 1;
-        void publish({
-            id: `m-ambient-${ counter }`,
-            conversationId: plan.conversationId,
-            from: plan.from,
-            kind: 'text',
-            text: plan.text,
-            at: runtime().clock.now(),
-            ref: null
-        });
-    };
-
-    const mine = (id: string, kind: Message['kind'], text: LocalizedText | string, ref: Message['ref']): Message =>
-    {
-        counter += 1;
-        return {
-            id: `m-${ kind }-${ counter }`,
-            conversationId: id,
-            from: untrack(meId),
-            kind,
-            text,
-            at: runtime().clock.now(),
-            ref
-        };
-    };
+    /**
+     * The message this client is ASKING for. The server decides its id, its time and its author -
+     * this shape exists only to carry the words to `post`, and what comes back on the next
+     * revalidation is the real thing.
+     */
+    const asked = (id: string, text: string): Message => ({
+        id: '',
+        conversationId: id,
+        from: untrack(meId),
+        kind: 'text',
+        text,
+        at: runtime().clock.now(),
+        ref: null
+    });
 
     return {
         me: meId,
@@ -252,30 +164,24 @@ export const useChat = createStore((): ChatApi =>
             setDrafts({ ...untrack(drafts), [id]: text });
         },
 
-        send(id, text)
+        async send(id, text)
         {
             const clean = text.trim();
             if (clean === '')
             {
-                return '';
+                return;
             }
-            const message = mine(id, 'text', clean, null);
-            void publish(message);
             setDrafts({ ...untrack(drafts), [id]: '' });
-            setSeen({ ...untrack(seen), [id]: message.at });
-            scheduleReply(id);
-            return message.id;
+            await publish(asked(id, clean));
         },
 
-        sendInvite(id, game, tableId)
-        {
-            const message = mine(id, 'invite', { en: 'Table open', fa: 'میز باز است' } as LocalizedText, { game, tableId });
-            void publish(message);
-            setSeen({ ...untrack(seen), [id]: message.at });
-            return message.id;
-        },
-
-        markRead(id)
+        /**
+         * Moves my watermark, on the SERVER.
+         *
+         * Debounced against the clock because the chat page calls it from an effect, and a write
+         * per render would be a write per keystroke somewhere else in the room.
+         */
+        async markRead(id)
         {
             const current = untrack(seen);
             const now = runtime().clock.now();
@@ -284,15 +190,29 @@ export const useChat = createStore((): ChatApi =>
                 return;
             }
             setSeen({ ...current, [id]: now });
+            await client.chat.read({ params: { id } }).catch(() => undefined);
+            await revalidate();
         },
 
         pinned: (id) => pins()[id] ?? rowOf(id)?.conversation.pinned ?? false,
 
-        togglePin(id)
+        async togglePin(id)
         {
             const current = untrack(pins);
-            const seeded = untrack(() => rowOf(id))?.conversation.pinned ?? false;
-            setPins({ ...current, [id]: !(current[id] ?? seeded) });
+            const held = untrack(() => rowOf(id))?.conversation.pinned ?? false;
+            const next = !(current[id] ?? held);
+            setPins({ ...current, [id]: next });
+            try
+            {
+                await client.chat.pin({ params: { id }, input: { pinned: next } });
+            }
+            finally
+            {
+                await revalidate();
+                const cleared = { ...untrack(pins) };
+                delete cleared[id];
+                setPins(cleared);
+            }
         },
 
         async openDirect(personId)
@@ -306,31 +226,24 @@ export const useChat = createStore((): ChatApi =>
 
         refresh: revalidate,
 
+        /**
+         * Nothing ticks any more.
+         *
+         * The store used to run an ambient timer that invented messages from people who were not
+         * there, and a per-send timer that typed a reply back. Both were furniture for a product
+         * with no server; with one, the only thing that produces a message is somebody sending
+         * it. Live delivery arrives with the realtime work - until then the list refreshes when
+         * the app asks it to.
+         */
         start()
         {
-            if (stopAmbient === null)
-            {
-                const cancel = runtime().clock.every(AMBIENT_TICK_MS, ambient);
-                stopAmbient = () =>
-                {
-                    cancel();
-                    stopAmbient = null;
-                };
-            }
-            return stopAmbient;
+            return () => undefined;
         },
 
-        stop()
-        {
-            stopAmbient?.();
-        },
+        stop: () => undefined,
 
         reset()
         {
-            stopAmbient?.();
-            clearTimers();
-            counter = 0;
-            ambientTick = 0;
             active.reset();
             setOpenId('');
             setSeen({});

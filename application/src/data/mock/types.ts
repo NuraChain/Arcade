@@ -71,6 +71,19 @@ export interface MessageRef
     winnerId?: string;
 }
 
+/**
+ * A server-authored line: a catalogue key and the ids it needs, never prose.
+ *
+ * `system`, `invite` and `result` are written by the server, so they are structured data
+ * rendered at display time - which is also what lets one follow a language switch. Only
+ * `kind: 'text'` carries words, and words are what gets sealed.
+ */
+export interface MessageLine
+{
+    key: string;
+    params: Record<string, string>;
+}
+
 export interface Message
 {
     id: string;
@@ -78,6 +91,7 @@ export interface Message
     from: string;
     kind: MessageKind;
     text: LocalizedText | string;
+    line?: MessageLine;
     at: number;
     ref: MessageRef | null;
 }

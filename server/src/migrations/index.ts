@@ -3,6 +3,7 @@ import type { MigrationInterface } from 'typeorm';
 import { ReferenceCatalogue1789138458214 } from './0001-reference.ts';
 import { Identity1789139000000 } from './0002-identity.ts';
 import { Social1789147000000 } from './0003-social.ts';
+import { Chat1789148500000 } from './0004-chat.ts';
 
 /**
  * Every migration. Appending is the only correct edit.
@@ -15,5 +16,6 @@ import { Social1789147000000 } from './0003-social.ts';
 export const migrations: (new () => MigrationInterface)[] = [
     ReferenceCatalogue1789138458214,
     Identity1789139000000,
-    Social1789147000000
+    Social1789147000000,
+    Chat1789148500000
 ];

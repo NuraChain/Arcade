@@ -11,6 +11,7 @@ import { buildApi } from './api.ts';
 import { buildApp } from './app.ts';
 import { buildPorts } from './services.ts';
 import { dataSource } from './data-source.ts';
+import { seedFixtures } from './db/seed-fixtures.ts';
 import { seedReference } from './db/seed-reference.ts';
 import { loadServerConfig } from './env.ts';
 import { apiRateLimit } from './http/rate-limit.ts';
@@ -36,6 +37,14 @@ log.info('database ready', { pool: config.databasePoolMax });
 // is how a deploy picks up a changed blurb without a migration.
 await seedReference(dataSource);
 log.info('reference catalogue seeded');
+
+// Development only, and it says so itself: it invents twenty-four people so there is something
+// to look at while the features are being built. It refuses to run anywhere else.
+if (config.env === 'development')
+{
+    await seedFixtures(dataSource);
+    log.info('development fixtures seeded');
+}
 
 // One self-contained SSR bundle carries both the route table and the renderer, so importing it
 // gives the kit everything it needs. Only when this process is the one serving the browser -

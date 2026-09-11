@@ -263,3 +263,90 @@ export const privacyInput = object({
     allowStrangerMessages: boolean(),
     showOnline: boolean()
 });
+
+/* -------------------------------------------------------------------------- chat */
+
+export const messageKind = enumOf(['text', 'system', 'invite', 'result']);
+
+/**
+ * What a server-authored line may say ABOUT, as a closed set.
+ *
+ * Not a free-form bag: the server writes these, the client renders them through the message
+ * catalogue, and an open shape is how a "system message" ends up carrying prose that looks like
+ * somebody said it. Every parameter here is an id or a handle the client resolves itself.
+ */
+export const lineParams = object({
+    game: string().optional(),
+    winner: string().optional(),
+    who: string().optional(),
+    tableId: string().optional()
+});
+
+export const line = object({ key: string(), params: lineParams });
+
+/**
+ * One message.
+ *
+ * `body` XOR `payload`, the same exclusive-or the database holds: words for what a person typed,
+ * `{ key, params }` for the three kinds the server authors. `from` is a HANDLE, because that is
+ * what the client keys people by and what survives being shown to somebody who has never seen
+ * this account before.
+ */
+export const chatMessage = object({
+    id: string(),
+    conversationId: string(),
+    kind: messageKind,
+    from: string().optional(),
+    body: string().optional(),
+    payload: line.optional(),
+    at: string()
+});
+
+export type ChatMessage = Infer<typeof chatMessage>;
+
+export const conversationKind = enumOf(['direct', 'group', 'game']);
+
+/**
+ * A conversation as the list needs it: who is in it, what was last said, and how much of it I
+ * have not read. `pinned` and `unread` are MINE - they come from my membership row, not from
+ * the conversation - so pinning a thread does not pin it for everybody in it.
+ */
+export const conversationSummary = object({
+    id: string(),
+    kind: conversationKind,
+    members: array(string()),
+    game: string().optional(),
+    title: string().optional(),
+    groupId: string().optional(),
+    tableId: string().optional(),
+    pinned: boolean(),
+    unread: number(),
+    last: chatMessage.optional()
+});
+
+export type ConversationSummary = Infer<typeof conversationSummary>;
+
+export const conversationList = object({ conversations: array(conversationSummary) });
+
+/**
+ * One page of history, oldest-first within the page, plus the cursor for the page BEFORE it.
+ *
+ * Keyset, not offset: a conversation grows at one end while somebody reads the other, and an
+ * offset page repeats or skips a line every time a message arrives.
+ */
+export const messagePage = object({
+    messages: array(chatMessage),
+    hasMore: boolean(),
+    cursor: string().optional()
+});
+
+export type MessagePage = Infer<typeof messagePage>;
+
+export const sendInput = object({ body: string() });
+
+export const pinInput = object({ pinned: boolean() });
+
+export const conversationRef = object({ id: string() });
+
+/** The keyset cursor, opaque to the client: the last row of the page it already has. */
+export const cursorQuery = object({ cursor: string().optional() });

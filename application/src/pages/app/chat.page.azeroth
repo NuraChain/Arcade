@@ -157,8 +157,10 @@ export default component ChatPage()
     {
         const invitees = others.map((person) => person.id);
         const config = catalogue.defaults(game);
+        // The invite CARD is a server-authored line, and the server cannot author one about a
+        // table it does not know about yet. Opening the table from here still works; the card
+        // comes back when tables are real.
         const tableId = lobby.host(game, { ...config, seats: Math.max(config.seats, Math.min(invitees.length + 1, config.seats)) }, invitees);
-        chat.sendInvite(id, game, tableId);
         toasts.show({ kind: 'success', text: locale.t('chat.inviteSent') });
         navigate(`/app/play/${ tableId }`);
     };

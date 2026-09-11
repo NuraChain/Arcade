@@ -77,7 +77,6 @@ export default component GroupPage()
         const tableId = lobby.host(pick, config, invitees);
         if (conversationId !== undefined)
         {
-            chat.sendInvite(conversationId, pick, tableId);
             toasts.show({ kind: 'success', text: locale.t('chat.inviteSent') });
         }
         navigate(`/app/play/${ tableId }`);

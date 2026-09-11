@@ -106,7 +106,7 @@ describe('session', () =>
         const account = useAccount();
         const person = await account.signInAsDemo('sara.k');
         expect(server.calls).toContain('auth.demo');
-        expect(person?.id).toBe('sara');
+        expect(person?.id).toBe('sara.k');
         expect(account.user()?.name.en).toBe('Sara Kamali');
     });
 
