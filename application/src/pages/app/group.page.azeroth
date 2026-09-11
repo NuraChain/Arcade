@@ -2,6 +2,7 @@ import { useHead, useNavigate, useParams } from 'azerothjs';
 
 import Page from '../../components/app/page.component.azeroth';
 import FriendRow from '../../components/social/friend-row.component.azeroth';
+import GroupCrest from '../../components/social/group-crest.component.azeroth';
 import Button from '../../components/ui/button.component.azeroth';
 import EmptyState from '../../components/ui/empty-state.component.azeroth';
 import IconButton from '../../components/ui/icon-button.component.azeroth';
@@ -90,7 +91,7 @@ export default component GroupPage()
             { () =>
                 <div class="flex flex-col gap-6">
                     <header class="flex flex-col items-center gap-3 pt-2 text-center">
-                        <span class="flex h-20 w-20 items-center justify-center rounded-panel bg-raised text-ui-4xl" aria-hidden="true">{ group!.emoji }</span>
+                        <GroupCrest group={ group! } size="lg" />
                         <h1 class="title text-ui-3xl">{ name }</h1>
                         <p class="max-w-[46ch] text-ui-base text-muted">{ locale.text(group!.blurb) }</p>
                         <p class="tally flex flex-wrap items-center justify-center gap-2 text-ui-sm text-muted">

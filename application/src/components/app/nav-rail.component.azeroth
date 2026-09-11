@@ -18,7 +18,7 @@ export default component NavRail()
     derived unread = chat.totalUnread();
 
     <nav class="bar safe-t safe-b flex h-dvh w-[var(--rail-w)] flex-col items-center gap-1 overflow-y-auto border-e border-line bg-field py-3" aria-label={ locale.t('app.nav.primary') }>
-        <Link to="/app" class="lit mb-3 flex h-10 w-10 shrink-0 items-center justify-center rounded-control bg-accent text-accent-ink" aria-label={ locale.t('app.nav.home') }>
+        <Link to="/app" class="lit mb-3 flex h-10 w-10 shrink-0 items-center justify-center rounded-control bg-accent text-accent-ink coarse:h-11 coarse:w-11" aria-label={ locale.t('app.nav.home') }>
             <Icon name="games" size={ 18 } />
         </Link>
         <ul class="flex shrink-0 flex-col items-center gap-0.5">

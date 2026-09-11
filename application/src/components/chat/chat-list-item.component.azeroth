@@ -10,6 +10,7 @@ import { useSettings } from '../../stores/settings.store.ts';
 import Avatar from '../ui/avatar.component.azeroth';
 import AvatarGroup from '../ui/avatar-group.component.azeroth';
 import Badge from '../ui/badge.component.azeroth';
+import GroupCrest from '../social/group-crest.component.azeroth';
 import { othersOf, titleOf } from './chat-title.ts';
 
 export default component ChatListItem(props: { conversation: Conversation; me: string; active?: boolean })
@@ -61,7 +62,7 @@ export default component ChatListItem(props: { conversation: Conversation; me: s
     <Link
         to={ `/app/chats/${ props.conversation.id }` }
         class={ [
-            'flex min-h-14 coarse:min-h-16 items-center gap-3 rounded-tile px-2 py-2 transition-colors duration-150 hover:bg-raised/60',
+            'flex min-h-14 items-center gap-2.5 rounded-tile px-2 py-1.5 transition-colors duration-150 hover:bg-raised coarse:min-h-16',
             props.active === true ? 'bg-raised' : ''
         ].filter(Boolean).join(' ') }
         prefetch="hover"
@@ -73,7 +74,7 @@ export default component ChatListItem(props: { conversation: Conversation; me: s
                     when={ group !== undefined }
                     fallback={ <AvatarGroup people={ others } size="sm" max={ 2 } class="w-10 shrink-0" /> }
                 >
-                    { () => <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-raised text-ui-xl" aria-hidden="true">{ group!.emoji }</span> }
+                    { () => <GroupCrest group={ group! } size="sm" /> }
                 </Show>
             }
         >

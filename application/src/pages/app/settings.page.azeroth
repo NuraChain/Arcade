@@ -195,7 +195,7 @@ export default component SettingsPage()
                                             <span class="flex min-w-0 flex-1 flex-col">
                                                 <span class="truncate text-ui-sm text-text">
                                                     { locale.text(personById(report.against)?.name ?? { en: report.against, fa: report.against }) }
-                                                    { ' · ' }
+                                                    <span class="mx-1.5 inline-block h-1 w-1 rounded-full bg-faint align-middle" aria-hidden="true"></span>
                                                     { locale.t(`report.category.${ report.category }`) }
                                                 </span>
                                                 <span class="text-ui-2xs text-faint">{ locale.relative(report.at) }</span>

@@ -1,0 +1,37 @@
+import type { Group } from '../../data/mock/types.ts';
+import Icon from '../../icons/icon.component.azeroth';
+
+const BOX: Record<'sm' | 'md' | 'lg', string> = {
+    sm: 'h-10 w-10 rounded-control',
+    md: 'h-12 w-12 rounded-tile',
+    lg: 'h-20 w-20 rounded-panel'
+};
+
+const GLYPH: Record<'sm' | 'md' | 'lg', number> = {
+    sm: 18,
+    md: 22,
+    lg: 34
+};
+
+export default component GroupCrest(props: { group: Group; size?: 'sm' | 'md' | 'lg'; class?: string })
+{
+    derived size = props.size ?? 'md';
+
+    <span
+        class={ [
+            'relative flex shrink-0 items-center justify-center overflow-hidden border border-line',
+            BOX[size],
+            props.class ?? ''
+        ].filter(Boolean).join(' ') }
+        style={ `--hue: ${ props.group.hue }` }
+        aria-hidden="true"
+    >
+        <span
+            class="absolute inset-0"
+            style="background: linear-gradient(145deg, color-mix(in oklab, hsl(var(--hue) 62% 52%) 28%, var(--raised)), var(--raised))"
+        ></span>
+        <span class="relative" style="color: color-mix(in oklab, hsl(var(--hue) 70% 62%) 78%, var(--text))">
+            <Icon name={ props.group.crest } size={ GLYPH[size] } />
+        </span>
+    </span>
+}

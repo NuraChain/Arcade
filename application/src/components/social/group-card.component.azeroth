@@ -6,6 +6,7 @@ import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { usePresence } from '../../stores/presence.store.ts';
 import AvatarGroup from '../ui/avatar-group.component.azeroth';
+import GroupCrest from './group-crest.component.azeroth';
 
 export default component GroupCard(props: { group: Group; class?: string })
 {
@@ -21,11 +22,11 @@ export default component GroupCard(props: { group: Group; class?: string })
 
     <Link
         to={ `/app/groups/${ props.group.id }` }
-        class={ [ 'flex items-center gap-3 rounded-panel border border-line bg-field p-3 transition duration-200 hover:border-accent/40 hover:bg-raised/50', props.class ?? '' ].filter(Boolean).join(' ') }
+        class={ [ 'flex min-w-0 items-center gap-2.5 rounded-panel border border-line bg-field p-2.5 transition duration-200 hover:border-line-strong hover:bg-raised/60', props.class ?? '' ].filter(Boolean).join(' ') }
         prefetch="hover"
     >
-        <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-tile bg-raised text-ui-2xl" aria-hidden="true">{ props.group.emoji }</span>
-        <span class="flex min-w-0 flex-1 flex-col gap-1">
+        <GroupCrest group={ props.group } size="md" />
+        <span class="flex min-w-0 flex-1 flex-col gap-0.5">
             <span class="truncate text-ui-md font-semibold text-text">{ locale.text(props.group.name) }</span>
             <span class="truncate text-ui-xs text-muted">
                 { locale.plural('chat.members', members.length) }
@@ -37,6 +38,6 @@ export default component GroupCard(props: { group: Group; class?: string })
                 </Show>
             </span>
         </span>
-        <AvatarGroup people={ members } size="xs" max={ 3 } class="shrink-0" />
+        <AvatarGroup people={ members } size="xs" max={ 3 } class="hidden shrink-0 @xs:flex" />
     </Link>
 }

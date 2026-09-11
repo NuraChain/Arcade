@@ -70,7 +70,7 @@ export default component TopBar()
 
             <Show when={ !phone }>
                 { () =>
-                    <Link to="/app/search" class="me-1 flex h-9 w-60 items-center gap-2 rounded-control border border-line bg-sunk px-2.5 text-ui-sm text-faint transition-colors hover:border-line-strong hover:text-muted">
+                    <Link to="/app/search" class="me-1 flex h-9 w-60 items-center gap-2 rounded-control border border-line bg-sunk px-2.5 text-ui-sm text-faint transition-colors hover:border-line-strong hover:text-muted coarse:h-11">
                         <Icon name="search" size={ 16 } />
                         <span class="truncate">{ locale.t('app.nav.search') }</span>
                     </Link>

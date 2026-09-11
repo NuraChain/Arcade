@@ -38,7 +38,8 @@ export interface Group
     id: string;
     name: LocalizedText;
     blurb: LocalizedText;
-    emoji: string;
+    crest: IconName;
+    hue: number;
     game: GameId | null;
     members: string[];
     owner: string;

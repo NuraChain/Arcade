@@ -158,7 +158,7 @@ export default component SearchPage()
                                                     <span class="truncate text-ui-base text-text">{ locale.text(message.text) }</span>
                                                     <span class="truncate text-ui-xs text-faint">
                                                         { locale.t('search.in', { where: locale.text(titleOf(chat.conversation(message.conversationId) ?? { id: '', kind: 'direct', participants: [], groupId: null, tableId: null, game: null, title: null, pinned: false, lastReadAt: 0 }, chat.me())) }) }
-                                                        { ' · ' }
+                                                        <span class="mx-1.5 inline-block h-1 w-1 rounded-full bg-faint align-middle" aria-hidden="true"></span>
                                                         { locale.relative(message.at) }
                                                     </span>
                                                 </button>

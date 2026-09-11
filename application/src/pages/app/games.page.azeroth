@@ -37,7 +37,7 @@ export default component GamesPage()
             <p class="flex items-center gap-2 text-ui-sm font-semibold text-live">
                 <span class="live-dot h-2.5 w-2.5 rounded-full" aria-hidden="true"></span>
                 <span class="tally">{ locale.plural('games.live.playing', totals.playersOnline) }</span>
-                <span class="text-faint">·</span>
+                <span class="h-1 w-1 rounded-full bg-faint" aria-hidden="true"></span>
                 <span class="tally text-muted">{ locale.plural('games.live.tables', totals.tablesOpen) }</span>
             </p>
         </header>
