@@ -1,0 +1,96 @@
+import Icon from '../../icons/icon.component.azeroth';
+import { windowOf } from '../../lib/pagination.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import Button from './button.component.azeroth';
+
+export default component Pagination(props: {
+    total: number;
+    size: number;
+    page: number;
+    mode?: 'pages' | 'more';
+    label: string;
+    moreLabel?: string;
+    class?: string;
+    onPage: (page: number) => void;
+})
+{
+    const locale = useLocale();
+
+    derived view = windowOf(props.total, props.size, props.page);
+
+    derived shown = Math.min(props.total, props.page * props.size);
+
+    derived remaining = Math.max(0, props.total - shown);
+
+    <Show when={ view.pages > 1 }>
+        <Show
+            when={ props.mode === 'more' }
+            fallback={
+                <nav class={ [ 'flex flex-wrap items-center justify-between gap-3 pt-3', props.class ?? '' ].filter(Boolean).join(' ') } aria-label={ props.label }>
+                    <p class="tally text-ui-xs text-faint">
+                        { locale.t('page.range', { from: locale.n(view.from), to: locale.n(view.to), total: locale.n(view.total) }) }
+                    </p>
+                    <ul class="flex items-center gap-1">
+                        <li>
+                            <button
+                                type="button"
+                                class="flex h-9 w-9 cursor-pointer items-center justify-center rounded-control text-muted transition-colors hover:bg-raised hover:text-text disabled:cursor-not-allowed disabled:opacity-40 coarse:h-11 coarse:w-11"
+                                aria-label={ locale.t('page.previous') }
+                                disabled={ view.page <= 1 }
+                                onClick={ () => props.onPage(view.page - 1) }
+                            >
+                                <Icon name="chevron-right" size={ 17 } class="icon-flip rotate-180" />
+                            </button>
+                        </li>
+                        <For each={ view.items } key={ (item, index) => `${ item }-${ index }` } let={ item }>
+                            <li>
+                                <Show
+                                    when={ item === 'gap' }
+                                    fallback={
+                                        <button
+                                            type="button"
+                                            class={ [
+                                                'tally flex h-9 min-w-9 cursor-pointer items-center justify-center rounded-control px-2 text-ui-sm font-semibold transition-colors coarse:h-11 coarse:min-w-11',
+                                                item === view.page ? 'bg-accent text-accent-ink' : 'text-muted hover:bg-raised hover:text-text'
+                                            ].join(' ') }
+                                            aria-current={ item === view.page ? 'page' : undefined }
+                                            aria-label={ locale.t('page.go', { page: locale.n(item as number) }) }
+                                            onClick={ () => props.onPage(item as number) }
+                                        >
+                                            { locale.n(item as number) }
+                                        </button>
+                                    }
+                                >
+                                    { () => <span class="flex h-9 w-6 items-center justify-center text-faint" aria-hidden="true">…</span> }
+                                </Show>
+                            </li>
+                        </For>
+                        <li>
+                            <button
+                                type="button"
+                                class="flex h-9 w-9 cursor-pointer items-center justify-center rounded-control text-muted transition-colors hover:bg-raised hover:text-text disabled:cursor-not-allowed disabled:opacity-40 coarse:h-11 coarse:w-11"
+                                aria-label={ locale.t('page.next') }
+                                disabled={ view.page >= view.pages }
+                                onClick={ () => props.onPage(view.page + 1) }
+                            >
+                                <Icon name="chevron-right" size={ 17 } class="icon-flip" />
+                            </button>
+                        </li>
+                    </ul>
+                </nav>
+            }
+        >
+            { () =>
+                <div class={ [ 'pt-3', props.class ?? '' ].filter(Boolean).join(' ') }>
+                    <Show when={ remaining > 0 }>
+                        { () =>
+                            <Button variant="outline" block leading="chevron-down" onClick={ () => props.onPage(view.page + 1) }>
+                                { props.moreLabel ?? locale.t('page.more', { count: locale.n(remaining) }) }
+                            </Button>
+                        }
+                    </Show>
+                </div>
+            }
+        </Show>
+    </Show>
+}

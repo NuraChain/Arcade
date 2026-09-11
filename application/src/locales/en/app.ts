@@ -47,9 +47,15 @@ export const app = {
     'common.friendsOnline': { one: '{count} friend online', other: '{count} friends online' },
     'common.unread': { one: '{count} unread', other: '{count} unread' },
     'common.optional': 'Optional',
+    'page.range': '{from}–{to} of {total}',
+    'page.previous': 'Previous page',
+    'page.next': 'Next page',
+    'page.go': 'Page {page}',
+    'page.more': 'Show {count} more',
 
     'toast.dismiss': 'Dismiss',
     'toast.region': 'Notifications',
+    'toast.more': '{count} more…',
 
     'overlay.close': 'Close',
     'overlay.handle': 'Drag down to close',

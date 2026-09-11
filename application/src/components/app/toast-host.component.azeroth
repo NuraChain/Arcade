@@ -1,69 +1,199 @@
 import { Portal } from 'azerothjs';
 
+import { personById } from '../../data/mock/index.ts';
 import Icon from '../../icons/icon.component.azeroth';
 import type { IconName } from '../../icons/registry.ts';
+import { runtime } from '../../lib/runtime.ts';
+import { createDrag } from '../../lib/swipe.ts';
+import { useDevice } from '../../stores/device.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
-import { useToasts, type ToastKind } from '../../stores/toasts.store.ts';
+import { useToasts, type Toast, type ToastKind } from '../../stores/toasts.store.ts';
+import Avatar from '../ui/avatar.component.azeroth';
+import Spinner from '../ui/spinner.component.azeroth';
 
 const ICON: Record<ToastKind, IconName> = {
     info: 'info',
     success: 'check-circle',
     warning: 'alert',
     error: 'error-circle',
-    live: 'zap'
+    live: 'zap',
+    pending: 'clock'
 };
 
 const TONE: Record<ToastKind, string> = {
     info: 'text-muted',
     success: 'text-win',
-    warning: 'text-accent',
-    error: 'text-madder',
-    live: 'text-live'
+    warning: 'text-gold',
+    error: 'text-danger',
+    live: 'text-live',
+    pending: 'text-accent'
+};
+
+const BAR: Record<ToastKind, string> = {
+    info: 'bg-muted',
+    success: 'bg-win',
+    warning: 'bg-gold',
+    error: 'bg-danger',
+    live: 'bg-live',
+    pending: 'bg-accent'
 };
 
 export default component ToastHost()
 {
     const toasts = useToasts();
     const locale = useLocale();
+    const device = useDevice();
+
+    state now = runtime().clock.now();
+
+    const drags = new Map<string, ReturnType<typeof createDrag>>();
+
+    const dragFor = (id: string): ReturnType<typeof createDrag> =>
+    {
+        const existing = drags.get(id);
+        if (existing !== undefined)
+        {
+            return existing;
+        }
+        const made = createDrag({ threshold: 56, velocity: 0.5, axis: 'y' });
+        drags.set(id, made);
+        return made;
+    };
+
+    mount
+    {
+        return runtime().clock.every(120, () => now = runtime().clock.now());
+    }
+
+    derived items = toasts.items();
+
+    derived queued = toasts.queued();
+
+    const held = (toast: Toast): boolean => !Number.isFinite(toast.duration);
 
     <Portal>
-        <div class="toast-root" role="region" aria-label={ locale.t('toast.region') } aria-live="polite">
-            <For each={ toasts.items() } key={ (toast) => toast.id } let={ toast }>
+        <div
+            class="toast-root"
+            data-placement={ toasts.placement() }
+            data-posture={ device.posture() }
+            role="region"
+            aria-label={ locale.t('toast.region') }
+            aria-live="polite"
+        >
+            <For each={ items } key={ (toast) => toast.id } let={ toast }>
                 <div
-                    class="pointer-events-auto flex w-full max-w-[26rem] animate-toast-in items-center gap-3 rounded-panel border border-line bg-raised px-3 py-2.5 shadow-3 motion-reduce:animate-none"
-                    role="status"
-                    onPointerEnter={ () => toasts.pause(toast.id) }
-                    onPointerLeave={ () => toasts.resume(toast.id) }
+                    class="toast pointer-events-auto"
+                    role={ toast.kind === 'error' ? 'alert' : 'status' }
+                    aria-live={ toast.kind === 'error' ? 'assertive' : 'polite' }
+                    ref={ (element) => element.style.setProperty('--swipe', '0px') }
+                    onPointerEnter={ (event) => (event.pointerType === 'mouse' ? toasts.pause(toast.id) : undefined) }
+                    onPointerLeave={ (event) => (event.pointerType === 'mouse' ? toasts.resume(toast.id) : undefined) }
+                    onPointerDown={ (event) =>
+                    {
+                        if (!device.coarse() || !toast.dismissible)
+                        {
+                            return;
+                        }
+                        (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+                        toasts.pause(toast.id);
+                        dragFor(toast.id).start(event.clientX, event.clientY, runtime().clock.now());
+                    } }
+                    onPointerMove={ (event) =>
+                    {
+                        const drag = drags.get(toast.id);
+                        if (drag === undefined || !drag.active())
+                        {
+                            return;
+                        }
+                        const frame = drag.move(event.clientX, event.clientY, runtime().clock.now());
+                        (event.currentTarget as HTMLElement).style.setProperty('--swipe', `${ frame.offset }px`);
+                    } }
+                    onPointerUp={ (event) =>
+                    {
+                        const drag = drags.get(toast.id);
+                        if (drag === undefined || !drag.active())
+                        {
+                            return;
+                        }
+                        const frame = drag.end(runtime().clock.now());
+                        (event.currentTarget as HTMLElement).style.setProperty('--swipe', '0px');
+                        if (frame.dismiss)
+                        {
+                            toasts.dismiss(toast.id);
+                            return;
+                        }
+                        toasts.resume(toast.id);
+                    } }
                 >
                     <span class={ [ 'shrink-0', TONE[toast.kind] ].join(' ') } aria-hidden="true">
-                        <Icon name={ ICON[toast.kind] } size={ 18 } />
+                        <Show
+                            when={ toast.avatar !== null }
+                            fallback={
+                                <Show when={ toast.kind === 'pending' } fallback={ <Icon name={ toast.icon ?? ICON[toast.kind] } size={ 18 } /> }>
+                                    { () => <Spinner size={ 18 } /> }
+                                </Show>
+                            }
+                        >
+                            { () => <Avatar person={ personById(toast.avatar!) ?? null } size="sm" /> }
+                        </Show>
                     </span>
-                    <span class="min-w-0 flex-1 text-ui-base text-text">{ toast.text }</span>
+
+                    <span class="flex min-w-0 flex-1 flex-col">
+                        <span class="text-ui-base text-text">{ toast.text }</span>
+                        <Show when={ toast.detail !== null }>
+                            { () => <span class="truncate text-ui-xs text-muted">{ toast.detail }</span> }
+                        </Show>
+                    </span>
+
                     <Show when={ toast.action !== null }>
                         { () =>
                             <button
                                 type="button"
-                                class="shrink-0 cursor-pointer rounded-full px-2 py-1 text-ui-sm font-bold text-accent hover:underline"
+                                class="shrink-0 cursor-pointer rounded-control px-2 py-1 text-ui-sm font-bold text-accent hover:bg-accent/10"
                                 onClick={ () =>
                                 {
                                     toast.action?.run();
-                                    toasts.dismiss(toast.id);
+                                    if (toast.action?.keepOpen !== true)
+                                    {
+                                        toasts.dismiss(toast.id);
+                                    }
                                 } }
                             >
                                 { toast.action?.label }
                             </button>
                         }
                     </Show>
-                    <button
-                        type="button"
-                        class="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full text-faint hover:bg-field hover:text-text"
-                        aria-label={ locale.t('toast.dismiss') }
-                        onClick={ () => toasts.dismiss(toast.id) }
-                    >
-                        <Icon name="close" size={ 16 } />
-                    </button>
+
+                    <Show when={ toast.dismissible }>
+                        { () =>
+                            <button
+                                type="button"
+                                class="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-control text-faint hover:bg-field hover:text-text coarse:h-11 coarse:w-11"
+                                aria-label={ locale.t('toast.dismiss') }
+                                onClick={ () => toasts.dismiss(toast.id) }
+                            >
+                                <Icon name="close" size={ 15 } />
+                            </button>
+                        }
+                    </Show>
+
+                    <Show when={ !held(toast) }>
+                        { () =>
+                            <span class="toast-progress" aria-hidden="true">
+                                <span class={ BAR[toast.kind] } style={ `inline-size: ${ Math.round((1 - toasts.progress(toast.id, now)) * 100) }%` }></span>
+                            </span>
+                        }
+                    </Show>
                 </div>
             </For>
+
+            <Show when={ queued > 0 }>
+                { () =>
+                    <p class="pointer-events-auto rounded-control border border-line bg-field px-2.5 py-1 text-ui-2xs font-semibold text-muted shadow-1">
+                        { locale.t('toast.more', { count: locale.n(queued) }) }
+                    </p>
+                }
+            </Show>
         </div>
     </Portal>
 }

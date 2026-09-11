@@ -69,7 +69,7 @@ export default component OverlayLayer(props: { entry: OverlayEntry })
                         onPointerDown={ (event) =>
                         {
                             (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
-                            drag.start(event.clientY, runtime().clock.now());
+                            drag.start(event.clientX, event.clientY, runtime().clock.now());
                             if (panel !== null)
                             {
                                 panel.style.transition = 'none';
@@ -81,7 +81,7 @@ export default component OverlayLayer(props: { entry: OverlayEntry })
                             {
                                 return;
                             }
-                            const frame = drag.move(event.clientY, runtime().clock.now());
+                            const frame = drag.move(event.clientX, event.clientY, runtime().clock.now());
                             panel.style.transform = `translateY(${ frame.offset }px)`;
                         } }
                         onPointerUp={ () =>

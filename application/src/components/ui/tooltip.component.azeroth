@@ -1,0 +1,132 @@
+import { Portal, type Child } from 'azerothjs';
+
+import { boxOf, place, viewportOf, type Placed, type Side } from '../../lib/anchor.ts';
+import { runtime } from '../../lib/runtime.ts';
+import { useDevice } from '../../stores/device.store.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+
+let openTooltip: (() => void) | null = null;
+
+export default component Tooltip(props: {
+    label: string;
+    children?: Child;
+    side?: Side;
+    delay?: number;
+    id?: string;
+    class?: string;
+})
+{
+    const locale = useLocale();
+    const device = useDevice();
+
+    state shown = false;
+    state at = { x: 0, y: 0, side: 'top', align: 'center', arrow: 12 } as Placed;
+
+    let host: HTMLElement | null = null;
+    let bubble: HTMLElement | null = null;
+    let cancel: (() => void) | null = null;
+
+    derived tipId = props.id ?? `tip-${ props.label.replace(/[^a-zA-Z0-9]+/g, '-').toLowerCase() }`;
+
+    const settle = (): void =>
+    {
+        if (host === null || bubble === null)
+        {
+            return;
+        }
+        at = place(
+            boxOf(host),
+            { width: bubble.offsetWidth, height: bubble.offsetHeight },
+            viewportOf(),
+            { side: props.side ?? 'top', gap: 8, padding: 10, rtl: locale.dir() === 'rtl' }
+        );
+    };
+
+    const hide = (): void =>
+    {
+        cancel?.();
+        cancel = null;
+        shown = false;
+        if (openTooltip === hide)
+        {
+            openTooltip = null;
+        }
+    };
+
+    const show = (immediate: boolean): void =>
+    {
+        if (shown)
+        {
+            return;
+        }
+        openTooltip?.();
+        openTooltip = hide;
+        cancel?.();
+        cancel = null;
+        if (immediate)
+        {
+            shown = true;
+            requestAnimationFrame(settle);
+            return;
+        }
+        cancel = runtime().clock.after(props.delay ?? 350, () =>
+        {
+            cancel = null;
+            shown = true;
+            requestAnimationFrame(settle);
+        });
+    };
+
+    mount
+    {
+        const onScroll = (): void => hide();
+        window.addEventListener('scroll', onScroll, true);
+        window.addEventListener('resize', onScroll, { passive: true });
+        return () =>
+        {
+            window.removeEventListener('scroll', onScroll, true);
+            window.removeEventListener('resize', onScroll);
+            hide();
+        };
+    }
+
+    <span
+        ref={ (element) => host = element }
+        class={ [ 'inline-flex', props.class ?? '' ].filter(Boolean).join(' ') }
+        aria-describedby={ shown ? tipId : undefined }
+        onPointerEnter={ (event) => (event.pointerType === 'mouse' ? show(false) : undefined) }
+        onPointerLeave={ () => hide() }
+        onPointerDown={ () => (device.coarse() ? undefined : hide()) }
+        onFocusIn={ () => show(true) }
+        onFocusOut={ () => hide() }
+        onKeyDown={ (event) => (event.key === 'Escape' ? hide() : undefined) }
+        onContextMenu={ (event) =>
+        {
+            if (device.coarse())
+            {
+                event.preventDefault();
+                show(true);
+            }
+        } }
+    >
+        { props.children }
+        <Show when={ shown }>
+            { () =>
+                <Portal>
+                    <div class="anchor-root">
+                        <div
+                            ref={ (element) => bubble = element }
+                            id={ tipId }
+                            role="tooltip"
+                            class="tooltip"
+                            data-side={ at.side }
+                            style={ `--x: ${ at.x }px; --y: ${ at.y }px; --arrow: ${ at.arrow }px` }
+                        >
+                            { props.label }
+                        </div>
+                    </div>
+                </Portal>
+            }
+        </Show>
+    </span>
+}

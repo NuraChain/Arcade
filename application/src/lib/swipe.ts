@@ -1,65 +1,108 @@
+export type DragAxis = 'x' | 'y';
+
 export interface DragOptions
 {
     threshold: number;
     velocity: number;
+    axis?: DragAxis;
+    lock?: number;
+    allowNegative?: boolean;
 }
 
 export interface DragFrame
 {
     offset: number;
+    axis: DragAxis | null;
     dismiss: boolean;
 }
 
 export interface Drag
 {
-    start(y: number, at: number): void;
-    move(y: number, at: number): DragFrame;
+    start(x: number, y: number, at: number): void;
+    move(x: number, y: number, at: number): DragFrame;
     end(at: number): DragFrame;
     active(): boolean;
+    axis(): DragAxis | null;
 }
+
+const IDLE: DragFrame = { offset: 0, axis: null, dismiss: false };
 
 export function createDrag(options: DragOptions): Drag
 {
-    let origin = 0;
+    const wanted = options.axis ?? 'y';
+    const lock = options.lock ?? 8;
+    const signed = options.allowNegative === true;
+
+    let originX = 0;
+    let originY = 0;
     let last = 0;
     let lastAt = 0;
     let speed = 0;
+    let locked: DragAxis | null = null;
     let tracking = false;
 
+    const along = (x: number, y: number): number => (wanted === 'y' ? y - originY : x - originX);
+
+    const clamp = (value: number): number => (signed ? value : Math.max(0, value));
+
     return {
-        start(y, at)
+        start(x, y, at)
         {
-            origin = y;
-            last = y;
+            originX = x;
+            originY = y;
+            last = wanted === 'y' ? y : x;
             lastAt = at;
             speed = 0;
+            locked = null;
             tracking = true;
         },
 
-        move(y, at)
+        move(x, y, at)
         {
             if (!tracking)
             {
-                return { offset: 0, dismiss: false };
+                return IDLE;
             }
+
+            if (locked === null)
+            {
+                const dx = Math.abs(x - originX);
+                const dy = Math.abs(y - originY);
+                if (Math.max(dx, dy) < lock)
+                {
+                    return { offset: 0, axis: null, dismiss: false };
+                }
+                locked = dx > dy ? 'x' : 'y';
+                if (locked !== wanted)
+                {
+                    tracking = false;
+                    return { offset: 0, axis: locked, dismiss: false };
+                }
+            }
+
+            const current = wanted === 'y' ? y : x;
             const elapsed = Math.max(1, at - lastAt);
-            speed = (y - last) / elapsed;
-            last = y;
+            speed = (current - last) / elapsed;
+            last = current;
             lastAt = at;
-            return { offset: Math.max(0, y - origin), dismiss: false };
+
+            return { offset: clamp(along(x, y)), axis: locked, dismiss: false };
         },
 
-        end()
+        end(at)
         {
             if (!tracking)
             {
-                return { offset: 0, dismiss: false };
+                return IDLE;
             }
             tracking = false;
-            const offset = Math.max(0, last - origin);
-            return { offset, dismiss: offset >= options.threshold || speed >= options.velocity };
+            const stale = at - lastAt > 160;
+            const offset = clamp(last - (wanted === 'y' ? originY : originX));
+            const flick = !stale && (signed ? Math.abs(speed) : speed) >= options.velocity;
+            return { offset, axis: locked, dismiss: Math.abs(offset) >= options.threshold || flick };
         },
 
-        active: () => tracking
+        active: () => tracking,
+        axis: () => locked
     };
 }

@@ -1,21 +1,90 @@
 import { useLocale } from '../../stores/locale.store.ts';
-import { TONE_FILL, type Tone } from './variants.ts';
+import {
+    BADGE_DOT_SIZE,
+    BADGE_SIZE,
+    TONE_DOT,
+    TONE_FILL,
+    TONE_OUTLINE,
+    TONE_SOFT,
+    type BadgeSize,
+    type BadgeVariant,
+    type Tone
+} from './variants.ts';
 
-export default component Badge(props: { count: number; max?: number; tone?: Tone; label?: string })
+export default component Badge(props: {
+    count?: number;
+    text?: string;
+    dot?: boolean;
+    max?: number;
+    tone?: Tone;
+    variant?: BadgeVariant;
+    size?: BadgeSize;
+    anchor?: boolean;
+    pulse?: boolean;
+    showZero?: boolean;
+    label?: string;
+    class?: string;
+})
 {
     const locale = useLocale();
 
+    derived tone = props.tone ?? 'accent';
+
+    derived size = props.size ?? 'md';
+
     derived limit = props.max ?? 99;
 
-    derived text = props.count > limit ? `${ locale.n(limit) }+` : locale.n(props.count);
+    derived hidden = props.dot !== true
+        && props.text === undefined
+        && (props.count ?? 0) <= 0
+        && props.showZero !== true;
 
-    <span
-        class={ [
-            'tally inline-flex h-4.5 min-w-4.5 items-center justify-center rounded-full px-1 text-ui-2xs font-bold leading-none',
-            TONE_FILL[props.tone ?? 'accent']
-        ].join(' ') }
-        aria-label={ props.label }
-    >
-        { text }
-    </span>
+    derived body = props.text ?? (props.count === undefined
+        ? ''
+        : (props.count > limit ? `${ locale.n(limit) }+` : locale.n(props.count)));
+
+    derived paint = props.variant === 'soft'
+        ? TONE_SOFT[tone]
+        : (props.variant === 'outline' ? TONE_OUTLINE[tone] : TONE_FILL[tone]);
+
+    derived anchored = props.anchor === true ? 'absolute -end-1 -top-1' : '';
+
+    <Show when={ !hidden }>
+        <Show
+            when={ props.dot === true }
+            fallback={
+                <span
+                    class={ [
+                        'tally inline-flex items-center justify-center rounded-full font-bold leading-none',
+                        BADGE_SIZE[size],
+                        paint,
+                        anchored,
+                        props.anchor === true ? 'ring-2 ring-field' : '',
+                        props.pulse === true ? 'animate-pulse-live motion-reduce:animate-none' : '',
+                        props.class ?? ''
+                    ].filter(Boolean).join(' ') }
+                    aria-label={ props.label }
+                    role={ props.label === undefined ? undefined : 'status' }
+                >
+                    { body }
+                </span>
+            }
+        >
+            { () =>
+                <span
+                    class={ [
+                        'inline-block shrink-0 rounded-full',
+                        BADGE_DOT_SIZE[size],
+                        TONE_DOT[tone],
+                        anchored,
+                        props.anchor === true ? 'ring-2 ring-field' : '',
+                        props.pulse === true ? 'animate-pulse-live motion-reduce:animate-none' : '',
+                        props.class ?? ''
+                    ].filter(Boolean).join(' ') }
+                    aria-label={ props.label }
+                    role={ props.label === undefined ? undefined : 'status' }
+                ></span>
+            }
+        </Show>
+    </Show>
 }

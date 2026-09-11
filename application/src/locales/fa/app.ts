@@ -50,9 +50,15 @@ export const app: Pick<Dictionary, keyof typeof reference> = {
     'common.friendsOnline': { one: '{count} دوست آنلاین', other: '{count} دوست آنلاین' },
     'common.unread': { one: '{count} خوانده‌نشده', other: '{count} خوانده‌نشده' },
     'common.optional': 'اختیاری',
+    'page.range': '{from} تا {to} از {total}',
+    'page.previous': 'صفحهٔ قبل',
+    'page.next': 'صفحهٔ بعد',
+    'page.go': 'صفحهٔ {page}',
+    'page.more': 'نمایش {count} مورد دیگر',
 
     'toast.dismiss': 'بستن',
     'toast.region': 'اعلان‌ها',
+    'toast.more': '{count} مورد دیگر…',
 
     'overlay.close': 'بستن',
     'overlay.handle': 'برای بستن به پایین بکش',
