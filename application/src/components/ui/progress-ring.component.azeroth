@@ -1,0 +1,65 @@
+import { useLocale } from '../../stores/locale.store.ts';
+import { TONE_TEXT, type Tone } from './variants.ts';
+
+export default component ProgressRing(props: {
+    value: number;
+    max?: number;
+    size?: number;
+    thickness?: number;
+    tone?: Tone;
+    label: string;
+    valueText?: string;
+    class?: string;
+})
+{
+    const locale = useLocale();
+
+    derived max = Math.max(1, props.max ?? 1);
+
+    derived value = Math.min(max, Math.max(0, props.value));
+
+    derived size = props.size ?? 72;
+
+    derived thickness = props.thickness ?? 6;
+
+    derived radius = (size - thickness) / 2;
+
+    derived circumference = 2 * Math.PI * radius;
+
+    derived filled = circumference * (value / max);
+
+    <div
+        class={ [ 'relative inline-flex shrink-0 items-center justify-center', props.class ?? '' ].filter(Boolean).join(' ') }
+        role="progressbar"
+        aria-valuemin="0"
+        aria-valuemax={ max }
+        aria-valuenow={ value }
+        aria-valuetext={ props.valueText ?? props.label }
+        aria-label={ props.label }
+        style={ `width:${ size }px;height:${ size }px` }
+    >
+        <svg width={ size } height={ size } viewBox={ `0 0 ${ size } ${ size }` } fill="none" aria-hidden="true" class="-rotate-90">
+            <circle
+                cx={ size / 2 }
+                cy={ size / 2 }
+                r={ radius }
+                stroke="currentColor"
+                stroke-width={ thickness }
+                class="text-line"
+            ></circle>
+            <circle
+                cx={ size / 2 }
+                cy={ size / 2 }
+                r={ radius }
+                stroke="currentColor"
+                stroke-width={ thickness }
+                stroke-linecap="round"
+                stroke-dasharray={ `${ filled } ${ circumference }` }
+                class={ [ 'transition-[stroke-dasharray] duration-500 ease-[var(--ease-reveal)] motion-reduce:transition-none', TONE_TEXT[props.tone ?? 'accent'] ].join(' ') }
+            ></circle>
+        </svg>
+        <span class="tally absolute inset-0 flex items-center justify-center text-ui-sm font-bold text-text">
+            { locale.n(value) }<span class="px-0.5 text-faint">/</span>{ locale.n(max) }
+        </span>
+    </div>
+}

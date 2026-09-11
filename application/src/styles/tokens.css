@@ -54,6 +54,7 @@
     --shadow-3: 0 28px 70px -28px color-mix(in oklab, var(--void) 90%, transparent);
     --shadow-glow-accent: 0 0 0 1px color-mix(in oklab, var(--accent) 50%, transparent), 0 10px 34px -10px color-mix(in oklab, var(--accent) 55%, transparent);
     --shadow-glow-live: 0 0 0 1px color-mix(in oklab, var(--live) 50%, transparent), 0 10px 34px -10px color-mix(in oklab, var(--live) 50%, transparent);
+    --shadow-glow-gold: 0 0 0 1px color-mix(in oklab, var(--gold) 45%, transparent), 0 8px 26px -10px color-mix(in oklab, var(--gold) 60%, transparent);
 
     --duration-fast: 120ms;
     --duration-ui: 180ms;

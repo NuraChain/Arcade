@@ -5,6 +5,7 @@ import { useLocale } from '../../stores/locale.store.ts';
 import { useWallet } from '../../stores/wallet.store.ts';
 import Button from '../ui/button.component.azeroth';
 import Spinner from '../ui/spinner.component.azeroth';
+import Tooltip from '../ui/tooltip.component.azeroth';
 
 export default component WalletPanel(props: { onConnected: (address: string) => void })
 {
@@ -59,10 +60,12 @@ export default component WalletPanel(props: { onConnected: (address: string) => 
         <span class="pointer-events-none absolute -end-16 -top-20 h-48 w-48 rounded-full bg-accent/15 blur-3xl" aria-hidden="true"></span>
 
         <div class="relative flex flex-wrap items-center gap-2">
-            <span class="flex items-center gap-1.5 rounded-full bg-live/15 px-2.5 py-1 text-ui-xs font-semibold text-live">
-                <span class="live-dot h-1.5 w-1.5 rounded-full" aria-hidden="true"></span>
-                { NURA_CHAIN.name }
-            </span>
+            <Tooltip label={ locale.t('wallet.chainExplainer', { chain: NURA_CHAIN.name, token: NURA_CHAIN.currency.symbol }) } side="bottom">
+                <span class="flex items-center gap-1.5 rounded-full bg-live/15 px-2.5 py-1 text-ui-xs font-semibold text-live">
+                    <span class="live-dot h-1.5 w-1.5 rounded-full" aria-hidden="true"></span>
+                    { NURA_CHAIN.name }
+                </span>
+            </Tooltip>
             <a
                 href={ NURA_CHAIN.site }
                 target="_blank"

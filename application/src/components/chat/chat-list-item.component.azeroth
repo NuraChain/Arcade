@@ -117,7 +117,14 @@ export default component ChatListItem(props: { conversation: Conversation; me: s
                     { () => <span class="text-ui-2xs text-faint">{ locale.relative(last!.at) }</span> }
                 </Show>
                 <Show when={ unread > 0 }>
-                    { () => <Badge count={ unread } tone={ muted ? 'neutral' : 'accent' } label={ locale.plural('common.unread', unread) } /> }
+                    { () =>
+                        <Show
+                            when={ muted }
+                            fallback={ <Badge count={ unread } tone="accent" label={ locale.plural('common.unread', unread) } /> }
+                        >
+                            { () => <Badge dot tone="neutral" label={ locale.plural('common.unread', unread) } /> }
+                        </Show>
+                    }
                 </Show>
             </span>
         </Link>

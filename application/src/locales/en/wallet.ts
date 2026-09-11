@@ -10,6 +10,7 @@ export const wallet = {
     'wallet.disconnect': 'Disconnect wallet',
     'wallet.chainReady': 'On {chain}',
     'wallet.chainSwitch': 'We’ll ask your wallet to switch to {chain}.',
+    'wallet.chainExplainer': 'Nura Games runs on {chain}. Signing in costs nothing: your wallet signs a message, never a transaction, and no {token} leaves it.',
     'wallet.chainUnset': 'Network details not set yet — we’ll use whatever network your wallet is on.',
     'wallet.free': 'Free to sign',
     'wallet.noGas': 'No gas, no transaction',

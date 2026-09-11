@@ -8,6 +8,7 @@ import GroupCard from '../../components/social/group-card.component.azeroth';
 import Chip from '../../components/ui/chip.component.azeroth';
 import EmptyState from '../../components/ui/empty-state.component.azeroth';
 import IconButton from '../../components/ui/icon-button.component.azeroth';
+import Pagination from '../../components/ui/pagination.component.azeroth';
 import Rail from '../../components/ui/rail.component.azeroth';
 import SearchInput from '../../components/ui/search-input.component.azeroth';
 import SectionHeading from '../../components/ui/section-heading.component.azeroth';
@@ -15,6 +16,9 @@ import Icon from '../../icons/icon.component.azeroth';
 import { useChat } from '../../stores/chat.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useSearch, SEARCH_SCOPES, type SearchScope } from '../../stores/search.store.ts';
+
+const PEOPLE_PAGE = 8;
+const MESSAGE_PAGE = 10;
 
 export default component SearchPage()
 {
@@ -25,9 +29,20 @@ export default component SearchPage()
 
     useHead({ title: () => locale.t('app.nav.search') });
 
+    state peoplePage = 1;
+    state messagePage = 1;
+
     derived results = search.results();
 
     derived query = search.query();
+
+    effect
+    {
+        search.query();
+        search.scope();
+        peoplePage = 1;
+        messagePage = 1;
+    }
 
     derived recents = search.recents();
 
@@ -101,12 +116,20 @@ export default component SearchPage()
                                 <section>
                                     <SectionHeading title={ locale.t('search.scope.people') } />
                                     <ul class="flex flex-col gap-0.5" aria-label={ locale.t('search.scope.people') }>
-                                        <For each={ results.people.slice(0, 8) } key={ (person) => person.id } let={ person }>
+                                        <For each={ results.people.slice(0, peoplePage * PEOPLE_PAGE) } key={ (person) => person.id } let={ person }>
                                             <li>
                                                 <FriendRow person={ person } subtitle={ `@${ person.handle }` } />
                                             </li>
                                         </For>
                                     </ul>
+                                    <Pagination
+                                        total={ results.people.length }
+                                        size={ PEOPLE_PAGE }
+                                        page={ peoplePage }
+                                        mode="more"
+                                        label={ locale.t('search.scope.people') }
+                                        onPage={ (page) => peoplePage = page }
+                                    />
                                 </section>
                             </Show>
 
@@ -149,7 +172,7 @@ export default component SearchPage()
                                 <section>
                                     <SectionHeading title={ locale.t('search.scope.chats') } />
                                     <ul class="flex flex-col gap-0.5" aria-label={ locale.t('search.scope.chats') }>
-                                        <For each={ results.messages.slice(0, 12) } key={ (message) => message.id } let={ message }>
+                                        <For each={ results.messages.slice(0, messagePage * MESSAGE_PAGE) } key={ (message) => message.id } let={ message }>
                                             <li>
                                                 <button
                                                     type="button"
@@ -166,6 +189,14 @@ export default component SearchPage()
                                             </li>
                                         </For>
                                     </ul>
+                                    <Pagination
+                                        total={ results.messages.length }
+                                        size={ MESSAGE_PAGE }
+                                        page={ messagePage }
+                                        mode="more"
+                                        label={ locale.t('search.scope.chats') }
+                                        onPage={ (page) => messagePage = page }
+                                    />
                                 </section>
                             </Show>
                         </div>

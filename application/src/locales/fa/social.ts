@@ -47,6 +47,9 @@ export const social: Pick<Dictionary, keyof typeof reference> = {
     'person.stat.best': 'بهترین بازی',
     'person.stat.open': 'میزهای باز',
     'person.achievements.locked': 'هنوز نگرفته',
+    'person.achievements.tier.bronze': 'نشان برنز',
+    'person.achievements.tier.silver': 'نشان نقره',
+    'person.achievements.tier.gold': 'نشان طلا',
     'person.notFound': 'چنین کسی نداریم.',
     'person.favourite': 'معمولاً {game} بازی می‌کند',
 
@@ -119,6 +122,7 @@ export const social: Pick<Dictionary, keyof typeof reference> = {
     'chats.typing': 'در حال نوشتن…',
     'chats.muted': 'بی‌صدا',
     'chats.pinned': 'سنجاق‌شده',
+    'chat.earlier': 'نمایش {count} پیام قبلی',
     'chats.pin': 'سنجاق به بالا',
     'chats.unpin': 'برداشتن سنجاق',
     'chats.markRead': 'علامت زدن به‌عنوان خوانده‌شده',

@@ -1,0 +1,39 @@
+import type { Achievement } from '../../data/mock/types.ts';
+import Icon from '../../icons/icon.component.azeroth';
+import { useLocale } from '../../stores/locale.store.ts';
+import Tooltip from '../ui/tooltip.component.azeroth';
+
+const RING: Record<Achievement['tier'], string> = {
+    bronze: 'border-gold/25 bg-gold/5',
+    silver: 'border-line-strong bg-raised/40',
+    gold: 'border-gold/55 bg-gold/10'
+};
+
+const MEDAL: Record<Achievement['tier'], string> = {
+    bronze: 'bg-gold/12 text-gold/70',
+    silver: 'bg-raised text-muted',
+    gold: 'bg-gold/20 text-gold shadow-glow-gold'
+};
+
+export default component AchievementTile(props: { achievement: Achievement; earned: boolean })
+{
+    const locale = useLocale();
+
+    <Tooltip label={ locale.t(`person.achievements.tier.${ props.achievement.tier }`) } side="top" class="flex">
+        <span class={ [
+            'flex w-full flex-col items-center gap-1.5 rounded-panel border p-3 text-center',
+            props.earned ? RING[props.achievement.tier] : 'border-line bg-field opacity-55'
+        ].join(' ') }>
+            <span class={ [
+                'flex h-11 w-11 items-center justify-center rounded-full',
+                props.earned ? MEDAL[props.achievement.tier] : 'bg-raised text-faint'
+            ].join(' ') }>
+                <Icon name={ props.achievement.icon } size={ 20 } />
+            </span>
+            <span class="text-ui-sm font-semibold text-text">{ locale.text(props.achievement.name) }</span>
+            <span class="text-ui-2xs text-muted">
+                { props.earned ? locale.text(props.achievement.blurb) : locale.t('person.achievements.locked') }
+            </span>
+        </span>
+    </Tooltip>
+}

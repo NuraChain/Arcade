@@ -5,6 +5,7 @@ import FriendRow from '../../components/social/friend-row.component.azeroth';
 import LanguageSwitch from '../../components/layout/language-switch.component.azeroth';
 import ThemeSwitch from '../../components/layout/theme-switch.component.azeroth';
 import Button from '../../components/ui/button.component.azeroth';
+import Pagination from '../../components/ui/pagination.component.azeroth';
 import SectionHeading from '../../components/ui/section-heading.component.azeroth';
 import Slider from '../../components/ui/slider.component.azeroth';
 import Toggle from '../../components/ui/switch.component.azeroth';
@@ -25,6 +26,8 @@ import { useWallet } from '../../stores/wallet.store.ts';
 import type { MessageKey } from '../../locales/en.ts';
 
 const PREMIUM: MessageKey[] = ['settings.premium.item.tables', 'settings.premium.item.frames', 'settings.premium.item.emotes', 'settings.premium.item.stats'];
+
+const SAFETY_PAGE = 5;
 
 export default component SettingsPage()
 {
@@ -47,15 +50,25 @@ export default component SettingsPage()
 
     derived minor = user?.minor === true;
 
-    derived blocked = social.blocked()
+    state blockedPage = 1;
+    state mutedPage = 1;
+    state reportsPage = 1;
+
+    derived allBlocked = social.blocked()
         .map((id) => personById(id))
         .filter((person): person is Person => person !== undefined);
 
-    derived muted = social.muted()
+    derived blocked = allBlocked.slice(0, blockedPage * SAFETY_PAGE);
+
+    derived allMuted = social.muted()
         .map((id) => personById(id))
         .filter((person): person is Person => person !== undefined);
 
-    derived reports = [...social.reports()].sort((a, b) => b.at - a.at);
+    derived muted = allMuted.slice(0, mutedPage * SAFETY_PAGE);
+
+    derived allReports = [...social.reports()].sort((a, b) => b.at - a.at);
+
+    derived reports = allReports.slice(0, reportsPage * SAFETY_PAGE);
 
     const leave = (): void =>
     {
@@ -130,7 +143,7 @@ export default component SettingsPage()
                         <p class="label text-ui-sm text-text">{ locale.t('settings.safety.blocked') }</p>
                         <p class="mt-1 text-ui-xs text-muted">{ locale.t('settings.safety.blockedLead') }</p>
                         <Show
-                            when={ blocked.length > 0 }
+                            when={ allBlocked.length > 0 }
                             fallback={ <p class="mt-2 text-ui-sm text-faint">{ locale.t('settings.safety.blockedEmpty') }</p> }
                         >
                             { () =>
@@ -151,13 +164,21 @@ export default component SettingsPage()
                                 </ul>
                             }
                         </Show>
+                        <Pagination
+                            total={ allBlocked.length }
+                            size={ SAFETY_PAGE }
+                            page={ blockedPage }
+                            mode="more"
+                            label={ locale.t('settings.safety.blocked') }
+                            onPage={ (page) => blockedPage = page }
+                        />
                     </div>
 
                     <div>
                         <p class="label text-ui-sm text-text">{ locale.t('settings.safety.muted') }</p>
                         <p class="mt-1 text-ui-xs text-muted">{ locale.t('settings.safety.mutedLead') }</p>
                         <Show
-                            when={ muted.length > 0 }
+                            when={ allMuted.length > 0 }
                             fallback={ <p class="mt-2 text-ui-sm text-faint">{ locale.t('settings.safety.mutedEmpty') }</p> }
                         >
                             { () =>
@@ -178,13 +199,21 @@ export default component SettingsPage()
                                 </ul>
                             }
                         </Show>
+                        <Pagination
+                            total={ allMuted.length }
+                            size={ SAFETY_PAGE }
+                            page={ mutedPage }
+                            mode="more"
+                            label={ locale.t('settings.safety.muted') }
+                            onPage={ (page) => mutedPage = page }
+                        />
                     </div>
 
                     <div>
                         <p class="label text-ui-sm text-text">{ locale.t('settings.safety.reports') }</p>
                         <p class="mt-1 text-ui-xs text-muted">{ locale.t('settings.safety.reportsLead') }</p>
                         <Show
-                            when={ reports.length > 0 }
+                            when={ allReports.length > 0 }
                             fallback={ <p class="mt-2 text-ui-sm text-faint">{ locale.t('report.empty') }</p> }
                         >
                             { () =>
@@ -211,6 +240,14 @@ export default component SettingsPage()
                                 </ul>
                             }
                         </Show>
+                        <Pagination
+                            total={ allReports.length }
+                            size={ SAFETY_PAGE }
+                            page={ reportsPage }
+                            mode="more"
+                            label={ locale.t('settings.safety.reports') }
+                            onPage={ (page) => reportsPage = page }
+                        />
                     </div>
                 </div>
             </section>

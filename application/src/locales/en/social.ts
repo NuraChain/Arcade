@@ -44,6 +44,9 @@ export const social = {
     'person.stat.best': 'Best game',
     'person.stat.open': 'Tables open now',
     'person.achievements.locked': 'Not earned yet',
+    'person.achievements.tier.bronze': 'Bronze badge',
+    'person.achievements.tier.silver': 'Silver badge',
+    'person.achievements.tier.gold': 'Gold badge',
     'person.notFound': 'No such person.',
     'person.favourite': 'Usually plays {game}',
 
@@ -116,6 +119,7 @@ export const social = {
     'chats.typing': 'typing…',
     'chats.muted': 'Muted',
     'chats.pinned': 'Pinned',
+    'chat.earlier': 'Show {count} earlier',
     'chats.pin': 'Pin to the top',
     'chats.unpin': 'Unpin',
     'chats.markRead': 'Mark as read',

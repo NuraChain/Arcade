@@ -2,6 +2,7 @@ import { useHead } from 'azerothjs';
 
 import Page from '../../components/app/page.component.azeroth';
 import RecordStrip from '../../components/games/record-strip.component.azeroth';
+import AchievementTile from '../../components/social/achievement-tile.component.azeroth';
 import Avatar from '../../components/ui/avatar.component.azeroth';
 import Button from '../../components/ui/button.component.azeroth';
 import Chip from '../../components/ui/chip.component.azeroth';
@@ -183,20 +184,8 @@ export default component MePage()
                         { () =>
                             <ul class="grid grid-cols-2 gap-2 @lg:grid-cols-3" aria-label={ locale.t('person.tab.achievements') }>
                                 <For each={ ACHIEVEMENTS } key={ (achievement) => achievement.id } let={ achievement }>
-                                    <li class={ [
-                                        'flex flex-col items-center gap-1.5 rounded-panel border p-3 text-center',
-                                        user!.achievements.includes(achievement.id) ? 'border-accent/40 bg-accent/5' : 'border-line bg-field opacity-60'
-                                    ].join(' ') }>
-                                        <span class={ [
-                                            'flex h-11 w-11 items-center justify-center rounded-full',
-                                            user!.achievements.includes(achievement.id) ? 'bg-accent/20 text-accent' : 'bg-raised text-faint'
-                                        ].join(' ') }>
-                                            <Icon name={ achievement.icon } size={ 20 } />
-                                        </span>
-                                        <span class="text-ui-sm font-semibold text-text">{ locale.text(achievement.name) }</span>
-                                        <span class="text-ui-2xs text-muted">
-                                            { user!.achievements.includes(achievement.id) ? locale.text(achievement.blurb) : locale.t('person.achievements.locked') }
-                                        </span>
+                                    <li class="flex min-w-0">
+                                        <AchievementTile achievement={ achievement } earned={ user!.achievements.includes(achievement.id) } />
                                     </li>
                                 </For>
                             </ul>

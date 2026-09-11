@@ -7,6 +7,7 @@ import UserCard from '../../components/social/user-card.component.azeroth';
 import Button from '../../components/ui/button.component.azeroth';
 import EmptyState from '../../components/ui/empty-state.component.azeroth';
 import IconButton from '../../components/ui/icon-button.component.azeroth';
+import Pagination from '../../components/ui/pagination.component.azeroth';
 import Tabs from '../../components/ui/tabs.component.azeroth';
 import { personById } from '../../data/mock/index.ts';
 import type { Person } from '../../data/mock/types.ts';
@@ -19,6 +20,9 @@ import { usePresence } from '../../stores/presence.store.ts';
 import { useDevice } from '../../stores/device.store.ts';
 import { useSocial } from '../../stores/social.store.ts';
 import { useToasts } from '../../stores/toasts.store.ts';
+
+const LIST_PAGE = 12;
+const SUGGEST_PAGE = 8;
 
 export default component FriendsPage()
 {
@@ -36,6 +40,8 @@ export default component FriendsPage()
     useHead({ title: () => locale.t('app.nav.friends') });
 
     state tab = 'all';
+    state listPage = 1;
+    state suggestPage = 1;
 
     derived roomy = device.posture() !== 'phone';
 
@@ -51,7 +57,9 @@ export default component FriendsPage()
 
     derived outgoing = social.outgoing();
 
-    derived suggestions = social.suggestions().slice(0, 8);
+    derived allSuggestions = social.suggestions();
+
+    derived suggestions = allSuggestions.slice(0, suggestPage * SUGGEST_PAGE);
 
     derived items = [
         { id: 'all', label: locale.t('friends.tab.all'), count: friends.length },
@@ -60,7 +68,9 @@ export default component FriendsPage()
         { id: 'suggestions', label: locale.t('friends.tab.suggestions') }
     ];
 
-    derived listed = tab === 'online' ? online : friends;
+    derived pool = tab === 'online' ? online : friends;
+
+    derived listed = pool.slice(0, listPage * LIST_PAGE);
 
     const playWith = (person: Person): void =>
     {
@@ -83,12 +93,23 @@ export default component FriendsPage()
             <p class="mt-2 text-ui-md text-muted">{ locale.t('friends.lead') }</p>
         </header>
 
-        <Tabs items={ items } value={ tab } label={ locale.t('app.nav.friends') } class="mb-4" onChange={ (id) => tab = id } />
+        <Tabs
+            items={ items }
+            value={ tab }
+            label={ locale.t('app.nav.friends') }
+            class="mb-4"
+            onChange={ (id) =>
+            {
+                tab = id;
+                listPage = 1;
+                suggestPage = 1;
+            } }
+        />
 
         <Show when={ tab === 'all' || tab === 'online' }>
             { () =>
                 <Show
-                    when={ listed.length > 0 }
+                    when={ pool.length > 0 }
                     fallback={
                         <EmptyState
                             icon="people"
@@ -131,6 +152,19 @@ export default component FriendsPage()
                         </ul>
                     }
                 </Show>
+            }
+        </Show>
+
+        <Show when={ tab === 'all' || tab === 'online' }>
+            { () =>
+                <Pagination
+                    total={ pool.length }
+                    size={ LIST_PAGE }
+                    page={ listPage }
+                    mode="more"
+                    label={ locale.t('friends.tab.all') }
+                    onPage={ (page) => listPage = page }
+                />
             }
         </Show>
 
@@ -199,7 +233,7 @@ export default component FriendsPage()
         <Show when={ tab === 'suggestions' }>
             { () =>
                 <Show
-                    when={ suggestions.length > 0 }
+                    when={ allSuggestions.length > 0 }
                     fallback={ <EmptyState icon="discover" title={ locale.t('friends.empty.suggestions') } class="py-10" /> }
                 >
                     { () =>
@@ -221,6 +255,19 @@ export default component FriendsPage()
                         </ul>
                     }
                 </Show>
+            }
+        </Show>
+
+        <Show when={ tab === 'suggestions' }>
+            { () =>
+                <Pagination
+                    total={ allSuggestions.length }
+                    size={ SUGGEST_PAGE }
+                    page={ suggestPage }
+                    mode="more"
+                    label={ locale.t('friends.tab.suggestions') }
+                    onPage={ (page) => suggestPage = page }
+                />
             }
         </Show>
     </Page>

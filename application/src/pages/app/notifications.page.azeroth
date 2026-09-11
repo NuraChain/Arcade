@@ -4,6 +4,7 @@ import Page from '../../components/app/page.component.azeroth';
 import NotificationRow from '../../components/social/notification-row.component.azeroth';
 import Button from '../../components/ui/button.component.azeroth';
 import EmptyState from '../../components/ui/empty-state.component.azeroth';
+import Pagination from '../../components/ui/pagination.component.azeroth';
 import SectionHeading from '../../components/ui/section-heading.component.azeroth';
 import { personById } from '../../data/mock/index.ts';
 import type { Notification } from '../../data/mock/types.ts';
@@ -11,15 +12,21 @@ import { runtime } from '../../lib/runtime.ts';
 import { useLobby } from '../../stores/lobby.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useNotifications } from '../../stores/notifications.store.ts';
+import { usePresence } from '../../stores/presence.store.ts';
+
+const EARLIER_PAGE = 8;
 
 export default component NotificationsPage()
 {
     const locale = useLocale();
     const notifications = useNotifications();
     const lobby = useLobby();
+    const presence = usePresence();
     const { navigate } = useNavigate();
 
     useHead({ title: () => locale.t('app.nav.notifications') });
+
+    state earlierPage = 1;
 
     derived items = notifications.items();
 
@@ -32,7 +39,9 @@ export default component NotificationsPage()
 
     derived today = items.filter((item) => item.at >= dayStart);
 
-    derived earlier = items.filter((item) => item.at < dayStart);
+    derived allEarlier = items.filter((item) => item.at < dayStart);
+
+    derived earlier = allEarlier.slice(0, earlierPage * EARLIER_PAGE);
 
     const open = (item: Notification): void =>
     {
@@ -53,7 +62,7 @@ export default component NotificationsPage()
         }
     };
 
-    <Page label={ locale.t('app.nav.notifications') }>
+    <Page label={ locale.t('app.nav.notifications') } onRefresh={ () => presence.refresh() }>
         <header class="flex flex-wrap items-end justify-between gap-3 pb-4">
             <div>
                 <h1 class="title text-ui-4xl">{ locale.t('app.nav.notifications') }</h1>
@@ -93,6 +102,14 @@ export default component NotificationsPage()
                                     </li>
                                 </For>
                             </ul>
+                            <Pagination
+                                total={ allEarlier.length }
+                                size={ EARLIER_PAGE }
+                                page={ earlierPage }
+                                mode="more"
+                                label={ locale.t('notifications.earlier') }
+                                onPage={ (page) => earlierPage = page }
+                            />
                         </section>
                     </Show>
                 </div>

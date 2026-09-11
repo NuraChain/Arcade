@@ -416,6 +416,46 @@
     }
 }
 
+.ring-seeking::after
+{
+    content: '';
+    position: absolute;
+    inset: -4px;
+    border-radius: 999px;
+    border: 1px solid color-mix(in oklab, var(--accent) 45%, transparent);
+    animation: ring-seek 2.4s var(--ease-ui) infinite;
+}
+
+@keyframes ring-seek
+{
+    0%
+    {
+        opacity: 0.55;
+        scale: 1;
+    }
+
+    70%
+    {
+        opacity: 0;
+        scale: 1.22;
+    }
+
+    100%
+    {
+        opacity: 0;
+        scale: 1.22;
+    }
+}
+
+@media (prefers-reduced-motion: reduce)
+{
+    .ring-seeking::after
+    {
+        animation: none;
+        opacity: 0.4;
+    }
+}
+
 .anchor-root
 {
     position: fixed;

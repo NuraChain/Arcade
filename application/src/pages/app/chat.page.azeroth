@@ -8,6 +8,7 @@ import GroupCrest from '../../components/social/group-crest.component.azeroth';
 import PersonActions from '../../components/social/person-actions.component.azeroth';
 import Avatar from '../../components/ui/avatar.component.azeroth';
 import AvatarGroup from '../../components/ui/avatar-group.component.azeroth';
+import Button from '../../components/ui/button.component.azeroth';
 import EmptyState from '../../components/ui/empty-state.component.azeroth';
 import IconButton from '../../components/ui/icon-button.component.azeroth';
 import { groupById, personById } from '../../data/mock/index.ts';
@@ -21,6 +22,8 @@ import { usePresence } from '../../stores/presence.store.ts';
 import { useSettings } from '../../stores/settings.store.ts';
 import { useShell } from '../../stores/shell.store.ts';
 import { useToasts } from '../../stores/toasts.store.ts';
+
+const WINDOW = 40;
 
 export default component ChatPage()
 {
@@ -37,6 +40,8 @@ export default component ChatPage()
     const params = useParams();
     const { navigate } = useNavigate();
 
+    state visible = WINDOW;
+
     let list: HTMLElement | null = null;
 
     derived id = params().id ?? '';
@@ -52,6 +57,10 @@ export default component ChatPage()
     derived title = conversation === null ? locale.t('chat.notFound') : locale.text(titleOf(conversation, me));
 
     derived messages = conversation === null ? [] : chat.messagesOf(id);
+
+    derived shown = messages.slice(Math.max(0, messages.length - visible));
+
+    derived hidden = messages.length - shown.length;
 
     derived typing = chat.typing(id);
 
@@ -97,6 +106,25 @@ export default component ChatPage()
             list.scrollTop = list.scrollHeight;
         }
     }
+
+    effect
+    {
+        params();
+        visible = WINDOW;
+    }
+
+    const showEarlier = (): void =>
+    {
+        const anchor = list === null ? 0 : list.scrollHeight - list.scrollTop;
+        visible += WINDOW;
+        requestAnimationFrame(() =>
+        {
+            if (list !== null)
+            {
+                list.scrollTop = list.scrollHeight - anchor;
+            }
+        });
+    };
 
     effect
     {
@@ -184,17 +212,26 @@ export default component ChatPage()
                     </header>
 
                     <div ref={ (element) => list = element } class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-4">
+                        <Show when={ hidden > 0 }>
+                            { () =>
+                                <div class="flex justify-center pb-2">
+                                    <Button variant="ghost" size="sm" leading="history" onClick={ showEarlier }>
+                                        { locale.t('chat.earlier', { count: locale.n(hidden) }) }
+                                    </Button>
+                                </div>
+                            }
+                        </Show>
                         <Show
                             when={ messages.length > 0 }
                             fallback={ <p class="m-auto text-center text-ui-base text-muted">{ locale.t('chat.empty') }</p> }
                         >
                             { () =>
-                                <For each={ messages } key={ (message) => message.id } let={ message } index={ index }>
+                                <For each={ shown } key={ (message) => message.id } let={ message } index={ index }>
                                     <div>
                                         <MessageBubble
                                             message={ message }
                                             me={ me }
-                                            showAuthor={ index === 0 || messages[index - 1].from !== message.from }
+                                            showAuthor={ index === 0 || shown[index - 1].from !== message.from }
                                             onHold={ (personId) => overlay.open(PersonActions, { personId }, { label: locale.t('actions.title') }) }
                                         />
                                     </div>

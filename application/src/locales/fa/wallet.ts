@@ -13,6 +13,7 @@ export const wallet: Pick<Dictionary, keyof typeof reference> = {
     'wallet.disconnect': 'قطع کیف پول',
     'wallet.chainReady': 'روی {chain}',
     'wallet.chainSwitch': 'از کیف پولت می‌خواهیم به {chain} سوییچ کند.',
+    'wallet.chainExplainer': 'نورا گیمز روی {chain} اجرا می‌شود. ورود هیچ هزینه‌ای ندارد: کیف پولت یک پیام را امضا می‌کند، نه تراکنشی، و هیچ {token} از آن خارج نمی‌شود.',
     'wallet.chainUnset': 'مشخصات شبکه هنوز تنظیم نشده — از همان شبکه‌ای که کیف پولت روی آن است استفاده می‌کنیم.',
     'wallet.free': 'امضا رایگان',
     'wallet.noGas': 'بدون گس، بدون تراکنش',
