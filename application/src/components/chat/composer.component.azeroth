@@ -22,19 +22,19 @@ export default component Composer(props: {
         <Show when={ open && props.disabled !== true }>
             { () =>
                 <ul class="rail-x flex gap-2 border-b border-line/60 px-3 py-2" aria-label={ locale.t('chat.pickGame') }>
-                    <li class="flex shrink-0 items-center pe-1 text-[12px] font-semibold text-faint">{ locale.t('chat.pickGame') }</li>
+                    <li class="flex shrink-0 items-center pe-1 text-ui-xs font-semibold text-faint">{ locale.t('chat.pickGame') }</li>
                     <For each={ catalogue.games } key={ (game) => game.id } let={ game }>
                         <li>
                             <button
                                 type="button"
-                                class="flex h-9 shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full border border-line bg-field px-3 text-[13px] font-semibold text-text transition-colors hover:border-lamp/60"
+                                class="flex h-9 shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full border border-line bg-field px-3 text-ui-sm font-semibold text-text transition-colors hover:border-accent/60"
                                 onClick={ () =>
                                 {
                                     open = false;
                                     props.onGame(game.id);
                                 } }
                             >
-                                <Icon name="zap" size={ 14 } class="text-lamp" />
+                                <Icon name="zap" size={ 14 } class="text-accent" />
                                 { locale.t(game.nameKey) }
                             </button>
                         </li>

@@ -25,9 +25,9 @@ export default component CreateGamePage()
             { () =>
                 <div class="flex flex-col gap-6">
                     <header>
-                        <p class="label text-[12px] text-faint">{ locale.t(game!.nameKey) }</p>
-                        <h1 class="mt-1 text-[clamp(1.75rem,6vw,2.5rem)] leading-none">{ locale.t('create.title') }</h1>
-                        <p class="mt-2 text-[14px] text-muted">{ locale.t('create.lead') }</p>
+                        <p class="label text-ui-xs text-faint">{ locale.t(game!.nameKey) }</p>
+                        <h1 class="mt-1 text-display-md leading-none">{ locale.t('create.title') }</h1>
+                        <p class="mt-2 text-ui-base text-muted">{ locale.t('create.lead') }</p>
                     </header>
                     <CreateGameForm game={ game! } onCreated={ (tableId) => navigate(`/app/play/${ tableId }`, { replace: true }) } />
                 </div>

@@ -31,7 +31,7 @@ export default component Input(props: {
 
     derived shell = [
         'flex h-12 items-center gap-2 rounded-control border bg-field px-3 text-text',
-        'transition-colors duration-150 focus-within:border-lamp',
+        'transition-colors duration-150 focus-within:border-accent',
         props.invalid === true ? 'border-madder' : 'border-line',
         props.disabled === true ? 'opacity-50' : '',
         props.class ?? ''
@@ -44,7 +44,7 @@ export default component Input(props: {
         <input
             ref={ (element) => field = element }
             id={ props.id }
-            class="h-full min-w-0 flex-1 bg-transparent text-[16px] text-text outline-none placeholder:text-faint"
+            class="h-full min-w-0 flex-1 bg-transparent text-ui-input text-text outline-none placeholder:text-faint"
             type={ props.type ?? 'text' }
             value={ props.value }
             placeholder={ props.placeholder }

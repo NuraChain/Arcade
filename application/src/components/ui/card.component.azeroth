@@ -4,7 +4,7 @@ export default component Card(props: {
     children?: Child;
     to?: NavigateTarget;
     padded?: boolean;
-    glow?: 'lamp' | 'live' | null;
+    glow?: 'accent' | 'live' | null;
     class?: string;
     label?: string;
     onClick?: () => void;
@@ -14,10 +14,10 @@ export default component Card(props: {
 
     derived shell = [
         'block rounded-panel border border-line bg-field text-start text-text',
-        props.padded === false ? '' : 'p-4',
-        props.glow === 'lamp' ? 'shadow-glow-lamp border-lamp/40' : '',
+        props.padded === false ? '' : 'p-3',
+        props.glow === 'accent' ? 'shadow-glow-accent border-accent/40' : '',
         props.glow === 'live' ? 'shadow-glow-live border-live/40' : '',
-        interactive ? 'cursor-pointer transition duration-200 ease-[var(--ease-ui)] hover:border-line hover:bg-raised/70 active:scale-[0.99]' : '',
+        interactive ? 'cursor-pointer transition duration-200 ease-[var(--ease-ui)] hover:border-line-strong hover:bg-raised/60 active:scale-[0.995]' : '',
         props.class ?? ''
     ].filter(Boolean).join(' ');
 

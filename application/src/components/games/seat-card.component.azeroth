@@ -35,7 +35,7 @@ export default component SeatCard(props: {
         }
         if (pending)
         {
-            return { text: locale.t('play.lobby.invited'), tone: 'bg-lamp/15 text-lamp' };
+            return { text: locale.t('play.lobby.invited'), tone: 'bg-accent/15 text-accent' };
         }
         if (!filled)
         {
@@ -50,7 +50,7 @@ export default component SeatCard(props: {
         'relative flex min-h-[9.5rem] flex-col items-center justify-center gap-2 rounded-panel border p-3 text-center transition-colors duration-200',
         filled && props.seat.ready ? 'border-live/50 bg-live/5 shadow-glow-live' : '',
         filled && !props.seat.ready ? 'border-line bg-field' : '',
-        !filled && pending ? 'border-dashed border-lamp/50 bg-field' : '',
+        !filled && pending ? 'border-dashed border-accent/50 bg-field' : '',
         !filled && !pending ? 'border-dashed border-line bg-void/40' : ''
     ].filter(Boolean).join(' ');
 
@@ -64,17 +64,17 @@ export default component SeatCard(props: {
                         <span class="flex h-14 w-14 items-center justify-center rounded-full border border-dashed border-line text-faint">
                             <Icon name="seat" size={ 22 } />
                         </span>
-                        <span class="text-[13px] font-semibold text-muted">{ locale.t('play.lobby.open') }</span>
+                        <span class="text-ui-sm font-semibold text-muted">{ locale.t('play.lobby.open') }</span>
                     </div>
                 }
             >
                 { () =>
-                    <button type="button" class={ [ shell, 'cursor-pointer hover:border-lamp/60 hover:bg-raised/40' ].join(' ') } onClick={ () => props.onInvite?.() }>
-                        <span class="flex h-14 w-14 items-center justify-center rounded-full border border-dashed border-line text-lamp">
+                    <button type="button" class={ [ shell, 'cursor-pointer hover:border-accent/60 hover:bg-raised/40' ].join(' ') } onClick={ () => props.onInvite?.() }>
+                        <span class="flex h-14 w-14 items-center justify-center rounded-full border border-dashed border-line text-accent">
                             <Icon name="friend-add" size={ 22 } />
                         </span>
-                        <span class="text-[13px] font-semibold text-lamp">{ locale.t('play.lobby.invite') }</span>
-                        <span class="text-[12px] text-faint">{ locale.t('play.lobby.open') }</span>
+                        <span class="text-ui-sm font-semibold text-accent">{ locale.t('play.lobby.invite') }</span>
+                        <span class="text-ui-xs text-faint">{ locale.t('play.lobby.open') }</span>
                     </button>
                 }
             </Show>
@@ -83,7 +83,7 @@ export default component SeatCard(props: {
         { () =>
             <div class={ shell }>
                 <Show when={ props.seat.host }>
-                    <span class="absolute start-2 top-2 flex items-center gap-1 rounded-full bg-lamp/15 px-2 py-0.5 text-[11px] font-semibold text-lamp">
+                    <span class="absolute start-2 top-2 flex items-center gap-1 rounded-full bg-accent/15 px-2 py-0.5 text-ui-2xs font-semibold text-accent">
                         <Icon name="star" size={ 11 } />
                         { locale.t('play.lobby.host') }
                     </span>
@@ -105,10 +105,10 @@ export default component SeatCard(props: {
                         />
                     }
                 </Show>
-                <span class={ [ 'w-full truncate text-[14px] font-semibold', pending ? 'text-muted' : 'text-text' ].join(' ') }>{ name }</span>
+                <span class={ [ 'w-full truncate text-ui-base font-semibold', pending ? 'text-muted' : 'text-text' ].join(' ') }>{ name }</span>
                 <Show when={ tag !== null }>
                     { () =>
-                        <span class={ [ 'rounded-full px-2 py-0.5 text-[11px] font-semibold', tag!.tone, pending ? 'animate-pulse motion-reduce:animate-none' : '' ].filter(Boolean).join(' ') }>
+                        <span class={ [ 'rounded-full px-2 py-0.5 text-ui-2xs font-semibold', tag!.tone, pending ? 'animate-pulse motion-reduce:animate-none' : '' ].filter(Boolean).join(' ') }>
                             { tag!.text }
                         </span>
                     }

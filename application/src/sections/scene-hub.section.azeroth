@@ -7,8 +7,8 @@ export default component SceneHub()
     <section class="relative flex min-h-dvh items-center" aria-labelledby="hub-title">
         <div class="mx-auto w-full max-w-[80rem] px-5 sm:px-8">
             <div class="flex max-w-[30rem] flex-col gap-4">
-                <h2 id="hub-title" class="text-[clamp(2rem,6vw,3.5rem)] text-text">{ locale.t('hub.title') }</h2>
-                <p class="max-w-[44ch] text-[16px] text-muted">{ locale.t('hub.lead') }</p>
+                <h2 id="hub-title" class="text-display-xl text-text">{ locale.t('hub.title') }</h2>
+                <p class="max-w-[44ch] text-ui-lg text-muted">{ locale.t('hub.lead') }</p>
             </div>
         </div>
     </section>

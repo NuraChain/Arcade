@@ -21,13 +21,13 @@ export default component GroupCard(props: { group: Group; class?: string })
 
     <Link
         to={ `/app/groups/${ props.group.id }` }
-        class={ [ 'flex items-center gap-3 rounded-panel border border-line bg-field p-3 transition duration-200 hover:border-lamp/40 hover:bg-raised/50', props.class ?? '' ].filter(Boolean).join(' ') }
+        class={ [ 'flex items-center gap-3 rounded-panel border border-line bg-field p-3 transition duration-200 hover:border-accent/40 hover:bg-raised/50', props.class ?? '' ].filter(Boolean).join(' ') }
         prefetch="hover"
     >
-        <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-tile bg-raised text-[24px]" aria-hidden="true">{ props.group.emoji }</span>
+        <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-tile bg-raised text-ui-2xl" aria-hidden="true">{ props.group.emoji }</span>
         <span class="flex min-w-0 flex-1 flex-col gap-1">
-            <span class="truncate text-[15px] font-semibold text-text">{ locale.text(props.group.name) }</span>
-            <span class="truncate text-[12px] text-muted">
+            <span class="truncate text-ui-md font-semibold text-text">{ locale.text(props.group.name) }</span>
+            <span class="truncate text-ui-xs text-muted">
                 { locale.plural('chat.members', members.length) }
                 <Show when={ online > 0 }>
                     <span class="text-live"> · { locale.plural('chat.online', online) }</span>

@@ -45,13 +45,13 @@ export default component Avatar(props: {
 
     derived dotClass = props.presence === 'online' || props.presence === 'playing'
         ? 'bg-live'
-        : (props.presence === 'away' ? 'bg-lamp' : 'bg-faint');
+        : (props.presence === 'away' ? 'bg-accent' : 'bg-faint');
 
     <span
         class={ [
             'relative inline-flex shrink-0 select-none items-center justify-center overflow-visible rounded-full align-middle font-semibold text-text',
             AVATAR_SIZE[size],
-            props.ring === true ? 'ring-2 ring-lamp ring-offset-2 ring-offset-field' : '',
+            props.ring === true ? 'ring-2 ring-accent ring-offset-2 ring-offset-field' : '',
             props.class ?? ''
         ].filter(Boolean).join(' ') }
         style={ `--hue: ${ hue }` }

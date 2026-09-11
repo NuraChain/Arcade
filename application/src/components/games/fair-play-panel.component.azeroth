@@ -32,13 +32,13 @@ export default component FairPlayPanel(props: { game: GameId; class?: string })
     })();
 
     <section class={ [ 'rounded-panel border border-live/30 bg-live/5 p-4', props.class ?? '' ].filter(Boolean).join(' ') } aria-labelledby={ `fair-play-${ props.game }` }>
-        <h2 id={ `fair-play-${ props.game }` } class="flex items-center gap-2 font-ui text-[13px] font-bold uppercase tracking-[0.08em] text-live [font-variation-settings:normal] [letter-spacing:0.08em]">
+        <h2 id={ `fair-play-${ props.game }` } class="flex items-center gap-2 font-ui text-ui-sm font-bold uppercase tracking-[0.08em] text-live [font-variation-settings:normal] [letter-spacing:0.08em]">
             <Icon name="verified" size={ 16 } />
             { locale.t('game.fairPlay.title') }
         </h2>
         <ul class="mt-3 flex flex-col gap-2.5">
             <For each={ items } key={ (item) => item.id } let={ item }>
-                <li class="flex items-start gap-3 text-[14px] leading-snug text-text">
+                <li class="flex items-start gap-3 text-ui-base leading-snug text-text">
                     <span class="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-live/15 text-live">
                         <Icon name={ item.icon } size={ 13 } />
                     </span>

@@ -90,10 +90,10 @@ export default component GroupPage()
             { () =>
                 <div class="flex flex-col gap-6">
                     <header class="flex flex-col items-center gap-3 pt-2 text-center">
-                        <span class="flex h-20 w-20 items-center justify-center rounded-panel bg-raised text-[40px]" aria-hidden="true">{ group!.emoji }</span>
-                        <h1 class="text-[clamp(1.75rem,6vw,2.5rem)] leading-none">{ name }</h1>
-                        <p class="max-w-[46ch] text-[14px] text-muted">{ locale.text(group!.blurb) }</p>
-                        <p class="tally flex flex-wrap items-center justify-center gap-2 text-[13px] text-muted">
+                        <span class="flex h-20 w-20 items-center justify-center rounded-panel bg-raised text-ui-4xl" aria-hidden="true">{ group!.emoji }</span>
+                        <h1 class="title text-ui-3xl">{ name }</h1>
+                        <p class="max-w-[46ch] text-ui-base text-muted">{ locale.text(group!.blurb) }</p>
+                        <p class="tally flex flex-wrap items-center justify-center gap-2 text-ui-sm text-muted">
                             <span>{ locale.plural('chat.members', members.length) }</span>
                             <Show when={ online.length > 0 }>
                                 { () => <span class="text-live">· { locale.plural('chat.online', online.length) }</span> }
@@ -137,7 +137,7 @@ export default component GroupPage()
                         </ul>
                     </section>
 
-                    <p class="flex items-center justify-center gap-2 text-[12px] text-faint">
+                    <p class="flex items-center justify-center gap-2 text-ui-xs text-faint">
                         <Icon name="history" size={ 13 } />
                         { locale.t('groups.since', { date: locale.date(group!.createdAt, { year: 'numeric', month: 'long' }) }) }
                         <Show when={ owner !== null }>

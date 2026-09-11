@@ -66,18 +66,18 @@ export default component MatchmakingPanel(props: { onInvite: () => void })
             <div class="pointer-events-none absolute inset-0 bg-gradient-to-t from-field via-field/60 to-transparent" aria-hidden="true"></div>
             <div class="relative -mt-16 flex flex-col gap-4 p-4 sm:-mt-20 sm:p-6">
                 <div class="flex items-center gap-3">
-                    <Show when={ !isFound } fallback={ <span class="flex h-10 w-10 items-center justify-center rounded-full bg-live text-void"><Icon name="check-circle" size={ 22 } /></span> }>
-                        { () => <Spinner size={ 28 } label={ locale.t('play.title.searching') } class="text-lamp" /> }
+                    <Show when={ !isFound } fallback={ <span class="flex h-10 w-10 items-center justify-center rounded-full bg-live text-accent-ink"><Icon name="check-circle" size={ 22 } /></span> }>
+                        { () => <Spinner size={ 28 } label={ locale.t('play.title.searching') } class="text-accent" /> }
                     </Show>
                     <div class="min-w-0">
-                        <h2 class="font-display text-[26px] font-semibold leading-none text-text">{ gameName }</h2>
-                        <p class="mt-1 text-[14px] text-muted">
+                        <h2 class="title text-ui-2xl text-text">{ gameName }</h2>
+                        <p class="mt-1 text-ui-base text-muted">
                             { isFound ? locale.t('play.found.lead') : locale.plural('play.search.lead', missing) }
                         </p>
                     </div>
                 </div>
 
-                <Progress value={ found } max={ total } tone={ isFound ? 'live' : 'lamp' } glow label={ locale.t('play.search.seats', { found, total }) } />
+                <Progress value={ found } max={ total } tone={ isFound ? 'live' : 'accent' } glow label={ locale.t('play.search.seats', { found, total }) } />
 
                 <ul class="flex flex-wrap items-center gap-3" aria-label={ locale.t('play.search.seats', { found, total }) }>
                     <For each={ current.seats } key={ (seat) => seat.index } let={ seat } index={ index }>
@@ -95,7 +95,7 @@ export default component MatchmakingPanel(props: { onInvite: () => void })
                                     </Show>
                                 }
                             </Show>
-                            <span class="max-w-[4.5rem] truncate text-[11px] text-muted">
+                            <span class="max-w-[4.5rem] truncate text-ui-2xs text-muted">
                                 { seat.playerId === current.me
                                     ? locale.t('common.you')
                                     : (seat.bot ? locale.t('play.lobby.bot') : (seated[index] === null ? '' : locale.text(seated[index]!.name).split(' ')[0])) }
@@ -111,7 +111,7 @@ export default component MatchmakingPanel(props: { onInvite: () => void })
                 </div>
 
                 <div class="flex flex-wrap items-center justify-between gap-3">
-                    <p class="tally text-[13px] text-faint">
+                    <p class="tally text-ui-sm text-faint">
                         { locale.t('play.search.eta', { seconds: etaSeconds }) } · { locale.plural('common.seconds', elapsed) }
                     </p>
                     <Show when={ !isFound }>
@@ -122,21 +122,21 @@ export default component MatchmakingPanel(props: { onInvite: () => void })
         </div>
 
         <Show when={ current.noMatch && !isFound }>
-            <div class="rounded-panel border border-lamp/40 bg-lamp/5 p-4 sm:p-5">
-                <h3 class="flex items-center gap-2 font-display text-[20px] font-semibold text-text">
-                    <Icon name="clock" size={ 18 } class="text-lamp" />
+            <div class="rounded-panel border border-accent/40 bg-accent/5 p-4 sm:p-5">
+                <h3 class="flex items-center gap-2 title text-ui-lg text-text">
+                    <Icon name="clock" size={ 18 } class="text-accent" />
                     { locale.t('play.search.slow') }
                 </h3>
-                <p class="mt-1 text-[14px] text-muted">{ locale.t('play.search.slowLead') }</p>
+                <p class="mt-1 text-ui-base text-muted">{ locale.t('play.search.slowLead') }</p>
                 <div class="mt-4 flex flex-col gap-2">
                     <Button variant="primary" block leading="friend-add" onClick={ () => props.onInvite() }>{ locale.t('play.search.inviteFriend') }</Button>
                     <Button variant="secondary" block leading="bot" onClick={ () => lobby.fillWithBots() }>{ locale.t('play.search.practice') }</Button>
-                    <p class="px-1 text-[12px] text-faint">{ locale.t('play.search.practiceHint') }</p>
+                    <p class="px-1 text-ui-xs text-faint">{ locale.t('play.search.practiceHint') }</p>
                     <Button variant="outline" block leading="refresh" onClick={ () => lobby.keepWaiting() }>{ locale.t('play.search.keepWaiting') }</Button>
                     <Show
                         when={ !lobby.notify() }
                         fallback={
-                            <p class="flex items-center gap-2 px-1 pt-1 text-[13px] text-live">
+                            <p class="flex items-center gap-2 px-1 pt-1 text-ui-sm text-live">
                                 <Icon name="bell" size={ 14 } />
                                 { locale.t('play.search.notified', { game: gameName }) }
                             </p>

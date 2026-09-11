@@ -74,13 +74,13 @@ export default component MePage()
                     <header class="flex flex-col items-center gap-3 pt-2 text-center">
                         <Avatar person={ user } size="2xl" presence="online" ring />
                         <div>
-                            <h1 class="text-[clamp(1.75rem,6vw,2.5rem)] leading-none">{ locale.text(user!.name) }</h1>
-                            <p class="mt-1 text-[14px] text-muted">@{ user!.handle }</p>
+                            <h1 class="title text-ui-3xl">{ locale.text(user!.name) }</h1>
+                            <p class="mt-1 text-ui-base text-muted">@{ user!.handle }</p>
                         </div>
                         <ul class="flex flex-wrap justify-center gap-2" aria-label={ locale.t('person.tab.overview') }>
                             <Show
                                 when={ account.isWallet() }
-                                fallback={ <li><Chip icon="people" tone="lamp">{ locale.t('wallet.demoBadge') }</Chip></li> }
+                                fallback={ <li><Chip icon="people" tone="accent">{ locale.t('wallet.demoBadge') }</Chip></li> }
                             >
                                 { () =>
                                     <li>
@@ -99,23 +99,23 @@ export default component MePage()
                         <Progress
                             value={ Math.max(0, totals.played - levelFloor) }
                             max={ Math.max(1, levelCeiling - levelFloor) }
-                            tone="lamp"
+                            tone="accent"
                             glow
                             label={ locale.t('me.xp', { current: locale.n(Math.max(0, totals.played - levelFloor)), next: locale.n(Math.max(1, levelCeiling - levelFloor)), level: nextLevel }) }
                         />
-                        <p class="tally mt-2 text-[12px] text-faint">
+                        <p class="tally mt-2 text-ui-xs text-faint">
                             { locale.t('me.xp', { current: locale.n(Math.max(0, totals.played - levelFloor)), next: locale.n(Math.max(1, levelCeiling - levelFloor)), level: nextLevel }) }
                         </p>
                     </section>
 
                     <Show when={ !account.isWallet() }>
                         { () =>
-                            <section class="rounded-panel border border-lamp/40 bg-lamp/5 p-4">
-                                <h2 class="flex items-center gap-2 font-display text-[20px] font-semibold text-text">
-                                    <Icon name="key" size={ 18 } class="text-lamp" />
+                            <section class="rounded-panel border border-accent/40 bg-accent/5 p-4">
+                                <h2 class="flex items-center gap-2 title text-ui-lg text-text">
+                                    <Icon name="key" size={ 18 } class="text-accent" />
                                     { locale.t('me.keepSeat.title') }
                                 </h2>
-                                <p class="mt-1 text-[14px] text-muted">{ locale.t('me.keepSeat.lead') }</p>
+                                <p class="mt-1 text-ui-base text-muted">{ locale.t('me.keepSeat.lead') }</p>
                                 <Button variant="primary" block class="mt-4" leading="key" to="/app/me/settings">{ locale.t('me.keepSeat.action') }</Button>
                             </section>
                         }
@@ -134,7 +134,7 @@ export default component MePage()
                                 <RecordStrip record={ { played: totals.played, won: totals.won, streak: user!.stats[user!.favourite].streak } } />
                                 <section>
                                     <SectionHeading title={ locale.t('person.friends') } />
-                                    <p class="tally rounded-panel border border-line bg-field p-4 text-[15px] text-text">
+                                    <p class="tally rounded-panel border border-line bg-field p-4 text-ui-md text-text">
                                         { locale.plural('friends.count', social.friends().length) }
                                     </p>
                                 </section>
@@ -147,8 +147,8 @@ export default component MePage()
                                                     <Icon name="key" size={ 18 } />
                                                 </span>
                                                 <span class="flex min-w-0 flex-1 flex-col">
-                                                    <code class="tally truncate text-[14px] text-text">{ account.address() }</code>
-                                                    <span class="text-[12px] text-muted">{ locale.t('wallet.chainReady', { chain: NURA_CHAIN.name }) }</span>
+                                                    <code class="tally truncate text-ui-base text-text">{ account.address() }</code>
+                                                    <span class="text-ui-xs text-muted">{ locale.t('wallet.chainReady', { chain: NURA_CHAIN.name }) }</span>
                                                 </span>
                                             </div>
                                         </section>
@@ -167,8 +167,8 @@ export default component MePage()
                                             <Icon name={ game.category === 'cards' ? 'cards' : 'dice' } size={ 18 } />
                                         </span>
                                         <span class="flex min-w-0 flex-1 flex-col">
-                                            <span class="truncate text-[15px] font-semibold text-text">{ locale.t(game.nameKey) }</span>
-                                            <span class="tally text-[12px] text-muted">
+                                            <span class="truncate text-ui-md font-semibold text-text">{ locale.t(game.nameKey) }</span>
+                                            <span class="tally text-ui-xs text-muted">
                                                 { locale.t('game.record.played') } { locale.n(user!.stats[game.id].played) } · { locale.t('game.record.won') } { locale.n(user!.stats[game.id].won) }
                                             </span>
                                         </span>
@@ -185,16 +185,16 @@ export default component MePage()
                                 <For each={ ACHIEVEMENTS } key={ (achievement) => achievement.id } let={ achievement }>
                                     <li class={ [
                                         'flex flex-col items-center gap-1.5 rounded-panel border p-3 text-center',
-                                        user!.achievements.includes(achievement.id) ? 'border-lamp/40 bg-lamp/5' : 'border-line bg-field opacity-60'
+                                        user!.achievements.includes(achievement.id) ? 'border-accent/40 bg-accent/5' : 'border-line bg-field opacity-60'
                                     ].join(' ') }>
                                         <span class={ [
                                             'flex h-11 w-11 items-center justify-center rounded-full',
-                                            user!.achievements.includes(achievement.id) ? 'bg-lamp/20 text-lamp' : 'bg-raised text-faint'
+                                            user!.achievements.includes(achievement.id) ? 'bg-accent/20 text-accent' : 'bg-raised text-faint'
                                         ].join(' ') }>
                                             <Icon name={ achievement.icon } size={ 20 } />
                                         </span>
-                                        <span class="text-[13px] font-semibold text-text">{ locale.text(achievement.name) }</span>
-                                        <span class="text-[11px] text-muted">
+                                        <span class="text-ui-sm font-semibold text-text">{ locale.text(achievement.name) }</span>
+                                        <span class="text-ui-2xs text-muted">
                                             { user!.achievements.includes(achievement.id) ? locale.text(achievement.blurb) : locale.t('person.achievements.locked') }
                                         </span>
                                     </li>

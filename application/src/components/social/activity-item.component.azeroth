@@ -54,8 +54,8 @@ export default component ActivityItem(props: { activity: Activity })
     <Link to={ href } class="flex items-center gap-3 rounded-tile px-2 py-2 transition-colors duration-150 hover:bg-raised/60">
         <Avatar person={ person } size="md" presence={ person === null ? null : presence.of(person.id).state } />
         <span class="flex min-w-0 flex-1 flex-col">
-            <span class="truncate text-[14px] text-text">{ text }</span>
-            <span class="text-[12px] text-faint">{ locale.relative(props.activity.at) }</span>
+            <span class="truncate text-ui-base text-text">{ text }</span>
+            <span class="text-ui-xs text-faint">{ locale.relative(props.activity.at) }</span>
         </span>
         <span class={ [ 'flex h-8 w-8 shrink-0 items-center justify-center rounded-full', props.activity.kind === 'won' ? 'bg-win/15 text-win' : 'bg-raised text-muted' ].join(' ') } aria-hidden="true">
             <Icon name={ ICON[props.activity.kind] } size={ 15 } />

@@ -179,7 +179,7 @@ export default component PlayPage()
             <Show when={ phone }>
                 { () => <IconButton icon="back" label={ locale.t('app.nav.back') } flip onClick={ exit } /> }
             </Show>
-            <h1 class={ [ 'label min-w-0 flex-1 truncate font-semibold text-text', phone ? 'text-[17px]' : 'sr-only' ].join(' ') }>{ title }</h1>
+            <h1 class={ [ 'label min-w-0 flex-1 truncate font-semibold text-text', phone ? 'text-ui-lg' : 'sr-only' ].join(' ') }>{ title }</h1>
             <Show when={ chatAvailable }>
                 { () =>
                     <IconButton

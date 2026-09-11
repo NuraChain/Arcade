@@ -25,8 +25,8 @@ export default component Button(props: {
     derived inert = props.disabled === true || props.loading === true;
 
     derived shell = [
-        'relative inline-flex select-none items-center justify-center rounded-full font-semibold',
-        'transition duration-150 ease-[var(--ease-ui)] active:scale-[0.98]',
+        'relative inline-flex select-none items-center justify-center rounded-control font-semibold',
+        'transition duration-150 ease-[var(--ease-ui)] active:scale-[0.985]',
         'disabled:cursor-not-allowed disabled:opacity-50',
         BUTTON_VARIANT[props.variant ?? 'outline'],
         BUTTON_SIZE[props.size ?? 'md'],

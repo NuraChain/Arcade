@@ -95,15 +95,15 @@ export default component GamePage()
                                 <SectionHeading id="game-about" title={ locale.t('game.about') } />
                                 <ol class="flex flex-col gap-2">
                                     <For each={ ruleKeys } key={ (key) => key } let={ key } index={ index }>
-                                        <li class="flex items-start gap-3 rounded-tile border border-line bg-field p-3 text-[14px] leading-snug text-text">
-                                            <span class="tally flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-lamp/15 text-[13px] font-bold text-lamp">{ locale.n(index + 1) }</span>
+                                        <li class="flex items-start gap-3 rounded-tile border border-line bg-field p-3 text-ui-base leading-snug text-text">
+                                            <span class="tally flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent/15 text-ui-sm font-bold text-accent">{ locale.n(index + 1) }</span>
                                             <span class="pt-1">{ locale.t(key) }</span>
                                         </li>
                                     </For>
                                 </ol>
                                 <Show when={ game!.id === 'hokm' }>
-                                    <p class="mt-3 flex items-start gap-2 rounded-tile bg-lamp/10 p-3 text-[13px] text-text">
-                                        <Icon name="info" size={ 16 } class="mt-0.5 shrink-0 text-lamp" />
+                                    <p class="mt-3 flex items-start gap-2 rounded-tile bg-accent/10 p-3 text-ui-sm text-text">
+                                        <Icon name="info" size={ 16 } class="mt-0.5 shrink-0 text-accent" />
                                         <span>{ locale.t('game.needsFour') }</span>
                                     </p>
                                 </Show>
@@ -113,7 +113,7 @@ export default component GamePage()
                                 <SectionHeading id="game-friends" title={ locale.t('game.friendsPlaying') } more={ locale.t('common.seeAll') } to="/app/friends" />
                                 <Show
                                     when={ friendsPlaying.length > 0 }
-                                    fallback={ <p class="rounded-tile border border-dashed border-line p-4 text-[13px] text-muted">{ locale.t('game.friendsPlayingEmpty', { game: name }) }</p> }
+                                    fallback={ <p class="rounded-tile border border-dashed border-line p-4 text-ui-sm text-muted">{ locale.t('game.friendsPlayingEmpty', { game: name }) }</p> }
                                 >
                                     { () => <PeopleStrip people={ friendsPlaying } label={ locale.t('game.friendsPlaying') } /> }
                                 </Show>
@@ -124,10 +124,10 @@ export default component GamePage()
                                 <ol class="flex flex-col gap-1 rounded-panel border border-line bg-field p-2">
                                     <For each={ leaders } key={ (person) => person.id } let={ person } index={ index }>
                                         <li class="flex items-center gap-3 rounded-tile px-2 py-1.5">
-                                            <span class={ [ 'tally w-6 text-center text-[13px] font-bold', index === 0 ? 'text-lamp' : 'text-faint' ].join(' ') }>{ locale.n(index + 1) }</span>
+                                            <span class={ [ 'tally w-6 text-center text-ui-sm font-bold', index === 0 ? 'text-accent' : 'text-faint' ].join(' ') }>{ locale.n(index + 1) }</span>
                                             <Avatar person={ person } size="sm" presence={ presence.of(person.id).state } />
-                                            <span class="min-w-0 flex-1 truncate text-[14px] font-semibold text-text">{ locale.text(person.name) }</span>
-                                            <span class="tally text-[13px] text-muted">{ locale.plural('game.leaderboard.wins', person.stats[game!.id].won) }</span>
+                                            <span class="min-w-0 flex-1 truncate text-ui-base font-semibold text-text">{ locale.text(person.name) }</span>
+                                            <span class="tally text-ui-sm text-muted">{ locale.plural('game.leaderboard.wins', person.stats[game!.id].won) }</span>
                                         </li>
                                     </For>
                                 </ol>
@@ -141,8 +141,8 @@ export default component GamePage()
                             </section>
                             <FairPlayPanel game={ game!.id } />
                             <Show when={ rules !== null && rules.stakes === 'play-money' }>
-                                <p class="flex items-start gap-2 rounded-tile border border-line bg-field p-3 text-[13px] text-muted">
-                                    <Icon name="coins" size={ 16 } class="mt-0.5 shrink-0 text-lamp" />
+                                <p class="flex items-start gap-2 rounded-tile border border-line bg-field p-3 text-ui-sm text-muted">
+                                    <Icon name="coins" size={ 16 } class="mt-0.5 shrink-0 text-accent" />
                                     <span>{ locale.t('games.stakes.playMoneyHint') }</span>
                                 </p>
                             </Show>

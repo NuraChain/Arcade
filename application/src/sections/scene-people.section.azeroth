@@ -10,17 +10,17 @@ export default component ScenePeople()
     <section class="relative flex min-h-dvh items-center" aria-labelledby="people-title">
         <div class="mx-auto w-full max-w-[80rem] px-5 sm:px-8">
             <div class="flex max-w-[34rem] flex-col gap-5">
-                <h2 id="people-title" class="text-[clamp(2rem,6vw,3.5rem)] text-text">{ locale.t('people.title') }</h2>
-                <p class="max-w-[44ch] text-[16px] text-muted">{ locale.t('people.lead') }</p>
+                <h2 id="people-title" class="text-display-xl text-text">{ locale.t('people.title') }</h2>
+                <p class="max-w-[44ch] text-ui-lg text-muted">{ locale.t('people.lead') }</p>
 
                 <dl class="mt-2 flex flex-col gap-3 border-s-2 border-line ps-5">
                     <div class="flex flex-wrap items-baseline gap-x-3">
-                        <dt class="label text-[13px] text-faint">{ locale.t('people.stat.open') }</dt>
-                        <dd class="tally font-display text-[20px] font-semibold text-lamp">{ locale.n(tables) }</dd>
+                        <dt class="label text-ui-sm text-faint">{ locale.t('people.stat.open') }</dt>
+                        <dd class="tally font-display text-ui-xl font-semibold text-accent">{ locale.n(tables) }</dd>
                     </div>
                     <div class="flex flex-wrap items-baseline gap-x-3">
-                        <dt class="label text-[13px] text-faint">{ locale.t('people.stat.seat') }</dt>
-                        <dd class="text-[15px] text-text">{ locale.t('people.stat.seatValue') }</dd>
+                        <dt class="label text-ui-sm text-faint">{ locale.t('people.stat.seat') }</dt>
+                        <dd class="text-ui-md text-text">{ locale.t('people.stat.seatValue') }</dd>
                     </div>
                 </dl>
             </div>

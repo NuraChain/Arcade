@@ -28,11 +28,11 @@ export default component GameHero(props: { game: Game; onQuickPlay: () => void }
                 <Chip icon={ props.game.category === 'cards' ? 'cards' : 'dice' }>{ locale.t(props.game.categoryKey) }</Chip>
                 <Chip icon="people"><span class="tally">{ seats }</span></Chip>
                 <Show when={ rules.partners }>{ () => <Chip icon="versus">{ locale.t('games.partners') }</Chip> }</Show>
-                <Show when={ rules.stakes === 'play-money' }>{ () => <Chip icon="coins" tone="lamp">{ locale.t('games.stakes.playMoney') }</Chip> }</Show>
+                <Show when={ rules.stakes === 'play-money' }>{ () => <Chip icon="coins" tone="accent">{ locale.t('games.stakes.playMoney') }</Chip> }</Show>
             </div>
             <div>
-                <h1 class="text-[clamp(2.25rem,7vw,3.5rem)] leading-none">{ name }</h1>
-                <p class="mt-2 max-w-[52ch] text-[15px] text-muted sm:text-[17px]">{ locale.t(props.game.blurbKey) }</p>
+                <h1 class="text-display-xl leading-none">{ name }</h1>
+                <p class="mt-2 max-w-[52ch] text-ui-md text-muted sm:text-ui-lg">{ locale.t(props.game.blurbKey) }</p>
             </div>
             <LiveStats game={ props.game.id } />
             <div class="hidden gap-3 sm:flex">
@@ -41,7 +41,7 @@ export default component GameHero(props: { game: Game; onQuickPlay: () => void }
             </div>
             <ul class="flex flex-wrap gap-2" aria-label={ locale.t('game.modes') }>
                 <For each={ [...rules.modes] } key={ (mode) => mode } let={ mode }>
-                    <li class="flex items-center gap-2 rounded-full border border-line bg-void/40 px-3 py-1.5 text-[12px] text-muted">
+                    <li class="flex items-center gap-2 rounded-full border border-line bg-void/40 px-3 py-1.5 text-ui-xs text-muted">
                         <Icon name={ mode === 'live' ? 'zap' : 'clock' } size={ 13 } class={ mode === 'live' ? 'text-live' : '' } />
                         <span class="font-semibold text-text">{ locale.t(mode === 'live' ? 'games.mode.live' : 'games.mode.turns') }</span>
                         <span class="hidden sm:inline">{ locale.t(mode === 'live' ? 'games.mode.liveHint' : 'games.mode.turnsHint') }</span>

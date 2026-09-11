@@ -10,7 +10,7 @@ export default component EmptyState(props: {
     lead?: string;
     action?: string;
     to?: NavigateTarget;
-    tone?: 'lamp' | 'live';
+    tone?: 'accent' | 'live';
     class?: string;
     onAction?: () => void;
 })
@@ -21,7 +21,7 @@ export default component EmptyState(props: {
                 <span
                     class={ [
                         'mb-4 flex h-14 w-14 items-center justify-center rounded-full',
-                        props.tone === 'live' ? 'bg-live/15 text-live' : 'bg-lamp/15 text-lamp'
+                        props.tone === 'live' ? 'bg-live/15 text-live' : 'bg-accent/15 text-accent'
                     ].join(' ') }
                     aria-hidden="true"
                 >
@@ -29,9 +29,9 @@ export default component EmptyState(props: {
                 </span>
             }
         </Show>
-        <p class="font-display text-[22px] font-semibold text-text">{ props.title }</p>
+        <p class="title text-ui-xl text-text">{ props.title }</p>
         <Show when={ props.lead !== undefined }>
-            { () => <p class="mt-1.5 max-w-[34ch] text-[14px] text-muted">{ props.lead }</p> }
+            { () => <p class="mt-1.5 max-w-[34ch] text-ui-base text-muted">{ props.lead }</p> }
         </Show>
         <Show when={ props.action !== undefined }>
             { () =>

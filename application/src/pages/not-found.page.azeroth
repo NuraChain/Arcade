@@ -6,8 +6,8 @@ export default component NotFoundPage()
     const locale = useLocale();
 
     <section class="mx-auto flex min-h-[70dvh] w-full max-w-[42rem] flex-col items-start justify-center gap-5 px-5 sm:px-8">
-        <h1 class="text-[clamp(2.25rem,7vw,3.5rem)] text-text">{ locale.t('notFound.title') }</h1>
-        <p class="max-w-[46ch] text-[16px] text-muted">{ locale.t('notFound.lead') }</p>
+        <h1 class="text-display-xl text-text">{ locale.t('notFound.title') }</h1>
+        <p class="max-w-[46ch] text-ui-lg text-muted">{ locale.t('notFound.lead') }</p>
         <Button href="/" variant="primary" size="md" icon="forward">{ locale.t('notFound.cta') }</Button>
     </section>
 }

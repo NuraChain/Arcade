@@ -49,18 +49,18 @@ export default component MessageBubble(props: { message: Message; me: string; sh
                 fallback={
                     <div class={ [
                         'flex w-full max-w-[22rem] flex-col gap-3 rounded-panel border p-3',
-                        props.message.kind === 'result' ? 'border-win/40 bg-win/5' : 'border-lamp/40 bg-lamp/5',
+                        props.message.kind === 'result' ? 'border-win/40 bg-win/5' : 'border-accent/40 bg-accent/5',
                         mine ? 'ms-auto' : ''
                     ].filter(Boolean).join(' ') }>
                         <div class="flex items-center gap-2.5">
                             <span class={ [
                                 'flex h-9 w-9 shrink-0 items-center justify-center rounded-full',
-                                props.message.kind === 'result' ? 'bg-win/20 text-win' : 'bg-lamp/20 text-lamp'
+                                props.message.kind === 'result' ? 'bg-win/20 text-win' : 'bg-accent/20 text-accent'
                             ].join(' ') }>
                                 <Icon name={ props.message.kind === 'result' ? 'trophy' : 'seat' } size={ 18 } />
                             </span>
                             <span class="flex min-w-0 flex-1 flex-col">
-                                <span class="truncate text-[14px] font-semibold text-text">
+                                <span class="truncate text-ui-base font-semibold text-text">
                                     { props.message.kind === 'result'
                                         ? locale.t('chat.result.title', {
                                             winner: props.message.ref?.winnerId === props.me
@@ -70,7 +70,7 @@ export default component MessageBubble(props: { message: Message; me: string; sh
                                         })
                                         : locale.t(mine ? 'chat.invite.titleMine' : 'chat.invite.title', { name: firstName, game: game === null ? '' : locale.t(game.nameKey) }) }
                                 </span>
-                                <span class="truncate text-[12px] text-muted">{ locale.text(props.message.text) }</span>
+                                <span class="truncate text-ui-xs text-muted">{ locale.text(props.message.text) }</span>
                             </span>
                         </div>
                         <Show when={ props.message.kind === 'invite' }>
@@ -80,7 +80,7 @@ export default component MessageBubble(props: { message: Message; me: string; sh
                 }
             >
                 { () =>
-                    <p class="mx-auto max-w-[26rem] rounded-full bg-raised/60 px-3 py-1 text-center text-[12px] text-muted">
+                    <p class="mx-auto max-w-[26rem] rounded-full bg-raised/60 px-3 py-1 text-center text-ui-xs text-muted">
                         { locale.text(props.message.text) }
                     </p>
                 }
@@ -91,22 +91,22 @@ export default component MessageBubble(props: { message: Message; me: string; sh
             <div class={ [ 'flex w-full items-end gap-2', mine ? 'flex-row-reverse' : '' ].filter(Boolean).join(' ') }>
                 <Show when={ !mine && props.showAuthor } fallback={ <span class="w-8 shrink-0" aria-hidden="true"></span> }>
                     { () =>
-                        <Link to={ `/app/people/${ person?.handle ?? props.message.from }` } class="shrink-0">
+                        <Link to={ `/app/people/${ person?.handle ?? props.message.from }` } data-inline class="shrink-0">
                             <Avatar person={ person } size="sm" />
                         </Link>
                     }
                 </Show>
                 <div class={ [ 'flex max-w-[min(30rem,78%)] flex-col gap-0.5', mine ? 'items-end' : 'items-start' ].join(' ') }>
                     <Show when={ !mine && props.showAuthor }>
-                        { () => <span class="px-1 text-[11px] font-semibold text-muted">{ firstName }</span> }
+                        { () => <span class="px-1 text-ui-2xs font-semibold text-muted">{ firstName }</span> }
                     </Show>
                     <span class={ [
-                        'rounded-tile px-3 py-2 text-[14px] leading-snug',
-                        mine ? 'bg-lamp text-void' : 'bg-raised text-text'
+                        'rounded-tile px-3 py-2 text-ui-base leading-snug',
+                        mine ? 'bg-accent text-accent-ink' : 'bg-raised text-text'
                     ].join(' ') }>
                         { locale.text(props.message.text) }
                     </span>
-                    <span class="px-1 text-[11px] text-faint">{ locale.relative(props.message.at) }</span>
+                    <span class="px-1 text-ui-2xs text-faint">{ locale.relative(props.message.at) }</span>
                 </div>
             </div>
         }

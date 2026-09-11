@@ -21,8 +21,8 @@ export default component Progress(props: { value: number; max?: number; tone?: T
         <div
             class={ [
                 'h-full rounded-full transition-[width] duration-500 ease-[var(--ease-reveal)]',
-                TONE_BAR[props.tone ?? 'lamp'],
-                props.glow === true ? (props.tone === 'live' ? 'shadow-glow-live' : 'shadow-glow-lamp') : ''
+                TONE_BAR[props.tone ?? 'accent'],
+                props.glow === true ? (props.tone === 'live' ? 'shadow-glow-live' : 'shadow-glow-accent') : ''
             ].filter(Boolean).join(' ') }
             style={ `width: ${ Math.round(ratio * 100) }%` }
         ></div>

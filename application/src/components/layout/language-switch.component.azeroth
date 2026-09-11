@@ -18,8 +18,8 @@ export default component LanguageSwitch()
                 type="button"
                 lang={ name }
                 class={ [
-                    'flex h-8 items-center justify-center rounded-full px-3 text-[13px] font-semibold transition-colors duration-150',
-                    locale.locale() === name ? 'cursor-default bg-raised text-lamp' : 'cursor-pointer text-muted hover:text-text'
+                    'flex h-8 items-center justify-center rounded-full px-3 text-ui-sm font-semibold transition-colors duration-150',
+                    locale.locale() === name ? 'cursor-default bg-raised text-accent' : 'cursor-pointer text-muted hover:text-text'
                 ].join(' ') }
                 aria-pressed={ locale.locale() === name }
                 onClick={ () => press(name) }

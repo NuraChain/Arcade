@@ -23,18 +23,18 @@ export default component SceneCrew()
     <section id="crew" class="relative flex min-h-dvh items-center py-24" aria-labelledby="crew-title">
         <div class="mx-auto w-full max-w-[80rem] px-5 sm:px-8">
             <div class="flex flex-col gap-3">
-                <h2 id="crew-title" class="max-w-[16ch] text-[clamp(2rem,6vw,3.5rem)] text-text">{ locale.t('crew.title') }</h2>
-                <p class="max-w-[48ch] text-[16px] text-muted">{ locale.t('crew.lead') }</p>
+                <h2 id="crew-title" class="max-w-[16ch] text-display-xl text-text">{ locale.t('crew.title') }</h2>
+                <p class="max-w-[48ch] text-ui-lg text-muted">{ locale.t('crew.lead') }</p>
             </div>
 
             <ul class="mt-10 flex flex-col gap-8 sm:mt-12 sm:grid sm:max-w-[60rem] sm:grid-cols-3 sm:gap-10">
                 <For each={ FEATURES } key={ (feature) => feature.titleKey } let={ feature }>
                     <li class="flex flex-col gap-3">
-                        <span class="flex h-9 w-9 items-center justify-center rounded-full border border-line text-lamp">
+                        <span class="flex h-9 w-9 items-center justify-center rounded-full border border-line text-accent">
                             <Icon name={ feature.icon } size={ 17 } />
                         </span>
-                        <h3 class="label text-[15px] text-text">{ locale.t(feature.titleKey) }</h3>
-                        <p class="max-w-[34ch] text-[14px] text-muted">{ locale.t(feature.bodyKey) }</p>
+                        <h3 class="label text-ui-md text-text">{ locale.t(feature.titleKey) }</h3>
+                        <p class="max-w-[34ch] text-ui-base text-muted">{ locale.t(feature.bodyKey) }</p>
                     </li>
                 </For>
             </ul>

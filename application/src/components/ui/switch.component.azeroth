@@ -20,21 +20,21 @@ export default component Switch(props: {
         onClick={ () => (props.disabled === true ? undefined : props.onChange(!props.checked)) }
     >
         <span class="flex min-w-0 flex-col">
-            <span class="text-[15px] font-semibold text-text">{ props.label }</span>
+            <span class="text-ui-md font-semibold text-text">{ props.label }</span>
             <Show when={ props.description !== undefined }>
-                { () => <span class="text-[13px] text-muted">{ props.description }</span> }
+                { () => <span class="text-ui-sm text-muted">{ props.description }</span> }
             </Show>
         </span>
         <span
             class={ [
                 'relative h-7 w-12 shrink-0 rounded-full transition-colors duration-200',
-                props.checked ? 'bg-lamp' : 'bg-line'
+                props.checked ? 'bg-accent' : 'bg-line'
             ].join(' ') }
             aria-hidden="true"
         >
             <span
                 class={ [
-                    'absolute top-1 h-5 w-5 rounded-full bg-white shadow-1 transition-all duration-200',
+                    'absolute top-1 h-5 w-5 rounded-full bg-accent-ink shadow-1 transition-all duration-200',
                     props.checked ? 'start-6' : 'start-1'
                 ].join(' ') }
             ></span>

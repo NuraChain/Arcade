@@ -10,8 +10,8 @@ export default component ErrorState(props: { title?: string; lead?: string; clas
         <span class="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-madder/15 text-madder" aria-hidden="true">
             <Icon name="alert" size={ 26 } />
         </span>
-        <p class="font-display text-[22px] font-semibold text-text">{ props.title ?? locale.t('state.errorTitle') }</p>
-        <p class="mt-1.5 max-w-[34ch] text-[14px] text-muted">{ props.lead ?? locale.t('state.errorLead') }</p>
+        <p class="title text-ui-xl text-text">{ props.title ?? locale.t('state.errorTitle') }</p>
+        <p class="mt-1.5 max-w-[34ch] text-ui-base text-muted">{ props.lead ?? locale.t('state.errorLead') }</p>
         <Show when={ props.onRetry !== undefined }>
             { () =>
                 <div class="mt-5">

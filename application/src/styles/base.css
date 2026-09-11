@@ -42,7 +42,7 @@
     
     :focus-visible
     {
-        outline: 2px solid var(--lamp);
+        outline: 2px solid var(--accent);
         outline-offset: 3px;
         border-radius: 3px;
     }
@@ -51,6 +51,7 @@
     body
     {
         overflow-anchor: none;
+    -webkit-tap-highlight-color: transparent;
     }
 }
 
@@ -79,7 +80,7 @@
 {
     background: var(--field);
     border: 1px solid var(--line);
-    border-radius: 0.875rem;
+    border-radius: var(--radius-panel);
 }
 
 @utility safe-t
@@ -160,14 +161,39 @@
 
 @utility sheen
 {
-    background-image: linear-gradient(
-        110deg,
-        transparent 30%,
-        color-mix(in oklab, white 22%, transparent) 50%,
-        transparent 70%
-    );
-    background-size: 200% 100%;
-    animation: var(--animate-sheen);
+    position: relative;
+    overflow: hidden;
+
+    &::after
+    {
+        content: '';
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background-image: linear-gradient(
+            105deg,
+            transparent 42%,
+            color-mix(in oklab, white 9%, transparent) 50%,
+            transparent 58%
+        );
+        background-size: 240% 100%;
+        animation: var(--animate-sheen);
+    }
+}
+
+@utility title
+{
+    font-family: var(--font-ui);
+    font-variation-settings: normal;
+    font-weight: 700;
+    letter-spacing: -0.012em;
+    line-height: 1.15;
+    text-wrap: balance;
+}
+
+@utility rule
+{
+    border-block-end: 1px solid var(--line);
 }
 
 @utility label
@@ -179,6 +205,37 @@
     line-height: 1.4;
 }
 
+@utility bar
+{
+    scrollbar-width: thin;
+    scrollbar-color: var(--line-strong) transparent;
+
+    &::-webkit-scrollbar
+    {
+        inline-size: 10px;
+        block-size: 10px;
+    }
+
+    &::-webkit-scrollbar-track
+    {
+        background: transparent;
+    }
+
+    &::-webkit-scrollbar-thumb
+    {
+        background: var(--line-strong);
+        border-radius: 999px;
+        border: 3px solid transparent;
+        background-clip: content-box;
+    }
+
+    &::-webkit-scrollbar-thumb:hover
+    {
+        background: var(--faint);
+        background-clip: content-box;
+    }
+}
+
 @utility tally
 {
     font-variant-numeric: tabular-nums;
@@ -188,8 +245,8 @@
 
 @utility lit
 {
-    box-shadow: 0 0 0 1px color-mix(in oklab, var(--lamp) 40%, transparent),
-                0 8px 40px -12px color-mix(in oklab, var(--lamp) 55%, transparent);
+    box-shadow: 0 0 0 1px color-mix(in oklab, var(--accent) 40%, transparent),
+                0 8px 40px -12px color-mix(in oklab, var(--accent) 55%, transparent);
 }
 
 @utility scrim

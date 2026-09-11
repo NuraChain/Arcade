@@ -31,11 +31,11 @@ export default component TablePlaceholder(props: { onLeave: () => void })
             </Show>
             <div class="pointer-events-none absolute inset-0 bg-gradient-to-t from-field via-field/40 to-transparent" aria-hidden="true"></div>
             <div class="absolute start-3 top-3 flex items-center gap-2">
-                <span class="flex items-center gap-1.5 rounded-full bg-void/70 px-2.5 py-1 text-[12px] font-semibold text-live backdrop-blur-sm">
+                <span class="flex items-center gap-1.5 rounded-control border border-line/60 bg-void/85 px-2 py-1 text-ui-2xs font-bold text-live backdrop-blur-md">
                     <span class="live-dot h-2 w-2 rounded-full" aria-hidden="true"></span>
                     { locale.t('play.table.live') }
                 </span>
-                <span class="rounded-full bg-void/70 px-2.5 py-1 text-[12px] font-semibold text-muted backdrop-blur-sm">{ locale.t('play.table.inProgress') }</span>
+                <span class="rounded-control border border-line/60 bg-void/85 px-2 py-1 text-ui-2xs font-bold text-muted backdrop-blur-md">{ locale.t('play.table.inProgress') }</span>
             </div>
             <div class="absolute end-3 top-3">
                 <IconButton
@@ -57,8 +57,8 @@ export default component TablePlaceholder(props: { onLeave: () => void })
                         </li>
                     </For>
                 </ul>
-                <h2 class="font-display text-[clamp(1.5rem,5vw,2.25rem)] font-semibold leading-tight text-text">{ locale.t('play.table.placeholder', { game: gameName }) }</h2>
-                <p class="max-w-[46ch] text-[14px] text-muted">{ locale.t('play.table.placeholderLead') }</p>
+                <h2 class="title text-display-md text-text">{ locale.t('play.table.placeholder', { game: gameName }) }</h2>
+                <p class="max-w-[46ch] text-ui-base text-muted">{ locale.t('play.table.placeholderLead') }</p>
             </div>
         </div>
         <div class="flex flex-col gap-2 sm:flex-row">

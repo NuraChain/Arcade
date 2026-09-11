@@ -79,8 +79,8 @@ export default component FriendsPage()
 
     <Page label={ locale.t('app.nav.friends') }>
         <header class="pb-4">
-            <h1 class="text-[clamp(2rem,6vw,3rem)] leading-none">{ locale.t('app.nav.friends') }</h1>
-            <p class="mt-2 text-[15px] text-muted">{ locale.t('friends.lead') }</p>
+            <h1 class="title text-ui-4xl">{ locale.t('app.nav.friends') }</h1>
+            <p class="mt-2 text-ui-md text-muted">{ locale.t('friends.lead') }</p>
         </header>
 
         <Tabs items={ items } value={ tab } label={ locale.t('app.nav.friends') } class="mb-4" onChange={ (id) => tab = id } />
@@ -204,7 +204,7 @@ export default component FriendsPage()
                     { () =>
                         <ul class="grid grid-cols-2 gap-3 @lg:grid-cols-3 @3xl:grid-cols-4" aria-label={ locale.t('friends.tab.suggestions') }>
                             <For each={ suggestions } key={ (person) => person.id } let={ person }>
-                                <li class="flex">
+                                <li class="flex min-w-0">
                                     <div class="flex-1">
                                         <UserCard
                                             person={ person }

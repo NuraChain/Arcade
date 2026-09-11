@@ -18,7 +18,7 @@ export default component GameGrid(props: {
         aria-label={ props.label }
     >
         <For each={ props.games } key={ (game) => game.id } let={ game }>
-            <li class="flex">
+            <li class="flex min-w-0">
                 <GameCard game={ game } compact={ props.compact } class="flex-1" onQuickPlay={ props.onQuickPlay } />
             </li>
         </For>

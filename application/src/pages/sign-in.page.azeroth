@@ -66,15 +66,15 @@ export default component SignInPage()
     };
 
     <div class="relative min-h-dvh overflow-hidden bg-void text-text">
-        <div class="pointer-events-none absolute -top-40 start-1/2 h-[32rem] w-[32rem] -translate-x-1/2 rounded-full bg-lamp/15 blur-3xl" aria-hidden="true"></div>
+        <div class="pointer-events-none absolute -top-40 start-1/2 h-[32rem] w-[32rem] -translate-x-1/2 rounded-full bg-accent/15 blur-3xl" aria-hidden="true"></div>
         <div class="pointer-events-none absolute -bottom-48 -end-24 h-[26rem] w-[26rem] rounded-full bg-live/10 blur-3xl" aria-hidden="true"></div>
 
         <header class="safe-t relative mx-auto flex w-full max-w-[64rem] items-center justify-between px-5 py-5 sm:px-8">
             <a href="/" class="flex min-w-0 shrink items-center gap-2.5 rounded-full" aria-label={ locale.t('app.nav.landing') }>
-                <span class="lit flex h-8 w-8 items-center justify-center rounded-full bg-lamp text-void">
+                <span class="lit flex h-8 w-8 items-center justify-center rounded-control bg-accent text-accent-ink">
                     <Icon name="games" size={ 16 } />
                 </span>
-                <BrandMark class="whitespace-nowrap text-[16px] text-text sm:text-[18px]" />
+                <BrandMark class="whitespace-nowrap text-ui-lg text-text sm:text-ui-lg" />
             </a>
             <div class="flex shrink-0 items-center gap-2">
                 <ThemeSwitch />
@@ -95,7 +95,7 @@ export default component SignInPage()
 
             <Divider label={ locale.t('wallet.demoTitle') } class="my-8" />
 
-            <p class="-mt-4 mb-5 text-center text-[14px] text-muted">{ locale.t('wallet.demoLead') }</p>
+            <p class="-mt-4 mb-5 text-center text-ui-base text-muted">{ locale.t('wallet.demoLead') }</p>
 
             <Show
                 when={ showDemo }
@@ -114,27 +114,27 @@ export default component SignInPage()
                                         type="button"
                                         class={ [
                                             'group flex w-full cursor-pointer items-center gap-4 rounded-panel border border-line bg-field p-4 text-start',
-                                            'transition duration-200 ease-[var(--ease-ui)] hover:border-lamp/60 hover:bg-raised/60 active:scale-[0.99]',
-                                            pending === person.handle ? 'border-lamp' : ''
+                                            'transition duration-200 ease-[var(--ease-ui)] hover:border-accent/60 hover:bg-raised/60 active:scale-[0.99]',
+                                            pending === person.handle ? 'border-accent' : ''
                                         ].filter(Boolean).join(' ') }
                                         disabled={ pending !== '' }
                                         onClick={ () => void enter(person.handle) }
                                     >
                                         <Avatar person={ person } size="lg" presence="online" />
                                         <span class="flex min-w-0 flex-1 flex-col gap-0.5">
-                                            <span class="truncate text-[17px] font-semibold text-text">{ locale.text(person.name) }</span>
-                                            <span class="text-[13px] text-muted">@{ person.handle }</span>
-                                            <span class="mt-1 line-clamp-2 text-[13px] text-muted">{ locale.text(person.bio) }</span>
+                                            <span class="truncate text-ui-lg font-semibold text-text">{ locale.text(person.name) }</span>
+                                            <span class="text-ui-sm text-muted">@{ person.handle }</span>
+                                            <span class="mt-1 line-clamp-2 text-ui-sm text-muted">{ locale.text(person.bio) }</span>
                                             <Show when={ person.minor }>
                                                 { () =>
-                                                    <span class="mt-2 inline-flex w-fit items-center gap-1.5 rounded-full bg-live/15 px-2.5 py-1 text-[12px] font-semibold text-live">
+                                                    <span class="mt-2 inline-flex w-fit items-center gap-1.5 rounded-full bg-live/15 px-2.5 py-1 text-ui-xs font-semibold text-live">
                                                         <Icon name="shield" size={ 13 } />
                                                         { locale.t('signIn.minor') }
                                                     </span>
                                                 }
                                             </Show>
                                         </span>
-                                        <Icon name="forward" size={ 16 } class="icon-flip hidden shrink-0 text-lamp transition-transform group-hover:translate-x-0.5 sm:block" />
+                                        <Icon name="forward" size={ 16 } class="icon-flip hidden shrink-0 text-accent transition-transform group-hover:translate-x-0.5 sm:block" />
                                     </button>
                                 </li>
                             </For>

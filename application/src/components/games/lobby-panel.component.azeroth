@@ -44,16 +44,16 @@ export default component LobbyPanel(props: { onInvite: () => void; onCopyLink: (
     <section class="flex flex-col gap-5" aria-label={ locale.t('play.title.lobby') }>
         <div class="flex flex-wrap items-end justify-between gap-3">
             <div>
-                <p class="label text-[12px] text-faint">{ locale.t(starting ? 'play.title.starting' : 'play.title.lobby') }</p>
-                <h2 class="font-display text-[26px] font-semibold leading-none text-text">{ gameName }</h2>
+                <p class="label text-ui-xs text-faint">{ locale.t(starting ? 'play.title.starting' : 'play.title.lobby') }</p>
+                <h2 class="title text-ui-2xl text-text">{ gameName }</h2>
             </div>
-            <p class="flex items-center gap-2 text-[14px] text-muted" aria-live="polite">
+            <p class="flex items-center gap-2 text-ui-base text-muted" aria-live="polite">
                 <Show when={ starting } fallback={ <Icon name="clock" size={ 15 } /> }>
                     { () => <span class="live-dot h-2.5 w-2.5 rounded-full" aria-hidden="true"></span> }
                 </Show>
                 <span>{ status }</span>
                 <Show when={ starting }>
-                    { () => <span class="tally font-display text-[28px] font-semibold leading-none text-live">{ locale.n(current.countdown ?? 0) }</span> }
+                    { () => <span class="tally title text-ui-2xl text-live">{ locale.n(current.countdown ?? 0) }</span> }
                 </Show>
             </p>
         </div>

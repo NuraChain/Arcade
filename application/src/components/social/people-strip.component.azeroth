@@ -27,8 +27,8 @@ export default component PeopleStrip(props: { people: Person[]; label: string; c
             <li class="snap-start">
                 <Link to={ `/app/people/${ person.handle }` } class="flex w-[4.75rem] flex-col items-center gap-1.5 rounded-tile py-1 text-center" prefetch="hover">
                     <Avatar person={ person } size="lg" presence={ presence.of(person.id).state } />
-                    <span class="w-full truncate text-[12px] font-semibold text-text">{ locale.text(person.name).split(' ')[0] }</span>
-                    <span class="w-full truncate text-[11px] text-faint">{ status(person.id) }</span>
+                    <span class="w-full truncate text-ui-xs font-semibold text-text">{ locale.text(person.name).split(' ')[0] }</span>
+                    <span class="w-full truncate text-ui-2xs text-faint">{ status(person.id) }</span>
                 </Link>
             </li>
         </For>

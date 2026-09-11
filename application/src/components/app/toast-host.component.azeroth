@@ -16,7 +16,7 @@ const ICON: Record<ToastKind, IconName> = {
 const TONE: Record<ToastKind, string> = {
     info: 'text-muted',
     success: 'text-win',
-    warning: 'text-lamp',
+    warning: 'text-accent',
     error: 'text-madder',
     live: 'text-live'
 };
@@ -38,12 +38,12 @@ export default component ToastHost()
                     <span class={ [ 'shrink-0', TONE[toast.kind] ].join(' ') } aria-hidden="true">
                         <Icon name={ ICON[toast.kind] } size={ 18 } />
                     </span>
-                    <span class="min-w-0 flex-1 text-[14px] text-text">{ toast.text }</span>
+                    <span class="min-w-0 flex-1 text-ui-base text-text">{ toast.text }</span>
                     <Show when={ toast.action !== null }>
                         { () =>
                             <button
                                 type="button"
-                                class="shrink-0 cursor-pointer rounded-full px-2 py-1 text-[13px] font-bold text-lamp hover:underline"
+                                class="shrink-0 cursor-pointer rounded-full px-2 py-1 text-ui-sm font-bold text-accent hover:underline"
                                 onClick={ () =>
                                 {
                                     toast.action?.run();

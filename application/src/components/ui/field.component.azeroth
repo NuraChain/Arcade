@@ -15,10 +15,10 @@ export default component Field(props: {
     const locale = useLocale();
 
     <div class={ [ 'flex flex-col gap-1.5', props.class ?? '' ].filter(Boolean).join(' ') }>
-        <label for={ props.id } class="flex items-baseline justify-between gap-3 text-[13px] font-semibold text-text">
+        <label for={ props.id } class="flex items-baseline justify-between gap-3 text-ui-sm font-semibold text-text">
             <span>{ props.label }</span>
             <Show when={ props.optional === true }>
-                { () => <span class="text-[12px] font-normal text-faint">{ locale.t('common.optional') }</span> }
+                { () => <span class="text-ui-xs font-normal text-faint">{ locale.t('common.optional') }</span> }
             </Show>
         </label>
         { props.children }
@@ -26,11 +26,11 @@ export default component Field(props: {
             when={ props.error !== undefined && props.error !== null }
             fallback={
                 <Show when={ props.hint !== undefined }>
-                    { () => <p id={ `${ props.id }-hint` } class="text-[12px] text-muted">{ props.hint }</p> }
+                    { () => <p id={ `${ props.id }-hint` } class="text-ui-xs text-muted">{ props.hint }</p> }
                 </Show>
             }
         >
-            { () => <p id={ `${ props.id }-error` } class="text-[12px] font-medium text-madder" role="alert">{ props.error }</p> }
+            { () => <p id={ `${ props.id }-error` } class="text-ui-xs font-medium text-madder" role="alert">{ props.error }</p> }
         </Show>
     </div>
 }

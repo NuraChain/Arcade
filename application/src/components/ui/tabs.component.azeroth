@@ -39,7 +39,7 @@ export default component Tabs(props: {
                 role="tab"
                 data-tab={ item.id }
                 class={ [
-                    'relative flex h-11 shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap px-3 text-[14px] font-semibold',
+                    'relative flex h-11 shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap px-3 text-ui-base font-semibold',
                     'transition-colors duration-150',
                     props.value === item.id ? 'text-text' : 'text-muted hover:text-text'
                 ].join(' ') }
@@ -58,12 +58,12 @@ export default component Tabs(props: {
             >
                 { item.label }
                 <Show when={ item.count !== undefined && item.count > 0 }>
-                    { () => <span class="tally rounded-full bg-raised px-1.5 text-[11px] text-muted">{ locale.n(item.count!) }</span> }
+                    { () => <span class="tally rounded-full bg-raised px-1.5 text-ui-2xs text-muted">{ locale.n(item.count!) }</span> }
                 </Show>
                 <span
                     class={ [
                         'absolute inset-x-2 bottom-0 h-0.5 rounded-full transition-all duration-200',
-                        props.value === item.id ? 'bg-lamp' : 'bg-transparent'
+                        props.value === item.id ? 'bg-accent' : 'bg-transparent'
                     ].join(' ') }
                     aria-hidden="true"
                 ></span>

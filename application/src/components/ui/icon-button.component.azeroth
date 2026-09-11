@@ -21,10 +21,10 @@ export default component IconButton(props: {
 })
 {
     derived shell = [
-        'relative inline-flex shrink-0 select-none items-center justify-center rounded-full',
+        'relative inline-flex shrink-0 select-none items-center justify-center rounded-control',
         'transition duration-150 ease-[var(--ease-ui)] active:scale-95',
         'disabled:cursor-not-allowed disabled:opacity-50',
-        props.active === true ? 'text-lamp' : '',
+        props.active === true ? 'text-accent' : '',
         BUTTON_VARIANT[props.variant ?? 'ghost'],
         ICON_BUTTON_SIZE[props.size ?? 'md'],
         props.disabled === true ? '' : 'cursor-pointer',

@@ -114,8 +114,8 @@ export default component HomePage()
     <Page label={ locale.t('app.nav.home') }>
         <div class="flex flex-col gap-8">
             <header>
-                <h1 class="text-[clamp(1.9rem,6vw,2.75rem)] leading-tight">{ greeting }</h1>
-                <p class="mt-1 flex items-center gap-2 text-[14px] text-muted">
+                <h1 class="title text-ui-3xl">{ greeting }</h1>
+                <p class="mt-1 flex items-center gap-2 text-ui-base text-muted">
                     <span class="live-dot h-2 w-2 rounded-full" aria-hidden="true"></span>
                     <span class="tally">{ locale.plural('home.pulse', totals.playersOnline) }</span>
                 </p>
@@ -124,14 +124,14 @@ export default component HomePage()
             <Show when={ lobby.active() }>
                 { () =>
                     <Link to={ `/app/play/${ lobby.tableId() ?? '' }` } class="flex items-center gap-4 rounded-panel border border-live/40 bg-live/5 p-4 shadow-glow-live transition hover:bg-live/10">
-                        <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-live text-void">
+                        <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-live text-accent-ink">
                             <Icon name="seat" size={ 22 } />
                         </span>
                         <span class="flex min-w-0 flex-1 flex-col">
-                            <span class="font-display text-[19px] font-semibold text-text">{ locale.t('home.continue.title') }</span>
-                            <span class="truncate text-[13px] text-muted">{ continueText }</span>
+                            <span class="title text-ui-lg text-text">{ locale.t('home.continue.title') }</span>
+                            <span class="truncate text-ui-sm text-muted">{ continueText }</span>
                         </span>
-                        <span class="flex items-center gap-1 text-[13px] font-semibold text-live">
+                        <span class="flex items-center gap-1 text-ui-sm font-semibold text-live">
                             { locale.t('home.continue.action') }
                             <Icon name="forward" size={ 14 } class="icon-flip" />
                         </span>
@@ -145,7 +145,7 @@ export default component HomePage()
                     onClick={ () => quickPlay(favourite.id) }
                 />
                 <ul class="flex flex-wrap items-center gap-2" aria-label={ locale.t('home.quickPlay.pick') }>
-                    <li class="text-[12px] font-semibold text-faint">{ locale.t('home.quickPlay.pick') }</li>
+                    <li class="text-ui-xs font-semibold text-faint">{ locale.t('home.quickPlay.pick') }</li>
                     <For each={ others } key={ (game) => game.id } let={ game }>
                         <li>
                             <Chip icon="zap" onClick={ () => quickPlay(game.id) }>{ locale.t(game.nameKey) }</Chip>
@@ -157,12 +157,12 @@ export default component HomePage()
             <Show when={ last !== null && !lobby.active() }>
                 { () =>
                     <div class="flex flex-col gap-3 rounded-panel border border-line bg-field p-4 sm:flex-row sm:items-center">
-                        <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-lamp/15 text-lamp">
+                        <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-accent/15 text-accent">
                             <Icon name="refresh" size={ 22 } />
                         </span>
                         <span class="flex min-w-0 flex-1 flex-col">
-                            <span class="font-display text-[19px] font-semibold text-text">{ locale.t('home.rematch.title') }</span>
-                            <span class="text-[13px] text-muted">{ locale.t('home.rematch.lead', { game: locale.t(catalogue.byId(last!.game).nameKey), names: lastNames }) }</span>
+                            <span class="title text-ui-lg text-text">{ locale.t('home.rematch.title') }</span>
+                            <span class="text-ui-sm text-muted">{ locale.t('home.rematch.lead', { game: locale.t(catalogue.byId(last!.game).nameKey), names: lastNames }) }</span>
                         </span>
                         <Button variant="primary" leading="refresh" onClick={ runItBack }>{ locale.t('home.rematch.action') }</Button>
                     </div>
@@ -173,7 +173,7 @@ export default component HomePage()
                 <SectionHeading id="home-friends" title={ locale.plural('common.friendsOnline', friends.length) } more={ locale.t('common.seeAll') } to="/app/friends" />
                 <Show
                     when={ friends.length > 0 }
-                    fallback={ <p class="rounded-tile border border-dashed border-line p-4 text-[13px] text-muted">{ locale.t('home.friends.empty') }</p> }
+                    fallback={ <p class="rounded-tile border border-dashed border-line p-4 text-ui-sm text-muted">{ locale.t('home.friends.empty') }</p> }
                 >
                     { () => <PeopleStrip people={ friends } label={ locale.t('home.friends.title') } /> }
                 </Show>
@@ -188,7 +188,7 @@ export default component HomePage()
                 <SectionHeading id="home-activity" title={ locale.t('home.activity.title') } />
                 <Show
                     when={ activity.length > 0 }
-                    fallback={ <p class="rounded-tile border border-dashed border-line p-4 text-[13px] text-muted">{ locale.t('home.activity.empty') }</p> }
+                    fallback={ <p class="rounded-tile border border-dashed border-line p-4 text-ui-sm text-muted">{ locale.t('home.activity.empty') }</p> }
                 >
                     { () =>
                         <ul class="flex flex-col gap-0.5 rounded-panel border border-line bg-field p-1.5">

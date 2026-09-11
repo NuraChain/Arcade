@@ -17,13 +17,13 @@ export default component BottomNav()
         <ul class="mx-auto grid h-[var(--nav-h)] w-full max-w-[40rem] grid-cols-5">
             <For each={ NAV } key={ (item) => item.tab } let={ item }>
                 <li class="flex">
-                    <Link to={ item.to } end={ item.end } activeClass="is-active" prefetch="hover" class="nav-item flex flex-1 flex-col items-center justify-center gap-0.5 rounded-tile text-[11px] font-semibold text-muted">
+                    <Link to={ item.to } end={ item.end } activeClass="is-active" prefetch="hover" class="nav-item flex flex-1 flex-col items-center justify-center gap-0.5 rounded-tile text-ui-2xs font-semibold text-muted">
                         <span class="nav-pill relative flex h-7 w-12 items-center justify-center rounded-full transition-colors duration-200">
                             <Icon name={ item.icon } size={ 22 } />
                             <Show when={ item.tab === 'chats' && unread > 0 }>
                                 { () =>
                                     <span class="absolute -end-0.5 -top-1">
-                                        <Badge count={ unread } tone="lamp" label={ locale.plural('common.unread', unread) } />
+                                        <Badge count={ unread } tone="accent" label={ locale.plural('common.unread', unread) } />
                                     </span>
                                 }
                             </Show>

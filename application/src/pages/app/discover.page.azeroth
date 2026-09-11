@@ -60,8 +60,8 @@ export default component DiscoverPage()
 
     <Page label={ locale.t('app.nav.discover') }>
         <header class="pb-5">
-            <h1 class="text-[clamp(2rem,6vw,3rem)] leading-none">{ locale.t('app.nav.discover') }</h1>
-            <p class="mt-2 text-[15px] text-muted">{ locale.t('discover.lead') }</p>
+            <h1 class="title text-ui-4xl">{ locale.t('app.nav.discover') }</h1>
+            <p class="mt-2 text-ui-md text-muted">{ locale.t('discover.lead') }</p>
         </header>
 
         <div class="flex flex-col gap-8">
@@ -69,7 +69,7 @@ export default component DiscoverPage()
                 <SectionHeading title={ locale.t('discover.people') } more={ locale.t('common.seeAll') } to="/app/friends" />
                 <ul class="grid grid-cols-2 gap-3 @lg:grid-cols-3 @3xl:grid-cols-4" aria-label={ locale.t('discover.people') }>
                     <For each={ suggestions } key={ (person) => person.id } let={ person }>
-                        <li class="flex">
+                        <li class="flex min-w-0">
                             <div class="flex-1">
                                 <UserCard
                                     person={ person }
@@ -103,7 +103,7 @@ export default component DiscoverPage()
                 <SectionHeading title={ locale.t('discover.rooms') } />
                 <ul class="grid gap-2 @2xl:grid-cols-2" aria-label={ locale.t('discover.rooms') }>
                     <For each={ groups } key={ (group) => group.id } let={ group }>
-                        <li class="flex">
+                        <li class="flex min-w-0">
                             <GroupCard group={ group } class="flex-1" />
                         </li>
                     </For>

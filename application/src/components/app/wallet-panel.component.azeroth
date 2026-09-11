@@ -55,11 +55,11 @@ export default component WalletPanel(props: { onConnected: (address: string) => 
         }
     };
 
-    <section class="relative overflow-hidden rounded-panel border border-lamp/30 bg-field p-5 sm:p-6" aria-labelledby="wallet-heading">
-        <span class="pointer-events-none absolute -end-16 -top-20 h-48 w-48 rounded-full bg-lamp/15 blur-3xl" aria-hidden="true"></span>
+    <section class="relative overflow-hidden rounded-panel border border-accent/30 bg-field p-5 sm:p-6" aria-labelledby="wallet-heading">
+        <span class="pointer-events-none absolute -end-16 -top-20 h-48 w-48 rounded-full bg-accent/15 blur-3xl" aria-hidden="true"></span>
 
         <div class="relative flex flex-wrap items-center gap-2">
-            <span class="flex items-center gap-1.5 rounded-full bg-live/15 px-2.5 py-1 text-[12px] font-semibold text-live">
+            <span class="flex items-center gap-1.5 rounded-full bg-live/15 px-2.5 py-1 text-ui-xs font-semibold text-live">
                 <span class="live-dot h-1.5 w-1.5 rounded-full" aria-hidden="true"></span>
                 { NURA_CHAIN.name }
             </span>
@@ -67,20 +67,20 @@ export default component WalletPanel(props: { onConnected: (address: string) => 
                 href={ NURA_CHAIN.site }
                 target="_blank"
                 rel="noreferrer noopener"
-                class="flex items-center gap-1 rounded-full px-2 py-1 text-[12px] font-semibold text-muted hover:text-lamp"
+                class="flex items-center gap-1 rounded-full px-2 py-1 text-ui-xs font-semibold text-muted hover:text-accent"
             >
                 { locale.t('wallet.learn', { chain: NURA_CHAIN.name }) }
                 <Icon name="forward" size={ 12 } class="icon-flip" />
             </a>
         </div>
 
-        <h2 id="wallet-heading" class="relative mt-3 text-[clamp(1.75rem,5vw,2.5rem)] leading-tight">{ locale.t('wallet.title') }</h2>
-        <p class="relative mt-2 max-w-[48ch] text-[15px] text-muted">{ locale.t('wallet.lead', { chain: NURA_CHAIN.name }) }</p>
+        <h2 id="wallet-heading" class="relative mt-3 text-display-md leading-tight">{ locale.t('wallet.title') }</h2>
+        <p class="relative mt-2 max-w-[48ch] text-ui-md text-muted">{ locale.t('wallet.lead', { chain: NURA_CHAIN.name }) }</p>
 
         <Show when={ status === 'signing' }>
             { () =>
-                <p class="relative mt-4 flex items-start gap-2 rounded-tile bg-lamp/10 p-3 text-[13px] text-text">
-                    <Icon name="edit" size={ 16 } class="mt-0.5 shrink-0 text-lamp" />
+                <p class="relative mt-4 flex items-start gap-2 rounded-tile bg-accent/10 p-3 text-ui-sm text-text">
+                    <Icon name="edit" size={ 16 } class="mt-0.5 shrink-0 text-accent" />
                     <span>
                         <span class="block font-semibold">{ locale.t('wallet.signing', { wallet: name }) }</span>
                         { locale.t('wallet.signingLead') }
@@ -91,7 +91,7 @@ export default component WalletPanel(props: { onConnected: (address: string) => 
 
         <Show when={ errorKey !== null }>
             { () =>
-                <p class="relative mt-4 flex items-start gap-2 rounded-tile bg-madder/10 p-3 text-[13px] text-madder" role="alert">
+                <p class="relative mt-4 flex items-start gap-2 rounded-tile bg-madder/10 p-3 text-ui-sm text-madder" role="alert">
                     <Icon name="alert" size={ 16 } class="mt-0.5 shrink-0" />
                     { locale.t(errorKey!, { chain: NURA_CHAIN.name }) }
                 </p>
@@ -103,7 +103,7 @@ export default component WalletPanel(props: { onConnected: (address: string) => 
                 when={ wallet.available() }
                 fallback={
                     <>
-                        <p class="text-[14px] text-muted">{ locale.t('wallet.installLead') }</p>
+                        <p class="text-ui-base text-muted">{ locale.t('wallet.installLead') }</p>
                         <Button variant="primary" size="lg" block href="https://metamask.io/download/" icon="forward">
                             { locale.t('wallet.install') }
                         </Button>
@@ -117,14 +117,14 @@ export default component WalletPanel(props: { onConnected: (address: string) => 
                 }
             </Show>
 
-            <p class="flex items-center gap-1.5 text-[12px] text-faint">
+            <p class="flex items-center gap-1.5 text-ui-xs text-faint">
                 <Icon name="info" size={ 13 } />
                 { chainIsConfigured() ? locale.t('wallet.chainSwitch', { chain: NURA_CHAIN.name }) : locale.t('wallet.chainUnset') }
             </p>
 
             <ul class="flex flex-wrap gap-x-4 gap-y-1.5" aria-label={ locale.t('wallet.title') }>
                 <For each={ assurances } key={ (item) => item.id } let={ item }>
-                    <li class="flex items-center gap-1.5 text-[12px] font-semibold text-muted">
+                    <li class="flex items-center gap-1.5 text-ui-xs font-semibold text-muted">
                         <Icon name={ item.icon } size={ 13 } class="text-live" />
                         { item.label }
                     </li>
@@ -135,7 +135,7 @@ export default component WalletPanel(props: { onConnected: (address: string) => 
         <Show when={ busy }>
             { () =>
                 <span class="absolute end-5 top-5" aria-hidden="true">
-                    <Spinner size={ 20 } class="text-lamp" />
+                    <Spinner size={ 20 } class="text-accent" />
                 </span>
             }
         </Show>

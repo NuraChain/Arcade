@@ -29,7 +29,7 @@ export default component Page(props: { children?: Child; padded?: boolean; narro
     <div
         ref={ (element) => root = element }
         class={ [
-            'page bg-void',
+            'page bar bg-void',
             props.padded === false ? '' : 'px-4 pt-4 sm:px-6 lg:px-8 phone:pb-nav rail:pb-8 sidebar:pb-8',
             props.class ?? ''
         ].filter(Boolean).join(' ') }

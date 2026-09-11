@@ -1,21 +1,20 @@
 @theme
 {
-    
     --font-display: 'Fraunces Variable', Georgia, 'Times New Roman', serif;
     --font-ui: 'Hanken Grotesk Variable', 'Segoe UI', system-ui, ui-sans-serif, sans-serif;
     --font-persian: 'Vazirmatn Variable', Vazirmatn, 'Segoe UI', Tahoma, ui-sans-serif, sans-serif;
 
-    
     --ease-reveal: cubic-bezier(0.16, 1, 0.3, 1);
     --ease-ui: cubic-bezier(0.22, 0.61, 0.36, 1);
+    --ease-arrive: cubic-bezier(0.2, 0.9, 0.25, 1.15);
 
     --animate-lift: lift 600ms cubic-bezier(0.16, 1, 0.3, 1) both;
     --animate-warm: warm 900ms cubic-bezier(0.16, 1, 0.3, 1) both;
-
-    
     --animate-beckon: beckon 2.6s cubic-bezier(0.45, 0, 0.55, 1) infinite;
-
-    --ease-arrive: cubic-bezier(0.2, 0.9, 0.25, 1.15);
+    --animate-toast-in: toast-in 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+    --animate-pulse-live: pulse-live 2.2s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+    --animate-sheen: sheen 7s linear infinite;
+    --animate-shimmer: shimmer 1.4s ease-in-out infinite;
 
     --text-ui-2xs: 11px;
     --text-ui-2xs--line-height: 1.4;
@@ -23,50 +22,58 @@
     --text-ui-xs--line-height: 1.45;
     --text-ui-sm: 13px;
     --text-ui-sm--line-height: 1.5;
-    --text-ui-base: 15px;
-    --text-ui-base--line-height: 1.55;
-    --text-ui-md: 16px;
-    --text-ui-md--line-height: 1.5;
-    --text-ui-lg: 18px;
-    --text-ui-lg--line-height: 1.4;
-    --text-ui-xl: 22px;
+    --text-ui-base: 14px;
+    --text-ui-base--line-height: 1.5;
+    --text-ui-md: 15px;
+    --text-ui-md--line-height: 1.45;
+    --text-ui-lg: 17px;
+    --text-ui-lg--line-height: 1.35;
+    --text-ui-xl: 20px;
     --text-ui-xl--line-height: 1.25;
-    --text-ui-2xl: 28px;
-    --text-ui-2xl--line-height: 1.15;
+    --text-ui-2xl: 24px;
+    --text-ui-2xl--line-height: 1.2;
+    --text-ui-3xl: 30px;
+    --text-ui-3xl--line-height: 1.15;
+    --text-ui-4xl: 38px;
+    --text-ui-4xl--line-height: 1.1;
+    --text-ui-input: 16px;
+    --text-ui-input--line-height: 1.4;
 
-    --radius-control: 0.75rem;
-    --radius-tile: 1rem;
-    --radius-panel: 1.25rem;
-    --radius-sheet: 1.5rem;
+    --text-display-sm: clamp(1.5rem, 4.5vw, 2rem);
+    --text-display-md: clamp(1.75rem, 5.5vw, 2.5rem);
+    --text-display-lg: clamp(2rem, 6vw, 3rem);
+    --text-display-xl: clamp(2.5rem, 8vw, 4.5rem);
 
-    --shadow-1: 0 1px 2px color-mix(in oklab, var(--void) 40%, transparent);
-    --shadow-2: 0 8px 24px -12px color-mix(in oklab, var(--void) 70%, transparent);
-    --shadow-3: 0 24px 64px -24px color-mix(in oklab, var(--void) 85%, transparent);
-    --shadow-glow-lamp: 0 0 0 1px color-mix(in oklab, var(--lamp) 45%, transparent), 0 8px 32px -8px color-mix(in oklab, var(--lamp) 60%, transparent);
-    --shadow-glow-live: 0 0 0 1px color-mix(in oklab, var(--live) 45%, transparent), 0 8px 32px -8px color-mix(in oklab, var(--live) 55%, transparent);
+    --radius-control: 0.5rem;
+    --radius-tile: 0.625rem;
+    --radius-panel: 0.875rem;
+    --radius-sheet: 1.125rem;
+
+    --shadow-1: 0 1px 2px color-mix(in oklab, var(--void) 55%, transparent);
+    --shadow-2: 0 10px 28px -14px color-mix(in oklab, var(--void) 80%, transparent);
+    --shadow-3: 0 28px 70px -28px color-mix(in oklab, var(--void) 90%, transparent);
+    --shadow-glow-accent: 0 0 0 1px color-mix(in oklab, var(--accent) 50%, transparent), 0 10px 34px -10px color-mix(in oklab, var(--accent) 55%, transparent);
+    --shadow-glow-live: 0 0 0 1px color-mix(in oklab, var(--live) 50%, transparent), 0 10px 34px -10px color-mix(in oklab, var(--live) 50%, transparent);
 
     --duration-fast: 120ms;
-    --duration-ui: 200ms;
-    --duration-page: 260ms;
-    --duration-sheet: 320ms;
-    --duration-toast: 240ms;
+    --duration-ui: 180ms;
+    --duration-page: 240ms;
+    --duration-sheet: 300ms;
+    --duration-toast: 220ms;
     --duration-emphasis: 520ms;
 
     --nav-h: 3.75rem;
-    --topbar-h: 3.5rem;
+    --topbar-h: 3.25rem;
     --rail-w: 4.5rem;
-    --sidebar-w: 16rem;
-    --social-w: 20rem;
+    --sidebar-w: 15rem;
+    --social-w: 19rem;
 
     --z-nav: 30;
     --z-topbar: 31;
     --z-banner: 32;
     --z-overlay: 50;
+    --z-anchor: 55;
     --z-toast: 60;
-
-    --animate-toast-in: toast-in 240ms cubic-bezier(0.16, 1, 0.3, 1) both;
-    --animate-pulse-live: pulse-live 2.2s cubic-bezier(0.45, 0, 0.55, 1) infinite;
-    --animate-sheen: sheen 5s linear infinite;
 
     @keyframes toast-in
     {
@@ -101,6 +108,18 @@
         }
     }
 
+    @keyframes shimmer
+    {
+        0%, 100%
+        {
+            opacity: 0.45;
+        }
+        50%
+        {
+            opacity: 0.85;
+        }
+    }
+
     @keyframes lift
     {
         from
@@ -110,7 +129,6 @@
         }
     }
 
-    
     @keyframes warm
     {
         from
@@ -138,26 +156,36 @@
 {
     color-scheme: dark;
 
-    --void: #0A1216;
-    --field: #12242B;
-    --raised: #1B333C;
-    --line: #24424D;
-    --text: #F2EADC;
-    --muted: #93A8AF;
-    --faint: #5F7880;
+    --void: oklch(0.175 0.023 262);
+    --sunk: oklch(0.135 0.021 262);
+    --field: oklch(0.222 0.026 262);
+    --raised: oklch(0.277 0.030 261);
+    --lifted: oklch(0.320 0.032 261);
+    --line: oklch(0.336 0.033 261);
+    --line-strong: oklch(0.424 0.038 262);
 
-    --lamp: #FFB43D;
-    --madder: #D6455C;
-    --live: #33D6C1;
-    --win: #7BD389;
-    --glass: color-mix(in oklab, var(--field) 74%, transparent);
-    --scrim: color-mix(in oklab, var(--void) 64%, transparent);
+    --text: oklch(0.940 0.012 253);
+    --muted: oklch(0.722 0.028 256);
+    --faint: oklch(0.560 0.031 258);
+
+    --accent: oklch(0.722 0.147 251);
+    --accent-ink: oklch(0.175 0.023 262);
+    --live: oklch(0.816 0.157 165);
+    --gold: oklch(0.840 0.146 82);
+    --win: oklch(0.834 0.164 155);
+    --danger: oklch(0.688 0.185 18);
+    --madder: oklch(0.618 0.191 17);
+
+    --glass: color-mix(in oklab, var(--field) 72%, transparent);
+    --scrim: color-mix(in oklab, var(--void) 66%, transparent);
 
     --world-sky: #0A1216;
     --world-fog: #10222A;
     --world-key: #FFC46A;
     --world-fill: #2B4E5E;
     --world-rim: #7FB4C9;
+    --world-lamp: #FFB43D;
+    --world-stone: #33474F;
     --world-lamp-intensity: 1;
     --world-fog-density: 1;
     --world-env: 0.35;
@@ -167,26 +195,36 @@
 {
     color-scheme: light;
 
-    --void: #F4F1EC;
-    --field: #FFFFFF;
-    --raised: #EAE5DC;
-    --line: #D8D1C5;
-    --text: #14201C;
-    --muted: #566B66;
-    --faint: #6E7F78;
+    --void: oklch(0.972 0.006 254);
+    --sunk: oklch(0.941 0.010 255);
+    --field: oklch(1 0 0);
+    --raised: oklch(0.949 0.010 255);
+    --lifted: oklch(1 0 0);
+    --line: oklch(0.885 0.014 255);
+    --line-strong: oklch(0.812 0.021 256);
 
-    --lamp: #A35F00;
-    --madder: #B02138;
-    --live: #0E8F82;
-    --win: #1F7A3A;
+    --text: oklch(0.190 0.026 264);
+    --muted: oklch(0.452 0.028 259);
+    --faint: oklch(0.556 0.026 258);
+
+    --accent: oklch(0.502 0.176 257);
+    --accent-ink: oklch(1 0 0);
+    --live: oklch(0.520 0.108 172);
+    --gold: oklch(0.560 0.126 66);
+    --win: oklch(0.495 0.124 158);
+    --danger: oklch(0.510 0.181 20);
+    --madder: oklch(0.470 0.172 17);
+
     --glass: color-mix(in oklab, var(--field) 80%, transparent);
-    --scrim: color-mix(in oklab, #14201C 38%, transparent);
+    --scrim: color-mix(in oklab, var(--text) 34%, transparent);
 
     --world-sky: #DCE4E2;
     --world-fog: #C9D6D4;
     --world-key: #FFE0B0;
     --world-fill: #A9BFC4;
     --world-rim: #FFFFFF;
+    --world-lamp: #E8A33A;
+    --world-stone: #9BB0B6;
     --world-lamp-intensity: 0.35;
     --world-fog-density: 0.6;
     --world-env: 0.7;
@@ -204,16 +242,22 @@
 @theme inline
 {
     --color-void: var(--void);
+    --color-sunk: var(--sunk);
     --color-field: var(--field);
     --color-raised: var(--raised);
+    --color-lifted: var(--lifted);
     --color-line: var(--line);
+    --color-line-strong: var(--line-strong);
     --color-text: var(--text);
     --color-muted: var(--muted);
     --color-faint: var(--faint);
-    --color-lamp: var(--lamp);
-    --color-madder: var(--madder);
+    --color-accent: var(--accent);
+    --color-accent-ink: var(--accent-ink);
     --color-live: var(--live);
+    --color-gold: var(--gold);
     --color-win: var(--win);
+    --color-danger: var(--danger);
+    --color-madder: var(--madder);
     --color-glass: var(--glass);
     --color-scrim: var(--scrim);
 }

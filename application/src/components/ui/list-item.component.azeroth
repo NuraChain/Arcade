@@ -17,7 +17,7 @@ export default component ListItem(props: {
     derived interactive = props.to !== undefined || props.onClick !== undefined;
 
     derived shell = [
-        'flex min-h-14 w-full items-center gap-3 rounded-tile px-3 py-2 text-start',
+        'flex min-h-13 w-full items-center gap-2.5 rounded-tile px-2.5 py-1.5 text-start coarse:min-h-14',
         interactive ? 'cursor-pointer transition-colors duration-150 hover:bg-raised/70 active:bg-raised' : '',
         props.active === true ? 'bg-raised' : '',
         props.class ?? ''

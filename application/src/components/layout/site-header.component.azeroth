@@ -25,12 +25,12 @@ export default component SiteHeader()
         <div class="pointer-events-none absolute inset-0 h-24 bg-gradient-to-b from-void/85 to-transparent"></div>
 
         <div class="pointer-events-auto relative mx-auto flex h-16 w-full max-w-[80rem] items-center justify-between gap-4 px-5 sm:h-20 sm:px-8">
-            <a href="/" class="flex items-center gap-2.5 rounded-lg" aria-label={ locale.t('brand.name') }>
+            <a href="/" class="flex items-center gap-2.5 rounded-control" aria-label={ locale.t('brand.name') }>
                 
-                <span class="lit flex h-7 w-7 items-center justify-center rounded-full bg-lamp text-void">
+                <span class="lit flex h-7 w-7 items-center justify-center rounded-control bg-accent text-accent-ink">
                     <Icon name="games" size={ 16 } />
                 </span>
-                <BrandMark class="text-[17px] text-text" />
+                <BrandMark class="text-ui-lg text-text" />
             </a>
 
             <nav class="hidden items-center gap-2 sm:flex" aria-label={ locale.t('nav.menu') }>
@@ -42,7 +42,7 @@ export default component SiteHeader()
             
             <button
                 type="button"
-                class="flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border border-line bg-field text-muted transition-colors duration-150 hover:border-lamp hover:text-text sm:hidden"
+                class="flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border border-line bg-field text-muted transition-colors duration-150 hover:border-accent hover:text-text sm:hidden"
                 aria-label={ open ? locale.t('nav.close') : locale.t('nav.menu') }
                 aria-expanded={ open }
                 onClick={ () => open = !open }

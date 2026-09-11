@@ -32,7 +32,7 @@ export interface Game
 
     rotation: number;
 
-    accent: 'lamp' | 'madder';
+    accent: 'accent' | 'madder';
 }
 
 export const PLAZA_ANCHOR = [0, 0.4, 4] as const;
@@ -115,7 +115,7 @@ export const GAMES: Game[] = [
         set: 'set-hokm',
         anchor: [-9.5, 0.9, -3.4],
         rotation: 0.48,
-        accent: 'lamp'
+        accent: 'accent'
     },
     {
         id: 'poker',
@@ -130,7 +130,7 @@ export const GAMES: Game[] = [
         set: 'set-poker',
         anchor: [-3.4, -0.5, -1.8],
         rotation: 0.2,
-        accent: 'lamp'
+        accent: 'accent'
     },
     {
         id: 'backgammon',
@@ -145,7 +145,7 @@ export const GAMES: Game[] = [
         set: 'set-backgammon',
         anchor: [3.4, 0.7, -2.4],
         rotation: -0.2,
-        accent: 'lamp'
+        accent: 'accent'
     },
     {
         id: 'ludo',
@@ -160,7 +160,7 @@ export const GAMES: Game[] = [
         set: 'set-ludo',
         anchor: [9.6, -0.3, -4.2],
         rotation: -0.52,
-        accent: 'lamp'
+        accent: 'accent'
     }
 ];
 

@@ -38,10 +38,10 @@ export default component NotificationRow(props: {
 
     <div class={ [
         'flex flex-col gap-2 rounded-tile px-2 py-2',
-        props.item.read ? '' : 'bg-lamp/5'
+        props.item.read ? '' : 'bg-accent/5'
     ].filter(Boolean).join(' ') }>
         <div class="flex items-center gap-3">
-            <button type="button" class="flex min-w-0 flex-1 cursor-pointer items-center gap-3 text-start" onClick={ () => props.onOpen(props.item) }>
+            <button type="button" class="flex min-h-11 min-w-0 flex-1 cursor-pointer items-center gap-3 text-start" onClick={ () => props.onOpen(props.item) }>
                 <Show
                     when={ person !== null }
                     fallback={
@@ -53,16 +53,16 @@ export default component NotificationRow(props: {
                     { () => <Avatar person={ person } size="md" /> }
                 </Show>
                 <span class="flex min-w-0 flex-1 flex-col">
-                    <span class={ [ 'line-clamp-2 text-[14px]', props.item.read ? 'text-muted' : 'text-text' ].join(' ') }>
+                    <span class={ [ 'line-clamp-2 text-ui-base', props.item.read ? 'text-muted' : 'text-text' ].join(' ') }>
                         <Show when={ person !== null }>
                             { () => <span class="font-semibold text-text">{ locale.text(person!.name) } </span> }
                         </Show>
                         { locale.text(props.item.text) }
                     </span>
-                    <span class="text-[12px] text-faint">{ locale.relative(props.item.at) }</span>
+                    <span class="text-ui-xs text-faint">{ locale.relative(props.item.at) }</span>
                 </span>
                 <Show when={ !props.item.read }>
-                    { () => <span class="h-2 w-2 shrink-0 rounded-full bg-lamp" aria-hidden="true"></span> }
+                    { () => <span class="h-2 w-2 shrink-0 rounded-full bg-accent" aria-hidden="true"></span> }
                 </Show>
             </button>
             <Show when={ answerable && roomy }>

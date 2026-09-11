@@ -55,8 +55,8 @@ export default component ChatsPage()
 
     <Page label={ locale.t('app.nav.chats') }>
         <header class="pb-4">
-            <h1 class="text-[clamp(2rem,6vw,3rem)] leading-none">{ locale.t('app.nav.chats') }</h1>
-            <p class="mt-2 text-[15px] text-muted">{ locale.t('chats.lead') }</p>
+            <h1 class="title text-ui-4xl">{ locale.t('app.nav.chats') }</h1>
+            <p class="mt-2 text-ui-md text-muted">{ locale.t('chats.lead') }</p>
         </header>
 
         <SearchInput

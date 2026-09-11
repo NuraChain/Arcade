@@ -17,12 +17,12 @@ export default component Chip(props: {
     derived interactive = props.onClick !== undefined;
 
     derived shell = [
-        'inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3.5 text-[13px] font-semibold',
+        'inline-flex h-8 shrink-0 coarse:h-11 items-center gap-1.5 whitespace-nowrap rounded-control border px-3 text-ui-sm font-semibold',
         'transition duration-150 ease-[var(--ease-ui)]',
         props.selected === true
-            ? 'border-lamp bg-lamp/15 text-lamp'
-            : (props.tone !== undefined ? `border-transparent ${ TONE_SOFT[props.tone] }` : 'border-line bg-field text-muted'),
-        interactive && props.disabled !== true ? 'cursor-pointer hover:border-lamp/60 hover:text-text active:scale-[0.97]' : '',
+            ? 'border-accent/60 bg-accent/15 text-accent'
+            : (props.tone !== undefined ? `border-transparent ${ TONE_SOFT[props.tone] }` : 'border-line bg-field text-muted hover:border-line-strong'),
+        interactive && props.disabled !== true ? 'cursor-pointer hover:border-accent/60 hover:text-text active:scale-[0.98]' : '',
         props.disabled === true ? 'opacity-50' : '',
         props.class ?? ''
     ].filter(Boolean).join(' ');

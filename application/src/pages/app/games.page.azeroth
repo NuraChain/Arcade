@@ -31,10 +31,10 @@ export default component GamesPage()
     <Page label={ locale.t('app.nav.games') }>
         <header class="flex flex-col gap-3 pb-5 sm:flex-row sm:items-end sm:justify-between">
             <div>
-                <h1 class="text-[clamp(2rem,6vw,3rem)] leading-none">{ locale.t('app.nav.games') }</h1>
-                <p class="mt-2 text-[15px] text-muted">{ locale.t('games.lead') }</p>
+                <h1 class="title text-ui-4xl">{ locale.t('app.nav.games') }</h1>
+                <p class="mt-2 text-ui-md text-muted">{ locale.t('games.lead') }</p>
             </div>
-            <p class="flex items-center gap-2 text-[13px] font-semibold text-live">
+            <p class="flex items-center gap-2 text-ui-sm font-semibold text-live">
                 <span class="live-dot h-2.5 w-2.5 rounded-full" aria-hidden="true"></span>
                 <span class="tally">{ locale.plural('games.live.playing', totals.playersOnline) }</span>
                 <span class="text-faint">·</span>

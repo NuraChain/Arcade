@@ -109,24 +109,24 @@ export default component ResultPanel(props: {
             <Show when={ won }>
                 <span class="pointer-events-none absolute -top-16 start-1/2 h-48 w-48 -translate-x-1/2 rounded-full bg-win/25 blur-3xl" aria-hidden="true"></span>
             </Show>
-            <span class={ [ 'relative mx-auto flex h-16 w-16 items-center justify-center rounded-full', won ? 'bg-win text-void' : 'bg-raised text-muted' ].join(' ') }>
+            <span class={ [ 'relative mx-auto flex h-16 w-16 items-center justify-center rounded-full', won ? 'bg-win text-accent-ink' : 'bg-raised text-muted' ].join(' ') }>
                 <Icon name={ won ? 'trophy' : 'versus' } size={ 30 } />
             </span>
-            <p class="label relative mt-4 text-[12px] text-faint">{ gameName }</p>
-            <h2 class="relative mt-1 text-[clamp(2rem,7vw,3.25rem)] leading-none">{ headline }</h2>
-            <p class="tally relative mt-3 text-[14px] text-muted">{ locale.t('play.result.duration', { duration }) }</p>
+            <p class="label relative mt-4 text-ui-xs text-faint">{ gameName }</p>
+            <h2 class="relative mt-1 text-display-lg leading-none">{ headline }</h2>
+            <p class="tally relative mt-3 text-ui-base text-muted">{ locale.t('play.result.duration', { duration }) }</p>
         </div>
 
         <ol class="flex flex-col gap-1 rounded-panel border border-line bg-field p-2" aria-label={ locale.t('play.title.result') }>
             <For each={ standings } key={ (row) => row.id } let={ row } index={ index }>
                 <li class={ [ 'flex items-center gap-3 rounded-tile px-3 py-2', row.winner ? 'bg-win/10' : '' ].filter(Boolean).join(' ') }>
-                    <span class="tally w-5 text-center text-[13px] font-semibold text-faint">{ locale.n(index + 1) }</span>
+                    <span class="tally w-5 text-center text-ui-sm font-semibold text-faint">{ locale.n(index + 1) }</span>
                     <Show when={ !row.id.startsWith('bot-') } fallback={ <span class="flex h-10 w-10 items-center justify-center rounded-full bg-raised text-muted"><Icon name="bot" size={ 20 } /></span> }>
                         { () => <Avatar person={ row.person } size="md" /> }
                     </Show>
-                    <span class="min-w-0 flex-1 truncate text-[15px] font-semibold text-text">{ nameOf(row.id) }</span>
+                    <span class="min-w-0 flex-1 truncate text-ui-md font-semibold text-text">{ nameOf(row.id) }</span>
                     <Show when={ row.winner }>{ () => <Icon name="trophy" size={ 16 } class="text-win" /> }</Show>
-                    <span class="tally font-display text-[20px] font-semibold text-text">{ locale.n(row.score) }</span>
+                    <span class="tally title text-ui-lg text-text">{ locale.n(row.score) }</span>
                 </li>
             </For>
         </ol>

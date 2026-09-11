@@ -11,8 +11,8 @@ export default component Badge(props: { count: number; max?: number; tone?: Tone
 
     <span
         class={ [
-            'tally inline-flex h-4.5 min-w-4.5 items-center justify-center rounded-full px-1 text-[10px] font-bold leading-none',
-            TONE_FILL[props.tone ?? 'lamp']
+            'tally inline-flex h-4.5 min-w-4.5 items-center justify-center rounded-full px-1 text-ui-2xs font-bold leading-none',
+            TONE_FILL[props.tone ?? 'accent']
         ].join(' ') }
         aria-label={ props.label }
     >

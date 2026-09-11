@@ -56,8 +56,8 @@ export default component NotificationsPage()
     <Page label={ locale.t('app.nav.notifications') }>
         <header class="flex flex-wrap items-end justify-between gap-3 pb-4">
             <div>
-                <h1 class="text-[clamp(2rem,6vw,3rem)] leading-none">{ locale.t('app.nav.notifications') }</h1>
-                <p class="mt-2 text-[15px] text-muted">{ locale.t('notifications.lead') }</p>
+                <h1 class="title text-ui-4xl">{ locale.t('app.nav.notifications') }</h1>
+                <p class="mt-2 text-ui-md text-muted">{ locale.t('notifications.lead') }</p>
             </div>
             <Show when={ notifications.unread() > 0 }>
                 { () => <Button variant="ghost" size="sm" leading="check-circle" onClick={ () => notifications.markAllRead() }>{ locale.t('notifications.markAll') }</Button> }

@@ -12,8 +12,8 @@ export default component ConnectionBanner()
         { () =>
             <div
                 class={ [
-                    'z-banner flex items-center justify-center gap-2 px-4 py-2 text-[13px] font-semibold',
-                    connection.state() === 'offline' ? 'bg-madder/15 text-madder' : 'bg-lamp/15 text-lamp'
+                    'z-banner flex items-center justify-center gap-2 px-4 py-2 text-ui-sm font-semibold',
+                    connection.state() === 'offline' ? 'bg-madder/15 text-madder' : 'bg-accent/15 text-accent'
                 ].join(' ') }
                 role="status"
                 aria-live="assertive"

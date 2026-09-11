@@ -86,7 +86,7 @@ export default component CreateGameForm(props: { game: Game; onCreated: (tableId
     >
         <Show when={ rules.seats.length > 1 }>
             <fieldset class="flex flex-col gap-2">
-                <legend class="label mb-2 text-[13px] text-muted">{ locale.t('create.seats') }</legend>
+                <legend class="label mb-2 text-ui-sm text-muted">{ locale.t('create.seats') }</legend>
                 <ul class="flex flex-wrap gap-2">
                     <For each={ [...rules.seats] } key={ (count) => count } let={ count }>
                         <li>
@@ -101,7 +101,7 @@ export default component CreateGameForm(props: { game: Game; onCreated: (tableId
 
         <Show when={ rules.modes.length > 1 }>
             <fieldset class="flex flex-col gap-2">
-                <legend class="label mb-2 text-[13px] text-muted">{ locale.t('create.pace') }</legend>
+                <legend class="label mb-2 text-ui-sm text-muted">{ locale.t('create.pace') }</legend>
                 <Segmented
                     block
                     label={ locale.t('create.pace') }
@@ -112,12 +112,12 @@ export default component CreateGameForm(props: { game: Game; onCreated: (tableId
                     ] }
                     onChange={ (id) => mode = id as TableMode }
                 />
-                <p class="text-[12px] text-faint">{ locale.t(mode === 'live' ? 'games.mode.liveHint' : 'games.mode.turnsHint') }</p>
+                <p class="text-ui-xs text-faint">{ locale.t(mode === 'live' ? 'games.mode.liveHint' : 'games.mode.turnsHint') }</p>
             </fieldset>
         </Show>
 
         <fieldset class="flex flex-col gap-2">
-            <legend class="label mb-2 text-[13px] text-muted">{ locale.t('create.privacy') }</legend>
+            <legend class="label mb-2 text-ui-sm text-muted">{ locale.t('create.privacy') }</legend>
             <Segmented
                 block
                 label={ locale.t('create.privacy') }
@@ -129,12 +129,12 @@ export default component CreateGameForm(props: { game: Game; onCreated: (tableId
                 ] }
                 onChange={ (id) => privacy = id as TablePrivacy }
             />
-            <p class="text-[12px] text-faint">{ privacyHint }</p>
+            <p class="text-ui-xs text-faint">{ privacyHint }</p>
         </fieldset>
 
         <Show when={ rules.targets.length > 0 }>
             <fieldset class="flex flex-col gap-2">
-                <legend class="label mb-2 text-[13px] text-muted">{ locale.t('create.target') }</legend>
+                <legend class="label mb-2 text-ui-sm text-muted">{ locale.t('create.target') }</legend>
                 <ul class="flex flex-wrap gap-2">
                     <For each={ [...rules.targets] } key={ (value) => value } let={ value }>
                         <li>
@@ -153,7 +153,7 @@ export default component CreateGameForm(props: { game: Game; onCreated: (tableId
 
         <Show when={ props.game.id === 'poker' }>
             <fieldset class="flex flex-col gap-2">
-                <legend class="label mb-2 text-[13px] text-muted">{ locale.t('create.blinds') }</legend>
+                <legend class="label mb-2 text-ui-sm text-muted">{ locale.t('create.blinds') }</legend>
                 <Segmented
                     block
                     label={ locale.t('create.blinds') }
@@ -165,19 +165,19 @@ export default component CreateGameForm(props: { game: Game; onCreated: (tableId
                     ] }
                     onChange={ (id) => blinds = id as Blinds }
                 />
-                <p class="text-[12px] text-faint">{ locale.t('games.stakes.playMoneyHint') }</p>
+                <p class="text-ui-xs text-faint">{ locale.t('games.stakes.playMoneyHint') }</p>
             </fieldset>
         </Show>
 
         <fieldset class="flex flex-col gap-3">
-            <legend class="label mb-2 flex w-full items-center justify-between text-[13px] text-muted">
+            <legend class="label mb-2 flex w-full items-center justify-between text-ui-sm text-muted">
                 <span>{ locale.t('create.invite') }</span>
-                <span class={ [ 'tally text-[12px] font-semibold', tooMany ? 'text-madder' : 'text-lamp' ].join(' ') }>{ locale.plural('create.invited', invitees.length) }</span>
+                <span class={ [ 'tally text-ui-xs font-semibold', tooMany ? 'text-madder' : 'text-accent' ].join(' ') }>{ locale.plural('create.invited', invitees.length) }</span>
             </legend>
-            <p class="text-[12px] text-faint">{ locale.t('create.inviteHint') }</p>
+            <p class="text-ui-xs text-faint">{ locale.t('create.inviteHint') }</p>
             <SearchInput value={ query } onInput={ (value) => query = value } placeholder={ locale.t('create.search') } label={ locale.t('create.search') } />
             <Show when={ tooMany }>
-                <p class="flex items-center gap-1.5 text-[13px] font-semibold text-madder" role="alert">
+                <p class="flex items-center gap-1.5 text-ui-sm font-semibold text-madder" role="alert">
                     <Icon name="alert" size={ 14 } />
                     { locale.t('create.tooMany') }
                 </p>
@@ -189,19 +189,19 @@ export default component CreateGameForm(props: { game: Game; onCreated: (tableId
                             type="button"
                             class={ [
                                 'flex min-h-12 w-full cursor-pointer items-center gap-3 rounded-tile px-2 py-1.5 text-start transition-colors hover:bg-raised/70',
-                                invitees.includes(person.id) ? 'bg-lamp/10' : ''
+                                invitees.includes(person.id) ? 'bg-accent/10' : ''
                             ].filter(Boolean).join(' ') }
                             aria-pressed={ invitees.includes(person.id) }
                             onClick={ () => toggleInvite(person.id) }
                         >
                             <Avatar person={ person } size="sm" presence={ presence.of(person.id).state } />
                             <span class="flex min-w-0 flex-1 flex-col">
-                                <span class="truncate text-[14px] font-semibold text-text">{ locale.text(person.name) }</span>
-                                <span class="truncate text-[12px] text-muted">{ presence.isOnline(person.id) ? locale.t('common.online') : locale.t('common.offline') }</span>
+                                <span class="truncate text-ui-base font-semibold text-text">{ locale.text(person.name) }</span>
+                                <span class="truncate text-ui-xs text-muted">{ presence.isOnline(person.id) ? locale.t('common.online') : locale.t('common.offline') }</span>
                             </span>
                             <span class={ [
                                 'flex h-6 w-6 items-center justify-center rounded-full border transition-colors',
-                                invitees.includes(person.id) ? 'border-lamp bg-lamp text-void' : 'border-line text-transparent'
+                                invitees.includes(person.id) ? 'border-accent bg-accent text-accent-ink' : 'border-line text-transparent'
                             ].join(' ') } aria-hidden="true">
                                 <Icon name="selected" size={ 14 } />
                             </span>
@@ -209,7 +209,7 @@ export default component CreateGameForm(props: { game: Game; onCreated: (tableId
                     </li>
                 </For>
                 <Show when={ friends.length === 0 }>
-                    <li class="px-3 py-4 text-center text-[13px] text-faint">{ locale.t('create.noFriends') }</li>
+                    <li class="px-3 py-4 text-center text-ui-sm text-faint">{ locale.t('create.noFriends') }</li>
                 </Show>
             </ul>
         </fieldset>

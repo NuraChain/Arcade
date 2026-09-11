@@ -109,15 +109,15 @@ export default component PersonPage()
                     <header class="flex flex-col items-center gap-3 pt-2 text-center">
                         <Avatar person={ person } size="2xl" presence={ state?.state ?? null } />
                         <div>
-                            <h1 class="flex items-center justify-center gap-2 text-[clamp(1.75rem,6vw,2.5rem)] leading-none">
+                            <h1 class="title flex items-center justify-center gap-2 text-ui-3xl">
                                 { name }
                                 <Show when={ person!.minor }>
                                     { () => <Icon name="shield" size={ 18 } class="text-live" /> }
                                 </Show>
                             </h1>
-                            <p class="mt-1 text-[14px] text-muted">@{ person!.handle }</p>
+                            <p class="mt-1 text-ui-base text-muted">@{ person!.handle }</p>
                         </div>
-                        <p class="max-w-[46ch] text-[14px] text-text">{ locale.text(person!.bio) }</p>
+                        <p class="max-w-[46ch] text-ui-base text-text">{ locale.text(person!.bio) }</p>
                         <ul class="flex flex-wrap justify-center gap-2" aria-label={ locale.t('person.tab.overview') }>
                             <li><Chip icon="star"><span class="tally">{ locale.t('person.level', { level: person!.level }) }</span></Chip></li>
                             <li><Chip icon="games">{ locale.t('person.favourite', { game: locale.t(catalogue.byId(person!.favourite).nameKey) }) }</Chip></li>
@@ -128,7 +128,7 @@ export default component PersonPage()
                         </ul>
                         <Show when={ person!.minor }>
                             { () =>
-                                <p class="flex items-center gap-2 rounded-full bg-live/10 px-3 py-1.5 text-[12px] font-semibold text-live">
+                                <p class="flex items-center gap-2 rounded-full bg-live/10 px-3 py-1.5 text-ui-xs font-semibold text-live">
                                     <Icon name="shield" size={ 13 } />
                                     { locale.t('person.minor') }
                                 </p>
@@ -139,8 +139,8 @@ export default component PersonPage()
                     <Show when={ relation === 'blocked' }>
                         { () =>
                             <div class="rounded-panel border border-madder/40 bg-madder/5 p-4 text-center">
-                                <p class="text-[15px] font-semibold text-text">{ locale.t('person.blockedTitle', { name: locale.text(person!.name).split(' ')[0] }) }</p>
-                                <p class="mt-1 text-[13px] text-muted">{ locale.t('person.blockedLead') }</p>
+                                <p class="text-ui-md font-semibold text-text">{ locale.t('person.blockedTitle', { name: locale.text(person!.name).split(' ')[0] }) }</p>
+                                <p class="mt-1 text-ui-sm text-muted">{ locale.t('person.blockedLead') }</p>
                                 <Button
                                     variant="outline"
                                     size="sm"
@@ -207,7 +207,7 @@ export default component PersonPage()
                                 <RecordStrip record={ { played: totals.played, won: totals.won, streak: person!.stats[person!.favourite].streak } } />
                                 <section>
                                     <SectionHeading title={ locale.t('person.stat.best') } />
-                                    <p class="rounded-panel border border-line bg-field p-4 text-[15px] text-text">
+                                    <p class="rounded-panel border border-line bg-field p-4 text-ui-md text-text">
                                         { locale.t(best.nameKey) } · <span class="tally">{ locale.plural('game.leaderboard.wins', person!.stats[best.id].won) }</span>
                                     </p>
                                 </section>
@@ -215,12 +215,12 @@ export default component PersonPage()
                                     <SectionHeading title={ locale.t('person.friends') } />
                                     <Show
                                         when={ theirFriends.length > 0 }
-                                        fallback={ <p class="rounded-tile border border-dashed border-line p-4 text-[13px] text-muted">{ locale.t('friends.empty.all') }</p> }
+                                        fallback={ <p class="rounded-tile border border-dashed border-line p-4 text-ui-sm text-muted">{ locale.t('friends.empty.all') }</p> }
                                     >
                                         { () => <PeopleStrip people={ theirFriends } label={ locale.t('person.friends') } /> }
                                     </Show>
                                 </section>
-                                <p class="text-center text-[12px] text-faint">{ locale.t('person.joined', { date: locale.date(person!.joinedAt, { year: 'numeric', month: 'long' }) }) }</p>
+                                <p class="text-center text-ui-xs text-faint">{ locale.t('person.joined', { date: locale.date(person!.joinedAt, { year: 'numeric', month: 'long' }) }) }</p>
                             </div>
                         }
                     </Show>
@@ -234,12 +234,12 @@ export default component PersonPage()
                                             <Icon name={ game.category === 'cards' ? 'cards' : 'dice' } size={ 18 } />
                                         </span>
                                         <span class="flex min-w-0 flex-1 flex-col">
-                                            <span class="truncate text-[15px] font-semibold text-text">{ locale.t(game.nameKey) }</span>
-                                            <span class="tally text-[12px] text-muted">
+                                            <span class="truncate text-ui-md font-semibold text-text">{ locale.t(game.nameKey) }</span>
+                                            <span class="tally text-ui-xs text-muted">
                                                 { locale.t('game.record.played') } { locale.n(person!.stats[game.id].played) } · { locale.t('game.record.won') } { locale.n(person!.stats[game.id].won) }
                                             </span>
                                         </span>
-                                        <span class="tally font-display text-[20px] font-semibold text-text">
+                                        <span class="tally title text-ui-lg text-text">
                                             { locale.n(person!.stats[game.id].played === 0 ? 0 : person!.stats[game.id].won / person!.stats[game.id].played, { style: 'percent' }) }
                                         </span>
                                     </li>
@@ -254,16 +254,16 @@ export default component PersonPage()
                                 <For each={ ACHIEVEMENTS } key={ (achievement) => achievement.id } let={ achievement }>
                                     <li class={ [
                                         'flex flex-col items-center gap-1.5 rounded-panel border p-3 text-center',
-                                        person!.achievements.includes(achievement.id) ? 'border-lamp/40 bg-lamp/5' : 'border-line bg-field opacity-60'
+                                        person!.achievements.includes(achievement.id) ? 'border-accent/40 bg-accent/5' : 'border-line bg-field opacity-60'
                                     ].join(' ') }>
                                         <span class={ [
                                             'flex h-11 w-11 items-center justify-center rounded-full',
-                                            person!.achievements.includes(achievement.id) ? 'bg-lamp/20 text-lamp' : 'bg-raised text-faint'
+                                            person!.achievements.includes(achievement.id) ? 'bg-accent/20 text-accent' : 'bg-raised text-faint'
                                         ].join(' ') }>
                                             <Icon name={ achievement.icon } size={ 20 } />
                                         </span>
-                                        <span class="text-[13px] font-semibold text-text">{ locale.text(achievement.name) }</span>
-                                        <span class="text-[11px] text-muted">
+                                        <span class="text-ui-sm font-semibold text-text">{ locale.text(achievement.name) }</span>
+                                        <span class="text-ui-2xs text-muted">
                                             { person!.achievements.includes(achievement.id) ? locale.text(achievement.blurb) : locale.t('person.achievements.locked') }
                                         </span>
                                     </li>

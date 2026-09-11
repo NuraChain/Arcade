@@ -77,18 +77,18 @@
 
 .nav-item.is-active
 {
-    color: var(--lamp);
+    color: var(--accent);
 }
 
 .nav-item.is-active .nav-pill
 {
-    background: color-mix(in oklab, var(--lamp) 16%, transparent);
+    background: color-mix(in oklab, var(--accent) 16%, transparent);
 }
 
 .nav-item.nav-row.is-active
 {
-    background: color-mix(in oklab, var(--lamp) 12%, transparent);
-    color: var(--lamp);
+    background: color-mix(in oklab, var(--accent) 12%, transparent);
+    color: var(--accent);
 }
 
 .overlay-root
@@ -125,7 +125,7 @@
     flex-direction: column;
     border-start-start-radius: var(--radius-sheet);
     border-start-end-radius: var(--radius-sheet);
-    background: var(--field);
+    background: var(--lifted);
     box-shadow: var(--shadow-3);
     padding-block-end: env(safe-area-inset-bottom, 0px);
     transition: transform var(--duration-sheet) var(--ease-reveal);
@@ -170,7 +170,7 @@
     display: flex;
     flex-direction: column;
     border-radius: var(--radius-panel);
-    background: var(--field);
+    background: var(--lifted);
     border: 1px solid var(--line);
     box-shadow: var(--shadow-3);
     transition: transform var(--duration-ui) var(--ease-reveal), opacity var(--duration-ui) var(--ease-ui);
@@ -193,7 +193,7 @@
     position: absolute;
     min-inline-size: 12rem;
     border-radius: var(--radius-tile);
-    background: var(--field);
+    background: var(--lifted);
     border: 1px solid var(--line);
     box-shadow: var(--shadow-2);
     transition: transform var(--duration-fast) var(--ease-ui), opacity var(--duration-fast) var(--ease-ui);

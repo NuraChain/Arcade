@@ -49,10 +49,10 @@ export default component TopBar()
                     <Show when={ phone }>
                         { () =>
                             <Link to="/app" class="flex h-11 items-center gap-2 rounded-full ps-2 pe-3" aria-label={ locale.t('app.nav.home') }>
-                                <span class="lit flex h-7 w-7 items-center justify-center rounded-full bg-lamp text-void">
+                                <span class="lit flex h-7 w-7 items-center justify-center rounded-control bg-accent text-accent-ink">
                                     <Icon name="games" size={ 15 } />
                                 </span>
-                                <BrandMark class="text-[16px] text-text" />
+                                <BrandMark class="text-ui-lg text-text" />
                             </Link>
                         }
                     </Show>
@@ -62,7 +62,7 @@ export default component TopBar()
             </Show>
 
             <h1 class={ [
-                'label min-w-0 flex-1 truncate text-[17px] font-semibold text-text',
+                'label min-w-0 flex-1 truncate text-ui-lg font-semibold text-text',
                 showBack ? 'text-start' : (phone ? 'sr-only' : 'text-start')
             ].join(' ') }>
                 { title }
@@ -70,7 +70,7 @@ export default component TopBar()
 
             <Show when={ !phone }>
                 { () =>
-                    <Link to="/app/search" class="me-1 flex h-10 w-56 items-center gap-2 rounded-full border border-line bg-field px-3 text-[14px] text-faint transition-colors hover:border-lamp/60 hover:text-muted">
+                    <Link to="/app/search" class="me-1 flex h-9 w-60 items-center gap-2 rounded-control border border-line bg-sunk px-2.5 text-ui-sm text-faint transition-colors hover:border-line-strong hover:text-muted">
                         <Icon name="search" size={ 16 } />
                         <span class="truncate">{ locale.t('app.nav.search') }</span>
                     </Link>
