@@ -1,17 +1,96 @@
 import { useHead } from 'azerothjs';
 
 import Page from '../../components/app/page.component.azeroth';
+import ChatListItem from '../../components/chat/chat-list-item.component.azeroth';
+import { titleOf } from '../../components/chat/chat-title.ts';
 import EmptyState from '../../components/ui/empty-state.component.azeroth';
+import SearchInput from '../../components/ui/search-input.component.azeroth';
+import Tabs from '../../components/ui/tabs.component.azeroth';
+import type { Conversation } from '../../data/mock/types.ts';
+import { fold } from '../../services/search.service.ts';
+import { useChat } from '../../stores/chat.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 
 export default component ChatsPage()
 {
     const locale = useLocale();
+    const chat = useChat();
 
     useHead({ title: () => locale.t('app.nav.chats') });
 
-    <Page>
-        <h1 class="text-[clamp(1.75rem,5vw,2.5rem)]">{ locale.t('app.nav.chats') }</h1>
-        <EmptyState icon="sparkles" title={ locale.t('state.emptyTitle') } />
+    state tab = 'all';
+    state query = '';
+
+    derived all = chat.conversations();
+
+    derived mine = chat.me();
+
+    derived filtered = ((): Conversation[] =>
+    {
+        const needle = fold(query);
+        const byTab = all.filter((conversation) => tab === 'all'
+            || (tab === 'direct' && conversation.kind === 'direct')
+            || (tab === 'groups' && conversation.kind === 'group')
+            || (tab === 'games' && conversation.kind === 'game'));
+        const matched = needle === ''
+            ? byTab
+            : byTab.filter((conversation) => fold(locale.text(titleOf(conversation, mine))).includes(needle)
+                || chat.messagesOf(conversation.id).some((message) => fold(locale.text(message.text)).includes(needle)));
+        return [...matched].sort((a, b) =>
+        {
+            if (a.pinned !== b.pinned)
+            {
+                return a.pinned ? -1 : 1;
+            }
+            return (chat.lastOf(b.id)?.at ?? 0) - (chat.lastOf(a.id)?.at ?? 0);
+        });
+    })();
+
+    derived items = [
+        { id: 'all', label: locale.t('chats.tab.all'), count: chat.totalUnread() },
+        { id: 'direct', label: locale.t('chats.tab.direct') },
+        { id: 'groups', label: locale.t('chats.tab.groups') },
+        { id: 'games', label: locale.t('chats.tab.games') }
+    ];
+
+    <Page label={ locale.t('app.nav.chats') }>
+        <header class="pb-4">
+            <h1 class="text-[clamp(2rem,6vw,3rem)] leading-none">{ locale.t('app.nav.chats') }</h1>
+            <p class="mt-2 text-[15px] text-muted">{ locale.t('chats.lead') }</p>
+        </header>
+
+        <SearchInput
+            value={ query }
+            onInput={ (value) => query = value }
+            placeholder={ locale.t('chats.search') }
+            label={ locale.t('chats.search') }
+            class="mb-3"
+        />
+
+        <Tabs items={ items } value={ tab } label={ locale.t('app.nav.chats') } class="mb-3" onChange={ (id) => tab = id } />
+
+        <Show
+            when={ filtered.length > 0 }
+            fallback={
+                <EmptyState
+                    icon="chats"
+                    title={ locale.t(all.length === 0 ? 'chats.empty' : 'chats.emptyFiltered') }
+                    lead={ all.length === 0 ? locale.t('chats.emptyLead') : undefined }
+                    action={ locale.t('app.nav.friends') }
+                    to="/app/friends"
+                    class="py-10"
+                />
+            }
+        >
+            { () =>
+                <ul class="flex flex-col gap-0.5" aria-label={ locale.t('app.nav.chats') }>
+                    <For each={ filtered } key={ (conversation) => conversation.id } let={ conversation }>
+                        <li>
+                            <ChatListItem conversation={ conversation } me={ mine } />
+                        </li>
+                    </For>
+                </ul>
+            }
+        </Show>
     </Page>
 }

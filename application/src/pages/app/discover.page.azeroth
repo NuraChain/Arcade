@@ -1,17 +1,119 @@
-import { useHead } from 'azerothjs';
+import { useHead, useNavigate } from 'azerothjs';
 
 import Page from '../../components/app/page.component.azeroth';
-import EmptyState from '../../components/ui/empty-state.component.azeroth';
+import GameGrid from '../../components/games/game-grid.component.azeroth';
+import GroupCard from '../../components/social/group-card.component.azeroth';
+import PeopleStrip from '../../components/social/people-strip.component.azeroth';
+import UserCard from '../../components/social/user-card.component.azeroth';
+import SectionHeading from '../../components/ui/section-heading.component.azeroth';
+import type { GameId } from '../../data/games.ts';
+import { dataset } from '../../data/mock/index.ts';
+import type { Person } from '../../data/mock/types.ts';
+import { useAccount } from '../../stores/account.store.ts';
+import { useCatalogue } from '../../stores/catalogue.store.ts';
+import { useLobby } from '../../stores/lobby.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
+import { usePresence } from '../../stores/presence.store.ts';
+import { useSocial } from '../../stores/social.store.ts';
+import { useToasts } from '../../stores/toasts.store.ts';
 
 export default component DiscoverPage()
 {
     const locale = useLocale();
+    const social = useSocial();
+    const presence = usePresence();
+    const catalogue = useCatalogue();
+    const account = useAccount();
+    const lobby = useLobby();
+    const toasts = useToasts();
+    const { navigate } = useNavigate();
 
     useHead({ title: () => locale.t('app.nav.discover') });
 
-    <Page>
-        <h1 class="text-[clamp(1.75rem,5vw,2.5rem)]">{ locale.t('app.nav.discover') }</h1>
-        <EmptyState icon="sparkles" title={ locale.t('state.emptyTitle') } />
+    derived user = account.user();
+
+    derived suggestions = social.suggestions().slice(0, 8);
+
+    derived playing = social.people()
+        .filter((person) => presence.of(person.id).state === 'playing' && person.id !== user?.id)
+        .slice(0, 12);
+
+    derived nearby = ((): Person[] =>
+    {
+        if (user === null)
+        {
+            return [];
+        }
+        return social.people()
+            .filter((person) => person.id !== user.id && person.skill === user.skill && !social.friends().includes(person.id))
+            .slice(0, 12);
+    })();
+
+    derived groups = dataset().groups.filter((group) => user === null || !group.members.includes(user.id));
+
+    derived trending = [...catalogue.games].sort((a, b) => catalogue.stats(b.id).playersOnline - catalogue.stats(a.id).playersOnline).slice(0, 3);
+
+    const quickPlay = (game: GameId): void =>
+    {
+        navigate(`/app/play/${ lobby.quick(game) }`);
+    };
+
+    <Page label={ locale.t('app.nav.discover') }>
+        <header class="pb-5">
+            <h1 class="text-[clamp(2rem,6vw,3rem)] leading-none">{ locale.t('app.nav.discover') }</h1>
+            <p class="mt-2 text-[15px] text-muted">{ locale.t('discover.lead') }</p>
+        </header>
+
+        <div class="flex flex-col gap-8">
+            <section>
+                <SectionHeading title={ locale.t('discover.people') } more={ locale.t('common.seeAll') } to="/app/friends" />
+                <ul class="grid grid-cols-2 gap-3 @lg:grid-cols-3 @3xl:grid-cols-4" aria-label={ locale.t('discover.people') }>
+                    <For each={ suggestions } key={ (person) => person.id } let={ person }>
+                        <li class="flex">
+                            <div class="flex-1">
+                                <UserCard
+                                    person={ person }
+                                    onAdd={ (id) =>
+                                    {
+                                        social.add(id);
+                                        toasts.show({ kind: 'success', text: locale.t('person.added') });
+                                    } }
+                                />
+                            </div>
+                        </li>
+                    </For>
+                </ul>
+            </section>
+
+            <Show when={ playing.length > 0 }>
+                <section>
+                    <SectionHeading title={ locale.t('discover.popular') } />
+                    <PeopleStrip people={ playing } label={ locale.t('discover.popular') } />
+                </section>
+            </Show>
+
+            <Show when={ nearby.length > 0 }>
+                <section>
+                    <SectionHeading title={ locale.t('discover.skill') } />
+                    <PeopleStrip people={ nearby } label={ locale.t('discover.skill') } />
+                </section>
+            </Show>
+
+            <section>
+                <SectionHeading title={ locale.t('discover.rooms') } />
+                <ul class="grid gap-2 @2xl:grid-cols-2" aria-label={ locale.t('discover.rooms') }>
+                    <For each={ groups } key={ (group) => group.id } let={ group }>
+                        <li class="flex">
+                            <GroupCard group={ group } class="flex-1" />
+                        </li>
+                    </For>
+                </ul>
+            </section>
+
+            <section>
+                <SectionHeading title={ locale.t('discover.trending') } more={ locale.t('common.seeAll') } to="/app/games" />
+                <GameGrid games={ trending } compact label={ locale.t('discover.trending') } onQuickPlay={ quickPlay } />
+            </section>
+        </div>
     </Page>
 }

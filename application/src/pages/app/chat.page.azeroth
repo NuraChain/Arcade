@@ -1,17 +1,218 @@
-import { useHead } from 'azerothjs';
+import { Link, useHead, useNavigate, useParams } from 'azerothjs';
 
 import Page from '../../components/app/page.component.azeroth';
+import { othersOf, titleOf } from '../../components/chat/chat-title.ts';
+import Composer from '../../components/chat/composer.component.azeroth';
+import MessageBubble from '../../components/chat/message-bubble.component.azeroth';
+import PersonActions from '../../components/social/person-actions.component.azeroth';
+import Avatar from '../../components/ui/avatar.component.azeroth';
+import AvatarGroup from '../../components/ui/avatar-group.component.azeroth';
 import EmptyState from '../../components/ui/empty-state.component.azeroth';
+import IconButton from '../../components/ui/icon-button.component.azeroth';
+import { groupById, personById } from '../../data/mock/index.ts';
+import { useCatalogue } from '../../stores/catalogue.store.ts';
+import { useChat } from '../../stores/chat.store.ts';
+import { useDevice } from '../../stores/device.store.ts';
+import { useLobby } from '../../stores/lobby.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
+import { useOverlay } from '../../stores/overlay.store.ts';
+import { usePresence } from '../../stores/presence.store.ts';
+import { useSettings } from '../../stores/settings.store.ts';
+import { useShell } from '../../stores/shell.store.ts';
+import { useToasts } from '../../stores/toasts.store.ts';
 
 export default component ChatPage()
 {
     const locale = useLocale();
+    const chat = useChat();
+    const presence = usePresence();
+    const catalogue = useCatalogue();
+    const lobby = useLobby();
+    const overlay = useOverlay();
+    const settings = useSettings();
+    const shell = useShell();
+    const toasts = useToasts();
+    const device = useDevice();
+    const params = useParams();
+    const { navigate } = useNavigate();
 
-    useHead({ title: () => locale.t('app.nav.chats') });
+    let list: HTMLElement | null = null;
 
-    <Page>
-        <h1 class="text-[clamp(1.75rem,5vw,2.5rem)]">{ locale.t('app.nav.chats') }</h1>
-        <EmptyState icon="sparkles" title={ locale.t('state.emptyTitle') } />
+    derived id = params().id ?? '';
+
+    derived conversation = chat.conversation(id) ?? null;
+
+    derived me = chat.me();
+
+    derived others = conversation === null ? [] : othersOf(conversation, me);
+
+    derived group = conversation?.groupId === undefined || conversation?.groupId === null ? null : (groupById(conversation.groupId) ?? null);
+
+    derived title = conversation === null ? locale.t('chat.notFound') : locale.text(titleOf(conversation, me));
+
+    derived messages = conversation === null ? [] : chat.messagesOf(id);
+
+    derived typing = chat.typing(id);
+
+    derived online = others.filter((person) => presence.isOnline(person.id)).length;
+
+    derived muted = settings.isMuted(id);
+
+    derived subtitle = ((): string =>
+    {
+        if (typing.length > 0)
+        {
+            return locale.t('chats.typing');
+        }
+        if (group !== null || others.length > 1)
+        {
+            return `${ locale.plural('chat.members', others.length + 1) } · ${ locale.plural('chat.online', online) }`;
+        }
+        const only = others[0];
+        if (only === undefined)
+        {
+            return '';
+        }
+        const state = presence.of(only.id);
+        if (state.state === 'playing' && state.game !== null)
+        {
+            return locale.t('common.playing', { game: locale.t(catalogue.byId(state.game).nameKey) });
+        }
+        return state.state === 'offline' ? locale.relative(state.since) : locale.t(state.state === 'away' ? 'common.away' : 'common.online');
+    })();
+
+    useHead({ title: () => title });
+
+    mount
+    {
+        return shell.claimTitle(() => title);
+    }
+
+    effect
+    {
+        const settled = messages.length + typing.length;
+        if (list !== null && settled >= 0)
+        {
+            list.scrollTop = list.scrollHeight;
+        }
+    }
+
+    effect
+    {
+        if (conversation !== null)
+        {
+            chat.markRead(id);
+        }
+    }
+
+    const send = (): void =>
+    {
+        chat.send(id, chat.draft(id));
+    };
+
+    const openTable = (game: Parameters<typeof lobby.host>[0]): void =>
+    {
+        const invitees = others.map((person) => person.id);
+        const config = catalogue.defaults(game);
+        const tableId = lobby.host(game, { ...config, seats: Math.max(config.seats, Math.min(invitees.length + 1, config.seats)) }, invitees);
+        chat.sendInvite(id, game, tableId);
+        toasts.show({ kind: 'success', text: locale.t('chat.inviteSent') });
+        navigate(`/app/play/${ tableId }`);
+    };
+
+    derived phone = device.posture() === 'phone';
+
+    <Page padded={ false } fill label={ title } class="flex flex-col">
+        <Show
+            when={ conversation !== null }
+            fallback={
+                <div class="px-4 py-10">
+                    <EmptyState icon="chats" title={ locale.t('chat.notFound') } action={ locale.t('app.nav.chats') } to="/app/chats" />
+                </div>
+            }
+        >
+            { () =>
+                <div class="flex h-full min-h-0 flex-col">
+                    <header class="glass safe-t z-topbar sticky top-0 flex items-center gap-2 border-b border-line/60 px-2 py-2">
+                        <Show when={ phone }>
+                            { () => <IconButton icon="back" label={ locale.t('app.nav.back') } flip to="/app/chats" /> }
+                        </Show>
+                        <Show
+                            when={ group !== null }
+                            fallback={
+                                <Show when={ others.length === 1 } fallback={ <AvatarGroup people={ others } size="sm" max={ 2 } class="w-9 shrink-0" /> }>
+                                    { () =>
+                                        <Link to={ `/app/people/${ others[0].handle }` } class="shrink-0">
+                                            <Avatar person={ others[0] } size="sm" presence={ presence.of(others[0].id).state } />
+                                        </Link>
+                                    }
+                                </Show>
+                            }
+                        >
+                            { () =>
+                                <Link to={ `/app/groups/${ group!.id }` } class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-raised text-[18px]" aria-label={ locale.t('chat.openGroup') }>
+                                    { group!.emoji }
+                                </Link>
+                            }
+                        </Show>
+                        <span class="flex min-w-0 flex-1 flex-col">
+                            <span class="truncate text-[15px] font-semibold text-text">{ title }</span>
+                            <span class={ [ 'truncate text-[12px]', typing.length > 0 ? 'text-live' : 'text-muted' ].join(' ') }>{ subtitle }</span>
+                        </span>
+                        <IconButton
+                            icon={ muted ? 'sound-off' : 'sound' }
+                            label={ locale.t(muted ? 'chat.unmute' : 'chat.mute') }
+                            variant="ghost"
+                            pressed={ muted }
+                            onClick={ () => settings.toggleMutedConversation(id) }
+                        />
+                        <Show when={ others.length === 1 }>
+                            { () =>
+                                <IconButton
+                                    icon="more"
+                                    label={ locale.t('actions.title') }
+                                    variant="ghost"
+                                    onClick={ () => overlay.open(PersonActions, { personId: others[0].id }, { label: locale.t('actions.title') }) }
+                                />
+                            }
+                        </Show>
+                    </header>
+
+                    <div ref={ (element) => list = element } class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-4">
+                        <Show
+                            when={ messages.length > 0 }
+                            fallback={ <p class="m-auto text-center text-[14px] text-muted">{ locale.t('chat.empty') }</p> }
+                        >
+                            { () =>
+                                <For each={ messages } key={ (message) => message.id } let={ message } index={ index }>
+                                    <div>
+                                        <MessageBubble
+                                            message={ message }
+                                            me={ me }
+                                            showAuthor={ index === 0 || messages[index - 1].from !== message.from }
+                                        />
+                                    </div>
+                                </For>
+                            }
+                        </Show>
+                        <Show when={ typing.length > 0 }>
+                            { () =>
+                                <p class="flex items-center gap-2 ps-10 text-[12px] text-live">
+                                    <span class="live-dot h-1.5 w-1.5 rounded-full animate-pulse motion-reduce:animate-none" aria-hidden="true"></span>
+                                    { locale.text(personById(typing[0])?.name ?? { en: '', fa: '' }) } { locale.t('chats.typing') }
+                                </p>
+                            }
+                        </Show>
+                    </div>
+
+                    <Composer
+                        value={ chat.draft(id) }
+                        onInput={ (value) => chat.setDraft(id, value) }
+                        onSend={ send }
+                        onGame={ openTable }
+                    />
+                </div>
+            }
+        </Show>
     </Page>
 }

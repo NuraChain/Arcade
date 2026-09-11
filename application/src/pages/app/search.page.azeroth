@@ -1,17 +1,176 @@
-import { useHead } from 'azerothjs';
+import { Link, useHead, useNavigate } from 'azerothjs';
 
 import Page from '../../components/app/page.component.azeroth';
+import { titleOf } from '../../components/chat/chat-title.ts';
+import GameArt from '../../components/games/game-art.component.azeroth';
+import FriendRow from '../../components/social/friend-row.component.azeroth';
+import GroupCard from '../../components/social/group-card.component.azeroth';
+import Chip from '../../components/ui/chip.component.azeroth';
 import EmptyState from '../../components/ui/empty-state.component.azeroth';
+import IconButton from '../../components/ui/icon-button.component.azeroth';
+import SearchInput from '../../components/ui/search-input.component.azeroth';
+import SectionHeading from '../../components/ui/section-heading.component.azeroth';
+import Icon from '../../icons/icon.component.azeroth';
+import { useChat } from '../../stores/chat.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
+import { useSearch, SEARCH_SCOPES, type SearchScope } from '../../stores/search.store.ts';
 
 export default component SearchPage()
 {
     const locale = useLocale();
+    const search = useSearch();
+    const chat = useChat();
+    const { navigate } = useNavigate();
 
     useHead({ title: () => locale.t('app.nav.search') });
 
-    <Page>
-        <h1 class="text-[clamp(1.75rem,5vw,2.5rem)]">{ locale.t('app.nav.search') }</h1>
-        <EmptyState icon="sparkles" title={ locale.t('state.emptyTitle') } />
+    derived results = search.results();
+
+    derived query = search.query();
+
+    derived recents = search.recents();
+
+    const run = (term: string): void =>
+    {
+        search.setQuery(term);
+        search.remember(term);
+    };
+
+    <Page label={ locale.t('app.nav.search') }>
+        <header class="pb-4">
+            <h1 class="sr-only">{ locale.t('app.nav.search') }</h1>
+            <SearchInput
+                value={ query }
+                onInput={ (value) => search.setQuery(value) }
+                placeholder={ locale.t('search.placeholder') }
+                label={ locale.t('app.nav.search') }
+                autofocus
+                onEnter={ () => search.remember(query) }
+            />
+        </header>
+
+        <ul class="rail-x -mx-4 mb-5 flex gap-2 px-4 sm:mx-0 sm:px-0" aria-label={ locale.t('search.scope.all') }>
+            <For each={ SEARCH_SCOPES } key={ (scope) => scope } let={ scope }>
+                <li>
+                    <Chip selected={ search.scope() === scope } onClick={ () => search.setScope(scope as SearchScope) }>
+                        { locale.t(`search.scope.${ scope }`) }
+                    </Chip>
+                </li>
+            </For>
+        </ul>
+
+        <Show
+            when={ query.trim() !== '' }
+            fallback={
+                <div class="flex flex-col gap-6">
+                    <Show when={ recents.length > 0 }>
+                        <section>
+                            <SectionHeading title={ locale.t('search.recent') } />
+                            <ul class="flex flex-col gap-0.5" aria-label={ locale.t('search.recent') }>
+                                <For each={ recents } key={ (term) => term } let={ term }>
+                                    <li class="flex items-center gap-2 rounded-tile px-2 hover:bg-raised/60">
+                                        <button
+                                            type="button"
+                                            class="flex min-h-11 flex-1 cursor-pointer items-center gap-3 text-start text-[14px] text-text"
+                                            onClick={ () => run(term) }
+                                        >
+                                            <Icon name="history" size={ 16 } class="text-faint" />
+                                            <span class="truncate">{ term }</span>
+                                        </button>
+                                        <IconButton icon="close" label={ locale.t('search.clear') } variant="ghost" size="sm" onClick={ () => search.forget(term) } />
+                                    </li>
+                                </For>
+                            </ul>
+                        </section>
+                    </Show>
+                    <EmptyState icon="search" title={ locale.t('search.start') } lead={ locale.t('search.startLead') } class="py-8" />
+                </div>
+            }
+        >
+            { () =>
+                <Show
+                    when={ results.total > 0 }
+                    fallback={ <EmptyState icon="search" title={ locale.t('search.empty', { query }) } lead={ locale.t('search.emptyLead') } class="py-10" /> }
+                >
+                    { () =>
+                        <div class="flex flex-col gap-7">
+                            <p class="tally text-[13px] text-faint">{ locale.plural('search.results', results.total) }</p>
+
+                            <Show when={ results.people.length > 0 }>
+                                <section>
+                                    <SectionHeading title={ locale.t('search.scope.people') } />
+                                    <ul class="flex flex-col gap-0.5" aria-label={ locale.t('search.scope.people') }>
+                                        <For each={ results.people.slice(0, 8) } key={ (person) => person.id } let={ person }>
+                                            <li>
+                                                <FriendRow person={ person } subtitle={ `@${ person.handle }` } />
+                                            </li>
+                                        </For>
+                                    </ul>
+                                </section>
+                            </Show>
+
+                            <Show when={ results.games.length > 0 }>
+                                <section>
+                                    <SectionHeading title={ locale.t('search.scope.games') } />
+                                    <ul class="flex flex-col gap-2" aria-label={ locale.t('search.scope.games') }>
+                                        <For each={ results.games } key={ (game) => game.id } let={ game }>
+                                            <li>
+                                                <Link to={ `/app/games/${ game.slug }` } class="flex items-center gap-3 rounded-panel border border-line bg-field p-2 transition-colors hover:border-lamp/40">
+                                                    <span class="h-14 w-14 shrink-0 overflow-hidden rounded-tile">
+                                                        <GameArt game={ game.id } alt="" ratio="square" sizes="64px" />
+                                                    </span>
+                                                    <span class="flex min-w-0 flex-1 flex-col">
+                                                        <span class="truncate text-[15px] font-semibold text-text">{ locale.t(game.nameKey) }</span>
+                                                        <span class="truncate text-[12px] text-muted">{ locale.t(game.blurbKey) }</span>
+                                                    </span>
+                                                    <Icon name="chevron-right" size={ 16 } class="icon-flip shrink-0 text-faint" />
+                                                </Link>
+                                            </li>
+                                        </For>
+                                    </ul>
+                                </section>
+                            </Show>
+
+                            <Show when={ results.groups.length > 0 }>
+                                <section>
+                                    <SectionHeading title={ locale.t('search.scope.groups') } />
+                                    <ul class="grid gap-2 @2xl:grid-cols-2" aria-label={ locale.t('search.scope.groups') }>
+                                        <For each={ results.groups } key={ (group) => group.id } let={ group }>
+                                            <li class="flex">
+                                                <GroupCard group={ group } class="flex-1" />
+                                            </li>
+                                        </For>
+                                    </ul>
+                                </section>
+                            </Show>
+
+                            <Show when={ results.messages.length > 0 }>
+                                <section>
+                                    <SectionHeading title={ locale.t('search.scope.chats') } />
+                                    <ul class="flex flex-col gap-0.5" aria-label={ locale.t('search.scope.chats') }>
+                                        <For each={ results.messages.slice(0, 12) } key={ (message) => message.id } let={ message }>
+                                            <li>
+                                                <button
+                                                    type="button"
+                                                    class="flex w-full cursor-pointer flex-col gap-0.5 rounded-tile px-3 py-2 text-start transition-colors hover:bg-raised/60"
+                                                    onClick={ () => navigate(`/app/chats/${ message.conversationId }`) }
+                                                >
+                                                    <span class="truncate text-[14px] text-text">{ locale.text(message.text) }</span>
+                                                    <span class="truncate text-[12px] text-faint">
+                                                        { locale.t('search.in', { where: locale.text(titleOf(chat.conversation(message.conversationId) ?? { id: '', kind: 'direct', participants: [], groupId: null, tableId: null, game: null, title: null, pinned: false, lastReadAt: 0 }, chat.me())) }) }
+                                                        { ' · ' }
+                                                        { locale.relative(message.at) }
+                                                    </span>
+                                                </button>
+                                            </li>
+                                        </For>
+                                    </ul>
+                                </section>
+                            </Show>
+                        </div>
+                    }
+                </Show>
+            }
+        </Show>
     </Page>
 }

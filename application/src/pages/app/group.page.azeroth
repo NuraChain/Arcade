@@ -1,17 +1,151 @@
-import { useHead } from 'azerothjs';
+import { useHead, useNavigate, useParams } from 'azerothjs';
 
 import Page from '../../components/app/page.component.azeroth';
+import FriendRow from '../../components/social/friend-row.component.azeroth';
+import Button from '../../components/ui/button.component.azeroth';
 import EmptyState from '../../components/ui/empty-state.component.azeroth';
+import IconButton from '../../components/ui/icon-button.component.azeroth';
+import SectionHeading from '../../components/ui/section-heading.component.azeroth';
+import { groupById, personById } from '../../data/mock/index.ts';
+import type { Person } from '../../data/mock/types.ts';
+import Icon from '../../icons/icon.component.azeroth';
+import { useAccount } from '../../stores/account.store.ts';
+import { useCatalogue } from '../../stores/catalogue.store.ts';
+import { useChat } from '../../stores/chat.store.ts';
+import { useLobby } from '../../stores/lobby.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
+import { useOverlay } from '../../stores/overlay.store.ts';
+import { usePresence } from '../../stores/presence.store.ts';
+import { useShell } from '../../stores/shell.store.ts';
+import { useSocial } from '../../stores/social.store.ts';
+import { useToasts } from '../../stores/toasts.store.ts';
+import PersonActions from '../../components/social/person-actions.component.azeroth';
 
 export default component GroupPage()
 {
     const locale = useLocale();
+    const presence = usePresence();
+    const catalogue = useCatalogue();
+    const chat = useChat();
+    const lobby = useLobby();
+    const social = useSocial();
+    const account = useAccount();
+    const overlay = useOverlay();
+    const shell = useShell();
+    const toasts = useToasts();
+    const params = useParams();
+    const { navigate } = useNavigate();
 
-    useHead({ title: () => locale.t('app.nav.friends') });
+    derived group = groupById(params().id ?? '') ?? null;
 
-    <Page>
-        <h1 class="text-[clamp(1.75rem,5vw,2.5rem)]">{ locale.t('app.nav.friends') }</h1>
-        <EmptyState icon="sparkles" title={ locale.t('state.emptyTitle') } />
+    derived name = group === null ? locale.t('groups.notFound') : locale.text(group.name);
+
+    useHead({ title: () => name });
+
+    mount
+    {
+        return shell.claimTitle(() => name);
+    }
+
+    derived members = group === null
+        ? []
+        : social.visible(group.members)
+            .map((id) => personById(id))
+            .filter((person): person is Person => person !== undefined);
+
+    derived online = members.filter((person) => presence.isOnline(person.id));
+
+    derived owner = group === null ? null : (personById(group.owner) ?? null);
+
+    derived conversationId = group === null ? undefined : chat.forGroup(group.id);
+
+    derived game = group?.game ?? null;
+
+    const playTogether = (): void =>
+    {
+        if (group === null)
+        {
+            return;
+        }
+        const pick = game ?? catalogue.featured();
+        const config = catalogue.defaults(pick);
+        const invitees = online
+            .filter((person) => person.id !== account.user()?.id)
+            .slice(0, config.seats - 1)
+            .map((person) => person.id);
+        const tableId = lobby.host(pick, config, invitees);
+        if (conversationId !== undefined)
+        {
+            chat.sendInvite(conversationId, pick, tableId);
+            toasts.show({ kind: 'success', text: locale.t('chat.inviteSent') });
+        }
+        navigate(`/app/play/${ tableId }`);
+    };
+
+    <Page label={ name }>
+        <Show
+            when={ group !== null }
+            fallback={ <EmptyState icon="people" title={ locale.t('groups.notFound') } action={ locale.t('app.nav.friends') } to="/app/friends" class="py-12" /> }
+        >
+            { () =>
+                <div class="flex flex-col gap-6">
+                    <header class="flex flex-col items-center gap-3 pt-2 text-center">
+                        <span class="flex h-20 w-20 items-center justify-center rounded-panel bg-raised text-[40px]" aria-hidden="true">{ group!.emoji }</span>
+                        <h1 class="text-[clamp(1.75rem,6vw,2.5rem)] leading-none">{ name }</h1>
+                        <p class="max-w-[46ch] text-[14px] text-muted">{ locale.text(group!.blurb) }</p>
+                        <p class="tally flex flex-wrap items-center justify-center gap-2 text-[13px] text-muted">
+                            <span>{ locale.plural('chat.members', members.length) }</span>
+                            <Show when={ online.length > 0 }>
+                                { () => <span class="text-live">· { locale.plural('chat.online', online.length) }</span> }
+                            </Show>
+                            <Show when={ game !== null }>
+                                { () => <span>· { locale.t(catalogue.byId(game!).nameKey) }</span> }
+                            </Show>
+                        </p>
+                    </header>
+
+                    <div class="flex flex-col gap-2 sm:flex-row sm:justify-center">
+                        <Button variant="primary" size="lg" leading="zap" onClick={ playTogether }>{ locale.t('groups.playTogether') }</Button>
+                        <Show when={ conversationId !== undefined }>
+                            { () => <Button variant="secondary" size="lg" leading="chats" to={ `/app/chats/${ conversationId! }` }>{ locale.t('groups.chat') }</Button> }
+                        </Show>
+                        <Show when={ game !== null }>
+                            { () => <Button variant="outline" size="lg" leading="add" to={ `/app/games/${ game! }/create` }>{ locale.t('groups.createGame') }</Button> }
+                        </Show>
+                    </div>
+
+                    <section>
+                        <SectionHeading title={ locale.t('groups.members') } />
+                        <ul class="flex flex-col gap-0.5" aria-label={ locale.t('groups.members') }>
+                            <For each={ members } key={ (person) => person.id } let={ person }>
+                                <li>
+                                    <FriendRow
+                                        person={ person }
+                                        subtitle={ person.id === group!.owner ? locale.t('groups.owner') : undefined }
+                                        actions={
+                                            <IconButton
+                                                icon="more"
+                                                label={ locale.t('actions.title') }
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={ () => overlay.open(PersonActions, { personId: person.id }, { label: locale.t('actions.title') }) }
+                                            />
+                                        }
+                                    />
+                                </li>
+                            </For>
+                        </ul>
+                    </section>
+
+                    <p class="flex items-center justify-center gap-2 text-[12px] text-faint">
+                        <Icon name="history" size={ 13 } />
+                        { locale.t('groups.since', { date: locale.date(group!.createdAt, { year: 'numeric', month: 'long' }) }) }
+                        <Show when={ owner !== null }>
+                            { () => <span>· { locale.t('groups.owner') }: { locale.text(owner!.name) }</span> }
+                        </Show>
+                    </p>
+                </div>
+            }
+        </Show>
     </Page>
 }

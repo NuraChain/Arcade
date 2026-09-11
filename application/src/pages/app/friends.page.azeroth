@@ -1,17 +1,226 @@
-import { useHead } from 'azerothjs';
+import { useHead, useNavigate } from 'azerothjs';
 
 import Page from '../../components/app/page.component.azeroth';
+import FriendRow from '../../components/social/friend-row.component.azeroth';
+import PersonActions from '../../components/social/person-actions.component.azeroth';
+import UserCard from '../../components/social/user-card.component.azeroth';
+import Button from '../../components/ui/button.component.azeroth';
 import EmptyState from '../../components/ui/empty-state.component.azeroth';
+import IconButton from '../../components/ui/icon-button.component.azeroth';
+import Tabs from '../../components/ui/tabs.component.azeroth';
+import { personById } from '../../data/mock/index.ts';
+import type { Person } from '../../data/mock/types.ts';
+import { useChat } from '../../stores/chat.store.ts';
+import { useLobby } from '../../stores/lobby.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
+import { useCatalogue } from '../../stores/catalogue.store.ts';
+import { useOverlay } from '../../stores/overlay.store.ts';
+import { usePresence } from '../../stores/presence.store.ts';
+import { useDevice } from '../../stores/device.store.ts';
+import { useSocial } from '../../stores/social.store.ts';
+import { useToasts } from '../../stores/toasts.store.ts';
 
 export default component FriendsPage()
 {
     const locale = useLocale();
+    const social = useSocial();
+    const presence = usePresence();
+    const device = useDevice();
+    const chat = useChat();
+    const lobby = useLobby();
+    const catalogue = useCatalogue();
+    const overlay = useOverlay();
+    const toasts = useToasts();
+    const { navigate } = useNavigate();
 
     useHead({ title: () => locale.t('app.nav.friends') });
 
-    <Page>
-        <h1 class="text-[clamp(1.75rem,5vw,2.5rem)]">{ locale.t('app.nav.friends') }</h1>
-        <EmptyState icon="sparkles" title={ locale.t('state.emptyTitle') } />
+    state tab = 'all';
+
+    derived roomy = device.posture() !== 'phone';
+
+    const peopleOf = (ids: readonly string[]): Person[] => ids
+        .map((id) => personById(id))
+        .filter((person): person is Person => person !== undefined);
+
+    derived friends = peopleOf(social.friends());
+
+    derived online = friends.filter((person) => presence.isOnline(person.id));
+
+    derived incoming = social.incoming();
+
+    derived outgoing = social.outgoing();
+
+    derived suggestions = social.suggestions().slice(0, 8);
+
+    derived items = [
+        { id: 'all', label: locale.t('friends.tab.all'), count: friends.length },
+        { id: 'online', label: locale.t('friends.tab.online'), count: online.length },
+        { id: 'requests', label: locale.t('friends.tab.requests'), count: incoming.length },
+        { id: 'suggestions', label: locale.t('friends.tab.suggestions') }
+    ];
+
+    derived listed = tab === 'online' ? online : friends;
+
+    const playWith = (person: Person): void =>
+    {
+        navigate(`/app/play/${ lobby.host(person.favourite, catalogue.defaults(person.favourite), [person.id]) }`);
+    };
+
+    const message = (person: Person): void =>
+    {
+        navigate(`/app/chats/${ chat.openDirect(person.id) }`);
+    };
+
+    const more = (person: Person): void =>
+    {
+        overlay.open(PersonActions, { personId: person.id }, { label: locale.t('actions.title') });
+    };
+
+    <Page label={ locale.t('app.nav.friends') }>
+        <header class="pb-4">
+            <h1 class="text-[clamp(2rem,6vw,3rem)] leading-none">{ locale.t('app.nav.friends') }</h1>
+            <p class="mt-2 text-[15px] text-muted">{ locale.t('friends.lead') }</p>
+        </header>
+
+        <Tabs items={ items } value={ tab } label={ locale.t('app.nav.friends') } class="mb-4" onChange={ (id) => tab = id } />
+
+        <Show when={ tab === 'all' || tab === 'online' }>
+            { () =>
+                <Show
+                    when={ listed.length > 0 }
+                    fallback={
+                        <EmptyState
+                            icon="people"
+                            title={ locale.t(tab === 'online' ? 'friends.empty.online' : 'friends.empty.all') }
+                            lead={ locale.t(tab === 'online' ? 'friends.empty.onlineLead' : 'friends.empty.allLead') }
+                            action={ locale.t('friends.tab.suggestions') }
+                            onAction={ () => tab = 'suggestions' }
+                            class="py-10"
+                        />
+                    }
+                >
+                    { () =>
+                        <ul class="flex flex-col gap-0.5" aria-label={ locale.t('friends.tab.all') }>
+                            <For each={ listed } key={ (person) => person.id } let={ person }>
+                                <li>
+                                    <FriendRow
+                                        person={ person }
+                                        actions={
+                                            <>
+                                                <Show
+                                                    when={ roomy }
+                                                    fallback={ <IconButton icon="zap" label={ locale.t('person.play') } variant="secondary" size="sm" onClick={ () => playWith(person) } /> }
+                                                >
+                                                    { () =>
+                                                        <Button variant="secondary" size="sm" leading="zap" class="whitespace-nowrap" onClick={ () => playWith(person) }>
+                                                            { locale.t('person.play') }
+                                                        </Button>
+                                                    }
+                                                </Show>
+                                                <Show when={ roomy }>
+                                                    { () => <IconButton icon="chats" label={ locale.t('person.message') } variant="ghost" size="sm" onClick={ () => message(person) } /> }
+                                                </Show>
+                                                <IconButton icon="more" label={ locale.t('actions.title') } variant="ghost" size="sm" onClick={ () => more(person) } />
+                                            </>
+                                        }
+                                    />
+                                </li>
+                            </For>
+                        </ul>
+                    }
+                </Show>
+            }
+        </Show>
+
+        <Show when={ tab === 'requests' }>
+            { () =>
+                <Show
+                    when={ incoming.length > 0 || outgoing.length > 0 }
+                    fallback={ <EmptyState icon="friend-add" title={ locale.t('friends.empty.requests') } class="py-10" /> }
+                >
+                    { () =>
+                        <div class="flex flex-col gap-6">
+                            <Show when={ incoming.length > 0 }>
+                                <ul class="flex flex-col gap-0.5" aria-label={ locale.t('friends.requests.incoming') }>
+                                    <For each={ incoming } key={ (request) => request.id } let={ request }>
+                                        <li>
+                                            <Show when={ personById(request.from) !== undefined }>
+                                                { () =>
+                                                    <FriendRow
+                                                        person={ personById(request.from)! }
+                                                        subtitle={ `${ locale.t('friends.requests.incoming') } · ${ locale.relative(request.at) }` }
+                                                        actions={
+                                                            <>
+                                                                <Button variant="primary" size="sm" class="whitespace-nowrap" onClick={ () => social.accept(request.id) }>
+                                                                    { locale.t('person.accept') }
+                                                                </Button>
+                                                                <Button variant="ghost" size="sm" class="whitespace-nowrap" onClick={ () => social.decline(request.id) }>
+                                                                    { locale.t('person.decline') }
+                                                                </Button>
+                                                            </>
+                                                        }
+                                                    />
+                                                }
+                                            </Show>
+                                        </li>
+                                    </For>
+                                </ul>
+                            </Show>
+
+                            <Show when={ outgoing.length > 0 }>
+                                <ul class="flex flex-col gap-0.5" aria-label={ locale.t('friends.requests.outgoing') }>
+                                    <For each={ outgoing } key={ (request) => request.id } let={ request }>
+                                        <li>
+                                            <Show when={ personById(request.to) !== undefined }>
+                                                { () =>
+                                                    <FriendRow
+                                                        person={ personById(request.to)! }
+                                                        subtitle={ `${ locale.t('friends.requests.outgoing') } · ${ locale.relative(request.at) }` }
+                                                        actions={
+                                                            <Button variant="ghost" size="sm" class="whitespace-nowrap" onClick={ () => social.withdraw(request.to) }>
+                                                                { locale.t('person.withdraw') }
+                                                            </Button>
+                                                        }
+                                                    />
+                                                }
+                                            </Show>
+                                        </li>
+                                    </For>
+                                </ul>
+                            </Show>
+                        </div>
+                    }
+                </Show>
+            }
+        </Show>
+
+        <Show when={ tab === 'suggestions' }>
+            { () =>
+                <Show
+                    when={ suggestions.length > 0 }
+                    fallback={ <EmptyState icon="discover" title={ locale.t('friends.empty.suggestions') } class="py-10" /> }
+                >
+                    { () =>
+                        <ul class="grid grid-cols-2 gap-3 @lg:grid-cols-3 @3xl:grid-cols-4" aria-label={ locale.t('friends.tab.suggestions') }>
+                            <For each={ suggestions } key={ (person) => person.id } let={ person }>
+                                <li class="flex">
+                                    <div class="flex-1">
+                                        <UserCard
+                                            person={ person }
+                                            onAdd={ (id) =>
+                                            {
+                                                social.add(id);
+                                                toasts.show({ kind: 'success', text: locale.t('person.added') });
+                                            } }
+                                        />
+                                    </div>
+                                </li>
+                            </For>
+                        </ul>
+                    }
+                </Show>
+            }
+        </Show>
     </Page>
 }

@@ -1,17 +1,102 @@
-import { useHead } from 'azerothjs';
+import { useHead, useNavigate } from 'azerothjs';
 
 import Page from '../../components/app/page.component.azeroth';
+import NotificationRow from '../../components/social/notification-row.component.azeroth';
+import Button from '../../components/ui/button.component.azeroth';
 import EmptyState from '../../components/ui/empty-state.component.azeroth';
+import SectionHeading from '../../components/ui/section-heading.component.azeroth';
+import { personById } from '../../data/mock/index.ts';
+import type { Notification } from '../../data/mock/types.ts';
+import { runtime } from '../../lib/runtime.ts';
+import { useLobby } from '../../stores/lobby.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
+import { useNotifications } from '../../stores/notifications.store.ts';
 
 export default component NotificationsPage()
 {
     const locale = useLocale();
+    const notifications = useNotifications();
+    const lobby = useLobby();
+    const { navigate } = useNavigate();
 
     useHead({ title: () => locale.t('app.nav.notifications') });
 
-    <Page>
-        <h1 class="text-[clamp(1.75rem,5vw,2.5rem)]">{ locale.t('app.nav.notifications') }</h1>
-        <EmptyState icon="sparkles" title={ locale.t('state.emptyTitle') } />
+    derived items = notifications.items();
+
+    derived dayStart = ((): number =>
+    {
+        const reference = new Date(runtime().clock.now());
+        reference.setHours(0, 0, 0, 0);
+        return reference.getTime();
+    })();
+
+    derived today = items.filter((item) => item.at >= dayStart);
+
+    derived earlier = items.filter((item) => item.at < dayStart);
+
+    const open = (item: Notification): void =>
+    {
+        notifications.markRead(item.id);
+        if (item.kind === 'invite' && item.ref.game !== undefined)
+        {
+            navigate(`/app/play/${ lobby.joinInvite(item.ref.game, item.from ?? 'sara') }`);
+            return;
+        }
+        if (item.ref.conversationId !== undefined)
+        {
+            navigate(`/app/chats/${ item.ref.conversationId }`);
+            return;
+        }
+        if (item.from !== null)
+        {
+            navigate(`/app/people/${ personById(item.from)?.handle ?? item.from }`);
+        }
+    };
+
+    <Page label={ locale.t('app.nav.notifications') }>
+        <header class="flex flex-wrap items-end justify-between gap-3 pb-4">
+            <div>
+                <h1 class="text-[clamp(2rem,6vw,3rem)] leading-none">{ locale.t('app.nav.notifications') }</h1>
+                <p class="mt-2 text-[15px] text-muted">{ locale.t('notifications.lead') }</p>
+            </div>
+            <Show when={ notifications.unread() > 0 }>
+                { () => <Button variant="ghost" size="sm" leading="check-circle" onClick={ () => notifications.markAllRead() }>{ locale.t('notifications.markAll') }</Button> }
+            </Show>
+        </header>
+
+        <Show
+            when={ items.length > 0 }
+            fallback={ <EmptyState icon="bell" title={ locale.t('notifications.empty') } lead={ locale.t('notifications.emptyLead') } class="py-10" /> }
+        >
+            { () =>
+                <div class="flex flex-col gap-6">
+                    <Show when={ today.length > 0 }>
+                        <section>
+                            <SectionHeading title={ locale.t('notifications.today') } />
+                            <ul class="flex flex-col gap-0.5" aria-label={ locale.t('notifications.today') }>
+                                <For each={ today } key={ (item) => item.id } let={ item }>
+                                    <li>
+                                        <NotificationRow item={ item } onOpen={ open } onDismiss={ (id) => notifications.remove(id) } />
+                                    </li>
+                                </For>
+                            </ul>
+                        </section>
+                    </Show>
+
+                    <Show when={ earlier.length > 0 }>
+                        <section>
+                            <SectionHeading title={ locale.t('notifications.earlier') } />
+                            <ul class="flex flex-col gap-0.5" aria-label={ locale.t('notifications.earlier') }>
+                                <For each={ earlier } key={ (item) => item.id } let={ item }>
+                                    <li>
+                                        <NotificationRow item={ item } onOpen={ open } onDismiss={ (id) => notifications.remove(id) } />
+                                    </li>
+                                </For>
+                            </ul>
+                        </section>
+                    </Show>
+                </div>
+            }
+        </Show>
     </Page>
 }
