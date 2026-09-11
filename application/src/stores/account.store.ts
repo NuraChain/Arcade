@@ -1,29 +1,29 @@
 import { createStore, type Getter } from 'azerothjs';
 
+import { client, type Account } from '../api.ts';
+
 import { DEMO_IDS, PEOPLE } from '../data/mock/people.ts';
-import { dataset, personByHandle, personById } from '../data/mock/index.ts';
+import { dataset, personById } from '../data/mock/index.ts';
 import type { Person } from '../data/mock/types.ts';
 import { runtime } from '../lib/runtime.ts';
-import { addressHue, shortAddress } from '../lib/wallet.ts';
-import { handleFor } from '../services/wallet.service.ts';
-import { GUEST_PREFIX, WALLET_PREFIX, useSession, type SessionRecord } from './session.store.ts';
+import { shortAddress } from '../lib/wallet.ts';
+import { useSession } from './session.store.ts';
 
 export function slugify(handle: string): string
 {
     return handle.trim().toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '');
 }
 
-export function guestFor(handle: string): Person
+function demoByHandle(handle: string): Person | undefined
 {
-    const template = personById('alex') ?? { ...PEOPLE[0], level: 1, reliability: 100, joinedAt: 0, stats: dataset().people[0].stats, achievements: [] };
-    const clean = handle.trim();
+    return DEMO_IDS.map((id) => personById(id)).find((person) => person?.handle === handle);
+}
+
+function blank(): Person
+{
+    const shape = personById('alex') ?? { ...PEOPLE[0], level: 1, reliability: 100, joinedAt: 0, stats: dataset().people[0].stats, achievements: [] };
     return {
-        ...template,
-        id: GUEST_PREFIX + slugify(clean),
-        handle: slugify(clean),
-        name: { en: clean, fa: clean },
-        bio: { en: 'Just sat down.', fa: 'تازه نشسته.' },
-        hue: (clean.length * 47) % 360,
+        ...shape,
         portrait: null,
         favourite: 'hokm',
         level: 1,
@@ -37,30 +37,38 @@ export function guestFor(handle: string): Person
     };
 }
 
-export function walletFor(address: string): Person
-{
-    const short = shortAddress(address);
-    return {
-        ...guestFor(short),
-        id: WALLET_PREFIX + address.toLowerCase(),
-        handle: handleFor(address),
-        name: { en: short, fa: short },
-        bio: { en: 'Signed in with a wallet on NuraChain.', fa: 'با کیف پول روی نوراچین وارد شده.' },
-        hue: addressHue(address)
-    };
-}
+const WALLET_BIO = { en: 'Signed in with a wallet on NuraChain.', fa: 'با کیف پول روی نوراچین وارد شده.' };
 
-export function resolveRecord(record: SessionRecord | null): Person | null
+const GUEST_BIO = { en: 'Just sat down.', fa: 'تازه نشسته.' };
+
+export function personFor(account: Account | null): Person | null
 {
-    if (record === null)
+    if (account === null)
     {
         return null;
     }
-    if (record.kind === 'wallet' && record.address !== undefined)
+
+    const demo = account.kind === 'demo' ? demoByHandle(account.handle) : undefined;
+    if (demo !== undefined)
     {
-        return walletFor(record.address);
+        return { ...demo, hue: account.hue, minor: account.isMinor };
     }
-    return record.id.startsWith(GUEST_PREFIX) ? guestFor(record.handle) : (personById(record.id) ?? null);
+
+    const label = account.kind === 'wallet' && account.address !== undefined
+        ? shortAddress(account.address)
+        : account.displayName;
+
+    const bio = account.bio === '' ? (account.kind === 'wallet' ? WALLET_BIO : GUEST_BIO) : { en: account.bio, fa: account.bio };
+
+    return {
+        ...blank(),
+        id: account.id,
+        handle: account.handle,
+        name: { en: label, fa: label },
+        bio,
+        hue: account.hue,
+        minor: account.isMinor
+    };
 }
 
 export interface AccountApi
@@ -69,8 +77,12 @@ export interface AccountApi
     isWallet: Getter<boolean>;
     address: Getter<string | null>;
     demoIdentities(): Person[];
-    signIn(handle: string, options?: { remember?: boolean }): Promise<Person>;
-    signInWithWallet(address: string, options?: { remember?: boolean }): Person;
+
+    signIn(name: string): Promise<Person | null>;
+
+    signInAsDemo(handle: string): Promise<Person | null>;
+
+    adoptWallet(account: Account): Person | null;
 }
 
 export const useAccount = createStore((): AccountApi =>
@@ -78,31 +90,37 @@ export const useAccount = createStore((): AccountApi =>
     const session = useSession();
 
     return {
-        user: () => resolveRecord(session.record()),
-        isWallet: () => session.record()?.kind === 'wallet',
-        address: () => session.record()?.address ?? null,
+        user: () => personFor(session.account()),
+        isWallet: () => session.account()?.kind === 'wallet',
+        address: () => session.account()?.address ?? null,
         demoIdentities: () => DEMO_IDS.map((id) => personById(id)).filter((person): person is Person => person !== undefined),
 
-        signInWithWallet(address, options)
+        adoptWallet(account)
         {
-            const person = walletFor(address);
-            session.establish({ id: person.id, handle: person.handle, kind: 'wallet', address }, options);
-            return person;
+            session.establish(account);
+            return personFor(account);
         },
 
-        signIn(handle, options)
+        async signInAsDemo(handle)
         {
-            const known = personByHandle(handle);
-            const person = known ?? guestFor(handle);
-            const delay = Math.round(180 * runtime().latency);
-            return new Promise<Person>((resolve) =>
+            const established = await client.auth.demo({ input: { handle } });
+            if (established.account === undefined)
             {
-                runtime().clock.after(delay, () =>
-                {
-                    session.establish({ id: person.id, handle: known === undefined ? handle.trim() : person.handle }, options);
-                    resolve(person);
-                });
-            });
+                return null;
+            }
+            session.establish(established.account);
+            return personFor(established.account);
+        },
+
+        async signIn(name)
+        {
+            const established = await client.auth.guest({ input: { name } });
+            if (established.account === undefined)
+            {
+                return null;
+            }
+            session.establish(established.account);
+            return personFor(established.account);
         }
     };
 });

@@ -1,3 +1,4 @@
+import type { Account } from '../../api.ts';
 import { NURA_CHAIN, chainIsConfigured } from '../../data/chain.ts';
 import Icon from '../../icons/icon.component.azeroth';
 import type { MessageKey } from '../../locales/en.ts';
@@ -7,7 +8,7 @@ import Button from '../ui/button.component.azeroth';
 import Spinner from '../ui/spinner.component.azeroth';
 import Tooltip from '../ui/tooltip.component.azeroth';
 
-export default component WalletPanel(props: { onConnected: (address: string) => void })
+export default component WalletPanel(props: { onConnected: (account: Account) => void })
 {
     const locale = useLocale();
     const wallet = useWallet();
@@ -49,10 +50,10 @@ export default component WalletPanel(props: { onConnected: (address: string) => 
 
     const connect = async (): Promise<void> =>
     {
-        const address = await wallet.connect();
-        if (address !== null)
+        const account = await wallet.connect();
+        if (account !== null)
         {
-            props.onConnected(address);
+            props.onConnected(account);
         }
     };
 

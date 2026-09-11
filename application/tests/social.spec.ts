@@ -43,7 +43,15 @@ beforeEach(() =>
     });
     useLocale().setLocale('en');
     useSession().reset();
-    useSession().establish({ id: 'alex', handle: 'alex' }, { remember: false });
+    useSession().establish({
+        id: 'alex',
+        handle: 'alex',
+        displayName: 'Alex Morgan',
+        bio: '',
+        hue: 210,
+        kind: 'demo',
+        isMinor: false
+    });
     useSocial().reset();
     useChat().reset();
     useNotifications().reset();

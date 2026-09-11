@@ -7,7 +7,7 @@ import { createRandom, hashSeed } from '../lib/random.ts';
 import { runtime } from '../lib/runtime.ts';
 import type { LocalizedText } from '../lib/text.ts';
 import { planAmbient, planReply } from '../services/chat.service.ts';
-import { useSession } from './session.store.ts';
+import { useAccount } from './account.store.ts';
 import { useSocial } from './social.store.ts';
 
 export const AMBIENT_TICK_MS = 24000;
@@ -38,10 +38,10 @@ export interface ChatApi
 
 export const useChat = createStore((): ChatApi =>
 {
-    const session = useSession();
+    const account = useAccount();
     const social = useSocial();
 
-    const meId = (): string => session.record()?.id ?? 'you';
+    const meId = (): string => account.user()?.id ?? 'you';
 
     const [extra, setExtra] = createSignal<Conversation[]>([]);
     const [posted, setPosted] = createSignal<Message[]>([]);

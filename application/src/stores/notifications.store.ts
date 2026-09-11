@@ -4,7 +4,7 @@ import { dataset } from '../data/mock/index.ts';
 import type { Notification, NotificationKind, NotificationRef } from '../data/mock/types.ts';
 import { runtime } from '../lib/runtime.ts';
 import type { LocalizedText } from '../lib/text.ts';
-import { useSession } from './session.store.ts';
+import { useAccount } from './account.store.ts';
 import { useSocial } from './social.store.ts';
 
 export interface NotificationInput
@@ -31,7 +31,7 @@ export interface NotificationsApi
 export const useNotifications = createStore((): NotificationsApi =>
 {
     const social = useSocial();
-    const session = useSession();
+    const account = useAccount();
 
     const [added, setAdded] = createSignal<Notification[]>([]);
     const [seen, setSeen] = createSignal<string[]>([]);
@@ -46,7 +46,7 @@ export const useNotifications = createStore((): NotificationsApi =>
             return true;
         }
         const request = dataset().requests.find((entry) => entry.id === item.ref.requestId);
-        return request !== undefined && request.to === (session.record()?.id ?? 'you');
+        return request !== undefined && request.to === (account.user()?.id ?? 'you');
     };
 
     const items = (): Notification[] => [...dataset().notifications, ...added()]

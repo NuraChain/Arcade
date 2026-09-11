@@ -1,4 +1,5 @@
-import type { AchievementList, GameList, ServerInfo } from './schemas.ts';
+import type { Principal } from './http/auth.ts';
+import type { AchievementList, Account, Challenge, GameList, ServerInfo } from './schemas.ts';
 
 /**
  * What the route declarations are allowed to know about the rest of the server.
@@ -14,6 +15,9 @@ import type { AchievementList, GameList, ServerInfo } from './schemas.ts';
  * So handlers are injected rather than imported. Interfaces only below; every implementation
  * lives behind `buildPorts()` in `./services.ts`, which is server-only and free to touch
  * entities, the DataSource and anything else.
+ *
+ * `http/auth.ts` is on the safe side of the line too: it imports `@azerothjs/http` and one
+ * entity TYPE ALIAS, never an entity class.
  */
 
 export interface MetaPort
@@ -30,9 +34,46 @@ export interface CataloguePort
     achievements(): Promise<AchievementList>;
 }
 
+/** What a sign-in hands back: the account, and the bearer token the cookie will carry. */
+export interface Established
+{
+    token: string;
+    account: Account;
+}
+
+export interface IdentityPort
+{
+    /** Resolves the caller from a request's cookie. Null when signed out - not an error. */
+    principal(request: Request): Promise<Principal | null>;
+
+    me(userId: string): Promise<Account | null>;
+
+    challenge(address: string): Promise<Challenge>;
+
+    signInWithWallet(input: {
+        address: string;
+        nonce: string;
+        signature: string;
+        providerRdns?: string | undefined;
+        userAgent: string;
+    }): Promise<Established>;
+
+    signInAsGuest(input: { name: string; userAgent: string }): Promise<Established>;
+
+    signInAsDemo(input: { handle: string; userAgent: string }): Promise<Established>;
+
+    signOut(sessionId: string): Promise<void>;
+    signOutEverywhere(userId: string): Promise<number>;
+    claimHandle(userId: string, handle: string): Promise<string>;
+
+    /** Whether cookies must carry Secure. Decided by configuration, never by a request. */
+    readonly secureCookies: boolean;
+}
+
 /** Every port the API declaration may reach. One member per domain. */
 export interface Ports
 {
     meta: MetaPort;
     catalogue: CataloguePort;
+    identity: IdentityPort;
 }

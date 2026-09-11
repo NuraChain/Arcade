@@ -46,6 +46,7 @@ const ssr = config.servePages
 
 const app = buildApp({
     db: dataSource,
+    config,
     log,
     observe: logRequests(log),
     pages: ssr === undefined
@@ -57,7 +58,7 @@ const app = buildApp({
 
             // Embedded into every served page, so the typed client boots synchronously instead
             // of spending a round trip on /api/_manifest before its first call.
-            manifest: manifestOf(buildApi(buildPorts(dataSource))),
+            manifest: manifestOf(buildApi(buildPorts(dataSource, config))),
 
             // Negotiated per request from the cookie `setLocale()` writes, then Accept-Language.
             // `prefix` routing is what search engines want and is recorded as broken in

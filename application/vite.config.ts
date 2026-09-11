@@ -63,6 +63,11 @@ export default defineConfig({
 
     test:
     {
-        environment: 'happy-dom'
+        environment: 'happy-dom',
+
+        // No unit test may reach the network. src/api.ts fetches the route manifest at module
+        // load, so importing any store from a spec would otherwise open a real socket to a port
+        // nothing is listening on - and bury a genuine failure in connection noise.
+        setupFiles: ['./tests/setup.ts']
     }
 });

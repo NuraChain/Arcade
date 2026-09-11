@@ -82,3 +82,76 @@ export type AchievementDefinition = Infer<typeof achievement>;
 export const achievementList = object({ achievements: array(achievement) });
 
 export type AchievementList = Infer<typeof achievementList>;
+
+/* -------------------------------------------------------------------------- identity */
+
+export const accountKind = enumOf(['wallet', 'demo', 'guest']);
+
+/**
+ * The signed-in account, as the browser sees it.
+ *
+ * `kind` is here because the UI must be able to tell the truth about how much an identity
+ * proves: a wallet account signed a challenge, a guest typed a name. Anything that renders a
+ * verification badge reads this.
+ */
+export const account = object({
+    id: string(),
+    handle: string(),
+    displayName: string(),
+    bio: string(),
+    hue: number(),
+    kind: accountKind,
+    isMinor: boolean(),
+
+    /**
+     * The wallet this account signs in with, when it has one. Absent for a guest, and absent
+     * for a wallet account only while the link is being written - the UI renders it as
+     * "no wallet linked" rather than assuming.
+     */
+    address: string().optional()
+});
+
+export type Account = Infer<typeof account>;
+
+/** The current session, or nothing. A signed-out browser is not an error. */
+export const sessionState = object({
+    account: account.optional()
+});
+
+export type SessionState = Infer<typeof sessionState>;
+
+export const challengeInput = object({ address: string() });
+
+/**
+ * The exact bytes to sign. The client renders them for the wallet and never composes its own -
+ * every field is a claim the server relies on when it verifies.
+ */
+export const challenge = object({
+    nonce: string(),
+    message: string(),
+    expiresAt: string()
+});
+
+export type Challenge = Infer<typeof challenge>;
+
+export const walletSignIn = object({
+    address: string(),
+    nonce: string(),
+    signature: string(),
+    providerRdns: string().optional()
+});
+
+export const guestSignIn = object({ name: string() });
+
+/**
+ * Signing in as one of the seeded demo identities. The handle is the whole request: these are
+ * shared exploration accounts, they prove nothing, and the account they open says `demo` so the
+ * UI can say so too.
+ */
+export const demoSignIn = object({ handle: string() });
+
+export const handleInput = object({ handle: string() });
+
+export const handleResult = object({ handle: string() });
+
+export const signOutResult = object({ ended: number() });

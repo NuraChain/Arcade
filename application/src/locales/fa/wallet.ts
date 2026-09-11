@@ -19,7 +19,7 @@ export const wallet: Pick<Dictionary, keyof typeof reference> = {
     'wallet.noGas': 'بدون گس، بدون تراکنش',
     'wallet.selfCustody': 'کلیدها مال خودت می‌ماند',
     'wallet.install': 'نصب متامسک',
-    'wallet.installLead': 'هنوز کیف پولی در این مرورگر نیست. راه‌اندازی متامسک یک دقیقه طول می‌کشد — یا با یک صندلی نمایشی پایین‌تر یک چرخی بزن.',
+    'wallet.installLead': 'هنوز کیف پولی در این مرورگر نیست. هر کیف پول مرورگری کار می‌کند — راه‌اندازی متامسک حدود یک دقیقه طول می‌کشد — یا با یک صندلی نمایشی پایین‌تر یک چرخی بزن.',
     'wallet.learn': '{chain} چیست؟',
     'wallet.error.rejected': 'قبول نکردی. هیچ اتفاقی نیفتاد.',
     'wallet.error.pending': 'کیف پولت همین حالا پرسیده. بازش کن و جواب بده.',

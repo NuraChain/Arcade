@@ -30,6 +30,19 @@ export function loadServerConfig()
          */
         origin: str('PUBLIC_ORIGIN', { default: 'http://localhost:3100' }),
 
+        /**
+         * The chain a wallet signature is made against, DECIMAL EIP-155. It lands in the SIWE
+         * message's `Chain ID` field, which parsers read as a number - the version this replaces
+         * put the chain NAME there when nothing was configured, which no parser accepts.
+         */
+        chainId: str('NURA_CHAIN_ID', { default: '' }),
+
+        /**
+         * A JSON-RPC url, for the ERC-1271 call that verifies a smart-contract wallet. Without
+         * one, only key-holding wallets can sign in - which is most of them, but not a Safe.
+         */
+        rpcUrl: str('NURA_RPC_URL', { default: '' }),
+
         clientDir: str('CLIENT_DIR', { default: '../application/dist' }),
         ssrEntry: str('SSR_ENTRY', { default: '../application/dist-server/entry.server.js' }),
 

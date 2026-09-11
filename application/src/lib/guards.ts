@@ -1,25 +1,31 @@
 import { redirect, type GuardContext, type GuardVerdict } from 'azerothjs';
 
-import { useSession } from '../stores/session.store.ts';
-
 export function safeNext(candidate: string | string[] | undefined): string
 {
     const value = Array.isArray(candidate) ? candidate[0] : candidate;
     return value !== undefined && value.startsWith('/app') && !value.startsWith('//') ? value : '/app';
 }
 
-export function requireSession(context: GuardContext): GuardVerdict
+async function settled(): Promise<{ signedIn: () => boolean }>
 {
-    if (useSession().signedIn())
+    const { useSession } = await import('../stores/session.store.ts');
+    const session = useSession();
+    await session.ready();
+    return session;
+}
+
+export async function requireSession(context: GuardContext): Promise<GuardVerdict>
+{
+    if ((await settled()).signedIn())
     {
         return true;
     }
     return redirect({ pathname: '/sign-in', query: { next: context.pathname } });
 }
 
-export function requireAnonymous(context: GuardContext): GuardVerdict
+export async function requireAnonymous(context: GuardContext): Promise<GuardVerdict>
 {
-    if (!useSession().signedIn())
+    if (!(await settled()).signedIn())
     {
         return true;
     }

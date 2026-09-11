@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { DataSource } from 'typeorm';
 
 import { buildApp } from '../src/app.ts';
+import type { ServerConfig } from '../src/env.ts';
 
 /**
  * Every server test drives the App through `app.handle(new Request(...))`.
@@ -21,6 +22,24 @@ const silent = {
     child: () => silent
 } as unknown as Parameters<typeof buildApp>[0]['log'];
 
+/**
+ * The configuration a test app runs under. Plain http, so cookies are minted without Secure and
+ * the suite exercises the same branch a developer's browser does.
+ */
+const config = {
+    port: 0,
+    env: 'test',
+    databaseUrl: '',
+    databasePoolMax: 1,
+    secret: 'test-secret',
+    origin: 'http://localhost:3100',
+    chainId: '',
+    rpcUrl: '',
+    clientDir: '',
+    ssrEntry: '',
+    servePages: false
+} as unknown as ServerConfig;
+
 function fakeDb(answers: { initialized: boolean; query?: () => Promise<unknown> }): DataSource
 {
     return {
@@ -36,7 +55,7 @@ describe('health', () =>
 {
     it('reports ok only when the database actually answers', async () =>
     {
-        const app = buildApp({ db: fakeDb({ initialized: true }), log: silent });
+        const app = buildApp({ db: fakeDb({ initialized: true }), config, log: silent });
         const response = await call(app, '/api/healthz');
 
         expect(response.status).toBe(200);
@@ -47,6 +66,7 @@ describe('health', () =>
     {
         const app = buildApp({
             db: fakeDb({ initialized: true, query: () => Promise.reject(new Error('no route to host')) }),
+            config,
             log: silent
         });
         const response = await call(app, '/api/healthz');
@@ -68,6 +88,7 @@ describe('health', () =>
                     return Promise.resolve([]);
                 }
             }),
+            config,
             log: silent
         });
         const response = await call(app, '/api/healthz');
@@ -81,7 +102,7 @@ describe('api surface', () =>
 {
     it('serves the wire version the client must speak', async () =>
     {
-        const app = buildApp({ db: fakeDb({ initialized: true }), log: silent });
+        const app = buildApp({ db: fakeDb({ initialized: true }), config, log: silent });
         const response = await call(app, '/api/meta');
 
         expect(response.status).toBe(200);
@@ -90,7 +111,7 @@ describe('api surface', () =>
 
     it('publishes a manifest whose every entry is a method and a path', async () =>
     {
-        const app = buildApp({ db: fakeDb({ initialized: true }), log: silent });
+        const app = buildApp({ db: fakeDb({ initialized: true }), config, log: silent });
         const manifest = await (await call(app, '/api/_manifest')).json() as
             Record<string, Record<string, { method: string; path: string }>>;
 
@@ -106,7 +127,7 @@ describe('api surface', () =>
 
     it('answers 404 for an unmounted path rather than falling through', async () =>
     {
-        const app = buildApp({ db: fakeDb({ initialized: true }), log: silent });
+        const app = buildApp({ db: fakeDb({ initialized: true }), config, log: silent });
         expect((await call(app, '/api/nothing-here')).status).toBe(404);
     });
 });

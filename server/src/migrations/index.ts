@@ -1,6 +1,7 @@
 import type { MigrationInterface } from 'typeorm';
 
 import { ReferenceCatalogue1789138458214 } from './0001-reference.ts';
+import { Identity1789139000000 } from './0002-identity.ts';
 
 /**
  * Every migration. Appending is the only correct edit.
@@ -11,5 +12,6 @@ import { ReferenceCatalogue1789138458214 } from './0001-reference.ts';
  * from the run.
  */
 export const migrations: (new () => MigrationInterface)[] = [
-    ReferenceCatalogue1789138458214
+    ReferenceCatalogue1789138458214,
+    Identity1789139000000
 ];

@@ -6,24 +6,27 @@ import { manualClock, type ManualClock } from '../src/lib/clock.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import {
     addressHue,
+    announcedWallets,
     detect,
+    discoverWallets,
     failureOf,
+    forgetWallets,
     isAddress,
+    rdnsOf,
     shortAddress,
     walletName,
     type Eip1193Provider
 } from '../src/lib/wallet.ts';
-import { buildSignInMessage, handleFor, nonceFor } from '../src/services/wallet.service.ts';
-import { resolveRecord, useAccount, walletFor } from '../src/stores/account.store.ts';
+import { personFor, useAccount } from '../src/stores/account.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
 import { useWallet } from '../src/stores/wallet.store.ts';
+import { demoAccount, guestAccount, server, walletAccount } from './fake-api.ts';
+
+vi.mock('../src/api.ts', async () => await import('./fake-api.ts'));
 
 const ADDRESS = '0x71C7656EC7ab88b098defB751B7401B5f6d8976F';
 
 let clock: ManualClock;
-
-const memory = new Map<string, string>();
-const originalStorage = Object.getOwnPropertyDescriptor(window, 'localStorage');
 
 interface FakeOptions
 {
@@ -34,13 +37,15 @@ interface FakeOptions
     isMetaMask?: boolean;
 }
 
-function fakeProvider(options: FakeOptions = {}): Eip1193Provider & { calls: string[] }
+function fakeProvider(options: FakeOptions = {}): Eip1193Provider & { calls: string[]; signed: string[] }
 {
     const calls: string[] = [];
+    const signed: string[] = [];
     return {
         calls,
+        signed,
         isMetaMask: options.isMetaMask ?? true,
-        async request({ method })
+        async request({ method, params })
         {
             calls.push(method);
             if (method === 'eth_requestAccounts')
@@ -65,6 +70,7 @@ function fakeProvider(options: FakeOptions = {}): Eip1193Provider & { calls: str
                 {
                     throw { code: 4001, message: 'User denied message signature.' };
                 }
+                signed.push(String((params as unknown[] | undefined)?.[0] ?? ''));
                 return '0xsignature';
             }
             if (method === 'wallet_switchEthereumChain' || method === 'wallet_addEthereumChain')
@@ -90,21 +96,8 @@ beforeEach(() =>
     clock = manualClock(1_700_000_000_000);
     setRuntime({ clock, seed: 4 });
     resetDataset();
-    memory.clear();
-    Object.defineProperty(window, 'localStorage', {
-        configurable: true,
-        value: {
-            getItem: (key: string): string | null => memory.get(key) ?? null,
-            setItem: (key: string, value: string): void =>
-            {
-                memory.set(key, value);
-            },
-            removeItem: (key: string): void =>
-            {
-                memory.delete(key);
-            }
-        }
-    });
+    server.reset();
+    forgetWallets();
     useSession().reset();
     useWallet().reset();
 });
@@ -113,11 +106,8 @@ afterEach(() =>
 {
     useWallet().reset();
     useSession().reset();
+    forgetWallets();
     delete (window as unknown as { ethereum?: unknown }).ethereum;
-    if (originalStorage !== undefined)
-    {
-        Object.defineProperty(window, 'localStorage', originalStorage);
-    }
 });
 
 describe('addresses', () =>
@@ -145,11 +135,6 @@ describe('addresses', () =>
         expect(addressHue(ADDRESS)).toBeLessThan(360);
         expect(addressHue('0x0000000000000000000000000000000000000001')).not.toBe(addressHue(ADDRESS));
     });
-
-    it('derives a short handle from the address', () =>
-    {
-        expect(handleFor(ADDRESS)).toBe('71c765');
-    });
 });
 
 describe('provider detection', () =>
@@ -159,20 +144,37 @@ describe('provider detection', () =>
         expect(detect()).toBeNull();
     });
 
-    it('prefers MetaMask when several wallets are injected', () =>
+    it('takes the first injected provider instead of believing a self-declared flag', () =>
     {
         const rabby = { ...fakeProvider({ isMetaMask: false }), isRabby: true };
         const metamask = fakeProvider();
         (window as unknown as { ethereum: Eip1193Provider }).ethereum = { ...metamask, providers: [rabby, metamask] };
-        expect(detect()).toBe(metamask);
+        expect(detect()).toBe(rabby);
     });
 
-    it('names the wallet it found', () =>
+    it('prefers a wallet that announced itself over whatever was injected', () =>
+    {
+        (window as unknown as { ethereum: Eip1193Provider }).ethereum = fakeProvider();
+        const nura = fakeProvider({ isMetaMask: false });
+        const stop = discoverWallets();
+
+        window.dispatchEvent(new CustomEvent('eip6963:announceProvider', {
+            detail: { info: { rdns: 'net.nurachain.wallet', name: 'Nura Wallet', icon: '' }, provider: nura }
+        }));
+
+        expect(detect()).toBe(nura);
+        expect(walletName(nura)).toBe('Nura Wallet');
+        expect(rdnsOf(nura)).toBe('net.nurachain.wallet');
+        expect(announcedWallets().map((one) => one.rdns)).toEqual(['net.nurachain.wallet']);
+        stop();
+    });
+
+    it('names the wallet it found, and does not invent one it did not', () =>
     {
         expect(walletName(fakeProvider())).toBe('MetaMask');
         expect(walletName({ ...fakeProvider({ isMetaMask: false }), isRabby: true })).toBe('Rabby');
         expect(walletName(fakeProvider({ isMetaMask: false }))).toBe('Browser wallet');
-        expect(walletName(null)).toBe('MetaMask');
+        expect(walletName(null)).toBe('Browser wallet');
     });
 
     it('reads the standard provider error codes', () =>
@@ -184,33 +186,8 @@ describe('provider detection', () =>
     });
 });
 
-describe('sign-in message', () =>
+describe('chain', () =>
 {
-    it('names the domain, the address, the chain and a nonce', () =>
-    {
-        const message = buildSignInMessage({
-            domain: 'nurachain.net',
-            address: ADDRESS,
-            chainId: '0x1',
-            nonce: 'abc123',
-            issuedAt: 1_700_000_000_000,
-            statement: 'Sign in to Nura Games.',
-            uri: 'https://nurachain.net'
-        });
-        expect(message).toContain('nurachain.net wants you to sign in with your wallet:');
-        expect(message).toContain(ADDRESS);
-        expect(message).toContain('Chain ID: 0x1');
-        expect(message).toContain('Nonce: abc123');
-        expect(message).toContain('Issued At: 2023-11-14T22:13:20.000Z');
-    });
-
-    it('mints the same nonce for the same second and a different one later', () =>
-    {
-        expect(nonceFor(4, ADDRESS, 1_700_000_000_000)).toBe(nonceFor(4, ADDRESS, 1_700_000_000_400));
-        expect(nonceFor(4, ADDRESS, 1_700_000_000_000)).not.toBe(nonceFor(4, ADDRESS, 1_700_000_060_000));
-        expect(nonceFor(4, ADDRESS, 1_700_000_000_000)).not.toBe(nonceFor(5, ADDRESS, 1_700_000_000_000));
-    });
-
     it('takes the domain from the configured chain site', () =>
     {
         expect(chainHost()).toBe('nurachain.net');
@@ -229,18 +206,28 @@ describe('wallet store', () =>
         expect(wallet.failure()).toBe('no-wallet');
     });
 
-    it('connects, signs once, and reports the account', async () =>
+    it('connects, signs the message the server issued, and returns the account it minted', async () =>
     {
         const wallet = useWallet();
         const provider = fakeProvider();
         wallet.adopt(provider);
 
-        expect(await wallet.connect()).toBe(ADDRESS);
+        const account = await wallet.connect();
+        expect(account).toEqual(walletAccount(ADDRESS));
         expect(wallet.status()).toBe('connected');
         expect(wallet.address()).toBe(ADDRESS);
         expect(wallet.chainId()).toBe('0x1');
         expect(provider.calls).toContain('eth_requestAccounts');
         expect(provider.calls.filter((method) => method === 'personal_sign').length).toBe(1);
+        expect(provider.signed[0]).toBe(server.issued?.message);
+    });
+
+    it('sends the signature back with the nonce it was issued against', async () =>
+    {
+        const wallet = useWallet();
+        wallet.adopt(fakeProvider());
+        await wallet.connect();
+        expect(server.received).toMatchObject({ address: ADDRESS, nonce: server.issued?.nonce, signature: '0xsignature' });
     });
 
     it('only asks the wallet to switch network once the chain is configured', async () =>
@@ -262,13 +249,32 @@ describe('wallet store', () =>
         expect(wallet.address()).toBeNull();
     });
 
-    it('stops cleanly when the signature is turned down', async () =>
+    it('stops cleanly when the signature is turned down, and never reaches the server', async () =>
     {
         const wallet = useWallet();
         wallet.adopt(fakeProvider({ rejectSign: true }));
         expect(await wallet.connect()).toBeNull();
         expect(wallet.status()).toBe('error');
         expect(wallet.failure()).toBe('rejected');
+        expect(server.calls).not.toContain('auth.wallet');
+    });
+
+    it('reports a refused signature as a refusal and an unreachable server as unavailable', async () =>
+    {
+        const wallet = useWallet();
+        wallet.adopt(fakeProvider());
+
+        server.refuse = 'bad-signature';
+        expect(await wallet.connect()).toBeNull();
+        expect(wallet.failure()).toBe('rejected');
+
+        server.refuse = 'wallet-unreachable';
+        expect(await wallet.connect()).toBeNull();
+        expect(wallet.failure()).toBe('unavailable');
+
+        server.refuse = 'challenge-unreachable';
+        expect(await wallet.connect()).toBeNull();
+        expect(wallet.failure()).toBe('unavailable');
     });
 
     it('forgets the account on disconnect', async () =>
@@ -297,35 +303,44 @@ describe('wallet store', () =>
 
 describe('wallet identity', () =>
 {
-    it('builds a person from an address with a stable handle and hue', () =>
+    it('builds a person from the account the server issued', () =>
     {
-        const person = walletFor(ADDRESS);
-        expect(person.handle).toBe('71c765');
-        expect(person.id).toBe(`wallet-${ ADDRESS.toLowerCase() }`);
-        expect(person.hue).toBe(addressHue(ADDRESS));
-        expect(person.name.en).toBe(shortAddress(ADDRESS));
-        expect(person.name.fa).toBe(shortAddress(ADDRESS));
+        const issued = walletAccount(ADDRESS);
+        const person = personFor(issued);
+        expect(person?.handle).toBe('71c765');
+        expect(person?.id).toBe(issued.id);
+        expect(person?.name.en).toBe(shortAddress(ADDRESS.toLowerCase()));
+        expect(person?.name.fa).toBe(person?.name.en);
+        expect(person?.hue).toBe(issued.hue);
     });
 
-    it('signs in with a wallet and remembers the address', () =>
+    it('adopts the connected account into the session', async () =>
     {
+        const wallet = useWallet();
         const account = useAccount();
         const session = useSession();
-        account.signInWithWallet(ADDRESS);
+        wallet.adopt(fakeProvider());
+
+        const established = await wallet.connect();
+        const person = account.adoptWallet(established!);
+
         expect(session.signedIn()).toBe(true);
         expect(account.isWallet()).toBe(true);
-        expect(account.address()).toBe(ADDRESS);
+        expect(account.address()).toBe(ADDRESS.toLowerCase());
+        expect(person?.handle).toBe('71c765');
         expect(account.user()?.handle).toBe('71c765');
     });
 
-    it('restores a wallet session from its record', () =>
+    it('never mistakes a guest for a wallet', () =>
     {
-        const person = resolveRecord({ id: `wallet-${ ADDRESS.toLowerCase() }`, handle: '71c765', kind: 'wallet', address: ADDRESS });
-        expect(person?.name.en).toBe(shortAddress(ADDRESS));
+        const person = personFor(guestAccount('Darya'));
+        expect(person?.handle).toBe('darya');
+        expect(person?.name.en).toBe('Darya');
+        expect(personFor(null)).toBeNull();
     });
 
-    it('still resolves a demo identity', () =>
+    it('still resolves a demo identity from its handle', () =>
     {
-        expect(resolveRecord({ id: 'alex', handle: 'alex' })?.handle).toBe('alex');
+        expect(personFor(demoAccount('alex')!)?.id).toBe('alex');
     });
 });

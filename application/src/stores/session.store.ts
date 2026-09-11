@@ -1,78 +1,84 @@
 import { createStore, createSignal, type Getter } from 'azerothjs';
 
-import { forget, recallJson, rememberJson } from '../lib/storage.ts';
-
-const STORAGE_KEY = 'nura-games.session';
-
-export const GUEST_PREFIX = 'guest-';
-
-export const WALLET_PREFIX = 'wallet-';
-
-export type SessionKind = 'wallet' | 'demo' | 'guest';
-
-export interface SessionRecord
-{
-    id: string;
-    handle: string;
-    kind?: SessionKind;
-    address?: string;
-}
-
-export function isSessionRecord(value: unknown): value is SessionRecord
-{
-    const record = value as SessionRecord | null;
-    return typeof record === 'object' && record !== null
-        && typeof record.id === 'string'
-        && typeof record.handle === 'string'
-        && (record.kind === undefined || record.kind === 'wallet' || record.kind === 'demo' || record.kind === 'guest')
-        && (record.address === undefined || typeof record.address === 'string');
-}
-
-function restore(): SessionRecord | null
-{
-    if (typeof window === 'undefined')
-    {
-        return null;
-    }
-    return recallJson(STORAGE_KEY, isSessionRecord);
-}
+import { client, type Account } from '../api.ts';
 
 export interface SessionApi
 {
-    record: Getter<SessionRecord | null>;
+    account: Getter<Account | null>;
     signedIn: Getter<boolean>;
-    establish(record: SessionRecord, options?: { remember?: boolean }): void;
-    signOut(): void;
+
+    ready(): Promise<void>;
+
+    establish(account: Account): void;
+
+    signOut(): Promise<void>;
+    signOutEverywhere(): Promise<number>;
+
+    refresh(): Promise<void>;
     reset(): void;
 }
 
 export const useSession = createStore((): SessionApi =>
 {
-    const [record, setRecord] = createSignal<SessionRecord | null>(restore());
+    const [account, setAccount] = createSignal<Account | null>(null);
+
+    let settled: Promise<void> | null = null;
+
+    const load = async (): Promise<void> =>
+    {
+        try
+        {
+            const state = await client.auth.me();
+            setAccount(state.account ?? null);
+        }
+        catch
+        {
+            setAccount(null);
+        }
+    };
+
+    const ready = (): Promise<void> =>
+    {
+        settled ??= load();
+        return settled;
+    };
 
     return {
-        record,
-        signedIn: () => record() !== null,
+        account,
+        signedIn: () => account() !== null,
+        ready,
 
-        establish(next, options)
+        establish(next)
         {
-            setRecord(next);
-            if (options?.remember !== false)
-            {
-                rememberJson(STORAGE_KEY, next);
-            }
+            setAccount(next);
+            settled = Promise.resolve();
         },
 
-        signOut()
+        async signOut()
         {
-            setRecord(null);
-            forget(STORAGE_KEY);
+            await client.auth.signOut().catch(() => undefined);
+            setAccount(null);
+            settled = Promise.resolve();
+        },
+
+        async signOutEverywhere()
+        {
+            const result = await client.auth.signOutEverywhere().catch(() => ({ ended: 0 }));
+            setAccount(null);
+            settled = Promise.resolve();
+            return result.ended;
+        },
+
+        async refresh()
+        {
+            settled = load();
+            await settled;
         },
 
         reset()
         {
-            setRecord(null);
-            forget(STORAGE_KEY);
+            setAccount(null);
+            settled = null;
         }
     };
 });

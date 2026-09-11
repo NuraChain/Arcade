@@ -45,14 +45,14 @@ export default component SignInPage()
         navigate(safeNext(query().next), { replace: true });
     };
 
-    const enter = async (handle: string): Promise<void> =>
+    const enter = async (key: string, sign: () => Promise<unknown>): Promise<void> =>
     {
         if (pending !== '')
         {
             return;
         }
-        pending = handle;
-        await account.signIn(handle);
+        pending = key;
+        await sign();
         leave();
     };
 
@@ -61,7 +61,7 @@ export default component SignInPage()
         touched = true;
         if (!tooShort)
         {
-            void enter(name.trim());
+            void enter(name.trim(), () => account.signIn(name.trim()));
         }
     };
 
@@ -86,9 +86,9 @@ export default component SignInPage()
             <h1 class="sr-only">{ locale.t('wallet.title') }</h1>
 
             <WalletPanel
-                onConnected={ (address) =>
+                onConnected={ (established) =>
                 {
-                    account.signInWithWallet(address);
+                    account.adoptWallet(established);
                     leave();
                 } }
             />
@@ -118,7 +118,7 @@ export default component SignInPage()
                                             pending === person.handle ? 'border-accent' : ''
                                         ].filter(Boolean).join(' ') }
                                         disabled={ pending !== '' }
-                                        onClick={ () => void enter(person.handle) }
+                                        onClick={ () => void enter(person.handle, () => account.signInAsDemo(person.handle)) }
                                     >
                                         <Avatar person={ person } size="lg" presence="online" />
                                         <span class="flex min-w-0 flex-1 flex-col gap-0.5">

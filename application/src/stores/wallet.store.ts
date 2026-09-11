@@ -1,11 +1,12 @@
 import { createStore, createSignal, untrack, type Getter } from 'azerothjs';
 
-import { NURA_CHAIN, chainHost, chainIsConfigured } from '../data/chain.ts';
-import { runtime } from '../lib/runtime.ts';
+import { NURA_CHAIN, chainIsConfigured } from '../data/chain.ts';
 import {
     detect,
+    discoverWallets,
     failureOf,
     personalSign,
+    rdnsOf,
     readAccounts,
     readChainId,
     requestAccounts,
@@ -14,7 +15,7 @@ import {
     type Eip1193Provider,
     type WalletFailure
 } from '../lib/wallet.ts';
-import { buildSignInMessage, nonceFor } from '../services/wallet.service.ts';
+import { client, ApiError, type Account } from '../api.ts';
 
 export type WalletStatus = 'idle' | 'connecting' | 'signing' | 'connected' | 'error';
 
@@ -27,7 +28,7 @@ export interface WalletApi
     name: Getter<string>;
     failure: Getter<WalletFailure | null>;
     onNuraChain: Getter<boolean>;
-    connect(): Promise<string | null>;
+    connect(): Promise<Account | null>;
     adopt(provider: Eip1193Provider | null): void;
     disconnect(): void;
     start(): () => void;
@@ -46,6 +47,7 @@ export const useWallet = createStore((): WalletApi =>
     let injected: Eip1193Provider | null = detect();
     let listening: (() => void) | null = null;
     let late: (() => void) | null = null;
+    let discovery: (() => void) | null = null;
 
     const provider = (): Eip1193Provider | null =>
     {
@@ -126,20 +128,23 @@ export const useWallet = createStore((): WalletApi =>
             }
 
             setStatus('signing');
-            const now = runtime().clock.now();
-            const message = buildSignInMessage({
-                domain: chainHost(),
-                address: account,
-                chainId: chainId() === '' ? NURA_CHAIN.name : chainId(),
-                nonce: nonceFor(runtime().seed, account, now),
-                issuedAt: now,
-                statement: 'Sign in to Nura Games. This proves the seat is yours. It costs nothing and moves nothing.',
-                uri: typeof window === 'undefined' ? NURA_CHAIN.site : window.location.origin
-            });
 
+            let challenge;
             try
             {
-                await personalSign(wallet, account, message);
+                challenge = await client.auth.challenge({ input: { address: account } });
+            }
+            catch
+            {
+                setFailure('unavailable');
+                setStatus('error');
+                return null;
+            }
+
+            let signature: string;
+            try
+            {
+                signature = await personalSign(wallet, account, challenge.message);
             }
             catch (error)
             {
@@ -148,8 +153,26 @@ export const useWallet = createStore((): WalletApi =>
                 return null;
             }
 
-            setStatus('connected');
-            return account;
+            try
+            {
+                const established = await client.auth.wallet({
+                    input: {
+                        address: account,
+                        nonce: challenge.nonce,
+                        signature,
+                        providerRdns: rdnsOf(wallet)
+                    }
+                });
+
+                setStatus('connected');
+                return established.account ?? null;
+            }
+            catch (error)
+            {
+                setFailure(error instanceof ApiError && error.status === 401 ? 'rejected' : 'unavailable');
+                setStatus('error');
+                return null;
+            }
         },
 
         adopt(next)
@@ -172,6 +195,13 @@ export const useWallet = createStore((): WalletApi =>
 
         start()
         {
+            const stopDiscovery = discoverWallets(() =>
+            {
+                injected = detect();
+                setPresent(injected !== null);
+            });
+            discovery = stopDiscovery;
+
             const wallet = provider();
             if (wallet === null)
             {
@@ -219,6 +249,8 @@ export const useWallet = createStore((): WalletApi =>
         stop()
         {
             listening?.();
+            discovery?.();
+            discovery = null;
         },
 
         reset()

@@ -21,7 +21,7 @@ import { createRandom, hashSeed } from '../lib/random.ts';
 import { runtime } from '../lib/runtime.ts';
 import { planCandidates, planChatter, planFinish, planInviteReply, planReadiness, type RollEntry } from '../services/lobby.service.ts';
 import { usePresence } from './presence.store.ts';
-import { useSession } from './session.store.ts';
+import { useAccount } from './account.store.ts';
 
 export interface TableMessage
 {
@@ -83,10 +83,10 @@ export interface LobbyApi
 
 export const useLobby = createStore((): LobbyApi =>
 {
-    const session = useSession();
+    const account = useAccount();
     const presence = usePresence();
 
-    const meId = (): string => session.record()?.id ?? 'you';
+    const meId = (): string => account.user()?.id ?? 'you';
 
     const [state, setState] = createSignal<MatchState>(initial(meId()));
     const [rolls, setRolls] = createSignal<RollEntry[]>([]);

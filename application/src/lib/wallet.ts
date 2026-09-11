@@ -12,7 +12,78 @@ export interface Eip1193Provider
     providers?: Eip1193Provider[];
 }
 
-export type WalletFailure = 'no-wallet' | 'rejected' | 'pending' | 'chain' | 'unknown';
+export type WalletFailure = 'no-wallet' | 'rejected' | 'pending' | 'chain' | 'unavailable' | 'unknown';
+
+export interface AnnouncedWallet
+{
+    rdns: string;
+    name: string;
+    icon: string;
+    provider: Eip1193Provider;
+}
+
+const announced = new Map<string, AnnouncedWallet>();
+
+interface AnnounceEvent extends Event
+{
+    detail?: { info?: { rdns?: string; name?: string; icon?: string }; provider?: Eip1193Provider };
+}
+
+export function discoverWallets(onChange?: () => void): () => void
+{
+    if (typeof window === 'undefined')
+    {
+        return () => undefined;
+    }
+
+    const onAnnounce = (event: Event): void =>
+    {
+        const detail = (event as AnnounceEvent).detail;
+        const rdns = detail?.info?.rdns;
+        if (rdns === undefined || detail?.provider === undefined)
+        {
+            return;
+        }
+        announced.set(rdns, {
+            rdns,
+            name: detail.info?.name ?? 'Browser wallet',
+            icon: detail.info?.icon ?? '',
+            provider: detail.provider
+        });
+        onChange?.();
+    };
+
+    window.addEventListener('eip6963:announceProvider', onAnnounce);
+    window.dispatchEvent(new Event('eip6963:requestProvider'));
+
+    return () => window.removeEventListener('eip6963:announceProvider', onAnnounce);
+}
+
+export function forgetWallets(): void
+{
+    announced.clear();
+}
+
+export function announcedWallets(): AnnouncedWallet[]
+{
+    return [...announced.values()];
+}
+
+export function rdnsOf(provider: Eip1193Provider | null): string
+{
+    if (provider === null)
+    {
+        return '';
+    }
+    for (const wallet of announced.values())
+    {
+        if (wallet.provider === provider)
+        {
+            return wallet.rdns;
+        }
+    }
+    return '';
+}
 
 export interface ProviderError
 {
@@ -30,6 +101,13 @@ export function detect(): Eip1193Provider | null
     {
         return null;
     }
+
+    const first = announced.values().next();
+    if (first.done !== true)
+    {
+        return first.value.provider;
+    }
+
     const injected = (window as unknown as { ethereum?: Eip1193Provider }).ethereum;
     if (injected === undefined)
     {
@@ -37,7 +115,7 @@ export function detect(): Eip1193Provider | null
     }
     if (Array.isArray(injected.providers) && injected.providers.length > 0)
     {
-        return injected.providers.find((provider) => provider.isMetaMask === true) ?? injected.providers[0];
+        return injected.providers[0];
     }
     return injected;
 }
@@ -46,7 +124,13 @@ export function walletName(provider: Eip1193Provider | null): string
 {
     if (provider === null)
     {
-        return 'MetaMask';
+        return 'Browser wallet';
+    }
+
+    const wallet = [...announced.values()].find((one) => one.provider === provider);
+    if (wallet !== undefined)
+    {
+        return wallet.name;
     }
     if (provider.isRabby === true)
     {

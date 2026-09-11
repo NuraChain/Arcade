@@ -1,8 +1,12 @@
 import { Achievement } from './achievement.entity.ts';
 import { GameRule } from './game-rule.entity.ts';
 import { Game } from './game.entity.ts';
+import { Session } from './session.entity.ts';
+import { SiweNonce } from './siwe-nonce.entity.ts';
+import { User } from './user.entity.ts';
+import { Wallet } from './wallet.entity.ts';
 
-export { Achievement, Game, GameRule };
+export { Achievement, Game, GameRule, Session, SiweNonce, User, Wallet };
 
 /**
  * Every entity, listed explicitly.
@@ -14,4 +18,4 @@ export { Achievement, Game, GameRule };
  *
  * The element type is TypeORM's own: a decorated class is a `Function` to it.
  */
-export const entities: Function[] = [Game, GameRule, Achievement];
+export const entities: Function[] = [Game, GameRule, Achievement, User, Wallet, Session, SiweNonce];

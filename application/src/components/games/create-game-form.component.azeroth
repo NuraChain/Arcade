@@ -23,10 +23,6 @@ export default component CreateGameForm(props: { game: Game; onCreated: (tableId
     const account = useAccount();
     const presence = usePresence();
 
-    // Reactive, not captured. The server owns these, and a table opened against a stale copy of
-    // the rules is a table the server will refuse. The page does not mount this form until the
-    // catalogue has answered (see create-game.page.azeroth), so the state initialisers below
-    // already see the published values - but a rules change while the page is open still lands.
     derived rules = catalogue.rules(props.game.id);
     derived defaults = catalogue.defaults(props.game.id);
 

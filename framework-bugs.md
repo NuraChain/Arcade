@@ -132,6 +132,92 @@ Medium. Silent, and only reachable through a prop combination that looks unrelat
 
 ---
 
+## BUG-003 — A `?raw` import of an `.azeroth` module emits a false `unused-import` warning
+
+### Status
+Confirmed. Open.
+
+### Framework
+AzerothJS 2.1.0-beta.2 — `@azerothjs/compiler` (`packages/compiler/src/vite.ts`,
+`packages/compiler/src/diagnostics.ts`).
+
+### Affected area
+The Vite plugin's `transform` lint pass. Warning only; the emitted code is correct and the build
+still succeeds.
+
+### Symptoms
+Importing an `.azeroth` module with `?raw` — which reads its SOURCE, and compiles nothing — prints
+a warning about that module's imports:
+
+```
+warning: azeroth/unused-import: `bootClient` is imported but never used - remove the import.
+File: src/main.azeroth?raw:1:25
+export default "import { bootClient } from '@azerothjs/kit/client';\n\nimport App from ...
+```
+
+`bootClient` **is** used — `bootClient(App);` is the last line of the file. The same module
+imported normally produces no warning, and `azeroth check` is silent.
+
+### Reproduction
+1. A module `entry.azeroth`:
+   ```ts
+   import { runtime } from './r.ts';
+
+   runtime();
+   ```
+2. Import it for its text: `import.meta.glob('./entry.azeroth', { query: '?raw', import: 'default', eager: true })`.
+3. The warning appears. Indent the call by one space, or bind it (`const a = runtime();`), and it
+   disappears — the use has not changed, only its column.
+
+### Evidence
+`transform` in `vite.ts` strips the `?query` suffix and lints whatever `code` it was handed:
+
+```ts
+const filename = id.split('?')[0] ?? id;
+if (!filename.endsWith(extension)) { return null; }
+…
+// Lint before compiling: …
+```
+
+For a `?raw` id that `code` is Vite's re-presentation of the module — `export default "…source…"` —
+not the component source. The type checker below it excludes query variants deliberately
+(`else if (id === filename)`, with a comment explaining that a variant's content is
+component-less). The lint pass above it has no such exclusion.
+
+Given the wrapper, `diagnoseUnusedImports` then fails both of its checks for the wrong reason:
+
+- the compiled-JS walk finds no identifier, because the whole module is one string literal;
+- the source cross-check looks for the name outside the import statement with
+  `` new RegExp(`(?<![\\w$.])${ name }(?![\\w$])`) ``. Inside the wrapper a line break is the
+  two literal characters `\n`, so a use that starts a line at column 0 is preceded by `n` — a `\w` —
+  and the lookbehind rejects it.
+
+Reproduced directly against the compiler, with no Vite involved:
+
+```js
+const wrapper = 'export default ' + JSON.stringify("import { runtime } from './r.ts';\n\nruntime();\n");
+diagnoseUnusedImports(wrapper, generateVirtualCode(wrapper, 'entry.azeroth').code);
+// -> [{ code: 'azeroth/unused-import', … }]     // and [] for "const a = runtime();"
+```
+
+### Why this is framework-related
+Nothing in application code chooses what the plugin lints. The source is correct, the import is
+used, and the only variable is which text the plugin handed its own rule.
+
+### Workaround
+None needed — it is a warning. Do not "fix" it by deleting the import or reformatting the entry
+module; both would be wrong. Live with the line, or stop raw-importing that file.
+
+### Upstream
+Not reported yet.
+
+### Impact
+Low, but persistent and misleading: it prints on every `npm test` run here, because
+`application/tests/lib.spec.ts` globs every source file with `?raw` to assert house rules over the
+text, and `src/main.azeroth` ends with `bootClient(App);` at column 0.
+
+---
+
 ## Investigated and NOT framework bugs
 
 Kept deliberately, so the same suspicions are not re-investigated.

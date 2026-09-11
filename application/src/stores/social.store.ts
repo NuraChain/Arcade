@@ -6,7 +6,7 @@ import { createRandom, hashSeed } from '../lib/random.ts';
 import { runtime } from '../lib/runtime.ts';
 import { recallJson, rememberJson } from '../lib/storage.ts';
 import { planRequestReply, rankSuggestions, reasonFor } from '../services/social.service.ts';
-import { useSession } from './session.store.ts';
+import { useAccount } from './account.store.ts';
 
 export type Relation = 'me' | 'friend' | 'incoming' | 'outgoing' | 'blocked' | 'none';
 
@@ -60,9 +60,9 @@ export interface SocialApi
 
 export const useSocial = createStore((): SocialApi =>
 {
-    const session = useSession();
+    const account = useAccount();
 
-    const meId = (): string => session.record()?.id ?? 'you';
+    const meId = (): string => account.user()?.id ?? 'you';
 
     const [added, setAdded] = createSignal<string[]>([]);
     const [dropped, setDropped] = createSignal<string[]>([]);

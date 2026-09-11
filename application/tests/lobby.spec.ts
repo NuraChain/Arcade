@@ -20,7 +20,15 @@ beforeEach(() =>
     setRuntime({ clock, seed: 5 });
     resetDataset();
     useSession().reset();
-    useSession().establish({ id: 'alex', handle: 'alex' }, { remember: false });
+    useSession().establish({
+        id: 'alex',
+        handle: 'alex',
+        displayName: 'Alex Morgan',
+        bio: '',
+        hue: 210,
+        kind: 'demo',
+        isMinor: false
+    });
     usePresence().reset();
     useLobby().reset();
 });

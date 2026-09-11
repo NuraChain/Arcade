@@ -44,6 +44,18 @@ Point it at whichever half is running: `npm run dev` (vite on 3100, the default)
 server (`QA_BASE=http://localhost:3200`). The server run is the stronger one — it exercises
 `mountPages`, the prerendered landing page and the real asset headers, which vite does not.
 
+Run it against the BUILT server when the result has to be trustworthy. Under `npm run dev` the
+conductor restarts the api whenever `dist/` is rewritten — a `npm run build` or `npm test` in
+another terminal is enough — and every restart costs the matrix one cell: vite answers the
+in-flight `/api/_manifest` with a 502, the page boots without its data, and the header controls
+fail the 44px check in their pre-hydration state. Three runs in a row each lost exactly one cell
+that way, each time to a different route. The same matrix against `npm start` is 600/600.
+
+It needs the **api** either way, because it signs in for real: one `POST /api/auth/demo` as
+`alex`, then every context is built from the resulting `storageState`. There is no longer a
+session key it could write into `localStorage` — the cookie is HttpOnly — and a matrix run against
+a database with no demo rows fails on the first line rather than touring 600 signed-out pages.
+
 **The matrix is a load generator, not a visitor.** It pulls 600 pages as fast as it can from one
 address, so anything metered per IP will refuse it. That is why the rate limit is scoped to
 `/api` and `/ws` in `server/src/http/rate-limit.ts` rather than wrapped around the whole handler:
@@ -134,6 +146,22 @@ are not obvious, each of which costs an afternoon to rediscover:
 - **`azeroth doctor` warns `version skew` permanently.** It compares raw dependency spec strings,
   and every `file:` link is a different string. Exit code stays 0. Do not spend an afternoon
   "aligning" it.
+
+**`DataSource.query()` does not return one shape, and the difference is silent.** A SELECT gives
+the rows. An INSERT, UPDATE or DELETE — *even with `returning`* — gives `[rows, affectedCount]`.
+So `result.length === 0` is never true for a mutation that matched nothing, and `result[0].x`
+reads the rows ARRAY rather than the first row. A "did this UPDATE match?" check written the
+obvious way always says yes, and the value it reads is always `undefined`. It cost an afternoon:
+a sign-in that burned its nonce correctly, handed `undefined` to the signature verifier, and
+reported "that signature did not match the address" for a perfectly good signature. **Every
+mutating query in this server goes through `lib/rows.ts`** — `rowsOf`, `firstRow`, `affectedBy` —
+and `tests/rows.spec.ts` pins all three shapes.
+
+**No application test may reach the network.** `application/src/api.ts` fetches the route manifest
+at module load, so importing any store from a spec opens a real socket. `application/tests/setup.ts`
+mocks that module globally with `tests/fake-api.ts`, an in-memory server that records its calls
+and can be told to refuse; specs that assert on those calls import `server` from it. The fake
+derives handles with the REAL `handleFromName`, imported from the server, so the two cannot drift.
 
 Ports: server **3200**, vite **3100**. 3000/3001 belong to Explorer. In development the two halves
 are two processes and `application/vite.config.ts` proxies `/api`, `/ws` and `/_image`; in
@@ -236,9 +264,15 @@ produces `export class 0001Reference…`, which is not a valid JavaScript identi
 backticks in SQL comments — inside a template literal they end the string.
 
 **Reference data** is content the product cannot run without: the games, their rules, the
-achievement definitions. `server/src/db/seed-reference.ts` upserts it on every boot, so a changed
+achievement definitions, and the three demo personas. `server/src/db/seed-reference.ts` upserts it on every boot, so a changed
 blurb ships without a migration. It is not development fixtures — those are a separate file that
 refuses to run outside development.
+
+A seed that upserts into a table real people also write to needs a guard, and the demo personas
+are that case: their `on conflict (handle)` ends in `where users.kind = 'demo'`. Without it, a
+deploy would silently convert whoever had claimed `alex` into a shared account anyone could sign
+into through `/auth/demo`. That is not hypothetical — it happened in development the first time
+this seed ran, against an account that had claimed `sara.k` minutes earlier.
 
 One sharp edge, because it will surprise someone: `status` is deliberately never overwritten on
 conflict. An operator who disabled a game did so for a reason and a deploy must not re-enable it.
@@ -251,6 +285,12 @@ table STANDS in the 3D market — `anchor`, `rotation`, `table`, `set` — becau
 geometry and the landing route is `render: 'static'`: it must paint with no JavaScript and no
 server. The two merge by id, the server wins where both hold a field, and
 `server/tests/reference-parity.spec.ts` fails if they ever drift.
+
+**The live counts on the home page are SIMULATED, and deliberately not zero.** No table has ever
+been opened — tables arrive with the play domain — so `BASE` and `seededStats` in
+`catalogue.store.ts` drift on a seeded RNG. Both are deleted outright the moment the server
+answers with real counts. Zeroing them instead would be a different lie: "0 people at the tables"
+reads as a broken product rather than an unbuilt feature.
 
 **A store that reads the server must be read reactively.** `catalogue.rules()` used to be a
 synchronous array and is now backed by a resource, so `const rules = catalogue.rules(id)` captures
@@ -354,13 +394,60 @@ rather than growing the control for everyone. `npm run qa` fails the build if it
 
 ## Signing in
 
-Wallet-first: `stores/wallet.store.ts` wraps an injected EIP-1193 provider, asks for accounts,
-switches to NuraChain when `data/chain.ts` is configured, and takes one `personal_sign` of a
-SIWE-shaped message. The address becomes the identity — name, handle and avatar hue all derive
-from it (`stores/account.store.ts`). Demo identities remain one tap away for exploring.
+**The session belongs to the server.** It is a row in `sessions` addressed by an HttpOnly cookie
+the browser cannot read, and identity is whatever `GET /api/auth/me` says it is.
+`stores/session.store.ts` is a CACHE of that answer, never the source of it. The version this
+replaces kept the answer in `localStorage` and trusted it, which meant editing one key in devtools
+impersonated anyone.
+
+`lib/guards.ts` is therefore a **courtesy**, not the enforcement: it exists so a signed-out visitor
+lands on `/sign-in` instead of on a page of empty states. The enforcement is `requireSession` in
+`server/src/http/auth.ts`, which answers 401. Both guards await `session.ready()`, which resolves
+after the first `/auth/me`; one request on boot, every navigation after it synchronous. They reach
+the store through a **dynamic import** — see Performance for why that import must stay dynamic.
+
+Three ways in, and the account says which one was used through `kind`:
+
+- **Wallet** (`kind: 'wallet'`). `stores/wallet.store.ts` asks an EIP-1193 provider for accounts,
+  switches to NuraChain when `data/chain.ts` is configured, then asks the SERVER for the message
+  to sign. The client never composes it: every field in an EIP-4361 message — the domain a
+  signature is valid for, the chain, the moment, the nonce — is a claim the server relies on when
+  it verifies, so a client that writes its own is a client that can sign "for" somewhere else. The
+  signature goes back and is CHECKED (`viem`'s `verifyMessage`, with an ERC-1271 `eth_call`
+  branch for contract wallets). The version this replaces awaited `personal_sign` and threw the
+  result away, which made the whole prompt theatre.
+- **Guest** (`kind: 'guest'`). A typed name, no proof of anything, and the actual onboarding for
+  most people. `handleFromName` folds the name into a handle.
+- **Demo** (`kind: 'demo'`). The three personas the sign-in page offers for exploring are REAL
+  seeded accounts (`DEMO_SEEDS` in `seed-reference.ts`), reachable only through `POST /auth/demo`,
+  which matches on `kind = 'demo'` so the route can never be a way into a real person's account.
+  Their handles are in the `RESERVED` set, which is what lets the seed own them; `identity.spec.ts`
+  fails if a persona is added without reserving its handle. The seed's `on conflict` carries
+  `where users.kind = 'demo'` as well, so it is structurally incapable of converting somebody's
+  account into a shared one.
+
+**The nonce is single use, and it is burned FIRST.** `signInWithWallet` runs a conditional UPDATE
+that only matches an unconsumed, unexpired row and takes the stored message from its `returning`
+clause. Two requests replaying one signature race in the database and exactly one wins. Verifying
+first would leave a window where both passed.
+
+**A handle is claimed by INSERT, never by "check then insert."** `insertUser` loops over
+`candidatesFor` and lets the unique index arbitrate, moving on only for a genuine 23505.
+
+`personFor` in `stores/account.store.ts` turns the server's account into the `Person` the app
+renders: identity from the account, and — until the profile and social domains land — statistics,
+achievements and a favourite game from the mock dataset, joined on the handle for a `demo` account
+only. The four mock-backed stores read `account.user()?.id`, not the raw account id, because that
+join is what keeps a demo tour's friends and chats attached to it.
 
 Chain details come from `VITE_NURA_*` env vars (see `.env.example`); with none set the app signs
-in on whatever network the wallet is already on and skips the switch.
+in on whatever network the wallet is already on and skips the switch. Real verification makes the
+chain env mandatory — a SIWE message must carry a decimal `Chain ID`, never a chain name.
+
+`lib/wallet.ts` discovers providers through **EIP-6963** and falls back to `window.ethereum`.
+It does not believe `isMetaMask` — any injector can set that flag — so with no announcement it
+takes the first injected provider, and `walletName(null)` says "Browser wallet" rather than naming
+a wallet that is not installed.
 
 ## The 3D asset kit
 
@@ -397,7 +484,7 @@ interactively must be written back into a script; the scripts stay the source of
 
 | | budget | actual |
 |---|---|---|
-| initial JS, gzip | < 60 KB | 49.3 KB |
+| initial JS, gzip | < 60 KB | 52.4 KB |
 | three.js chunk | lazy | 160.9 KB gzip, after first paint |
 | `/app` shell + page | lazy per route | 12 KB gzip shell, 1–15 KB per page |
 | GLB kit + textures | < 4.5 MB | see `npm run assets` |
@@ -406,9 +493,19 @@ interactively must be written back into a script; the scripts stay the source of
 | kit triangles | — | ~190k, ~20% of it instanced figures |
 
 The `/app` tree is kept out of the landing's initial payload by three things, all of which must
-stay true: the `/app` layout route is `lazy`, `session.store.ts` records only an id and a handle
-(`account.store.ts` is what resolves a person from the mock dataset), and the app message
-catalogue is registered by `locales/app-catalogue.ts`, imported only by the shell and sign-in.
+stay true: the `/app` layout route is `lazy`, the app message catalogue is registered by
+`locales/app-catalogue.ts` which only the shell and sign-in import, and **`lib/guards.ts` imports
+`session.store.ts` dynamically**.
+
+That third one is not a size optimisation. Route guards are named in `routes.ts`, so `guards.ts` is
+eager; a static import there would drag `api.ts` into the landing chunk, and `api.ts` has a
+TOP-LEVEL await that reads the route manifest. `mountPages` embeds that manifest in a page it
+renders, but the landing is `render: 'static'` and prerendered to a file — no embed — so the client
+falls back to fetching `/api/_manifest`. A page whose whole promise is that it paints with no
+JavaScript and no server would have opened a request to the server on every visit. The dynamic
+import moves the whole typed client behind the first guarded navigation, where the app chunk is
+loading anyway. `tools/qa` does not catch this; the browser pass asserts the landing makes no api
+call at all.
 
 Three quality tiers picked from a capability probe, then policed by a frame-time governor that
 only ever steps **down**. Most lamps are not lights: they are emissive geometry plus an additive

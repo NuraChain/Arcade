@@ -5,11 +5,13 @@ import type { Logger } from '@azerothjs/logger';
 import type { DataSource } from 'typeorm';
 
 import { buildApi } from './api.ts';
+import type { ServerConfig } from './env.ts';
 import { buildPorts } from './services.ts';
 
 export interface AppDeps
 {
     db: DataSource;
+    config: ServerConfig;
     log: Logger;
     observe?: RequestObserver;
 
@@ -48,7 +50,7 @@ export function buildApp(deps: AppDeps): App
         );
     });
 
-    const api = buildApi(buildPorts(deps.db));
+    const api = buildApi(buildPorts(deps.db, deps.config));
 
     register(app, api, { prefix: '/api' });
 

@@ -31,7 +31,8 @@
         "azerothjs": "file:../../../AzerothJS/packages/azerothjs",
         "pg": "^8.16.3",
         "reflect-metadata": "^0.2.2",
-        "typeorm": "^0.3.30"
+        "typeorm": "^0.3.30",
+        "viem": "^2.56.3"
     },
     "devDependencies": {
         "@azerothjs/cli": "file:../../../AzerothJS/packages/cli",

@@ -59,7 +59,23 @@ const ROUTES = [
 
 const LOCALES = ['en', 'fa'];
 
-const SESSION = JSON.stringify({ id: 'alex', handle: 'alex', kind: 'demo' });
+// The demo persona the matrix tours as. Signing in is a real round trip now - the session is an
+// HttpOnly cookie the server sets, not a localStorage key a test can write - so this happens once
+// and the resulting storage state is handed to every context.
+const DEMO_HANDLE = 'alex';
+
+async function signedIn(browser)
+{
+    const context = await browser.newContext();
+    const response = await context.request.post(`${ BASE }/api/auth/demo`, { data: { handle: DEMO_HANDLE } });
+    if (!response.ok())
+    {
+        throw new Error(`qa: could not sign in as ${ DEMO_HANDLE } (${ response.status() }). Is the api running?`);
+    }
+    const state = await context.storageState();
+    await context.close();
+    return state;
+}
 
 function heightFor(width, landscape)
 {
@@ -167,6 +183,7 @@ async function main()
 
     const executablePath = process.env.QA_CHROME ?? cachedChromium();
     const browser = await chromium.launch(executablePath === undefined ? {} : { executablePath });
+    const storageState = await signedIn(browser);
     const failures = [];
     const rows = [];
     let cells = 0;
@@ -183,14 +200,14 @@ async function main()
                     deviceScaleFactor: 1,
                     hasTouch: width < 1024,
                     isMobile: width < 768,
-                    locale: locale === 'fa' ? 'fa-IR' : 'en-US'
+                    locale: locale === 'fa' ? 'fa-IR' : 'en-US',
+                    storageState
                 });
 
-                await context.addInitScript(([session, tag]) =>
+                await context.addInitScript((tag) =>
                 {
-                    localStorage.setItem('nura-games.session', session);
                     localStorage.setItem('nura-games.locale', tag);
-                }, [SESSION, locale]);
+                }, locale);
 
                 const page = await context.newPage();
                 const noise = [];

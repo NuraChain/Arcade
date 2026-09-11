@@ -13,15 +13,6 @@ export interface LiveStats
     waitSeconds: number;
 }
 
-/**
- * SIMULATED. These are not real counts - no table has ever been opened, because tables arrive
- * with the play domain. The numbers drift on a seeded RNG so the page feels alive during
- * development, and the moment `tables` exists the server answers with counts and this block and
- * `seededStats` below are deleted outright.
- *
- * Kept rather than zeroed because a home page reading "0 people at the tables" would be a
- * different lie: it would look like a broken product rather than an unbuilt feature.
- */
 const BASE: Record<GameId, LiveStats> = {
     hokm: { tablesOpen: 42, playersOnline: 168, waitSeconds: 40 },
     poker: { tablesOpen: 31, playersOnline: 124, waitSeconds: 25 },
@@ -44,10 +35,8 @@ export interface CatalogueApi
     totals: Getter<{ tablesOpen: number; playersOnline: number }>;
     featured: Getter<GameId>;
 
-    /** Whether a table of this game may be opened. The server decides; the client obeys. */
     status(id: GameId): GameStatus;
 
-    /** True until the server's copy has landed. The local geometry is serving in the meantime. */
     loading: Getter<boolean>;
     refresh(): void;
     start(): () => void;
@@ -71,18 +60,6 @@ function seededStats(seed: number, tick: number): Record<GameId, LiveStats>
     return out;
 }
 
-/**
- * The catalogue is the one domain where a local copy is correct rather than a shortcut.
- *
- * `application/src/data/games.ts` carries where each table STANDS in the 3D market - `anchor`,
- * `rotation`, `table`, `set` - and the landing route is `render: 'static'`: it must paint the
- * market with no JavaScript and no server. So the geometry ships in the bundle, and the server
- * owns what a game IS: its seat counts, modes, targets, and whether it can be opened at all.
- *
- * The two are merged by id. Before the server answers, the local half serves alone and every
- * page renders; when it answers, the server's rules and status win. `server/tests/reference-
- * parity.spec.ts` fails if the halves ever disagree about a field they both hold.
- */
 export const useCatalogue = createStore((): CatalogueApi =>
 {
     const [tick, setTick] = createSignal(0);
@@ -94,7 +71,6 @@ export const useCatalogue = createStore((): CatalogueApi =>
         { name: 'catalogue.games' }
     );
 
-    /** Server rows by id, or an empty map before the first answer. */
     const published = (): Map<string, { status: GameStatus; rules: TableRules }> =>
     {
         const rows = catalogue.data()?.games ?? [];
@@ -129,8 +105,6 @@ export const useCatalogue = createStore((): CatalogueApi =>
         byId: (id) => GAMES.find((game) => game.id === id) ?? GAMES[0],
         rules: rulesFor,
 
-        // Built from whichever rules are current, so a server that widens poker to ten seats
-        // changes the create form's default without a client release.
         defaults: (id) =>
         {
             const rules = rulesFor(id);

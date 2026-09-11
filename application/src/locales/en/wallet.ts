@@ -16,7 +16,7 @@ export const wallet = {
     'wallet.noGas': 'No gas, no transaction',
     'wallet.selfCustody': 'Your keys stay yours',
     'wallet.install': 'Install MetaMask',
-    'wallet.installLead': 'No wallet in this browser yet. MetaMask takes a minute to set up — or look around with a demo seat below.',
+    'wallet.installLead': 'No wallet in this browser yet. Any browser wallet works — MetaMask takes about a minute — or look around with a demo seat below.',
     'wallet.learn': 'What is {chain}?',
     'wallet.error.rejected': 'You turned that down. Nothing happened.',
     'wallet.error.pending': 'Your wallet is already asking. Open it and answer.',

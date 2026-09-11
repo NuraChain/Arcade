@@ -17,6 +17,9 @@ import { OVERLAY_SETTLE, useOverlay } from '../src/stores/overlay.store.ts';
 import { useAccount } from '../src/stores/account.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
 import { TOAST_DURATION, useToasts } from '../src/stores/toasts.store.ts';
+import { server } from './fake-api.ts';
+
+vi.mock('../src/api.ts', async () => await import('./fake-api.ts'));
 
 type Rendered = HTMLElement;
 
@@ -54,6 +57,7 @@ beforeEach(() =>
         }
     });
     useLocale().setLocale('en');
+    server.reset();
     useSession().reset();
     useOverlay().reset();
     useToasts().reset();
@@ -235,9 +239,7 @@ describe('routes', () =>
 
     it('keeps a signed-in person in the app and bounces them off sign-in', async () =>
     {
-        const pending = useAccount().signIn('alex');
-        clock.advance(500);
-        await pending;
+        await useAccount().signInAsDemo('alex');
         const router = createRouter({ routes, history: createMemoryHistory('/sign-in?next=/app/chats'), scroll: false });
         await settle();
         expect(router.location().pathname).toBe('/app/chats');

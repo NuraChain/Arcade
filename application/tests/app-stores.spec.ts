@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 import { manualClock, type ManualClock } from '../src/lib/clock.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
@@ -12,6 +12,9 @@ import { defaultSettings, useSettings } from '../src/stores/settings.store.ts';
 import { useShell } from '../src/stores/shell.store.ts';
 import { TOAST_DURATION, TOAST_VISIBLE, useToasts } from '../src/stores/toasts.store.ts';
 import { resetDataset } from '../src/data/mock/index.ts';
+import { server } from './fake-api.ts';
+
+vi.mock('../src/api.ts', async () => await import('./fake-api.ts'));
 
 let clock: ManualClock;
 
@@ -24,6 +27,7 @@ beforeEach(() =>
     clock = manualClock(1_000_000);
     setRuntime({ clock, seed: 3 });
     resetDataset();
+    server.reset();
     memory.clear();
     Object.defineProperty(window, 'localStorage', {
         configurable: true,
@@ -86,33 +90,69 @@ describe('session', () =>
         expect(identities.filter((person) => person.minor).length).toBe(1);
     });
 
-    it('signs a known handle in after the runtime latency and remembers it', async () =>
+    it('asks the server for the account and adopts the one it issues', async () =>
     {
         const session = useSession();
         const account = useAccount();
-        const pending = account.signIn('sara.k');
-        expect(account.user()).toBeNull();
-        clock.advance(500);
-        const person = await pending;
-        expect(person.id).toBe('sara');
+        const person = await account.signIn('Darya');
+        expect(server.calls).toContain('auth.guest');
         expect(session.signedIn()).toBe(true);
-        expect(account.user()?.id).toBe('sara');
-        expect(memory.get('nura-games.session')).toContain('sara');
+        expect(person?.handle).toBe('darya');
+        expect(account.user()?.handle).toBe('darya');
     });
 
-    it('seats an unknown name as a guest, keeps the name, and forgets it on sign-out', async () =>
+    it('joins a demo identity to the person the dataset knows', async () =>
+    {
+        const account = useAccount();
+        const person = await account.signInAsDemo('sara.k');
+        expect(server.calls).toContain('auth.demo');
+        expect(person?.id).toBe('sara');
+        expect(account.user()?.name.en).toBe('Sara Kamali');
+    });
+
+    it('will not let a typed name borrow a demo identity', async () =>
+    {
+        const person = await useAccount().signIn('alex');
+        expect(person?.id).not.toBe('alex');
+        expect(person?.name.en).toBe('alex');
+    });
+
+    it('keeps a name nobody in the dataset has ever answered to', async () =>
+    {
+        const account = useAccount();
+        const person = await account.signIn('Darya');
+        expect(person?.handle).toBe('darya');
+        expect(person?.name.en).toBe('Darya');
+        expect(account.user()?.name.en).toBe('Darya');
+    });
+
+    it('ends the session on the server rather than only in this tab', async () =>
     {
         const session = useSession();
         const account = useAccount();
-        const pending = account.signIn('Darya');
-        clock.advance(500);
-        const person = await pending;
-        expect(person.id).toBe('guest-darya');
-        expect(person.name.en).toBe('Darya');
-        expect(account.user()?.name.en).toBe('Darya');
-        session.signOut();
+        await account.signIn('Darya');
+        await session.signOut();
+        expect(server.calls).toContain('auth.sign-out');
+        expect(server.account).toBeNull();
         expect(account.user()).toBeNull();
-        expect(memory.has('nura-games.session')).toBe(false);
+    });
+
+    it('ends every session at once and reports how many it closed', async () =>
+    {
+        const session = useSession();
+        await useAccount().signIn('Darya');
+        expect(await session.signOutEverywhere()).toBe(3);
+        expect(session.signedIn()).toBe(false);
+    });
+
+    it('takes the answer from the server when nothing has been established', async () =>
+    {
+        const session = useSession();
+        server.account = { id: 'u-darya', handle: 'darya', displayName: 'Darya', bio: '', hue: 280, kind: 'guest', isMinor: false };
+        await session.ready();
+        expect(server.calls).toContain('auth.me');
+        expect(session.signedIn()).toBe(true);
+        expect(useAccount().user()?.id).toBe('u-darya');
     });
 });
 
@@ -125,19 +165,24 @@ describe('guards', () =>
         from: null
     });
 
-    it('sends a stranger to sign-in with a way back', () =>
+    it('sends a stranger to sign-in with a way back', async () =>
     {
-        const verdict = requireSession(context('/app/friends'));
+        const verdict = await requireSession(context('/app/friends'));
         expect(verdict).toMatchObject({ to: { pathname: '/sign-in', query: { next: '/app/friends' } } });
+    });
+
+    it('asks the server once and answers every navigation after it from the answer', async () =>
+    {
+        await requireSession(context('/app'));
+        await requireSession(context('/app/friends'));
+        expect(server.calls.filter((call) => call === 'auth.me').length).toBe(1);
     });
 
     it('lets a signed-in person through, and bounces them off the sign-in page', async () =>
     {
-        const pending = useAccount().signIn('alex');
-        clock.advance(500);
-        await pending;
-        expect(requireSession(context('/app'))).toBe(true);
-        expect(requireAnonymous(context('/sign-in', '/app/chats'))).toMatchObject({ to: '/app/chats' });
+        await useAccount().signInAsDemo('alex');
+        expect(await requireSession(context('/app'))).toBe(true);
+        expect(await requireAnonymous(context('/sign-in', '/app/chats'))).toMatchObject({ to: '/app/chats' });
     });
 
     it('never follows a next that leaves the app', () =>
