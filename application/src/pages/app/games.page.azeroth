@@ -1,17 +1,53 @@
-import { useHead } from 'azerothjs';
+import { useHead, useNavigate } from 'azerothjs';
 
 import Page from '../../components/app/page.component.azeroth';
-import EmptyState from '../../components/ui/empty-state.component.azeroth';
+import GameGrid from '../../components/games/game-grid.component.azeroth';
+import Chip from '../../components/ui/chip.component.azeroth';
+import type { GameCategory, GameId } from '../../data/games.ts';
+import { useCatalogue } from '../../stores/catalogue.store.ts';
+import { useLobby } from '../../stores/lobby.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 
 export default component GamesPage()
 {
     const locale = useLocale();
+    const catalogue = useCatalogue();
+    const lobby = useLobby();
+    const { navigate } = useNavigate();
 
     useHead({ title: () => locale.t('app.nav.games') });
 
-    <Page>
-        <h1 class="text-[clamp(1.75rem,5vw,2.5rem)]">{ locale.t('app.nav.games') }</h1>
-        <EmptyState icon="sparkles" title={ locale.t('state.emptyTitle') } />
+    state filter = 'all' as 'all' | GameCategory;
+
+    derived games = catalogue.games.filter((game) => filter === 'all' || game.category === filter);
+
+    derived totals = catalogue.totals();
+
+    const quickPlay = (game: GameId): void =>
+    {
+        navigate(`/app/play/${ lobby.quick(game) }`);
+    };
+
+    <Page label={ locale.t('app.nav.games') }>
+        <header class="flex flex-col gap-3 pb-5 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+                <h1 class="text-[clamp(2rem,6vw,3rem)] leading-none">{ locale.t('app.nav.games') }</h1>
+                <p class="mt-2 text-[15px] text-muted">{ locale.t('games.lead') }</p>
+            </div>
+            <p class="flex items-center gap-2 text-[13px] font-semibold text-live">
+                <span class="live-dot h-2.5 w-2.5 rounded-full" aria-hidden="true"></span>
+                <span class="tally">{ locale.plural('games.live.playing', totals.playersOnline) }</span>
+                <span class="text-faint">·</span>
+                <span class="tally text-muted">{ locale.plural('games.live.tables', totals.tablesOpen) }</span>
+            </p>
+        </header>
+
+        <div class="rail-x -mx-4 mb-5 flex gap-2 px-4 sm:mx-0 sm:px-0" role="group" aria-label={ locale.t('games.filter.all') }>
+            <Chip selected={ filter === 'all' } onClick={ () => filter = 'all' }>{ locale.t('games.filter.all') }</Chip>
+            <Chip icon="cards" selected={ filter === 'cards' } onClick={ () => filter = 'cards' }>{ locale.t('games.category.cards') }</Chip>
+            <Chip icon="dice" selected={ filter === 'board' } onClick={ () => filter = 'board' }>{ locale.t('games.category.board') }</Chip>
+        </div>
+
+        <GameGrid games={ games } label={ locale.t('app.nav.games') } onQuickPlay={ quickPlay } />
     </Page>
 }

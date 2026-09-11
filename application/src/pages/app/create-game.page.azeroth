@@ -1,17 +1,37 @@
-import { useHead } from 'azerothjs';
+import { useHead, useNavigate, useParams } from 'azerothjs';
 
 import Page from '../../components/app/page.component.azeroth';
+import CreateGameForm from '../../components/games/create-game-form.component.azeroth';
 import EmptyState from '../../components/ui/empty-state.component.azeroth';
+import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 
 export default component CreateGamePage()
 {
     const locale = useLocale();
+    const catalogue = useCatalogue();
+    const params = useParams();
+    const { navigate } = useNavigate();
+
+    derived game = catalogue.bySlug(params().slug ?? '') ?? null;
 
     useHead({ title: () => locale.t('create.title') });
 
-    <Page>
-        <h1 class="text-[clamp(1.75rem,5vw,2.5rem)]">{ locale.t('create.title') }</h1>
-        <EmptyState icon="sparkles" title={ locale.t('state.emptyTitle') } />
+    <Page narrow label={ locale.t('create.title') }>
+        <Show
+            when={ game !== null }
+            fallback={ <EmptyState icon="games" title={ locale.t('game.notFound') } action={ locale.t('app.nav.games') } to="/app/games" /> }
+        >
+            { () =>
+                <div class="flex flex-col gap-6">
+                    <header>
+                        <p class="label text-[12px] text-faint">{ locale.t(game!.nameKey) }</p>
+                        <h1 class="mt-1 text-[clamp(1.75rem,6vw,2.5rem)] leading-none">{ locale.t('create.title') }</h1>
+                        <p class="mt-2 text-[14px] text-muted">{ locale.t('create.lead') }</p>
+                    </header>
+                    <CreateGameForm game={ game! } onCreated={ (tableId) => navigate(`/app/play/${ tableId }`, { replace: true }) } />
+                </div>
+            }
+        </Show>
     </Page>
 }

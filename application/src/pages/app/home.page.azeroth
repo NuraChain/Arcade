@@ -1,17 +1,206 @@
-import { useHead } from 'azerothjs';
+import { Link, useHead, useNavigate } from 'azerothjs';
 
 import Page from '../../components/app/page.component.azeroth';
-import EmptyState from '../../components/ui/empty-state.component.azeroth';
+import GameGrid from '../../components/games/game-grid.component.azeroth';
+import QuickPlayButton from '../../components/games/quick-play-button.component.azeroth';
+import ActivityItem from '../../components/social/activity-item.component.azeroth';
+import PeopleStrip from '../../components/social/people-strip.component.azeroth';
+import Button from '../../components/ui/button.component.azeroth';
+import Chip from '../../components/ui/chip.component.azeroth';
+import SectionHeading from '../../components/ui/section-heading.component.azeroth';
+import type { Game, GameId } from '../../data/games.ts';
+import { dataset, personById } from '../../data/mock/index.ts';
+import type { Activity, Person } from '../../data/mock/types.ts';
+import Icon from '../../icons/icon.component.azeroth';
+import { runtime } from '../../lib/runtime.ts';
+import { useAccount } from '../../stores/account.store.ts';
+import { useCatalogue } from '../../stores/catalogue.store.ts';
+import { useLobby } from '../../stores/lobby.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
+import { usePresence } from '../../stores/presence.store.ts';
 
 export default component HomePage()
 {
     const locale = useLocale();
+    const account = useAccount();
+    const catalogue = useCatalogue();
+    const lobby = useLobby();
+    const presence = usePresence();
+    const { navigate } = useNavigate();
 
     useHead({ title: () => locale.t('app.nav.home') });
 
-    <Page>
-        <h1 class="text-[clamp(1.75rem,5vw,2.5rem)]">{ locale.t('app.nav.home') }</h1>
-        <EmptyState icon="sparkles" title={ locale.t('state.emptyTitle') } />
+    derived user = account.user();
+
+    derived firstName = user === null ? locale.t('common.you') : locale.text(user.name).split(' ')[0];
+
+    derived greeting = ((): string =>
+    {
+        const hour = new Date(runtime().clock.now()).getHours();
+        const key = hour < 5 ? 'home.greeting.night' : (hour < 12 ? 'home.greeting.morning' : (hour < 17 ? 'home.greeting.afternoon' : (hour < 22 ? 'home.greeting.evening' : 'home.greeting.night')));
+        return locale.t(key, { name: firstName });
+    })();
+
+    derived totals = catalogue.totals();
+
+    derived favourite = catalogue.byId(user?.favourite ?? catalogue.featured());
+
+    derived favouriteStats = catalogue.stats(favourite.id);
+
+    derived others = catalogue.games.filter((game) => game.id !== favourite.id);
+
+    derived friends = ((): Person[] =>
+    {
+        if (user === null)
+        {
+            return [];
+        }
+        return presence.online(dataset().friends[user.id] ?? [])
+            .map((id) => personById(id))
+            .filter((person): person is Person => person !== undefined);
+    })();
+
+    derived recommended = ((): Game[] =>
+    {
+        const rest = [...others].sort((a, b) => catalogue.stats(b.id).playersOnline - catalogue.stats(a.id).playersOnline);
+        return [favourite, ...rest].slice(0, 3);
+    })();
+
+    derived activity = ((): Activity[] =>
+    {
+        if (user === null)
+        {
+            return [];
+        }
+        const circle = new Set(dataset().friends[user.id] ?? []);
+        return dataset().activity
+            .filter((entry) => circle.has(entry.personId))
+            .sort((a, b) => b.at - a.at)
+            .slice(0, 8);
+    })();
+
+    derived table = lobby.state();
+
+    derived tableGame = table.intent === null ? '' : locale.t(catalogue.byId(table.intent.game).nameKey);
+
+    derived continueText = table.phase === 'searching' || table.phase === 'found'
+        ? locale.t('home.continue.searching', { game: tableGame })
+        : (table.phase === 'playing'
+            ? locale.t('home.continue.playing', { game: tableGame })
+            : locale.plural('home.continue.lobby', table.players.length, { game: tableGame }));
+
+    derived last = lobby.lastResult();
+
+    derived lastNames = last === null
+        ? ''
+        : locale.list(last.players
+            .filter((id) => id !== lobby.me())
+            .map((id) => (id.startsWith('bot-') ? locale.t('play.lobby.bot') : locale.text(personById(id)?.name ?? { en: id, fa: id }).split(' ')[0])));
+
+    const quickPlay = (game: GameId): void =>
+    {
+        navigate(`/app/play/${ lobby.quick(game) }`);
+    };
+
+    const runItBack = (): void =>
+    {
+        if (last === null)
+        {
+            return;
+        }
+        navigate(`/app/play/${ table.phase === 'result' ? lobby.rematch() : lobby.quick(last.game, last.config) }`);
+    };
+
+    <Page label={ locale.t('app.nav.home') }>
+        <div class="flex flex-col gap-8">
+            <header>
+                <h1 class="text-[clamp(1.9rem,6vw,2.75rem)] leading-tight">{ greeting }</h1>
+                <p class="mt-1 flex items-center gap-2 text-[14px] text-muted">
+                    <span class="live-dot h-2 w-2 rounded-full" aria-hidden="true"></span>
+                    <span class="tally">{ locale.plural('home.pulse', totals.playersOnline) }</span>
+                </p>
+            </header>
+
+            <Show when={ lobby.active() }>
+                { () =>
+                    <Link to={ `/app/play/${ lobby.tableId() ?? '' }` } class="flex items-center gap-4 rounded-panel border border-live/40 bg-live/5 p-4 shadow-glow-live transition hover:bg-live/10">
+                        <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-live text-void">
+                            <Icon name="seat" size={ 22 } />
+                        </span>
+                        <span class="flex min-w-0 flex-1 flex-col">
+                            <span class="font-display text-[19px] font-semibold text-text">{ locale.t('home.continue.title') }</span>
+                            <span class="truncate text-[13px] text-muted">{ continueText }</span>
+                        </span>
+                        <span class="flex items-center gap-1 text-[13px] font-semibold text-live">
+                            { locale.t('home.continue.action') }
+                            <Icon name="forward" size={ 14 } class="icon-flip" />
+                        </span>
+                    </Link>
+                }
+            </Show>
+
+            <section aria-label={ locale.t('app.nav.quickPlay') } class="flex flex-col gap-3">
+                <QuickPlayButton
+                    detail={ `${ locale.t('home.quickPlay.usual', { game: locale.t(favourite.nameKey) }) } · ${ locale.t('home.quickPlay.wait', { seconds: favouriteStats.waitSeconds }) }` }
+                    onClick={ () => quickPlay(favourite.id) }
+                />
+                <ul class="flex flex-wrap items-center gap-2" aria-label={ locale.t('home.quickPlay.pick') }>
+                    <li class="text-[12px] font-semibold text-faint">{ locale.t('home.quickPlay.pick') }</li>
+                    <For each={ others } key={ (game) => game.id } let={ game }>
+                        <li>
+                            <Chip icon="zap" onClick={ () => quickPlay(game.id) }>{ locale.t(game.nameKey) }</Chip>
+                        </li>
+                    </For>
+                </ul>
+            </section>
+
+            <Show when={ last !== null && !lobby.active() }>
+                { () =>
+                    <div class="flex flex-col gap-3 rounded-panel border border-line bg-field p-4 sm:flex-row sm:items-center">
+                        <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-lamp/15 text-lamp">
+                            <Icon name="refresh" size={ 22 } />
+                        </span>
+                        <span class="flex min-w-0 flex-1 flex-col">
+                            <span class="font-display text-[19px] font-semibold text-text">{ locale.t('home.rematch.title') }</span>
+                            <span class="text-[13px] text-muted">{ locale.t('home.rematch.lead', { game: locale.t(catalogue.byId(last!.game).nameKey), names: lastNames }) }</span>
+                        </span>
+                        <Button variant="primary" leading="refresh" onClick={ runItBack }>{ locale.t('home.rematch.action') }</Button>
+                    </div>
+                }
+            </Show>
+
+            <section aria-labelledby="home-friends">
+                <SectionHeading id="home-friends" title={ locale.plural('common.friendsOnline', friends.length) } more={ locale.t('common.seeAll') } to="/app/friends" />
+                <Show
+                    when={ friends.length > 0 }
+                    fallback={ <p class="rounded-tile border border-dashed border-line p-4 text-[13px] text-muted">{ locale.t('home.friends.empty') }</p> }
+                >
+                    { () => <PeopleStrip people={ friends } label={ locale.t('home.friends.title') } /> }
+                </Show>
+            </section>
+
+            <section aria-labelledby="home-recommended">
+                <SectionHeading id="home-recommended" title={ locale.t('home.recommended.title') } more={ locale.t('common.seeAll') } to="/app/games" />
+                <GameGrid games={ recommended } compact label={ locale.t('home.recommended.title') } onQuickPlay={ quickPlay } />
+            </section>
+
+            <section aria-labelledby="home-activity">
+                <SectionHeading id="home-activity" title={ locale.t('home.activity.title') } />
+                <Show
+                    when={ activity.length > 0 }
+                    fallback={ <p class="rounded-tile border border-dashed border-line p-4 text-[13px] text-muted">{ locale.t('home.activity.empty') }</p> }
+                >
+                    { () =>
+                        <ul class="flex flex-col gap-0.5 rounded-panel border border-line bg-field p-1.5">
+                            <For each={ activity } key={ (entry) => entry.id } let={ entry }>
+                                <li>
+                                    <ActivityItem activity={ entry } />
+                                </li>
+                            </For>
+                        </ul>
+                    }
+                </Show>
+            </section>
+        </div>
     </Page>
 }

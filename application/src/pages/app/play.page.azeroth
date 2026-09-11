@@ -1,17 +1,246 @@
-import { useHead } from 'azerothjs';
+import { untrack, useHead, useNavigate, useParams } from 'azerothjs';
 
+import ConfirmSheet from '../../components/app/confirm-sheet.component.azeroth';
 import Page from '../../components/app/page.component.azeroth';
+import InviteSheet from '../../components/games/invite-sheet.component.azeroth';
+import LobbyPanel from '../../components/games/lobby-panel.component.azeroth';
+import MatchmakingPanel from '../../components/games/matchmaking-panel.component.azeroth';
+import ResultPanel from '../../components/games/result-panel.component.azeroth';
+import TableChat from '../../components/games/table-chat.component.azeroth';
+import TablePlaceholder from '../../components/games/table-placeholder.component.azeroth';
 import EmptyState from '../../components/ui/empty-state.component.azeroth';
+import IconButton from '../../components/ui/icon-button.component.azeroth';
+import { useCatalogue } from '../../stores/catalogue.store.ts';
+import { useDevice } from '../../stores/device.store.ts';
+import { useLobby } from '../../stores/lobby.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
+import { useOverlay } from '../../stores/overlay.store.ts';
+import { useSettings } from '../../stores/settings.store.ts';
+import { useShell } from '../../stores/shell.store.ts';
+import { useToasts } from '../../stores/toasts.store.ts';
 
 export default component PlayPage()
 {
     const locale = useLocale();
+    const lobby = useLobby();
+    const catalogue = useCatalogue();
+    const device = useDevice();
+    const overlay = useOverlay();
+    const settings = useSettings();
+    const shell = useShell();
+    const toasts = useToasts();
+    const params = useParams();
+    const { navigate } = useNavigate();
 
-    useHead({ title: () => locale.t('app.nav.games') });
+    state seenMessages = 0;
 
-    <Page>
-        <h1 class="text-[clamp(1.75rem,5vw,2.5rem)]">{ locale.t('app.nav.games') }</h1>
-        <EmptyState icon="sparkles" title={ locale.t('state.emptyTitle') } />
+    let wasLive = false;
+
+    derived current = lobby.state();
+
+    derived phase = current.phase;
+
+    derived live = lobby.tableId() === (params().id ?? '') && phase !== 'idle';
+
+    derived game = current.intent === null ? null : catalogue.byId(current.intent.game);
+
+    derived gameName = game === null ? '' : locale.t(game.nameKey);
+
+    derived title = ((): string =>
+    {
+        if (!live)
+        {
+            return locale.t('play.expired.title');
+        }
+        switch (phase)
+        {
+            case 'searching':
+                return locale.t('play.title.searching');
+            case 'found':
+                return locale.t('play.title.found');
+            case 'lobby':
+                return locale.t('play.title.lobby');
+            case 'starting':
+                return locale.t('play.title.starting');
+            case 'playing':
+                return locale.t('play.table.title', { game: gameName });
+            default:
+                return locale.t('play.title.result');
+        }
+    })();
+
+    derived phone = device.posture() === 'phone';
+
+    derived chatAvailable = live && (phase === 'lobby' || phase === 'starting' || phase === 'playing');
+
+    derived railOpen = settings.settings().railOpen;
+
+    derived unread = Math.max(0, lobby.chatter().length - seenMessages);
+
+    derived railVisible = chatAvailable && railOpen;
+
+    derived layout = railVisible ? 'grid gap-5 @4xl:grid-cols-[minmax(0,1fr)_20rem]' : 'grid gap-5';
+
+    useHead({ title: () => title });
+
+    mount
+    {
+        return shell.claimTitle(() => title);
+    }
+
+    const exit = (): void =>
+    {
+        navigate(game === null ? '/app/games' : `/app/games/${ game.slug }`, { replace: true });
+    };
+
+    effect
+    {
+        if (live)
+        {
+            wasLive = true;
+        }
+        else if (wasLive && phase === 'idle')
+        {
+            wasLive = false;
+            untrack(exit);
+        }
+    }
+
+    effect
+    {
+        if (railVisible)
+        {
+            seenMessages = lobby.chatter().length;
+        }
+    }
+
+    const copy = async (text: string, done: string): Promise<void> =>
+    {
+        try
+        {
+            await navigator.clipboard.writeText(text);
+            toasts.show({ kind: 'success', text: done });
+        }
+        catch
+        {
+            toasts.show({ kind: 'info', text });
+        }
+    };
+
+    const openInvite = (): void =>
+    {
+        overlay.open(InviteSheet, { title: locale.t('play.lobby.invite') }, { label: locale.t('play.lobby.invite') });
+    };
+
+    const leave = async (): Promise<void> =>
+    {
+        if (phase === 'playing')
+        {
+            const confirmed = await overlay.open(
+                ConfirmSheet,
+                { title: locale.t('play.table.leaveConfirm'), confirm: locale.t('play.table.leave'), destructive: true },
+                { label: locale.t('play.table.leave') }
+            ).closed;
+            if (confirmed !== true)
+            {
+                return;
+            }
+        }
+        if (phase === 'searching' || phase === 'found')
+        {
+            lobby.cancel();
+            toasts.show({ kind: 'info', text: locale.t('play.search.stopped') });
+            return;
+        }
+        lobby.leave();
+    };
+
+    const rematch = (): void =>
+    {
+        navigate(`/app/play/${ lobby.rematch() }`, { replace: true });
+    };
+
+    const again = (): void =>
+    {
+        const intent = current.intent;
+        if (intent !== null && intent.mode === 'private')
+        {
+            navigate(`/app/games/${ intent.game }/create`, { replace: true });
+            return;
+        }
+        navigate(`/app/play/${ lobby.newOpponent() }`, { replace: true });
+    };
+
+    <Page padded={ false } label={ title } class="px-4 pb-8 sm:px-6 lg:px-8">
+        <header class={ [
+            'flex items-center gap-1 py-2',
+            phone ? 'glass safe-t sticky top-0 z-topbar -mx-4 mb-2 px-2' : 'mb-3'
+        ].join(' ') }>
+            <Show when={ phone }>
+                { () => <IconButton icon="back" label={ locale.t('app.nav.back') } flip onClick={ exit } /> }
+            </Show>
+            <h1 class={ [ 'label min-w-0 flex-1 truncate font-semibold text-text', phone ? 'text-[17px]' : 'sr-only' ].join(' ') }>{ title }</h1>
+            <Show when={ chatAvailable }>
+                { () =>
+                    <IconButton
+                        icon={ railOpen ? 'panel-close' : 'chats' }
+                        label={ locale.t(railOpen ? 'play.table.chatHide' : 'play.table.chatShow') }
+                        pressed={ railOpen }
+                        count={ railOpen ? 0 : unread }
+                        flip={ railOpen }
+                        onClick={ () => settings.update({ railOpen: !railOpen }) }
+                    />
+                }
+            </Show>
+        </header>
+
+        <Show
+            when={ live }
+            fallback={
+                <EmptyState
+                    icon="seat"
+                    title={ locale.t('play.expired.title') }
+                    lead={ locale.t('play.expired.lead') }
+                    action={ locale.t('app.nav.games') }
+                    to="/app/games"
+                    class="py-12"
+                />
+            }
+        >
+            { () =>
+                <div class={ layout }>
+                    <div class="min-w-0">
+                        <Show when={ phase === 'searching' || phase === 'found' }>
+                            { () => <MatchmakingPanel onInvite={ openInvite } /> }
+                        </Show>
+                        <Show when={ phase === 'lobby' || phase === 'starting' }>
+                            { () => <LobbyPanel onInvite={ openInvite } onCopyLink={ () => void copy(`${ window.location.origin }/app/play/${ lobby.tableId() ?? '' }`, locale.t('play.lobby.copied')) } onLeave={ () => void leave() } /> }
+                        </Show>
+                        <Show when={ phase === 'playing' }>
+                            { () => <TablePlaceholder onLeave={ () => void leave() } /> }
+                        </Show>
+                        <Show when={ phase === 'result' }>
+                            { () =>
+                                <ResultPanel
+                                    onRematch={ rematch }
+                                    onAgain={ again }
+                                    onBack={ () => navigate('/app/games') }
+                                    onShare={ (text) => void copy(text, locale.t('play.result.shared')) }
+                                    onCopyCode={ (code) => void copy(code, locale.t('play.result.codeCopied')) }
+                                />
+                            }
+                        </Show>
+                    </div>
+                    <Show when={ railVisible }>
+                        { () =>
+                            <TableChat
+                                class="h-[22rem] overflow-hidden rounded-panel border border-line bg-field @4xl:sticky @4xl:top-2 @4xl:h-[min(70dvh,40rem)]"
+                                onClose={ () => settings.update({ railOpen: false }) }
+                            />
+                        }
+                    </Show>
+                </div>
+            }
+        </Show>
     </Page>
 }
