@@ -1,7 +1,10 @@
+import { useNavigate } from 'azerothjs';
+
 import { dataset, personById } from '../../data/mock/index.ts';
 import type { Person } from '../../data/mock/types.ts';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
+import { useLobby } from '../../stores/lobby.store.ts';
 import { usePresence } from '../../stores/presence.store.ts';
 import { useAccount } from '../../stores/account.store.ts';
 import Avatar from '../ui/avatar.component.azeroth';
@@ -14,6 +17,14 @@ export default component SocialPanel()
     const account = useAccount();
     const presence = usePresence();
     const catalogue = useCatalogue();
+    const lobby = useLobby();
+    const { navigate } = useNavigate();
+
+    const playWith = (person: Person): void =>
+    {
+        const game = person.favourite;
+        navigate(`/app/play/${ lobby.host(game, catalogue.defaults(game), [person.id]) }`);
+    };
 
     derived friends = ((): Person[] =>
     {
@@ -43,7 +54,7 @@ export default component SocialPanel()
                                     : locale.t('common.online') }
                             </span>
                         </span>
-                        <Button variant="secondary" size="sm" to={ `/app/people/${ person.handle }` }>{ locale.t('app.nav.quickPlay') }</Button>
+                        <Button variant="secondary" size="sm" class="shrink-0 whitespace-nowrap" onClick={ () => playWith(person) }>{ locale.t('app.nav.quickPlay') }</Button>
                     </li>
                 </For>
             </ul>

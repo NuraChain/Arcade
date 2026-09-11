@@ -38,7 +38,7 @@ export default component Page(props: { children?: Child; padded?: boolean; narro
         aria-label={ props.label }
     >
         <div class={ [
-            'mx-auto w-full',
+            '@container mx-auto w-full',
             props.padded === false ? '' : (props.narrow === true ? 'max-w-[44rem]' : 'max-w-[72rem]')
         ].filter(Boolean).join(' ') }>
             { props.children }

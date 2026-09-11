@@ -1,0 +1,27 @@
+import { useLocale } from '../../stores/locale.store.ts';
+import type { OverlayProps } from '../../stores/overlay.store.ts';
+import Button from '../ui/button.component.azeroth';
+
+export default component ConfirmSheet(props: OverlayProps & {
+    title: string;
+    lead?: string;
+    confirm: string;
+    cancel?: string;
+    destructive?: boolean;
+})
+{
+    const locale = useLocale();
+
+    <div class="flex flex-col gap-5 p-5">
+        <div>
+            <h2 class="font-display text-[22px] font-semibold leading-tight text-text">{ props.title }</h2>
+            <Show when={ props.lead !== undefined }>
+                <p class="mt-2 text-[14px] text-muted">{ props.lead }</p>
+            </Show>
+        </div>
+        <div class="flex flex-col gap-2 sm:flex-row-reverse">
+            <Button variant={ props.destructive === true ? 'destructive' : 'primary' } block onClick={ () => props.close(true) }>{ props.confirm }</Button>
+            <Button variant="ghost" block onClick={ () => props.close(false) }>{ props.cancel ?? locale.t('common.cancel') }</Button>
+        </div>
+    </div>
+}

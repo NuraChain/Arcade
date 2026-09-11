@@ -1,6 +1,8 @@
 import { Link, useNavigate } from 'azerothjs';
 
 import Icon from '../../icons/icon.component.azeroth';
+import { useCatalogue } from '../../stores/catalogue.store.ts';
+import { useLobby } from '../../stores/lobby.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useAccount } from '../../stores/account.store.ts';
 import { useSession } from '../../stores/session.store.ts';
@@ -14,9 +16,16 @@ export default component Sidebar()
     const locale = useLocale();
     const session = useSession();
     const account = useAccount();
+    const catalogue = useCatalogue();
+    const lobby = useLobby();
     const { navigate } = useNavigate();
 
     derived user = account.user();
+
+    const quickPlay = (): void =>
+    {
+        navigate(`/app/play/${ lobby.quick(user?.favourite ?? catalogue.featured()) }`);
+    };
 
     <nav class="safe-t safe-b flex h-dvh w-[var(--sidebar-w)] flex-col border-e border-line/60 bg-field px-3 py-4" aria-label={ locale.t('app.nav.primary') }>
         <Link to="/app" class="mb-5 flex items-center gap-2.5 rounded-full px-2 py-1" aria-label={ locale.t('app.nav.home') }>
@@ -26,7 +35,7 @@ export default component Sidebar()
             <BrandMark class="text-[18px] text-text" />
         </Link>
 
-        <Button variant="primary" size="md" block leading="zap" to="/app/games">{ locale.t('app.nav.quickPlay') }</Button>
+        <Button variant="primary" size="md" block leading="zap" onClick={ quickPlay }>{ locale.t('app.nav.quickPlay') }</Button>
 
         <ul class="mt-5 flex flex-col gap-0.5">
             <For each={ NAV } key={ (item) => item.tab } let={ item }>

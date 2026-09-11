@@ -115,6 +115,18 @@
     min-block-size: 44px;
 }
 
+@utility rail-x
+{
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+
+    &::-webkit-scrollbar
+    {
+        display: none;
+    }
+}
+
 @utility live-dot
 {
     background: var(--live);

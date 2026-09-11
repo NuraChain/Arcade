@@ -11,6 +11,7 @@ import { usePresence } from '../../stores/presence.store.ts';
 import { useShell } from '../../stores/shell.store.ts';
 import BottomNav from './bottom-nav.component.azeroth';
 import ConnectionBanner from './connection-banner.component.azeroth';
+import LobbyNotices from './lobby-notices.component.azeroth';
 import NavRail from './nav-rail.component.azeroth';
 import OverlayHost from './overlay-host.component.azeroth';
 import Sidebar from './sidebar.component.azeroth';
@@ -72,18 +73,20 @@ export default component AppShell(props: { children?: MountNode })
 
     derived showBottomNav = posture === 'phone' && !device.keyboardOpen() && !immersive;
 
+    derived showSocial = posture === 'sidebar' && device.social() && !immersive;
+
     <div class="contents">
         <div
             id="app-shell"
             data-posture={ posture }
-            data-social={ device.social() ? 'true' : 'false' }
+            data-social={ showSocial ? 'true' : 'false' }
             inert={ overlay.blocking() }
             class={ [
                 'grid h-dvh min-h-0 bg-void text-text',
                 posture === 'phone' ? 'grid-cols-1' : '',
                 posture === 'rail' ? 'grid-cols-[var(--rail-w)_1fr]' : '',
-                posture === 'sidebar' && !device.social() ? 'grid-cols-[var(--sidebar-w)_1fr]' : '',
-                posture === 'sidebar' && device.social() ? 'grid-cols-[var(--sidebar-w)_1fr_var(--social-w)]' : ''
+                posture === 'sidebar' && !showSocial ? 'grid-cols-[var(--sidebar-w)_1fr]' : '',
+                showSocial ? 'grid-cols-[var(--sidebar-w)_1fr_var(--social-w)]' : ''
             ].filter(Boolean).join(' ') }
         >
             <Show when={ posture === 'rail' }>{ () => <NavRail /> }</Show>
@@ -98,9 +101,10 @@ export default component AppShell(props: { children?: MountNode })
                 <Show when={ showBottomNav }>{ () => <BottomNav /> }</Show>
             </div>
 
-            <Show when={ posture === 'sidebar' && device.social() }>{ () => <SocialPanel /> }</Show>
+            <Show when={ showSocial }>{ () => <SocialPanel /> }</Show>
         </div>
         <OverlayHost />
         <ToastHost />
+        <LobbyNotices />
     </div>
 }
