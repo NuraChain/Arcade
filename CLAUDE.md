@@ -220,6 +220,45 @@ any light — so they are lit differently by theme but never re-tinted. The lamp
 both themes for the same reason: the market is lamplit, and that warmth against a cool ground is
 the whole picture.
 
+## Migrations and reference data
+
+Two things that look alike and are not.
+
+**Migrations** change the schema. `server/src/migrations/NNNN-name.ts`, registered in the barrel,
+applied in order inside a transaction. Two names, both load-bearing: the FILE is numbered for
+people so the directory reads in order, and the CLASS must end in a JavaScript timestamp because
+that is what TypeORM sorts by — it refuses a class without one ("migration name is wrong"). The
+class name is also what it records as applied, so it must never change once it has run anywhere.
+
+Use `npm run migration:generate` to DISCOVER the SQL; it is very good at that. Then commit the
+result by hand: the generator names the class after the file, and a file starting with a digit
+produces `export class 0001Reference…`, which is not a valid JavaScript identifier. Watch for
+backticks in SQL comments — inside a template literal they end the string.
+
+**Reference data** is content the product cannot run without: the games, their rules, the
+achievement definitions. `server/src/db/seed-reference.ts` upserts it on every boot, so a changed
+blurb ships without a migration. It is not development fixtures — those are a separate file that
+refuses to run outside development.
+
+One sharp edge, because it will surprise someone: `status` is deliberately never overwritten on
+conflict. An operator who disabled a game did so for a reason and a deploy must not re-enable it.
+That makes the `status` in the seed an INITIAL value only — changing it on a database that already
+has the row is `update games set status = …`, not a redeploy.
+
+**The catalogue is split, and the split is the point.** The server owns what a game IS — seats,
+modes, targets, fairness, whether it can be opened. `application/src/data/games.ts` keeps where its
+table STANDS in the 3D market — `anchor`, `rotation`, `table`, `set` — because that is scene
+geometry and the landing route is `render: 'static'`: it must paint with no JavaScript and no
+server. The two merge by id, the server wins where both hold a field, and
+`server/tests/reference-parity.spec.ts` fails if they ever drift.
+
+**A store that reads the server must be read reactively.** `catalogue.rules()` used to be a
+synchronous array and is now backed by a resource, so `const rules = catalogue.rules(id)` captures
+whatever was there before the answer landed — silently, with no error. Use `derived`, and where a
+component's whole premise is the server's answer (the create form exists to offer the legal seat
+counts), do not mount it until `catalogue.loading()` is false. Reading inside an event handler is
+fine: by click time the answer is in.
+
 ## The chat wire format — `nura-e2ee/v1`
 
 Written down before any of it is implemented, because a wire format decided while coding is a

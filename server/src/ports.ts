@@ -1,3 +1,5 @@
+import type { AchievementList, GameList, ServerInfo } from './schemas.ts';
+
 /**
  * What the route declarations are allowed to know about the rest of the server.
  *
@@ -16,11 +18,21 @@
 
 export interface MetaPort
 {
-    info(): { wire: string; env: string };
+    info(): ServerInfo;
+}
+
+export interface CataloguePort
+{
+    /** Every game, in display order, each with the rules a table of it may be configured with. */
+    games(): Promise<GameList>;
+
+    /** Every achievement definition, in display order. Who has earned what is a different port. */
+    achievements(): Promise<AchievementList>;
 }
 
 /** Every port the API declaration may reach. One member per domain. */
 export interface Ports
 {
     meta: MetaPort;
+    catalogue: CataloguePort;
 }

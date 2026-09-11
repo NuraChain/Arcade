@@ -11,6 +11,7 @@ import { buildApi } from './api.ts';
 import { buildApp } from './app.ts';
 import { buildPorts } from './services.ts';
 import { dataSource } from './data-source.ts';
+import { seedReference } from './db/seed-reference.ts';
 import { loadServerConfig } from './env.ts';
 import { apiRateLimit } from './http/rate-limit.ts';
 import { createServerLogger } from './logger.ts';
@@ -29,6 +30,12 @@ const log = createServerLogger(config);
 
 await dataSource.initialize();
 log.info('database ready', { pool: config.databasePoolMax });
+
+// The catalogue is part of the product, not development data: every environment needs identical
+// rows and the app is broken without them. The upsert is idempotent, so running it on every boot
+// is how a deploy picks up a changed blurb without a migration.
+await seedReference(dataSource);
+log.info('reference catalogue seeded');
 
 // One self-contained SSR bundle carries both the route table and the renderer, so importing it
 // gives the kit everything it needs. Only when this process is the one serving the browser -

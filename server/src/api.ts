@@ -1,7 +1,7 @@
 import { feature } from '@azerothjs/http/api';
 
 import type { Ports } from './ports.ts';
-import { serverInfo } from './schemas.ts';
+import { achievementList, gameList, serverInfo } from './schemas.ts';
 
 /**
  * The whole API, declared once.
@@ -22,6 +22,20 @@ export function buildApi(ports: Ports)
              * speak. Deliberately unguarded and deliberately tiny.
              */
             info: routes.get('/', { output: serverInfo }, () => ports.meta.info())
+        })),
+
+        catalogue: feature('/catalogue', (routes) => ({
+            /**
+             * The game catalogue. Unguarded on purpose - the signed-out landing page lists games
+             * too, and nothing here is anyone's private data.
+             */
+            games: routes.get('/games', { output: gameList }, () => ports.catalogue.games()),
+
+            achievements: routes.get(
+                '/achievements',
+                { output: achievementList },
+                () => ports.catalogue.achievements()
+            )
         }))
     };
 }

@@ -3,6 +3,7 @@ import { useHead, useNavigate, useParams } from 'azerothjs';
 import Page from '../../components/app/page.component.azeroth';
 import CreateGameForm from '../../components/games/create-game-form.component.azeroth';
 import EmptyState from '../../components/ui/empty-state.component.azeroth';
+import Skeleton from '../../components/ui/skeleton.component.azeroth';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 
@@ -29,7 +30,19 @@ export default component CreateGamePage()
                         <h1 class="mt-1 text-display-md leading-none">{ locale.t('create.title') }</h1>
                         <p class="mt-2 text-ui-base text-muted">{ locale.t('create.lead') }</p>
                     </header>
-                    <CreateGameForm game={ game! } onCreated={ (tableId) => navigate(`/app/play/${ tableId }`, { replace: true }) } />
+                    <Show
+                        when={ !catalogue.loading() }
+                        fallback={
+                            <div class="flex flex-col gap-6" aria-busy="true">
+                                <Skeleton lines={ 3 } />
+                                <Skeleton lines={ 4 } />
+                            </div>
+                        }
+                    >
+                        { () =>
+                            <CreateGameForm game={ game! } onCreated={ (tableId) => navigate(`/app/play/${ tableId }`, { replace: true }) } />
+                        }
+                    </Show>
                 </div>
             }
         </Show>
