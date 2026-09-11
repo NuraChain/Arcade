@@ -41,6 +41,17 @@ export default defineConfig({
         // Declared rather than inherited: 3100 keeps this app clear of Explorer (3001) and its
         // api (3000) when both dev servers are up. Vite still steps on if the port is taken.
         port: 3100,
+
+        // In dev the two halves are two processes, so the api has to be reachable on this
+        // origin or every cookie would be cross-site. In production one server answers both
+        // and these paths are mounted directly, which is why they are listed rather than
+        // proxied by prefix guesswork. `ws: true` is what carries the realtime upgrade.
+        proxy:
+        {
+            '/api': { target: 'http://localhost:3200', changeOrigin: false },
+            '/ws': { target: 'ws://localhost:3200', ws: true },
+            '/_image': { target: 'http://localhost:3200', changeOrigin: false }
+        },
         fs:
         {
             // The junctions resolve to a realpath OUTSIDE this project and outside its

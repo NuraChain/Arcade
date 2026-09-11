@@ -2,32 +2,55 @@
 
 A social gaming platform: a cinematic 3D landing page at `/`, and the signed-in product —
 matchmaking, tables, friends, chat, groups, search, notifications, profile and settings — at
-`/app/*`. One npm workspace, `application/`, plus `tools/blender/` where the 3D assets come
-from and `tools/qa/` which is the responsive gate. Everything below is drawn from the repository
-as it stands — if a rule here disagrees with the code, the code is right and this file needs
-fixing.
+`/app/*`. **Two npm workspaces**, `application/` (the browser) and `server/` (the api, the
+database and the realtime gateway), plus `tools/blender/` where the 3D assets come from and
+`tools/qa/` which is the responsive gate. Everything below is drawn from the repository as it
+stands — if a rule here disagrees with the code, the code is right and this file needs fixing.
 
 ## Commands
 
 ```sh
-npm run dev            # vite on 3100
-npm run check          # azeroth-tsc + eslint — the gate
-npm run build          # client bundle, SSR bundle, prerender
-npm test               # every suite
+npm run dev            # the conductor: tsc -w on the server, node --watch on dist, vite on 3100
+npm run check          # api typecheck + server test typecheck + azeroth-tsc + eslint — the gate
+npm run build          # server tsc, then client bundle, SSR bundle, prerender
+npm test               # every suite, both workspaces
 npm run test:shuffle   # every suite in random order — the isolation gate
 npm run qa             # 600-cell Playwright matrix: 12 widths × orientation × locale × route
-npm run preview        # serve dist with the production rewrite (shell.html for /app/*)
+npm start              # the built server, serving the api AND the built client on one origin
+npm run migration:run  # apply pending migrations (generate/revert/show alongside)
 npm run assets         # rebuild the GLB kit from tools/blender (needs Blender 5.2)
 ```
 
 `npm run check`, `npm test`, `npm run test:shuffle` and `npm run qa` must all pass before a
 change is done.
 
+**The database is Postgres.** `server/.env` carries `DATABASE_URL`; create the database once with
+`psql -U postgres -c "create database nura_games"`. Nothing is ever `synchronize`d — every schema
+change is a migration in `server/src/migrations/`, applied in order inside a transaction.
+
+**There is no `npm run preview` and no `tools/preview.mjs`.** The server serves the built client
+itself through `mountPages`, so the preview path and the production path are the same code:
+`npm run build && SERVE_PAGES=true NODE_ENV=production npm start`. The old script kept its own MIME
+table and its own copy of the client route list, which drifted from `application/src/routes.ts`
+silently.
+
 `npm run qa` drives a real browser over every route at 320–1920, portrait and landscape, in both
 languages, and fails on horizontal overflow, a control smaller than 44px under a coarse pointer
 (hit-tested with `elementFromPoint`, so an expanded hit area counts), a missing `main` landmark
 or a dirty console. Findings land in `tools/qa/out/matrix/report.json` with a screenshot per
-failing cell. It needs `npm run dev` already running.
+failing cell.
+
+Point it at whichever half is running: `npm run dev` (vite on 3100, the default) or the built
+server (`QA_BASE=http://localhost:3200`). The server run is the stronger one — it exercises
+`mountPages`, the prerendered landing page and the real asset headers, which vite does not.
+
+**The matrix is a load generator, not a visitor.** It pulls 600 pages as fast as it can from one
+address, so anything metered per IP will refuse it. That is why the rate limit is scoped to
+`/api` and `/ws` in `server/src/http/rate-limit.ts` rather than wrapped around the whole handler:
+a page load pulls forty static assets, a file served from disk with an ETag costs almost nothing,
+and one budget cannot be right for both. Metering the cheap thing at the rate the expensive thing
+needs is how a normal visitor ends up taking 429s on their own JavaScript — which is exactly what
+the first run of this matrix showed, as 808 console errors and 377 pages that never booted.
 
 `tools/blender/art.py` renders the game card and hero art; it is run by hand
 (`blender -b -P tools/blender/art.py`, `NURA_ART=<game>` for one) because it needs Blender, and
@@ -54,6 +77,67 @@ specs, which npm installs as Windows junctions.
   `vite.config.ts` carries `resolve.dedupe` for this reason, and `preserveSymlinks` must stay off.
 - TypeScript is pinned to `^6.0.3`. typescript@7 ships the native CLI without the JS compiler API
   that the language server needs.
+
+## The server
+
+`server/` owns the wire shape. A new field starts in `server/src/schemas.ts`; the browser's type is
+inferred from that declaration, so it is decided in exactly one place.
+
+```
+server/src/
+  main.ts          composition root: env, logger, DataSource, pipeline, serve, shutdown
+  app.ts           the App: /api/healthz, register(api), mountPages LAST
+  api.ts           every route, declared once   <- CLIENT-SAFE
+  schemas.ts       every wire shape             <- CLIENT-SAFE
+  ports.ts         what the routes may call     <- CLIENT-SAFE
+  services.ts      the real implementations behind Ports   (server-only, touches entities)
+  data-source.ts   the single DataSource export, for the app and the migration CLI
+  env.ts logger.ts entities/ migrations/ domains/ realtime/ jobs/ lib/
+```
+
+**The client-safe triangle is load-bearing.** `application/src/api.ts` does
+`import type { Api } from '../../server/src/api.ts'`, which pulls `api.ts`, `schemas.ts` and
+`ports.ts` into the WEB typecheck program — and that program is `application/tsconfig.json`, which
+has no `experimentalDecorators`. One entity reached from those three files, even as a type, is
+parsed as an ES decorator instead of a legacy one and fails `azeroth check`. That is why route
+handlers are **injected** through `Ports` rather than imported: `api.ts` names what it needs,
+`services.ts` provides it, and the decorated half never crosses the line.
+
+**This backend compiles.** `typeorm` in `dependencies` is what decides that — the CLI carries
+`DECORATOR_PACKAGES = ['typeorm', '@mikro-orm/core']` and the name alone flips the project from
+running `src/` directly to emitting `dist/`. Node's TypeScript support is strip-only and rejects
+decorator syntax outright, so there is no other way to run an `@Entity` file. Consequences that
+are not obvious, each of which costs an afternoon to rediscover:
+
+- **`rootDir: "src"` is mandatory.** The CLI hard-codes `builtEntry` as a flat `dist/main.js`. One
+  file pulled in from outside `src/` moves emit to `dist/src/main.js`, and `azeroth dev` then polls
+  `existsSync` forever with no error and no timeout. Stating `rootDir` turns that into a TS6059.
+- **`useDefineForClassFields: false`, explicitly.** At the ES2022 default every declared entity
+  field installs `undefined` over the accessors TypeORM attaches for relations. Silent corruption,
+  never a crash.
+- **`rewriteRelativeImportExtensions: true`**, because house style keeps `.ts` on relative imports
+  and real emit would otherwise be TS5096.
+- **No `incremental`/`composite`**: `azeroth check` (`--noEmit`) and `azeroth build` share one
+  tsconfig and would share one `.tsbuildinfo`.
+- **`server/vitest.config.ts`, never `vite.config.ts`.** A vite config in a directory that declares
+  no vite drops it to `kind: 'none'` and every `azeroth` command exits 2.
+- **Two compilers transform this workspace, and both are configured.** `tsc` builds it from
+  `tsconfig.json`; **vitest transforms it with oxc**, which does NOT read that tsconfig for files
+  under `tests/`, so `server/vitest.config.ts` states the decorator transform itself
+  (`oxc.decorator.legacy`, `oxc.decorator.emitDecoratorMetadata`,
+  `oxc.typescript.removeClassFieldsWithoutInitializer` — oxc's spelling of
+  `useDefineForClassFields: false`). An `esbuild` block there is silently ignored with a warning.
+  Without this, a spec importing an entity dies with a bare `SyntaxError: Invalid or unexpected
+  token` that names neither decorators nor the config that fixes them.
+  `server/tests/decorator-metadata.spec.ts` pins all three properties — registration,
+  `design:type`, and class fields staying off the instance — so none of it can regress quietly.
+- **`azeroth doctor` warns `version skew` permanently.** It compares raw dependency spec strings,
+  and every `file:` link is a different string. Exit code stays 0. Do not spend an afternoon
+  "aligning" it.
+
+Ports: server **3200**, vite **3100**. 3000/3001 belong to Explorer. In development the two halves
+are two processes and `application/vite.config.ts` proxies `/api`, `/ws` and `/_image`; in
+production one process answers everything, so there is no CORS between halves in either mode.
 
 ## Frontend architecture
 

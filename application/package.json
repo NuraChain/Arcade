@@ -37,7 +37,6 @@
         "@azerothjs/logger": "file:../../../AzerothJS/packages/logger",
         "@azerothjs/testing": "file:../../../AzerothJS/packages/testing",
         "@azerothjs/typescript-plugin": "file:../../../AzerothJS/packages/typescript-plugin",
-        "@azerothjs/ws": "file:../../../AzerothJS/packages/ws",
         "@eslint/js": "^10.0.1",
         "@tailwindcss/vite": "^4.0.0",
         "@types/three": "^0.185.4",

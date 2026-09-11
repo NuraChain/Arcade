@@ -1,0 +1,53 @@
+{
+    "compilerOptions": {
+        "module": "nodenext",
+        "moduleResolution": "nodenext",
+        "target": "es2024",
+        "lib": ["ES2024"],
+        "types": ["node"],
+
+        /* This backend COMPILES. `typeorm` in dependencies is what decides that: the CLI's
+           detect.ts carries DECORATOR_PACKAGES = ['typeorm', '@mikro-orm/core'], and the name
+           alone flips the project from build:'native' (node runs src/) to build:'built'.
+           Node's TypeScript support is strip-only and rejects decorator syntax outright, so
+           there is no other way to run an @Entity file. */
+        "noEmit": false,
+        "outDir": "dist",
+
+        /* MANDATORY, and the most expensive line to omit. The CLI hard-codes builtEntry as a
+           FLAT `<outDir>/main.js`. tsc infers rootDir from the common directory of the program,
+           so one file pulled in from outside src/ moves emit to dist/src/main.js — and the dev
+           runner then polls existsSync(dist/main.js) forever with no error and no timeout.
+           Stating rootDir turns that silent hang into an immediate TS6059. */
+        "rootDir": "src",
+
+        "experimentalDecorators": true,
+        "emitDecoratorMetadata": true,
+
+        /* House style keeps the .ts extension on relative imports. With real emit that is
+           TS5096 unless the specifiers are rewritten on the way out. */
+        "allowImportingTsExtensions": true,
+        "rewriteRelativeImportExtensions": true,
+
+        /* EXPLICIT, not inherited. At the ES2022+ default of true every declared entity field
+           becomes a [[Define]] class field that installs `undefined` over the prototype
+           accessors TypeORM attaches for relations. The symptom is "my relation is always
+           undefined" and "the entity saved nulls" — silent corruption, never a crash. */
+        "useDefineForClassFields": false,
+
+        /* `azeroth check` runs tsc --noEmit and `azeroth build` runs tsc -p against THIS file.
+           Sharing one .tsbuildinfo between an emitting and a non-emitting invocation is exactly
+           the configuration where a build convinces itself it is already up to date, so
+           neither `incremental` nor `composite` belongs here. */
+
+        "strict": true,
+        "noUnusedLocals": true,
+        "noUnusedParameters": true,
+        "noFallthroughCasesInSwitch": true,
+        "noImplicitOverride": true,
+        "exactOptionalPropertyTypes": false,
+        "skipLibCheck": true,
+        "sourceMap": true
+    },
+    "include": ["src"]
+}
