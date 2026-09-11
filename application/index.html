@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+    <head>
+        <meta charset="UTF-8"/>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+        <title>Nura Games</title>
+        <meta name="description" content="A social gaming world. Cards, chess, pool and backgammon, played with the people you actually want to play them with."/>
+
+        <!-- Both match --void in tokens.css. A mismatch shows as a flash of the wrong colour
+             behind the address bar on mobile before the page paints. -->
+        <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0A1216"/>
+        <meta name="theme-color" media="(prefers-color-scheme: light)" content="#F4F1EC"/>
+
+        <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png"/>
+        <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png"/>
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png"/>
+        <link rel="stylesheet" href="/src/styles.css"/>
+
+        <!--
+            Runs BEFORE first paint, which is the whole point: the theme and the direction are
+            read from storage and stamped on <html> here rather than in a component, because a
+            component runs after hydration and the reader would see one frame of the wrong
+            theme, or an English-shaped layout snapping to Persian.
+
+            Everything is wrapped: a browser with site data blocked THROWS on localStorage
+            access, and an app that cannot start because it could not read a preference is a
+            worse failure than an app that starts in its default.
+        -->
+        <script>
+            (function ()
+            {
+                var THEMES = ['dark', 'light'];
+                var LOCALES = ['en', 'fa'];
+                var RTL = ['fa'];
+                var root = document.documentElement;
+
+                function stored(key, allowed)
+                {
+                    try
+                    {
+                        var value = localStorage.getItem(key);
+                        return allowed.indexOf(value) === -1 ? null : value;
+                    }
+                    catch (error)
+                    {
+                        return null;
+                    }
+                }
+
+                var theme = stored('nura-games.theme', THEMES);
+                if (theme === null)
+                {
+                    theme = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+                }
+                root.setAttribute('data-theme', theme);
+
+                var locale = stored('nura-games.locale', LOCALES);
+                if (locale === null)
+                {
+                    locale = (navigator.language || 'en').toLowerCase().indexOf('fa') === 0 ? 'fa' : 'en';
+                }
+                root.setAttribute('lang', locale);
+                root.setAttribute('dir', RTL.indexOf(locale) === -1 ? 'ltr' : 'rtl');
+            })();
+        </script>
+    </head>
+    <body>
+        <div id="root"></div>
+        <script type="module" src="/src/main.azeroth" defer></script>
+    </body>
+</html>

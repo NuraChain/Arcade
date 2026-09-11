@@ -1,0 +1,18 @@
+import { bootClient } from '@azerothjs/kit/client';
+
+import App from './App.azeroth';
+
+if (import.meta.env.DEV)
+{
+    try
+    {
+        const { installDevtools } = await import('@azerothjs/devtools');
+        installDevtools();
+    }
+    catch (error)
+    {
+        console.warn('[dev] devtools unavailable; continuing without the panel.', error);
+    }
+}
+
+bootClient(App);

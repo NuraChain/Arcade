@@ -1,0 +1,54 @@
+{
+    "name": "nura-games-application",
+    "private": true,
+    "version": "0.1.0",
+    "type": "module",
+    "engines": {
+        "node": ">=24"
+    },
+    "scripts": {
+        "dev": "azeroth dev",
+        "check": "azeroth check",
+        "build": "azeroth build",
+        "test": "vitest run",
+        "test:watch": "vitest",
+        "test:shuffle": "vitest run --sequence.shuffle",
+        "preview": "vite preview"
+    },
+    "dependencies": {
+        "@azerothjs/http": "file:../../../AzerothJS/packages/http",
+        "@azerothjs/kit": "file:../../../AzerothJS/packages/kit",
+        "@azerothjs/schema": "file:../../../AzerothJS/packages/schema",
+        "@fontsource-variable/fraunces": "^5.3.0",
+        "@fontsource-variable/hanken-grotesk": "^5.3.0",
+        "@fontsource-variable/vazirmatn": "^5.3.0",
+        "azerothjs": "file:../../../AzerothJS/packages/azerothjs",
+        "gsap": "^3.15.0",
+        "lenis": "^1.3.26",
+        "lucide": "^1.43.0",
+        "three": "^0.186.0"
+    },
+    "devDependencies": {
+        "@azerothjs/cli": "file:../../../AzerothJS/packages/cli",
+        "@azerothjs/compiler": "file:../../../AzerothJS/packages/compiler",
+        "@azerothjs/devtools": "file:../../../AzerothJS/packages/devtools",
+        "@azerothjs/eslint-plugin": "file:../../../AzerothJS/packages/eslint-plugin",
+        "@azerothjs/language-server": "file:../../../AzerothJS/packages/language-server",
+        "@azerothjs/logger": "file:../../../AzerothJS/packages/logger",
+        "@azerothjs/testing": "file:../../../AzerothJS/packages/testing",
+        "@azerothjs/typescript-plugin": "file:../../../AzerothJS/packages/typescript-plugin",
+        "@azerothjs/ws": "file:../../../AzerothJS/packages/ws",
+        "@eslint/js": "^10.0.1",
+        "@tailwindcss/vite": "^4.0.0",
+        "@types/three": "^0.185.4",
+        "eslint": "^10.7.0",
+        "globals": "^17.7.0",
+        "happy-dom": "^20.10.6",
+        "jiti": "^2.7.0",
+        "tailwindcss": "^4.0.0",
+        "typescript": "^6.0.3",
+        "typescript-eslint": "^8.64.0",
+        "vite": "^8.2.1",
+        "vitest": "^4.1.9"
+    }
+}

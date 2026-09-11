@@ -1,0 +1,44 @@
+import { ErrorBoundary, RouterProvider, Routes, createMemoryHistory, createRouter } from 'azerothjs';
+import type { LoaderHandoff } from 'azerothjs';
+
+import SiteFooter from './components/layout/site-footer.component.azeroth';
+import SiteHeader from './components/layout/site-header.component.azeroth';
+import ErrorPage from './pages/error.page.azeroth';
+import NotFoundPage from './pages/not-found.page.azeroth';
+import { routes } from './routes.ts';
+import { useLocale } from './stores/locale.store.ts';
+
+export default component App(props: { url?: string; handoff?: LoaderHandoff })
+{
+    const locale = useLocale();
+
+    const router = createRouter({
+        routes,
+        history: props.url !== undefined ? createMemoryHistory(props.url) : undefined,
+        initialLoaderData: props.handoff,
+
+        scroll: false
+    });
+
+    <RouterProvider router={ router }>
+        <div class="min-h-dvh bg-void text-text">
+            
+            <a
+                href="#main"
+                class="sr-only rounded-full bg-lamp px-4 py-2 text-[14px] font-semibold text-void focus:not-sr-only focus:absolute focus:start-4 focus:top-4 focus:z-50"
+            >
+                { locale.t('a11y.skip') }
+            </a>
+
+            <SiteHeader />
+
+            <main id="main">
+                <ErrorBoundary fallback={ (_error, reset) => <ErrorPage reset={ reset } /> }>
+                    <Routes fallback={ () => <NotFoundPage /> } />
+                </ErrorBoundary>
+            </main>
+
+            <SiteFooter />
+        </div>
+    </RouterProvider>
+}

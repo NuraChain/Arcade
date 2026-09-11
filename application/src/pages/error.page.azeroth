@@ -1,0 +1,13 @@
+import Button from '../components/ui/button.component.azeroth';
+import { useLocale } from '../stores/locale.store.ts';
+
+export default component ErrorPage(props: { reset: () => void })
+{
+    const locale = useLocale();
+
+    <section class="mx-auto flex min-h-[70dvh] w-full max-w-[42rem] flex-col items-start justify-center gap-5 px-5 sm:px-8">
+        <h1 class="text-[clamp(2.25rem,7vw,3.5rem)] text-text">{ locale.t('error.title') }</h1>
+        <p class="max-w-[46ch] text-[16px] text-muted">{ locale.t('error.lead') }</p>
+        <Button variant="primary" size="md" onClick={ () => props.reset() }>{ locale.t('error.cta') }</Button>
+    </section>
+}

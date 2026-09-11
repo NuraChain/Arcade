@@ -1,0 +1,25 @@
+import WorldCanvas from '../components/world/world-canvas.component.azeroth';
+import SceneArrival from '../sections/scene-arrival.section.azeroth';
+import SceneCompete from '../sections/scene-compete.section.azeroth';
+import SceneCrew from '../sections/scene-crew.section.azeroth';
+import SceneFinale from '../sections/scene-finale.section.azeroth';
+import SceneGames from '../sections/scene-games.section.azeroth';
+import SceneHub from '../sections/scene-hub.section.azeroth';
+import ScenePeople from '../sections/scene-people.section.azeroth';
+
+export default component LandingPage()
+{
+    <div class="relative">
+        <WorldCanvas />
+
+        <div class="relative z-10 -mt-[100dvh]">
+            <SceneArrival />
+            <SceneHub />
+            <ScenePeople />
+            <SceneGames />
+            <SceneCrew />
+            <SceneCompete />
+            <SceneFinale />
+        </div>
+    </div>
+}
