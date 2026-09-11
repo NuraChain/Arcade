@@ -2,7 +2,19 @@ import { createClient, readManifest, type Manifest } from '@azerothjs/http/api/s
 
 import type { Api } from '../../server/src/api.ts';
 
-export type { Account, AchievementDefinition, Challenge, GameSummary, ServerInfo, SessionState } from '../../server/src/schemas.ts';
+export type {
+    Account,
+    AchievementDefinition,
+    Challenge,
+    GameSummary,
+    MuteSubject,
+    PersonSummary,
+    PersonView,
+    Privacy,
+    ServerInfo,
+    SessionState,
+    SocialGraph
+} from '../../server/src/schemas.ts';
 
 export { ApiError, applyFieldErrors } from '@azerothjs/http/api/shared';
 

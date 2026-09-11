@@ -1,4 +1,6 @@
-import { createStore, createSignal, type Getter } from 'azerothjs';
+import { createStore, createResource, createSignal, untrack, type Getter } from 'azerothjs';
+
+import { client, type MuteSubject, type Privacy } from '../api.ts';
 
 import { dataset, personById } from '../data/mock/index.ts';
 import type { FriendRequest, Person, Report, ReportCategory } from '../data/mock/types.ts';
@@ -15,7 +17,6 @@ const STORAGE_KEY = 'nura-games.social';
 interface Kept
 {
     blocked: string[];
-    muted: string[];
     reports: Report[];
 }
 
@@ -25,7 +26,6 @@ function isKept(value: unknown): value is Kept
     return candidate !== null
         && typeof candidate === 'object'
         && Array.isArray(candidate.blocked)
-        && Array.isArray(candidate.muted)
         && Array.isArray(candidate.reports);
 }
 
@@ -36,11 +36,28 @@ export interface SocialApi
     outgoing: Getter<FriendRequest[]>;
     suggestions: Getter<Person[]>;
     blocked: Getter<string[]>;
-    muted: Getter<string[]>;
     reports: Getter<Report[]>;
+
+    /**
+     * Silence, for a person, a conversation or a game. ONE mechanism: the product used to keep a
+     * muted-people list in this store and muted conversations and games in the settings store,
+     * which is three spellings of one idea and three places for a feature to forget one.
+     */
+    mutes: Getter<{ kind: MuteSubject; id: string }[]>;
+    isMuted(kind: MuteSubject, id: string): boolean;
+    toggleMute(kind: MuteSubject, id: string): Promise<void>;
+
+    /**
+     * The two switches this account controls, as the SERVER holds them. A minor's stranger
+     * setting comes back false however it was set, which is why this is the server's answer
+     * rather than what the client asked for.
+     */
+    privacy: Getter<Privacy>;
+    setPrivacy(patch: Partial<Pick<Privacy, 'allowStrangerMessages' | 'showOnline'>>): Promise<void>;
+    privacyLoading: Getter<boolean>;
     relation(id: string): Relation;
     isBlocked(id: string): boolean;
-    isMuted(id: string): boolean;
+
     reasonFor(id: string): ReturnType<typeof reasonFor>;
     visible(ids: readonly string[]): string[];
     people(): Person[];
@@ -51,7 +68,7 @@ export interface SocialApi
     remove(id: string): void;
     block(id: string): void;
     unblock(id: string): void;
-    toggleMute(id: string): void;
+
     report(id: string, category: ReportCategory): string;
     start(): () => void;
     stop(): void;
@@ -69,8 +86,32 @@ export const useSocial = createStore((): SocialApi =>
     const [sent, setSent] = createSignal<FriendRequest[]>([]);
     const [answered, setAnswered] = createSignal<string[]>([]);
     const [blocked, setBlocked] = createSignal<string[]>([]);
-    const [muted, setMuted] = createSignal<string[]>([]);
     const [reports, setReports] = createSignal<Report[]>([]);
+    const [pendingMutes, setPendingMutes] = createSignal<Record<string, boolean>>({});
+    const [held, setHeld] = createSignal<Privacy | null>(null);
+
+    const graph = createResource(
+        () => account.user()?.id ?? null,
+        () => client.social.graph(),
+        { name: 'social.graph' }
+    );
+
+    const privacyRead = createResource(
+        () => account.user()?.id ?? null,
+        () => client.social.privacy(),
+        { name: 'social.privacy' }
+    );
+
+    const OPEN: Privacy = { allowStrangerMessages: true, showOnline: true, isMinor: false };
+
+    const privacy = (): Privacy => held() ?? privacyRead.data() ?? OPEN;
+
+    const muteKey = (kind: MuteSubject, id: string): string => `${ kind }:${ id }`;
+
+    const mutes = (): { kind: MuteSubject; id: string }[] => graph.data()?.mutes ?? [];
+
+    const isMuted = (kind: MuteSubject, id: string): boolean =>
+        pendingMutes()[muteKey(kind, id)] ?? mutes().some((entry) => entry.kind === kind && entry.id === id);
 
     const timers = new Set<() => void>();
     let counter = 0;
@@ -96,14 +137,13 @@ export const useSocial = createStore((): SocialApi =>
 
     const keep = (): void =>
     {
-        rememberJson(STORAGE_KEY, { blocked: blocked(), muted: muted(), reports: reports() });
+        rememberJson(STORAGE_KEY, { blocked: blocked(), reports: reports() });
     };
 
     const restored = recallJson(STORAGE_KEY, isKept);
     if (restored !== null)
     {
         setBlocked(restored.blocked);
-        setMuted(restored.muted);
         setReports(restored.reports);
     }
 
@@ -173,8 +213,58 @@ export const useSocial = createStore((): SocialApi =>
         incoming,
         outgoing,
         blocked,
-        muted,
         reports,
+
+        mutes,
+        isMuted,
+
+        /**
+         * Flips a mute and tells the server, showing the new state at once.
+         *
+         * The overlay is cleared in `finally`, so a call that fails reverts to whatever the
+         * server last said rather than leaving a switch showing a state nobody holds.
+         */
+        async toggleMute(kind, id)
+        {
+            const key = muteKey(kind, id);
+            const next = !untrack(() => isMuted(kind, id));
+            setPendingMutes({ ...untrack(pendingMutes), [key]: next });
+            try
+            {
+                await client.social.mute({ input: { kind, id, muted: next } });
+            }
+            finally
+            {
+                // Refetched on BOTH paths. After a refusal the question is not "what did I ask
+                // for" but "what does the server hold", and the overlay is dropped either way.
+                await graph.refetch().catch(() => undefined);
+                const current = { ...untrack(pendingMutes) };
+                delete current[key];
+                setPendingMutes(current);
+            }
+        },
+
+        privacy,
+        privacyLoading: () => privacyRead.loading(),
+
+        /**
+         * Writes the switches and adopts what came BACK.
+         *
+         * A minor asking to be reachable by strangers is answered with `false`, so the control
+         * settles on the truth in one round trip instead of showing what was asked for until
+         * something else happens to reload it.
+         */
+        async setPrivacy(patch)
+        {
+            const current = privacy();
+            const stored = await client.social.setPrivacy({
+                input: {
+                    allowStrangerMessages: patch.allowStrangerMessages ?? current.allowStrangerMessages,
+                    showOnline: patch.showOnline ?? current.showOnline
+                }
+            });
+            setHeld(stored);
+        },
 
         suggestions()
         {
@@ -189,7 +279,6 @@ export const useSocial = createStore((): SocialApi =>
 
         relation,
         isBlocked: (id) => blocked().includes(id),
-        isMuted: (id) => muted().includes(id),
 
         reasonFor(id)
         {
@@ -270,12 +359,6 @@ export const useSocial = createStore((): SocialApi =>
             keep();
         },
 
-        toggleMute(id)
-        {
-            setMuted(muted().includes(id) ? muted().filter((entry) => entry !== id) : [...muted(), id]);
-            keep();
-        },
-
         report(id, category)
         {
             counter += 1;
@@ -306,8 +389,11 @@ export const useSocial = createStore((): SocialApi =>
             setSent([]);
             setAnswered([]);
             setBlocked([]);
-            setMuted([]);
             setReports([]);
+            setPendingMutes({});
+            setHeld(null);
+            void graph.refetch();
+            void privacyRead.refetch();
         }
     };
 });

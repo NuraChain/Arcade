@@ -155,3 +155,111 @@ export const handleInput = object({ handle: string() });
 export const handleResult = object({ handle: string() });
 
 export const signOutResult = object({ ended: number() });
+
+/* -------------------------------------------------------------------------- social */
+
+/** The answer to a write that has nothing to report but that it happened. */
+export const ack = object({ ok: boolean() });
+
+export const relation = enumOf(['me', 'friend', 'incoming', 'outgoing', 'blocked', 'none']);
+
+export type Relation = Infer<typeof relation>;
+
+export const muteSubject = enumOf(['person', 'conversation', 'game']);
+
+export type MuteSubject = Infer<typeof muteSubject>;
+
+export const messageRefusal = enumOf(['blocked', 'strangers-off', 'minor-safety', 'self']);
+
+/**
+ * Somebody else, as this viewer is allowed to see them.
+ *
+ * `lastSeenAt` is ABSENT rather than null when the viewer may not have it. That is the privacy
+ * switch being enforced where it cannot be undone: a client cannot render what it was never
+ * sent, and a filter it was trusted to apply is a filter one code path forgets.
+ */
+export const personSummary = object({
+    id: string(),
+    handle: string(),
+    displayName: string(),
+    hue: number(),
+    isMinor: boolean(),
+    lastSeenAt: string().optional()
+});
+
+export type PersonSummary = Infer<typeof personSummary>;
+
+export const friendRequest = object({
+    id: string(),
+    from: string(),
+    to: string(),
+    at: string()
+});
+
+export type FriendRequest = Infer<typeof friendRequest>;
+
+export const mute = object({ kind: muteSubject, id: string() });
+
+/** Everything one account knows about its own relationships. One call on boot. */
+export const socialGraph = object({
+    friends: array(personSummary),
+    incoming: array(friendRequest),
+    outgoing: array(friendRequest),
+    blocked: array(personSummary),
+    mutes: array(mute)
+});
+
+export type SocialGraph = Infer<typeof socialGraph>;
+
+export const suggestion = object({ person: personSummary, mutual: number() });
+
+export const suggestionList = object({ suggestions: array(suggestion) });
+
+export const personList = object({ people: array(personSummary) });
+
+/**
+ * A profile as seen by somebody in particular: the person, our relationship, and whether the
+ * viewer may write to them. The last one is a SERVER answer, so the compose box can be honest
+ * about a door the server is going to hold shut anyway.
+ */
+export const personView = object({
+    person: personSummary,
+    relation,
+    mutual: number(),
+    refusal: messageRefusal.optional()
+});
+
+export type PersonView = Infer<typeof personView>;
+
+export const personRef = object({ id: string() });
+
+export const answerInput = object({ id: string(), outcome: enumOf(['accepted', 'declined']) });
+
+export const requestResult = object({ outcome: enumOf(['sent', 'accepted']) });
+
+export const muteInput = object({ kind: muteSubject, id: string(), muted: boolean() });
+
+export const reportCategory = enumOf(['harassment', 'spam', 'cheating', 'inappropriate', 'other']);
+
+export const reportInput = object({ id: string(), category: reportCategory });
+
+export const reportResult = object({ id: string() });
+
+/**
+ * The two switches an account controls, and the one it does not.
+ *
+ * `isMinor` rides along because the UI has to say WHY a switch is disabled. A control that is
+ * simply dead, with no reason given, reads as a bug.
+ */
+export const privacy = object({
+    allowStrangerMessages: boolean(),
+    showOnline: boolean(),
+    isMinor: boolean()
+});
+
+export type Privacy = Infer<typeof privacy>;
+
+export const privacyInput = object({
+    allowStrangerMessages: boolean(),
+    showOnline: boolean()
+});

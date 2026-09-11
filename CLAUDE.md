@@ -24,6 +24,13 @@ npm run assets         # rebuild the GLB kit from tools/blender (needs Blender 5
 `npm run check`, `npm test`, `npm run test:shuffle` and `npm run qa` must all pass before a
 change is done.
 
+`npm test` runs with **no Postgres**, and that promise is why the database-backed suite is opt-in:
+`npm run test:db --workspace server` with `TEST_DATABASE_URL` pointing at a database you do not
+mind losing. It truncates before every test, so it owns whatever it is pointed at. Everything that
+is a claim about the DATABASE lives there - mirrored writes, partial unique indexes, CHECK
+constraints, the races - because a fake DataSource can only prove that the fake agrees with the
+code.
+
 **The database is Postgres.** `server/.env` carries `DATABASE_URL`; create the database once with
 `psql -U postgres -c "create database nura_games"`. Nothing is ever `synchronize`d — every schema
 change is a migration in `server/src/migrations/`, applied in order inside a transaction.
@@ -298,6 +305,60 @@ whatever was there before the answer landed — silently, with no error. Use `de
 component's whole premise is the server's answer (the create form exists to offer the legal seat
 counts), do not mount it until `catalogue.loading()` is false. Reading inside an event handler is
 fine: by click time the answer is in.
+
+## The social graph, and the privacy over it
+
+`server/src/domains/social/` is two files and the split matters. `policy.ts` is PURE - it decides
+who may write to whom, who may see somebody online, who may knock, and what a minor is allowed to
+hold - and `service.ts` resolves two accounts and a relation from the database and then does
+nothing but call it. Four places ask the same question (starting a chat, sending a message,
+inviting to a table, adding a friend), and four copies of the answer would be four chances to be
+generous by accident.
+
+**The rules, in the order they are checked.** Blocking first, because a blocked pair is refused
+whatever anybody set. Friendship next, because a friend is somebody you already said yes to.
+Only then the RECIPIENT's settings - and a minor's setting can never be the permissive one.
+
+| | strangers | friends | blocked |
+|---|---|---|---|
+| ordinary account | may write | may write | refused |
+| strangers turned off | `strangers-off` | may write | refused |
+| minor | `minor-safety`, both directions | may write | refused |
+
+Presence has the same shape: invisible means invisible to everyone but friends, and a minor is
+offline to strangers whatever they set. Discovery does NOT: being a stranger is not grounds for
+invisibility, because this is a product for finding people to play with. What a stranger cannot do
+is write.
+
+**A minor who allows stranger messages is not a row this database can hold.**
+`users_minor_no_strangers` is a CHECK, and `clampPrivacy` applies the same rule in the service so
+the route can answer with what was STORED rather than with a 500. Two locks on one door, and they
+are not redundant: the constraint makes the unsafe row unrepresentable whoever writes it, the
+function makes the unsafe answer unrepresentable whoever asks. The constraint earned its keep
+immediately - the demo seed inserted the minor persona with the column default and took the whole
+server down at boot, which is exactly the failure it exists to cause.
+
+**Friendships are mirrored**: two rows, written by one function, so "my friends" is one index scan
+rather than a union of two half-queries. **A friend request is unique on the UNORDERED pair while
+pending**, so A asking B while B is asking A cannot become two rows describing one intention - the
+second call finds the first and accepts it. Both are proved in `social.db.spec.ts` against a real
+Postgres, because neither is a claim about TypeScript.
+
+**Privacy is enforced by what the server does not SEND.** `lastSeenAt` is absent from a person
+payload the viewer may not have it for - not null, not flagged. A client cannot render what it was
+never given, and a filter it is trusted to apply is a filter one component forgets.
+
+**One mute, three kinds of subject.** `mutes (user_id, subject_kind, subject_id)` holds people,
+conversations and games. The product used to keep a muted-people list in `social.store.ts` and
+muted conversations and games in `settings.store.ts` - three spellings of one idea, and every
+feature had to remember all three. `settings.store.ts` is now only what this DEVICE prefers:
+sound, haptics, the rail, notification categories. Nothing in it belongs to the account.
+
+**What is still on the mock:** friends, requests and suggestions are read from
+`data/mock/index.ts` by `social.store.ts`, while mutes and privacy come from the server. That
+seam is deliberate. Moving the graph now means re-keying people from mock ids to server ids while
+conversations still reference mock ids - the translation would be written once and deleted one PR
+later. People and conversations get re-keyed together, in one cutover, when chat moves.
 
 ## Reading chat
 

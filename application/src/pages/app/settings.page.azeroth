@@ -44,11 +44,9 @@ export default component SettingsPage()
 
     useHead({ title: () => locale.t('settings.title') });
 
-    derived user = account.user();
 
     derived current = settings.settings();
 
-    derived minor = user?.minor === true;
 
     state blockedPage = 1;
     state mutedPage = 1;
@@ -60,9 +58,12 @@ export default component SettingsPage()
 
     derived blocked = allBlocked.slice(0, blockedPage * SAFETY_PAGE);
 
-    derived allMuted = social.muted()
-        .map((id) => personById(id))
+    derived allMuted = social.mutes()
+        .filter((entry) => entry.kind === 'person')
+        .map((entry) => personById(entry.id))
         .filter((person): person is Person => person !== undefined);
+
+    derived privacy = social.privacy();
 
     derived muted = allMuted.slice(0, mutedPage * SAFETY_PAGE);
 
@@ -126,17 +127,17 @@ export default component SettingsPage()
                 <SectionHeading id="settings-safety" title={ locale.t('settings.safety') } />
                 <div class="flex flex-col gap-4 rounded-panel border border-line bg-field p-4">
                     <Toggle
-                        checked={ minor ? true : current.strangerMessages }
-                        disabled={ minor }
+                        checked={ privacy.allowStrangerMessages }
+                        disabled={ privacy.isMinor }
                         label={ locale.t('settings.safety.strangers') }
-                        description={ minor ? locale.t('settings.safety.strangersLocked') : locale.t('settings.safety.strangersHint') }
-                        onChange={ (checked) => settings.update({ strangerMessages: checked }) }
+                        description={ privacy.isMinor ? locale.t('settings.safety.strangersLocked') : locale.t('settings.safety.strangersHint') }
+                        onChange={ (checked) => void social.setPrivacy({ allowStrangerMessages: checked }) }
                     />
                     <Toggle
-                        checked={ current.showOnline }
+                        checked={ privacy.showOnline }
                         label={ locale.t('settings.safety.online') }
                         description={ locale.t('settings.safety.onlineHint') }
-                        onChange={ (checked) => settings.update({ showOnline: checked }) }
+                        onChange={ (checked) => void social.setPrivacy({ showOnline: checked }) }
                     />
 
                     <div>
@@ -189,7 +190,7 @@ export default component SettingsPage()
                                                 person={ person }
                                                 subtitle={ `@${ person.handle }` }
                                                 actions={
-                                                    <Button variant="ghost" size="sm" class="whitespace-nowrap" onClick={ () => social.toggleMute(person.id) }>
+                                                    <Button variant="ghost" size="sm" class="whitespace-nowrap" onClick={ () => void social.toggleMute('person', person.id) }>
                                                         { locale.t('actions.unmute', { name: locale.text(person.name).split(' ')[0] }) }
                                                     </Button>
                                                 }

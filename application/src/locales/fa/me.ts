@@ -38,7 +38,7 @@ export const me: Pick<Dictionary, keyof typeof reference> = {
     'settings.safety.mutedEmpty': 'کسی بی‌صدا نشده.',
     'settings.safety.strangers': 'پیام از کسانی که نمی‌شناسی',
     'settings.safety.strangersHint': 'خاموش یعنی فقط دوستان می‌توانند گفت‌وگو را شروع کنند.',
-    'settings.safety.strangersLocked': 'برای حساب‌های زیر ۱۸ سال قفل است.',
+    'settings.safety.strangersLocked': 'برای حساب‌های زیر ۱۸ سال خاموش نگه داشته می‌شود. فقط دوستان می‌توانند گفت‌وگو را شروع کنند.',
     'settings.safety.online': 'نشان بده که آنلاینم',
     'settings.safety.onlineHint': 'دوستان یک نقطهٔ سبز و بازی‌ای که می‌کنی را می‌بینند.',
     'settings.safety.reports': 'گزارش‌های من',

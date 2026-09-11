@@ -19,8 +19,8 @@ import { useLobby } from '../../stores/lobby.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useOverlay } from '../../stores/overlay.store.ts';
 import { usePresence } from '../../stores/presence.store.ts';
-import { useSettings } from '../../stores/settings.store.ts';
 import { useShell } from '../../stores/shell.store.ts';
+import { useSocial } from '../../stores/social.store.ts';
 import { useToasts } from '../../stores/toasts.store.ts';
 
 const WINDOW = 40;
@@ -28,12 +28,12 @@ const WINDOW = 40;
 export default component ChatPage()
 {
     const locale = useLocale();
+    const social = useSocial();
     const chat = useChat();
     const presence = usePresence();
     const catalogue = useCatalogue();
     const lobby = useLobby();
     const overlay = useOverlay();
-    const settings = useSettings();
     const shell = useShell();
     const toasts = useToasts();
     const device = useDevice();
@@ -70,7 +70,7 @@ export default component ChatPage()
 
     derived online = others.filter((person) => presence.isOnline(person.id)).length;
 
-    derived muted = settings.isMuted(id);
+    derived muted = social.isMuted('conversation', id);
 
     derived subtitle = ((): string =>
     {
@@ -209,7 +209,7 @@ export default component ChatPage()
                                     label={ locale.t(muted ? 'chat.unmute' : 'chat.mute') }
                                     variant="ghost"
                                     pressed={ muted }
-                                    onClick={ () => settings.toggleMutedConversation(id) }
+                                    onClick={ () => void social.toggleMute('conversation', id) }
                                 />
                             }
                         </Show>

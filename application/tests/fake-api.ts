@@ -1,7 +1,7 @@
 import { ApiError, applyFieldErrors } from '@azerothjs/http/api/shared';
 
 import { handleFromAddress, handleFromName } from '../../server/src/domains/identity/handle.ts';
-import type { Account } from '../../server/src/schemas.ts';
+import type { Account, MuteSubject, Privacy } from '../../server/src/schemas.ts';
 
 export type Refusal = 'challenge-unreachable' | 'bad-signature' | 'wallet-unreachable' | 'guest-taken';
 
@@ -19,6 +19,13 @@ export const server =
     calls: [] as string[],
     sessions: 3,
 
+    /** The social half: mutes the fake server holds, and the privacy it enforces. */
+    mutes: [] as { kind: MuteSubject; id: string }[],
+    allowStrangerMessages: true,
+    showOnline: true,
+    minor: false,
+    refuseMute: false,
+
     reset(): void
     {
         server.account = null;
@@ -27,6 +34,11 @@ export const server =
         server.refuse = null;
         server.calls = [];
         server.sessions = 3;
+        server.mutes = [];
+        server.allowStrangerMessages = true;
+        server.showOnline = true;
+        server.minor = false;
+        server.refuseMute = false;
     }
 };
 
@@ -84,6 +96,54 @@ export const client =
         {
             server.calls.push('catalogue.achievements');
             return { achievements: [] };
+        }
+    },
+
+    social:
+    {
+        async graph()
+        {
+            server.calls.push('social.graph');
+            return { friends: [], incoming: [], outgoing: [], blocked: [], mutes: [...server.mutes] };
+        },
+
+        async privacy(): Promise<Privacy>
+        {
+            server.calls.push('social.privacy');
+            return {
+                allowStrangerMessages: server.minor ? false : server.allowStrangerMessages,
+                showOnline: server.showOnline,
+                isMinor: server.minor
+            };
+        },
+
+        // The clamp is the server's, not the caller's: a minor asking for strangers is answered
+        // with false, exactly as the real one does.
+        async setPrivacy({ input }: { input: { allowStrangerMessages: boolean; showOnline: boolean } }): Promise<Privacy>
+        {
+            server.calls.push('social.set-privacy');
+            server.allowStrangerMessages = server.minor ? false : input.allowStrangerMessages;
+            server.showOnline = input.showOnline;
+            return {
+                allowStrangerMessages: server.allowStrangerMessages,
+                showOnline: server.showOnline,
+                isMinor: server.minor
+            };
+        },
+
+        async mute({ input }: { input: { kind: MuteSubject; id: string; muted: boolean } })
+        {
+            server.calls.push('social.mute');
+            if (server.refuseMute)
+            {
+                throw new ApiError(503, 'unavailable', 'The server is not answering.', undefined);
+            }
+            server.mutes = server.mutes.filter((entry) => !(entry.kind === input.kind && entry.id === input.id));
+            if (input.muted)
+            {
+                server.mutes.push({ kind: input.kind, id: input.id });
+            }
+            return { ok: true };
         }
     },
 

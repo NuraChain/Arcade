@@ -36,7 +36,7 @@ export default component PersonActions(props: OverlayProps & { personId: string 
 
     derived name = person === null ? props.personId : locale.text(person.name).split(' ')[0];
 
-    derived muted = social.isMuted(props.personId);
+    derived muted = social.isMuted('person', props.personId);
 
     derived blocked = social.isBlocked(props.personId);
 
@@ -103,7 +103,7 @@ export default component PersonActions(props: OverlayProps & { personId: string 
                 label: locale.t(muted ? 'actions.unmute' : 'actions.mute', { name }),
                 run: () =>
                 {
-                    social.toggleMute(props.personId);
+                    void social.toggleMute('person', props.personId);
                     toasts.show({ kind: 'info', text: locale.t(muted ? 'actions.unmuted' : 'actions.muted', { name }) });
                 }
             },

@@ -1,9 +1,12 @@
+import { NotFoundError } from '@azerothjs/http';
 import { feature, reply } from '@azerothjs/http/api';
 
 import { clearSessionCookie, requireSession, sessionCookie } from './http/auth.ts';
 import type { Ports } from './ports.ts';
 import {
     achievementList,
+    ack,
+    answerInput,
     challenge,
     challengeInput,
     demoSignIn,
@@ -11,9 +14,20 @@ import {
     guestSignIn,
     handleInput,
     handleResult,
+    muteInput,
+    personList,
+    personRef,
+    personView,
+    privacy,
+    privacyInput,
+    reportInput,
+    reportResult,
+    requestResult,
     serverInfo,
     sessionState,
     signOutResult,
+    socialGraph,
+    suggestionList,
     walletSignIn
 } from './schemas.ts';
 
@@ -185,6 +199,108 @@ export function buildApi(ports: Ports)
                     return { handle };
                 }
             )
+        })),
+
+        /**
+         * The social graph, and the privacy that governs it.
+         *
+         * Every route is guarded at the FEATURE, because there is no such thing as a signed-out
+         * view of somebody's relationships. `guard()` here rather than `routes.with()` on each
+         * one means a route added later is protected by default instead of by remembering.
+         */
+        social: feature('/social', [session], (routes) => ({
+            /** Everything about my own relationships: friends, both request directions, blocks, mutes. */
+            graph: routes.get('/', { output: socialGraph }, (context) => ports.social.graph(context.principal.userId)),
+
+            people: routes.get('/people', { output: personList }, async (context) => ({
+                people: await ports.social.directory(context.principal.userId, 60)
+            })),
+
+            suggestions: routes.get('/suggestions', { output: suggestionList }, async (context) => ({
+                suggestions: await ports.social.suggestions(context.principal.userId, 20)
+            })),
+
+            /**
+             * One profile, as this viewer may see it.
+             *
+             * By handle, because that is what the URL carries and what a person types. The answer
+             * includes `refusal`, which is the server telling the client what it would do if the
+             * client tried - so the compose box can be closed with a reason rather than open and
+             * then rejected.
+             */
+            person: routes.get('/people/:handle', { output: personView }, async (context) =>
+            {
+                const view = await ports.social.view(context.principal.userId, context.params.handle);
+                if (view === null)
+                {
+                    throw new NotFoundError('No account with that name.');
+                }
+                return view;
+            }),
+
+            request: routes.post('/requests', { input: personRef, output: requestResult },
+                (context) => ports.social.sendRequest(context.principal.userId, context.input.id)),
+
+            answer: routes.post('/requests/answer', { input: answerInput, output: ack },
+                async (context) =>
+                {
+                    await ports.social.answerRequest(context.principal.userId, context.input.id, context.input.outcome);
+                    return { ok: true };
+                }),
+
+            withdraw: routes.post('/requests/withdraw', { input: personRef, output: ack },
+                async (context) =>
+                {
+                    await ports.social.withdrawRequest(context.principal.userId, context.input.id);
+                    return { ok: true };
+                }),
+
+            unfriend: routes.post('/friends/remove', { input: personRef, output: ack },
+                async (context) =>
+                {
+                    await ports.social.removeFriend(context.principal.userId, context.input.id);
+                    return { ok: true };
+                }),
+
+            block: routes.post('/blocks', { input: personRef, output: ack },
+                async (context) =>
+                {
+                    await ports.social.block(context.principal.userId, context.input.id);
+                    return { ok: true };
+                }),
+
+            unblock: routes.post('/blocks/remove', { input: personRef, output: ack },
+                async (context) =>
+                {
+                    await ports.social.unblock(context.principal.userId, context.input.id);
+                    return { ok: true };
+                }),
+
+            /** One mute route for people, conversations and games. The subject kind is the argument. */
+            mute: routes.post('/mutes', { input: muteInput, output: ack },
+                async (context) =>
+                {
+                    await ports.social.setMute(context.principal.userId, context.input.kind, context.input.id, context.input.muted);
+                    return { ok: true };
+                }),
+
+            report: routes.post('/reports', { input: reportInput, output: reportResult },
+                async (context) => ({
+                    id: await ports.social.report(context.principal.userId, context.input.id, context.input.category)
+                })),
+
+            privacy: routes.get('/privacy', { output: privacy },
+                (context) => ports.social.privacy(context.principal.userId)),
+
+            /**
+             * Writes the two switches and answers with what was actually STORED.
+             *
+             * A minor asking for stranger messages gets `false` back, not an error and not a
+             * silent success: the control then shows the truth on the next render rather than
+             * lying until a reload.
+             */
+            setPrivacy: routes.post('/privacy', { input: privacyInput, output: privacy },
+                (context) => ports.social.setPrivacy(context.principal.userId, context.input))
         }))
     };
 }

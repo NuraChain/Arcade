@@ -196,15 +196,20 @@ describe('guards', () =>
 
 describe('settings', () =>
 {
-    it('persists a patch and toggles mutes', () =>
+    it('persists a patch to this device', () =>
     {
         const settings = useSettings();
         settings.update({ sound: true });
         expect(JSON.parse(memory.get('nura-games.settings') ?? '{}').sound).toBe(true);
-        settings.toggleMutedConversation('c-1');
-        expect(settings.isMuted('c-1')).toBe(true);
-        settings.toggleMutedConversation('c-1');
-        expect(settings.isMuted('c-1')).toBe(false);
+    });
+
+    it('keeps nothing that belongs to the account', () =>
+    {
+        const stored = Object.keys(defaultSettings());
+        expect(stored).not.toContain('mutedConversations');
+        expect(stored).not.toContain('mutedGames');
+        expect(stored).not.toContain('strangerMessages');
+        expect(stored).not.toContain('showOnline');
     });
 
     it('starts silent and with the chat rail open', () =>

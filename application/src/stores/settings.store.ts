@@ -1,12 +1,19 @@
 import { createStore, createSignal, type Getter } from 'azerothjs';
 
-import type { GameId } from '../data/games.ts';
 import { forget, recallJson, rememberJson } from '../lib/storage.ts';
 
 export type NotificationCategory = 'invites' | 'requests' | 'results' | 'messages' | 'achievements';
 
 export const NOTIFICATION_CATEGORIES: NotificationCategory[] = ['invites', 'requests', 'results', 'messages', 'achievements'];
 
+/**
+ * What this DEVICE prefers. Nothing here is privacy and nothing here is social.
+ *
+ * Mutes moved to `social.store.ts` and the privacy switches moved to the server, because both
+ * belong to the account rather than the browser: a mute that only exists in one browser's
+ * localStorage is a mute the other device keeps notifying you through, and a privacy switch the
+ * client holds is a privacy switch the client can turn off.
+ */
 export interface Settings
 {
     sound: boolean;
@@ -14,10 +21,6 @@ export interface Settings
     railWidth: number;
     railOpen: boolean;
     notifications: Record<NotificationCategory, boolean>;
-    mutedConversations: string[];
-    mutedGames: GameId[];
-    strangerMessages: boolean;
-    showOnline: boolean;
 }
 
 const STORAGE_KEY = 'nura-games.settings';
@@ -29,11 +32,7 @@ export function defaultSettings(): Settings
         haptics: true,
         railWidth: 0.3,
         railOpen: true,
-        notifications: { invites: true, requests: true, results: true, messages: true, achievements: true },
-        mutedConversations: [],
-        mutedGames: [],
-        strangerMessages: true,
-        showOnline: true
+        notifications: { invites: true, requests: true, results: true, messages: true, achievements: true }
     };
 }
 
@@ -56,9 +55,6 @@ export interface SettingsApi
 {
     settings: Getter<Settings>;
     update(patch: Partial<Settings>): void;
-    toggleMutedConversation(id: string): void;
-    toggleMutedGame(game: GameId): void;
-    isMuted(conversationId: string): boolean;
     reset(): void;
 }
 
@@ -72,14 +68,9 @@ export const useSettings = createStore((): SettingsApi =>
         rememberJson(STORAGE_KEY, next);
     };
 
-    const toggle = <T>(list: T[], item: T): T[] => (list.includes(item) ? list.filter((entry) => entry !== item) : [...list, item]);
-
     return {
         settings,
         update: (patch) => write({ ...settings(), ...patch }),
-        toggleMutedConversation: (id) => write({ ...settings(), mutedConversations: toggle(settings().mutedConversations, id) }),
-        toggleMutedGame: (game) => write({ ...settings(), mutedGames: toggle(settings().mutedGames, game) }),
-        isMuted: (conversationId) => settings().mutedConversations.includes(conversationId),
         reset: () =>
         {
             setSettings(defaultSettings());

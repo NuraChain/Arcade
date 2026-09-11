@@ -6,8 +6,8 @@ import { attachHold } from '../../lib/hold.ts';
 import Icon from '../../icons/icon.component.azeroth';
 import { useChat } from '../../stores/chat.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
+import { useSocial } from '../../stores/social.store.ts';
 import { usePresence } from '../../stores/presence.store.ts';
-import { useSettings } from '../../stores/settings.store.ts';
 import Avatar from '../ui/avatar.component.azeroth';
 import AvatarGroup from '../ui/avatar-group.component.azeroth';
 import Badge from '../ui/badge.component.azeroth';
@@ -17,9 +17,9 @@ import { othersOf, titleOf } from './chat-title.ts';
 export default component ChatListItem(props: { conversation: Conversation; me: string; active?: boolean; onHold?: () => void })
 {
     const locale = useLocale();
+    const social = useSocial();
     const chat = useChat();
     const presence = usePresence();
-    const settings = useSettings();
 
     let row: HTMLElement | null = null;
 
@@ -42,7 +42,7 @@ export default component ChatListItem(props: { conversation: Conversation; me: s
 
     derived typing = chat.typing(props.conversation.id);
 
-    derived muted = settings.isMuted(props.conversation.id);
+    derived muted = social.isMuted('conversation', props.conversation.id);
 
     derived preview = ((): string =>
     {

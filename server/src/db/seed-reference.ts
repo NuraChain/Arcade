@@ -267,12 +267,17 @@ export async function seedReference(db: DataSource): Promise<void>
         for (const demo of DEMO_SEEDS)
         {
             await tx.query(
-                `insert into users (handle, display_name, hue, kind, is_minor)
-                 values ($1, $2, $3, 'demo', $4)
+                // `allow_stranger_messages` is derived from `is_minor` rather than left to the
+                // column default: `users_minor_no_strangers` refuses the pair a minor would
+                // otherwise be inserted with, and the refusal happens at BOOT, where it takes the
+                // whole server down. The constraint was right and this seed was wrong.
+                `insert into users (handle, display_name, hue, kind, is_minor, allow_stranger_messages)
+                 values ($1, $2, $3, 'demo', $4, not $4)
                  on conflict (handle) do update set
                     display_name = excluded.display_name,
                     hue = excluded.hue,
-                    is_minor = excluded.is_minor
+                    is_minor = excluded.is_minor,
+                    allow_stranger_messages = excluded.allow_stranger_messages
                  where users.kind = 'demo'`,
                 [demo.handle, demo.displayName, demo.hue, demo.isMinor]
             );

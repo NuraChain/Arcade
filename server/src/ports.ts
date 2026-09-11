@@ -1,5 +1,16 @@
 import type { Principal } from './http/auth.ts';
-import type { AchievementList, Account, Challenge, GameList, ServerInfo } from './schemas.ts';
+import type {
+    AchievementList,
+    Account,
+    Challenge,
+    GameList,
+    MuteSubject,
+    PersonSummary,
+    PersonView,
+    Privacy,
+    ServerInfo,
+    SocialGraph
+} from './schemas.ts';
 
 /**
  * What the route declarations are allowed to know about the rest of the server.
@@ -70,10 +81,38 @@ export interface IdentityPort
     readonly secureCookies: boolean;
 }
 
+export interface SocialPort
+{
+    /** Every relationship this account holds. One call, because the shell needs all of it. */
+    graph(me: string): Promise<SocialGraph>;
+
+    directory(me: string, limit: number): Promise<PersonSummary[]>;
+    suggestions(me: string, limit: number): Promise<{ person: PersonSummary; mutual: number }[]>;
+
+    /** A profile as this viewer may see it, including whether they may write to it. */
+    view(me: string, handle: string): Promise<PersonView | null>;
+
+    sendRequest(me: string, otherId: string): Promise<{ outcome: 'sent' | 'accepted' }>;
+    answerRequest(me: string, requestId: string, outcome: 'accepted' | 'declined'): Promise<void>;
+    withdrawRequest(me: string, otherId: string): Promise<void>;
+    removeFriend(me: string, otherId: string): Promise<void>;
+
+    block(me: string, otherId: string): Promise<void>;
+    unblock(me: string, otherId: string): Promise<void>;
+
+    setMute(me: string, kind: MuteSubject, subjectId: string, muted: boolean): Promise<void>;
+
+    report(me: string, againstId: string, category: string): Promise<string>;
+
+    privacy(me: string): Promise<Privacy>;
+    setPrivacy(me: string, wanted: { allowStrangerMessages: boolean; showOnline: boolean }): Promise<Privacy>;
+}
+
 /** Every port the API declaration may reach. One member per domain. */
 export interface Ports
 {
     meta: MetaPort;
     catalogue: CataloguePort;
     identity: IdentityPort;
+    social: SocialPort;
 }

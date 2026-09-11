@@ -8,6 +8,7 @@ import { mutualCount, planRequestReply, rankSuggestions } from '../src/services/
 import { createRandom } from '../src/lib/random.ts';
 import { setChatSource, useChat } from '../src/stores/chat.store.ts';
 import { createLocalSource, type ChatSource } from '../src/services/chat.source.ts';
+import { server } from './fake-api.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
 import { useNotifications } from '../src/stores/notifications.store.ts';
 import { useSearch } from '../src/stores/search.store.ts';
@@ -53,6 +54,7 @@ beforeEach(() =>
         kind: 'demo',
         isMinor: false
     });
+    server.reset();
     useSocial().reset();
     useChat().reset();
     useNotifications().reset();
@@ -200,14 +202,58 @@ describe('social store', () =>
         expect(social.reports().find((report) => report.id === id)?.status).toBe('reviewed');
     });
 
-    it('mutes without unfriending', () =>
+    it('mutes a person without unfriending them', async () =>
     {
         const social = useSocial();
-        social.toggleMute('reza');
-        expect(social.isMuted('reza')).toBe(true);
+        await social.toggleMute('person', 'reza');
+        expect(social.isMuted('person', 'reza')).toBe(true);
         expect(social.friends()).toContain('reza');
-        social.toggleMute('reza');
-        expect(social.isMuted('reza')).toBe(false);
+
+        await social.toggleMute('person', 'reza');
+        expect(social.isMuted('person', 'reza')).toBe(false);
+    });
+
+    it('mutes a person, a conversation and a game through one mechanism', async () =>
+    {
+        const social = useSocial();
+        await social.toggleMute('person', 'reza');
+        await social.toggleMute('conversation', 'c-friday');
+        await social.toggleMute('game', 'poker');
+
+        expect(social.isMuted('person', 'reza')).toBe(true);
+        expect(social.isMuted('conversation', 'c-friday')).toBe(true);
+        expect(social.isMuted('game', 'poker')).toBe(true);
+
+        // Same id, different kind: a conversation called 'reza' is not the person.
+        expect(social.isMuted('conversation', 'reza')).toBe(false);
+        expect(social.mutes().length).toBe(3);
+    });
+
+    it('shows a mute at once and reverts it when the server refuses', async () =>
+    {
+        const social = useSocial();
+        server.refuseMute = true;
+        await social.toggleMute('person', 'reza').catch(() => undefined);
+        expect(social.isMuted('person', 'reza')).toBe(false);
+
+        server.refuseMute = false;
+        await social.toggleMute('person', 'reza');
+        expect(social.isMuted('person', 'reza')).toBe(true);
+    });
+
+    it('takes the privacy switches from the server, and a minor cannot turn strangers on', async () =>
+    {
+        const social = useSocial();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        expect(social.privacy().allowStrangerMessages).toBe(true);
+
+        await social.setPrivacy({ allowStrangerMessages: false });
+        expect(social.privacy().allowStrangerMessages).toBe(false);
+
+        server.minor = true;
+        await social.setPrivacy({ allowStrangerMessages: true });
+        expect(social.privacy().allowStrangerMessages).toBe(false);
+        expect(social.privacy().isMinor).toBe(true);
     });
 });
 

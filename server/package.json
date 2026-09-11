@@ -19,7 +19,8 @@
         "migration:generate": "npm run clean && npm run build && typeorm migration:generate -d dist/data-source.js",
         "migration:run": "npm run build && typeorm migration:run -d dist/data-source.js",
         "migration:revert": "npm run build && typeorm migration:revert -d dist/data-source.js",
-        "migration:show": "npm run build && typeorm migration:show -d dist/data-source.js"
+        "migration:show": "npm run build && typeorm migration:show -d dist/data-source.js",
+        "test:db": "vitest run tests/social.db.spec.ts"
     },
     "dependencies": {
         "@azerothjs/cron": "file:../../../AzerothJS/packages/cron",

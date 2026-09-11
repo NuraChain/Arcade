@@ -35,7 +35,7 @@ export const me = {
     'settings.safety.mutedEmpty': 'Nobody muted.',
     'settings.safety.strangers': 'Messages from people you don’t know',
     'settings.safety.strangersHint': 'Off means only friends can start a conversation.',
-    'settings.safety.strangersLocked': 'Locked on for accounts under 18.',
+    'settings.safety.strangersLocked': 'Held off for accounts under 18. Only friends can start a conversation.',
     'settings.safety.online': 'Show when I’m online',
     'settings.safety.onlineHint': 'Friends see a green dot and what you’re playing.',
     'settings.safety.reports': 'My reports',
