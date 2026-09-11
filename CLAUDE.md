@@ -80,7 +80,7 @@ the first run of this matrix showed, as 808 console errors and 377 pages that ne
 (`blender -b -P tools/blender/art.py`, `NURA_ART=<game>` for one) because it needs Blender, and
 `build.mjs` audits the output against its budgets.
 
-## House rules
+## The framework defect register
 
 **`framework-bugs.md` is not in this repository.** It is a register of defects in a DEPENDENCY,
 not part of this product, and it lives on the desktop
@@ -571,6 +571,86 @@ moderation sees only the excerpt a reporter chooses to disclose; a device that l
 its recovery phrase cannot get the history back, and the UI says so plainly rather than showing an
 empty thread.
 
+## Realtime — `nura-rt/v1`
+
+One WebSocket at `/ws`, and it is a **doorbell, not a delivery**. A frame says "something about
+this conversation changed" and the store that cares re-reads it through the route that already
+exists — with the same membership check, the same block rules, the same read watermark. A second
+delivery path carrying message bodies would be a second place to get all three wrong, and it would
+have to be rewritten again the moment a body becomes ciphertext.
+
+`server/src/realtime/frames.ts` is the whole wire. Four server frames (`hello`, `presence`,
+`nudge`, `typing`), three client frames (`sync`, `presence`, `typing`), and
+`parseClientFrame` is total and strict — **unknown keys are refused**, because a frame carrying a
+field this version does not know is a frame from something that is not this client.
+
+**`n` is a per-connection sequence number and is NOT the e2ee `seq`.** It stamps the order frames
+left this server for one socket, nothing more. The envelope's `seq` in `nura-e2ee/v1` is bound
+into AAD and orders messages inside a conversation epoch. They are different numbers with different
+lifetimes; do not derive one from the other.
+
+**The origin gate is a union, and the union is load-bearing.**
+
+```
+isSameOrigin(origin, request.headers.host) || origin === config.origin
+```
+
+`config.origin` alone refuses every socket in the mandatory QA run: the browser is on `:3200`
+against the built server while `PUBLIC_ORIGIN` is `:3100`, and a refused handshake writes exactly
+one console error that `tools/qa` cannot suppress — 600 failing cells. `isSameOrigin` is
+reimplemented in `realtime/admit.ts` because `@azerothjs/ws` does not export its own copy; that is
+recorded in the framework register, and the copy is not trivial (implied ports, the opaque `null`
+origin a sandboxed frame sends).
+
+**Nothing in `onConnection` may await.** The package replays the bytes that arrived in the same TCP
+segment as the handshake AFTER `onConnection` returns, so a handler assigned behind an `await`
+misses an eager client's first frames and they are dropped against a null handler with no error at
+all. `realtime.socket.spec.ts` asserts this over the source text rather than by racing a socket —
+a deterministic test beats an atmospheric one.
+
+**Shutdown order is load-bearing.** `handleShutdownSignals` gives two seams and they are not
+interchangeable: `beforeShutdown` runs while connections are still live, which is the only moment
+`hub.closeAll(1001)` can say goodbye with a code; `beforeExit` runs after they are gone, which is
+where the DataSource is destroyed. Swap them and every client sees 1006 and reconnects into a
+server that is on its way out.
+
+**`isMetered('/ws')` is now nearly dead code.** The rate limiter still scopes to `/api` and
+`/ws`, but a socket costs one request per connection and the gateway meters frames itself
+(`sync` 5s, `presence` 2s, `typing` 3s, ten faults and the socket is closed 4400). Keep the
+prefix — a handshake flood is still a flood — but the per-frame budget is where the real metering
+happens.
+
+**Presence has three states on the client, not two.** `Presence.known` says whether the server
+mentioned this person at all; absent from the snapshot is NOT "offline", because it could equally
+be `show_online: false`. An unknown person renders **no dot** (`presence.dot()` returns null) and
+no presence word — a handle, which is always true, goes in that line instead. The store is a
+projection of `useRealtime().presence()` and nothing else: the seeded roster that used to drift on
+a timer is gone, so a page with no socket shows nobody online rather than inventing a room.
+
+**The typing indicator is new server-visible metadata.** The server learns that somebody is typing,
+in which conversation, and when — that is on the same list as who talked to whom and how large it
+was, and it belongs in the privacy copy alongside them. A notice carries its own 4s expiry because
+nobody ever sends "I stopped": the tab may have closed, the socket may have dropped, or they may
+have walked away.
+
+The client half is `services/realtime.source.ts` (the only module that constructs a `WebSocket`)
+and `stores/realtime.store.ts` (one connection, jittered backoff seeded from `runtime().seed`, a
+visibility pause, coalesced nudges). **Connecting does not reset the backoff — staying connected
+for `STEADY_MS` does**, or a socket that opens and dies 200ms later in a loop is hammered at one
+second forever. 4400, 4401 and 4429 are terminal and never retried.
+
+`stores/connection.store.ts` reports only what it can see: the socket's own status plus
+`navigator.onLine`. The `latency` it used to publish was never measured by any request, and the
+fixed 1800ms "reconnecting" animation had nothing to do with a reconnection. It deliberately does
+NOT follow every flap — between drop and retry the socket is `down`, during the retry it is
+`connecting`, and at the first backoff rung that alternates once a second — so `offline` means
+something that will not fix itself and everything in between is one steady `reconnecting`.
+
+**The socket starts FIRST in the app shell's `stops` array**, which means it stops LAST, because
+the teardown runs in reverse and every store under it holds an unsubscribe against it. Each stop is
+wrapped in its own try/catch: one that throws must not strand the sockets, timers and listeners of
+every store after it.
+
 ## The product shell
 
 Everything behind `/sign-in` and `/app/*` is client-rendered and lazily chunked; the landing
@@ -610,6 +690,23 @@ lands on `/sign-in` instead of on a page of empty states. The enforcement is `re
 `server/src/http/auth.ts`, which answers 401. Both guards await `session.ready()`, which resolves
 after the first `/auth/me`; one request on boot, every navigation after it synchronous. They reach
 the store through a **dynamic import** — see Performance for why that import must stay dynamic.
+
+**The landing page's way in is a wallet chooser, and it is a dynamic import.**
+`stores/connect.store.ts` is one boolean shared by the site header and the two landing CTAs;
+`components/layout/connect-dialog.component.azeroth` is fetched the first time somebody asks for
+it. That import MUST stay dynamic for the same reason `lib/guards.ts`'s is — see Performance.
+
+The chooser lists MetaMask, Trust Wallet and Nura Wallet, matched against EIP-6963 announcements by
+`rdns` (a prefix match, so `io.metamask.flask` is still MetaMask). A wallet that did not announce
+itself is shown as missing with a link to its own download page — **except Nura Wallet, which has
+no download link on purpose**: it injects its provider only inside its own in-app browser and
+registers no url scheme, so there is nowhere to send a desktop browser. Its row expands into a
+panel with a QR of this page and a copy button instead. A row that offered to install it, or that
+called connect and waited, would be a button that lies.
+
+`/sign-in` stays, wears the same `SiteHeader` (with `cta={ false }`, because that page IS the
+connect surface) and `SiteFooter`, and remains what `lib/guards.ts` redirects to and where guest
+and demo entry live.
 
 Three ways in, and the account says which one was used through `kind`:
 
@@ -697,10 +794,11 @@ interactively must be written back into a script; the scripts stay the source of
 | game hero art, 1280 | < 110 KB each | 40–70 KB |
 | kit triangles | — | ~190k, ~20% of it instanced figures |
 
-The `/app` tree is kept out of the landing's initial payload by three things, all of which must
+The `/app` tree is kept out of the landing's initial payload by four things, all of which must
 stay true: the `/app` layout route is `lazy`, the app message catalogue is registered by
-`locales/app-catalogue.ts` which only the shell and sign-in import, and **`lib/guards.ts` imports
-`session.store.ts` dynamically**.
+`locales/app-catalogue.ts` which only the shell and sign-in import, **`lib/guards.ts` imports
+`session.store.ts` dynamically**, and **`public-shell.component.azeroth` imports
+`connect-dialog.component.azeroth` dynamically**.
 
 That third one is not a size optimisation. Route guards are named in `routes.ts`, so `guards.ts` is
 eager; a static import there would drag `api.ts` into the landing chunk, and `api.ts` has a
@@ -709,8 +807,16 @@ renders, but the landing is `render: 'static'` and prerendered to a file — no 
 falls back to fetching `/api/_manifest`. A page whose whole promise is that it paints with no
 JavaScript and no server would have opened a request to the server on every visit. The dynamic
 import moves the whole typed client behind the first guarded navigation, where the app chunk is
-loading anyway. `tools/qa` does not catch this; the browser pass asserts the landing makes no api
-call at all.
+loading anyway. The wallet chooser is the same rule from the other end: it reaches
+`wallet.store.ts` and therefore `api.ts`, so a static import in the public shell would reintroduce
+the request the dynamic guard import exists to remove. `tools/qa` does not catch either of these;
+the browser pass asserts the landing makes no api call at all.
+
+**A component cannot be held in a signal by plain assignment.** A setter treats a bare function
+argument as an updater, so `Dialog = module.default` CALLS the component with the previous value
+— null — instead of storing it, and the symptom is a component whose `props` are null at
+construction rather than any kind of error. The public shell holds the loaded component in a plain
+`let` and a separate boolean says when it is there.
 
 Three quality tiers picked from a capability probe, then policed by a frame-time governor that
 only ever steps **down**. Most lamps are not lights: they are emissive geometry plus an additive
