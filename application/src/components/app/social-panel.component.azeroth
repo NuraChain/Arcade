@@ -10,7 +10,6 @@ import { usePresence } from '../../stores/presence.store.ts';
 import { useSocial } from '../../stores/social.store.ts';
 import Avatar from '../ui/avatar.component.azeroth';
 import Button from '../ui/button.component.azeroth';
-import SectionHeading from '../ui/section-heading.component.azeroth';
 
 export default component SocialPanel()
 {
@@ -37,12 +36,20 @@ export default component SocialPanel()
 
     derived totals = catalogue.totals();
 
-    <aside class="bar safe-t safe-b flex h-dvh w-[var(--social-w)] flex-col gap-5 overflow-y-auto border-s border-line bg-field px-3 py-4" aria-label={ locale.t('app.nav.friends') }>
-        <section>
-            <SectionHeading title={ locale.plural('common.friendsOnline', friends.length) } more={ locale.t('common.seeAll') } to="/app/friends" />
-            <Show
-                when={ friends.length > 0 }
-                fallback={
+    <aside class="bar safe-t safe-b flex h-dvh w-[var(--social-w)] flex-col border-s border-line bg-field" aria-label={ locale.t('app.nav.friends') }>
+        <div class="flex h-[var(--topbar-h)] shrink-0 items-center justify-between gap-3 border-b border-line ps-4 pe-2">
+            <h2 class="label min-w-0 truncate text-ui-sm text-faint">{ locale.plural('common.friendsOnline', friends.length) }</h2>
+            <Link to="/app/friends" class="flex min-h-11 shrink-0 items-center gap-0.5 rounded-control px-2 text-ui-sm font-semibold text-accent hover:underline">
+                { locale.t('common.seeAll') }
+                <Icon name="chevron-right" size={ 14 } class="icon-flip" />
+            </Link>
+        </div>
+
+        <div class="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-3 py-4">
+            <section>
+                <Show
+                    when={ friends.length > 0 }
+                    fallback={
                     <div class="rounded-panel border border-dashed border-line p-3">
                         <p class="text-ui-sm text-muted">{ locale.t('home.friends.empty') }</p>
                         <Show when={ suggestions.length > 0 }>
@@ -62,7 +69,7 @@ export default component SocialPanel()
                         </Show>
                     </div>
                 }
-            >
+                >
                 { () =>
                     <ul class="flex flex-col gap-0.5">
                         <For each={ friends } key={ (person) => person.id } let={ person }>
@@ -81,16 +88,17 @@ export default component SocialPanel()
                         </For>
                     </ul>
                 }
-            </Show>
-        </section>
+                </Show>
+            </section>
 
-        <section class="rounded-panel border border-line bg-sunk p-3">
-            <p class="label text-ui-2xs text-faint">{ locale.t('people.stat.open') }</p>
-            <p class="tally title mt-0.5 text-ui-3xl text-text">{ locale.n(totals.tablesOpen) }</p>
-            <p class="mt-1 flex items-center gap-1.5 text-ui-xs text-muted">
-                <span class="live-dot h-1.5 w-1.5 rounded-full" aria-hidden="true"></span>
-                <span class="tally">{ locale.n(totals.playersOnline) }</span> { locale.t('common.online').toLowerCase() }
-            </p>
-        </section>
+            <section class="rounded-panel border border-line bg-sunk p-3">
+                <p class="label text-ui-2xs text-faint">{ locale.t('people.stat.open') }</p>
+                <p class="tally title mt-0.5 text-ui-3xl text-text">{ locale.n(totals.tablesOpen) }</p>
+                <p class="mt-1 flex items-center gap-1.5 text-ui-xs text-muted">
+                    <span class="live-dot h-1.5 w-1.5 rounded-full" aria-hidden="true"></span>
+                    <span class="tally">{ locale.n(totals.playersOnline) }</span> { locale.t('common.online').toLowerCase() }
+                </p>
+            </section>
+        </div>
     </aside>
 }

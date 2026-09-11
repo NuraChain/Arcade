@@ -20,6 +20,7 @@ export default component Tooltip(props: {
     const device = useDevice();
 
     state shown = false;
+    state placed = false;
     state at = { x: 0, y: 0, side: 'top', align: 'center', arrow: 12 } as Placed;
 
     let host: HTMLElement | null = null;
@@ -40,6 +41,7 @@ export default component Tooltip(props: {
             viewportOf(),
             { side: props.side ?? 'top', gap: 8, padding: 10, rtl: locale.dir() === 'rtl' }
         );
+        placed = true;
     };
 
     const hide = (): void =>
@@ -47,6 +49,7 @@ export default component Tooltip(props: {
         cancel?.();
         cancel = null;
         shown = false;
+        placed = false;
         if (openTooltip === hide)
         {
             openTooltip = null;
@@ -120,6 +123,7 @@ export default component Tooltip(props: {
                             role="tooltip"
                             class="tooltip"
                             data-side={ at.side }
+                            data-placed={ placed ? 'true' : 'false' }
                             style={ `--x: ${ at.x }px; --y: ${ at.y }px; --arrow: ${ at.arrow }px` }
                         >
                             { props.label }

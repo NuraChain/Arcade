@@ -376,6 +376,39 @@ describe('Tooltip', () =>
         await settle();
         expect(document.body.querySelector('[role="tooltip"]')).toBeNull();
     });
+
+    it('never paints before it has been measured, so a reopen cannot flash at the last position', async () =>
+    {
+        const { container } = renderTest(() => Tooltip({ label: 'More actions', children: Probe() }) as Rendered);
+        await settle();
+        const host = container.querySelector('span')!;
+
+        host.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+        await settle();
+        expect(document.body.querySelector('[role="tooltip"]')?.getAttribute('data-placed')).toBe('false');
+
+        host.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+        await settle();
+        host.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+        await settle();
+        expect(document.body.querySelector('[role="tooltip"]')?.getAttribute('data-placed')).toBe('false');
+    });
+
+    it('drops a pending open when the pointer leaves before the delay elapses', async () =>
+    {
+        const { container } = renderTest(() => Tooltip({ label: 'More actions', children: Probe(), delay: 300 }) as Rendered);
+        await settle();
+        const host = container.querySelector('span')!;
+
+        const enter = new Event('pointerenter', { bubbles: true });
+        Object.defineProperty(enter, 'pointerType', { value: 'mouse' });
+        host.dispatchEvent(enter);
+        clock.advance(120);
+        host.dispatchEvent(new Event('pointerleave', { bubbles: true }));
+        clock.advance(600);
+        await settle();
+        expect(document.body.querySelector('[role="tooltip"]')).toBeNull();
+    });
 });
 
 describe('toasts', () =>

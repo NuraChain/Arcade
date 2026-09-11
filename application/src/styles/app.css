@@ -480,6 +480,11 @@
     font-weight: 600;
     box-shadow: var(--shadow-2);
     pointer-events: none;
+    opacity: 0;
+}
+
+.tooltip[data-placed='true']
+{
     animation: tooltip-in 120ms var(--ease-ui) both;
 }
 
@@ -533,11 +538,17 @@
         opacity: 0;
         transform: scale(0.96);
     }
+
+    to
+    {
+        opacity: 1;
+        transform: none;
+    }
 }
 
 @media (prefers-reduced-motion: reduce)
 {
-    .tooltip
+    .tooltip[data-placed='true']
     {
         animation-duration: 0.01ms;
     }

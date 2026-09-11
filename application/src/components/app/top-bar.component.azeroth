@@ -25,11 +25,11 @@ export default component TopBar()
 
     derived title = shell.title() ?? (meta.title === undefined ? '' : locale.t(meta.title));
 
-    derived showBack = meta.parent !== undefined || shell.depth() > 0;
+    derived phone = device.posture() === 'phone';
+
+    derived showBack = phone && (meta.parent !== undefined || shell.depth() > 0);
 
     derived unread = notifications.unread();
-
-    derived phone = device.posture() === 'phone';
 
     const goBack = (): void =>
     {
@@ -41,8 +41,8 @@ export default component TopBar()
         replace(meta.parent ?? '/app');
     };
 
-    <header class="glass z-topbar safe-t sticky top-0 border-b border-line/60">
-        <div class="mx-auto flex h-[var(--topbar-h)] w-full max-w-[72rem] items-center gap-1 px-2 sm:px-4 lg:px-6">
+    <header class="glass z-topbar safe-t sticky top-0 border-b border-line">
+        <div class="mx-auto flex h-[var(--topbar-h)] w-full max-w-[96rem] items-center gap-1 px-2 sm:px-6 lg:px-8">
             <Show
                 when={ showBack }
                 fallback={

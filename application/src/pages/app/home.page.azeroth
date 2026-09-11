@@ -126,13 +126,30 @@ export default component HomePage()
         } }
     >
         <div class="flex flex-col gap-8">
-            <header>
-                <h1 class="title text-ui-3xl">{ greeting }</h1>
-                <p class="mt-1 flex items-center gap-2 text-ui-base text-muted">
-                    <span class="live-dot h-2 w-2 rounded-full" aria-hidden="true"></span>
-                    <span class="tally">{ locale.plural('home.pulse', totals.playersOnline) }</span>
-                </p>
-            </header>
+            <section class="grid gap-5 @3xl:grid-cols-[minmax(0,1fr)_minmax(0,30rem)] @3xl:items-center @3xl:gap-8" aria-label={ locale.t('app.nav.quickPlay') }>
+                <header>
+                    <h1 class="title text-ui-3xl @3xl:text-ui-4xl">{ greeting }</h1>
+                    <p class="mt-2 flex items-center gap-2 text-ui-base text-muted">
+                        <span class="live-dot h-2 w-2 rounded-full" aria-hidden="true"></span>
+                        <span class="tally">{ locale.plural('home.pulse', totals.playersOnline) }</span>
+                    </p>
+                </header>
+
+                <div class="flex flex-col gap-3">
+                    <QuickPlayButton
+                        detail={ `${ locale.t('home.quickPlay.usual', { game: locale.t(favourite.nameKey) }) } · ${ locale.t('home.quickPlay.wait', { seconds: favouriteStats.waitSeconds }) }` }
+                        onClick={ () => quickPlay(favourite.id) }
+                    />
+                    <ul class="flex flex-wrap items-center gap-2" aria-label={ locale.t('home.quickPlay.pick') }>
+                        <li class="text-ui-xs font-semibold text-faint">{ locale.t('home.quickPlay.pick') }</li>
+                        <For each={ others } key={ (game) => game.id } let={ game }>
+                            <li>
+                                <Chip icon="zap" onClick={ () => quickPlay(game.id) }>{ locale.t(game.nameKey) }</Chip>
+                            </li>
+                        </For>
+                    </ul>
+                </div>
+            </section>
 
             <Show when={ lobby.active() }>
                 { () =>
@@ -151,21 +168,6 @@ export default component HomePage()
                     </Link>
                 }
             </Show>
-
-            <section aria-label={ locale.t('app.nav.quickPlay') } class="flex flex-col gap-3">
-                <QuickPlayButton
-                    detail={ `${ locale.t('home.quickPlay.usual', { game: locale.t(favourite.nameKey) }) } · ${ locale.t('home.quickPlay.wait', { seconds: favouriteStats.waitSeconds }) }` }
-                    onClick={ () => quickPlay(favourite.id) }
-                />
-                <ul class="flex flex-wrap items-center gap-2" aria-label={ locale.t('home.quickPlay.pick') }>
-                    <li class="text-ui-xs font-semibold text-faint">{ locale.t('home.quickPlay.pick') }</li>
-                    <For each={ others } key={ (game) => game.id } let={ game }>
-                        <li>
-                            <Chip icon="zap" onClick={ () => quickPlay(game.id) }>{ locale.t(game.nameKey) }</Chip>
-                        </li>
-                    </For>
-                </ul>
-            </section>
 
             <Show when={ last !== null && !lobby.active() }>
                 { () =>
