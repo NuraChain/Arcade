@@ -5,6 +5,7 @@ import { createCatalogueService } from './domains/catalogue/service.ts';
 import { createChatService, type ConversationRow, type MessageRow } from './domains/chat/service.ts';
 import { createEpochService } from './domains/chat/epochs.ts';
 import { createPeerDevices, type PeerDeviceRow } from './domains/device/peers.ts';
+import { createRecoveryService } from './domains/device/recovery-service.ts';
 import { createDeviceService, type DeviceRow } from './domains/device/service.ts';
 import { createGroupService, type GroupRow } from './domains/group/service.ts';
 import { createNotifyService, type NotificationRow } from './domains/notify/service.ts';
@@ -432,6 +433,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
 
     const peers = createPeerDevices(db);
     const epochs = createEpochService(db);
+    const recovery = createRecoveryService(db);
 
     /**
      * Tells every room this account is in that its recipient set has moved.
@@ -1166,6 +1168,73 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 // to, and nobody else learns that until they read the epoch again.
                 await ringRooms(me);
                 return asDevice(row);
+            },
+
+            /* ------------------------------------------------------ recovery */
+
+            async recovery(me)
+            {
+                const vault = await recovery.vaultOf(me);
+
+                return vault === null
+                    ? { configured: false }
+                    : {
+                        configured: true,
+                        salt: vault.salt,
+                        checkValue: vault.check_value,
+                        createdAt: vault.created_at.toISOString()
+                    };
+            },
+
+            async setRecovery(me, sessionId, input)
+            {
+                const vault = await recovery.setVault(me, await device.deviceOfSession(sessionId), input);
+
+                return {
+                    configured: true,
+                    salt: vault.salt,
+                    checkValue: vault.check_value,
+                    createdAt: vault.created_at.toISOString()
+                };
+            },
+
+            async clearRecovery(me)
+            {
+                await recovery.clearVault(me);
+            },
+
+            async archive(me, input)
+            {
+                await recovery.archive(me, input.conversationId, input.epoch, input.wrapped);
+            },
+
+            async archived(me)
+            {
+                return {
+                    entries: (await recovery.archived(me)).map((row) => ({
+                        conversationId: row.conversation_id,
+                        epoch: row.epoch,
+                        wrapped: row.wrapped
+                    }))
+                };
+            },
+
+            async recoveryChallenge(me, deviceId)
+            {
+                return recovery.challenge(me, deviceId);
+            },
+
+            /**
+             * Confirming by phrase changes who this account can be sealed to, exactly as confirming
+             * by another device does - so it rings the same rooms. A recovered browser that nobody
+             * had been told about would sit there unable to read anything new.
+             */
+            async recoverDevice(me, input)
+            {
+                const answer = await recovery.confirm(me, input.deviceId, input.nonce, input.signature);
+
+                await ringRooms(me);
+                return answer;
             }
         },
 

@@ -17,7 +17,8 @@ import {
     type SealedBody
 } from './crypto.ts';
 import { keyStore } from './device-keys.ts';
-import { recallEpochKey, rememberEpochKey } from './epoch-keys.ts';
+import { recallArchiveKey, recallEpochKey, rememberEpochKey } from './epoch-keys.ts';
+import { sealForArchive } from './recovery.ts';
 import { sealabilityOf, type MemberSeal } from './seal-state.ts';
 
 /**
@@ -195,7 +196,7 @@ async function mintNext(
             : currentEpoch(conversationId, me, true);
     }
 
-    await rememberEpochKey(conversationId, epoch, key);
+    await keepEpochKey(conversationId, epoch, key);
 
     return { ok: true, epoch, deviceId, accountId, key, nextSeq: 1 };
 }
@@ -260,9 +261,47 @@ async function adopt(
         return failed('wrong-key');
     }
 
-    await rememberEpochKey(conversationId, epoch, key);
+    await keepEpochKey(conversationId, epoch, key);
 
     return { ok: true, epoch, deviceId, accountId, key, nextSeq: state.nextSeq };
+}
+
+/**
+ * Keeps an epoch key: in this browser's vault, and in the account's archive if there is one.
+ *
+ * The archive write is best-effort and never blocks anything. A message must not fail to send
+ * because a backup could not be written, and a key that missed its archive is picked up the next
+ * time this browser reads that epoch - every path that learns a key comes through here, so the gap
+ * closes itself rather than needing to be noticed.
+ *
+ * `recallArchiveKey` answers null when recovery is not set up on this browser, which is the
+ * ordinary case and not a failure.
+ */
+async function keepEpochKey(conversationId: string, epoch: number, key: Uint8Array): Promise<void>
+{
+    await rememberEpochKey(conversationId, epoch, key);
+
+    const archiveKey = await recallArchiveKey();
+
+    if (archiveKey === null)
+    {
+        return;
+    }
+
+    try
+    {
+        await client.devices.archive({
+            input: { conversationId, epoch, wrapped: await sealForArchive(archiveKey, key) }
+        });
+    }
+    catch
+    {
+        // Recovery is a promise about later, and later is when this can be repaired.
+    }
+    finally
+    {
+        forget(archiveKey);
+    }
 }
 
 const signerCache = new Map<string, PeerSigner[]>();
@@ -492,6 +531,6 @@ export async function historicalKey(conversationId: string, epoch: number, devic
         return null;
     }
 
-    await rememberEpochKey(conversationId, epoch, key);
+    await keepEpochKey(conversationId, epoch, key);
     return key;
 }

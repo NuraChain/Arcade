@@ -1,0 +1,180 @@
+import Icon from '../../icons/icon.component.azeroth';
+import { useLocale } from '../../stores/locale.store.ts';
+import { useRecovery } from '../../stores/recovery.store.ts';
+import { useToasts } from '../../stores/toasts.store.ts';
+import Button from '../ui/button.component.azeroth';
+import Input from '../ui/input.component.azeroth';
+
+/**
+ * The recovery phrase: making one, seeing it once, and using one.
+ *
+ * The phrase is shown exactly once and nothing here can bring it back. That is the honest shape of
+ * the promise - a browser that could re-display it would be a browser holding it, and the whole
+ * premise is that it lives only where the person put it.
+ *
+ * The copy says what it costs rather than what it saves. A backup phrase reads like free insurance
+ * until somebody works out that whoever holds it reads everything, forever, with no way to take it
+ * back; that sentence is on the screen before the button, not buried under it.
+ */
+export default component RecoveryPanel(props: { waitingDevice?: string })
+{
+    const locale = useLocale();
+    const recovery = useRecovery();
+    const toasts = useToasts();
+
+    state typed = '';
+    state wrong = false;
+
+    derived state = recovery.state();
+
+    derived configured = state?.configured === true;
+
+    const make = async (): Promise<void> =>
+    {
+        const made = await recovery.setUp();
+
+        if (!made)
+        {
+            toasts.show({ kind: 'error', text: locale.t('recovery.failed') });
+        }
+    };
+
+    const turnOff = async (): Promise<void> =>
+    {
+        await recovery.turnOff();
+        toasts.show({ kind: 'info', text: locale.t('recovery.off') });
+    };
+
+    const copy = async (): Promise<void> =>
+    {
+        const phrase = recovery.freshPhrase();
+
+        if (phrase === null)
+        {
+            return;
+        }
+
+        await navigator.clipboard.writeText(phrase).catch(() => undefined);
+        toasts.show({ kind: 'success', text: locale.t('recovery.copied') });
+    };
+
+    const use = async (): Promise<void> =>
+    {
+        const deviceId = props.waitingDevice;
+
+        if (deviceId === undefined)
+        {
+            return;
+        }
+
+        wrong = false;
+        const outcome = await recovery.recover(deviceId, typed);
+
+        if (outcome === 'ok')
+        {
+            typed = '';
+            toasts.show({ kind: 'success', text: locale.t('recovery.restored', { count: String(recovery.restored()) }) });
+            return;
+        }
+
+        wrong = outcome === 'bad-phrase';
+
+        if (!wrong)
+        {
+            toasts.show({ kind: 'error', text: locale.t(outcome === 'no-vault' ? 'recovery.none' : 'recovery.failed') });
+        }
+    };
+
+    <div class="flex flex-col gap-3 rounded-panel border border-line bg-field p-4">
+        <Show
+            when={ recovery.freshPhrase() !== null }
+            fallback={
+                <Show
+                    when={ props.waitingDevice !== undefined && configured }
+                    fallback={
+                        <div class="flex flex-col gap-3">
+                            <p class="text-ui-sm text-muted">
+                                { locale.t(configured ? 'recovery.onLead' : 'recovery.offLead') }
+                            </p>
+
+                            <p class="flex items-start gap-2 text-ui-xs text-faint">
+                                <Icon name="alert" size={ 13 } class="mt-0.5 shrink-0" />
+                                <span>{ locale.t('recovery.cost') }</span>
+                            </p>
+
+                            <div class="flex flex-col gap-2">
+                                <Button
+                                    variant={ configured ? 'outline' : 'primary' }
+                                    block
+                                    leading="key"
+                                    loading={ recovery.busy() }
+                                    onClick={ () => void make() }
+                                >
+                                    { locale.t(configured ? 'recovery.roll' : 'recovery.make') }
+                                </Button>
+
+                                <Show when={ configured }>
+                                    { () =>
+                                        <Button variant="ghost" block leading="close" loading={ recovery.busy() } onClick={ () => void turnOff() }>
+                                            { locale.t('recovery.turnOff') }
+                                        </Button>
+                                    }
+                                </Show>
+                            </div>
+                        </div>
+                    }
+                >
+                    { () =>
+                        <div class="flex flex-col gap-3">
+                            <p class="text-ui-sm text-muted">{ locale.t('recovery.useLead') }</p>
+
+                            <Input
+                                id="recovery-phrase"
+                                label={ locale.t('recovery.field') }
+                                value={ typed }
+                                autocomplete="off"
+                                invalid={ wrong }
+                                onEnter={ () => void use() }
+                                onInput={ (value) => { typed = value; wrong = false; } }
+                            />
+
+                            <Show when={ wrong }>
+                                { () => <p class="text-ui-sm text-madder" role="alert">{ locale.t('recovery.wrong') }</p> }
+                            </Show>
+
+                            <Button variant="primary" block leading="key" loading={ recovery.busy() } onClick={ () => void use() }>
+                                { locale.t('recovery.use') }
+                            </Button>
+                        </div>
+                    }
+                </Show>
+            }
+        >
+            { () =>
+                <div class="flex flex-col gap-3">
+                    <p class="flex items-start gap-2 text-ui-sm text-text">
+                        <Icon name="alert" size={ 15 } class="mt-0.5 shrink-0 text-gold" />
+                        <span>{ locale.t('recovery.writeItDown') }</span>
+                    </p>
+
+                    <code
+                        dir="ltr"
+                        class="tally select-all rounded-tile bg-sunk px-3 py-3 text-center text-ui-lg tracking-widest text-text"
+                    >
+                        { recovery.freshPhrase() }
+                    </code>
+
+                    <div class="flex flex-col gap-2">
+                        <Button variant="outline" block leading="copy" onClick={ () => void copy() }>
+                            { locale.t('recovery.copy') }
+                        </Button>
+
+                        <Button variant="primary" block leading="check-circle" onClick={ () => recovery.dismissPhrase() }>
+                            { locale.t('recovery.saved') }
+                        </Button>
+                    </div>
+                </div>
+            }
+        </Show>
+    </div>
+}

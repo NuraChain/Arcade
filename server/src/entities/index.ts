@@ -3,6 +3,7 @@ import { Block } from './block.entity.ts';
 import { ConversationEpoch } from './conversation-epoch.entity.ts';
 import { ConversationMember } from './conversation-member.entity.ts';
 import { Device } from './device.entity.ts';
+import { EpochArchive } from './epoch-archive.entity.ts';
 import { EpochKey } from './epoch-key.entity.ts';
 import { Conversation } from './conversation.entity.ts';
 import { FriendRequest } from './friend-request.entity.ts';
@@ -17,6 +18,8 @@ import { Table } from './table.entity.ts';
 import { Mute } from './mute.entity.ts';
 import { Notification } from './notification.entity.ts';
 import { PushSubscription } from './push-subscription.entity.ts';
+import { RecoveryNonce } from './recovery-nonce.entity.ts';
+import { RecoveryVault } from './recovery-vault.entity.ts';
 import { Report } from './report.entity.ts';
 import { Session } from './session.entity.ts';
 import { SiweNonce } from './siwe-nonce.entity.ts';
@@ -25,9 +28,9 @@ import { Wallet } from './wallet.entity.ts';
 
 export {
     Achievement, Block, Conversation, ConversationEpoch, ConversationMember, Device, EpochKey,
-    FriendRequest, Friendship,
+    EpochArchive, FriendRequest, Friendship,
     Game, GameRule, Group, GroupMember, Message, Mute, Notification, PushSubscription,
-    Report, Session, SiweNonce, Table, TableSeat, User, Wallet
+    RecoveryNonce, RecoveryVault, Report, Session, SiweNonce, Table, TableSeat, User, Wallet
 };
 
 /**
@@ -44,7 +47,8 @@ export const entities: Function[] = [
     Game, GameRule, Achievement,
     User, Wallet, Session, SiweNonce, Device,
     Friendship, FriendRequest, Block, Mute, Report,
-    Conversation, ConversationMember, Message, ConversationEpoch, EpochKey,
+    Conversation, ConversationMember, Message, ConversationEpoch, EpochKey, EpochArchive,
+    RecoveryVault, RecoveryNonce,
     Group, GroupMember,
     Table, TableSeat,
     Notification, PushSubscription

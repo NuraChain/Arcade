@@ -3,12 +3,14 @@ import { useHead } from 'azerothjs';
 import DeviceRow from '../../components/app/device-row.component.azeroth';
 import KeyNotice from '../../components/app/key-notice.component.azeroth';
 import Page from '../../components/app/page.component.azeroth';
+import RecoveryPanel from '../../components/app/recovery-panel.component.azeroth';
 import Button from '../../components/ui/button.component.azeroth';
 import EmptyState from '../../components/ui/empty-state.component.azeroth';
 import SectionHeading from '../../components/ui/section-heading.component.azeroth';
 import { useDevice } from '../../stores/device.store.ts';
 import { useDevices } from '../../stores/devices.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
+import { useRecovery } from '../../stores/recovery.store.ts';
 
 /**
  * The devices panel.
@@ -23,6 +25,7 @@ export default component DevicesPage()
     const locale = useLocale();
     const devices = useDevices();
     const device = useDevice();
+    const recovery = useRecovery();
 
     useHead({ title: () => locale.t('devices.title') });
 
@@ -31,6 +34,14 @@ export default component DevicesPage()
     derived live = rows.filter((one) => !one.revoked);
 
     derived retired = rows.filter((one) => one.revoked);
+
+    /**
+     * This browser, when it is the one waiting to be confirmed.
+     *
+     * That is the state recovery exists for: the device that would have confirmed it is the one
+     * that was lost, so the phrase has to be able to vouch instead.
+     */
+    derived waiting = devices.readiness() === 'waiting' ? devices.current() ?? undefined : undefined;
 
     /**
      * The label this browser suggests for itself.
@@ -43,6 +54,7 @@ export default component DevicesPage()
     mount
     {
         void devices.refresh();
+        void recovery.refresh();
     }
 
     <Page narrow label={ locale.t('devices.title') } onRefresh={ () => void devices.refresh() }>
@@ -75,6 +87,11 @@ export default component DevicesPage()
                     </p>
                 }
             </Show>
+
+            <section aria-labelledby="devices-recovery">
+                <SectionHeading id="devices-recovery" title={ locale.t('recovery.title') } />
+                <RecoveryPanel waitingDevice={ waiting } />
+            </section>
 
             <section aria-labelledby="devices-live">
                 <SectionHeading id="devices-live" title={ locale.t('devices.live') } />

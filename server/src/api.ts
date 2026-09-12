@@ -8,6 +8,8 @@ import {
     ack,
     answerInput,
     chatMessage,
+    archiveInput,
+    archiveList,
     conversationDevices,
     conversationSigners,
     epochQuery,
@@ -21,6 +23,12 @@ import {
     challengeInput,
     device,
     deviceLabelInput,
+    recoveryChallengeInput,
+    recoveryChallengeOut,
+    recoveryConfirmInput,
+    recoveryConfirmOut,
+    recoveryState,
+    recoveryVaultInput,
     deviceList,
     deviceRef,
     enrolInput,
@@ -556,7 +564,44 @@ export function buildApi(ports: Ports)
                 (context) => ports.device.rename(context.principal.userId, context.params.id, context.input.label)),
 
             revoke: routes.post('/:id/revoke', { output: device },
-                (context) => ports.device.revoke(context.principal.userId, context.params.id))
+                (context) => ports.device.revoke(context.principal.userId, context.params.id)),
+
+            /* ---------------------------------------------------------- recovery */
+
+            /** Whether this account has a phrase, and the public halves of what using one needs. */
+            recovery: routes.get('/recovery', { output: recoveryState },
+                (context) => ports.device.recovery(context.principal.userId)),
+
+            setRecovery: routes.post('/recovery', { input: recoveryVaultInput, output: recoveryState },
+                (context) => ports.device.setRecovery(context.principal.userId, context.principal.sessionId, context.input)),
+
+            clearRecovery: routes.post('/recovery/off', { output: ack }, async (context) =>
+            {
+                await ports.device.clearRecovery(context.principal.userId);
+                return { ok: true };
+            }),
+
+            archive: routes.post('/recovery/archive', { input: archiveInput, output: ack }, async (context) =>
+            {
+                await ports.device.archive(context.principal.userId, context.input);
+                return { ok: true };
+            }),
+
+            archived: routes.get('/recovery/archive', { output: archiveList },
+                (context) => ports.device.archived(context.principal.userId)),
+
+            /**
+             * A challenge a device this account has NOT confirmed may ask for.
+             *
+             * That is the whole point: the device that would have confirmed it is the one that was
+             * lost. The session says which account is asking, and the device has to be one of its
+             * own, unconfirmed and unrevoked.
+             */
+            recoveryChallenge: routes.post('/recovery/challenge', { input: recoveryChallengeInput, output: recoveryChallengeOut },
+                (context) => ports.device.recoveryChallenge(context.principal.userId, context.input.deviceId)),
+
+            recoverDevice: routes.post('/recovery/confirm', { input: recoveryConfirmInput, output: recoveryConfirmOut },
+                (context) => ports.device.recoverDevice(context.principal.userId, context.input))
         })),
 
         /**

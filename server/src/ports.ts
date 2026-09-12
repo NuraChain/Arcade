@@ -13,8 +13,10 @@ import type {
     ConversationSigners,
     ConversationSummary,
     EpochState,
+    ArchiveList,
     DeviceList,
     Device,
+    RecoveryState,
     Challenge as DeviceChallenge,
     GroupSummary,
     MessagePage,
@@ -238,6 +240,45 @@ export interface DevicePort
 
     /** One of the account's confirmed devices vouching for another. Never for itself. */
     confirm(me: string, sessionId: string, deviceId: string): Promise<Device>;
+
+    /* ------------------------------------------------------------ recovery */
+
+    /** Whether this account has a phrase, and the public half of what it needs to use one. */
+    recovery(me: string): Promise<RecoveryState>;
+
+    /**
+     * Writes or replaces the vault.
+     *
+     * Needs a CONFIRMED device on this session. A pending device that could write its own vault
+     * would then present its own phrase to confirm itself, and the confirmation step would mean
+     * nothing at all.
+     */
+    setRecovery(me: string, sessionId: string, input: {
+        salt: string;
+        publicKey: string;
+        wrapped: string;
+        checkValue: string;
+    }): Promise<RecoveryState>;
+
+    /** Throws the vault AND the archive away. A phrase that restores nothing is worse than none. */
+    clearRecovery(me: string): Promise<void>;
+
+    /** Adds one epoch key to the archive. */
+    archive(me: string, input: { conversationId: string; epoch: number; wrapped: string }): Promise<void>;
+
+    /** Everything archived, for a browser that has just proved the phrase. */
+    archived(me: string): Promise<ArchiveList>;
+
+    /**
+     * A one-shot challenge for one device.
+     *
+     * Deliberately reachable from a device this account has NOT confirmed, because that is the
+     * situation recovery exists for - the confirmer was what got lost.
+     */
+    recoveryChallenge(me: string, deviceId: string): Promise<{ nonce: string; salt: string; expiresAt: string }>;
+
+    /** Confirms a device on the strength of the phrase, and returns the sealed archive key. */
+    recoverDevice(me: string, input: { deviceId: string; nonce: string; signature: string }): Promise<{ wrapped: string }>;
 
     rename(me: string, deviceId: string, label: string): Promise<Device>;
 

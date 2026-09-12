@@ -781,7 +781,7 @@ Binding `kind` stops the server relabelling a fabricated row as a person's words
 an unrevocable, phishable, remote skeleton key to the entire archive. Recovery is a *generated*
 120-bit phrase only; a user-chosen passphrase is refused, because PBKDF2 is the only KDF
 `SubtleCrypto` offers and it is weak enough against GPUs that a human-chosen phrase is a real
-break.
+break. It is BUILT — see *Recovery* below.
 
 **No plaintext key bytes at rest.** Keys are non-extractable `CryptoKey`s; IndexedDB holds vault
 ciphertext. The honest claim is *"no key bytes at rest"*, not *"key bytes never exist"* — they
@@ -1139,6 +1139,76 @@ defects on its first run: the console error above, and copy still offering a dem
 corpus once at module load — a device per fixture person with real P-256 keys and a real wallet
 attestation, one epoch per thread, every line sealed by its own sender — and `fake-api.ts` serves
 it. A fake handing the browser plaintext would be testing a wire format this product does not have.
+
+## Recovery
+
+A device that loses its keys loses what it could read, and the only honest way back is a secret the
+person holds outside this product. That is a **generated** 120-bit phrase, and everything about the
+design follows from refusing the two shortcuts a wallet-first product reaches for first.
+
+**It is not derived from a wallet signature, and that is the most important sentence here.** A
+deterministic `personal_sign` over a fixed string would be the obvious move on a platform where
+everybody already has a wallet — and it would be an unrevocable, phishable, remote skeleton key to
+every message the account has ever received. Getting one signature out of somebody is the single
+most practised attack in this industry, and unlike a stolen device there would be nothing to
+revoke. The phrase is random, it is shown once, and it exists only where the person put it.
+
+**It is not chosen either.** PBKDF2 is the only KDF `SubtleCrypto` offers, and against a GPU it is
+weak enough that a human-chosen phrase is a real break rather than a theoretical one. 600,000
+iterations is in `recovery.ts` as belt; the 120 bits of entropy are braces, and the comment on the
+constant says so — because the day somebody argues for letting people type their own phrase, that
+number is what will be quoted as though it made it safe.
+
+**Crockford base32, not a wordlist.** BIP-39 is 13 KB of dictionary shipped to every browser for a
+string people write on paper once. Crockford excludes the four characters people confuse and folds
+the confusable ones back on input, so a hand-copied `O` becomes `0` and nobody is told they got it
+wrong for writing a capital letter.
+
+**The phrase is minted in CANONICAL form and grouped only for the screen.** `mintPhrase` returns
+twenty-four bare symbols; `groupPhrase` is for display and `normalisePhrase` is what everything
+derives from. It shipped the other way round for an afternoon — minted pre-grouped, so setting up
+recovery derived from `AB12-CD34-…` while using it derived from `AB12CD34…`, and the feature could
+never have worked for anybody. Every gate was green. The browser pass found it, and
+`recovery.spec.ts` now pins the round trip through the form a person is actually shown.
+
+**What it protects is an ARCHIVE KEY, and the archive key seals every epoch key.** One secret
+restores every conversation. It does NOT restore a device's identity: those keypairs are
+non-extractable and stay that way, so a replacement browser enrols as itself with its own wallet
+attestation and then restores what it can read. The working copy of the archive key lives in this
+browser's vault beside the epoch keys, because otherwise archiving a key learned today would need
+somebody to type twenty-four characters first.
+
+**Confirming a device is what recovery is FOR.** A replacement browser enrols as a second device,
+every device after the first arrives `pending`, and the only thing that can confirm one is another
+device of the account — which is exactly what was lost. So the phrase vouches: the client signs a
+one-shot challenge naming the account and the device, and the server checks it against a stored
+public key. The nonce names the DEVICE for the same reason the enrolment message does, and is burned
+FIRST by a conditional UPDATE, so two replays of one signature race in the database and one wins.
+
+**The server holds nothing it could use.** The salt is public by construction, the public key
+verifies and decrypts nothing, and the wrapped archive key and its check value are sealed under a
+phrase that has never been here. Holding the whole table gets an attacker no closer to a message
+than holding none of it.
+
+**Writing a vault needs a CONFIRMED device.** A pending device that could write its own vault would
+then present its own phrase to confirm itself, and the confirmation step would mean nothing at all —
+the same reasoning that stops an unconfirmed device vouching for another.
+
+**Rolling a phrase keeps the archive key** and re-seals it, so everything already backed up stays
+readable and only the outer wrapping changes. Minting a fresh archive key instead would silently
+orphan every row in the archive. Turning recovery off drops the vault AND the archive together: a
+phrase that restores nothing and ciphertext nobody can open are both broken promises.
+
+**`readiness` reads this browser's keyring, never the server's `current`.** It used to fall back to
+the device the SESSION is bound to, which reads as reasonable until the keyring is gone — a browser
+whose storage was cleared or evicted went on reporting `ready`, the panel said "This browser is set
+up", and the chat silently refused to send. That is precisely the situation recovery exists for and
+the one place the product must not be confidently wrong. The browser pass found it by deleting
+`nura-keyring` and reloading, which is what losing a laptop looks like from the inside.
+
+**`tools/qa/seal-pass.mjs` loses a laptop in every cell.** It makes a phrase, throws the keyring
+away, re-enrols as a pending device and types the phrase back in — at 390 and 1280, both themes,
+both languages. Two of the defects above were found that way and neither was visible to any gate.
 
 ## Notifications, and a push that carries nothing
 

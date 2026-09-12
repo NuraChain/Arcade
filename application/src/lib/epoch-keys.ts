@@ -26,6 +26,16 @@ import { EPOCH_STORE, keyringAvailable, transact, VAULT_STORE } from './keyring-
 const VAULT = 'self';
 const IV_BYTES = 12;
 
+/**
+ * Where the ARCHIVE key rests, in the same vault and under the same device key.
+ *
+ * It has to be here rather than behind the phrase, or this browser could not archive an epoch key
+ * it learned today without asking somebody to type twenty-four characters first. The phrase seals
+ * the archive key ON THE SERVER; this is the working copy, and it is exactly as protected as every
+ * epoch key beside it.
+ */
+const ARCHIVE = 'archive';
+
 interface Sealed
 {
     iv: string;
@@ -33,6 +43,16 @@ interface Sealed
 }
 
 const slotFor = (conversationId: string, epoch: number): string => `${ conversationId }:${ epoch }`;
+
+const slotBack = (slot: string): { conversationId: string; epoch: number } | null =>
+{
+    const cut = slot.lastIndexOf(':');
+    const epoch = Number(slot.slice(cut + 1));
+
+    return cut < 0 || !Number.isSafeInteger(epoch) || epoch < 1
+        ? null
+        : { conversationId: slot.slice(0, cut), epoch };
+};
 
 /**
  * The vault key, made once and never replaced.
@@ -135,6 +155,109 @@ export async function recallEpochKey(conversationId: string, epoch: number): Pro
     }
 }
 
+/** The archive key this browser is working with, or null when recovery is not set up here. */
+export async function recallArchiveKey(): Promise<Uint8Array | null>
+{
+    const vault = await vaultKey();
+    if (vault === null)
+    {
+        return null;
+    }
+
+    const record = await transact<Sealed | undefined>(VAULT_STORE, 'readonly', (store) => store.get(ARCHIVE))
+        .catch(() => undefined);
+
+    if (record === undefined)
+    {
+        return null;
+    }
+
+    try
+    {
+        const opened = await crypto.subtle.decrypt(
+            { name: 'AES-GCM', iv: fromBase64Url(record.iv) as BufferSource },
+            vault,
+            fromBase64Url(record.bytes) as BufferSource
+        );
+        return new Uint8Array(opened);
+    }
+    catch
+    {
+        return null;
+    }
+}
+
+export async function rememberArchiveKey(key: Uint8Array): Promise<boolean>
+{
+    const vault = await vaultKey();
+    if (vault === null)
+    {
+        return false;
+    }
+
+    const iv = crypto.getRandomValues(new Uint8Array(IV_BYTES));
+    const sealed = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv as BufferSource }, vault, key as BufferSource));
+
+    try
+    {
+        await transact(VAULT_STORE, 'readwrite', (store) =>
+            store.put({ iv: toBase64Url(iv), bytes: toBase64Url(sealed) }, ARCHIVE));
+        return true;
+    }
+    catch
+    {
+        return false;
+    }
+}
+
+export async function forgetArchiveKey(): Promise<void>
+{
+    if (!keyringAvailable())
+    {
+        return;
+    }
+    await transact(VAULT_STORE, 'readwrite', (store) => store.delete(ARCHIVE)).catch(() => undefined);
+}
+
+/**
+ * Every epoch key this browser holds, so setting up recovery can back-fill what is already here.
+ *
+ * Reads the slot NAMES first and opens each one, rather than pulling every record into memory: a
+ * browser that has been in a lot of conversations holds a lot of keys, and all of them being live
+ * bytes at once for the sake of one sweep is the opposite of what the rest of this file is for.
+ */
+export async function heldEpochKeys(): Promise<{ conversationId: string; epoch: number; key: Uint8Array }[]>
+{
+    if (!keyringAvailable())
+    {
+        return [];
+    }
+
+    const slots = await transact<IDBValidKey[]>(EPOCH_STORE, 'readonly', (store) => store.getAllKeys())
+        .catch(() => [] as IDBValidKey[]);
+
+    const held: { conversationId: string; epoch: number; key: Uint8Array }[] = [];
+
+    for (const slot of slots)
+    {
+        const named = typeof slot === 'string' ? slotBack(slot) : null;
+
+        if (named === null)
+        {
+            continue;
+        }
+
+        const key = await recallEpochKey(named.conversationId, named.epoch);
+
+        if (key !== null)
+        {
+            held.push({ ...named, key });
+        }
+    }
+
+    return held;
+}
+
 /**
  * Throws away every epoch key this browser holds.
  *
@@ -149,4 +272,5 @@ export async function forgetEpochKeys(): Promise<void>
         return;
     }
     await transact(EPOCH_STORE, 'readwrite', (store) => store.clear()).catch(() => undefined);
+    await forgetArchiveKey();
 }

@@ -224,6 +224,77 @@ export const enrolInput = object({
 
 export const deviceLabelInput = object({ label: string() });
 
+/* ---------------------------------------------------------------- recovery */
+
+/**
+ * What this account's recovery vault looks like from outside it.
+ *
+ * `salt` is here because deriving the key needs it and it is public by construction - a salt is
+ * part of a key, never part of a secret. `checkValue` is here so a browser can tell somebody their
+ * phrase is wrong without first failing to open an archive. Nothing else about the vault travels,
+ * and nothing that does would help anybody read a message.
+ */
+export const recoveryState = object({
+    configured: boolean(),
+    salt: string().optional(),
+    checkValue: string().optional(),
+    createdAt: string().optional()
+});
+
+export type RecoveryState = Infer<typeof recoveryState>;
+
+/**
+ * Writing or replacing the vault.
+ *
+ * Replacing is how a phrase is rolled: the client re-seals the SAME archive key under a new phrase,
+ * so everything already archived stays readable and only the outer wrapping changes. This server
+ * cannot tell the two cases apart, which is correct - it can read neither.
+ */
+export const recoveryVaultInput = object({
+    salt: string(),
+
+    /** The uncompressed P-256 point, which verifies a signature and decrypts nothing. */
+    publicKey: string(),
+
+    wrapped: string(),
+    checkValue: string()
+});
+
+/** One epoch key, sealed to the archive key rather than to a device. */
+export const archiveInput = object({
+    conversationId: string(),
+    epoch: number(),
+    wrapped: string()
+});
+
+export const archiveEntry = object({
+    conversationId: string(),
+    epoch: number(),
+    wrapped: string()
+});
+
+export const archiveList = object({ entries: array(archiveEntry) });
+
+export type ArchiveList = Infer<typeof archiveList>;
+
+/** A one-shot challenge for one device, plus the salt needed to derive the key that signs it. */
+export const recoveryChallengeInput = object({ deviceId: string() });
+
+export const recoveryChallengeOut = object({
+    nonce: string(),
+    salt: string(),
+    expiresAt: string()
+});
+
+export const recoveryConfirmInput = object({
+    deviceId: string(),
+    nonce: string(),
+    signature: string()
+});
+
+/** What a browser gets for proving the phrase: the sealed archive key, and nothing else. */
+export const recoveryConfirmOut = object({ wrapped: string() });
+
 /**
  * A device of somebody ELSE, as a peer may see it.
  *

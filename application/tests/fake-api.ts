@@ -217,6 +217,17 @@ export const server =
     sealDevice: null as string | null,
 
     /**
+     * The recovery vault, exactly as opaque here as it is on the real server.
+     *
+     * This fake stores four strings it cannot read and verifies nothing, because verifying a P-256
+     * signature is a claim about the SERVER and belongs to `recovery.db.spec.ts` against a real
+     * Postgres. What it is for is letting a page mount the store without exploding.
+     */
+    vault: null as { salt: string; publicKey: string; wrapped: string; checkValue: string } | null,
+
+    archive: [] as { conversationId: string; epoch: number; wrapped: string }[],
+
+    /**
      * Devices, in memory.
      *
      * This fake does NOT recompute an id from the keys. That rule belongs to the real server and
@@ -325,6 +336,8 @@ export const server =
         server.conversationDevices = {};
         server.epochs = {};
         server.sealDevice = null;
+        server.vault = null;
+        server.archive = [];
         server.devices = [];
         server.currentDevice = null;
         server.refuseEnrol = null;
@@ -970,6 +983,95 @@ export const client =
             const found = mustDevice(params.id);
             found.label = input.label;
             return found;
+        },
+
+        async recovery()
+        {
+            server.calls.push('devices.recovery');
+
+            return server.vault === null
+                ? { configured: false }
+                : {
+                    configured: true,
+                    salt: server.vault.salt,
+                    checkValue: server.vault.checkValue,
+                    createdAt: new Date(0).toISOString()
+                };
+        },
+
+        async setRecovery({ input }: { input: { salt: string; publicKey: string; wrapped: string; checkValue: string } })
+        {
+            server.calls.push('devices.setRecovery');
+            server.vault = { ...input };
+
+            return {
+                configured: true,
+                salt: input.salt,
+                checkValue: input.checkValue,
+                createdAt: new Date(0).toISOString()
+            };
+        },
+
+        async clearRecovery()
+        {
+            server.calls.push('devices.clearRecovery');
+            server.vault = null;
+            server.archive = [];
+            return { ok: true };
+        },
+
+        async archive({ input }: { input: { conversationId: string; epoch: number; wrapped: string } })
+        {
+            server.calls.push('devices.archive');
+
+            const held = server.archive.some((one) =>
+                one.conversationId === input.conversationId && one.epoch === input.epoch);
+
+            if (!held)
+            {
+                server.archive.push({ ...input });
+            }
+            return { ok: true };
+        },
+
+        async archived()
+        {
+            server.calls.push('devices.archived');
+            return { entries: server.archive.map((one) => ({ ...one })) };
+        },
+
+        async recoveryChallenge({ input }: { input: { deviceId: string } })
+        {
+            server.calls.push('devices.recoveryChallenge');
+
+            if (server.vault === null)
+            {
+                throw new ApiError(404, 'not-found', 'This account has no recovery phrase.', undefined);
+            }
+
+            return {
+                nonce: `nonce-for-${ input.deviceId }`,
+                salt: server.vault.salt,
+                expiresAt: new Date(1_700_000_300_000).toISOString()
+            };
+        },
+
+        async recoverDevice({ input }: { input: { deviceId: string; nonce: string; signature: string } })
+        {
+            server.calls.push('devices.recoverDevice');
+
+            if (server.vault === null || input.signature === '')
+            {
+                throw new ApiError(401, 'unauthorized', 'That is not the recovery phrase for this account.', undefined);
+            }
+
+            const row = server.devices.find((one) => one.id === input.deviceId);
+
+            if (row !== undefined)
+            {
+                row.confirmed = true;
+            }
+            return { wrapped: server.vault.wrapped };
         },
 
         async revoke({ params }: { params: { id: string } })
