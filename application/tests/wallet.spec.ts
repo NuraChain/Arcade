@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 import { NURA_CHAIN, chainHost, chainIsConfigured } from '../src/data/chain.ts';
-import { resetDataset } from '../src/data/mock/index.ts';
 import { manualClock, type ManualClock } from '../src/lib/clock.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import {
@@ -95,7 +94,6 @@ beforeEach(() =>
     resetRuntime();
     clock = manualClock(1_700_000_000_000);
     setRuntime({ clock, seed: 4 });
-    resetDataset();
     server.reset();
     forgetWallets();
     useSession().reset();

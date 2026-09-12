@@ -3,7 +3,7 @@ import { createStore, createResource, createSignal, untrack, type Getter } from 
 import { client, type MuteSubject, type Privacy } from '../api.ts';
 
 import type { Person } from '../data/person.ts';
-import type { FriendRequest, Report, ReportCategory } from '../data/mock/types.ts';
+import type { FriendRequest, Report, ReportCategory } from '../data/chat.ts';
 import type { reasonFor } from '../services/social.service.ts';
 import { useAccount } from './account.store.ts';
 import { usePeople } from './people.store.ts';

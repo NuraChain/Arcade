@@ -1,6 +1,6 @@
 import type { GroupSummary } from '../../api.ts';
 import type { Person } from '../../data/person.ts';
-import type { Conversation } from '../../data/mock/types.ts';
+import type { Conversation } from '../../data/chat.ts';
 import type { LocalizedText } from '../../lib/text.ts';
 
 /**

@@ -3,7 +3,6 @@ import { cleanup, fire, renderTest } from '@azerothjs/testing';
 
 import GroupForm from '../src/components/social/group-form.component.azeroth';
 import { CRESTS, crestOf } from '../src/data/crests.ts';
-import { resetDataset } from '../src/data/mock/index.ts';
 import { manualClock } from '../src/lib/clock.ts';
 import { isLineKey, LINE_KEYS } from '../src/lib/lines.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
@@ -32,7 +31,6 @@ beforeEach(async () =>
     resetRuntime();
     clock = manualClock(1_200_000);
     setRuntime({ clock, seed: 7 });
-    resetDataset();
     server.reset();
     useRealtime().reset();
     socket.reset();

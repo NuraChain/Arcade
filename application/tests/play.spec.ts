@@ -8,7 +8,6 @@ const SEATED = ['alex', 'sara.k', 'reza.t', 'mina', 'nima.f', 'leila.a'];
 import GameCard from '../src/components/games/game-card.component.azeroth';
 import { gameArt, gameArtSet } from '../src/components/games/art.ts';
 import { GAMES } from '../src/data/games.ts';
-import { resetDataset } from '../src/data/mock/index.ts';
 import { manualClock, type ManualClock } from '../src/lib/clock.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import '../src/locales/app-catalogue.ts';
@@ -29,7 +28,6 @@ beforeEach(() =>
     resetRuntime();
     clock = manualClock(400_000);
     setRuntime({ clock, seed: 11 });
-    resetDataset();
     useLocale().setLocale('en');
     useSession().reset();
     useSession().establish({

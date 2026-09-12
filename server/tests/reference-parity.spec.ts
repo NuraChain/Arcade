@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
 import { ACHIEVEMENT_SEEDS, GAME_SEEDS } from '../src/db/seed-reference.ts';
-import { ACHIEVEMENTS } from '../../application/src/data/mock/achievements.ts';
 import { GAMES } from '../../application/src/data/games.ts';
 import { TABLE_RULES } from '../../application/src/data/tables.ts';
 
@@ -91,25 +90,11 @@ describe('games: the server and the 3D market agree', () =>
     });
 });
 
-describe('achievements: the server and the client agree', () =>
+describe('achievements: the server definitions hold together', () =>
 {
-    it('knows the same achievements, in the same order', () =>
+    it('gives every one a distinct id', () =>
     {
-        expect(ACHIEVEMENT_SEEDS.map((one) => one.id)).toEqual(ACHIEVEMENTS.map((one) => one.id));
-    });
-
-    it('carries both languages for every one of them', () =>
-    {
-        for (const seed of ACHIEVEMENT_SEEDS)
-        {
-            const client = ACHIEVEMENTS.find((one) => one.id === seed.id)!;
-            expect(seed.nameEn).toBe(client.name.en);
-            expect(seed.nameFa).toBe(client.name.fa);
-            expect(seed.blurbEn).toBe(client.blurb.en);
-            expect(seed.blurbFa).toBe(client.blurb.fa);
-            expect(seed.icon).toBe(client.icon);
-            expect(seed.tier).toBe(client.tier);
-        }
+        expect(new Set(ACHIEVEMENT_SEEDS.map((one) => one.id)).size).toBe(ACHIEVEMENT_SEEDS.length);
     });
 
     it('never ships an untranslated string, which the CHECK constraint also refuses', () =>

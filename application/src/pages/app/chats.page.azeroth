@@ -8,7 +8,7 @@ import EmptyState from '../../components/ui/empty-state.component.azeroth';
 import SearchInput from '../../components/ui/search-input.component.azeroth';
 import Skeleton from '../../components/ui/skeleton.component.azeroth';
 import Tabs from '../../components/ui/tabs.component.azeroth';
-import type { Conversation } from '../../data/mock/types.ts';
+import type { Conversation } from '../../data/chat.ts';
 import { fold } from '../../services/search.service.ts';
 import { usePeople } from '../../stores/people.store.ts';
 import { useChat } from '../../stores/chat.store.ts';

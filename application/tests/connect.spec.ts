@@ -2,7 +2,6 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { cleanup, fire, renderTest } from '@azerothjs/testing';
 
 import ConnectDialog from '../src/components/layout/connect-dialog.component.azeroth';
-import { resetDataset } from '../src/data/mock/index.ts';
 import { manualClock } from '../src/lib/clock.ts';
 import { qrOf } from '../src/lib/qr.ts';
 import { discoverWallets, forgetWallets, type Eip1193Provider } from '../src/lib/wallet.ts';
@@ -86,7 +85,6 @@ beforeEach(() =>
     cleanup();
     resetRuntime();
     setRuntime({ clock: manualClock(1_700_000_000_000), seed: 4 });
-    resetDataset();
     server.reset();
     forgetWallets();
     useSession().reset();

@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 
-import { resetDataset } from '../src/data/mock/index.ts';
 import { manualClock, type ManualClock } from '../src/lib/clock.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import { fold, rank, ranked } from '../src/services/search.service.ts';
@@ -27,7 +26,6 @@ beforeEach(() =>
     resetRuntime();
     clock = manualClock(900_000);
     setRuntime({ clock, seed: 9 });
-    resetDataset();
     memory.clear();
     Object.defineProperty(window, 'localStorage', {
         configurable: true,

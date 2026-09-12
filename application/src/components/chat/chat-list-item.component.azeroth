@@ -1,7 +1,7 @@
 import { Link } from 'azerothjs';
 
 import { isLineKey } from '../../lib/lines.ts';
-import type { Conversation } from '../../data/mock/types.ts';
+import type { Conversation } from '../../data/chat.ts';
 import { attachHold } from '../../lib/hold.ts';
 import Icon from '../../icons/icon.component.azeroth';
 import { usePeople } from '../../stores/people.store.ts';

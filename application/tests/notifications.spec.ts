@@ -3,7 +3,6 @@ import { cleanup, renderTest } from '@azerothjs/testing';
 
 import type { Notification } from '../src/api.ts';
 import NotificationRow from '../src/components/social/notification-row.component.azeroth';
-import { resetDataset } from '../src/data/mock/index.ts';
 import { manualClock } from '../src/lib/clock.ts';
 import { decodeKey } from '../src/lib/push.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
@@ -32,7 +31,6 @@ beforeEach(async () =>
     resetRuntime();
     clock = manualClock(3_000_000);
     setRuntime({ clock, seed: 3 });
-    resetDataset();
     server.reset();
     useRealtime().reset();
     socket.reset();

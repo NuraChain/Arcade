@@ -638,11 +638,25 @@ from people who were not there, and a per-send timer that typed a reply back; bo
 Until the realtime work lands, the only thing that produces a message is somebody sending one, and
 the list refreshes when the app asks it to.
 
+**The browser's mock is gone.** `application/src/data/mock/` held twenty-four invented people, the
+threads between them, a script of replies to type back, and a copy of the achievement definitions.
+Every name on every screen came out of it - including for accounts that really exist - through
+`personById`, and `account.store.ts` synthesised the rest. What replaces it is `people.store.ts`: a
+cache of whatever the server has actually said, keyed by handle, where a handle nobody has described
+is ABSENT and the caller renders the handle.
+
+Two rules make that store safe to read anywhere. It only ever holds what the server sent - nothing
+is derived or defaulted - and `byHandle` never fetches, so it is safe inside a `derived`; asking is
+a separate `want()` the owning store calls once its own list has landed.
+
+The chat view types moved to `data/chat.ts`, which is where they always belonged: they are the
+client's view of a `ConversationSummary` and a `ChatMessage`, not fixture shapes. `Message.text` is
+a plain string now, because a message is what somebody typed.
+
 **Development fixtures** live in `server/src/db/seed-fixtures.ts` and refuse to run outside
-development. They seed the same twenty-four people, friendships and conversations the mock
-describes, so the demo tour still opens onto a populated room. `tests/fake-api.ts` imports the
-same file, so the browser specs and the server agree about who exists by construction. Deleting
-that file is how the mock finally goes away.
+development. They seed twenty-four people, friendships and conversations so there is a populated
+room to look at. `tests/fake-api.ts` imports the same file, so the browser specs and the server
+agree about who exists by construction.
 
 Each fixture conversation is written in ONE language, because a real message is one language. The
 bilingual strings were a mock convenience the wire format does not have.

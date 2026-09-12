@@ -1,6 +1,6 @@
 import { Link, useNavigate } from 'azerothjs';
 
-import type { Message } from '../../data/mock/types.ts';
+import type { Message } from '../../data/chat.ts';
 import Icon from '../../icons/icon.component.azeroth';
 import { isLineKey } from '../../lib/lines.ts';
 import { usePeople } from '../../stores/people.store.ts';

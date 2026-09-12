@@ -3,7 +3,6 @@ import { cleanup } from '@azerothjs/testing';
 
 import { defaultTable, TABLE_RULES } from '../src/data/tables.ts';
 import { GAMES } from '../src/data/games.ts';
-import { resetDataset } from '../src/data/mock/index.ts';
 import { manualClock } from '../src/lib/clock.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import { useLobby } from '../src/stores/lobby.store.ts';
@@ -30,7 +29,6 @@ beforeEach(async () =>
     resetRuntime();
     clock = manualClock(2_000_000);
     setRuntime({ clock, seed: 5 });
-    resetDataset();
     server.reset();
     useRealtime().reset();
     socket.reset();

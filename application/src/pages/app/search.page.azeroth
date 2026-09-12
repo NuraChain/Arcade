@@ -12,7 +12,7 @@ import Pagination from '../../components/ui/pagination.component.azeroth';
 import Rail from '../../components/ui/rail.component.azeroth';
 import SearchInput from '../../components/ui/search-input.component.azeroth';
 import SectionHeading from '../../components/ui/section-heading.component.azeroth';
-import type { Conversation } from '../../data/mock/types.ts';
+import type { Conversation } from '../../data/chat.ts';
 import Icon from '../../icons/icon.component.azeroth';
 import { usePeople } from '../../stores/people.store.ts';
 import { useChat } from '../../stores/chat.store.ts';

@@ -12,7 +12,6 @@ import { useSession } from '../src/stores/session.store.ts';
 import { defaultSettings, useSettings } from '../src/stores/settings.store.ts';
 import { useShell } from '../src/stores/shell.store.ts';
 import { TOAST_DURATION, TOAST_VISIBLE, useToasts } from '../src/stores/toasts.store.ts';
-import { resetDataset } from '../src/data/mock/index.ts';
 import { server } from './fake-api.ts';
 import { socket } from './fake-realtime.ts';
 
@@ -28,7 +27,6 @@ beforeEach(() =>
     resetRuntime();
     clock = manualClock(1_000_000);
     setRuntime({ clock, seed: 3 });
-    resetDataset();
     server.reset();
     memory.clear();
     Object.defineProperty(window, 'localStorage', {

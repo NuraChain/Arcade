@@ -1,7 +1,7 @@
 import { createStore, createResource, createSignal, untrack, type Getter } from 'azerothjs';
 
 import { client } from '../api.ts';
-import type { Conversation, Message } from '../data/mock/types.ts';
+import type { Conversation, Message } from '../data/chat.ts';
 import { runtime } from '../lib/runtime.ts';
 import { createApiSource, type ChatScope, type ChatSource, type ConversationRow } from '../services/chat.source.ts';
 import { useAccount } from './account.store.ts';

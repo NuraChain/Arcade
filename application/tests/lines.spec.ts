@@ -3,8 +3,7 @@ import { cleanup, renderTest } from '@azerothjs/testing';
 import { RouterProvider, createMemoryHistory, createRouter } from 'azerothjs';
 
 import MessageBubble from '../src/components/chat/message-bubble.component.azeroth';
-import { resetDataset } from '../src/data/mock/index.ts';
-import type { Message } from '../src/data/mock/types.ts';
+import type { Message } from '../src/data/chat.ts';
 import { manualClock } from '../src/lib/clock.ts';
 import { LINE_KEYS, isLineKey } from '../src/lib/lines.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
@@ -52,7 +51,6 @@ beforeEach(() =>
 {
     resetRuntime();
     setRuntime({ clock: manualClock(1_700_000_000_000), seed: 3 });
-    resetDataset();
     useLocale().setLocale('en');
 });
 

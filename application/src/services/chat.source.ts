@@ -1,5 +1,5 @@
 import { client } from '../api.ts';
-import type { Conversation, Message, MessageKind } from '../data/mock/types.ts';
+import type { Conversation, Message, MessageKind } from '../data/chat.ts';
 
 export interface ChatScope
 {

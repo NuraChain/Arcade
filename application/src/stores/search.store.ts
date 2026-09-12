@@ -3,7 +3,7 @@ import { createStore, createSignal, type Getter } from 'azerothjs';
 import { GAMES, type Game } from '../data/games.ts';
 import type { GroupSummary } from '../api.ts';
 import type { Person } from '../data/person.ts';
-import type { Message } from '../data/mock/types.ts';
+import type { Message } from '../data/chat.ts';
 import { recallJson, rememberJson } from '../lib/storage.ts';
 import { pickText } from '../lib/text.ts';
 import { fold, ranked } from '../services/search.service.ts';
