@@ -4,6 +4,7 @@ import { cleanup, fire, renderTest } from '@azerothjs/testing';
 import BrandMark from '../src/components/layout/brand-mark.component.azeroth';
 import Button from '../src/components/ui/button.component.azeroth';
 import GameRow from '../src/components/ui/game-row.component.azeroth';
+import SectionHeading from '../src/components/ui/section-heading.component.azeroth';
 import { GAMES } from '../src/data/games.ts';
 import { useFocus } from '../src/stores/focus.store.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
@@ -15,6 +16,22 @@ beforeEach(() =>
     cleanup();
     useLocale().setLocale('en');
     useFocus().focus(null);
+});
+
+describe('SectionHeading', () =>
+{
+    it('renders the controls it was handed', () =>
+    {
+        // It used to take no children at all, so a heading written with a button INSIDE it
+        // rendered the heading and dropped the button - silently, and on two pages at once.
+        const { container } = renderTest(() => SectionHeading({
+            title: 'Your groups',
+            actions: Button({ children: 'New group' })
+        }) as Rendered);
+
+        expect(container.textContent).toContain('Your groups');
+        expect(container.querySelector('button')?.textContent).toContain('New group');
+    });
 });
 
 describe('Button', () =>

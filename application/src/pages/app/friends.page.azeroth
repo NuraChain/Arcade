@@ -2,17 +2,21 @@ import { useHead, useNavigate } from 'azerothjs';
 
 import Page from '../../components/app/page.component.azeroth';
 import FriendRow from '../../components/social/friend-row.component.azeroth';
+import GroupCard from '../../components/social/group-card.component.azeroth';
+import GroupForm from '../../components/social/group-form.component.azeroth';
 import PersonActions from '../../components/social/person-actions.component.azeroth';
 import UserCard from '../../components/social/user-card.component.azeroth';
 import Button from '../../components/ui/button.component.azeroth';
 import EmptyState from '../../components/ui/empty-state.component.azeroth';
 import IconButton from '../../components/ui/icon-button.component.azeroth';
 import Pagination from '../../components/ui/pagination.component.azeroth';
+import SectionHeading from '../../components/ui/section-heading.component.azeroth';
 import Tabs from '../../components/ui/tabs.component.azeroth';
 import { personById } from '../../data/mock/index.ts';
 import type { Person } from '../../data/mock/types.ts';
 import { useChat } from '../../stores/chat.store.ts';
 import { useLobby } from '../../stores/lobby.store.ts';
+import { useGroups } from '../../stores/groups.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useOverlay } from '../../stores/overlay.store.ts';
@@ -29,6 +33,7 @@ export default component FriendsPage()
     const locale = useLocale();
     const social = useSocial();
     const presence = usePresence();
+    const groups = useGroups();
     const device = useDevice();
     const chat = useChat();
     const lobby = useLobby();
@@ -60,6 +65,7 @@ export default component FriendsPage()
     mount
     {
         social.want('suggestions');
+        groups.want();
     }
 
     derived allSuggestions = social.suggestions();
@@ -70,7 +76,8 @@ export default component FriendsPage()
         { id: 'all', label: locale.t('friends.tab.all'), count: friends.length },
         { id: 'online', label: locale.t('friends.tab.online'), count: online.length },
         { id: 'requests', label: locale.t('friends.tab.requests'), count: incoming.length },
-        { id: 'suggestions', label: locale.t('friends.tab.suggestions') }
+        { id: 'suggestions', label: locale.t('friends.tab.suggestions') },
+        { id: 'groups', label: locale.t('groups.title'), count: groups.mine().length }
     ];
 
     derived pool = tab === 'online' ? online : friends;
@@ -90,6 +97,17 @@ export default component FriendsPage()
     const more = (person: Person): void =>
     {
         overlay.open(PersonActions, { personId: person.id }, { label: locale.t('actions.title') });
+    };
+
+    const makeGroup = (): void =>
+    {
+        void overlay.open(GroupForm, {}, { label: locale.t('groups.createTitle') }).closed.then((made) =>
+        {
+            if (made !== undefined && made !== null)
+            {
+                navigate(`/app/groups/${ (made as { slug: string }).slug }`);
+            }
+        });
     };
 
     <Page
@@ -267,6 +285,61 @@ export default component FriendsPage()
                         </ul>
                     }
                 </Show>
+            }
+        </Show>
+
+        <Show when={ tab === 'groups' }>
+            { () =>
+                <div class="flex flex-col gap-6">
+                    <section>
+                        <SectionHeading
+                            title={ locale.t('groups.mine') }
+                            actions={ <Button variant="ghost" size="sm" leading="add" onClick={ makeGroup }>{ locale.t('groups.create') }</Button> }
+                        />
+
+                        <Show
+                            when={ groups.mine().length > 0 }
+                            fallback={
+                                <EmptyState
+                                    icon="people"
+                                    title={ locale.t('groups.none') }
+                                    lead={ locale.t('groups.noneLead') }
+                                    action={ locale.t('groups.create') }
+                                    onAction={ makeGroup }
+                                    class="py-10"
+                                />
+                            }
+                        >
+                            { () =>
+                                <ul class="grid gap-2 @2xl:grid-cols-2" aria-label={ locale.t('groups.mine') }>
+                                    <For each={ groups.mine() } key={ (group) => group.id } let={ group }>
+                                        <li class="flex min-w-0">
+                                            <GroupCard group={ group } class="flex-1" />
+                                        </li>
+                                    </For>
+                                </ul>
+                            }
+                        </Show>
+                    </section>
+
+                    <section>
+                        <SectionHeading title={ locale.t('groups.discover') } />
+                        <Show
+                            when={ groups.elsewhere().length > 0 }
+                            fallback={ <p class="text-ui-base text-muted">{ locale.t('groups.discoverNone') }</p> }
+                        >
+                            { () =>
+                                <ul class="grid gap-2 @2xl:grid-cols-2" aria-label={ locale.t('groups.discover') }>
+                                    <For each={ groups.elsewhere() } key={ (group) => group.id } let={ group }>
+                                        <li class="flex min-w-0">
+                                            <GroupCard group={ group } class="flex-1" />
+                                        </li>
+                                    </For>
+                                </ul>
+                            }
+                        </Show>
+                    </section>
+                </div>
             }
         </Show>
 

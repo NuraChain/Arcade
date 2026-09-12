@@ -10,6 +10,7 @@ import { setChatSource, useChat } from '../src/stores/chat.store.ts';
 import { createApiSource, type ChatSource } from '../src/services/chat.source.ts';
 import { server } from './fake-api.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
+import { useGroups } from '../src/stores/groups.store.ts';
 import { useNotifications } from '../src/stores/notifications.store.ts';
 import { useSearch } from '../src/stores/search.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
@@ -56,6 +57,7 @@ beforeEach(() =>
     });
     server.reset();
     useSocial().reset();
+    useGroups().reset();
     useChat().reset();
     useNotifications().reset();
     useSearch().reset();
@@ -562,13 +564,20 @@ describe('notifications store', () =>
 
 describe('search store', () =>
 {
-    it('finds people, games, groups and messages, and remembers the term', () =>
+    it('finds people, games, groups and messages, and remembers the term', async () =>
     {
         const search = useSearch();
+        const groups = useGroups();
+
+        // Groups are the server's now, and search looks through what this device has already
+        // loaded rather than fetching on a keystroke - so the page's own `want()` stands in here.
+        groups.want();
+        await groups.refresh();
+
         search.setQuery('backgammon');
         const results = search.results();
         expect(results.games.some((game) => game.id === 'backgammon')).toBe(true);
-        expect(results.groups.some((group) => group.id === 'g-balcony')).toBe(true);
+        expect(results.groups.some((group) => group.id === 'balcony-backgammon')).toBe(true);
         expect(results.total).toBeGreaterThan(0);
 
         search.remember('backgammon');

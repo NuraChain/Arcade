@@ -7,6 +7,8 @@ export type {
     AchievementDefinition,
     Challenge,
     GameSummary,
+    GroupRole,
+    GroupSummary,
     MuteSubject,
     PersonSummary,
     PersonView,

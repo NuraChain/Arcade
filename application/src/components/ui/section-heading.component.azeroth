@@ -1,12 +1,15 @@
-import type { NavigateTarget } from 'azerothjs';
+import type { Child, NavigateTarget } from 'azerothjs';
 import { Link } from 'azerothjs';
 
 import Icon from '../../icons/icon.component.azeroth';
 
-export default component SectionHeading(props: { title: string; more?: string; to?: NavigateTarget; id?: string; class?: string })
+export default component SectionHeading(props: { title: string; more?: string; to?: NavigateTarget; actions?: Child; id?: string; class?: string })
 {
     <div class={ [ 'mb-3 flex items-center justify-between gap-3', props.class ?? '' ].filter(Boolean).join(' ') }>
         <h2 id={ props.id } class="font-ui text-ui-sm font-bold uppercase tracking-[0.08em] text-faint [font-variation-settings:normal] [letter-spacing:0.08em]">{ props.title }</h2>
+        <Show when={ props.actions !== undefined }>
+            { () => <span class="flex shrink-0 items-center gap-1">{ props.actions }</span> }
+        </Show>
         <Show when={ props.more !== undefined && props.to !== undefined }>
             { () =>
                 <Link to={ props.to! } class="-me-2 flex min-h-11 items-center gap-0.5 px-2 text-ui-sm font-semibold text-accent hover:underline">

@@ -1,7 +1,7 @@
 import { Link, useHead, useNavigate, useParams } from 'azerothjs';
 
 import Page from '../../components/app/page.component.azeroth';
-import { othersOf, titleOf } from '../../components/chat/chat-title.ts';
+import { groupNameOf, othersOf, titleOf } from '../../components/chat/chat-title.ts';
 import Composer from '../../components/chat/composer.component.azeroth';
 import MessageBubble from '../../components/chat/message-bubble.component.azeroth';
 import GroupCrest from '../../components/social/group-crest.component.azeroth';
@@ -11,9 +11,10 @@ import AvatarGroup from '../../components/ui/avatar-group.component.azeroth';
 import Button from '../../components/ui/button.component.azeroth';
 import EmptyState from '../../components/ui/empty-state.component.azeroth';
 import IconButton from '../../components/ui/icon-button.component.azeroth';
-import { groupById, personById } from '../../data/mock/index.ts';
+import { personById } from '../../data/mock/index.ts';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useChat } from '../../stores/chat.store.ts';
+import { useGroups } from '../../stores/groups.store.ts';
 import { useDevice } from '../../stores/device.store.ts';
 import { useLobby } from '../../stores/lobby.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
@@ -30,6 +31,7 @@ export default component ChatPage()
     const locale = useLocale();
     const social = useSocial();
     const chat = useChat();
+    const groups = useGroups();
     const presence = usePresence();
     const catalogue = useCatalogue();
     const lobby = useLobby();
@@ -52,9 +54,11 @@ export default component ChatPage()
 
     derived others = conversation === null ? [] : othersOf(conversation, me);
 
-    derived group = conversation?.groupId === undefined || conversation?.groupId === null ? null : (groupById(conversation.groupId) ?? null);
+    derived group = conversation?.groupId === undefined || conversation?.groupId === null ? null : (groups.byId(conversation.groupId) ?? null);
 
-    derived title = conversation === null ? locale.t('chat.notFound') : locale.text(titleOf(conversation, me));
+    derived title = conversation === null
+        ? locale.t('chat.notFound')
+        : locale.text(titleOf(conversation, me, groupNameOf(conversation, groups.byId)));
 
     derived messages = chat.messages();
 
@@ -200,7 +204,7 @@ export default component ChatPage()
                         >
                             { () =>
                                 <Link to={ `/app/groups/${ group!.id }` } class="flex h-11 w-10 shrink-0 items-center justify-center" aria-label={ locale.t('chat.openGroup') }>
-                                    <GroupCrest group={ group! } size="sm" />
+                                    <GroupCrest crest={ group!.crest } hue={ group!.hue } size="sm" />
                                 </Link>
                             }
                         </Show>

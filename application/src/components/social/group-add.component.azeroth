@@ -1,0 +1,95 @@
+import type { GroupSummary } from '../../api.ts';
+import { personById } from '../../data/mock/index.ts';
+import type { Person } from '../../data/mock/types.ts';
+import Icon from '../../icons/icon.component.azeroth';
+import { useGroups } from '../../stores/groups.store.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import type { OverlayProps } from '../../stores/overlay.store.ts';
+import { usePresence } from '../../stores/presence.store.ts';
+import { useSocial } from '../../stores/social.store.ts';
+import { useToasts } from '../../stores/toasts.store.ts';
+import Avatar from '../ui/avatar.component.azeroth';
+import EmptyState from '../ui/empty-state.component.azeroth';
+
+/**
+ * Who can be brought into a group: the people this account has added, minus whoever is already
+ * here.
+ *
+ * Friends only, and not because the server insists - it gates on `mayMessage`, which a stranger
+ * with open settings would pass. It is a product decision: a group is somebody's room, and being
+ * put in one by a person you have never spoken to is the kind of thing that needs an invitation
+ * rather than an addition. The server's rule is the floor; this is the door.
+ */
+export default component GroupAdd(props: OverlayProps & { group: GroupSummary })
+{
+    const locale = useLocale();
+    const groups = useGroups();
+    const social = useSocial();
+    const presence = usePresence();
+    const toasts = useToasts();
+
+    state pending = '';
+
+    derived candidates = social.friends()
+        .filter((handle) => !props.group.members.includes(handle))
+        .map((handle) => personById(handle))
+        .filter((person): person is Person => person !== undefined)
+        .sort((a, b) => (presence.isOnline(a.id) ? 0 : 1) - (presence.isOnline(b.id) ? 0 : 1));
+
+    const add = async (person: Person): Promise<void> =>
+    {
+        if (pending !== '')
+        {
+            return;
+        }
+        pending = person.id;
+        try
+        {
+            await groups.add(props.group.id, person.id);
+            toasts.show({ kind: 'success', text: locale.t('groups.added', { name: locale.text(person.name) }) });
+            props.close(person.id);
+        }
+        catch
+        {
+            toasts.show({ kind: 'warning', text: locale.t('state.errorLead') });
+        }
+        finally
+        {
+            pending = '';
+        }
+    };
+
+    <div class="flex flex-col gap-4 p-5">
+        <div>
+            <h2 class="title text-ui-xl text-text">{ locale.t('groups.addTitle', { name: props.group.name }) }</h2>
+            <p class="mt-2 text-ui-base text-muted">{ locale.t('groups.addLead') }</p>
+        </div>
+
+        <Show
+            when={ candidates.length > 0 }
+            fallback={ <EmptyState icon="people" title={ locale.t('groups.addNone') } class="py-8" /> }
+        >
+            { () =>
+                <ul class="flex flex-col gap-1" aria-label={ locale.t('groups.add') }>
+                    <For each={ candidates } key={ (person) => person.id } let={ person }>
+                        <li>
+                            <button
+                                type="button"
+                                class="flex min-h-14 w-full cursor-pointer items-center gap-3 rounded-tile px-2 py-2 text-start transition-colors hover:bg-raised/60"
+                                disabled={ pending !== '' }
+                                onClick={ () => void add(person) }
+                            >
+                                <Avatar person={ person } size="md" presence={ presence.dot(person.id) } />
+                                <span class="flex min-w-0 flex-1 flex-col">
+                                    <span class="truncate text-ui-base font-semibold text-text">{ locale.text(person.name) }</span>
+                                    <span class="truncate text-ui-xs text-muted">@{ person.handle }</span>
+                                </span>
+                                <Icon name="friend-add" size={ 16 } class="shrink-0 text-accent" />
+                            </button>
+                        </li>
+                    </For>
+                </ul>
+            }
+        </Show>
+    </div>
+}

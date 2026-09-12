@@ -6,6 +6,7 @@ import { routeMeta } from '../../lib/route-meta.ts';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useChat } from '../../stores/chat.store.ts';
 import { useConnection } from '../../stores/connection.store.ts';
+import { useGroups } from '../../stores/groups.store.ts';
 import { useDevice } from '../../stores/device.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useOverlay } from '../../stores/overlay.store.ts';
@@ -74,6 +75,7 @@ export default component AppShell(props: { children?: MountNode })
             useConnection().start(),
             useCatalogue().start(),
             useSocial().start(),
+            useGroups().start(),
             useChat().start(),
             useNotifications().start(),
             useWallet().start()

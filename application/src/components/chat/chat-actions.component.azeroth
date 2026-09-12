@@ -1,14 +1,14 @@
 import { useNavigate } from 'azerothjs';
 
-import { groupById } from '../../data/mock/index.ts';
 import Icon from '../../icons/icon.component.azeroth';
 import type { IconName } from '../../icons/registry.ts';
 import { useChat } from '../../stores/chat.store.ts';
+import { useGroups } from '../../stores/groups.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useSocial } from '../../stores/social.store.ts';
 import type { OverlayProps } from '../../stores/overlay.store.ts';
 import IconButton from '../ui/icon-button.component.azeroth';
-import { othersOf, titleOf } from './chat-title.ts';
+import { groupNameOf, othersOf, titleOf } from './chat-title.ts';
 
 interface Action
 {
@@ -23,11 +23,14 @@ export default component ChatActions(props: OverlayProps & { conversationId: str
     const locale = useLocale();
     const social = useSocial();
     const chat = useChat();
+    const groups = useGroups();
     const { navigate } = useNavigate();
 
     derived conversation = chat.conversation(props.conversationId) ?? null;
 
-    derived title = conversation === null ? props.conversationId : locale.text(titleOf(conversation, chat.me()));
+    derived title = conversation === null
+        ? props.conversationId
+        : locale.text(titleOf(conversation, chat.me(), groupNameOf(conversation, groups.byId)));
 
     derived pinned = chat.pinned(props.conversationId);
 
@@ -62,7 +65,7 @@ export default component ChatActions(props: OverlayProps & { conversationId: str
             });
         }
 
-        const group = conversation?.groupId === null || conversation?.groupId === undefined ? undefined : groupById(conversation.groupId);
+        const group = conversation?.groupId === null || conversation?.groupId === undefined ? undefined : groups.byId(conversation.groupId);
         if (group !== undefined)
         {
             list.push({

@@ -1,7 +1,7 @@
 import { Link, useHead, useNavigate } from 'azerothjs';
 
 import Page from '../../components/app/page.component.azeroth';
-import { titleOf } from '../../components/chat/chat-title.ts';
+import { groupNameOf, titleOf } from '../../components/chat/chat-title.ts';
 import GameArt from '../../components/games/game-art.component.azeroth';
 import FriendRow from '../../components/social/friend-row.component.azeroth';
 import GroupCard from '../../components/social/group-card.component.azeroth';
@@ -12,8 +12,10 @@ import Pagination from '../../components/ui/pagination.component.azeroth';
 import Rail from '../../components/ui/rail.component.azeroth';
 import SearchInput from '../../components/ui/search-input.component.azeroth';
 import SectionHeading from '../../components/ui/section-heading.component.azeroth';
+import type { Conversation } from '../../data/mock/types.ts';
 import Icon from '../../icons/icon.component.azeroth';
 import { useChat } from '../../stores/chat.store.ts';
+import { useGroups } from '../../stores/groups.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useSearch, SEARCH_SCOPES, type SearchScope } from '../../stores/search.store.ts';
 import { useSocial } from '../../stores/social.store.ts';
@@ -21,11 +23,26 @@ import { useSocial } from '../../stores/social.store.ts';
 const PEOPLE_PAGE = 8;
 const MESSAGE_PAGE = 10;
 
+const NOWHERE: Conversation = {
+    id: '',
+    kind: 'direct',
+    participants: [],
+    groupId: null,
+    tableId: null,
+    game: null,
+    title: null,
+    pinned: false,
+    lastReadAt: 0
+};
+
 export default component SearchPage()
 {
     const locale = useLocale();
     const search = useSearch();
     const chat = useChat();
+    const groups = useGroups();
+
+    const whereOf = (conversationId: string): Conversation => chat.conversation(conversationId) ?? NOWHERE;
     const social = useSocial();
     const { navigate } = useNavigate();
 
@@ -188,7 +205,7 @@ export default component SearchPage()
                                                 >
                                                     <span class="truncate text-ui-base text-text">{ locale.text(message.text) }</span>
                                                     <span class="truncate text-ui-xs text-faint">
-                                                        { locale.t('search.in', { where: locale.text(titleOf(chat.conversation(message.conversationId) ?? { id: '', kind: 'direct', participants: [], groupId: null, tableId: null, game: null, title: null, pinned: false, lastReadAt: 0 }, chat.me())) }) }
+                                                        { locale.t('search.in', { where: locale.text(titleOf(whereOf(message.conversationId), chat.me(), groupNameOf(whereOf(message.conversationId), groups.byId))) }) }
                                                         <span class="mx-1.5 inline-block h-1 w-1 rounded-full bg-faint align-middle" aria-hidden="true"></span>
                                                         { locale.relative(message.at) }
                                                     </span>

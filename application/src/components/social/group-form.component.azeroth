@@ -1,0 +1,180 @@
+import type { GroupSummary } from '../../api.ts';
+import { CRESTS, crestOf } from '../../data/crests.ts';
+import { GAMES, type GameId } from '../../data/games.ts';
+import Icon from '../../icons/icon.component.azeroth';
+import { useCatalogue } from '../../stores/catalogue.store.ts';
+import { useGroups } from '../../stores/groups.store.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import type { OverlayProps } from '../../stores/overlay.store.ts';
+import { useToasts } from '../../stores/toasts.store.ts';
+import Button from '../ui/button.component.azeroth';
+import Field from '../ui/field.component.azeroth';
+import Input from '../ui/input.component.azeroth';
+
+const NAME_MAX = 60;
+const BLURB_MAX = 240;
+
+/**
+ * One form for making a group and for editing one.
+ *
+ * The same fields either way, because they are the same fields - and an edit submits all of them
+ * rather than a patch, so there is no tri-state for "leave this alone" versus "clear it". What
+ * the form does NOT offer is the slug: it is claimed once, and a url that moves when somebody
+ * renames a group is a url that breaks every link they shared.
+ */
+export default component GroupForm(props: OverlayProps & { group?: GroupSummary })
+{
+    const locale = useLocale();
+    const groups = useGroups();
+    const catalogue = useCatalogue();
+    const toasts = useToasts();
+
+    derived editing = props.group !== undefined;
+
+    state name = props.group?.name ?? '';
+    state blurb = props.group?.blurb ?? '';
+    state crest = crestOf(props.group?.crest ?? CRESTS[0]);
+    state game = props.group?.game ?? '';
+    state touched = false;
+    state pending = false;
+
+    // A hue per crest rather than a colour picker: five crests and five hues is a palette, and a
+    // free hue is how a group ends up the same grey as every other group.
+    derived hue = props.group?.hue ?? CRESTS.indexOf(crest) * 67 + 25;
+
+    derived tooShort = name.trim().length < 2;
+
+    const submit = async (): Promise<void> =>
+    {
+        touched = true;
+        if (tooShort || pending)
+        {
+            return;
+        }
+
+        pending = true;
+        try
+        {
+            const saved = props.group === undefined
+                ? await groups.create({ name: name.trim(), blurb: blurb.trim(), crest, hue, game })
+                : await groups.edit(props.group.id, { name: name.trim(), blurb: blurb.trim(), crest, game });
+
+            toasts.show({
+                kind: 'success',
+                text: props.group === undefined
+                    ? locale.t('groups.made', { name: saved.name })
+                    : locale.t('groups.editTitle', { name: saved.name })
+            });
+            props.close(saved);
+        }
+        catch
+        {
+            toasts.show({ kind: 'warning', text: locale.t('state.errorLead') });
+        }
+        finally
+        {
+            pending = false;
+        }
+    };
+
+    <form
+        class="flex flex-col gap-5 p-5"
+        onSubmit={ (event) =>
+        {
+            event.preventDefault();
+            void submit();
+        } }
+    >
+        <div>
+            <h2 class="title text-ui-xl text-text">
+                { editing ? locale.t('groups.editTitle', { name: props.group!.name }) : locale.t('groups.createTitle') }
+            </h2>
+            <Show when={ !editing }>
+                <p class="mt-2 text-ui-base text-muted">{ locale.t('groups.createLead') }</p>
+            </Show>
+        </div>
+
+        <Field
+            id="group-name"
+            label={ locale.t('groups.name') }
+            hint={ locale.t('groups.nameHint') }
+            error={ touched && tooShort ? locale.t('groups.nameShort') : null }
+        >
+            <Input
+                id="group-name"
+                value={ name }
+                onInput={ (value) => name = value }
+                maxlength={ NAME_MAX }
+                invalid={ touched && tooShort }
+                describedBy={ touched && tooShort ? 'group-name-error' : 'group-name-hint' }
+            />
+        </Field>
+
+        <Field id="group-blurb" label={ locale.t('groups.blurb') } hint={ locale.t('groups.blurbHint') }>
+            <Input
+                id="group-blurb"
+                value={ blurb }
+                onInput={ (value) => blurb = value }
+                maxlength={ BLURB_MAX }
+                describedBy="group-blurb-hint"
+            />
+        </Field>
+
+        <fieldset class="flex flex-col gap-2">
+            <legend class="label text-ui-sm text-muted">{ locale.t('groups.crest') }</legend>
+            <div class="flex flex-wrap gap-2">
+                <For each={ CRESTS } key={ (one) => one } let={ one } index={ index }>
+                    <button
+                        type="button"
+                        class={ [
+                            'flex h-12 w-12 cursor-pointer items-center justify-center rounded-tile border transition-colors coarse:h-14 coarse:w-14',
+                            crest === one ? 'border-accent bg-accent/10 text-accent' : 'border-line bg-field text-muted hover:border-line-strong'
+                        ].join(' ') }
+                        aria-pressed={ crest === one }
+                        aria-label={ locale.t('groups.crestOf', { number: locale.n(index + 1) }) }
+                        onClick={ () => crest = one }
+                    >
+                        <Icon name={ one } size={ 22 } />
+                    </button>
+                </For>
+            </div>
+        </fieldset>
+
+        <fieldset class="flex flex-col gap-2">
+            <legend class="label text-ui-sm text-muted">{ locale.t('groups.game') }</legend>
+            <div class="flex flex-wrap gap-2">
+                <button
+                    type="button"
+                    class={ [
+                        'min-h-11 cursor-pointer rounded-control border px-3 text-ui-sm font-semibold transition-colors',
+                        game === '' ? 'border-accent bg-accent/10 text-accent' : 'border-line bg-field text-muted hover:border-line-strong'
+                    ].join(' ') }
+                    aria-pressed={ game === '' }
+                    onClick={ () => game = '' }
+                >
+                    { locale.t('groups.noGame') }
+                </button>
+                <For each={ GAMES } key={ (one) => one.id } let={ one }>
+                    <button
+                        type="button"
+                        class={ [
+                            'min-h-11 cursor-pointer rounded-control border px-3 text-ui-sm font-semibold transition-colors',
+                            game === one.id ? 'border-accent bg-accent/10 text-accent' : 'border-line bg-field text-muted hover:border-line-strong'
+                        ].join(' ') }
+                        aria-pressed={ game === one.id }
+                        onClick={ () => game = one.id }
+                    >
+                        { locale.t(catalogue.byId(one.id as GameId).nameKey) }
+                    </button>
+                </For>
+            </div>
+        </fieldset>
+
+        <div class="flex flex-col gap-2 sm:flex-row-reverse">
+            <Button variant="primary" block submit loading={ pending }>
+                { editing ? locale.t('groups.save') : locale.t('groups.create') }
+            </Button>
+            <Button variant="ghost" block onClick={ () => props.close() }>{ locale.t('common.cancel') }</Button>
+        </div>
+    </form>
+}

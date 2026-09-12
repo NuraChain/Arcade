@@ -4,6 +4,7 @@ import { handleFromAddress, handleFromName } from '../../server/src/domains/iden
 import type { Account, ChatMessage, ConversationSummary, MuteSubject, Privacy } from '../../server/src/schemas.ts';
 import {
     FRIENDSHIP_FIXTURES,
+    GROUP_FIXTURES,
     PEOPLE_FIXTURES,
     REQUEST_FIXTURES,
     THREAD_FIXTURES
@@ -14,6 +15,33 @@ export type Refusal = 'challenge-unreachable' | 'bad-signature' | 'wallet-unreac
 function hueOf(text: string): number
 {
     return [...text].reduce((total, character) => total + character.codePointAt(0)!, 0) % 360;
+}
+
+interface GroupWire
+{
+    id: string;
+    slug: string;
+    name: string;
+    blurb: string;
+    crest: string;
+    hue: number;
+    game?: string;
+    owner: string;
+    role?: 'owner' | 'member';
+    members: string[];
+    memberCount: number;
+    conversationId?: string;
+    createdAt: string;
+}
+
+function mustGroup(slug: string): GroupWire
+{
+    const group = server.groups.find((one) => one.slug === slug);
+    if (group === undefined)
+    {
+        throw new ApiError(404, 'not-found', 'No group there.', undefined);
+    }
+    return group;
 }
 
 export const server =
@@ -43,6 +71,15 @@ export const server =
     messages: [] as ChatMessage[],
     refuseSend: null as string | null,
 
+    /**
+     * The groups, from the same fixtures the development server seeds.
+     *
+     * Held as rows rather than built per call, because every write answers with the group as it
+     * now stands and a test that joins one then reads the list has to see the same object twice.
+     */
+    groups: [] as GroupWire[],
+    refuseGroup: null as string | null,
+
     /** The graph, from the same fixtures the development server seeds. */
     friends: [] as string[],
     incoming: [] as { id: string; from: string; to: string; at: string }[],
@@ -52,6 +89,22 @@ export const server =
 
     reset(): void
     {
+        server.groups = GROUP_FIXTURES.map((group) => ({
+            id: group.slug,
+            slug: group.slug,
+            name: group.name,
+            blurb: group.blurb,
+            crest: group.crest,
+            hue: group.hue,
+            ...(group.game === null ? {} : { game: group.game }),
+            owner: group.owner,
+            members: [...group.members],
+            memberCount: group.members.length,
+            ...(group.members.includes('alex') ? { role: group.owner === 'alex' ? 'owner' as const : 'member' as const } : {}),
+            ...(group.members.includes('alex') ? { conversationId: `conv-${ group.slug }` } : {}),
+            createdAt: new Date(0).toISOString()
+        }));
+        server.refuseGroup = null;
         server.account = null;
         server.issued = null;
         server.received = null;
@@ -315,6 +368,150 @@ export const client =
                 unread: 0
             });
             return { id };
+        }
+    },
+
+    /**
+     * Groups, in memory.
+     *
+     * The slug claim is the server's business - `groups.db.spec.ts` owns that race - so this
+     * fake takes the folded name and appends a counter when it is taken. What it exists to prove
+     * is that the CLIENT sends what it said it would and renders what came back.
+     */
+    groups:
+    {
+        async mine()
+        {
+            server.calls.push('groups.mine');
+            return { groups: server.groups.filter((group) => group.members.includes(server.me)) };
+        },
+
+        async discover()
+        {
+            server.calls.push('groups.discover');
+            return { groups: server.groups.filter((group) => !group.members.includes(server.me)) };
+        },
+
+        async view({ params }: { params: { slug: string } })
+        {
+            server.calls.push('groups.view');
+            const group = server.groups.find((one) => one.slug === params.slug);
+            if (group === undefined)
+            {
+                throw new ApiError(404, 'not-found', 'No group there.', undefined);
+            }
+            return group;
+        },
+
+        async create({ input }: { input: { name: string; blurb: string; crest: string; hue: number; game: string } })
+        {
+            server.calls.push('groups.create');
+            if (server.refuseGroup !== null)
+            {
+                throw new ApiError(409, 'conflict', server.refuseGroup, undefined);
+            }
+
+            const wanted = input.name.trim().toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-+|-+$/g, '') || 'group';
+            let slug = wanted;
+            for (let attempt = 1; server.groups.some((one) => one.slug === slug); attempt += 1)
+            {
+                slug = `${ wanted }-${ attempt }`;
+            }
+
+            const made: GroupWire = {
+                id: slug,
+                slug,
+                name: input.name.trim(),
+                blurb: input.blurb.trim(),
+                crest: input.crest,
+                hue: input.hue,
+                ...(input.game === '' ? {} : { game: input.game }),
+                owner: server.me,
+                members: [server.me],
+                memberCount: 1,
+                role: 'owner',
+                conversationId: `conv-${ slug }`,
+                createdAt: new Date(0).toISOString()
+            };
+            server.groups.push(made);
+            return made;
+        },
+
+        async edit({ params, input }: { params: { slug: string }; input: { name: string; blurb: string; crest: string; game: string } })
+        {
+            server.calls.push('groups.edit');
+            const group = mustGroup(params.slug);
+            group.name = input.name.trim();
+            group.blurb = input.blurb.trim();
+            group.crest = input.crest;
+            if (input.game === '')
+            {
+                delete group.game;
+            }
+            else
+            {
+                group.game = input.game;
+            }
+            return group;
+        },
+
+        async join({ params }: { params: { slug: string } })
+        {
+            server.calls.push('groups.join');
+            const group = mustGroup(params.slug);
+            if (!group.members.includes(server.me))
+            {
+                group.members.push(server.me);
+                group.memberCount = group.members.length;
+                group.role = 'member';
+                group.conversationId = `conv-${ group.slug }`;
+            }
+            return group;
+        },
+
+        async leave({ params }: { params: { slug: string } })
+        {
+            server.calls.push('groups.leave');
+            const group = mustGroup(params.slug);
+            group.members = group.members.filter((handle) => handle !== server.me);
+            group.memberCount = group.members.length;
+            delete group.role;
+            delete group.conversationId;
+            if (group.members.length === 0)
+            {
+                server.groups = server.groups.filter((one) => one.slug !== group.slug);
+            }
+            return { ok: true };
+        },
+
+        async add({ params, input }: { params: { slug: string }; input: { id: string } })
+        {
+            server.calls.push('groups.add');
+            const group = mustGroup(params.slug);
+            if (!group.members.includes(input.id))
+            {
+                group.members.push(input.id);
+                group.memberCount = group.members.length;
+            }
+            return group;
+        },
+
+        async remove({ params, input }: { params: { slug: string }; input: { id: string } })
+        {
+            server.calls.push('groups.remove');
+            const group = mustGroup(params.slug);
+            group.members = group.members.filter((handle) => handle !== input.id);
+            group.memberCount = group.members.length;
+            return group;
+        },
+
+        async transfer({ params, input }: { params: { slug: string }; input: { id: string } })
+        {
+            server.calls.push('groups.transfer');
+            const group = mustGroup(params.slug);
+            group.owner = input.id;
+            group.role = 'member';
+            return group;
         }
     },
 

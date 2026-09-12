@@ -1,14 +1,16 @@
 import { Link } from 'azerothjs';
 
+import type { GroupSummary } from '../../api.ts';
+import type { GameId } from '../../data/games.ts';
 import { personById } from '../../data/mock/index.ts';
-import type { Group, Person } from '../../data/mock/types.ts';
+import type { Person } from '../../data/mock/types.ts';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { usePresence } from '../../stores/presence.store.ts';
 import AvatarGroup from '../ui/avatar-group.component.azeroth';
 import GroupCrest from './group-crest.component.azeroth';
 
-export default component GroupCard(props: { group: Group; class?: string })
+export default component GroupCard(props: { group: GroupSummary; class?: string })
 {
     const locale = useLocale();
     const presence = usePresence();
@@ -18,23 +20,23 @@ export default component GroupCard(props: { group: Group; class?: string })
         .map((id) => personById(id))
         .filter((person): person is Person => person !== undefined);
 
-    derived online = members.filter((person) => presence.isOnline(person.id)).length;
+    derived online = props.group.members.filter((id) => presence.isOnline(id)).length;
 
     <Link
         to={ `/app/groups/${ props.group.id }` }
         class={ [ 'flex min-w-0 items-center gap-2.5 rounded-panel border border-line bg-field p-2.5 transition duration-200 hover:border-line-strong hover:bg-raised/60', props.class ?? '' ].filter(Boolean).join(' ') }
         prefetch="hover"
     >
-        <GroupCrest group={ props.group } size="md" />
+        <GroupCrest crest={ props.group.crest } hue={ props.group.hue } size="md" />
         <span class="flex min-w-0 flex-1 flex-col gap-0.5">
-            <span class="truncate text-ui-md font-semibold text-text">{ locale.text(props.group.name) }</span>
+            <span class="truncate text-ui-md font-semibold text-text">{ props.group.name }</span>
             <span class="truncate text-ui-xs text-muted">
-                { locale.plural('chat.members', members.length) }
+                { locale.plural('chat.members', props.group.memberCount) }
                 <Show when={ online > 0 }>
                     <span class="text-live"> · { locale.plural('chat.online', online) }</span>
                 </Show>
-                <Show when={ props.group.game !== null }>
-                    <span> · { locale.t(catalogue.byId(props.group.game!).nameKey) }</span>
+                <Show when={ props.group.game !== undefined }>
+                    <span> · { locale.t(catalogue.byId(props.group.game! as GameId).nameKey) }</span>
                 </Show>
             </span>
         </span>

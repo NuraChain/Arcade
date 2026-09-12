@@ -1,18 +1,20 @@
 import { Link } from 'azerothjs';
 
-import { groupById, personById } from '../../data/mock/index.ts';
+import { personById } from '../../data/mock/index.ts';
+import { isLineKey } from '../../lib/lines.ts';
 import type { Conversation } from '../../data/mock/types.ts';
 import { attachHold } from '../../lib/hold.ts';
 import Icon from '../../icons/icon.component.azeroth';
 import { useChat } from '../../stores/chat.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useSocial } from '../../stores/social.store.ts';
+import { useGroups } from '../../stores/groups.store.ts';
 import { usePresence } from '../../stores/presence.store.ts';
 import Avatar from '../ui/avatar.component.azeroth';
 import AvatarGroup from '../ui/avatar-group.component.azeroth';
 import Badge from '../ui/badge.component.azeroth';
 import GroupCrest from '../social/group-crest.component.azeroth';
-import { othersOf, titleOf } from './chat-title.ts';
+import { groupNameOf, othersOf, titleOf } from './chat-title.ts';
 
 export default component ChatListItem(props: { conversation: Conversation; me: string; active?: boolean; onHold?: () => void })
 {
@@ -20,6 +22,7 @@ export default component ChatListItem(props: { conversation: Conversation; me: s
     const social = useSocial();
     const chat = useChat();
     const presence = usePresence();
+    const groups = useGroups();
 
     let row: HTMLElement | null = null;
 
@@ -34,7 +37,7 @@ export default component ChatListItem(props: { conversation: Conversation; me: s
 
     derived others = othersOf(props.conversation, props.me);
 
-    derived group = props.conversation.groupId === null ? undefined : groupById(props.conversation.groupId);
+    derived group = props.conversation.groupId === null ? undefined : groups.byId(props.conversation.groupId);
 
     derived last = chat.lastOf(props.conversation.id);
 
@@ -55,17 +58,19 @@ export default component ChatListItem(props: { conversation: Conversation; me: s
         {
             return locale.t('chat.empty');
         }
-        if (last.kind === 'invite')
+        // A server-authored line says what it says, here as well as in the bubble: "alex joined"
+        // is a better row than "Table update", and it follows a language switch for free. The
+        // generic strings stay as the fallback for a key this client has never heard of.
+        if (last.kind !== 'text')
         {
-            return locale.t('chats.invitePreview');
-        }
-        if (last.kind === 'result')
-        {
-            return locale.t('chats.resultPreview');
-        }
-        if (last.kind === 'system')
-        {
-            return locale.t('chats.systemPreview');
+            const line = last.line;
+            if (line !== undefined && isLineKey(line.key))
+            {
+                return locale.t(line.key, line.params);
+            }
+            return locale.t(last.kind === 'invite'
+                ? 'chats.invitePreview'
+                : (last.kind === 'result' ? 'chats.resultPreview' : 'chats.systemPreview'));
         }
         const body = locale.text(last.text);
         return last.from === props.me ? `${ locale.t('chats.you') }${ body }` : body;
@@ -88,7 +93,7 @@ export default component ChatListItem(props: { conversation: Conversation; me: s
                         when={ group !== undefined }
                         fallback={ <AvatarGroup people={ others } size="sm" max={ 2 } class="w-10 shrink-0" /> }
                     >
-                        { () => <GroupCrest group={ group! } size="sm" /> }
+                        { () => <GroupCrest crest={ group!.crest } hue={ group!.hue } size="sm" /> }
                     </Show>
                 }
             >
@@ -98,7 +103,7 @@ export default component ChatListItem(props: { conversation: Conversation; me: s
             <span class="flex min-w-0 flex-1 flex-col gap-0.5">
                 <span class="flex items-center gap-1.5">
                     <span class={ [ 'truncate text-ui-md', unread > 0 ? 'font-bold text-text' : 'font-semibold text-text' ].join(' ') }>
-                        { locale.text(titleOf(props.conversation, props.me)) }
+                        { locale.text(titleOf(props.conversation, props.me, groupNameOf(props.conversation, groups.byId))) }
                     </span>
                     <Show when={ chat.pinned(props.conversation.id) }>
                         { () => <Icon name="star" size={ 12 } class="shrink-0 text-accent" /> }

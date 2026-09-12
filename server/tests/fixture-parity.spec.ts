@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { PEOPLE_FIXTURES, THREAD_FIXTURES } from '../src/db/seed-fixtures.ts';
+import { GROUP_FIXTURES, PEOPLE_FIXTURES, THREAD_FIXTURES } from '../src/db/seed-fixtures.ts';
+import { GROUP_SLUGS } from '../../application/src/data/mock/index.ts';
 import { PEOPLE } from '../../application/src/data/mock/people.ts';
 import { THREADS } from '../../application/src/data/mock/threads.ts';
 
@@ -17,6 +18,32 @@ import { THREADS } from '../../application/src/data/mock/threads.ts';
 
 describe('the fixtures and the mock agree about who exists', () =>
 {
+    it('names the same groups, so a "joined" activity points at a group that exists', () =>
+    {
+        expect([...GROUP_SLUGS].sort()).toEqual(GROUP_FIXTURES.map((group) => group.slug).sort());
+    });
+
+    it('seats every group owner in their own group', () =>
+    {
+        for (const group of GROUP_FIXTURES)
+        {
+            expect(group.members, group.slug).toContain(group.owner);
+        }
+    });
+
+    it('gives each group thread a group to belong to', () =>
+    {
+        const threads = new Set(THREAD_FIXTURES.filter((thread) => thread.kind === 'group').map((thread) => thread.slug));
+        const claimed = GROUP_FIXTURES.map((group) => group.thread);
+
+        expect(new Set(claimed).size).toBe(claimed.length);
+        for (const thread of claimed)
+        {
+            expect(threads.has(thread), thread).toBe(true);
+        }
+        expect(claimed.length).toBe(threads.size);
+    });
+
     it('has the same people, by handle', () =>
     {
         expect(PEOPLE_FIXTURES.map((person) => person.handle).sort())

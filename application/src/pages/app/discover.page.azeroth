@@ -7,10 +7,11 @@ import PeopleStrip from '../../components/social/people-strip.component.azeroth'
 import UserCard from '../../components/social/user-card.component.azeroth';
 import SectionHeading from '../../components/ui/section-heading.component.azeroth';
 import type { GameId } from '../../data/games.ts';
-import { dataset } from '../../data/mock/index.ts';
+
 import type { Person } from '../../data/mock/types.ts';
 import { useAccount } from '../../stores/account.store.ts';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
+import { useGroups } from '../../stores/groups.store.ts';
 import { useLobby } from '../../stores/lobby.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { usePresence } from '../../stores/presence.store.ts';
@@ -22,6 +23,7 @@ export default component DiscoverPage()
     const locale = useLocale();
     const social = useSocial();
     const presence = usePresence();
+    const groups_ = useGroups();
     const catalogue = useCatalogue();
     const account = useAccount();
     const lobby = useLobby();
@@ -36,6 +38,7 @@ export default component DiscoverPage()
     {
         social.want('suggestions');
         social.want('people');
+        groups_.want();
     }
 
     derived suggestions = social.suggestions().slice(0, 8);
@@ -55,7 +58,7 @@ export default component DiscoverPage()
             .slice(0, 12);
     })();
 
-    derived groups = dataset().groups.filter((group) => user === null || !group.members.includes(user.id));
+    derived groups = groups_.elsewhere().slice(0, 12);
 
     derived trending = [...catalogue.games].sort((a, b) => catalogue.stats(b.id).playersOnline - catalogue.stats(a.id).playersOnline).slice(0, 3);
 

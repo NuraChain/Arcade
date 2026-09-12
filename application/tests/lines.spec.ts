@@ -62,6 +62,14 @@ afterEach(() =>
     useLocale().setLocale('en');
 });
 
+/**
+ * The server file that writes the lines, as text.
+ *
+ * Read through the bundler rather than `node:fs`: this suite runs under jsdom, where
+ * `import.meta.url` is an http url and `readFileSync` refuses it.
+ */
+const SERVICES = (import.meta.glob('../../server/src/services.ts', { query: '?raw', import: 'default', eager: true }) as Record<string, string>)['../../server/src/services.ts'];
+
 describe('a server-authored line', () =>
 {
     it('is composed at display time, so a language switch re-renders it', () =>
@@ -86,6 +94,20 @@ describe('a server-authored line', () =>
         // print the key: an internal identifier on the screen is worse than a blank line.
         expect(container.textContent ?? '').not.toContain('chat.line.from-the-future');
         expect(container.textContent ?? '').not.toContain('from-the-future');
+    });
+
+    it('has a producer for every key it declares', () =>
+    {
+        // The rule from CLAUDE.md, as a test: a key with no producer is filler copy standing in
+        // for a sentence nobody has written. Every group key is written by `services.ts`.
+        const written = SERVICES;
+
+        for (const key of LINE_KEYS.filter((one) => one.startsWith('chat.line.group.')))
+        {
+            const what = key.slice('chat.line.group.'.length);
+            expect(written, key).toContain(`'${ what }'`);
+        }
+        expect(written).toContain('chat.line.group.');
     });
 
     it('knows exactly which keys it can render, and they are all in both catalogues', () =>

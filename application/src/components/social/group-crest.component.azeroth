@@ -1,4 +1,4 @@
-import type { Group } from '../../data/mock/types.ts';
+import { crestOf } from '../../data/crests.ts';
 import Icon from '../../icons/icon.component.azeroth';
 
 const BOX: Record<'sm' | 'md' | 'lg', string> = {
@@ -13,7 +13,7 @@ const GLYPH: Record<'sm' | 'md' | 'lg', number> = {
     lg: 34
 };
 
-export default component GroupCrest(props: { group: Group; size?: 'sm' | 'md' | 'lg'; class?: string })
+export default component GroupCrest(props: { crest: string; hue: number; size?: 'sm' | 'md' | 'lg'; class?: string })
 {
     derived size = props.size ?? 'md';
 
@@ -23,7 +23,7 @@ export default component GroupCrest(props: { group: Group; size?: 'sm' | 'md' | 
             BOX[size],
             props.class ?? ''
         ].filter(Boolean).join(' ') }
-        style={ `--hue: ${ props.group.hue }` }
+        style={ `--hue: ${ props.hue }` }
         aria-hidden="true"
     >
         <span
@@ -31,7 +31,7 @@ export default component GroupCrest(props: { group: Group; size?: 'sm' | 'md' | 
             style="background: linear-gradient(145deg, color-mix(in oklab, hsl(var(--hue) 62% 52%) 28%, var(--raised)), var(--raised))"
         ></span>
         <span class="relative" style="color: color-mix(in oklab, hsl(var(--hue) 70% 62%) 78%, var(--text))">
-            <Icon name={ props.group.crest } size={ GLYPH[size] } />
+            <Icon name={ crestOf(props.crest) } size={ GLYPH[size] } />
         </span>
     </span>
 }

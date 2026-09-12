@@ -2,20 +2,9 @@ import { createRandom, hashSeed } from '../../lib/random.ts';
 import { runtime } from '../../lib/runtime.ts';
 import { GAMES, type GameId } from '../games.ts';
 import { ACHIEVEMENTS } from './achievements.ts';
-import { GROUPS } from './groups.ts';
 import { PEOPLE, type PersonSeed } from './people.ts';
 import { THREADS } from './threads.ts';
-import type {
-    Activity,
-    Conversation,
-    FriendRequest,
-    GameRecord,
-    Group,
-    Message,
-    Notification,
-    Person,
-    Skill
-} from './types.ts';
+import type { Activity, Conversation, FriendRequest, GameRecord, Message, Notification, Person, Skill } from './types.ts';
 
 export const MINUTE = 60000;
 export const HOUR = 60 * MINUTE;
@@ -26,7 +15,6 @@ export interface Dataset
     seed: number;
     now: number;
     people: Person[];
-    groups: Group[];
     conversations: Conversation[];
     messages: Message[];
     notifications: Notification[];
@@ -86,21 +74,6 @@ function buildPerson(seed: PersonSeed, now: number, datasetSeed: number): Person
     };
 }
 
-function buildGroups(now: number): Group[]
-{
-    return GROUPS.map((group) => ({
-        id: group.id,
-        name: group.name,
-        blurb: group.blurb,
-        crest: group.crest,
-        hue: group.hue,
-        game: group.game,
-        members: group.members,
-        owner: group.owner,
-        createdAt: now - group.ageDays * DAY
-    }));
-}
-
 function buildThreads(now: number): { conversations: Conversation[]; messages: Message[] }
 {
     const conversations: Conversation[] = [];
@@ -149,6 +122,23 @@ function buildRequests(now: number): FriendRequest[]
     }));
 }
 
+/**
+ * The groups a "joined" activity may point at.
+ *
+ * Slugs only - a group's name, crest and members are the server's now, and the activity row
+ * carries an id the way every other row does. `server/tests/fixture-parity.spec.ts` fails if
+ * this list stops matching `GROUP_FIXTURES`, the same way it does for people.
+ *
+ * The whole activity feed is mock furniture until the activity domain lands.
+ */
+export const GROUP_SLUGS = [
+    'friday-night-crew',
+    'balcony-backgammon',
+    'lunch-ludo',
+    'midnight-table',
+    'newcomers-table'
+];
+
 function buildActivity(people: Person[], now: number, datasetSeed: number): Activity[]
 {
     const random = createRandom(hashSeed(datasetSeed, 'activity'));
@@ -166,7 +156,7 @@ function buildActivity(people: Person[], now: number, datasetSeed: number): Acti
             at: now - random.int(2, 60 * 36) * MINUTE,
             targetId: kind === 'achievement'
                 ? (person.achievements[0] ?? null)
-                : (kind === 'joined' ? random.pick(GROUPS).id : (kind === 'invited' ? random.pick(people).id : null))
+                : (kind === 'joined' ? random.pick(GROUP_SLUGS) : (kind === 'invited' ? random.pick(people).id : null))
         });
     }
     return activity.sort((a, b) => b.at - a.at);
@@ -198,7 +188,15 @@ function buildNotifications(requests: FriendRequest[], now: number): Notificatio
     return notifications.sort((a, b) => b.at - a.at);
 }
 
-function buildFriends(people: Person[], groups: Group[]): Record<string, string[]>
+/**
+ * The mock friend graph.
+ *
+ * Only the explicit pairs now. It used to link everyone who shared a group, but a group is a row
+ * on the server and the real graph is `social.friends()` - this is a profile-cache convenience
+ * for the things no domain owns yet, and inventing edges from data that no longer lives here
+ * would be inventing them from nothing.
+ */
+function buildFriends(people: Person[]): Record<string, string[]>
 {
     const friends: Record<string, Set<string>> = {};
     const link = (a: string, b: string): void =>
@@ -217,19 +215,6 @@ function buildFriends(people: Person[], groups: Group[]): Record<string, string[
             link(id, other);
         }
     }
-    for (const group of groups)
-    {
-        for (const a of group.members)
-        {
-            for (const b of group.members)
-            {
-                if (!(a in FRIENDS) && !(b in FRIENDS))
-                {
-                    link(a, b);
-                }
-            }
-        }
-    }
     const out: Record<string, string[]> = {};
     for (const person of people)
     {
@@ -241,20 +226,18 @@ function buildFriends(people: Person[], groups: Group[]): Record<string, string[
 export function buildDataset(seed: number, now: number): Dataset
 {
     const people = PEOPLE.map((person) => buildPerson(person, now, seed));
-    const groups = buildGroups(now);
     const { conversations, messages } = buildThreads(now);
     const requests = buildRequests(now);
     return {
         seed,
         now,
         people,
-        groups,
         conversations,
         messages,
         notifications: buildNotifications(requests, now),
         activity: buildActivity(people, now, seed),
         requests,
-        friends: buildFriends(people, groups)
+        friends: buildFriends(people)
     };
 }
 
@@ -284,9 +267,4 @@ export function personByHandle(handle: string): Person | undefined
 {
     const wanted = handle.trim().toLowerCase();
     return dataset().people.find((person) => person.handle.toLowerCase() === wanted || person.id === wanted);
-}
-
-export function groupById(id: string): Group | undefined
-{
-    return dataset().groups.find((group) => group.id === id);
 }

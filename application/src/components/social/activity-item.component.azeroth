@@ -1,12 +1,13 @@
 import { Link } from 'azerothjs';
 
 import { achievementById } from '../../data/mock/achievements.ts';
-import { groupById, personById } from '../../data/mock/index.ts';
+import { personById } from '../../data/mock/index.ts';
 import type { Activity } from '../../data/mock/types.ts';
 import Icon from '../../icons/icon.component.azeroth';
 import type { IconName } from '../../icons/registry.ts';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
+import { useGroups } from '../../stores/groups.store.ts';
 import { usePresence } from '../../stores/presence.store.ts';
 import Avatar from '../ui/avatar.component.azeroth';
 
@@ -23,6 +24,7 @@ export default component ActivityItem(props: { activity: Activity })
     const locale = useLocale();
     const catalogue = useCatalogue();
     const presence = usePresence();
+    const groups = useGroups();
 
     derived person = personById(props.activity.personId) ?? null;
 
@@ -36,7 +38,7 @@ export default component ActivityItem(props: { activity: Activity })
         {
             return '';
         }
-        const group = groupById(props.activity.targetId);
+        const group = groups.byId(props.activity.targetId);
         if (group !== undefined)
         {
             return locale.text(group.name);

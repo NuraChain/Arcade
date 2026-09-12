@@ -48,7 +48,7 @@ const ROUTES = [
     { id: 'person', path: '/app/people/sara.k' },
     { id: 'chats', path: '/app/chats' },
     { id: 'chat', path: '/app/chats/:conversation' },
-    { id: 'group', path: '/app/groups/g-balcony' },
+    { id: 'group', path: '/app/groups/balcony-backgammon' },
     { id: 'discover', path: '/app/discover' },
     { id: 'search', path: '/app/search' },
     { id: 'notifications', path: '/app/notifications' },

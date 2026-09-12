@@ -33,19 +33,6 @@ export interface Person
     achievements: string[];
 }
 
-export interface Group
-{
-    id: string;
-    name: LocalizedText;
-    blurb: LocalizedText;
-    crest: IconName;
-    hue: number;
-    game: GameId | null;
-    members: string[];
-    owner: string;
-    createdAt: number;
-}
-
 export type ConversationKind = 'direct' | 'group' | 'game';
 
 export interface Conversation

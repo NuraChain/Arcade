@@ -40,12 +40,6 @@ describe('mock dataset', () =>
                 expect(achievementIds.has(achievement), `${ person.id } → ${ achievement }`).toBe(true);
             }
         }
-        for (const group of data.groups)
-        {
-            expect(ids.has(group.owner)).toBe(true);
-            expect(group.members.every((member) => ids.has(member))).toBe(true);
-            expect(group.members).toContain(group.owner);
-        }
         for (const conversation of data.conversations)
         {
             expect(conversation.participants.every((member) => ids.has(member)), conversation.id).toBe(true);

@@ -407,6 +407,83 @@ themselves - and the answer is that a rename refetches, which is what the client
 
 The server still keys everything on uuid internally. Handles are the EDGE.
 
+## Groups
+
+`server/src/domains/group/` owns them, and three of its rules are INDEXES rather than application
+code — because each one is a state that has to be impossible, not merely unlikely.
+
+**The slug is claimed by INSERT.** `groups.slug` is `citext` and unique, and `create` walks
+`candidatesFor` letting the index arbitrate, moving on only for a genuine 23505 — the same shape
+as the handle claim, sharing `lib/naming.ts` with it. "Check then insert" is the same race with
+extra steps, and two people making "Friday Night Crew" in one second is the case it has to
+survive. `groups.db.spec.ts` runs five at once and expects five distinct slugs.
+
+A slug hyphenates where a handle strips: "Friday Night Crew" is `friday-night-crew`, and Persian's
+zero-width non-joiner becomes a hyphen so `تخته‌نرد` reads as `تخته-نرد` rather than gluing two
+words into one. A name with nothing claimable in it — all emoji — folds to the empty string and
+the service falls back to a word the product owns rather than inventing one.
+
+**The slug does not move when the name changes.** A url that changes because somebody edited a
+name is a url that breaks every link they shared. `edit` takes the whole editable surface and
+never the slug.
+
+**The owner is a ROLE on the membership row**, with a partial unique index over
+`(group_id) where role = 'owner'`. An `owner_id` column on the group would let a transfer that
+promotes before it demotes leave two owners behind — a state nobody notices until one of them
+removes the other. This makes it unrepresentable, so `transfer` demotes FIRST inside one
+transaction or fails.
+
+**One conversation per group**, enforced by a partial unique index on
+`conversations (group_id) where kind = 'group'`. Membership moves in lockstep: joining a group
+seats you in its thread and leaving takes the seat back, both inside one transaction. A member who
+is not in the thread cannot read what the group is saying, and a thread member who is not in the
+group keeps reading it after they leave.
+
+**The last member out takes the group with them.** An empty group is a row nobody can ever see
+again. An owner who leaves a populated group hands it to the longest-standing remaining member —
+which keeps the single-owner index satisfied — and the handover is ANNOUNCED with a line, so it is
+visible rather than silent.
+
+**Adding somebody is gated twice, and the two are different questions.** The server asks
+`mayMessage`, because putting a person in a group is writing into their chat list and that is the
+act the messaging policy already governs — blocks, stranger settings and minor safety all apply
+without a second opinion. The UI offers only friends, which is narrower on purpose: a group is
+somebody's room, and being put in one by a stranger with open settings wants an invitation rather
+than an addition. The server's rule is the floor; the picker is the door.
+
+**`LINE_KEYS` grew by six, and every one has a producer.** `created`, `joined`, `left`,
+`removed`, `renamed` and `owner` are written by the group half of `services.ts`, and
+`tests/lines.spec.ts` reads that file to prove it — the rule that a key without a producer is
+filler copy, as a test rather than a convention. The line is written OUTSIDE the transaction that
+changes the membership: the membership is the fact and the announcement is the courtesy, so a
+failed line must not undo a completed change. Leaving writes its line BEFORE the seat goes, or it
+lands in a thread the writer has just been removed from.
+
+**A group is named by its SLUG on the wire**, the way a person is named by their handle — including
+`conversationSummary.groupId`, which carries the slug and not the uuid. One identifier at the edge
+means a link, a route parameter and an api call are all the same string.
+
+**A slug nobody has claimed is an answer, not a failure.** `groups.store.ts` turns a 404 from the
+view route into `null`, so the page says "No such group" rather than offering to retry the same
+missing thing. Every other status still surfaces as an error.
+
+**`application/src/data/mock/groups.ts` is gone.** The five groups are rows, seeded from
+`GROUP_FIXTURES`. What survives in the mock is `GROUP_SLUGS` — five strings that exist only so a
+"joined" activity can point at a group that is really there — and `fixture-parity.spec.ts` fails
+if that list stops matching the fixtures, the same way it does for people. The crest is a closed
+set the CLIENT owns (`data/crests.ts`): the server sends a string, `Icon` takes an `IconName`, and
+a value from a newer server draws the first crest instead of a blank square.
+
+Two things the browser pass caught that no type could:
+
+- **`SectionHeading` took no children**, so a heading written with a button inside it rendered the
+  heading and dropped the button — silently, on two pages at once. It takes `actions` now, the
+  same named slot `FriendRow` uses, and `components.spec.ts` pins it.
+- **The group page opened itself from an `effect` over `params()`.** A route parameter is shared
+  router state, so the effect fired again on the way out with the NEXT route's id in hand — asking
+  the groups api for a conversation id and putting a 404 in the console on every navigation away.
+  It opens once in `mount` and closes in the teardown.
+
 ## Chat is the server's
 
 `server/src/domains/chat/` owns conversations, membership and messages; the browser reads them

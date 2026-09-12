@@ -1,12 +1,14 @@
 import { createStore, createSignal, type Getter } from 'azerothjs';
 
 import { GAMES, type Game } from '../data/games.ts';
-import { dataset, groupById, personById } from '../data/mock/index.ts';
-import type { Group, Message, Person } from '../data/mock/types.ts';
+import { personById } from '../data/mock/index.ts';
+import type { GroupSummary } from '../api.ts';
+import type { Message, Person } from '../data/mock/types.ts';
 import { recallJson, rememberJson } from '../lib/storage.ts';
 import { pickText } from '../lib/text.ts';
 import { fold, ranked } from '../services/search.service.ts';
 import { useChat } from './chat.store.ts';
+import { useGroups } from './groups.store.ts';
 import { useLocale } from './locale.store.ts';
 import { useSocial } from './social.store.ts';
 
@@ -22,7 +24,7 @@ export interface SearchResults
 {
     people: Person[];
     games: Game[];
-    groups: Group[];
+    groups: GroupSummary[];
     messages: Message[];
     total: number;
 }
@@ -51,6 +53,7 @@ export const useSearch = createStore((): SearchApi =>
     const locale = useLocale();
     const social = useSocial();
     const chat = useChat();
+    const groups = useGroups();
 
     const [query, setQuery] = createSignal('');
     const [scope, setScope] = createSignal<SearchScope>('all');
@@ -60,6 +63,20 @@ export const useSearch = createStore((): SearchApi =>
     {
         setRecents(terms);
         rememberJson(RECENTS_KEY, terms);
+    };
+
+    /**
+     * The groups this device already has: the ones I am in, plus whatever discover has loaded.
+     *
+     * Reading does not fetch. The discover list arrives because the search page asked for it in
+     * its `mount`, the same way it asks for the people directory - a store that fetched inside a
+     * getter would fetch on every keystroke.
+     */
+    const everyGroup = (): GroupSummary[] =>
+    {
+        const held = groups.mine();
+        const other = groups.elsewhere().filter((one) => !held.some((mine) => mine.id === one.id));
+        return [...held, ...other];
     };
 
     const results = (): SearchResults =>
@@ -80,7 +97,7 @@ export const useSearch = createStore((): SearchApi =>
             ? ranked(GAMES, needle, (game) => [game.slug, locale.t(game.nameKey), locale.t(game.blurbKey)])
             : [];
         const groups = want('groups')
-            ? ranked(dataset().groups, needle, (group) => [pickText(group.name, tag), pickText(group.blurb, tag)])
+            ? ranked(everyGroup(), needle, (group) => [group.name, group.blurb])
             : [];
         const messages = want('chats')
             ? ranked(
@@ -130,7 +147,7 @@ export const useSearch = createStore((): SearchApi =>
     };
 });
 
-export function groupFor(id: string): Group | undefined
+export function groupFor(id: string): GroupSummary | undefined
 {
-    return groupById(id);
+    return useGroups().byId(id);
 }
