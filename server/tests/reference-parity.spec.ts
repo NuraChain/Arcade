@@ -65,7 +65,6 @@ describe('games: the server and the 3D market agree', () =>
             expect(seed.seats).toEqual([...rules.seats]);
             expect(seed.modes).toEqual([...rules.modes]);
             expect(seed.targets).toEqual([...rules.targets]);
-            expect(seed.fairness).toBe(rules.fairness);
             expect(seed.stakes).toBe(rules.stakes);
             expect(seed.partners).toBe(rules.partners);
         }

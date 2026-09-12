@@ -2,7 +2,23 @@
     "extends": "./tsconfig.json",
     "compilerOptions": {
         "noEmit": true,
-        "rootDir": "."
+
+        /* The test program spans BOTH workspaces. `fixture-parity.spec.ts` and
+           `reference-parity.spec.ts` import from `application/src/` on purpose - that is the whole
+           point of them, proving the two halves agree about who exists - and
+           `application/tests/wallet-fixtures.spec.ts` reaches the other way. So the common root of
+           this program is the repository, not `server/`.
+
+           `..` rather than `src` here is safe in a way it is NOT in tsconfig.json: that config
+           emits, and rootDir is what keeps `dist/main.js` flat (see the note there). This one is
+           `--noEmit`, so rootDir only decides whether tsc considers the program well-formed. */
+        "rootDir": "..",
+
+        /* The application half of the program is browser code and reaches `document`, `CryptoKey`
+           and the rest of WebCrypto's DOM-declared types - and so do the device specs, which
+           generate real P-256 keys. The RUNTIME still has no DOM: this adds declarations to a
+           typecheck, not globals to a server. */
+        "lib": ["ES2024", "DOM"]
     },
     "include": ["src", "tests"]
 }

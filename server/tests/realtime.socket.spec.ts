@@ -75,7 +75,7 @@ beforeAll(async () =>
     const base = createHub({
         now: () => Date.now(),
         accountMax: config.wsAccountMax,
-        edgesFor: async (userId) => ({
+        edgesFor: async () => ({
             party: { id: 'alex', isMinor: false, allowStrangerMessages: true, showOnline: true },
             friends: new Set<string>(),
             blocks: new Set<string>(),
@@ -148,7 +148,7 @@ interface Conversation
  * No browser and no new dependency: `serializeFrame` masks like a client and `FrameParser` in
  * client role reads the server's answers, which is exactly the pair the package ships.
  */
-function talk(path: string, headers: Record<string, string>, racing?: unknown): Conversation
+function talk(path: string, headers: Record<string, string>): Conversation
 {
     const socket = tcpConnect(port, '127.0.0.1');
     const frames: ServerFrame[] = [];
@@ -213,11 +213,11 @@ function talk(path: string, headers: Record<string, string>, racing?: unknown): 
 
         for (const frame of parsed)
         {
-            if (frame.opcode === OPCODE.TEXT)
+            if (frame.opcode === OPCODE.text)
             {
                 frames.push(JSON.parse(Buffer.from(frame.payload).toString('utf8')) as ServerFrame);
             }
-            if (frame.opcode === OPCODE.CLOSE)
+            if (frame.opcode === OPCODE.close)
             {
                 settleClose({ code: frame.payload.length >= 2 ? (frame.payload[0] << 8) | frame.payload[1] : 1005 });
             }
@@ -231,10 +231,9 @@ function talk(path: string, headers: Record<string, string>, racing?: unknown): 
         socket,
         frames,
         faults,
-        get seen() { return seen; },
         status,
         closed,
-        send: (frame) => socket.write(serializeFrame(OPCODE.TEXT, Buffer.from(JSON.stringify(frame), 'utf8'), { mask: true })),
+        send: (frame) => socket.write(serializeFrame(OPCODE.text, Buffer.from(JSON.stringify(frame), 'utf8'), { mask: true })),
         end: () => socket.destroy()
     };
 }
@@ -343,11 +342,16 @@ describe('a bound socket', () =>
         await settle();
 
         talker.send({ v: 1, t: 'subscribe', topic: 'everything' });
-        await settle(300);
 
-        // The CODE is asserted in realtime-hub.spec.ts, where a fake wire records it. What a
-        // real socket adds is that the connection actually ends rather than sitting open.
-        expect(talker.socket.destroyed || talker.socket.readyState !== 'open').toBe(true);
+        // A frame that does not parse closes the socket on the spot - the ten-fault budget in the
+        // gateway is for frames that arrive too FAST, not for ones it cannot read.
+        //
+        // Asserted on the close FRAME rather than on `socket.destroyed`, because a close is a
+        // handshake: the server sends its frame and the TCP socket stays open until somebody
+        // hangs up. The old assertion read the transport and could pass while nothing had been
+        // said - which is exactly what it did while OPCODE.TEXT was undefined and this suite
+        // parsed no frames at all.
+        expect((await talker.closed).code).toBe(4400);
     });
 
     it('does not bind a socket whose session turns out to be dead', async () =>
