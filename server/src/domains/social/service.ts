@@ -11,6 +11,7 @@ export interface PersonRow
     id: string;
     handle: string;
     display_name: string;
+    bio: string;
     hue: number;
     is_minor: boolean;
     allow_stranger_messages: boolean;
@@ -33,7 +34,7 @@ const partyOf = (row: PersonRow): Party => ({
     showOnline: row.show_online
 });
 
-const PERSON_COLUMNS = 'u.id, u.handle, u.display_name, u.hue, u.is_minor, u.allow_stranger_messages, u.show_online, u.last_seen_at';
+const PERSON_COLUMNS = 'u.id, u.handle, u.display_name, u.bio, u.hue, u.is_minor, u.allow_stranger_messages, u.show_online, u.last_seen_at';
 
 /** Whether a path parameter could be an id at all. A malformed one is 22P02, which is a 500. */
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -565,7 +566,7 @@ export function createSocialService(db: DataSource)
                 `update users
                  set allow_stranger_messages = $2, show_online = $3, updated_at = now()
                  where id = $1
-                 returning id, handle, display_name, hue, is_minor, allow_stranger_messages, show_online, last_seen_at`,
+                 returning id, handle, display_name, bio, hue, is_minor, allow_stranger_messages, show_online, last_seen_at`,
                 [me, held.allowStrangerMessages, held.showOnline]
             );
             return rowsOf<PersonRow>(rows)[0];

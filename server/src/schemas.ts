@@ -301,6 +301,15 @@ export const personSummary = object({
     id: string(),
     handle: string(),
     displayName: string(),
+
+    /**
+     * What they wrote about themselves, empty when they have written nothing.
+     *
+     * Not gated by privacy the way `lastSeenAt` is: a bio is a sentence somebody chose to publish
+     * on their own profile, which is a different kind of fact from when they were last online.
+     */
+    bio: string(),
+
     hue: number(),
     isMinor: boolean(),
     lastSeenAt: string().optional()

@@ -518,6 +518,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             id: row.handle,
             handle: row.handle,
             displayName: row.display_name,
+            bio: row.bio,
             hue: row.hue,
             isMinor: row.is_minor
         };

@@ -8,6 +8,7 @@ import type {
     ConversationSummary,
     Device,
     MuteSubject,
+    PersonSummary,
     Privacy
 } from '../../server/src/schemas.ts';
 import {
@@ -418,13 +419,14 @@ function loadGraph(): void
 
 const reachable = (handle: string): boolean => !server.blocks.includes(handle) && handle !== server.me;
 
-const personWire = (handle: string) =>
+const personWire = (handle: string): PersonSummary =>
 {
     const person = PEOPLE_FIXTURES.find((one) => one.handle === handle);
     return {
         id: handle,
         handle,
         displayName: person?.displayName ?? handle,
+        bio: '',
         hue: person?.hue ?? 0,
         isMinor: person?.isMinor ?? false
     };
