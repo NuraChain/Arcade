@@ -89,6 +89,9 @@ export const useDevices = createStore((): DevicesApi =>
 
     const refresh = async (): Promise<void> =>
     {
+        // The keyring FIRST, because everything below is a statement about this browser rather than
+        // about the account, and a stale answer to "do I hold keys" is the one that lies.
+        setLocal(await keyStore().load());
         await listing.refetch();
     };
 
@@ -141,14 +144,27 @@ export const useDevices = createStore((): DevicesApi =>
         busy,
         failure,
 
+        /**
+         * What THIS BROWSER can do, answered by this browser's keyring and nothing else.
+         *
+         * It used to fall back to the server's `current` - the device the session is bound to - and
+         * that reads as reasonable until the keyring is gone: a browser whose keys were cleared, or
+         * evicted under storage pressure, would go on reporting `ready` because the SESSION still
+         * named a device. The panel said "This browser is set up" while the chat silently refused
+         * to send anything, which is the exact situation recovery exists for and the one place the
+         * product must not be confidently wrong. A browser pass found it.
+         *
+         * The server's `current` is still what labels a row "This one" for a browser that does hold
+         * keys; it is not evidence that this browser holds them.
+         */
         readiness: () => readinessOf({
             supported: keyStore().available(),
-            current: current() ?? local()?.id ?? null,
+            current: local()?.id ?? null,
             devices: devices()
         }),
 
         stateOf: (device) => deviceState(device, {
-            current: current() ?? local()?.id ?? null,
+            current: local()?.id ?? null,
             verified: listing.data()?.verified.has(device.id) ?? false
         }),
 
