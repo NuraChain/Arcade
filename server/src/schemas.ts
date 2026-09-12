@@ -33,7 +33,6 @@ export const tableRules = object({
 
     /** Empty means the game has no score target - true of poker and ludo, not a missing value. */
     targets: array(number()),
-    fairness: enumOf(['dice', 'deal', 'none']),
     stakes: enumOf(['none', 'play-money']),
     partners: boolean(),
     hasCube: boolean(),

@@ -7,6 +7,7 @@ import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useChat } from '../../stores/chat.store.ts';
 import { useConnection } from '../../stores/connection.store.ts';
 import { useGroups } from '../../stores/groups.store.ts';
+import { useLobby } from '../../stores/lobby.store.ts';
 import { useDevice } from '../../stores/device.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useOverlay } from '../../stores/overlay.store.ts';
@@ -18,7 +19,6 @@ import { useWallet } from '../../stores/wallet.store.ts';
 import { useShell } from '../../stores/shell.store.ts';
 import BottomNav from './bottom-nav.component.azeroth';
 import ConnectionBanner from './connection-banner.component.azeroth';
-import LobbyNotices from './lobby-notices.component.azeroth';
 import NavRail from './nav-rail.component.azeroth';
 import OverlayHost from './overlay-host.component.azeroth';
 import Sidebar from './sidebar.component.azeroth';
@@ -76,6 +76,7 @@ export default component AppShell(props: { children?: MountNode })
             useCatalogue().start(),
             useSocial().start(),
             useGroups().start(),
+            useLobby().start(),
             useChat().start(),
             useNotifications().start(),
             useWallet().start()
@@ -136,6 +137,5 @@ export default component AppShell(props: { children?: MountNode })
         </div>
         <OverlayHost />
         <ToastHost />
-        <LobbyNotices />
     </div>
 }

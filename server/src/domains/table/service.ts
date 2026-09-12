@@ -81,7 +81,17 @@ function codeFrom(random: () => number): string
  */
 const TABLE_COLUMNS = `
     t.id, t.code::text as code, t.game, t.seats, t.mode, t.privacy,
-    t.target, t.cube, t.blinds, t.status, t.created_at,
+    t.target, t.cube, t.blinds, t.created_at,
+
+    -- Derived, never stored. A closed table is a decision somebody made and lives in the column;
+    -- open-versus-ready is a fact about how many chairs are full, and a stored copy of it is a
+    -- copy that goes stale the first time a seat moves down a path that forgot to update it.
+    case
+        when t.status = 'closed' then 'closed'
+        when (select count(*) from table_seats s
+               where s.table_id = t.id and s.user_id is not null) >= t.seats then 'ready'
+        else 'open'
+    end                                                                        as status,
 
     (select u.handle::text from users u where u.id = t.host_id)                as host,
 
@@ -138,26 +148,6 @@ export function createTableService(db: DataSource, social: SocialService)
             throw new NotFoundError('No table there.');
         }
         return table;
-    };
-
-    /**
-     * Moves a table between `open` and `ready` to match how many chairs are filled.
-     *
-     * Derived from the seats rather than set by whoever happened to write last, so there is no
-     * path where the last person sits down and the table forgets to notice. A closed table stays
-     * closed: somebody ended it, and filling a seat is not how it comes back.
-     */
-    const restate = async (tx: { query(sql: string, params?: unknown[]): Promise<unknown> }, tableId: string): Promise<void> =>
-    {
-        await tx.query(
-            `update tables t
-                set status = case
-                        when (select count(*) from table_seats s
-                               where s.table_id = t.id and s.user_id is not null) >= t.seats
-                        then 'ready' else 'open' end
-              where t.id = $1 and t.status <> 'closed'`,
-            [tableId]
-        );
     };
 
     return {
@@ -376,7 +366,6 @@ export function createTableService(db: DataSource, social: SocialService)
                         [tableId, me]
                     );
 
-                    await restate(tx, tableId);
                     return seat.seat;
                 });
 
@@ -447,7 +436,6 @@ export function createTableService(db: DataSource, social: SocialService)
                     return { left: true, closed: true };
                 }
 
-                await restate(tx, tableId);
                 return { left: true, closed: false };
             });
         },

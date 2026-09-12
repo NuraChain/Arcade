@@ -1,25 +1,31 @@
-import { untrack, useHead, useNavigate, useParams } from 'azerothjs';
+import { useHead, useNavigate, useParams } from 'azerothjs';
 
 import ConfirmSheet from '../../components/app/confirm-sheet.component.azeroth';
 import Page from '../../components/app/page.component.azeroth';
 import InviteSheet from '../../components/games/invite-sheet.component.azeroth';
 import LobbyPanel from '../../components/games/lobby-panel.component.azeroth';
-import MatchmakingPanel from '../../components/games/matchmaking-panel.component.azeroth';
-import ResultPanel from '../../components/games/result-panel.component.azeroth';
 import TableChat from '../../components/games/table-chat.component.azeroth';
-import TablePlaceholder from '../../components/games/table-placeholder.component.azeroth';
 import EmptyState from '../../components/ui/empty-state.component.azeroth';
+import ErrorState from '../../components/ui/error-state.component.azeroth';
 import IconButton from '../../components/ui/icon-button.component.azeroth';
+import Skeleton from '../../components/ui/skeleton.component.azeroth';
+import type { GameId } from '../../data/games.ts';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useDevice } from '../../stores/device.store.ts';
-import { haptic } from '../../lib/haptics.ts';
 import { useLobby } from '../../stores/lobby.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useOverlay } from '../../stores/overlay.store.ts';
-import { useSettings } from '../../stores/settings.store.ts';
 import { useShell } from '../../stores/shell.store.ts';
 import { useToasts } from '../../stores/toasts.store.ts';
 
+/**
+ * One table, as it stands.
+ *
+ * The version this replaces had seven phases and a state machine to walk between them: searching,
+ * found, lobby, starting, playing, result. Six of the seven were a simulation - opponents arriving
+ * on a timer, a countdown to a game that never began, a winner nobody beat - and what is left is
+ * the one that was always real: people in chairs.
+ */
 export default component PlayPage()
 {
     const locale = useLocale();
@@ -27,242 +33,244 @@ export default component PlayPage()
     const catalogue = useCatalogue();
     const device = useDevice();
     const overlay = useOverlay();
-    const settings = useSettings();
     const shell = useShell();
     const toasts = useToasts();
     const params = useParams();
     const { navigate } = useNavigate();
 
-    state seenMessages = 0;
-
-    let wasLive = false;
-
-    derived current = lobby.state();
-
-    derived phase = current.phase;
-
-    let lastPhase = untrack(() => current.phase);
-
-    derived live = lobby.tableId() === (params().id ?? '') && phase !== 'idle';
-
-    derived game = current.intent === null ? null : catalogue.byId(current.intent.game);
-
-    derived gameName = game === null ? '' : locale.t(game.nameKey);
-
-    derived title = ((): string =>
-    {
-        if (!live)
-        {
-            return locale.t('play.expired.title');
-        }
-        switch (phase)
-        {
-            case 'searching':
-                return locale.t('play.title.searching');
-            case 'found':
-                return locale.t('play.title.found');
-            case 'lobby':
-                return locale.t('play.title.lobby');
-            case 'starting':
-                return locale.t('play.title.starting');
-            case 'playing':
-                return locale.t('play.table.title', { game: gameName });
-            default:
-                return locale.t('play.title.result');
-        }
-    })();
-
-    derived phone = device.posture() === 'phone';
-
-    derived chatAvailable = live && (phase === 'lobby' || phase === 'starting' || phase === 'playing');
-
-    derived railOpen = settings.settings().railOpen;
-
-    derived unread = Math.max(0, lobby.chatter().length - seenMessages);
-
-    derived railVisible = chatAvailable && railOpen;
-
-    derived railShare = Math.round(settings.settings().railWidth * 100);
-
-    derived layout = railVisible ? 'grid gap-4 @4xl:grid-cols-[minmax(0,1fr)_var(--rail-share)]' : 'grid gap-4';
-
-    useHead({ title: () => title });
+    state chatOpen = false;
 
     mount
     {
-        return shell.claimTitle(() => title);
+        lobby.open(params().id ?? '');
+        const release = shell.claimTitle(() => title);
+
+        return () =>
+        {
+            release();
+            lobby.close();
+        };
     }
 
-    const exit = (): void =>
-    {
-        navigate(game === null ? '/app/games' : `/app/games/${ game.slug }`, { replace: true });
-    };
+    derived table = lobby.table();
 
-    effect
-    {
-        const now = phase;
-        if (now !== lastPhase)
-        {
-            lastPhase = now;
-            if (now === 'found')
-            {
-                haptic('ready');
-            }
-            else if (now === 'playing')
-            {
-                haptic('select');
-            }
-            else if (now === 'result')
-            {
-                haptic('win');
-            }
-        }
-    }
+    derived loading = lobby.loading() && table === null;
 
-    effect
-    {
-        if (live)
-        {
-            wasLive = true;
-        }
-        else if (wasLive && phase === 'idle')
-        {
-            wasLive = false;
-            untrack(exit);
-        }
-    }
+    derived failed = lobby.failed() !== undefined && table === null;
 
-    effect
-    {
-        if (railVisible)
-        {
-            seenMessages = lobby.chatter().length;
-        }
-    }
+    derived seated = table?.mine !== undefined;
 
-    const copy = async (text: string, done: string): Promise<void> =>
+    derived amHost = table?.chairs.find((chair) => chair.seat === table!.mine)?.host === true;
+
+    derived title = table === null
+        ? locale.t('play.notFound')
+        : locale.t(catalogue.byId(table.game as GameId).nameKey);
+
+    useHead({ title: () => title });
+
+    derived phone = device.posture() === 'phone';
+
+    derived railVisible = !phone && seated && table?.conversationId !== undefined;
+
+    const copyLink = async (): Promise<void> =>
     {
+        if (table === null)
+        {
+            return;
+        }
         try
         {
-            await navigator.clipboard.writeText(text);
-            toasts.show({ kind: 'success', text: done });
+            await navigator.clipboard.writeText(`${ window.location.origin }/app/play/${ table.id }`);
+            toasts.show({ kind: 'success', text: locale.t('play.lobby.copied') });
         }
         catch
         {
-            toasts.show({ kind: 'info', text });
+            toasts.show({ kind: 'warning', text: locale.t('state.errorLead') });
         }
     };
 
-    const openInvite = (): void =>
+    const sitDown = async (): Promise<void> =>
     {
-        overlay.open(InviteSheet, { title: locale.t('play.lobby.invite') }, { label: locale.t('play.lobby.invite') });
+        if (table === null)
+        {
+            return;
+        }
+        const seat = await lobby.claim(table.id);
+
+        // No chair is an ANSWER, not a failure: somebody reached the last one first, which is an
+        // ordinary thing for a table to do between one page load and one tap.
+        toasts.show(seat === null
+            ? { kind: 'warning', text: locale.t('play.table.tooLate') }
+            : { kind: 'success', text: locale.t('play.table.satDown') });
     };
 
     const leave = async (): Promise<void> =>
     {
-        if (phase === 'playing')
+        if (table === null)
         {
-            const confirmed = await overlay.open(
-                ConfirmSheet,
-                { title: locale.t('play.table.leaveConfirm'), confirm: locale.t('play.table.leave'), destructive: true },
-                { label: locale.t('play.table.leave') }
-            ).closed;
-            if (confirmed !== true)
+            return;
+        }
+        const last = table.taken <= 1;
+        const yes = await overlay.open(
+            ConfirmSheet,
             {
-                return;
+                title: locale.t('play.leave.title'),
+                lead: locale.t(last ? 'play.leave.last' : 'play.leave.lead'),
+                confirm: locale.t('play.lobby.leave'),
+                destructive: true
+            },
+            { label: locale.t('play.leave.title') }
+        ).closed;
+
+        if (yes === true)
+        {
+            await lobby.leave(table.id);
+            navigate('/app/games');
+        }
+    };
+
+    const end = async (): Promise<void> =>
+    {
+        if (table === null)
+        {
+            return;
+        }
+        const yes = await overlay.open(
+            ConfirmSheet,
+            {
+                title: locale.t('play.close.title'),
+                lead: locale.t('play.close.lead'),
+                confirm: locale.t('play.close.confirm'),
+                destructive: true
+            },
+            { label: locale.t('play.close.title') }
+        ).closed;
+
+        if (yes === true)
+        {
+            await lobby.end(table.id);
+            navigate('/app/games');
+        }
+    };
+
+    <Page label={ title } fill>
+        <Show when={ loading }>
+            { () =>
+                <div class="flex flex-col gap-4 pt-4">
+                    <Skeleton class="h-8 w-48" />
+                    <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                        <Skeleton class="h-[9.5rem] rounded-panel" />
+                        <Skeleton class="h-[9.5rem] rounded-panel" />
+                        <Skeleton class="h-[9.5rem] rounded-panel" />
+                        <Skeleton class="h-[9.5rem] rounded-panel" />
+                    </div>
+                </div>
             }
-        }
-        if (phase === 'searching' || phase === 'found')
-        {
-            lobby.cancel();
-            toasts.show({ kind: 'info', text: locale.t('play.search.stopped') });
-            return;
-        }
-        lobby.leave();
-    };
+        </Show>
 
-    const rematch = (): void =>
-    {
-        navigate(`/app/play/${ lobby.rematch() }`, { replace: true });
-    };
+        <Show when={ failed }>
+            { () => <ErrorState title={ locale.t('state.errorTitle') } lead={ locale.t('state.errorLead') } onRetry={ () => void lobby.refresh() } class="py-12" /> }
+        </Show>
 
-    const again = (): void =>
-    {
-        const intent = current.intent;
-        if (intent !== null && intent.mode === 'private')
-        {
-            navigate(`/app/games/${ intent.game }/create`, { replace: true });
-            return;
-        }
-        navigate(`/app/play/${ lobby.newOpponent() }`, { replace: true });
-    };
-
-    <Page padded={ false } label={ title } class="px-4 pb-8 sm:px-6 lg:px-8">
-        <header class={ [
-            'flex items-center gap-1 py-2',
-            phone ? 'glass safe-t sticky top-0 z-topbar -mx-4 mb-2 px-2' : 'mb-3'
-        ].join(' ') }>
-            <Show when={ phone }>
-                { () => <IconButton icon="back" label={ locale.t('app.nav.back') } flip onClick={ exit } /> }
-            </Show>
-            <h1 class={ [ 'label min-w-0 flex-1 truncate font-semibold text-text', phone ? 'text-ui-lg' : 'sr-only' ].join(' ') }>{ title }</h1>
-            <Show when={ chatAvailable }>
-                { () =>
-                    <IconButton
-                        icon={ railOpen ? 'panel-close' : 'chats' }
-                        label={ locale.t(railOpen ? 'play.table.chatHide' : 'play.table.chatShow') }
-                        pressed={ railOpen }
-                        count={ railOpen ? 0 : unread }
-                        flip={ railOpen }
-                        onClick={ () => settings.update({ railOpen: !railOpen }) }
-                    />
-                }
-            </Show>
-        </header>
-
-        <Show
-            when={ live }
-            fallback={
+        <Show when={ !loading && !failed && table === null }>
+            { () =>
                 <EmptyState
                     icon="seat"
-                    title={ locale.t('play.expired.title') }
-                    lead={ locale.t('play.expired.lead') }
+                    title={ locale.t('play.notFound') }
+                    lead={ locale.t('play.notFoundLead') }
                     action={ locale.t('app.nav.games') }
                     to="/app/games"
                     class="py-12"
                 />
             }
-        >
+        </Show>
+
+        <Show when={ table !== null && table!.status === 'closed' }>
             { () =>
-                <div class={ layout } style={ `--rail-share: ${ railShare }%` }>
-                    <div class="min-w-0">
-                        <Show when={ phase === 'searching' || phase === 'found' }>
-                            { () => <MatchmakingPanel onInvite={ openInvite } /> }
-                        </Show>
-                        <Show when={ phase === 'lobby' || phase === 'starting' }>
-                            { () => <LobbyPanel onInvite={ openInvite } onCopyLink={ () => void copy(`${ window.location.origin }/app/play/${ lobby.tableId() ?? '' }`, locale.t('play.lobby.copied')) } onLeave={ () => void leave() } /> }
-                        </Show>
-                        <Show when={ phase === 'playing' }>
-                            { () => <TablePlaceholder onLeave={ () => void leave() } /> }
-                        </Show>
-                        <Show when={ phase === 'result' }>
+                <EmptyState
+                    icon="clock"
+                    title={ locale.t('play.closed') }
+                    lead={ locale.t('play.closedLead') }
+                    action={ locale.t('app.nav.games') }
+                    to="/app/games"
+                    class="py-12"
+                />
+            }
+        </Show>
+
+        <Show when={ table !== null && table!.status !== 'closed' }>
+            { () =>
+                <div class="flex min-h-0 flex-1 gap-4">
+                    <div class="flex min-w-0 flex-1 flex-col gap-5 py-2">
+                        <Show
+                            when={ seated }
+                            fallback={
+                                <div class="flex flex-col items-center gap-4 rounded-panel border border-line bg-field p-6 text-center">
+                                    <p class="text-ui-lg text-text">{ locale.t('play.table.watching') }</p>
+                                    <p class="max-w-[44ch] text-ui-base text-muted">
+                                        { locale.plural('play.lobby.emptySeats', table!.seats - table!.taken) }
+                                    </p>
+                                    <IconButton
+                                        icon="seat"
+                                        label={ locale.t('play.table.sitDown') }
+                                        variant="primary"
+                                        size="lg"
+                                        disabled={ table!.taken >= table!.seats }
+                                        onClick={ () => void sitDown() }
+                                    />
+                                </div>
+                            }
+                        >
                             { () =>
-                                <ResultPanel
-                                    onRematch={ rematch }
-                                    onAgain={ again }
-                                    onBack={ () => navigate('/app/games') }
-                                    onShare={ (text) => void copy(text, locale.t('play.result.shared')) }
-                                    onCopyCode={ (code) => void copy(code, locale.t('play.result.codeCopied')) }
+                                <LobbyPanel
+                                    table={ table! }
+                                    onInvite={ () => overlay.open(InviteSheet, { tableId: table!.id }, { label: locale.t('play.lobby.invite') }) }
+                                    onCopyLink={ () => void copyLink() }
+                                    onLeave={ () => void leave() }
                                 />
                             }
                         </Show>
+
+                        <Show when={ amHost }>
+                            { () =>
+                                <button
+                                    type="button"
+                                    class="mx-auto min-h-11 cursor-pointer px-3 text-ui-sm font-semibold text-madder"
+                                    onClick={ () => void end() }
+                                >
+                                    { locale.t('play.close.confirm') }
+                                </button>
+                            }
+                        </Show>
+
+                        <Show when={ phone && table!.conversationId !== undefined && chatOpen }>
+                            { () =>
+                                <TableChat
+                                    conversationId={ table!.conversationId! }
+                                    class="min-h-[18rem] rounded-panel border border-line bg-field"
+                                    onClose={ () => chatOpen = false }
+                                />
+                            }
+                        </Show>
+
+                        <Show when={ phone && table!.conversationId !== undefined && !chatOpen }>
+                            { () =>
+                                <button
+                                    type="button"
+                                    class="mx-auto flex min-h-11 cursor-pointer items-center gap-2 rounded-control px-3 text-ui-sm font-semibold text-accent"
+                                    onClick={ () => chatOpen = true }
+                                >
+                                    { locale.t('play.table.chat') }
+                                </button>
+                            }
+                        </Show>
                     </div>
+
                     <Show when={ railVisible }>
                         { () =>
-                            <TableChat
-                                class="h-[22rem] overflow-hidden rounded-panel border border-line bg-field @4xl:sticky @4xl:top-2 @4xl:h-[min(70dvh,40rem)]"
-                                onClose={ () => settings.update({ railOpen: false }) }
-                            />
+                            <aside class="hidden w-[var(--social-w)] shrink-0 border-s border-line lg:flex lg:min-h-0 lg:flex-col">
+                                <TableChat conversationId={ table!.conversationId! } class="min-h-0 flex-1" />
+                            </aside>
                         }
                     </Show>
                 </div>

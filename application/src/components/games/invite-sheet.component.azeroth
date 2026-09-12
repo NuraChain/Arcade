@@ -11,7 +11,7 @@ import EmptyState from '../ui/empty-state.component.azeroth';
 import IconButton from '../ui/icon-button.component.azeroth';
 import SearchInput from '../ui/search-input.component.azeroth';
 
-export default component InviteSheet(props: OverlayProps & { title: string })
+export default component InviteSheet(props: OverlayProps & { tableId: string })
 {
     const locale = useLocale();
     const account = useAccount();
@@ -27,7 +27,10 @@ export default component InviteSheet(props: OverlayProps & { title: string })
         {
             return [];
         }
-        const taken = new Set(lobby.seats().flatMap((seat) => [seat.playerId, seat.invitedId]).filter((id): id is string => id !== null));
+        const table = lobby.table();
+        const taken = new Set((table?.chairs ?? [])
+            .flatMap((chair) => [chair.who, chair.invited])
+            .filter((handle): handle is string => handle !== undefined));
         const needle = query.trim().toLowerCase();
         const people = (dataset().friends[user.id] ?? [])
             .map((id) => personById(id))
@@ -39,7 +42,7 @@ export default component InviteSheet(props: OverlayProps & { title: string })
 
     <div class="flex max-h-[inherit] min-h-0 flex-col">
         <header class="flex items-center justify-between gap-3 px-5 pb-2 pt-4">
-            <h2 class="title text-ui-xl text-text">{ props.title }</h2>
+            <h2 class="title text-ui-xl text-text">{ locale.t('play.lobby.invite') }</h2>
             <IconButton icon="close" label={ locale.t('common.close') } variant="ghost" onClick={ () => props.close() } />
         </header>
         <div class="px-5 pb-3">
@@ -57,7 +60,7 @@ export default component InviteSheet(props: OverlayProps & { title: string })
                             class="flex min-h-13 coarse:min-h-14 w-full cursor-pointer items-center gap-3 rounded-tile px-2 py-2 text-start transition-colors hover:bg-raised/70"
                             onClick={ () =>
                             {
-                                lobby.invite(person.id);
+                                void lobby.invite(props.tableId, person.id);
                                 props.close(person.id);
                             } }
                         >

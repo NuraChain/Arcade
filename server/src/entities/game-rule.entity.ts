@@ -3,8 +3,6 @@ import { Column, Entity, JoinColumn, OneToOne, PrimaryColumn } from 'typeorm';
 import { Game } from './game.entity.ts';
 
 /** How a game decides who goes first and what is random. */
-export type Fairness = 'dice' | 'deal' | 'none';
-
 /** Whether anything is wagered. `play-money` is chips with no value; there is no real money. */
 export type Stakes = 'none' | 'play-money';
 
@@ -46,7 +44,6 @@ export class GameRule
     targets!: number[];
 
     @Column({ type: 'varchar', length: 16 })
-    fairness!: Fairness;
 
     @Column({ type: 'varchar', length: 16 })
     stakes!: Stakes;

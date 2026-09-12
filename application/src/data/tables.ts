@@ -4,8 +4,6 @@ export type TableMode = 'live' | 'turns';
 
 export type TablePrivacy = 'private' | 'friends' | 'public';
 
-export type Fairness = 'dice' | 'deal' | 'none';
-
 export type Stakes = 'none' | 'play-money';
 
 export type Blinds = 'low' | 'mid' | 'high';
@@ -27,16 +25,15 @@ export interface TableRules
     seats: readonly number[];
     modes: readonly TableMode[];
     targets: readonly number[];
-    fairness: Fairness;
     stakes: Stakes;
     partners: boolean;
 }
 
 export const TABLE_RULES: Record<GameId, TableRules> = {
-    hokm: { seats: [4], modes: ['live', 'turns'], targets: [7, 13], fairness: 'deal', stakes: 'none', partners: true },
-    poker: { seats: [2, 4, 6, 8], modes: ['live'], targets: [], fairness: 'deal', stakes: 'play-money', partners: false },
-    backgammon: { seats: [2], modes: ['live', 'turns'], targets: [1, 3, 5], fairness: 'dice', stakes: 'none', partners: false },
-    ludo: { seats: [2, 4], modes: ['live', 'turns'], targets: [], fairness: 'dice', stakes: 'none', partners: false }
+    hokm: { seats: [4], modes: ['live', 'turns'], targets: [7, 13], stakes: 'none', partners: true },
+    poker: { seats: [2, 4, 6, 8], modes: ['live'], targets: [], stakes: 'play-money', partners: false },
+    backgammon: { seats: [2], modes: ['live', 'turns'], targets: [1, 3, 5], stakes: 'none', partners: false },
+    ludo: { seats: [2, 4], modes: ['live', 'turns'], targets: [], stakes: 'none', partners: false }
 };
 
 export function defaultTable(game: GameId): TableConfig

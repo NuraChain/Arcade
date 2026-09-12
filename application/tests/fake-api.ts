@@ -34,6 +34,73 @@ interface GroupWire
     createdAt: string;
 }
 
+interface SeatWire
+{
+    seat: number;
+    who?: string;
+    invited?: string;
+    ready: boolean;
+    host: boolean;
+}
+
+interface TableWire
+{
+    id: string;
+    code: string;
+    game: string;
+    seats: number;
+    mode: 'live' | 'turns';
+    privacy: 'private' | 'friends' | 'public';
+    target: number;
+    cube: boolean;
+    blinds: string;
+    status: 'open' | 'ready' | 'closed';
+    host?: string;
+    chairs: SeatWire[];
+    taken: number;
+    mine?: number;
+    conversationId?: string;
+    createdAt: string;
+}
+
+/**
+ * The seat claim, in memory.
+ *
+ * The RACE is the server's business and `seat-race.spec.ts` owns it against a real Postgres.
+ * What this fake exists to prove is the other half: that the client sends what it said it would,
+ * renders what came back, and treats "no chair" as an answer rather than an error.
+ */
+function restate(table: TableWire): TableWire
+{
+    table.taken = table.chairs.filter((chair) => chair.who !== undefined).length;
+    if (table.status !== 'closed')
+    {
+        table.status = table.taken >= table.seats ? 'ready' : 'open';
+    }
+    const mine = table.chairs.find((chair) => chair.who === server.me);
+    if (mine === undefined)
+    {
+        delete table.mine;
+        delete table.conversationId;
+    }
+    else
+    {
+        table.mine = mine.seat;
+        table.conversationId = `conv-${ table.id }`;
+    }
+    return table;
+}
+
+function mustTable(id: string): TableWire
+{
+    const table = server.tables.find((one) => one.id === id);
+    if (table === undefined)
+    {
+        throw new ApiError(404, 'not-found', 'No table there.', undefined);
+    }
+    return table;
+}
+
 function mustGroup(slug: string): GroupWire
 {
     const group = server.groups.find((one) => one.slug === slug);
@@ -79,6 +146,10 @@ export const server =
      */
     groups: [] as GroupWire[],
     refuseGroup: null as string | null,
+    tableSeq: 0,
+
+    /** Tables, in memory. Empty until a test opens one - nobody is sitting anywhere on boot. */
+    tables: [] as TableWire[],
 
     /** The graph, from the same fixtures the development server seeds. */
     friends: [] as string[],
@@ -105,6 +176,8 @@ export const server =
             createdAt: new Date(0).toISOString()
         }));
         server.refuseGroup = null;
+        server.tables = [];
+        server.tableSeq = 0;
         server.account = null;
         server.issued = null;
         server.received = null;
@@ -512,6 +585,167 @@ export const client =
             group.owner = input.id;
             group.role = 'member';
             return group;
+        }
+    },
+
+    tables:
+    {
+        async open({ query }: { query: { game?: string } })
+        {
+            server.calls.push('tables.open');
+            return {
+                tables: server.tables.filter((table) =>
+                    table.status === 'open'
+                    && table.privacy === 'public'
+                    && (query.game === undefined || table.game === query.game)
+                    && table.chairs.some((chair) => chair.who === undefined)
+                    && !table.chairs.some((chair) => chair.who === server.me))
+            };
+        },
+
+        async mine()
+        {
+            server.calls.push('tables.mine');
+            return {
+                tables: server.tables.filter((table) =>
+                    table.status !== 'closed' && table.chairs.some((chair) => chair.who === server.me))
+            };
+        },
+
+        async view({ params }: { params: { id: string } })
+        {
+            server.calls.push('tables.view');
+            return restate(mustTable(params.id));
+        },
+
+        async byCode({ params }: { params: { code: string } })
+        {
+            server.calls.push('tables.byCode');
+            const table = server.tables.find((one) => one.code.toLowerCase() === params.code.toLowerCase());
+            if (table === undefined)
+            {
+                throw new ApiError(404, 'not-found', 'No table there.', undefined);
+            }
+            return restate(table);
+        },
+
+        async create({ input }: { input: {
+            game: string;
+            seats: number;
+            mode: 'live' | 'turns';
+            privacy: 'private' | 'friends' | 'public';
+            target: number;
+            cube: boolean;
+            blinds: string;
+            invitees: string[];
+        } })
+        {
+            server.calls.push('tables.create');
+            server.tableSeq += 1;
+
+            const made: TableWire = {
+                id: `table-${ server.tableSeq }`,
+                code: `code${ server.tableSeq }`,
+                game: input.game,
+                seats: input.seats,
+                mode: input.mode,
+                privacy: input.privacy,
+                target: input.target,
+                cube: input.cube,
+                blinds: input.blinds,
+                status: 'open',
+                host: server.me,
+                chairs: Array.from({ length: input.seats }, (_, seat) => ({
+                    seat,
+                    ready: false,
+                    host: seat === 0,
+                    ...(seat === 0 ? { who: server.me } : {}),
+                    ...(input.invitees[seat - 1] === undefined ? {} : { invited: input.invitees[seat - 1] })
+                })),
+                taken: 1,
+                createdAt: new Date(0).toISOString()
+            };
+            server.tables.push(made);
+            return restate(made);
+        },
+
+        async claim({ params }: { params: { id: string } })
+        {
+            server.calls.push('tables.claim');
+            const table = mustTable(params.id);
+            if (table.status === 'closed')
+            {
+                throw new ApiError(409, 'conflict', 'That table has closed.', undefined);
+            }
+
+            const held = table.chairs.find((chair) => chair.who === server.me);
+            if (held !== undefined)
+            {
+                return { table: restate(table), seat: held.seat };
+            }
+
+            const free = table.chairs.find((chair) =>
+                chair.who === undefined && (chair.invited === undefined || chair.invited === server.me));
+
+            if (free === undefined)
+            {
+                return { table: restate(table) };
+            }
+
+            free.who = server.me;
+            return { table: restate(table), seat: free.seat };
+        },
+
+        async leave({ params }: { params: { id: string } })
+        {
+            server.calls.push('tables.leave');
+            const table = mustTable(params.id);
+            for (const chair of table.chairs)
+            {
+                if (chair.who === server.me)
+                {
+                    delete chair.who;
+                    chair.ready = false;
+                }
+            }
+            restate(table);
+            if (table.taken === 0)
+            {
+                table.status = 'closed';
+            }
+            return { ok: true };
+        },
+
+        async ready({ params, input }: { params: { id: string }; input: { ready: boolean } })
+        {
+            server.calls.push('tables.ready');
+            const table = mustTable(params.id);
+            const mine = table.chairs.find((chair) => chair.who === server.me);
+            if (mine !== undefined)
+            {
+                mine.ready = input.ready;
+            }
+            return restate(table);
+        },
+
+        async invite({ params, input }: { params: { id: string }; input: { id: string } })
+        {
+            server.calls.push('tables.invite');
+            const table = mustTable(params.id);
+            const free = table.chairs.find((chair) => chair.who === undefined && chair.invited === undefined);
+            if (free !== undefined)
+            {
+                free.invited = input.id;
+            }
+            return restate(table);
+        },
+
+        async close({ params }: { params: { id: string } })
+        {
+            server.calls.push('tables.close');
+            const table = mustTable(params.id);
+            table.status = 'closed';
+            return { ok: true };
         }
     },
 

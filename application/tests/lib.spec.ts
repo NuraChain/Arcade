@@ -245,12 +245,18 @@ describe('table rules', () =>
         expect(TABLE_RULES.backgammon.seats).toEqual([2]);
     });
 
-    it('marks only the dice games as dice-fair and only poker as play-money', () =>
+    it('marks only poker as play-money, and claims nothing about fairness', () =>
     {
-        expect(TABLE_RULES.backgammon.fairness).toBe('dice');
-        expect(TABLE_RULES.ludo.fairness).toBe('dice');
-        expect(TABLE_RULES.hokm.fairness).toBe('deal');
         expect(GAMES.filter((game) => TABLE_RULES[game.id].stakes === 'play-money').map((game) => game.id)).toEqual(['poker']);
+
+        // The rules used to carry `fairness: 'dice' | 'deal'`, which the UI turned into a promise
+        // that every roll was committed and every deal was checkable. Nothing implemented either.
+        // A rule that says what a table IS may stay; a rule that vouches for a mechanism nobody
+        // wrote goes, and stays gone until the mechanism arrives with it.
+        for (const game of GAMES)
+        {
+            expect(Object.keys(TABLE_RULES[game.id]), game.id).not.toContain('fairness');
+        }
     });
 
     it('rejects a seat count the game does not offer', () =>

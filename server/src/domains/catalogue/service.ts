@@ -21,7 +21,6 @@ interface GameRow
     seats: number[];
     modes: string[];
     targets: number[];
-    fairness: 'dice' | 'deal' | 'none';
     stakes: 'none' | 'play-money';
     partners: boolean;
     has_cube: boolean;
@@ -50,7 +49,7 @@ interface AchievementRow
 const GAMES_SQL = `
     select g.id, g.slug, g.name_key, g.blurb_key, g.category_key, g.category,
            g.min_players, g.max_players, g.status,
-           r.seats, r.modes, r.targets, r.fairness, r.stakes, r.partners, r.has_cube, r.has_blinds
+           r.seats, r.modes, r.targets, r.stakes, r.partners, r.has_cube, r.has_blinds
     from games g
     join game_rules r on r.game_id = g.id
     order by g.sort_order
@@ -83,7 +82,6 @@ export function createCatalogueService(db: DataSource): CataloguePort
                         seats: row.seats,
                         modes: row.modes,
                         targets: row.targets,
-                        fairness: row.fairness,
                         stakes: row.stakes,
                         partners: row.partners,
                         hasCube: row.has_cube,

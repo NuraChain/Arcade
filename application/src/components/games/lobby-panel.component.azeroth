@@ -1,75 +1,86 @@
+import type { GameId } from '../../data/games.ts';
+import type { TableSummary } from '../../api.ts';
 import { personById } from '../../data/mock/index.ts';
 import Icon from '../../icons/icon.component.azeroth';
-import { openSeats } from '../../lib/matchmaking.ts';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useLobby } from '../../stores/lobby.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import Button from '../ui/button.component.azeroth';
 import SeatCard from './seat-card.component.azeroth';
 
-export default component LobbyPanel(props: { onInvite: () => void; onCopyLink: () => void; onLeave: () => void })
+/**
+ * The table, as it stands.
+ *
+ * Every chair here is a row somebody claimed. Nothing arrives on a timer, nothing is filled with
+ * a practice partner to make the grid look busy, and the panel never counts anybody down: the
+ * furthest a table goes is every chair taken, because there is no game behind it yet and the one
+ * thing this screen must not do is imply there is.
+ */
+export default component LobbyPanel(props: {
+    table: TableSummary;
+    onInvite: () => void;
+    onCopyLink: () => void;
+    onLeave: () => void;
+})
 {
     const locale = useLocale();
     const lobby = useLobby();
     const catalogue = useCatalogue();
 
-    derived current = lobby.state();
-
     derived me = lobby.me();
 
-    derived mine = current.seats.find((seat) => seat.playerId === me) ?? null;
+    derived mine = props.table.mine === undefined
+        ? null
+        : (props.table.chairs.find((chair) => chair.seat === props.table.mine) ?? null);
 
     derived amHost = mine?.host === true;
 
-    derived empty = openSeats(current).length;
+    derived empty = props.table.seats - props.table.taken;
 
-    derived starting = current.phase === 'starting';
+    derived full = empty === 0;
 
-    derived waitingOn = current.seats
-        .filter((seat) => seat.playerId !== null && seat.playerId !== me && !seat.ready && !seat.bot)
-        .map((seat) => personById(seat.playerId!))
+    derived waitingOn = props.table.chairs
+        .filter((chair) => chair.who !== undefined && chair.who !== me && !chair.ready)
+        .map((chair) => personById(chair.who!))
         .map((person) => (person === undefined ? '' : locale.text(person.name).split(' ')[0]))
         .filter(Boolean);
 
-    derived status = starting
-        ? locale.t('play.starting.lead')
-        : (empty > 0
-            ? locale.plural('play.lobby.emptySeats', empty)
-            : (waitingOn.length > 0 ? locale.t('play.lobby.waiting', { names: locale.list(waitingOn) }) : locale.t('play.lobby.readyTag')));
+    derived status = empty > 0
+        ? locale.plural('play.lobby.emptySeats', empty)
+        : (waitingOn.length > 0 ? locale.t('play.lobby.waiting', { names: locale.list(waitingOn) }) : locale.t('play.lobby.allReady'));
 
-    derived gameName = current.intent === null ? '' : locale.t(catalogue.byId(current.intent.game).nameKey);
-
-    derived columns = current.seats.length <= 2 ? 'grid-cols-2' : (current.seats.length === 4 ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-2 sm:grid-cols-4');
+    derived gameName = locale.t(catalogue.byId(props.table.game as GameId).nameKey);
 
     <section class="flex flex-col gap-5" aria-label={ locale.t('play.title.lobby') }>
         <div class="flex flex-wrap items-end justify-between gap-3">
             <div>
-                <p class="label text-ui-xs text-faint">{ locale.t(starting ? 'play.title.starting' : 'play.title.lobby') }</p>
+                <p class="label text-ui-xs text-faint">{ locale.t('play.title.lobby') }</p>
                 <h2 class="title text-ui-2xl text-text">{ gameName }</h2>
             </div>
             <p class="flex items-center gap-2 text-ui-base text-muted" aria-live="polite">
-                <Show when={ starting } fallback={ <Icon name="clock" size={ 15 } /> }>
+                <Show when={ full } fallback={ <Icon name="clock" size={ 15 } /> }>
                     { () => <span class="live-dot h-2.5 w-2.5 rounded-full" aria-hidden="true"></span> }
                 </Show>
                 <span>{ status }</span>
-                <Show when={ starting }>
-                    { () => <span class="tally title text-ui-2xl text-live">{ locale.n(current.countdown ?? 0) }</span> }
-                </Show>
             </p>
         </div>
 
-        <ul class={ [ 'grid gap-3', columns ].join(' ') } aria-label={ locale.t('create.seats') }>
-            <For each={ current.seats } key={ (seat) => seat.index } let={ seat }>
+        <ul class="grid grid-cols-2 gap-3 sm:grid-cols-4" aria-label={ locale.t('create.seats') }>
+            <For each={ props.table.chairs } key={ (chair) => chair.seat } let={ chair }>
                 <li class="flex">
                     <div class="flex-1">
-                        <SeatCard seat={ seat } me={ me } canInvite={ amHost || current.intent?.mode !== 'private' } onInvite={ () => props.onInvite() } />
+                        <SeatCard seat={ chair } me={ me } canInvite={ amHost } onInvite={ () => props.onInvite() } />
                     </div>
                 </li>
             </For>
         </ul>
 
-        <Show when={ empty > 0 && amHost && !starting }>
-            <Button variant="outline" block leading="bot" onClick={ () => lobby.fillWithBots() }>{ locale.t('play.lobby.fill') }</Button>
+        <Show when={ full }>
+            { () =>
+                <p class="rounded-panel border border-line bg-field p-4 text-center text-ui-base text-muted">
+                    { locale.t('play.table.notBuilt') }
+                </p>
+            }
         </Show>
 
         <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -79,7 +90,7 @@ export default component LobbyPanel(props: { onInvite: () => void; onCopyLink: (
                 block
                 leading={ mine?.ready === true ? 'check-circle' : 'zap' }
                 disabled={ mine === null }
-                onClick={ () => lobby.ready(!(mine?.ready === true)) }
+                onClick={ () => void lobby.ready(props.table.id, !(mine?.ready === true)) }
             >
                 { mine?.ready === true ? locale.t('play.lobby.readyTag') : locale.t('play.lobby.ready') }
             </Button>

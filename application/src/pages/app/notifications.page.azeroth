@@ -9,7 +9,6 @@ import SectionHeading from '../../components/ui/section-heading.component.azerot
 import { personById } from '../../data/mock/index.ts';
 import type { Notification } from '../../data/mock/types.ts';
 import { runtime } from '../../lib/runtime.ts';
-import { useLobby } from '../../stores/lobby.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useNotifications } from '../../stores/notifications.store.ts';
 import { usePresence } from '../../stores/presence.store.ts';
@@ -20,7 +19,6 @@ export default component NotificationsPage()
 {
     const locale = useLocale();
     const notifications = useNotifications();
-    const lobby = useLobby();
     const presence = usePresence();
     const { navigate } = useNavigate();
 
@@ -46,9 +44,11 @@ export default component NotificationsPage()
     const open = (item: Notification): void =>
     {
         notifications.markRead(item.id);
-        if (item.kind === 'invite' && item.ref.game !== undefined)
+        // An invitation names the table it is for. There is nothing to reconstruct from a game
+        // id and a sender: either the notification carries a table or it is too old to act on.
+        if (item.kind === 'invite' && item.ref.tableId !== undefined)
         {
-            navigate(`/app/play/${ lobby.joinInvite(item.ref.game, item.from ?? 'sara') }`);
+            navigate(`/app/play/${ item.ref.tableId }`);
             return;
         }
         if (item.ref.conversationId !== undefined)

@@ -147,7 +147,7 @@ describe.skipIf(!active)('claiming a seat, against a real database', () =>
         expect(rowsOf<{ n: number }>(rows)[0].n).toBe(1);
     });
 
-    it('marks the table ready when the last chair fills, and open again when one frees', async () =>
+    it('reads ready off the chairs, so no write can leave it stale', async () =>
     {
         const host = await makeUser();
         const other = await makeUser();
@@ -158,6 +158,14 @@ describe.skipIf(!active)('claiming a seat, against a real database', () =>
 
         await tables.leave(other, tableId);
         expect((await tables.byId(host, tableId))!.status).toBe('open');
+
+        // The status is derived where it is READ, not written alongside the seat. A chair that
+        // moves down some path nobody thought of still counts, which a stored copy would not.
+        await db.query(
+            `update table_seats set user_id = $2, joined_at = now() where table_id = $1 and seat = 1`,
+            [tableId, other]
+        );
+        expect((await tables.byId(host, tableId))!.status).toBe('ready');
     });
 
     it('holds an invited chair against a stranger, and gives it to the person it is held for', async () =>

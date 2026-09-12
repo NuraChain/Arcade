@@ -7,6 +7,7 @@ import { useAccount } from '../../stores/account.store.ts';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useLobby } from '../../stores/lobby.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
+import { useToasts } from '../../stores/toasts.store.ts';
 import { usePresence } from '../../stores/presence.store.ts';
 import Avatar from '../ui/avatar.component.azeroth';
 import Button from '../ui/button.component.azeroth';
@@ -18,6 +19,7 @@ import Toggle from '../ui/switch.component.azeroth';
 export default component CreateGameForm(props: { game: Game; onCreated: (tableId: string) => void })
 {
     const locale = useLocale();
+    const toasts = useToasts();
     const catalogue = useCatalogue();
     const lobby = useLobby();
     const account = useAccount();
@@ -72,8 +74,13 @@ export default component CreateGameForm(props: { game: Game; onCreated: (tableId
             return;
         }
         pending = true;
-        const tableId = lobby.host(props.game.id, config, invitees);
-        props.onCreated(tableId);
+        void lobby.host(props.game.id, config, invitees)
+            .then((tableId) => props.onCreated(tableId))
+            .catch(() =>
+            {
+                pending = false;
+                toasts.show({ kind: 'warning', text: locale.t('state.errorLead') });
+            });
     };
 
     <form

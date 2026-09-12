@@ -27,7 +27,6 @@ interface GameSeed
     seats: number[];
     modes: string[];
     targets: number[];
-    fairness: 'dice' | 'deal' | 'none';
     stakes: 'none' | 'play-money';
     partners: boolean;
     hasCube: boolean;
@@ -57,7 +56,6 @@ export const GAME_SEEDS: GameSeed[] = [
         seats: [4],
         modes: ['live', 'turns'],
         targets: [7, 13],
-        fairness: 'deal',
         stakes: 'none',
         partners: true,
         hasCube: false,
@@ -73,7 +71,6 @@ export const GAME_SEEDS: GameSeed[] = [
         seats: [2, 4, 6, 8],
         modes: ['live'],
         targets: [],
-        fairness: 'deal',
         stakes: 'play-money',
         partners: false,
         hasCube: false,
@@ -89,7 +86,6 @@ export const GAME_SEEDS: GameSeed[] = [
         seats: [2],
         modes: ['live', 'turns'],
         targets: [1, 3, 5],
-        fairness: 'dice',
         stakes: 'none',
         partners: false,
         hasCube: true,
@@ -105,7 +101,6 @@ export const GAME_SEEDS: GameSeed[] = [
         seats: [2, 4],
         modes: ['live', 'turns'],
         targets: [],
-        fairness: 'dice',
         stakes: 'none',
         partners: false,
         hasCube: false,
@@ -212,13 +207,12 @@ export async function seedReference(db: DataSource): Promise<void>
 
             await tx.query(
                 `insert into game_rules
-                    (game_id, seats, modes, targets, fairness, stakes, partners, has_cube, has_blinds)
-                 values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                    (game_id, seats, modes, targets, stakes, partners, has_cube, has_blinds)
+                 values ($1, $2, $3, $4, $5, $6, $7, $8)
                  on conflict (game_id) do update set
                     seats = excluded.seats,
                     modes = excluded.modes,
                     targets = excluded.targets,
-                    fairness = excluded.fairness,
                     stakes = excluded.stakes,
                     partners = excluded.partners,
                     has_cube = excluded.has_cube,
@@ -228,7 +222,6 @@ export async function seedReference(db: DataSource): Promise<void>
                     game.seats,
                     game.modes,
                     game.targets,
-                    game.fairness,
                     game.stakes,
                     game.partners,
                     game.hasCube,

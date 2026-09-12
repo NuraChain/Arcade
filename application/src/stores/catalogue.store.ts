@@ -82,7 +82,6 @@ export const useCatalogue = createStore((): CatalogueApi =>
                     seats: row.rules.seats,
                     modes: row.rules.modes as TableRules['modes'],
                     targets: row.rules.targets,
-                    fairness: row.rules.fairness,
                     stakes: row.rules.stakes,
                     partners: row.rules.partners
                 }

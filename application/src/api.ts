@@ -15,7 +15,10 @@ export type {
     Privacy,
     ServerInfo,
     SessionState,
-    SocialGraph
+    SocialGraph,
+    TableSeat,
+    TableStatus,
+    TableSummary
 } from '../../server/src/schemas.ts';
 
 export type {

@@ -1,7 +1,6 @@
 import { useHead, useNavigate, useParams } from 'azerothjs';
 
 import Page from '../../components/app/page.component.azeroth';
-import FairPlayPanel from '../../components/games/fair-play-panel.component.azeroth';
 import GameHero from '../../components/games/game-hero.component.azeroth';
 import RecordStrip from '../../components/games/record-strip.component.azeroth';
 import PeopleStrip from '../../components/social/people-strip.component.azeroth';
@@ -153,7 +152,6 @@ export default component GamePage()
                                 <SectionHeading id="game-record" title={ locale.t('game.record.title') } />
                                 <RecordStrip record={ record } />
                             </section>
-                            <FairPlayPanel game={ game!.id } />
                             <Show when={ rules !== null && rules.stakes === 'play-money' }>
                                 <p class="flex items-start gap-2 rounded-tile border border-line bg-field p-3 text-ui-sm text-muted">
                                     <Icon name="coins" size={ 16 } class="mt-0.5 shrink-0 text-accent" />

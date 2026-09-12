@@ -6,6 +6,7 @@ import { Social1789147000000 } from './0003-social.ts';
 import { Chat1789148500000 } from './0004-chat.ts';
 import { Groups1789160000000 } from './0005-groups.ts';
 import { Tables1789170000000 } from './0006-tables.ts';
+import { DropFairness1789180000000 } from './0007-drop-fairness.ts';
 
 /**
  * Every migration. Appending is the only correct edit.
@@ -21,5 +22,6 @@ export const migrations: (new () => MigrationInterface)[] = [
     Social1789147000000,
     Chat1789148500000,
     Groups1789160000000,
-    Tables1789170000000
+    Tables1789170000000,
+    DropFairness1789180000000
 ];

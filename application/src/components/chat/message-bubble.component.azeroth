@@ -5,7 +5,6 @@ import type { Message } from '../../data/mock/types.ts';
 import Icon from '../../icons/icon.component.azeroth';
 import { isLineKey } from '../../lib/lines.ts';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
-import { useLobby } from '../../stores/lobby.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { attachHold } from '../../lib/hold.ts';
 import { useToasts } from '../../stores/toasts.store.ts';
@@ -16,7 +15,6 @@ export default component MessageBubble(props: { message: Message; me: string; sh
 {
     const locale = useLocale();
     const catalogue = useCatalogue();
-    const lobby = useLobby();
     const toasts = useToasts();
     const { navigate } = useNavigate();
 
@@ -63,13 +61,15 @@ export default component MessageBubble(props: { message: Message; me: string; sh
         {
             return;
         }
-        if (lobby.tableId() === props.message.ref?.tableId && lobby.active())
+        // The invitation names its table. There is nothing to reconstruct from a game and a
+        // sender any more: either the line carries an id or it is too old to sit down at.
+        const tableId = props.message.ref?.tableId;
+        if (tableId === undefined)
         {
-            navigate(`/app/play/${ lobby.tableId() ?? '' }`);
+            toasts.show({ kind: 'info', text: locale.t('chat.invite.closed') });
             return;
         }
-        toasts.show({ kind: 'info', text: locale.t('chat.invite.closed') });
-        navigate(`/app/play/${ lobby.joinInvite(game.id, props.message.from) }`);
+        navigate(`/app/play/${ tableId }`);
     };
 
     <Show

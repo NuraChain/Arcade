@@ -1,12 +1,12 @@
+import type { TableSeat } from '../../api.ts';
 import { personById } from '../../data/mock/index.ts';
 import Icon from '../../icons/icon.component.azeroth';
-import type { Seat } from '../../lib/matchmaking.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { usePresence } from '../../stores/presence.store.ts';
 import Avatar from '../ui/avatar.component.azeroth';
 
 export default component SeatCard(props: {
-    seat: Seat;
+    seat: TableSeat;
     me: string;
     canInvite: boolean;
     onInvite?: () => void;
@@ -15,24 +15,20 @@ export default component SeatCard(props: {
     const locale = useLocale();
     const presence = usePresence();
 
-    derived filled = props.seat.playerId !== null;
+    derived filled = props.seat.who !== undefined;
 
-    derived pending = !filled && props.seat.invitedId !== null;
+    derived pending = !filled && props.seat.invited !== undefined;
 
-    derived personId = props.seat.playerId ?? props.seat.invitedId;
+    derived handle = props.seat.who ?? props.seat.invited ?? null;
 
-    derived person = personId === null ? null : (personById(personId) ?? null);
+    derived person = handle === null ? null : (personById(handle) ?? null);
 
-    derived name = props.seat.bot
-        ? locale.t('play.lobby.bot')
-        : (props.seat.playerId === props.me ? locale.t('common.you') : (person === null ? (personId ?? '') : locale.text(person.name)));
+    derived name = props.seat.who === props.me
+        ? locale.t('common.you')
+        : (person === null ? (handle ?? '') : locale.text(person.name));
 
     derived tag = ((): { text: string; tone: string } | null =>
     {
-        if (props.seat.bot)
-        {
-            return { text: locale.t('play.lobby.bot'), tone: 'bg-raised text-muted' };
-        }
         if (pending)
         {
             return { text: locale.t('play.lobby.invited'), tone: 'bg-accent/15 text-accent' };
@@ -88,23 +84,12 @@ export default component SeatCard(props: {
                         { locale.t('play.lobby.host') }
                     </span>
                 </Show>
-                <Show
-                    when={ !props.seat.bot }
-                    fallback={
-                        <span class="flex h-14 w-14 items-center justify-center rounded-full bg-raised text-muted" role="img" aria-label={ locale.t('play.lobby.bot') }>
-                            <Icon name="bot" size={ 26 } />
-                        </span>
-                    }
-                >
-                    { () =>
-                        <Avatar
-                            person={ person }
-                            size="lg"
-                            presence={ pending || person === null ? null : presence.dot(person.id) }
-                            class={ pending ? 'opacity-60' : '' }
-                        />
-                    }
-                </Show>
+                <Avatar
+                    person={ person }
+                    size="lg"
+                    presence={ pending || person === null ? null : presence.dot(person.id) }
+                    class={ pending ? 'opacity-60' : '' }
+                />
                 <span class={ [ 'w-full truncate text-ui-base font-semibold', pending ? 'text-muted' : 'text-text' ].join(' ') }>{ name }</span>
                 <Show when={ tag !== null }>
                     { () =>

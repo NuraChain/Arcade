@@ -484,6 +484,91 @@ Two things the browser pass caught that no type could:
   the groups api for a conversation id and putting a 404 in the console on every navigation away.
   It opens once in `mount` and closes in the teardown.
 
+## Tables
+
+A table is a SEAT CONTAINER. It opens, people sit down, and it stops there — there is no game
+engine behind it and nothing in the domain pretends there is. Whatever plays the hand plugs in
+here and reads the seats.
+
+**Seats are rows, created empty with the table.** That is what turns "claim a seat" from a read
+followed by a write into a single UPDATE the database arbitrates:
+
+```sql
+update table_seats set user_id = $2, joined_at = now()
+ where table_id = $1
+   and seat = (select s.seat from table_seats s
+                where s.table_id = $1 and s.user_id is null
+                  and (s.invited_id is null or s.invited_id = $2)
+                order by (s.invited_id = $2) desc nulls last, s.seat
+                limit 1 for update skip locked)
+   and user_id is null
+returning seat
+```
+
+`skip locked` is the whole trick: two people arriving in the same instant lock DIFFERENT rows, so
+both succeed while two chairs are free and exactly one succeeds when one is. The outer
+`user_id is null` is the belt — a row taken between the lock and the write matches nothing.
+`tests/seat-race.spec.ts` fires ten claimers at three chairs and expects three seated and seven
+told no, with no two in the same chair.
+
+**One person racing themselves is a different problem, and it took three attempts to see it.**
+Two requests from one account both find the table empty of them, and then either the partial
+unique index `table_seats_one_per_person` refuses the second (23505) or — worse — the second
+finds every free chair momentarily LOCKED by the first and concludes the table is full. Neither
+is true, and a double tap must answer with the chair they are sitting in. The fix is
+`pg_advisory_xact_lock(hashtext(tableId), hashtext(userId))` as the first statement in the claim:
+two requests from ONE person serialise, different people never contend, and the lock releases with
+the transaction whichever way it ends. Five consecutive clean runs of the race suite is what
+"fixed" meant here; two out of three was not.
+
+**A seat claim answers 200 with no seat, never an error.** Two people reaching for the last chair
+is ordinary. A 409 would make the loser's client show a failure for something that simply
+happened, and the client says "somebody took the last chair first" instead.
+
+**`status` is derived where it is read**, not written beside the seat:
+
+```sql
+case when t.status = 'closed' then 'closed'
+     when (count of occupied chairs) >= t.seats then 'ready'
+     else 'open' end
+```
+
+`closed` is a decision somebody made and lives in the column; open-versus-ready is a fact about
+how many chairs are full, and a stored copy of a derivable fact is a copy that goes stale the
+first time a seat moves down a path that forgot to update it. It did, in the browser pass.
+
+**`ready` means every chair is taken. It does not mean playing.** The furthest a table gets is
+full, and the page says so in as many words: *"Every chair is taken. The game itself is still
+being built — until it is, the table holds your seats and the chat stays open."*
+
+**Matchmaking is a query.** `quick(game)` reads the open public tables for that game, claims a
+chair at the first one that still has one, and opens a table to wait in only when there is nothing
+to join. Nobody is invented to fill it.
+
+**The table's chat is the chat domain.** A table owns a `kind: 'game'` conversation, one per
+table by partial unique index, and membership moves with the seats inside the same transaction —
+sit down and you are in the thread, stand up and you are out. The version this replaces kept a
+private list of invented lines in the lobby store, which was a second message system with its own
+membership rules, its own watermark and its own future sealing problem.
+
+**What was deleted, and why it had to be.** The lobby store was a simulation: it invented
+opponents on a timer (`planCandidates`), typed their small talk from a script (`planChatter`),
+rolled dice nobody threw (`RollEntry`), and declared a winner nobody beat (`planFinish`). With
+it went `lib/matchmaking.ts`'s seven-phase reducer, `MatchmakingPanel`, `ResultPanel`,
+`RollLog`, `TablePlaceholder`, `LobbyNotices`, and thirty-seven catalogue keys. Six of the seven
+phases described things that do not happen; the seventh — people in chairs — is the whole product
+now.
+
+**The provably-fair claim is gone, column and all.** `game_rules.fairness` said `dice` or
+`deal`, and the UI turned that into two sentences: every roll committed before it is shown and
+logged for every seat, every deal shuffled from a seed both sides can check. Neither was true and
+neither was designed — the cryptography this product has specified is `nura-e2ee/v1`, which is
+about messages. A claim about fairness is what a player leans on when they lose, and shipping it
+ahead of the mechanism teaches people that the product's assurances are marketing.
+`0007-drop-fairness.ts` removes the column; `tests/lib.spec.ts` now asserts the key is ABSENT,
+so it cannot come back without the mechanism. `stakes: 'play-money'` stays: that is a fact about
+a table, not a promise about a random number.
+
 ## Chat is the server's
 
 `server/src/domains/chat/` owns conversations, membership and messages; the browser reads them

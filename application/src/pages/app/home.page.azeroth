@@ -5,7 +5,6 @@ import GameGrid from '../../components/games/game-grid.component.azeroth';
 import QuickPlayButton from '../../components/games/quick-play-button.component.azeroth';
 import ActivityItem from '../../components/social/activity-item.component.azeroth';
 import PeopleStrip from '../../components/social/people-strip.component.azeroth';
-import Button from '../../components/ui/button.component.azeroth';
 import Chip from '../../components/ui/chip.component.azeroth';
 import Pagination from '../../components/ui/pagination.component.azeroth';
 import SectionHeading from '../../components/ui/section-heading.component.azeroth';
@@ -85,36 +84,24 @@ export default component HomePage()
 
     derived activity = allActivity.slice(0, activityPage * ACTIVITY_PAGE);
 
-    derived table = lobby.state();
+    /**
+     * Where this account is sitting, from the server.
+     *
+     * There is no "last result" card any more, because nothing produces a result: no game is
+     * played, so no game is won. What replaces it is the honest version of the same idea - the
+     * table you are still at, which survives a reload and a second device because it is a row.
+     */
+    derived table = lobby.seated()[0] ?? null;
 
-    derived tableGame = table.intent === null ? '' : locale.t(catalogue.byId(table.intent.game).nameKey);
+    derived tableGame = table === null ? '' : locale.t(catalogue.byId(table.game as GameId).nameKey);
 
-    derived continueText = table.phase === 'searching' || table.phase === 'found'
-        ? locale.t('home.continue.searching', { game: tableGame })
-        : (table.phase === 'playing'
-            ? locale.t('home.continue.playing', { game: tableGame })
-            : locale.plural('home.continue.lobby', table.players.length, { game: tableGame }));
-
-    derived last = lobby.lastResult();
-
-    derived lastNames = last === null
+    derived continueText = table === null
         ? ''
-        : locale.list(last.players
-            .filter((id) => id !== lobby.me())
-            .map((id) => (id.startsWith('bot-') ? locale.t('play.lobby.bot') : locale.text(personById(id)?.name ?? { en: id, fa: id }).split(' ')[0])));
+        : locale.plural('home.continue.lobby', table.taken, { game: tableGame });
 
     const quickPlay = (game: GameId): void =>
     {
-        navigate(`/app/play/${ lobby.quick(game) }`);
-    };
-
-    const runItBack = (): void =>
-    {
-        if (last === null)
-        {
-            return;
-        }
-        navigate(`/app/play/${ table.phase === 'result' ? lobby.rematch() : lobby.quick(last.game, last.config) }`);
+        void lobby.quick(game).then((id) => navigate(`/app/play/${ id }`));
     };
 
     <Page
@@ -151,9 +138,9 @@ export default component HomePage()
                 </div>
             </section>
 
-            <Show when={ lobby.active() }>
+            <Show when={ table !== null }>
                 { () =>
-                    <Link to={ `/app/play/${ lobby.tableId() ?? '' }` } class="flex items-center gap-4 rounded-panel border border-live/40 bg-live/5 p-4 shadow-glow-live transition hover:bg-live/10">
+                    <Link to={ `/app/play/${ table!.id }` } class="flex items-center gap-4 rounded-panel border border-live/40 bg-live/5 p-4 shadow-glow-live transition hover:bg-live/10">
                         <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-live text-accent-ink">
                             <Icon name="seat" size={ 22 } />
                         </span>
@@ -166,21 +153,6 @@ export default component HomePage()
                             <Icon name="forward" size={ 14 } class="icon-flip" />
                         </span>
                     </Link>
-                }
-            </Show>
-
-            <Show when={ last !== null && !lobby.active() }>
-                { () =>
-                    <div class="flex flex-col gap-3 rounded-panel border border-line bg-field p-4 sm:flex-row sm:items-center">
-                        <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-accent/15 text-accent">
-                            <Icon name="refresh" size={ 22 } />
-                        </span>
-                        <span class="flex min-w-0 flex-1 flex-col">
-                            <span class="title text-ui-lg text-text">{ locale.t('home.rematch.title') }</span>
-                            <span class="text-ui-sm text-muted">{ locale.t('home.rematch.lead', { game: locale.t(catalogue.byId(last!.game).nameKey), names: lastNames }) }</span>
-                        </span>
-                        <Button variant="primary" leading="refresh" onClick={ runItBack }>{ locale.t('home.rematch.action') }</Button>
-                    </div>
                 }
             </Show>
 
