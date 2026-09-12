@@ -2,8 +2,8 @@ import { Link } from 'azerothjs';
 
 import type { GroupSummary } from '../../api.ts';
 import type { GameId } from '../../data/games.ts';
-import { personById } from '../../data/mock/index.ts';
-import type { Person } from '../../data/mock/types.ts';
+import type { Person } from '../../data/person.ts';
+import { usePeople } from '../../stores/people.store.ts';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { usePresence } from '../../stores/presence.store.ts';
@@ -15,10 +15,11 @@ export default component GroupCard(props: { group: GroupSummary; class?: string 
     const locale = useLocale();
     const presence = usePresence();
     const catalogue = useCatalogue();
+    const people = usePeople();
 
     derived members = props.group.members
-        .map((id) => personById(id))
-        .filter((person): person is Person => person !== undefined);
+        .map((id) => people.byHandle(id))
+        .filter((person): person is Person => person !== null);
 
     derived online = props.group.members.filter((id) => presence.isOnline(id)).length;
 

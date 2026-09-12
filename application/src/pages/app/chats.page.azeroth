@@ -10,6 +10,7 @@ import Skeleton from '../../components/ui/skeleton.component.azeroth';
 import Tabs from '../../components/ui/tabs.component.azeroth';
 import type { Conversation } from '../../data/mock/types.ts';
 import { fold } from '../../services/search.service.ts';
+import { usePeople } from '../../stores/people.store.ts';
 import { useChat } from '../../stores/chat.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useOverlay } from '../../stores/overlay.store.ts';
@@ -23,6 +24,7 @@ export default component ChatsPage()
     const overlay = useOverlay();
     const presence = usePresence();
     const groups = useGroups();
+    const people = usePeople();
 
     useHead({ title: () => locale.t('app.nav.chats') });
 
@@ -49,7 +51,7 @@ export default component ChatsPage()
             : byTab.filter((conversation) =>
             {
                 const last = chat.lastOf(conversation.id);
-                return fold(locale.text(titleOf(conversation, mine, groupNameOf(conversation, groups.byId)))).includes(needle)
+                return fold(locale.text(titleOf(conversation, mine, people.byHandle, groupNameOf(conversation, groups.byId)))).includes(needle)
                     || (last !== undefined && fold(locale.text(last.text)).includes(needle));
             });
         return [...matched].sort((a, b) =>

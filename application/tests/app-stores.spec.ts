@@ -87,13 +87,6 @@ describe('device posture', () =>
 
 describe('session', () =>
 {
-    it('offers three demo identities, one of them a minor', async () =>
-    {
-        const identities = useAccount().demoIdentities();
-        expect(identities.length).toBe(3);
-        expect(identities.filter((person) => person.minor).length).toBe(1);
-    });
-
     it('asks the server for the account and adopts the one it issues', async () =>
     {
         const session = useSession();
@@ -105,20 +98,11 @@ describe('session', () =>
         expect(account.user()?.handle).toBe('darya');
     });
 
-    it('joins a demo identity to the person the dataset knows', async () =>
-    {
-        const account = useAccount();
-        const person = await account.signInAsDemo('sara.k');
-        expect(server.calls).toContain('auth.demo');
-        expect(person?.id).toBe('sara.k');
-        expect(account.user()?.name.en).toBe('Sara Kamali');
-    });
-
-    it('will not let a typed name borrow a demo identity', async () =>
+    it('claims a fresh handle rather than taking one that is spoken for', async () =>
     {
         const person = await useAccount().signIn('alex');
         expect(person?.id).not.toBe('alex');
-        expect(person?.name.en).toBe('alex');
+        expect(person?.displayName).toBe('alex');
     });
 
     it('keeps a name nobody in the dataset has ever answered to', async () =>
@@ -126,8 +110,8 @@ describe('session', () =>
         const account = useAccount();
         const person = await account.signIn('Darya');
         expect(person?.handle).toBe('darya');
-        expect(person?.name.en).toBe('Darya');
-        expect(account.user()?.name.en).toBe('Darya');
+        expect(person?.displayName).toBe('Darya');
+        expect(account.user()?.displayName).toBe('Darya');
     });
 
     it('ends the session on the server rather than only in this tab', async () =>
@@ -156,7 +140,7 @@ describe('session', () =>
         await session.ready();
         expect(server.calls).toContain('auth.me');
         expect(session.signedIn()).toBe(true);
-        expect(useAccount().user()?.id).toBe('u-darya');
+        expect(useAccount().user()?.id).toBe('darya');
     });
 });
 
@@ -184,7 +168,7 @@ describe('guards', () =>
 
     it('lets a signed-in person through, and bounces them off the sign-in page', async () =>
     {
-        await useAccount().signInAsDemo('alex');
+        await useAccount().signIn('Alex');
         expect(await requireSession(context('/app'))).toBe(true);
         expect(await requireAnonymous(context('/sign-in', '/app/chats'))).toMatchObject({ to: '/app/chats' });
     });

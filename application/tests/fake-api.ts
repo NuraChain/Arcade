@@ -1,6 +1,6 @@
 import { ApiError, applyFieldErrors } from '@azerothjs/http/api/shared';
 
-import { handleFromAddress, handleFromName } from '../../server/src/domains/identity/handle.ts';
+import { candidatesFor, handleFromAddress, handleFromName } from '../../server/src/domains/identity/handle.ts';
 import type {
     Account,
     ChatMessage,
@@ -440,9 +440,24 @@ export function demoAccount(handle: string): Account | undefined
     return DEMO[handle];
 }
 
+/**
+ * A guest account, with the handle CLAIMED rather than assumed.
+ *
+ * The real server inserts and lets the unique index arbitrate, walking `candidatesFor` until one
+ * sticks. A fake that handed back the first candidate would let a spec sign in as a name somebody
+ * already answers to and never notice - which is exactly what it did, and the test that was meant
+ * to catch it passed for a different reason entirely.
+ */
 export function guestAccount(name: string): Account
 {
-    const handle = handleFromName(name);
+    const taken = new Set(PEOPLE_FIXTURES.map((one) => one.handle));
+
+    let handle = handleFromName(name);
+    for (let attempt = 0; taken.has(handle) && attempt < 8; attempt += 1)
+    {
+        handle = candidatesFor(handleFromName(name), attempt + 1, () => 0.5);
+    }
+
     return { id: `u-${ handle }`, handle, displayName: name.trim(), bio: '', hue: hueOf(name), kind: 'guest', isMinor: false };
 }
 
@@ -452,7 +467,7 @@ export function walletAccount(address: string): Account
     return {
         id: `u-${ lower.slice(2, 10) }`,
         handle: handleFromAddress(address),
-        displayName: `${ address.slice(0, 6) }…${ address.slice(-4) }`,
+        displayName: `${ lower.slice(0, 6) }…${ lower.slice(-4) }`,
         bio: '',
         hue: Number.parseInt(lower.slice(2, 8), 16) % 360,
         kind: 'wallet',

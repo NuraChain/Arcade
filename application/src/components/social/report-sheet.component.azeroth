@@ -1,5 +1,5 @@
-import { personById } from '../../data/mock/index.ts';
 import type { ReportCategory } from '../../data/mock/types.ts';
+import { usePeople } from '../../stores/people.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import type { OverlayProps } from '../../stores/overlay.store.ts';
 import { useSocial } from '../../stores/social.store.ts';
@@ -15,13 +15,14 @@ export default component ReportSheet(props: OverlayProps & { personId: string })
     const locale = useLocale();
     const social = useSocial();
     const toasts = useToasts();
+    const people = usePeople();
 
     state category = 'harassment' as ReportCategory;
     state alsoBlock = false;
 
-    derived person = personById(props.personId);
+    derived person = people.byHandle(props.personId);
 
-    derived name = person === undefined ? props.personId : locale.text(person.name).split(' ')[0];
+    derived name = person === null ? props.personId : person.displayName.split(' ')[0];
 
     const submit = (): void =>
     {

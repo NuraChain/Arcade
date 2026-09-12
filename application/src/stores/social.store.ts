@@ -2,10 +2,11 @@ import { createStore, createResource, createSignal, untrack, type Getter } from 
 
 import { client, type MuteSubject, type Privacy } from '../api.ts';
 
-import { personById } from '../data/mock/index.ts';
-import type { FriendRequest, Person, Report, ReportCategory } from '../data/mock/types.ts';
+import type { Person } from '../data/person.ts';
+import type { FriendRequest, Report, ReportCategory } from '../data/mock/types.ts';
 import type { reasonFor } from '../services/social.service.ts';
 import { useAccount } from './account.store.ts';
+import { usePeople } from './people.store.ts';
 import { useRealtime } from './realtime.store.ts';
 
 export type Relation = 'me' | 'friend' | 'incoming' | 'outgoing' | 'blocked' | 'none';
@@ -73,6 +74,7 @@ export interface SocialApi
 export const useSocial = createStore((): SocialApi =>
 {
     const account = useAccount();
+    const people = usePeople();
 
     const meId = (): string => account.user()?.id ?? '';
 
@@ -81,7 +83,15 @@ export const useSocial = createStore((): SocialApi =>
 
     const who = (): string | null => account.user()?.id ?? null;
 
-    const graph = createResource(who, () => client.social.graph(), { name: 'social.graph' });
+    // Every payload that carries a person files them with `people.store`, which is the only thing
+    // that knows a handle's name now. A store that fetched people and did not hand them over would
+    // leave every OTHER screen rendering bare handles for somebody it had just loaded.
+    const graph = createResource(who, async () =>
+    {
+        const answer = await client.social.graph();
+        people.remember([...answer.friends, ...answer.blocked]);
+        return answer;
+    }, { name: 'social.graph' });
 
     const privacyRead = createResource(who, () => client.social.privacy(), { name: 'social.privacy' });
 
@@ -89,9 +99,19 @@ export const useSocial = createStore((): SocialApi =>
 
     const asked = (what: string) => (): string | null => (wanted()[what] === true ? who() : null);
 
-    const suggested = createResource(asked('suggestions'), () => client.social.suggestions(), { name: 'social.suggestions' });
+    const suggested = createResource(asked('suggestions'), async () =>
+    {
+        const answer = await client.social.suggestions();
+        people.remember(answer.suggestions.map((entry) => entry.person));
+        return answer;
+    }, { name: 'social.suggestions' });
 
-    const directory = createResource(asked('people'), () => client.social.people(), { name: 'social.people' });
+    const directory = createResource(asked('people'), async () =>
+    {
+        const answer = await client.social.people();
+        people.remember(answer.people);
+        return answer;
+    }, { name: 'social.people' });
 
     const filed = createResource(asked('reports'), () => client.social.reports(), { name: 'social.reports' });
 
@@ -181,9 +201,7 @@ export const useSocial = createStore((): SocialApi =>
         outgoing,
         blocked,
 
-        suggestions: () => (suggested.data()?.suggestions ?? [])
-            .map((entry) => personById(entry.person.id))
-            .filter((person): person is Person => person !== undefined),
+        suggestions: () => (suggested.data()?.suggestions ?? []).map((entry) => entry.person),
 
         reports: () => (filed.data()?.reports ?? []).map((report): Report => ({
             id: report.id,
@@ -240,9 +258,7 @@ export const useSocial = createStore((): SocialApi =>
 
         visible: (ids) => ids.filter((id) => !blocked().includes(id)),
 
-        people: () => (directory.data()?.people ?? [])
-            .map((person) => personById(person.id))
-            .filter((person): person is Person => person !== undefined),
+        people: () => directory.data()?.people ?? [],
 
         add: (id) => write(() => client.social.request({ input: { id } })),
         accept: (requestId) => write(() => client.social.answer({ input: { id: requestId, outcome: 'accepted' } })),

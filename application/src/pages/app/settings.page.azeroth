@@ -10,11 +10,11 @@ import SectionHeading from '../../components/ui/section-heading.component.azerot
 import Slider from '../../components/ui/slider.component.azeroth';
 import Toggle from '../../components/ui/switch.component.azeroth';
 import { NURA_CHAIN } from '../../data/chain.ts';
-import { personById } from '../../data/mock/index.ts';
-import type { Person } from '../../data/mock/types.ts';
+import type { Person } from '../../data/person.ts';
 import Icon from '../../icons/icon.component.azeroth';
 import PushToggle from '../../components/app/push-toggle.component.azeroth';
 import { shortAddress } from '../../lib/wallet.ts';
+import { usePeople } from '../../stores/people.store.ts';
 import { useAccount } from '../../stores/account.store.ts';
 import { useConnection } from '../../stores/connection.store.ts';
 import { useDevice } from '../../stores/device.store.ts';
@@ -41,6 +41,7 @@ export default component SettingsPage()
     const connection = useConnection();
     const device = useDevice();
     const toasts = useToasts();
+    const people = usePeople();
     const { navigate } = useNavigate();
 
     useHead({ title: () => locale.t('settings.title') });
@@ -54,15 +55,15 @@ export default component SettingsPage()
     state reportsPage = 1;
 
     derived allBlocked = social.blocked()
-        .map((id) => personById(id))
-        .filter((person): person is Person => person !== undefined);
+        .map((id) => people.byHandle(id))
+        .filter((person): person is Person => person !== null);
 
     derived blocked = allBlocked.slice(0, blockedPage * SAFETY_PAGE);
 
     derived allMuted = social.mutes()
         .filter((entry) => entry.kind === 'person')
-        .map((entry) => personById(entry.id))
-        .filter((person): person is Person => person !== undefined);
+        .map((entry) => people.byHandle(entry.id))
+        .filter((person): person is Person => person !== null);
 
     derived privacy = social.privacy();
 
@@ -165,7 +166,7 @@ export default component SettingsPage()
                                                 subtitle={ `@${ person.handle }` }
                                                 actions={
                                                     <Button variant="ghost" size="sm" class="whitespace-nowrap" onClick={ () => social.unblock(person.id) }>
-                                                        { locale.t('actions.unblock', { name: locale.text(person.name).split(' ')[0] }) }
+                                                        { locale.t('actions.unblock', { name: person.displayName.split(' ')[0] }) }
                                                     </Button>
                                                 }
                                             />
@@ -200,7 +201,7 @@ export default component SettingsPage()
                                                 subtitle={ `@${ person.handle }` }
                                                 actions={
                                                     <Button variant="ghost" size="sm" class="whitespace-nowrap" onClick={ () => void social.toggleMute('person', person.id) }>
-                                                        { locale.t('actions.unmute', { name: locale.text(person.name).split(' ')[0] }) }
+                                                        { locale.t('actions.unmute', { name: person.displayName.split(' ')[0] }) }
                                                     </Button>
                                                 }
                                             />
@@ -233,7 +234,7 @@ export default component SettingsPage()
                                             <Icon name="report" size={ 15 } class="shrink-0 text-madder" />
                                             <span class="flex min-w-0 flex-1 flex-col">
                                                 <span class="truncate text-ui-sm text-text">
-                                                    { locale.text(personById(report.against)?.name ?? { en: report.against, fa: report.against }) }
+                                                    { locale.text(people.byHandle(report.against)?.displayName ?? { en: report.against, fa: report.against }) }
                                                     <span class="mx-1.5 inline-block h-1 w-1 rounded-full bg-faint align-middle" aria-hidden="true"></span>
                                                     { locale.t(`report.category.${ report.category }`) }
                                                 </span>

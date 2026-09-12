@@ -1,6 +1,6 @@
 import type { TableSeat } from '../../api.ts';
-import { personById } from '../../data/mock/index.ts';
 import Icon from '../../icons/icon.component.azeroth';
+import { usePeople } from '../../stores/people.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { usePresence } from '../../stores/presence.store.ts';
 import Avatar from '../ui/avatar.component.azeroth';
@@ -14,6 +14,7 @@ export default component SeatCard(props: {
 {
     const locale = useLocale();
     const presence = usePresence();
+    const people = usePeople();
 
     derived filled = props.seat.who !== undefined;
 
@@ -21,11 +22,11 @@ export default component SeatCard(props: {
 
     derived handle = props.seat.who ?? props.seat.invited ?? null;
 
-    derived person = handle === null ? null : (personById(handle) ?? null);
+    derived person = handle === null ? null : (people.byHandle(handle) ?? null);
 
     derived name = props.seat.who === props.me
         ? locale.t('common.you')
-        : (person === null ? (handle ?? '') : locale.text(person.name));
+        : (person === null ? (handle ?? '') : person.displayName);
 
     derived tag = ((): { text: string; tone: string } | null =>
     {

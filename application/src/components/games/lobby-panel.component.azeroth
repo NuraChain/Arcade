@@ -1,7 +1,7 @@
 import type { GameId } from '../../data/games.ts';
 import type { TableSummary } from '../../api.ts';
-import { personById } from '../../data/mock/index.ts';
 import Icon from '../../icons/icon.component.azeroth';
+import { usePeople } from '../../stores/people.store.ts';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useLobby } from '../../stores/lobby.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
@@ -26,6 +26,7 @@ export default component LobbyPanel(props: {
     const locale = useLocale();
     const lobby = useLobby();
     const catalogue = useCatalogue();
+    const people = usePeople();
 
     derived me = lobby.me();
 
@@ -41,8 +42,8 @@ export default component LobbyPanel(props: {
 
     derived waitingOn = props.table.chairs
         .filter((chair) => chair.who !== undefined && chair.who !== me && !chair.ready)
-        .map((chair) => personById(chair.who!))
-        .map((person) => (person === undefined ? '' : locale.text(person.name).split(' ')[0]))
+        .map((chair) => people.byHandle(chair.who!))
+        .map((person) => (person === null ? '' : person.displayName.split(' ')[0]))
         .filter(Boolean);
 
     derived status = empty > 0

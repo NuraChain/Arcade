@@ -1,9 +1,9 @@
 import { useNavigate } from 'azerothjs';
 
-import { personById } from '../../data/mock/index.ts';
 import Icon from '../../icons/icon.component.azeroth';
 import type { IconName } from '../../icons/registry.ts';
 import ConfirmSheet from '../app/confirm-sheet.component.azeroth';
+import { usePeople } from '../../stores/people.store.ts';
 import { useChat } from '../../stores/chat.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import type { OverlayProps } from '../../stores/overlay.store.ts';
@@ -30,11 +30,12 @@ export default component PersonActions(props: OverlayProps & { personId: string 
     const chat = useChat();
     const overlay = useOverlay();
     const toasts = useToasts();
+    const people = usePeople();
     const { navigate } = useNavigate();
 
-    derived person = personById(props.personId) ?? null;
+    derived person = people.byHandle(props.personId) ?? null;
 
-    derived name = person === null ? props.personId : locale.text(person.name).split(' ')[0];
+    derived name = person === null ? props.personId : person.displayName.split(' ')[0];
 
     derived muted = social.isMuted('person', props.personId);
 
@@ -146,7 +147,7 @@ export default component PersonActions(props: OverlayProps & { personId: string 
         <header class="flex items-center gap-3 px-2 pb-2 pt-1">
             <Avatar person={ person } size="md" />
             <span class="flex min-w-0 flex-1 flex-col">
-                <span class="truncate text-ui-md font-semibold text-text">{ person === null ? props.personId : locale.text(person.name) }</span>
+                <span class="truncate text-ui-md font-semibold text-text">{ person === null ? props.personId : person.displayName }</span>
                 <span class="truncate text-ui-xs text-muted">@{ person?.handle ?? props.personId }</span>
             </span>
             <IconButton icon="close" label={ locale.t('common.close') } variant="ghost" onClick={ () => props.close() } />

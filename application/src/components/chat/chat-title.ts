@@ -1,14 +1,23 @@
 import type { GroupSummary } from '../../api.ts';
-import { personById } from '../../data/mock/index.ts';
-import type { Conversation, Person } from '../../data/mock/types.ts';
+import type { Person } from '../../data/person.ts';
+import type { Conversation } from '../../data/mock/types.ts';
 import type { LocalizedText } from '../../lib/text.ts';
 
-export function othersOf(conversation: Conversation, me: string): Person[]
+/**
+ * The other people in a conversation.
+ *
+ * Takes the lookup rather than reaching for a store, for the reason `groupNameOf` states below:
+ * this module is imported by a page, a list row, an actions sheet and a search result, and a store
+ * call inside a `derived` would subscribe four times over.
+ *
+ * A handle nobody has described yet is dropped rather than invented; the caller renders the handle.
+ */
+export function othersOf(conversation: Conversation, me: string, find: (handle: string) => Person | null): Person[]
 {
     return conversation.participants
         .filter((id) => id !== me)
-        .map((id) => personById(id))
-        .filter((person): person is Person => person !== undefined);
+        .map((id) => find(id))
+        .filter((person): person is Person => person !== null);
 }
 
 /**
@@ -23,7 +32,12 @@ export function groupNameOf(conversation: Conversation, find: (slug: string) => 
     return conversation.groupId === null ? undefined : find(conversation.groupId)?.name;
 }
 
-export function titleOf(conversation: Conversation, me: string, groupName?: string): LocalizedText | string
+export function titleOf(
+    conversation: Conversation,
+    me: string,
+    find: (handle: string) => Person | null,
+    groupName?: string
+): LocalizedText | string
 {
     if (conversation.title !== null)
     {
@@ -33,10 +47,10 @@ export function titleOf(conversation: Conversation, me: string, groupName?: stri
     {
         return groupName;
     }
-    const others = othersOf(conversation, me);
+    const others = othersOf(conversation, me, find);
     if (others.length === 1)
     {
-        return others[0].name;
+        return others[0].displayName;
     }
     return { en: 'Table chat', fa: 'گفت‌وگوی میز' };
 }

@@ -1,4 +1,4 @@
-import type { Person } from '../data/mock/types.ts';
+import type { Person } from '../data/person.ts';
 
 export function mutualCount(friends: Record<string, string[]>, a: string, b: string): number
 {

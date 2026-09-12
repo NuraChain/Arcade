@@ -1,6 +1,7 @@
-import { dataset, personById } from '../../data/mock/index.ts';
-import type { Person } from '../../data/mock/types.ts';
+import type { Person } from '../../data/person.ts';
 import Icon from '../../icons/icon.component.azeroth';
+import { useSocial } from '../../stores/social.store.ts';
+import { usePeople } from '../../stores/people.store.ts';
 import { useAccount } from '../../stores/account.store.ts';
 import { useLobby } from '../../stores/lobby.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
@@ -17,6 +18,8 @@ export default component InviteSheet(props: OverlayProps & { tableId: string })
     const account = useAccount();
     const presence = usePresence();
     const lobby = useLobby();
+    const people = usePeople();
+    const social = useSocial();
 
     state query = '';
 
@@ -32,12 +35,12 @@ export default component InviteSheet(props: OverlayProps & { tableId: string })
             .flatMap((chair) => [chair.who, chair.invited])
             .filter((handle): handle is string => handle !== undefined));
         const needle = query.trim().toLowerCase();
-        const people = (dataset().friends[user.id] ?? [])
-            .map((id) => personById(id))
-            .filter((person): person is Person => person !== undefined && !taken.has(person.id))
-            .filter((person) => needle === '' || locale.text(person.name).toLowerCase().includes(needle) || person.handle.includes(needle));
+        const found = social.friends()
+            .map((handle) => people.byHandle(handle))
+            .filter((person): person is Person => person !== null && !taken.has(person.id))
+            .filter((person) => needle === '' || person.displayName.toLowerCase().includes(needle) || person.handle.includes(needle));
         const rank = (person: Person): number => (presence.isOnline(person.id) ? 0 : 1);
-        return people.sort((a, b) => rank(a) - rank(b));
+        return found.sort((a, b) => rank(a) - rank(b));
     })();
 
     <div class="flex max-h-[inherit] min-h-0 flex-col">
@@ -66,7 +69,7 @@ export default component InviteSheet(props: OverlayProps & { tableId: string })
                         >
                             <Avatar person={ person } size="md" presence={ presence.dot(person.id) } />
                             <span class="flex min-w-0 flex-1 flex-col">
-                                <span class="truncate text-ui-base font-semibold text-text">{ locale.text(person.name) }</span>
+                                <span class="truncate text-ui-base font-semibold text-text">{ person.displayName }</span>
                                 <span class="truncate text-ui-xs text-muted">@{ person.handle }</span>
                             </span>
                             <span class="flex items-center gap-1 text-ui-sm font-semibold text-accent">

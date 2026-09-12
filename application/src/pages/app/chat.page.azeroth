@@ -12,7 +12,7 @@ import AvatarGroup from '../../components/ui/avatar-group.component.azeroth';
 import Button from '../../components/ui/button.component.azeroth';
 import EmptyState from '../../components/ui/empty-state.component.azeroth';
 import IconButton from '../../components/ui/icon-button.component.azeroth';
-import { personById } from '../../data/mock/index.ts';
+import { usePeople } from '../../stores/people.store.ts';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useChat } from '../../stores/chat.store.ts';
 import { useGroups } from '../../stores/groups.store.ts';
@@ -33,6 +33,7 @@ export default component ChatPage()
     const locale = useLocale();
     const social = useSocial();
     const chat = useChat();
+    const people = usePeople();
     const groups = useGroups();
     const presence = usePresence();
     const catalogue = useCatalogue();
@@ -54,13 +55,13 @@ export default component ChatPage()
 
     derived me = chat.me();
 
-    derived others = conversation === null ? [] : othersOf(conversation, me);
+    derived others = conversation === null ? [] : othersOf(conversation, me, people.byHandle);
 
     derived group = conversation?.groupId === undefined || conversation?.groupId === null ? null : (groups.byId(conversation.groupId) ?? null);
 
     derived title = conversation === null
         ? locale.t('chat.notFound')
-        : locale.text(titleOf(conversation, me, groupNameOf(conversation, groups.byId)));
+        : locale.text(titleOf(conversation, me, people.byHandle, groupNameOf(conversation, groups.byId)));
 
     const seal = useSeal();
 
@@ -286,7 +287,7 @@ export default component ChatPage()
                             { () =>
                                 <p class="flex items-center gap-2 ps-10 text-ui-xs text-live">
                                     <span class="live-dot h-1.5 w-1.5 rounded-full animate-pulse motion-reduce:animate-none" aria-hidden="true"></span>
-                                    { locale.text(personById(typing[0])?.name ?? { en: '', fa: '' }) } { locale.t('chats.typing') }
+                                    { locale.text(people.byHandle(typing[0])?.displayName ?? { en: '', fa: '' }) } { locale.t('chats.typing') }
                                 </p>
                             }
                         </Show>

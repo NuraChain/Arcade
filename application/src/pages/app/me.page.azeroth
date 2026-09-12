@@ -38,7 +38,7 @@ export default component MePage()
 
     derived user = account.user();
 
-    derived bio = user === null ? '' : locale.text(user.bio);
+    derived bio = user === null ? '' : user.bio;
 
     const share = async (): Promise<void> =>
     {
@@ -64,7 +64,7 @@ export default component MePage()
                     <header class="flex flex-col items-center gap-3 pt-2 text-center">
                         <Avatar person={ user } size="2xl" presence="online" ring />
                         <div class="min-w-0">
-                            <h1 class="title text-ui-3xl">{ locale.text(user!.name) }</h1>
+                            <h1 class="title text-ui-3xl">{ locale.text(user!.displayName) }</h1>
                             <p class="mt-1 text-ui-base text-muted">@{ user!.handle }</p>
                         </div>
 

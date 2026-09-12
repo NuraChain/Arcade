@@ -1,9 +1,9 @@
 import { createStore, createSignal, type Getter } from 'azerothjs';
 
 import { GAMES, type Game } from '../data/games.ts';
-import { personById } from '../data/mock/index.ts';
 import type { GroupSummary } from '../api.ts';
-import type { Message, Person } from '../data/mock/types.ts';
+import type { Person } from '../data/person.ts';
+import type { Message } from '../data/mock/types.ts';
 import { recallJson, rememberJson } from '../lib/storage.ts';
 import { pickText } from '../lib/text.ts';
 import { fold, ranked } from '../services/search.service.ts';
@@ -91,7 +91,7 @@ export const useSearch = createStore((): SearchApi =>
         const want = (kind: SearchScope): boolean => scope() === 'all' || scope() === kind;
 
         const people = want('people')
-            ? ranked(social.people(), needle, (person) => [person.handle, pickText(person.name, tag), pickText(person.bio, tag)])
+            ? ranked(social.people(), needle, (person) => [person.handle, pickText(person.displayName, tag), pickText(person.bio, tag)])
             : [];
         const games = want('games')
             ? ranked(GAMES, needle, (game) => [game.slug, locale.t(game.nameKey), locale.t(game.blurbKey)])
@@ -103,7 +103,7 @@ export const useSearch = createStore((): SearchApi =>
             ? ranked(
                 chat.archive(),
                 needle,
-                (message) => [locale.text(message.text), personById(message.from)?.handle ?? '']
+                (message) => [locale.text(message.text), message.from]
             ).slice(0, 30)
             : [];
 

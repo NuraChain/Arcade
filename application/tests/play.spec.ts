@@ -2,10 +2,13 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { cleanup, fire, renderTest } from '@azerothjs/testing';
 import { RouterProvider, createMemoryHistory, createRouter, type Route } from 'azerothjs';
 
+/** The handles this suite seats. A presence frame names people, and these are the people. */
+const SEATED = ['alex', 'sara.k', 'reza.t', 'mina', 'nima.f', 'leila.a'];
+
 import GameCard from '../src/components/games/game-card.component.azeroth';
 import { gameArt, gameArtSet } from '../src/components/games/art.ts';
 import { GAMES } from '../src/data/games.ts';
-import { dataset, resetDataset } from '../src/data/mock/index.ts';
+import { resetDataset } from '../src/data/mock/index.ts';
 import { manualClock, type ManualClock } from '../src/lib/clock.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import '../src/locales/app-catalogue.ts';
@@ -50,7 +53,7 @@ beforeEach(() =>
         t: 'presence',
         n: 1,
         full: true,
-        people: dataset().people.map((person) => ({ who: person.id, state: 'online' as const, since: 0 }))
+        people: SEATED.map((who) => ({ who, state: 'online' as const, since: 0 }))
     });
 
     useCatalogue().reset();

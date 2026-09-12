@@ -1,5 +1,4 @@
-import type { Person } from '../../data/mock/types.ts';
-import { useLocale } from '../../stores/locale.store.ts';
+import type { Person } from '../../data/person.ts';
 import { AVATAR_DOT, AVATAR_SIZE, type AvatarSize } from './variants.ts';
 
 export type Presence = 'online' | 'away' | 'offline' | 'playing' | null;
@@ -31,11 +30,10 @@ export default component Avatar(props: {
     class?: string;
 })
 {
-    const locale = useLocale();
-
+    
     derived size = props.size ?? 'md';
 
-    derived name = props.person === null ? '' : locale.text(props.person.name);
+    derived name = props.person === null ? '' : props.person.displayName;
 
     derived hue = props.person === null ? 200 : props.person.hue;
 

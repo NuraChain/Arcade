@@ -3,12 +3,10 @@ import { useHead, useNavigate, useQuery } from 'azerothjs';
 import WalletPanel from '../components/app/wallet-panel.component.azeroth';
 import SiteFooter from '../components/layout/site-footer.component.azeroth';
 import SiteHeader from '../components/layout/site-header.component.azeroth';
-import Avatar from '../components/ui/avatar.component.azeroth';
 import Button from '../components/ui/button.component.azeroth';
 import Divider from '../components/ui/divider.component.azeroth';
 import Field from '../components/ui/field.component.azeroth';
 import Input from '../components/ui/input.component.azeroth';
-import Icon from '../icons/icon.component.azeroth';
 import '../locales/app-catalogue.ts';
 import { safeNext } from '../lib/guards.ts';
 import { useAccount } from '../stores/account.store.ts';
@@ -28,14 +26,11 @@ export default component SignInPage()
     state name = '';
     state pending = '';
     state touched = false;
-    state showDemo = false;
 
     mount
     {
         return wallet.start();
     }
-
-    derived identities = account.demoIdentities();
 
     derived tooShort = name.trim().length < 3;
 
@@ -81,82 +76,36 @@ export default component SignInPage()
                 } }
             />
 
-            <Divider label={ locale.t('wallet.demoTitle') } class="my-8" />
+            <Divider label={ locale.t('wallet.guestTitle') } class="my-8" />
 
-            <p class="-mt-4 mb-5 text-center text-ui-base text-muted">{ locale.t('wallet.demoLead') }</p>
+            <p class="-mt-4 mb-5 text-center text-ui-base text-muted">{ locale.t('wallet.guestLead') }</p>
 
-            <Show
-                when={ showDemo }
-                fallback={
-                    <Button variant="outline" size="lg" block leading="people" onClick={ () => showDemo = true }>
-                        { locale.t('signIn.demo') }
-                    </Button>
-                }
+            <form
+                class="flex flex-col gap-4"
+                onSubmit={ (event) =>
+                {
+                    event.preventDefault();
+                    submit();
+                } }
             >
-                { () =>
-                    <div class="flex flex-col gap-6">
-                        <ul class="grid gap-3" aria-label={ locale.t('signIn.demo') }>
-                            <For each={ identities } key={ (person) => person.id } let={ person }>
-                                <li>
-                                    <button
-                                        type="button"
-                                        class={ [
-                                            'group flex w-full cursor-pointer items-center gap-4 rounded-panel border border-line bg-field p-4 text-start',
-                                            'transition duration-200 ease-[var(--ease-ui)] hover:border-accent/60 hover:bg-raised/60 active:scale-[0.99]',
-                                            pending === person.handle ? 'border-accent' : ''
-                                        ].filter(Boolean).join(' ') }
-                                        disabled={ pending !== '' }
-                                        onClick={ () => void enter(person.handle, () => account.signInAsDemo(person.handle)) }
-                                    >
-                                        <Avatar person={ person } size="lg" presence="online" />
-                                        <span class="flex min-w-0 flex-1 flex-col gap-0.5">
-                                            <span class="truncate text-ui-lg font-semibold text-text">{ locale.text(person.name) }</span>
-                                            <span class="text-ui-sm text-muted">@{ person.handle }</span>
-                                            <span class="mt-1 line-clamp-2 text-ui-sm text-muted">{ locale.text(person.bio) }</span>
-                                            <Show when={ person.minor }>
-                                                { () =>
-                                                    <span class="mt-2 inline-flex w-fit items-center gap-1.5 rounded-full bg-live/15 px-2.5 py-1 text-ui-xs font-semibold text-live">
-                                                        <Icon name="shield" size={ 13 } />
-                                                        { locale.t('signIn.minor') }
-                                                    </span>
-                                                }
-                                            </Show>
-                                        </span>
-                                        <Icon name="forward" size={ 16 } class="icon-flip hidden shrink-0 text-accent transition-transform group-hover:translate-x-0.5 sm:block" />
-                                    </button>
-                                </li>
-                            </For>
-                        </ul>
-
-                        <form
-                            class="flex flex-col gap-4"
-                            onSubmit={ (event) =>
-                            {
-                                event.preventDefault();
-                                submit();
-                            } }
-                        >
-                            <Field id="sign-in-name" label={ locale.t('signIn.handle') } hint={ locale.t('signIn.handleHint') } error={ touched && tooShort ? locale.t('signIn.handleShort') : null }>
-                                <Input
-                                    id="sign-in-name"
-                                    value={ name }
-                                    onInput={ (value) => name = value }
-                                    leading="at"
-                                    maxlength={ 24 }
-                                    autocomplete="nickname"
-                                    enterkeyhint="go"
-                                    invalid={ touched && tooShort }
-                                    describedBy={ touched && tooShort ? 'sign-in-name-error' : 'sign-in-name-hint' }
-                                    onEnter={ submit }
-                                />
-                            </Field>
-                            <Button variant="secondary" size="lg" block submit loading={ pending !== '' && pending === name.trim() } icon="forward">
-                                { locale.t('signIn.continue', { name: name.trim() === '' ? locale.t('common.you') : name.trim() }) }
-                            </Button>
-                        </form>
-                    </div>
-                }
-            </Show>
+                <Field id="sign-in-name" label={ locale.t('signIn.handle') } hint={ locale.t('signIn.handleHint') } error={ touched && tooShort ? locale.t('signIn.handleShort') : null }>
+                    <Input
+                        id="sign-in-name"
+                        value={ name }
+                        onInput={ (value) => name = value }
+                        leading="at"
+                        maxlength={ 24 }
+                        autocomplete="nickname"
+                        enterkeyhint="go"
+                        invalid={ touched && tooShort }
+                        describedBy={ touched && tooShort ? 'sign-in-name-error' : 'sign-in-name-hint' }
+                        onEnter={ submit }
+                    />
+                </Field>
+                <Button variant="secondary" size="lg" block submit loading={ pending !== '' && pending === name.trim() } icon="forward">
+                    { locale.t('signIn.continue', { name: name.trim() === '' ? locale.t('common.you') : name.trim() }) }
+                </Button>
+            </form>
         </main>
 
         <SiteFooter />

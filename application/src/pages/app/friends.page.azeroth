@@ -12,8 +12,8 @@ import IconButton from '../../components/ui/icon-button.component.azeroth';
 import Pagination from '../../components/ui/pagination.component.azeroth';
 import SectionHeading from '../../components/ui/section-heading.component.azeroth';
 import Tabs from '../../components/ui/tabs.component.azeroth';
-import { personById } from '../../data/mock/index.ts';
-import type { Person } from '../../data/mock/types.ts';
+import type { Person } from '../../data/person.ts';
+import { usePeople } from '../../stores/people.store.ts';
 import { useChat } from '../../stores/chat.store.ts';
 import { useLobby } from '../../stores/lobby.store.ts';
 import { useGroups } from '../../stores/groups.store.ts';
@@ -40,6 +40,7 @@ export default component FriendsPage()
     const catalogue = useCatalogue();
     const overlay = useOverlay();
     const toasts = useToasts();
+    const people = usePeople();
     const { navigate } = useNavigate();
 
     useHead({ title: () => locale.t('app.nav.friends') });
@@ -51,8 +52,8 @@ export default component FriendsPage()
     derived roomy = device.posture() !== 'phone';
 
     const peopleOf = (ids: readonly string[]): Person[] => ids
-        .map((id) => personById(id))
-        .filter((person): person is Person => person !== undefined);
+        .map((id) => people.byHandle(id))
+        .filter((person): person is Person => person !== null);
 
     derived friends = peopleOf(social.friends());
 
@@ -211,10 +212,10 @@ export default component FriendsPage()
                                 <ul class="flex flex-col gap-0.5" aria-label={ locale.t('friends.requests.incoming') }>
                                     <For each={ incoming } key={ (request) => request.id } let={ request }>
                                         <li>
-                                            <Show when={ personById(request.from) !== undefined }>
+                                            <Show when={ people.byHandle(request.from) !== null }>
                                                 { () =>
                                                     <FriendRow
-                                                        person={ personById(request.from)! }
+                                                        person={ people.byHandle(request.from)! }
                                                         subtitle={ `${ locale.t('friends.requests.incoming') } · ${ locale.relative(request.at) }` }
                                                         actions={
                                                             <>
@@ -238,10 +239,10 @@ export default component FriendsPage()
                                 <ul class="flex flex-col gap-0.5" aria-label={ locale.t('friends.requests.outgoing') }>
                                     <For each={ outgoing } key={ (request) => request.id } let={ request }>
                                         <li>
-                                            <Show when={ personById(request.to) !== undefined }>
+                                            <Show when={ people.byHandle(request.to) !== null }>
                                                 { () =>
                                                     <FriendRow
-                                                        person={ personById(request.to)! }
+                                                        person={ people.byHandle(request.to)! }
                                                         subtitle={ `${ locale.t('friends.requests.outgoing') } · ${ locale.relative(request.at) }` }
                                                         actions={
                                                             <Button variant="ghost" size="sm" class="whitespace-nowrap" onClick={ () => social.withdraw(request.to) }>

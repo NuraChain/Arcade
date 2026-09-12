@@ -6,10 +6,11 @@ import PeopleStrip from '../../components/social/people-strip.component.azeroth'
 import Button from '../../components/ui/button.component.azeroth';
 import EmptyState from '../../components/ui/empty-state.component.azeroth';
 import SectionHeading from '../../components/ui/section-heading.component.azeroth';
-import { dataset, personById } from '../../data/mock/index.ts';
-import type { Person } from '../../data/mock/types.ts';
+import type { Person } from '../../data/person.ts';
 import Icon from '../../icons/icon.component.azeroth';
 import type { MessageKey } from '../../locales/en.ts';
+import { useSocial } from '../../stores/social.store.ts';
+import { usePeople } from '../../stores/people.store.ts';
 import { useAccount } from '../../stores/account.store.ts';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useLobby } from '../../stores/lobby.store.ts';
@@ -26,6 +27,8 @@ export default component GamePage()
     const presence = usePresence();
     const shell = useShell();
     const params = useParams();
+    const people = usePeople();
+    const social = useSocial();
     const { navigate } = useNavigate();
 
     derived game = catalogue.bySlug(params().slug ?? '') ?? null;
@@ -48,9 +51,9 @@ export default component GamePage()
         {
             return [];
         }
-        return (dataset().friends[user.id] ?? [])
-            .map((id) => personById(id))
-            .filter((person): person is Person => person !== undefined)
+        return social.friends()
+            .map((id) => people.byHandle(id))
+            .filter((person): person is Person => person !== null)
             .filter((person) => presence.of(person.id).state === 'playing' && presence.of(person.id).game === game!.id);
     })();
 

@@ -2,9 +2,7 @@ import { createStore, type Getter } from 'azerothjs';
 
 import { client, type Account } from '../api.ts';
 
-import { DEMO_IDS } from '../data/mock/people.ts';
-import { personById } from '../data/mock/index.ts';
-import type { Person } from '../data/mock/types.ts';
+import type { Person } from '../data/person.ts';
 import { shortAddress } from '../lib/wallet.ts';
 import { useSession } from './session.store.ts';
 
@@ -13,11 +11,14 @@ export function slugify(handle: string): string
     return handle.trim().toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '');
 }
 
-function demoByHandle(handle: string): Person | undefined
-{
-    return DEMO_IDS.map((id) => personById(id)).find((person) => person?.handle === handle);
-}
-
+/**
+ * The account, as the same `Person` shape every other screen renders.
+ *
+ * `id` is the HANDLE, not the account uuid. The wire keys people by handle everywhere - a
+ * conversation's members, a message's author, a seat - so an account that identified itself by
+ * uuid was an account that did not match itself in any list it appeared in. The version this
+ * replaces only got that right for demo personas, by looking them up in a fixture.
+ */
 export function personFor(account: Account | null): Person | null
 {
     if (account === null)
@@ -25,23 +26,19 @@ export function personFor(account: Account | null): Person | null
         return null;
     }
 
-    const demo = account.kind === 'demo' ? demoByHandle(account.handle) : undefined;
-    if (demo !== undefined)
-    {
-        return { ...demo, hue: account.hue, minor: account.isMinor };
-    }
-
-    const label = account.kind === 'wallet' && account.address !== undefined
+    // A wallet account is named after its address until somebody chooses something; the server
+    // sets that at creation, and this is only the fallback for one that has not.
+    const displayName = account.displayName === '' && account.address !== undefined
         ? shortAddress(account.address)
         : account.displayName;
 
     return {
-        id: account.id,
+        id: account.handle,
         handle: account.handle,
-        name: { en: label, fa: label },
-        bio: { en: account.bio, fa: account.bio },
+        displayName,
+        bio: account.bio,
         hue: account.hue,
-        minor: account.isMinor
+        isMinor: account.isMinor
     };
 }
 
@@ -50,11 +47,8 @@ export interface AccountApi
     user: Getter<Person | null>;
     isWallet: Getter<boolean>;
     address: Getter<string | null>;
-    demoIdentities(): Person[];
 
     signIn(name: string): Promise<Person | null>;
-
-    signInAsDemo(handle: string): Promise<Person | null>;
 
     adoptWallet(account: Account): Person | null;
 }
@@ -67,23 +61,11 @@ export const useAccount = createStore((): AccountApi =>
         user: () => personFor(session.account()),
         isWallet: () => session.account()?.kind === 'wallet',
         address: () => session.account()?.address ?? null,
-        demoIdentities: () => DEMO_IDS.map((id) => personById(id)).filter((person): person is Person => person !== undefined),
 
         adoptWallet(account)
         {
             session.establish(account);
             return personFor(account);
-        },
-
-        async signInAsDemo(handle)
-        {
-            const established = await client.auth.demo({ input: { handle } });
-            if (established.account === undefined)
-            {
-                return null;
-            }
-            session.establish(established.account);
-            return personFor(established.account);
         },
 
         async signIn(name)

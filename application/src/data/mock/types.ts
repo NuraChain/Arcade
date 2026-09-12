@@ -2,16 +2,6 @@ import type { IconName } from '../../icons/registry.ts';
 import type { LocalizedText } from '../../lib/text.ts';
 import type { GameId } from '../games.ts';
 
-export interface Person
-{
-    id: string;
-    handle: string;
-    name: LocalizedText;
-    bio: LocalizedText;
-    hue: number;
-    minor: boolean;
-}
-
 export type ConversationKind = 'direct' | 'group' | 'game';
 
 export interface Conversation

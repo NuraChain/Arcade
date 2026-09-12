@@ -1,9 +1,9 @@
 import { Link, useNavigate } from 'azerothjs';
 
-import { personById } from '../../data/mock/index.ts';
 import type { Message } from '../../data/mock/types.ts';
 import Icon from '../../icons/icon.component.azeroth';
 import { isLineKey } from '../../lib/lines.ts';
+import { usePeople } from '../../stores/people.store.ts';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { attachHold } from '../../lib/hold.ts';
@@ -16,6 +16,7 @@ export default component MessageBubble(props: { message: Message; me: string; sh
     const locale = useLocale();
     const catalogue = useCatalogue();
     const toasts = useToasts();
+    const people = usePeople();
     const { navigate } = useNavigate();
 
     derived mine = props.message.from === props.me;
@@ -31,9 +32,9 @@ export default component MessageBubble(props: { message: Message; me: string; sh
         return attachHold(bubble, () => props.onHold?.(props.message.from));
     }
 
-    derived person = personById(props.message.from) ?? null;
+    derived person = people.byHandle(props.message.from) ?? null;
 
-    derived firstName = person === null ? props.message.from : locale.text(person.name).split(' ')[0];
+    derived firstName = person === null ? props.message.from : person.displayName.split(' ')[0];
 
     /**
      * What this line SAYS.
@@ -96,7 +97,7 @@ export default component MessageBubble(props: { message: Message; me: string; sh
                                         ? locale.t('chat.result.title', {
                                             winner: props.message.ref?.winnerId === props.me
                                                 ? locale.t('common.you')
-                                                : (personById(props.message.ref?.winnerId ?? '')?.handle ?? firstName),
+                                                : (people.byHandle(props.message.ref?.winnerId ?? '')?.handle ?? firstName),
                                             game: game === null ? '' : locale.t(game.nameKey)
                                         })
                                         : locale.t(mine ? 'chat.invite.titleMine' : 'chat.invite.title', { name: firstName, game: game === null ? '' : locale.t(game.nameKey) }) }

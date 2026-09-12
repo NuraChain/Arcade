@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 
-import { buildDataset, resetDataset } from '../src/data/mock/index.ts';
+import { resetDataset } from '../src/data/mock/index.ts';
 import { manualClock, type ManualClock } from '../src/lib/clock.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import { fold, rank, ranked } from '../src/services/search.service.ts';
@@ -172,8 +172,16 @@ describe('social store', () =>
     it('never caps the block list', async () =>
     {
         const social = useSocial();
+
+        // The directory is a LAZY read - `want` starts it, and the list is empty until it lands.
+        // The version of this test that looped over a fixture array never had to wait.
         social.want('people');
-        for (const person of buildDataset(9, 900_000).people)
+        for (let turn = 0; turn < 12; turn += 1)
+        {
+            await Promise.resolve();
+        }
+
+        for (const person of social.people())
         {
             if (person.id !== 'alex')
             {

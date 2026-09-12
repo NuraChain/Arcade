@@ -7,10 +7,11 @@ import PeopleStrip from '../../components/social/people-strip.component.azeroth'
 import Chip from '../../components/ui/chip.component.azeroth';
 import SectionHeading from '../../components/ui/section-heading.component.azeroth';
 import type { Game, GameId } from '../../data/games.ts';
-import { dataset, personById } from '../../data/mock/index.ts';
-import type { Person } from '../../data/mock/types.ts';
+import type { Person } from '../../data/person.ts';
 import Icon from '../../icons/icon.component.azeroth';
 import { runtime } from '../../lib/runtime.ts';
+import { useSocial } from '../../stores/social.store.ts';
+import { usePeople } from '../../stores/people.store.ts';
 import { useAccount } from '../../stores/account.store.ts';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useLobby } from '../../stores/lobby.store.ts';
@@ -24,13 +25,15 @@ export default component HomePage()
     const catalogue = useCatalogue();
     const lobby = useLobby();
     const presence = usePresence();
+    const people = usePeople();
+    const social = useSocial();
     const { navigate } = useNavigate();
 
     useHead({ title: () => locale.t('app.nav.home') });
 
     derived user = account.user();
 
-    derived firstName = user === null ? locale.t('common.you') : locale.text(user.name).split(' ')[0];
+    derived firstName = user === null ? locale.t('common.you') : user.displayName.split(' ')[0];
 
     derived greeting = ((): string =>
     {
@@ -53,9 +56,9 @@ export default component HomePage()
         {
             return [];
         }
-        return presence.online(dataset().friends[user.id] ?? [])
-            .map((id) => personById(id))
-            .filter((person): person is Person => person !== undefined);
+        return presence.online(social.friends())
+            .map((id) => people.byHandle(id))
+            .filter((person): person is Person => person !== null);
     })();
 
     derived recommended = ((): Game[] =>

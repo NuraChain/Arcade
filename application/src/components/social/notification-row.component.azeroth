@@ -1,8 +1,8 @@
 import type { Notification, NotificationKind } from '../../api.ts';
-import { personById } from '../../data/mock/index.ts';
 import Icon from '../../icons/icon.component.azeroth';
 import type { IconName } from '../../icons/registry.ts';
 import type { MessageKey } from '../../locales/en.ts';
+import { usePeople } from '../../stores/people.store.ts';
 import { useDevice } from '../../stores/device.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useSocial } from '../../stores/social.store.ts';
@@ -42,10 +42,11 @@ export default component NotificationRow(props: {
     const locale = useLocale();
     const social = useSocial();
     const device = useDevice();
+    const people = usePeople();
 
-    derived person = props.item.actor === undefined ? null : (personById(props.item.actor) ?? null);
+    derived person = props.item.actor === undefined ? null : (people.byHandle(props.item.actor) ?? null);
 
-    derived who = person === null ? (props.item.actor ?? '') : locale.text(person.name).split(' ')[0];
+    derived who = person === null ? (props.item.actor ?? '') : person.displayName.split(' ')[0];
 
     derived said = props.item.kind === 'message'
         ? locale.plural('notify.message', props.item.count, { who })

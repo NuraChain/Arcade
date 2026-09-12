@@ -1,10 +1,10 @@
 import { Portal } from 'azerothjs';
 
-import { personById } from '../../data/mock/index.ts';
 import Icon from '../../icons/icon.component.azeroth';
 import type { IconName } from '../../icons/registry.ts';
 import { runtime } from '../../lib/runtime.ts';
 import { createDrag } from '../../lib/swipe.ts';
+import { usePeople } from '../../stores/people.store.ts';
 import { useDevice } from '../../stores/device.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useToasts, type Toast, type ToastKind } from '../../stores/toasts.store.ts';
@@ -43,6 +43,7 @@ export default component ToastHost()
     const toasts = useToasts();
     const locale = useLocale();
     const device = useDevice();
+    const people = usePeople();
 
     state now = runtime().clock.now();
 
@@ -134,7 +135,7 @@ export default component ToastHost()
                                 </Show>
                             }
                         >
-                            { () => <Avatar person={ personById(toast.avatar!) ?? null } size="sm" /> }
+                            { () => <Avatar person={ people.byHandle(toast.avatar!) ?? null } size="sm" /> }
                         </Show>
                     </span>
 

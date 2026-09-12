@@ -308,9 +308,8 @@ describe('wallet identity', () =>
         const issued = walletAccount(ADDRESS);
         const person = personFor(issued);
         expect(person?.handle).toBe('71c765');
-        expect(person?.id).toBe(issued.id);
-        expect(person?.name.en).toBe(shortAddress(ADDRESS.toLowerCase()));
-        expect(person?.name.fa).toBe(person?.name.en);
+        expect(person?.id).toBe(issued.handle);
+        expect(person?.displayName).toBe(shortAddress(ADDRESS.toLowerCase()));
         expect(person?.hue).toBe(issued.hue);
     });
 
@@ -335,7 +334,7 @@ describe('wallet identity', () =>
     {
         const person = personFor(guestAccount('Darya'));
         expect(person?.handle).toBe('darya');
-        expect(person?.name.en).toBe('Darya');
+        expect(person?.displayName).toBe('Darya');
         expect(personFor(null)).toBeNull();
     });
 

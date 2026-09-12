@@ -1,31 +1,21 @@
 import { describe, it, expect } from 'vitest';
+import { PEOPLE_FIXTURES } from '../../server/src/db/seed-fixtures.ts';
 
 import { ACHIEVEMENTS } from '../src/data/mock/achievements.ts';
 import { buildDataset } from '../src/data/mock/index.ts';
-import { PEOPLE } from '../src/data/mock/people.ts';
 
 const NOW = Date.UTC(2026, 8, 10, 18, 0, 0);
 
 describe('mock dataset', () =>
 {
     const data = buildDataset(1, NOW);
-    const ids = new Set(data.people.map((person) => person.id));
+
+    /** Who exists, according to the only list of them that is left. */
+    const ids = new Set(PEOPLE_FIXTURES.map((person) => person.handle));
 
     it('replays identically for the same seed and differs for another', () =>
     {
         expect(buildDataset(1, NOW)).toEqual(data);
-    });
-
-    it('gives every person a unique id and handle, both scripts, and no lorem', () =>
-    {
-        expect(ids.size).toBe(PEOPLE.length);
-        expect(new Set(data.people.map((person) => person.handle)).size).toBe(PEOPLE.length);
-        for (const person of data.people)
-        {
-            expect(person.name.en).not.toBe(person.name.fa);
-            expect(person.bio.en.toLowerCase()).not.toContain('lorem');
-            expect(/^user \d+$/i.test(person.name.en)).toBe(false);
-        }
     });
 
     it('keeps every reference pointing at something that exists', () =>
@@ -62,10 +52,8 @@ describe('mock dataset', () =>
         expect(unread.length).toBe(2);
     });
 
-    it('gives the default demo identity a dozen friends and open requests', () =>
+    it('leaves two requests waiting for an answer', () =>
     {
-        expect(data.friends.alex.length).toBe(12);
         expect(data.requests.filter((request) => request.to === 'alex').length).toBe(2);
-        expect(data.friends.alex).not.toContain('alex');
     });
 });

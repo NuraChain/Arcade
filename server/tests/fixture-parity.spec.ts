@@ -1,19 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
-import { GROUP_FIXTURES, PEOPLE_FIXTURES, THREAD_FIXTURES } from '../src/db/seed-fixtures.ts';
+import { GROUP_FIXTURES, THREAD_FIXTURES } from '../src/db/seed-fixtures.ts';
 import { GROUP_SLUGS } from '../../application/src/data/mock/index.ts';
-import { PEOPLE } from '../../application/src/data/mock/people.ts';
 import { THREADS } from '../../application/src/data/mock/threads.ts';
 
 /**
- * The fixtures and the mock describe the same imaginary people, and they will drift.
+ * The fixtures and what is left of the mock describe the same conversations, and they will drift.
  *
- * The server seeds who EXISTS and who knows whom; the browser's mock is now only the profile a
- * person has - portrait, favourite game, region, statistics - joined by handle, because no domain
- * owns those yet. Add somebody on one side without the other and the join silently produces a
- * person with no face, so this is the test that notices.
- *
- * It goes away with the mock, which is the whole point of the domain work.
+ * The PEOPLE half of this is gone: the browser no longer keeps a mirror of who exists, because a
+ * name now comes from the server through `people.store.ts`. What remains to check is the chat
+ * fixtures and the group slugs, which the mock still holds - and that goes the same way.
  */
 
 describe('the fixtures and the mock agree about who exists', () =>
@@ -42,36 +38,6 @@ describe('the fixtures and the mock agree about who exists', () =>
             expect(threads.has(thread), thread).toBe(true);
         }
         expect(claimed.length).toBe(threads.size);
-    });
-
-    it('has the same people, by handle', () =>
-    {
-        expect(PEOPLE_FIXTURES.map((person) => person.handle).sort())
-            .toEqual(PEOPLE.map((person) => person.handle).sort());
-    });
-
-    it('gives each of them the same name, hue and age gate', () =>
-    {
-        const mock = new Map(PEOPLE.map((person) => [person.handle, person]));
-
-        for (const fixture of PEOPLE_FIXTURES)
-        {
-            const person = mock.get(fixture.handle);
-            expect(person, fixture.handle).toBeDefined();
-            expect(fixture.displayName).toBe(person!.name.en);
-            expect(fixture.hue).toBe(person!.hue);
-            expect(fixture.isMinor).toBe(person!.minor);
-        }
-    });
-
-    it('keys the browser by handle, so the two halves can be joined at all', () =>
-    {
-        // The client's person id IS the handle since the people became the server's. A seed that
-        // still used the old opaque ids would join to nothing.
-        for (const person of PEOPLE)
-        {
-            expect(person.id).toBe(person.handle);
-        }
     });
 
     it('has the same conversations, with the same people in them', () =>

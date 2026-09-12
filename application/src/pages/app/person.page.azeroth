@@ -1,5 +1,6 @@
-import { useHead, useNavigate, useParams } from 'azerothjs';
+import { createResource, useHead, useNavigate, useParams } from 'azerothjs';
 
+import { client } from '../../api.ts';
 import Page from '../../components/app/page.component.azeroth';
 import PersonActions from '../../components/social/person-actions.component.azeroth';
 import Avatar from '../../components/ui/avatar.component.azeroth';
@@ -7,10 +8,8 @@ import Button from '../../components/ui/button.component.azeroth';
 import Chip from '../../components/ui/chip.component.azeroth';
 import EmptyState from '../../components/ui/empty-state.component.azeroth';
 import IconButton from '../../components/ui/icon-button.component.azeroth';
-import { dataset, personByHandle } from '../../data/mock/index.ts';
 import Icon from '../../icons/icon.component.azeroth';
-import { mutualCount } from '../../services/social.service.ts';
-import { useAccount } from '../../stores/account.store.ts';
+import { usePeople } from '../../stores/people.store.ts';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useChat } from '../../stores/chat.store.ts';
 import { useLobby } from '../../stores/lobby.store.ts';
@@ -29,16 +28,29 @@ export default component PersonPage()
     const catalogue = useCatalogue();
     const chat = useChat();
     const lobby = useLobby();
-    const account = useAccount();
     const overlay = useOverlay();
     const shell = useShell();
     const toasts = useToasts();
     const params = useParams();
+    const people = usePeople();
     const { navigate } = useNavigate();
 
-    derived person = personByHandle(params().handle ?? '') ?? null;
+    /**
+     * The profile, from the server, with the relation and the mutual count it already computes.
+     *
+     * One request for the page whose whole premise is the answer. The version this replaces read a
+     * name out of a fixture and recomputed `mutual` from a fixture friend graph - a number the
+     * server had already worked out and sent.
+     */
+    const view = createResource(
+        () => params().handle ?? null,
+        (handle) => client.social.person({ params: { handle } }),
+        { name: 'social.person' }
+    );
 
-    derived name = person === null ? locale.t('person.notFound') : locale.text(person.name);
+    derived person = view.data()?.person ?? people.byHandle(params().handle ?? '') ?? null;
+
+    derived name = person === null ? locale.t('person.notFound') : person.displayName;
 
     useHead({ title: () => name });
 
@@ -49,7 +61,7 @@ export default component PersonPage()
 
     derived relation = person === null ? 'none' : social.relation(person.id);
 
-    derived mutual = person === null || account.user() === null ? 0 : mutualCount(dataset().friends, account.user()!.id, person.id);
+    derived mutual = view.data()?.mutual ?? 0;
 
     const play = (): void =>
     {
@@ -80,7 +92,7 @@ export default component PersonPage()
                         <div>
                             <h1 class="title flex items-center justify-center gap-2 text-ui-3xl">
                                 { name }
-                                <Show when={ person!.minor }>
+                                <Show when={ person!.isMinor }>
                                     { () => <Icon name="shield" size={ 18 } class="text-live" /> }
                                 </Show>
                             </h1>
@@ -92,7 +104,7 @@ export default component PersonPage()
                                 <li><Chip icon="people"><span class="tally">{ locale.plural('person.mutual', mutual) }</span></Chip></li>
                             </Show>
                         </ul>
-                        <Show when={ person!.minor }>
+                        <Show when={ person!.isMinor }>
                             { () =>
                                 <p class="flex items-center gap-2 rounded-full bg-live/10 px-3 py-1.5 text-ui-xs font-semibold text-live">
                                     <Icon name="shield" size={ 13 } />
@@ -105,7 +117,7 @@ export default component PersonPage()
                     <Show when={ relation === 'blocked' }>
                         { () =>
                             <div class="rounded-panel border border-madder/40 bg-madder/5 p-4 text-center">
-                                <p class="text-ui-md font-semibold text-text">{ locale.t('person.blockedTitle', { name: locale.text(person!.name).split(' ')[0] }) }</p>
+                                <p class="text-ui-md font-semibold text-text">{ locale.t('person.blockedTitle', { name: locale.text(person!.displayName).split(' ')[0] }) }</p>
                                 <p class="mt-1 text-ui-sm text-muted">{ locale.t('person.blockedLead') }</p>
                                 <Button
                                     variant="outline"
@@ -114,10 +126,10 @@ export default component PersonPage()
                                     onClick={ () =>
                                     {
                                         social.unblock(person!.id);
-                                        toasts.show({ kind: 'success', text: locale.t('actions.unblocked', { name: locale.text(person!.name).split(' ')[0] }) });
+                                        toasts.show({ kind: 'success', text: locale.t('actions.unblocked', { name: locale.text(person!.displayName).split(' ')[0] }) });
                                     } }
                                 >
-                                    { locale.t('actions.unblock', { name: locale.text(person!.name).split(' ')[0] }) }
+                                    { locale.t('actions.unblock', { name: locale.text(person!.displayName).split(' ')[0] }) }
                                 </Button>
                             </div>
                         }

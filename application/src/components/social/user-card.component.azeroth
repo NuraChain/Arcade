@@ -1,6 +1,6 @@
 import { Link } from 'azerothjs';
 
-import type { Person } from '../../data/mock/types.ts';
+import type { Person } from '../../data/person.ts';
 import Icon from '../../icons/icon.component.azeroth';
 import { useLocale } from '../../stores/locale.store.ts';
 import { usePresence } from '../../stores/presence.store.ts';
@@ -30,8 +30,8 @@ export default component UserCard(props: { person: Person; onAdd: (id: string) =
         <Link to={ `/app/people/${ props.person.handle }` } class="flex flex-col items-center gap-2" prefetch="hover">
             <Avatar person={ props.person } size="xl" presence={ presence.dot(props.person.id) } />
             <span class="flex items-center gap-1.5">
-                <span class="max-w-[10rem] truncate text-ui-md font-semibold text-text">{ locale.text(props.person.name) }</span>
-                <Show when={ props.person.minor }>
+                <span class="max-w-[10rem] truncate text-ui-md font-semibold text-text">{ props.person.displayName }</span>
+                <Show when={ props.person.isMinor }>
                     { () => <Icon name="shield" size={ 13 } class="shrink-0 text-live" /> }
                 </Show>
             </span>

@@ -2,6 +2,7 @@ import { useNavigate } from 'azerothjs';
 
 import Icon from '../../icons/icon.component.azeroth';
 import type { IconName } from '../../icons/registry.ts';
+import { usePeople } from '../../stores/people.store.ts';
 import { useChat } from '../../stores/chat.store.ts';
 import { useGroups } from '../../stores/groups.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
@@ -24,13 +25,14 @@ export default component ChatActions(props: OverlayProps & { conversationId: str
     const social = useSocial();
     const chat = useChat();
     const groups = useGroups();
+    const people = usePeople();
     const { navigate } = useNavigate();
 
     derived conversation = chat.conversation(props.conversationId) ?? null;
 
     derived title = conversation === null
         ? props.conversationId
-        : locale.text(titleOf(conversation, chat.me(), groupNameOf(conversation, groups.byId)));
+        : locale.text(titleOf(conversation, chat.me(), people.byHandle, groupNameOf(conversation, groups.byId)));
 
     derived pinned = chat.pinned(props.conversationId);
 
@@ -81,7 +83,7 @@ export default component ChatActions(props: OverlayProps & { conversationId: str
         }
         else
         {
-            const others = conversation === null ? [] : othersOf(conversation, chat.me());
+            const others = conversation === null ? [] : othersOf(conversation, chat.me(), people.byHandle);
             if (others.length === 1)
             {
                 list.push({

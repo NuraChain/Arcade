@@ -239,7 +239,7 @@ describe('routes', () =>
 
     it('keeps a signed-in person in the app and bounces them off sign-in', async () =>
     {
-        await useAccount().signInAsDemo('alex');
+        await useAccount().signIn('Alex');
         const router = createRouter({ routes, history: createMemoryHistory('/sign-in?next=/app/chats'), scroll: false });
         await settle();
         expect(router.location().pathname).toBe('/app/chats');

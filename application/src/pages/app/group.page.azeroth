@@ -15,9 +15,9 @@ import IconButton from '../../components/ui/icon-button.component.azeroth';
 import SectionHeading from '../../components/ui/section-heading.component.azeroth';
 import Skeleton from '../../components/ui/skeleton.component.azeroth';
 import type { GameId } from '../../data/games.ts';
-import { personById } from '../../data/mock/index.ts';
-import type { Person } from '../../data/mock/types.ts';
+import type { Person } from '../../data/person.ts';
 import Icon from '../../icons/icon.component.azeroth';
+import { usePeople } from '../../stores/people.store.ts';
 import { useAccount } from '../../stores/account.store.ts';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useGroups } from '../../stores/groups.store.ts';
@@ -40,6 +40,7 @@ export default component GroupPage()
     const shell = useShell();
     const toasts = useToasts();
     const params = useParams();
+    const people = usePeople();
     const { navigate } = useNavigate();
 
     /**
@@ -77,8 +78,8 @@ export default component GroupPage()
     derived joined = group?.role !== undefined;
 
     derived members = (group?.members ?? [])
-        .map((handle) => personById(handle))
-        .filter((person): person is Person => person !== undefined);
+        .map((handle) => people.byHandle(handle))
+        .filter((person): person is Person => person !== null);
 
     derived online = (group?.members ?? []).filter((handle) => presence.isOnline(handle));
 
@@ -155,7 +156,7 @@ export default component GroupPage()
 
     const removeMember = async (one: GroupSummary, person: Person): Promise<void> =>
     {
-        const who = locale.text(person.name);
+        const who = person.displayName;
         const yes = await overlay.open(
             ConfirmSheet,
             {
@@ -176,7 +177,7 @@ export default component GroupPage()
 
     const handOver = async (one: GroupSummary, person: Person): Promise<void> =>
     {
-        const who = locale.text(person.name);
+        const who = person.displayName;
         const yes = await overlay.open(
             ConfirmSheet,
             {

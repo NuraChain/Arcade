@@ -1,4 +1,4 @@
-import type { Person } from '../../data/mock/types.ts';
+import type { Person } from '../../data/person.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import Avatar from './avatar.component.azeroth';
 import { AVATAR_SIZE, type AvatarSize } from './variants.ts';

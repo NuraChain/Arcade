@@ -1,10 +1,10 @@
 import { Link } from 'azerothjs';
 
-import { personById } from '../../data/mock/index.ts';
 import { isLineKey } from '../../lib/lines.ts';
 import type { Conversation } from '../../data/mock/types.ts';
 import { attachHold } from '../../lib/hold.ts';
 import Icon from '../../icons/icon.component.azeroth';
+import { usePeople } from '../../stores/people.store.ts';
 import { useChat } from '../../stores/chat.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useSocial } from '../../stores/social.store.ts';
@@ -23,6 +23,7 @@ export default component ChatListItem(props: { conversation: Conversation; me: s
     const chat = useChat();
     const presence = usePresence();
     const groups = useGroups();
+    const people = usePeople();
 
     let row: HTMLElement | null = null;
 
@@ -35,7 +36,7 @@ export default component ChatListItem(props: { conversation: Conversation; me: s
         return attachHold(row, () => props.onHold?.());
     }
 
-    derived others = othersOf(props.conversation, props.me);
+    derived others = othersOf(props.conversation, props.me, people.byHandle);
 
     derived group = props.conversation.groupId === null ? undefined : groups.byId(props.conversation.groupId);
 
@@ -51,8 +52,8 @@ export default component ChatListItem(props: { conversation: Conversation; me: s
     {
         if (typing.length > 0)
         {
-            const who = personById(typing[0]);
-            return `${ who === undefined ? '' : `${ locale.text(who.name).split(' ')[0] } ` }${ locale.t('chats.typing') }`;
+            const who = people.byHandle(typing[0]);
+            return `${ who === null ? '' : `${ who.displayName.split(' ')[0] } ` }${ locale.t('chats.typing') }`;
         }
         if (last === undefined)
         {
@@ -103,7 +104,7 @@ export default component ChatListItem(props: { conversation: Conversation; me: s
             <span class="flex min-w-0 flex-1 flex-col gap-0.5">
                 <span class="flex items-center gap-1.5">
                     <span class={ [ 'truncate text-ui-md', unread > 0 ? 'font-bold text-text' : 'font-semibold text-text' ].join(' ') }>
-                        { locale.text(titleOf(props.conversation, props.me, groupNameOf(props.conversation, groups.byId))) }
+                        { locale.text(titleOf(props.conversation, props.me, people.byHandle, groupNameOf(props.conversation, groups.byId))) }
                     </span>
                     <Show when={ chat.pinned(props.conversation.id) }>
                         { () => <Icon name="star" size={ 12 } class="shrink-0 text-accent" /> }

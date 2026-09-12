@@ -1,8 +1,8 @@
 import { Link, useNavigate } from 'azerothjs';
 
-import { personById } from '../../data/mock/index.ts';
-import type { Person } from '../../data/mock/types.ts';
+import type { Person } from '../../data/person.ts';
 import Icon from '../../icons/icon.component.azeroth';
+import { usePeople } from '../../stores/people.store.ts';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useLobby } from '../../stores/lobby.store.ts';
@@ -18,6 +18,7 @@ export default component SocialPanel()
     const catalogue = useCatalogue();
     const social = useSocial();
     const lobby = useLobby();
+    const people = usePeople();
     const { navigate } = useNavigate();
 
     const playWith = (person: Person): void =>
@@ -27,8 +28,8 @@ export default component SocialPanel()
     };
 
     const peopleOf = (ids: readonly string[]): Person[] => ids
-        .map((id) => personById(id))
-        .filter((person): person is Person => person !== undefined);
+        .map((id) => people.byHandle(id))
+        .filter((person): person is Person => person !== null);
 
     derived friends = peopleOf(presence.online(social.friends()));
 
@@ -64,7 +65,7 @@ export default component SocialPanel()
                                         <li>
                                             <Link to={ `/app/people/${ person.handle }` } class="flex items-center gap-2.5 rounded-tile p-1 transition-colors hover:bg-raised">
                                                 <Avatar person={ person } size="sm" presence={ presence.dot(person.id) } />
-                                                <span class="min-w-0 flex-1 truncate text-ui-sm font-semibold text-text">{ locale.text(person.name) }</span>
+                                                <span class="min-w-0 flex-1 truncate text-ui-sm font-semibold text-text">{ person.displayName }</span>
                                                 <Icon name="friend-add" size={ 14 } class="shrink-0 text-accent" />
                                             </Link>
                                         </li>
@@ -81,7 +82,7 @@ export default component SocialPanel()
                             <li class="flex items-center gap-2.5 rounded-tile p-1 transition-colors hover:bg-raised">
                                 <Avatar person={ person } size="sm" presence={ presence.dot(person.id) } />
                                 <span class="flex min-w-0 flex-1 flex-col">
-                                    <span class="truncate text-ui-sm font-semibold text-text">{ locale.text(person.name) }</span>
+                                    <span class="truncate text-ui-sm font-semibold text-text">{ person.displayName }</span>
                                     <span class="truncate text-ui-2xs text-muted">
                                         { presence.of(person.id).state === 'playing' && presence.of(person.id).game !== null
                                             ? locale.t('common.playing', { game: locale.t(catalogue.byId(presence.of(person.id).game!).nameKey) })
