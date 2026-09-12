@@ -33,13 +33,9 @@ export default component Avatar(props: {
 {
     const locale = useLocale();
 
-    state failed = false;
-
     derived size = props.size ?? 'md';
 
     derived name = props.person === null ? '' : locale.text(props.person.name);
-
-    derived portrait = props.person !== null && props.person.portrait !== null && !failed ? `/art/avatars/${ props.person.portrait }.webp` : null;
 
     derived hue = props.person === null ? 200 : props.person.hue;
 
@@ -62,18 +58,7 @@ export default component Avatar(props: {
             class="flex h-full w-full items-center justify-center overflow-hidden rounded-full"
             style="background: color-mix(in oklab, hsl(var(--hue) 52% 38%) 85%, var(--field))"
         >
-            <Show when={ portrait !== null } fallback={ <span aria-hidden="true">{ initialsOf(name) }</span> }>
-                { () =>
-                    <img
-                        src={ portrait! }
-                        alt=""
-                        class="h-full w-full object-cover"
-                        loading="lazy"
-                        decoding="async"
-                        onError={ () => failed = true }
-                    />
-                }
-            </Show>
+            <span aria-hidden="true">{ initialsOf(name) }</span>
         </span>
         <Show when={ props.presence !== undefined && props.presence !== null }>
             { () =>

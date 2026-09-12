@@ -86,7 +86,8 @@ export default component FriendsPage()
 
     const playWith = (person: Person): void =>
     {
-        navigate(`/app/play/${ lobby.host(person.favourite, catalogue.defaults(person.favourite), [person.id]) }`);
+        const game = catalogue.featured();
+        navigate(`/app/play/${ lobby.host(game, catalogue.defaults(game), [person.id]) }`);
     };
 
     const message = (person: Person): void =>

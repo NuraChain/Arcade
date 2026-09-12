@@ -8,7 +8,6 @@ import UserCard from '../../components/social/user-card.component.azeroth';
 import SectionHeading from '../../components/ui/section-heading.component.azeroth';
 import type { GameId } from '../../data/games.ts';
 
-import type { Person } from '../../data/mock/types.ts';
 import { useAccount } from '../../stores/account.store.ts';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useGroups } from '../../stores/groups.store.ts';
@@ -46,17 +45,6 @@ export default component DiscoverPage()
     derived playing = social.people()
         .filter((person) => presence.of(person.id).state === 'playing' && person.id !== user?.id)
         .slice(0, 12);
-
-    derived nearby = ((): Person[] =>
-    {
-        if (user === null)
-        {
-            return [];
-        }
-        return social.people()
-            .filter((person) => person.id !== user.id && person.skill === user.skill && !social.friends().includes(person.id))
-            .slice(0, 12);
-    })();
 
     derived groups = groups_.elsewhere().slice(0, 12);
 
@@ -105,13 +93,6 @@ export default component DiscoverPage()
                 <section>
                     <SectionHeading title={ locale.t('discover.popular') } />
                     <PeopleStrip people={ playing } label={ locale.t('discover.popular') } />
-                </section>
-            </Show>
-
-            <Show when={ nearby.length > 0 }>
-                <section>
-                    <SectionHeading title={ locale.t('discover.skill') } />
-                    <PeopleStrip people={ nearby } label={ locale.t('discover.skill') } />
                 </section>
             </Show>
 

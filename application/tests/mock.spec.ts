@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
 
-import { GAMES } from '../src/data/games.ts';
 import { ACHIEVEMENTS } from '../src/data/mock/achievements.ts';
 import { buildDataset } from '../src/data/mock/index.ts';
 import { PEOPLE } from '../src/data/mock/people.ts';
@@ -15,7 +14,6 @@ describe('mock dataset', () =>
     it('replays identically for the same seed and differs for another', () =>
     {
         expect(buildDataset(1, NOW)).toEqual(data);
-        expect(buildDataset(2, NOW).people[3].stats).not.toEqual(data.people[3].stats);
     });
 
     it('gives every person a unique id and handle, both scripts, and no lorem', () =>
@@ -32,14 +30,7 @@ describe('mock dataset', () =>
 
     it('keeps every reference pointing at something that exists', () =>
     {
-        const achievementIds = new Set(ACHIEVEMENTS.map((achievement) => achievement.id));
-        for (const person of data.people)
-        {
-            for (const achievement of person.achievements)
-            {
-                expect(achievementIds.has(achievement), `${ person.id } → ${ achievement }`).toBe(true);
-            }
-        }
+        expect(new Set(ACHIEVEMENTS.map((achievement) => achievement.id)).size).toBe(ACHIEVEMENTS.length);
         for (const conversation of data.conversations)
         {
             expect(conversation.participants.every((member) => ids.has(member)), conversation.id).toBe(true);
@@ -52,20 +43,6 @@ describe('mock dataset', () =>
         for (const request of data.requests)
         {
             expect(ids.has(request.from) && ids.has(request.to)).toBe(true);
-        }
-    });
-
-    it('never wins more than it plays and keeps the favourite game the most played', () =>
-    {
-        for (const person of data.people)
-        {
-            for (const game of GAMES)
-            {
-                const record = person.stats[game.id];
-                expect(record.won).toBeLessThanOrEqual(record.played);
-            }
-            const most = Math.max(...GAMES.map((game) => person.stats[game.id].played));
-            expect(person.stats[person.favourite].played, person.id).toBe(most);
         }
     });
 

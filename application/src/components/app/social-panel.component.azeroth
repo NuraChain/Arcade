@@ -22,7 +22,7 @@ export default component SocialPanel()
 
     const playWith = (person: Person): void =>
     {
-        const game = person.favourite;
+        const game = catalogue.featured();
         navigate(`/app/play/${ lobby.host(game, catalogue.defaults(game), [person.id]) }`);
     };
 

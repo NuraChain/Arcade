@@ -4,8 +4,7 @@ import { buildDataset, resetDataset } from '../src/data/mock/index.ts';
 import { manualClock, type ManualClock } from '../src/lib/clock.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import { fold, rank, ranked } from '../src/services/search.service.ts';
-import { mutualCount, planRequestReply, rankSuggestions } from '../src/services/social.service.ts';
-import { createRandom } from '../src/lib/random.ts';
+import { mutualCount } from '../src/services/social.service.ts';
 import { setChatSource, useChat } from '../src/stores/chat.store.ts';
 import { createApiSource, type ChatSource } from '../src/services/chat.source.ts';
 import { server } from './fake-api.ts';
@@ -99,39 +98,13 @@ describe('search folding', () =>
     });
 });
 
-describe('social plans', () =>
+describe('mutual friends', () =>
 {
-    const people = buildDataset(9, 900_000).people;
-
-    it('answers a friend request within seconds and usually says yes', () =>
-    {
-        let accepted = 0;
-        for (let seed = 0; seed < 40; seed += 1)
-        {
-            const reply = planRequestReply(people[seed % people.length], createRandom(seed));
-            expect(reply.after).toBeGreaterThanOrEqual(2000);
-            expect(reply.after).toBeLessThanOrEqual(14000);
-            accepted += reply.accepted ? 1 : 0;
-        }
-        expect(accepted).toBeGreaterThan(20);
-    });
-
     it('counts only the friends two people share', () =>
     {
         const friends = { a: ['x', 'y', 'z'], b: ['y', 'z', 'w'], c: [] as string[] };
         expect(mutualCount(friends, 'a', 'b')).toBe(2);
         expect(mutualCount(friends, 'a', 'c')).toBe(0);
-    });
-
-    it('suggests nobody it was told to exclude, and puts shared friends first', () =>
-    {
-        const dataset = buildDataset(9, 900_000);
-        const me = dataset.people.find((person) => person.id === 'alex')!;
-        const excluded = new Set(dataset.friends.alex);
-        const out = rankSuggestions(me, dataset.people, dataset.friends, excluded, createRandom(1));
-        expect(out.some((person) => excluded.has(person.id))).toBe(false);
-        expect(out.some((person) => person.id === 'alex')).toBe(false);
-        expect(mutualCount(dataset.friends, 'alex', out[0].id)).toBeGreaterThanOrEqual(mutualCount(dataset.friends, 'alex', out[out.length - 1].id));
     });
 });
 

@@ -3,14 +3,12 @@ import { Link, useHead, useNavigate } from 'azerothjs';
 import Page from '../../components/app/page.component.azeroth';
 import GameGrid from '../../components/games/game-grid.component.azeroth';
 import QuickPlayButton from '../../components/games/quick-play-button.component.azeroth';
-import ActivityItem from '../../components/social/activity-item.component.azeroth';
 import PeopleStrip from '../../components/social/people-strip.component.azeroth';
 import Chip from '../../components/ui/chip.component.azeroth';
-import Pagination from '../../components/ui/pagination.component.azeroth';
 import SectionHeading from '../../components/ui/section-heading.component.azeroth';
 import type { Game, GameId } from '../../data/games.ts';
 import { dataset, personById } from '../../data/mock/index.ts';
-import type { Activity, Person } from '../../data/mock/types.ts';
+import type { Person } from '../../data/mock/types.ts';
 import Icon from '../../icons/icon.component.azeroth';
 import { runtime } from '../../lib/runtime.ts';
 import { useAccount } from '../../stores/account.store.ts';
@@ -18,8 +16,6 @@ import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useLobby } from '../../stores/lobby.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { usePresence } from '../../stores/presence.store.ts';
-
-const ACTIVITY_PAGE = 6;
 
 export default component HomePage()
 {
@@ -45,7 +41,7 @@ export default component HomePage()
 
     derived totals = catalogue.totals();
 
-    derived favourite = catalogue.byId(user?.favourite ?? catalogue.featured());
+    derived favourite = catalogue.byId(catalogue.featured());
 
     derived favouriteStats = catalogue.stats(favourite.id);
 
@@ -67,22 +63,6 @@ export default component HomePage()
         const rest = [...others].sort((a, b) => catalogue.stats(b.id).playersOnline - catalogue.stats(a.id).playersOnline);
         return [favourite, ...rest].slice(0, 3);
     })();
-
-    state activityPage = 1;
-
-    derived allActivity = ((): Activity[] =>
-    {
-        if (user === null)
-        {
-            return [];
-        }
-        const circle = new Set(dataset().friends[user.id] ?? []);
-        return dataset().activity
-            .filter((entry) => circle.has(entry.personId))
-            .sort((a, b) => b.at - a.at);
-    })();
-
-    derived activity = allActivity.slice(0, activityPage * ACTIVITY_PAGE);
 
     /**
      * Where this account is sitting, from the server.
@@ -169,32 +149,6 @@ export default component HomePage()
             <section aria-labelledby="home-recommended">
                 <SectionHeading id="home-recommended" title={ locale.t('home.recommended.title') } more={ locale.t('common.seeAll') } to="/app/games" />
                 <GameGrid games={ recommended } compact label={ locale.t('home.recommended.title') } onQuickPlay={ quickPlay } />
-            </section>
-
-            <section aria-labelledby="home-activity">
-                <SectionHeading id="home-activity" title={ locale.t('home.activity.title') } />
-                <Show
-                    when={ activity.length > 0 }
-                    fallback={ <p class="rounded-tile border border-dashed border-line p-4 text-ui-sm text-muted">{ locale.t('home.activity.empty') }</p> }
-                >
-                    { () =>
-                        <ul class="flex flex-col gap-0.5 rounded-panel border border-line bg-field p-1.5">
-                            <For each={ activity } key={ (entry) => entry.id } let={ entry }>
-                                <li>
-                                    <ActivityItem activity={ entry } />
-                                </li>
-                            </For>
-                        </ul>
-                    }
-                </Show>
-                <Pagination
-                    total={ allActivity.length }
-                    size={ ACTIVITY_PAGE }
-                    page={ activityPage }
-                    mode="more"
-                    label={ locale.t('home.activity.title') }
-                    onPage={ (page) => activityPage = page }
-                />
             </section>
         </div>
     </Page>

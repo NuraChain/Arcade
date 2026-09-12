@@ -235,22 +235,7 @@ export const useSocial = createStore((): SocialApi =>
         reasonFor(id)
         {
             const mutual = mutuals().get(id) ?? 0;
-            if (mutual > 0)
-            {
-                return { kind: 'mutual', count: mutual };
-            }
-
-            const me = personById(meId());
-            const person = personById(id);
-            if (me === undefined || person === undefined)
-            {
-                return { kind: 'new' };
-            }
-            if (person.favourite === me.favourite)
-            {
-                return { kind: 'game' };
-            }
-            return person.region === me.region ? { kind: 'region' } : { kind: 'new' };
+            return mutual > 0 ? { kind: 'mutual', count: mutual } : { kind: 'new' };
         },
 
         visible: (ids) => ids.filter((id) => !blocked().includes(id)),

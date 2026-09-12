@@ -2,17 +2,6 @@ import type { IconName } from '../../icons/registry.ts';
 import type { LocalizedText } from '../../lib/text.ts';
 import type { GameId } from '../games.ts';
 
-export type Skill = 'new' | 'casual' | 'regular' | 'sharp' | 'expert';
-
-export type Region = 'eu' | 'me' | 'na' | 'asia';
-
-export interface GameRecord
-{
-    played: number;
-    won: number;
-    streak: number;
-}
-
 export interface Person
 {
     id: string;
@@ -20,17 +9,7 @@ export interface Person
     name: LocalizedText;
     bio: LocalizedText;
     hue: number;
-    portrait: string | null;
-    favourite: GameId;
-    level: number;
-    skill: Skill;
-    reliability: number;
-    region: Region;
-    joinedAt: number;
     minor: boolean;
-    demo: boolean;
-    stats: Record<GameId, GameRecord>;
-    achievements: string[];
 }
 
 export type ConversationKind = 'direct' | 'group' | 'game';

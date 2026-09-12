@@ -385,8 +385,8 @@ sound, haptics, the rail, notification categories. Nothing in it belongs to the 
 
 **The whole graph is the server's now.** `social.store.ts` reads friends, both request
 directions, blocks, the directory, suggestions, mutes, privacy and my own reports from the API,
-and every one of them is a handle. The browser's mock is a PROFILE cache - portrait, favourite
-game, region, statistics - joined by handle, because no domain owns those fields yet.
+and every one of them is a handle. What is left of the browser's mock is a NAME cache - a display
+name, a bio and a hue for people no domain owns yet - and nothing more.
 
 Two behaviours went away with it, and both were furniture:
 
@@ -484,7 +484,7 @@ missing thing. Every other status still surfaces as an error.
 
 **`application/src/data/mock/groups.ts` is gone.** The five groups are rows, seeded from
 `GROUP_FIXTURES`. What survives in the mock is `GROUP_SLUGS` — five strings that exist only so a
-"joined" activity can point at a group that is really there — and `fixture-parity.spec.ts` fails
+development fixtures seed — and `fixture-parity.spec.ts` fails
 if that list stops matching the fixtures, the same way it does for people. The crest is a closed
 set the CLIENT owns (`data/crests.ts`): the server sends a string, `Icon` takes an `IconName`, and
 a value from a newer server draws the first crest instead of a blank square.
@@ -890,6 +890,48 @@ peer device on earth failing to verify and nothing saying why.
 question most conversations never reach — a thread where nobody has a provable device is answered
 entirely by the empty-array branch. A static import put all of it in the chat page's chunk and
 pushed that chunk from 5.7 KB to 19.8 KB, past its budget, for code that would not run.
+
+## What was deleted because nothing produced it
+
+A person used to carry a level, a skill band, a reliability score, a favourite game, a region, a
+portrait, a per-game record of games played and won, and a list of earned achievements. Not one of
+them had a source.
+
+`buildPerson` invented the played counts from a seeded RNG, the level was the square root of that
+invention, the win rate came from a per-skill constant, and the earned achievements were whichever
+definitions cleared a threshold against a 0.85 coin flip. For a REAL account none of that even ran:
+`blank()` in `account.store.ts` handed every wallet and guest `level: 1`, `skill: 'new'`,
+`reliability: 100`, `favourite: 'hokm'` and four all-zero records — numbers about a person that
+nobody measured, on a product where no game has ever been played. It also gave them a bio they
+never wrote ("Signed in with a wallet on NuraChain").
+
+**No game engine exists, so none of it can be made true.** This is the same judgement that removed
+`game_rules.fairness` and the matchmaking simulation: a claim shipped ahead of its mechanism
+teaches people that the product's assurances are decoration. So the fields are gone, and with them:
+
+| gone | it rendered |
+|---|---|
+| `stats` | the game leaderboard, the record strips on three pages, the per-game win rates |
+| `level` | the XP bar and the level chip on `me` and `person` |
+| `achievements` | the achievements tab and its twelve tiles |
+| `skill` | "people at your skill" on `discover` |
+| `reliability` | a tooltipped chip on `person` |
+| `favourite` | which game seven different Play buttons opened |
+| `region` | a suggestion reason |
+| `portrait` | an `<img>` pointing at a file that has never existed — every row was null |
+| `dataset().activity` | the whole home activity feed, forty invented events |
+
+`me` and `person` lost their tab bars with the tabs. What is left on a profile is what the server
+actually knows: who you are, what you wrote about yourself, whether a wallet is behind the account,
+and how many friends you have. `social.service.ts` lost `planRequestReply` and `rankSuggestions`
+entirely — neither had a caller in the product, and only their own tests were keeping them alive.
+
+**A suggestion has one reason left, and it is checkable**: how many friends you already share, from
+the real graph. "Plays the same game" and "same region" compared two fixture literals.
+
+Eighty catalogue entries went with the UI, along with `record-strip`, `activity-item`,
+`achievement-tile` and `progress` — components with no remaining caller. A key whose renderer is
+deleted is the same dead weight as a key that never had one.
 
 ## The wallet fixtures, and why a happy path has to be reachable
 

@@ -2,7 +2,6 @@ import { Link } from 'azerothjs';
 
 import type { Person } from '../../data/mock/types.ts';
 import Icon from '../../icons/icon.component.azeroth';
-import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { usePresence } from '../../stores/presence.store.ts';
 import { useSocial } from '../../stores/social.store.ts';
@@ -14,7 +13,6 @@ export default component UserCard(props: { person: Person; onAdd: (id: string) =
     const locale = useLocale();
     const social = useSocial();
     const presence = usePresence();
-    const catalogue = useCatalogue();
 
     derived relation = social.relation(props.person.id);
 
@@ -25,11 +23,7 @@ export default component UserCard(props: { person: Person; onAdd: (id: string) =
         {
             return locale.plural('friends.reason.mutual', why.count);
         }
-        if (why.kind === 'game')
-        {
-            return locale.t('friends.reason.game', { game: locale.t(catalogue.byId(props.person.favourite).nameKey) });
-        }
-        return locale.t(why.kind === 'region' ? 'friends.reason.region' : 'friends.reason.new');
+        return locale.t('friends.reason.new');
     })();
 
     <article class="flex h-full flex-col items-center gap-2 rounded-panel border border-line bg-field p-4 text-center">

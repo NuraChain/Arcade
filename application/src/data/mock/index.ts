@@ -1,10 +1,7 @@
-import { createRandom, hashSeed } from '../../lib/random.ts';
 import { runtime } from '../../lib/runtime.ts';
-import { GAMES, type GameId } from '../games.ts';
-import { ACHIEVEMENTS } from './achievements.ts';
-import { PEOPLE, type PersonSeed } from './people.ts';
+import { PEOPLE } from './people.ts';
 import { THREADS } from './threads.ts';
-import type { Activity, Conversation, FriendRequest, GameRecord, Message, Person, Skill } from './types.ts';
+import type { Conversation, FriendRequest, Message, Person } from './types.ts';
 
 export const MINUTE = 60000;
 export const HOUR = 60 * MINUTE;
@@ -17,20 +14,9 @@ export interface Dataset
     people: Person[];
     conversations: Conversation[];
     messages: Message[];
-    activity: Activity[];
     requests: FriendRequest[];
     friends: Record<string, string[]>;
 }
-
-const SKILL_PLAYED: Record<Skill, [number, number]> = {
-    new: [1, 8],
-    casual: [10, 40],
-    regular: [40, 120],
-    sharp: [120, 320],
-    expert: [300, 800]
-};
-
-const SKILL_WIN_RATE: Record<Skill, number> = { new: 0.3, casual: 0.42, regular: 0.5, sharp: 0.57, expert: 0.64 };
 
 const FRIENDS: Record<string, string[]> = {
     'alex': ['sara.k', 'reza.t', 'parisa', 'farhad', 'dariush', 'nima.f', 'omid.j', 'nilou', 'babak.r', 'leila.a', 'yas', 'tara.y'],
@@ -45,33 +31,6 @@ const REQUESTS: Array<{ from: string; to: string; minutesAgo: number }> = [
     { from: 'arash', to: 'sara.k', minutesAgo: 80 },
     { from: 'peyman', to: 'kian16', minutesAgo: 200 }
 ];
-
-function buildPerson(seed: PersonSeed, now: number, datasetSeed: number): Person
-{
-    const random = createRandom(hashSeed(datasetSeed, 'person', seed.id));
-    const [low, high] = SKILL_PLAYED[seed.skill];
-    const favouritePlayed = random.int(low, high);
-    const stats = {} as Record<GameId, GameRecord>;
-    let total = 0;
-    for (const game of GAMES)
-    {
-        const played = game.id === seed.favourite ? favouritePlayed : Math.round(favouritePlayed * random.next() * 0.6);
-        const won = Math.round(played * (SKILL_WIN_RATE[seed.skill] + (random.next() - 0.5) * 0.12));
-        stats[game.id] = { played, won: Math.min(played, Math.max(0, won)), streak: played > 0 ? random.int(0, 4) : 0 };
-        total += played;
-    }
-    const thresholds = [1, 1, 8, 12, 25, 40, 60, 90, 120, 200, 100, 50];
-    const earned = ACHIEVEMENTS.filter((_achievement, index) => total >= thresholds[index] && random.chance(0.85))
-        .map((achievement) => achievement.id);
-    return {
-        ...seed,
-        level: Math.max(1, Math.round(Math.sqrt(total) * 1.6)),
-        reliability: Math.min(100, Math.round(88 + random.next() * 12 - (seed.skill === 'new' ? 4 : 0))),
-        joinedAt: now - random.int(seed.skill === 'new' ? 3 : 20, seed.skill === 'expert' ? 700 : 300) * DAY,
-        stats,
-        achievements: earned
-    };
-}
 
 function buildThreads(now: number): { conversations: Conversation[]; messages: Message[] }
 {
@@ -122,13 +81,10 @@ function buildRequests(now: number): FriendRequest[]
 }
 
 /**
- * The groups a "joined" activity may point at.
+ * The group slugs the development fixtures seed.
  *
- * Slugs only - a group's name, crest and members are the server's now, and the activity row
- * carries an id the way every other row does. `server/tests/fixture-parity.spec.ts` fails if
- * this list stops matching `GROUP_FIXTURES`, the same way it does for people.
- *
- * The whole activity feed is mock furniture until the activity domain lands.
+ * `server/tests/fixture-parity.spec.ts` fails if this list stops matching `GROUP_FIXTURES`, the
+ * same way it does for people.
  */
 export const GROUP_SLUGS = [
     'friday-night-crew',
@@ -137,29 +93,6 @@ export const GROUP_SLUGS = [
     'midnight-table',
     'newcomers-table'
 ];
-
-function buildActivity(people: Person[], now: number, datasetSeed: number): Activity[]
-{
-    const random = createRandom(hashSeed(datasetSeed, 'activity'));
-    const kinds: Activity['kind'][] = ['played', 'won', 'won', 'joined', 'achievement', 'invited'];
-    const activity: Activity[] = [];
-    for (let index = 0; index < 40; index += 1)
-    {
-        const person = random.pick(people);
-        const kind = random.pick(kinds);
-        activity.push({
-            id: `act-${ index + 1 }`,
-            personId: person.id,
-            kind,
-            game: kind === 'joined' ? null : (random.chance(0.7) ? person.favourite : random.pick(GAMES).id),
-            at: now - random.int(2, 60 * 36) * MINUTE,
-            targetId: kind === 'achievement'
-                ? (person.achievements[0] ?? null)
-                : (kind === 'joined' ? random.pick(GROUP_SLUGS) : (kind === 'invited' ? random.pick(people).id : null))
-        });
-    }
-    return activity.sort((a, b) => b.at - a.at);
-}
 
 /**
  * The mock friend graph.
@@ -198,7 +131,7 @@ function buildFriends(people: Person[]): Record<string, string[]>
 
 export function buildDataset(seed: number, now: number): Dataset
 {
-    const people = PEOPLE.map((person) => buildPerson(person, now, seed));
+    const people: Person[] = [...PEOPLE];
     const { conversations, messages } = buildThreads(now);
     const requests = buildRequests(now);
     return {
@@ -207,7 +140,6 @@ export function buildDataset(seed: number, now: number): Dataset
         people,
         conversations,
         messages,
-        activity: buildActivity(people, now, seed),
         requests,
         friends: buildFriends(people)
     };
