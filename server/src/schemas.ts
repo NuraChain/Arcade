@@ -263,6 +263,16 @@ export type PeerDevice = Infer<typeof peerDevice>;
  * wallet, so a guest has no sealable device, and the UI says which of those it is looking at.
  */
 export const conversationMember = object({
+    /**
+     * The account uuid, and the only uuid this product puts on the wire.
+     *
+     * Everywhere else a person is a handle - the public identifier, the url key, the thing a
+     * rename is supposed to change. `nura-e2ee/v1` binds the sender's account into the AAD, and an
+     * identifier somebody can rename is one that stops matching a signature made last week. So the
+     * crypto gets the immutable id and nothing else does.
+     */
+    accountId: string(),
+
     handle: string(),
     kind: accountKind,
     devices: array(peerDevice)
@@ -271,6 +281,35 @@ export const conversationMember = object({
 export const conversationDevices = object({ members: array(conversationMember) });
 
 export type ConversationDevices = Infer<typeof conversationDevices>;
+
+/**
+ * A device that may have signed something in this conversation's past, revoked ones included.
+ *
+ * The recipient list and the signer list are different questions and this is the second one. A
+ * device revoked last month still signed what it signed; hiding it would make every message of
+ * every epoch it touched permanently unverifiable, which turns replacing a laptop into losing a
+ * conversation's provenance. `revoked` travels so the reader can say which it is looking at, and
+ * nothing here is ever a recipient - that list comes from `conversationDevices`, and the server
+ * refuses a revoked device as a recipient anyway.
+ */
+export const peerSigner = object({
+    accountId: string(),
+    handle: string(),
+    id: string(),
+    exchangeKey: string(),
+    signingKey: string(),
+    revoked: boolean(),
+    attested: enumOf(['wallet', 'contract']),
+    address: string(),
+    message: string(),
+    signature: string()
+});
+
+export type PeerSigner = Infer<typeof peerSigner>;
+
+export const conversationSigners = object({ signers: array(peerSigner) });
+
+export type ConversationSigners = Infer<typeof conversationSigners>;
 
 /* -------------------------------------------------------------------------- social */
 
@@ -661,7 +700,24 @@ export const chatMessage = object({
     from: string().optional(),
     body: string().optional(),
     payload: line.optional(),
-    at: string()
+    at: string(),
+
+    /**
+     * The envelope, present on a sealed message and absent from a line the server wrote.
+     *
+     * These are the AAD fields that are not already somewhere else in this shape. `body` is the
+     * ciphertext for a text message, so every one of them has to travel or the recipient cannot
+     * reconstruct what the signature was made over. `senderAccountId` travels rather than being
+     * looked up from the member list, because somebody who has LEFT a conversation is not in that
+     * list and their messages are still in it.
+     */
+    epoch: number().optional(),
+    seq: number().optional(),
+    iv: string().optional(),
+    senderDeviceId: string().optional(),
+    senderAccountId: string().optional(),
+    signature: string().optional(),
+    clientAt: string().optional()
 });
 
 export type ChatMessage = Infer<typeof chatMessage>;
@@ -704,7 +760,106 @@ export const messagePage = object({
 
 export type MessagePage = Infer<typeof messagePage>;
 
-export const sendInput = object({ body: string() });
+/**
+ * What sending a sealed message states.
+ *
+ * The server checks the shape, the membership, the policy and that the device is this account's -
+ * and then stores an envelope it cannot open and a ciphertext it cannot read. It does not check
+ * the signature: the only thing a signature check here would prove is that the client that sent it
+ * could also make it, which is not in doubt, and the recipient has to do the real check anyway.
+ *
+ * `id` is chosen by the CLIENT, because the message id is bound into the AAD and a server-assigned
+ * id could not be. That is not a hole - the id is a uuid the sender picks, the primary key refuses
+ * a collision, and nothing about the id authorises anything.
+ */
+export const sendInput = object({
+    id: string(),
+    epoch: number(),
+    seq: number(),
+    iv: string(),
+
+    /** Ciphertext. The only field in this product that is deliberately unreadable to the server. */
+    body: string(),
+
+    senderDeviceId: string(),
+    signature: string(),
+    clientAt: string()
+});
+
+/* ---------------------------------------------------------------- epochs */
+
+/**
+ * One epoch as its recipients receive it: the commitment, and this device's copy of the key.
+ *
+ * `wrapped` is absent rather than null when this device was not a recipient, which is the state a
+ * device lands in after somebody else rotated without it - it can read nothing of this epoch and
+ * has to wait to be included in the next one. `stale` says the recipient set no longer describes
+ * the room, and it is the whole of rotation: the next sender mints, because this server holds no
+ * key it could re-wrap with.
+ */
+export const epochState = object({
+    epoch: number().optional(),
+    mintedBy: string().optional(),
+
+    /** The sorted recipient device ids, exactly as the minter signed them. */
+    recipients: string().optional(),
+    signature: string().optional(),
+    confirmation: string().optional(),
+
+    wrapped: object({ ephemeralKey: string(), wrapped: string() }).optional(),
+
+    /** The next number this device may use for a message in this epoch. */
+    nextSeq: number(),
+
+    /** Who a new epoch could be wrapped to right now, as the server sees eligibility. */
+    eligible: array(string()),
+
+    stale: boolean()
+});
+
+export type EpochState = Infer<typeof epochState>;
+
+/**
+ * Which epoch to read, when it is not the current one.
+ *
+ * History is the reason this exists. A page of old messages is sealed under the epoch that was
+ * current when it was written, and a device reading it after a rotation needs that epoch's wrapped
+ * key - which it can only be given for an epoch it was a recipient of. Absent means "the one in
+ * force now", which is what sending needs.
+ */
+export const epochQuery = object({ epoch: string().optional() });
+
+export const wrappedKey = object({
+    deviceId: string(),
+    ephemeralKey: string(),
+    wrapped: string()
+});
+
+/**
+ * Minting the next epoch.
+ *
+ * The epoch and every wrapped key arrive together and are written in one transaction. An epoch row
+ * with missing keys is an epoch somebody cannot open, and it would take the conversation with it:
+ * every later sender would seal under a key that recipient does not hold.
+ */
+export const mintEpochInput = object({
+    epoch: number(),
+    mintedBy: string(),
+    recipients: array(string()),
+    signature: string(),
+    confirmation: string(),
+    keys: array(wrappedKey)
+});
+
+/**
+ * Whether this caller claimed the epoch.
+ *
+ * `false` is an ordinary outcome, not an error: two devices noticing the same membership change at
+ * the same moment both compute the same next number, and the primary key arbitrates. The loser
+ * refetches - and if the winner's recipient set is the one it expected, there is nothing left to
+ * do. A 409 here would make a race that resolved itself correctly look like a failure.
+ */
+export const mintResult = object({ minted: boolean(), epoch: number() });
 
 export const pinInput = object({ pinned: boolean() });
 

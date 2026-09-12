@@ -57,13 +57,34 @@ export interface MessageLine
     params: Record<string, string>;
 }
 
+/**
+ * Why a message on the screen is not words.
+ *
+ * Under `nura-e2ee/v1` the server cannot read a text message, so `text` is whatever THIS browser
+ * managed to open - and every way that can fail is a different sentence rather than a blank
+ * bubble. `bad-signature` and `tampered` are alarms: they mean the row was edited. The other
+ * three are ordinary states a person can act on, or wait out.
+ */
+export type MessageLock =
+    | 'unknown-sender'
+    | 'bad-signature'
+    | 'no-key'
+    | 'tampered'
+    | 'no-epoch-key';
+
 export interface Message
 {
     id: string;
     conversationId: string;
     from: string;
     kind: MessageKind;
+
+    /** What was said, once this browser has opened it. Empty while `locked` says why it has not. */
     text: string;
+
+    /** Absent when the message is readable, which is the ordinary case. */
+    locked?: MessageLock;
+
     line?: MessageLine;
     at: number;
     ref: MessageRef | null;

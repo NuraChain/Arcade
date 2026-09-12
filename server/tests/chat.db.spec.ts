@@ -45,6 +45,60 @@ async function befriend(a: string, b: string): Promise<void>
     await social.answerRequest(b, incoming[0].id, 'accepted');
 }
 
+const deviceOf = new Map<string, string>();
+const seqOf = new Map<string, number>();
+const mintedIn = new Set<string>();
+
+/**
+ * Says something, with the envelope the schema now requires and none of the cryptography.
+ *
+ * This suite is about the READS - the keyset, the watermark, the exclusive-or, the pair race - and
+ * every one of those is indifferent to whether the body is ciphertext. Standing up real keys for
+ * each would make the tests slower and no more true, so the device and the epoch are written
+ * directly and the body goes in as itself. `epochs.db.spec.ts` owns the key schedule, with real
+ * devices and the real service, and this borrows nothing from it.
+ */
+async function say(userId: string, conversationId: string, body: string): Promise<unknown>
+{
+    let device = deviceOf.get(userId);
+
+    if (device === undefined)
+    {
+        device = `dev${ deviceOf.size.toString().padStart(19, '0') }`;
+        await db.query(
+            `insert into devices (id, user_id, label, exchange_key, signing_key, attested, confirmed_at)
+             values ($1, $2, 'Test', 'exchange', 'signing', 'server', now())`,
+            [device, userId]
+        );
+        deviceOf.set(userId, device);
+    }
+
+    if (!mintedIn.has(conversationId))
+    {
+        await db.query(
+            `insert into conversation_epochs (conversation_id, epoch, minted_by, recipients, signature, confirmation)
+             values ($1, 1, $2, $3, 'signature', 'confirmation')`,
+            [conversationId, device, device]
+        );
+        mintedIn.add(conversationId);
+    }
+
+    const key = `${ conversationId }:${ device }`;
+    const next = (seqOf.get(key) ?? 0) + 1;
+    seqOf.set(key, next);
+
+    return chat.send(userId, conversationId, device, {
+        id: crypto.randomUUID(),
+        epoch: 1,
+        seq: next,
+        iv: 'nonce',
+        body,
+        senderDeviceId: device,
+        signature: 'signature',
+        clientAt: new Date().toISOString()
+    });
+}
+
 describe.skipIf(!active)('chat, against a real database', () =>
 {
     beforeAll(async () =>
@@ -66,6 +120,9 @@ describe.skipIf(!active)('chat, against a real database', () =>
     {
         await db.query('truncate users cascade');
         await db.query('truncate conversations cascade');
+        deviceOf.clear();
+        seqOf.clear();
+        mintedIn.clear();
         social = createSocialService(db);
         chat = createChatService(db, social);
     });
@@ -101,13 +158,13 @@ describe.skipIf(!active)('chat, against a real database', () =>
     {
         const [a, b] = [await makeUser(), await makeUser()];
         const conversation = await chat.openDirect(a, b);
-        await chat.send(a, conversation, 'still here?');
+        await say(a, conversation, 'still here?');
 
         await social.setPrivacy(b, { allowStrangerMessages: false, showOnline: true });
-        await expect(chat.send(a, conversation, 'hello?')).rejects.toThrow();
+        await expect(say(a, conversation, 'hello?')).rejects.toThrow();
 
         await befriend(a, b);
-        await expect(chat.send(a, conversation, 'now?')).resolves.toBeDefined();
+        await expect(say(a, conversation, 'now?')).resolves.toBeDefined();
     });
 
     it('answers a conversation somebody is not in exactly as one that does not exist', async () =>
@@ -123,7 +180,7 @@ describe.skipIf(!active)('chat, against a real database', () =>
     {
         const [a, b] = [await makeUser(), await makeUser()];
         const conversation = await chat.openDirect(a, b);
-        await chat.send(a, conversation, 'hello');
+        await say(a, conversation, 'hello');
 
         await social.block(a, b);
         expect(await chat.list(a)).toEqual([]);
@@ -172,8 +229,8 @@ describe.skipIf(!active)('chat, against a real database', () =>
         const [a, b] = [await makeUser(), await makeUser()];
         const conversation = await chat.openDirect(a, b);
 
-        await chat.send(b, conversation, 'one');
-        await chat.send(b, conversation, 'two');
+        await say(b, conversation, 'one');
+        await say(b, conversation, 'two');
 
         const forA = (await chat.list(a))[0];
         const forB = (await chat.list(b))[0];
@@ -202,7 +259,7 @@ describe.skipIf(!active)('chat, against a real database', () =>
         const total = PAGE + 15;
         for (let index = 0; index < total; index += 1)
         {
-            await chat.send(index % 2 === 0 ? a : b, conversation, `line ${ index }`);
+            await say(index % 2 === 0 ? a : b, conversation, `line ${ index }`);
         }
 
         const first = await chat.messages(a, conversation, null);
@@ -227,7 +284,7 @@ describe.skipIf(!active)('chat, against a real database', () =>
 
         for (let index = 0; index < PAGE + 5; index += 1)
         {
-            await chat.send(a, conversation, `old ${ index }`);
+            await say(a, conversation, `old ${ index }`);
         }
 
         const first = await chat.messages(a, conversation, null);
@@ -235,7 +292,7 @@ describe.skipIf(!active)('chat, against a real database', () =>
 
         // Somebody says something while the reader is scrolling up. An OFFSET page would shift
         // by one and repeat a line; the keyset does not move.
-        await chat.send(b, conversation, 'arriving now');
+        await say(b, conversation, 'arriving now');
 
         const second = await chat.messages(a, conversation, { at: oldest.created_at, id: oldest.id });
         expect(second.messages.map((message) => message.body)).toEqual(['old 0', 'old 1', 'old 2', 'old 3', 'old 4']);
@@ -245,7 +302,7 @@ describe.skipIf(!active)('chat, against a real database', () =>
     {
         const [a, b] = [await makeUser(), await makeUser()];
         const conversation = await chat.openDirect(a, b);
-        await chat.send(b, conversation, 'the last word');
+        await say(b, conversation, 'the last word');
 
         const row = (await chat.list(a))[0];
         expect(row.last_body).toBe('the last word');

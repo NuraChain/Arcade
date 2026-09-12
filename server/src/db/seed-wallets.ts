@@ -36,6 +36,11 @@ import { WALLET_FIXTURES, WALLET_FRIENDSHIPS, WALLET_GROUP } from './wallet-fixt
  * The DEVICE keys are generated fresh and only their public halves are kept, which is the honest
  * shape: nobody holds these devices. They are somebody else's device as far as any browser is
  * concerned, which is exactly what the sealing path needs to have in front of it.
+ *
+ * Which is also why `dana.w` gets none. A browser signing in as an account that already has a
+ * device enrols a second one, and every device after the first arrives `pending` - confirmable only
+ * by an existing device of that account, whose keys nobody has. The account a person actually signs
+ * in as has to be the one whose first device is theirs. See `enrolled` in `wallet-fixtures.ts`.
  */
 
 /** The direct conversations in the development database. */
@@ -119,6 +124,11 @@ export async function seedWalletFixtures(db: DataSource, config: WalletSeedConfi
              on conflict (address) do nothing`,
             [userId, address, chainId]
         );
+
+        if (!fixture.enrolled)
+        {
+            continue;
+        }
 
         const held = firstRow<{ n: number }>(
             await db.query('select count(*)::int as n from devices where user_id = $1', [userId])

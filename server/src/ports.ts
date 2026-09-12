@@ -10,7 +10,9 @@ import type {
     Privacy,
     ChatMessage,
     ConversationDevices,
+    ConversationSigners,
     ConversationSummary,
+    EpochState,
     DeviceList,
     Device,
     Challenge as DeviceChallenge,
@@ -255,8 +257,57 @@ export interface ChatPort
      * every other chat route is the same one that answers this.
      */
     devices(me: string, conversationId: string): Promise<ConversationDevices>;
+
+    /**
+     * Every device that could have signed in this conversation, revoked ones included.
+     *
+     * A separate read from `devices` because it answers a separate question. That one is "who may
+     * I wrap a key to", which must exclude a device somebody signed out; this one is "who could
+     * have signed what I am reading", which must not - a device revoked in April still signed what
+     * it signed in March, and hiding it would make that history permanently unverifiable.
+     */
+    signers(me: string, conversationId: string): Promise<ConversationSigners>;
+
+    /**
+     * Where the key schedule has got to, from the device this session is signed in on.
+     *
+     * The session decides which device is asking rather than the caller naming one. A device's
+     * wrapped key is unreadable to anybody else whichever way it is fetched, but who holds a key
+     * for which epoch is still a fact about somebody's devices, and the session already knows the
+     * answer without being told.
+     */
+    epoch(me: string, sessionId: string, conversationId: string, epoch: string | undefined): Promise<EpochState>;
+
+    /** Claims the next epoch, or reports that somebody else claimed it first. */
+    mint(me: string, sessionId: string, conversationId: string, input: {
+        epoch: number;
+        mintedBy: string;
+        recipients: string[];
+        signature: string;
+        confirmation: string;
+        keys: { deviceId: string; ephemeralKey: string; wrapped: string }[];
+    }): Promise<{ minted: boolean; epoch: number }>;
+
     messages(me: string, conversationId: string, cursor: string | undefined): Promise<MessagePage>;
-    send(me: string, conversationId: string, body: string): Promise<ChatMessage>;
+
+    /**
+     * Stores a sealed message: an envelope this server can read and a body it cannot.
+     *
+     * The session's device is what the envelope must name. A message claiming to come from another
+     * of the account's devices is refused rather than stored - a device signs its own words, and
+     * accepting one device's claim about another's is the shape of every re-attribution this
+     * format binds the AAD to prevent.
+     */
+    send(me: string, sessionId: string, conversationId: string, input: {
+        id: string;
+        epoch: number;
+        seq: number;
+        iv: string;
+        body: string;
+        senderDeviceId: string;
+        signature: string;
+        clientAt: string;
+    }): Promise<ChatMessage>;
     markRead(me: string, conversationId: string): Promise<void>;
     setPinned(me: string, conversationId: string, pinned: boolean): Promise<void>;
 

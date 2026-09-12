@@ -685,8 +685,10 @@ bilingual strings were a mock convenience the wire format does not have.
 
 `chat.store.ts` reads through `services/chat.source.ts` and nothing else. That interface is the
 whole seam the server slots into: `conversations`, `thread`, `post`, `openDirect`, `archive`.
-Today `createLocalSource()` implements it over the mock; `setChatSource()` swaps it, which is how
-the failure states are tested and how the API implementation will arrive.
+`createApiSource()` is the only implementation the product ships and `setChatSource()` swaps it,
+which is how the failure states — loading, refused, offline — are driven in a spec. It is also where
+the SEALING happens and the only place it does: a message goes out as ciphertext and an envelope and
+comes back as a row this browser has to open for itself, and the store above never sees either half.
 
 **Two reads, two shapes, and the split is the point.** The LIST carries a row per conversation —
 the conversation, its last message, its unread count — and the THREAD carries the messages of the
@@ -712,8 +714,9 @@ box says "Search conversations" because that is what it does. Full-text search o
 honest shape for E2EE, where a server-side message index cannot exist, and it is the one call site
 PR 15 changes when the archive becomes the locally decrypted one.
 
-**Sending is not optimistic yet.** `send` posts to the source and revalidates, so the message
-appears when the source acknowledges it. With a local source that is the same microtask.
+**Sending is not optimistic.** `send` seals, posts and revalidates, so the message appears when the
+server has acknowledged it. That is a round trip plus a signature rather than a microtask now, which
+is why `chat.listLoading()` is what a test waits on rather than one macrotask.
 
 **Do not put `await import()` inside a spec.** Resolving a module mid-run races the other workers
 resolving `@azerothjs/testing` through its junction, and `npm run test:shuffle` starts failing
@@ -762,7 +765,7 @@ wallet, so their devices are `attested: 'server'` — and `attested` is a REQUIR
 badge, so a server-asserted device cannot be rendered as wallet-verified by forgetting to say so.
 How a PEER decides whether to believe any of that is *Whose device is that?* below.
 
-**The envelope**, with its AAD fields joined by `` in exactly this order:
+**The envelope**, with its AAD fields joined by the ASCII unit separator (0x1F) in exactly this order:
 
 ```
 'nura-e2ee/v1' ␟ 'msg' ␟ conversationId ␟ epoch ␟ seq ␟ messageId
@@ -793,9 +796,10 @@ empty thread.
 
 ## Devices, and the degraded states that shipped first
 
-Nothing is sealed yet. This is the half of `nura-e2ee/v1` that has to exist before any of it, and
-it was built in the order the plan asks for: the states that mean something went wrong were written,
-rendered and tested BEFORE the happy path, so they are exercised rather than discovered.
+This is the half of `nura-e2ee/v1` that had to exist before any of the sealing, and it was built in
+the order the plan asks for: the states that mean something went wrong were written, rendered and
+tested BEFORE the happy path, so they are exercised rather than discovered. *The sealing* below is
+what was built on top of it.
 
 **A device id is derived, not issued.** `base64url(SHA-256(exchangeSpki || signingSpki)).slice(0, 22)`,
 computed by the client and recomputed by the server, which refuses a mismatch. An id the SERVER
@@ -905,11 +909,10 @@ guests are the main onboarding path — and it is stated rather than hidden behi
 contract wallet is refused too, for now: ERC-1271 has no signature to recover and the answer needs
 an `eth_call` this browser does not make. Unverifiable is not verified, and the copy says which.
 
-**There is no "this conversation IS sealed" banner.** Nothing is sealed yet; a padlock ahead of its
-mechanism is a claim rather than a fact. What ships is the reason a conversation CANNOT be sealed,
-which is true of every conversation in the product today and stays true for the ones that still
-cannot be afterwards. The notice names the person it is about, and speaks in the second person when
-that person is the reader — being told about your own account in the third person reads like a bug.
+**The notice names the person it is about**, and speaks in the second person when that person is
+the reader — being told about your own account in the third person reads like a bug. It shipped with
+no positive case, because a padlock ahead of its mechanism is a claim rather than a fact and at the
+time nothing was sealed; it has one now, and *The sealing* says what it claims.
 
 **Two things about the maths that fail silently.** EIP-191's prefix begins with the byte 0x19,
 written as `String.fromCharCode(0x19)` because an invisible control character in a source file is
@@ -969,17 +972,22 @@ deleted is the same dead weight as a key that never had one.
 
 ## The wallet fixtures, and why a happy path has to be reachable
 
-`server/src/db/seed-wallets.ts` seeds two accounts that sign in with a wallet - `dana.w` and
-`omid.k` - each holding one confirmed device whose attestation really verifies, and two
-conversations: one between them, and one between `dana.w` and the `alex` persona.
+`server/src/db/seed-wallets.ts` seeds the six accounts that ARE the development population, their
+friendships, three direct conversations and one group. They sign in with a wallet through the real
+challenge-sign-post round trip, and five of the six hold a confirmed device whose attestation really
+verifies.
 
 They exist because without them **the sealed half of this product had no reachable happy path in
-any development database.** Every person in `seed-fixtures.ts` is inserted as a guest and the three
-personas are `demo`, so `attested` is `server` for all of them, `peers.ts` publishes none of their
-devices, and `sealabilityOf` answered `no-wallet` for every conversation that had ever existed here.
-The 640-cell matrix tours as `alex` and could not reach a sealable thread; neither could a browser
-pass, because signing in as a wallet account needs a wallet. The `ready` branch shipped in a PR whose
-gates were all green and had never once rendered.
+any development database.** Everybody who used to be in one was a guest or a demo persona, so
+`attested` was `server` for all of them, `peers.ts` published none of their devices, and
+`sealabilityOf` answered `no-wallet` for every conversation that had ever existed here. The 640-cell
+matrix could not reach a sealable thread; neither could a browser pass, because signing in as a
+wallet account needs a wallet. The `ready` branch shipped in a PR whose gates were all green and had
+never once rendered.
+
+**The sixth, `dana.w`, deliberately has no device**, because it is the one a person and the matrix
+sign in as — see *The sealing* for why an account you sign into must not already hold a device
+nobody has the keys to.
 
 **The signatures are real and the recipe is shared.** `domains/device/enrol-message.ts` composes the
 bytes for a live enrolment AND for the fixture, so the two cannot drift; `deviceResource` lives in
@@ -998,6 +1006,117 @@ are kept: nobody holds these devices, which is exactly what the other end of a c
 Idempotent about the device as well as the account, because P-256 keys cannot be generated
 deterministically from a seed and the fixture runs on every boot. The guard is "does this account
 already have a device", which is also the rule a real account follows.
+
+## The sealing
+
+Only `kind: 'text'` is sealed, exactly as the wire format says. Everything else in this section is
+the part that had to be decided while writing it rather than before, and three of the decisions
+came out of design audits that found the first draft broken.
+
+**`chat/envelope.ts` is a zero-import module, and both halves compose their strings from it.** The
+separator is `String.fromCharCode(0x1f)` for the same reason `attestation.ts` writes 0x19 that way:
+an invisible control byte in a source file is one an editor or a lint autofix eventually eats, and
+the failure is a signature that verifies against different bytes than it was made over — which
+reads as "everyone's messages are forged" with nothing anywhere naming the cause.
+
+**The minter signs its recipient set, and every recipient checks it.** Without that,
+"the epoch key was wrapped to exactly the members' devices" is a promise from the one party this
+design exists to distrust: the server chooses which wrapped keys a client is shown, so it could
+withhold a device to keep somebody out of their own conversation, or add one of its own and be
+wrapped in beside the real members. `conversation_epochs.recipients` and `.signature` are the
+commitment; `verifyRecipients` in `lib/crypto.ts` is the check. A client computes the set it
+EXPECTS from the devices it verified itself and refuses an epoch signed for anything else.
+
+**`GET /chat/:id/signers` is a second device read, and revoked devices are IN it.** The recipient
+list must exclude a device somebody signed out — that is what revocation is for. The signer list
+must not: a device that minted an epoch in March and was revoked in April still signed it, and
+hiding it would make every message of that epoch permanently unverifiable the moment somebody
+replaced a laptop. Devices are never deleted, only revoked, which is what keeps the past checkable.
+
+**`senderAccountId` is the account UUID, and it is the one uuid this product puts on the wire.**
+Everywhere else a person is a handle, because that is the public identifier and the url key — but a
+handle can be renamed, and an identifier that changes is one an old signature stops matching. It
+travels on `conversationMember.accountId` and on the message, and the reader checks that the signing
+device belongs to the account the message names.
+
+**`seq` is per SENDER DEVICE, not per conversation.** A conversation-wide counter would have two
+devices picking the same number whenever two people typed at once, and the loser would refetch and
+retry for nothing: the AAD already binds the device, so a sender's own counter orders that sender's
+own messages and nothing needs coordinating. One honest limit, stated rather than implied away: a
+gap in a sender's sequence is visible, but nothing proves there is no gap — a server that drops the
+LAST message leaves nothing to see. Detecting that needs each message to commit to the one before
+it, which this version does not do.
+
+**Every epoch carries a key check value.** `confirmation` is the epoch key encrypting a fixed
+sentence about itself, bound to the conversation and the epoch. Without it a device holding the
+wrong key finds out at the first message it cannot open, where a failed AES-GCM tag means "wrong
+key" and "corrupt ciphertext" and "edited row" all at once.
+
+**Rotation is client-driven and server-detected.** `GET /chat/:id/epoch` reports `stale` when the
+recipient set no longer equals the eligible set — which is what enrolling a second phone or revoking
+a laptop changes — and the next sender mints the next epoch. The server cannot do it: it holds no
+key it could re-wrap with, which is the point. Two devices noticing the same change both compute
+the same number and the primary key on `(conversation_id, epoch)` arbitrates; losing is ordinary,
+answered 200 with `minted: false`, and the loser usually finds the set it was going to mint already
+minted.
+
+**The server's eligibility test is a SUBSET, deliberately.** Its idea of who can be sealed to is
+"confirmed, unrevoked, attested by a wallet or a contract"; the client's is narrower, because it
+refuses a contract wallet it cannot check without a chain call it does not make. Demanding they
+match would refuse an honest client for being more careful than the server. So the server bounds the
+set from above — nothing unknown gets wrapped in — and the signed commitment bounds it exactly, from
+the only place that can.
+
+**The epoch key is BYTES, and that is forced rather than chosen.** WebCrypto refuses both halves of
+what a key object would need here: a non-extractable AES key cannot be wrapped, and HKDF cannot
+derive from an AES-GCM key at all. So the bytes exist in memory while a message is being sealed or
+opened and are zeroed afterwards, and at rest they live as ciphertext under a per-browser vault key
+that IS a non-extractable `CryptoKey` (`lib/epoch-keys.ts`). `structuredClone` preserving
+non-extractable keys is what makes that possible. The honest claim stays "no key bytes at rest".
+
+**`lib/keyring-db.ts` owns the IndexedDB version, and both key modules go through it.** Two modules
+opening one database with their own idea of the version is a `VersionError` for anyone who ran the
+first one — a keyring that looks empty and a device that appears never to have enrolled.
+
+**A message that cannot be opened is a sentence, never a blank bubble.** `MessageLock` is five
+states and `message-bubble` maps every one of them; `bad-signature` and `tampered` render as alarms
+because they mean the row was EDITED, and the other three mean this browser simply does not hold
+what it needs. The chats LIST opens previews only from keys this browser already holds — thirty rows
+each fetching an epoch is thirty requests per navigation, which is the shape that took the rate
+limiter out during the responsive matrix.
+
+**There is a "this conversation IS sealed" line now, and only because the mechanism is here.** The
+seal notice shipped with a comment saying there deliberately would not be one; that was right while
+nothing was sealed. What it says is what happens: the bodies are ciphertext, the server stores them,
+it cannot open them.
+
+**A thread nobody can be sealed to is a thread nothing can be said in.** There is no unsealed
+message any more, so the composer is disabled when `sealabilityOf` is blocked and the notice above
+it names the person in the way. The browser pass found this: a send that could not seal threw into
+the console instead of being a state.
+
+**`0012-sealing.ts` is a HARD CUTOVER.** Every pre-sealing text row is deleted rather than left
+bodiless, because a text row whose body is gone renders as an empty bubble forever. There is no
+production data; a development database reseeds as empty threads.
+
+**One wallet fixture deliberately has no device.** The seed mints device keys and throws the private
+halves away, which is the honest shape for modelling the far end of a conversation and exactly wrong
+for the near end: a browser signing in as an account that already has a device enrols a SECOND one,
+and every device after the first arrives `pending` — confirmable only by an existing device whose
+keys nobody holds. `dana.w` is the account a person and the QA matrix sign in as, so `enrolled` is
+false for it and the browser's own enrolment is its first.
+
+**`tools/qa/seal-pass.mjs` is the browser pass for this, and it is run by hand.** It injects an
+EIP-1193 provider backed by a hardhat key, signs in through the real chooser, enrols through the
+real button, opens a thread and sends a message — at 390 and 1280, both themes, both languages,
+reading the console each time. It empties the account between cells because every fresh browser
+context has an empty keyring and would otherwise enrol a second, pending device. It found two
+defects on its first run: the console error above, and copy still offering a demo seat.
+
+**The browser specs run the real thing.** `tests/sealed-fixtures.ts` builds a genuinely sealed
+corpus once at module load — a device per fixture person with real P-256 keys and a real wallet
+attestation, one epoch per thread, every line sealed by its own sender — and `fake-api.ts` serves
+it. A fake handing the browser plaintext would be testing a wire format this product does not have.
 
 ## Notifications, and a push that carries nothing
 
@@ -1271,7 +1390,7 @@ interactively must be written back into a script; the scripts stay the source of
 
 | | budget | actual |
 |---|---|---|
-| initial JS, gzip | < 60 KB | 52.4 KB |
+| initial JS, gzip | < 60 KB | 53.8 KB |
 | three.js chunk | lazy | 160.9 KB gzip, after first paint |
 | `/app` shell + page | lazy per route | 12 KB gzip shell, 1–15 KB per page |
 | GLB kit + textures | < 4.5 MB | see `npm run assets` |

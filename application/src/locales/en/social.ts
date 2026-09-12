@@ -232,5 +232,14 @@ export const social = {
     'seal.tampered': 'Something is wrong with {who}\u2019s devices. One did not match the proof published beside it, so there is no telling whose it is. Nothing here is sealed to any of them.',
     'seal.tamperedMine': 'Something is wrong with your devices. One did not match the proof published beside it. Open your devices and sign out anything you do not recognise.',
 
+    'seal.sealed': 'Only the devices in this conversation can read what is typed here. This server stores it and cannot open it.',
+    'chat.sealedOnly': 'That could not be sealed, so it was not sent.',
+
+    'locked.unknownSender': 'Locked. This was signed by a device nobody in this conversation vouches for, so there is no telling who wrote it.',
+    'locked.badSignature': 'Changed after it was signed. This is not what its sender wrote.',
+    'locked.noKey': 'Locked. The key this browser holds does not open this message.',
+    'locked.noEpochKey': 'Locked. This browser was not given the key for this part of the conversation.',
+    'locked.tampered': 'Locked. This arrived without the parts needed to check it.',
+
     'notify.push.unavailable': 'Push is not set up on this server yet.'
 };

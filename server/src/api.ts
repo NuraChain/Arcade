@@ -9,6 +9,11 @@ import {
     answerInput,
     chatMessage,
     conversationDevices,
+    conversationSigners,
+    epochQuery,
+    epochState,
+    mintEpochInput,
+    mintResult,
     conversationList,
     conversationRef,
     cursorQuery,
@@ -580,6 +585,42 @@ export function buildApi(ports: Ports)
             devices: routes.get('/:id/devices', { output: conversationDevices },
                 (context) => ports.chat.devices(context.principal.userId, context.params.id)),
 
+            /**
+             * Every device that could have signed in this conversation, revoked ones included.
+             *
+             * The same membership guard, a different question. `devices` answers who a key may go
+             * to and must hide a revoked device; this answers who could have signed what is on the
+             * screen, and must not - or replacing a laptop would make its own past unverifiable.
+             */
+            signers: routes.get('/:id/signers', { output: conversationSigners },
+                (context) => ports.chat.signers(context.principal.userId, context.params.id)),
+
+            /**
+             * Where the key schedule has got to, for the device this session is signed in on.
+             *
+             * `epoch` names an older one, which is how history is read after a rotation: those
+             * messages are sealed under the epoch that was current when they were written, and this
+             * device can only be handed a key for an epoch it was a recipient of.
+             */
+            epoch: routes.get('/:id/epoch', { output: epochState, query: epochQuery },
+                (context) => ports.chat.epoch(
+                    context.principal.userId,
+                    context.principal.sessionId,
+                    context.params.id,
+                    context.query.epoch
+                )),
+
+            /**
+             * Claims the next epoch.
+             *
+             * Answers 200 whether or not the claim succeeded, because losing is ordinary: two
+             * devices noticing one membership change at the same moment compute the same number
+             * and the primary key arbitrates. The loser refetches, and usually finds the set it
+             * was going to mint already minted.
+             */
+            mint: routes.post('/:id/epoch', { input: mintEpochInput, output: mintResult },
+                (context) => ports.chat.mint(context.principal.userId, context.principal.sessionId, context.params.id, context.input)),
+
             messages: routes.get(
                 '/:id/messages',
                 { output: messagePage, query: cursorQuery },
@@ -589,7 +630,12 @@ export function buildApi(ports: Ports)
             send: routes.post(
                 '/:id/messages',
                 { input: sendInput, output: chatMessage },
-                (context) => ports.chat.send(context.principal.userId, context.params.id, context.input.body)
+                (context) => ports.chat.send(
+                    context.principal.userId,
+                    context.principal.sessionId,
+                    context.params.id,
+                    context.input
+                )
             ),
 
             read: routes.post('/:id/read', { output: ack }, async (context) =>

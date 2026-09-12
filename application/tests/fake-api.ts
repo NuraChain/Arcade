@@ -18,6 +18,8 @@ import {
     REQUEST_FIXTURES,
     THREAD_FIXTURES
 } from './fixtures.ts';
+import type { TestDevice } from './keys.ts';
+import { accountIdOf, buildSealedFixtures } from './sealed-fixtures.ts';
 
 export type Refusal = 'challenge-unreachable' | 'bad-signature' | 'wallet-unreachable' | 'guest-taken';
 
@@ -203,6 +205,18 @@ export const server =
     conversationDevices: {} as Record<string, ConversationDevices>,
 
     /**
+     * The epochs this fake has been asked to store, per conversation.
+     *
+     * It holds them exactly as the real server does - a commitment it cannot check and wrapped keys
+     * it cannot open - which is what lets the browser specs run a genuine round trip: seal here,
+     * store here, read back here, and open with the same code the product ships.
+     */
+    epochs: {} as Record<string, FakeEpoch[]>,
+
+    /** Which device this fake is answering as, so `wrapped` is the right one's copy. */
+    sealDevice: null as string | null,
+
+    /**
      * Devices, in memory.
      *
      * This fake does NOT recompute an id from the keys. That rule belongs to the real server and
@@ -309,6 +323,8 @@ export const server =
         server.notifications = [];
         server.notifySeq = 0;
         server.conversationDevices = {};
+        server.epochs = {};
+        server.sealDevice = null;
         server.devices = [];
         server.currentDevice = null;
         server.refuseEnrol = null;
@@ -339,10 +355,57 @@ export const server =
  * a name, a hue and an age gate to be. The minor is here because the privacy rules turn on it.
  */
 const FIXTURE_ACCOUNTS: Record<string, Account> = {
-    alex: { id: 'u-alex', handle: 'alex', displayName: 'Alex Morgan', bio: '', hue: 32, kind: 'guest', isMinor: false },
-    'sara.k': { id: 'u-sara', handle: 'sara.k', displayName: 'Sara Kamali', bio: '', hue: 340, kind: 'guest', isMinor: false },
-    kian16: { id: 'u-kian', handle: 'kian16', displayName: 'Kian Nazari', bio: '', hue: 200, kind: 'guest', isMinor: true }
+    alex: { id: accountIdOf('alex'), handle: 'alex', displayName: 'Alex Morgan', bio: '', hue: 32, kind: 'wallet', isMinor: false },
+    'sara.k': { id: accountIdOf('sara.k'), handle: 'sara.k', displayName: 'Sara Kamali', bio: '', hue: 340, kind: 'wallet', isMinor: false },
+    kian16: { id: accountIdOf('kian16'), handle: 'kian16', displayName: 'Kian Nazari', bio: '', hue: 200, kind: 'wallet', isMinor: true }
 };
+
+interface FakeEpoch
+{
+    epoch: number;
+    mintedBy: string;
+    recipients: string;
+    signature: string;
+    confirmation: string;
+    keys: Record<string, { ephemeralKey: string; wrapped: string }>;
+}
+
+interface FakeMint
+{
+    epoch: number;
+    mintedBy: string;
+    recipients: string[];
+    signature: string;
+    confirmation: string;
+    keys: { deviceId: string; ephemeralKey: string; wrapped: string }[];
+}
+
+interface FakeSend
+{
+    id: string;
+    epoch: number;
+    seq: number;
+    iv: string;
+    body: string;
+    senderDeviceId: string;
+    signature: string;
+    clientAt: string;
+}
+
+/**
+ * The sealed fixture corpus, built once.
+ *
+ * Top-level await, so every spec that imports this fake gets a server whose threads are sealed the
+ * way the real one's are. It costs a few milliseconds of elliptic curve per test FILE and it is
+ * what stops the entire browser suite testing a wire format the product does not have.
+ */
+const sealed = await buildSealedFixtures();
+
+/** The device a fixture person holds, with real keys. `setup.ts` installs it as the key store. */
+export function fixtureDevice(handle: string): TestDevice | null
+{
+    return sealed.devices.get(handle) ?? null;
+}
 
 let counter = 0;
 
@@ -358,8 +421,9 @@ function loadFixtures(): void
     counter = 0;
     server.conversations = [];
     server.messages = [];
-
-    const at = (minutesAgo: number): string => new Date(1_700_000_000_000 - minutesAgo * 60_000).toISOString();
+    server.conversationDevices = {};
+    server.epochs = {};
+    server.sealDevice = sealed.devices.get(server.me)?.id ?? null;
 
     for (const thread of THREAD_FIXTURES)
     {
@@ -368,19 +432,11 @@ function loadFixtures(): void
             continue;
         }
 
-        for (const message of thread.messages)
-        {
-            counter += 1;
-            server.messages.push({
-                id: `m-${ counter }`,
-                conversationId: thread.slug,
-                kind: message.kind ?? 'text',
-                from: message.from,
-                at: at(message.minutesAgo),
-                ...(message.body === undefined ? {} : { body: message.body }),
-                ...(message.payload === undefined ? {} : { payload: message.payload })
-            });
-        }
+        server.messages.push(...(sealed.messages[thread.slug] ?? []).map((one) => ({ ...one })));
+        server.conversationDevices[thread.slug] = sealed.members[thread.slug];
+        server.epochs[thread.slug] = (sealed.epochs[thread.slug] ?? []).map((one) => ({ ...one }));
+
+        counter = server.messages.length;
 
         const mine = server.messages.filter((one) => one.conversationId === thread.slug);
         const last = mine[mine.length - 1];
@@ -521,6 +577,102 @@ export const client =
             return server.conversationDevices[params.id] ?? { members: [] };
         },
 
+        /**
+         * Who could have signed here.
+         *
+         * Derived from the member device lists rather than kept separately, because every device a
+         * spec arranges is a current one - revoked history is a DATABASE claim and belongs to
+         * `peer-devices.db.spec.ts` against a real Postgres, not to a fake that would only agree
+         * with itself about it.
+         */
+        async signers({ params }: { params: { id: string } })
+        {
+            server.calls.push('chat.signers');
+
+            const answer = server.conversationDevices[params.id] ?? { members: [] };
+
+            return {
+                signers: answer.members.flatMap((member) => member.devices.map((device) => ({
+                    accountId: member.accountId,
+                    handle: member.handle,
+                    id: device.id,
+                    exchangeKey: device.exchangeKey,
+                    signingKey: device.signingKey,
+                    revoked: false,
+                    attested: device.attested,
+                    address: device.address,
+                    message: device.message,
+                    signature: device.signature
+                })))
+            };
+        },
+
+        async epoch({ params, query }: { params: { id: string }; query: { epoch?: string } })
+        {
+            server.calls.push('chat.epoch');
+
+            const held = server.epochs[params.id] ?? [];
+            const wanted = query.epoch === undefined ? null : Number(query.epoch);
+
+            const row = wanted === null
+                ? held[held.length - 1]
+                : held.find((one) => one.epoch === wanted);
+
+            const eligible = (server.conversationDevices[params.id] ?? { members: [] })
+                .members.flatMap((member) => member.devices.map((device) => device.id)).sort();
+
+            if (row === undefined)
+            {
+                return { nextSeq: 1, eligible, stale: eligible.length > 0 };
+            }
+
+            const wrap = server.sealDevice === null ? undefined : row.keys[server.sealDevice];
+
+            const nextSeq = server.messages.filter((one) =>
+                one.conversationId === params.id
+                && one.epoch === row.epoch
+                && one.senderDeviceId === server.sealDevice).length + 1;
+
+            return {
+                epoch: row.epoch,
+                mintedBy: row.mintedBy,
+                recipients: row.recipients,
+                signature: row.signature,
+                confirmation: row.confirmation,
+                ...(wrap === undefined ? {} : { wrapped: wrap }),
+                nextSeq,
+                eligible,
+                stale: wanted === null && row.recipients !== eligible.join(',')
+            };
+        },
+
+        async mint({ params, input }: { params: { id: string }; input: FakeMint })
+        {
+            server.calls.push('chat.mint');
+
+            const held = server.epochs[params.id] ?? [];
+
+            if (held.some((one) => one.epoch === input.epoch))
+            {
+                return { minted: false, epoch: input.epoch };
+            }
+
+            held.push({
+                epoch: input.epoch,
+                mintedBy: input.mintedBy,
+                recipients: [...input.recipients].sort().join(','),
+                signature: input.signature,
+                confirmation: input.confirmation,
+                keys: Object.fromEntries(input.keys.map((key) => [
+                    key.deviceId,
+                    { ephemeralKey: key.ephemeralKey, wrapped: key.wrapped }
+                ]))
+            });
+
+            server.epochs[params.id] = held;
+            return { minted: true, epoch: input.epoch };
+        },
+
         async messages({ params }: { params: { id: string } })
         {
             server.calls.push('chat.messages');
@@ -535,7 +687,7 @@ export const client =
             };
         },
 
-        async send({ params, input }: { params: { id: string }; input: { body: string } })
+        async send({ params, input }: { params: { id: string }; input: FakeSend })
         {
             server.calls.push('chat.send');
             if (server.refuseSend !== null)
@@ -543,13 +695,24 @@ export const client =
                 throw new ApiError(403, 'forbidden', server.refuseSend, undefined);
             }
             counter += 1;
+
+            // The id is the CLIENT's, because it is bound into the AAD - a server-assigned id could
+            // not be. The timestamp is still this server's: `at` is when the row landed, `clientAt`
+            // is what the sender signed, and the two are deliberately different fields.
             const message: ChatMessage = {
-                id: `m-${ counter }`,
+                id: input.id,
                 conversationId: params.id,
                 kind: 'text',
                 from: server.me,
                 body: input.body,
-                at: new Date(1_700_000_000_000 + counter * 1000).toISOString()
+                at: new Date(1_700_000_000_000 + counter * 1000).toISOString(),
+                epoch: input.epoch,
+                seq: input.seq,
+                iv: input.iv,
+                senderDeviceId: input.senderDeviceId,
+                senderAccountId: accountIdOf(server.me),
+                signature: input.signature,
+                clientAt: input.clientAt
             };
             server.messages.push(message);
 

@@ -165,9 +165,20 @@ export default component ChatPage()
         }
     }
 
+    /**
+     * Sends, or says why it could not.
+     *
+     * There is no unsealed message any more, so a thread nobody can be sealed to is a thread
+     * nothing can be said in. The composer is disabled for exactly that reason and the notice above
+     * it names the person in the way - but the keyboard can still reach a disabled control's form,
+     * and a failure that reached the console instead of the screen is what the browser pass found.
+     */
     const send = (): void =>
     {
-        chat.send(id, chat.draft(id));
+        void chat.send(id, chat.draft(id)).catch(() =>
+        {
+            toasts.show({ kind: 'error', text: locale.t('chat.sealedOnly') });
+        });
     };
 
     const openTable = (game: Parameters<typeof lobby.host>[0]): void =>
@@ -293,16 +304,17 @@ export default component ChatPage()
                         </Show>
                     </div>
 
-                    <Show when={ blocked !== null }>
+                    <Show when={ !seal.loading() }>
                         { () =>
                             <div class="px-3 pb-2">
-                                <SealNotice blocked={ blocked! } />
+                                <SealNotice blocked={ blocked } />
                             </div>
                         }
                     </Show>
 
                     <Composer
                         value={ chat.draft(id) }
+                        disabled={ blocked !== null }
                         onInput={ (value) => chat.setDraft(id, value) }
                         onSend={ send }
                         onGame={ openTable }

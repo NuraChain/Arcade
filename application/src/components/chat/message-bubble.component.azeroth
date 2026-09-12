@@ -1,6 +1,6 @@
 import { Link, useNavigate } from 'azerothjs';
 
-import type { Message } from '../../data/chat.ts';
+import type { Message, MessageLock } from '../../data/chat.ts';
 import Icon from '../../icons/icon.component.azeroth';
 import { isLineKey } from '../../lib/lines.ts';
 import { usePeople } from '../../stores/people.store.ts';
@@ -8,8 +8,31 @@ import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { attachHold } from '../../lib/hold.ts';
 import { useToasts } from '../../stores/toasts.store.ts';
+import type { MessageKey } from '../../locales/en.ts';
 import Avatar from '../ui/avatar.component.azeroth';
 import Button from '../ui/button.component.azeroth';
+
+/**
+ * Why a message is not words, as a sentence rather than an empty bubble.
+ *
+ * An exhaustive record over the union, like every other state map in this product, so a way of
+ * failing to open a message that is added later cannot render as nothing.
+ *
+ * Two of these are alarms and three are not, and the difference is real: `bad-signature` and
+ * `tampered` mean the row was EDITED between being written and being read, which is the thing the
+ * whole envelope exists to detect. The rest mean this browser simply does not hold what it needs,
+ * which happens for ordinary reasons - a device that was not a recipient of an older epoch, a
+ * conversation somebody rotated without it.
+ */
+const LOCKED: Record<MessageLock, MessageKey> = {
+    'unknown-sender': 'locked.unknownSender',
+    'bad-signature': 'locked.badSignature',
+    'no-key': 'locked.noKey',
+    'no-epoch-key': 'locked.noEpochKey',
+    tampered: 'locked.tampered'
+};
+
+const ALARMING: MessageLock[] = ['bad-signature', 'tampered'];
 
 export default component MessageBubble(props: { message: Message; me: string; showAuthor: boolean; onHold?: (personId: string) => void })
 {
@@ -53,6 +76,10 @@ export default component MessageBubble(props: { message: Message; me: string; sh
         }
         return isLineKey(line.key) ? locale.t(line.key, line.params) : '';
     })();
+
+    derived locked = props.message.locked ?? null;
+
+    derived alarming = locked !== null && ALARMING.includes(locked);
 
     derived game = props.message.ref?.game === undefined ? null : catalogue.byId(props.message.ref.game);
 
@@ -132,16 +159,34 @@ export default component MessageBubble(props: { message: Message; me: string; sh
                     <Show when={ !mine && props.showAuthor }>
                         { () => <span class="px-1 text-ui-2xs font-semibold text-muted">{ firstName }</span> }
                     </Show>
-                    <span
-                        ref={ (element) => bubble = element }
-                        dir="auto"
-                        class={ [
-                            'rounded-tile px-3 py-2 text-ui-base leading-snug',
-                            mine ? 'bg-accent text-accent-ink' : 'bg-raised text-text'
-                        ].join(' ') }
+                    <Show
+                        when={ locked === null }
+                        fallback={
+                            <span
+                                class={ [
+                                    'flex items-start gap-2 rounded-tile border border-dashed px-3 py-2 text-ui-sm',
+                                    alarming ? 'border-madder/50 bg-madder/10 text-madder' : 'border-line bg-field text-muted'
+                                ].join(' ') }
+                                role={ alarming ? 'alert' : undefined }
+                            >
+                                <Icon name={ alarming ? 'alert' : 'lock' } size={ 15 } class="mt-0.5 shrink-0" />
+                                <span>{ locale.t(LOCKED[locked ?? 'no-key']) }</span>
+                            </span>
+                        }
                     >
-                        { said }
-                    </span>
+                        { () =>
+                            <span
+                                ref={ (element) => bubble = element }
+                                dir="auto"
+                                class={ [
+                                    'rounded-tile px-3 py-2 text-ui-base leading-snug',
+                                    mine ? 'bg-accent text-accent-ink' : 'bg-raised text-text'
+                                ].join(' ') }
+                            >
+                                { said }
+                            </span>
+                        }
+                    </Show>
                     <span class="px-1 text-ui-2xs text-faint">{ locale.relative(props.message.at) }</span>
                 </div>
             </div>

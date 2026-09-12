@@ -331,13 +331,25 @@ describe('chat store', () =>
 
     it('loads itself: no page has to ask for the list or for a thread', async () =>
     {
+        // Settling takes more than one turn now: the list and the thread both OPEN what they read,
+        // and opening a message is elliptic-curve and AES work rather than a field copy. Waiting
+        // for the flag rather than for a fixed tick is what the test meant in the first place -
+        // that nothing had to ask, not that it finished within one macrotask.
+        const settled = async (loading: () => boolean): Promise<void> =>
+        {
+            for (let turn = 0; turn < 40 && loading(); turn += 1)
+            {
+                await new Promise((resolve) => setTimeout(resolve, 0));
+            }
+        };
+
         const chat = useChat();
-        await new Promise((resolve) => setTimeout(resolve, 0));
+        await settled(() => chat.listLoading());
         expect(chat.conversations().length).toBeGreaterThan(0);
         expect(chat.listLoading()).toBe(false);
 
         chat.openThread('c-reza');
-        await new Promise((resolve) => setTimeout(resolve, 0));
+        await settled(() => chat.threadLoading());
         expect(chat.messages().length).toBeGreaterThan(0);
         expect(chat.threadLoading()).toBe(false);
     });

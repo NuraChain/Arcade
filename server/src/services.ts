@@ -1,8 +1,9 @@
-import { NotFoundError } from '@azerothjs/http';
+import { ForbiddenError, NotFoundError } from '@azerothjs/http';
 import type { DataSource } from 'typeorm';
 
 import { createCatalogueService } from './domains/catalogue/service.ts';
 import { createChatService, type ConversationRow, type MessageRow } from './domains/chat/service.ts';
+import { createEpochService } from './domains/chat/epochs.ts';
 import { createPeerDevices, type PeerDeviceRow } from './domains/device/peers.ts';
 import { createDeviceService, type DeviceRow } from './domains/device/service.ts';
 import { createGroupService, type GroupRow } from './domains/group/service.ts';
@@ -171,6 +172,22 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         {
             message.payload = row.payload as ChatMessage['payload'];
         }
+
+        // The envelope travels whole or not at all, which the CHECK constraints already hold: a
+        // recipient rebuilds the AAD from these fields and a partial one verifies against nothing.
+        if (row.epoch !== null && row.seq !== null && row.iv !== null
+            && row.sender_device_id !== null && row.signature !== null && row.client_at !== null
+            && row.sender_account_id !== null)
+        {
+            message.epoch = row.epoch;
+            message.seq = Number(row.seq);
+            message.iv = row.iv;
+            message.senderDeviceId = row.sender_device_id;
+            message.senderAccountId = row.sender_account_id;
+            message.signature = row.signature;
+            message.clientAt = row.client_at.toISOString();
+        }
+
         return message;
     };
 
@@ -231,7 +248,14 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 body: row.last_body,
                 payload: row.last_payload,
                 sender: row.last_from,
-                created_at: row.last_at
+                sender_account_id: row.last_sender_account_id,
+                created_at: row.last_at,
+                epoch: row.last_epoch,
+                seq: row.last_seq,
+                iv: row.last_iv,
+                sender_device_id: row.last_sender_device_id,
+                signature: row.last_signature,
+                client_at: row.last_client_at
             });
         }
         return summary;
@@ -407,6 +431,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
     };
 
     const peers = createPeerDevices(db);
+    const epochs = createEpochService(db);
 
     /**
      * Folds the join back into one entry per member.
@@ -425,7 +450,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             let member = byHandle.get(row.handle);
             if (member === undefined)
             {
-                member = { handle: row.handle, kind: row.kind, devices: [] };
+                member = { accountId: row.account_id, handle: row.handle, kind: row.kind, devices: [] };
                 byHandle.set(row.handle, member);
             }
 
@@ -1125,6 +1150,96 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 return asConversationDevices(await peers.forConversation(conversationId));
             },
 
+            /**
+             * Who could have signed what is in this thread - including devices since revoked.
+             *
+             * The same guard, because it publishes the same class of fact. What it does NOT do is
+             * filter by revocation: a device that signed in March and was signed out in April
+             * still signed it, and a reader who cannot check that signature has a thread whose
+             * provenance evaporated because somebody replaced a laptop.
+             */
+            async signers(me, conversationId)
+            {
+                await chat.mustBeMember(me, conversationId);
+
+                const rows = await peers.signersFor(conversationId);
+
+                return {
+                    signers: rows.map((row) => ({
+                        accountId: row.account_id,
+                        handle: row.handle,
+                        id: row.device_id,
+                        exchangeKey: row.exchange_key,
+                        signingKey: row.signing_key,
+                        revoked: row.revoked,
+                        attested: row.attested,
+                        address: row.attested_address,
+                        message: row.attested_message,
+                        signature: row.attested_signature
+                    }))
+                };
+            },
+
+            async epoch(me, sessionId, conversationId, epoch)
+            {
+                await chat.mustBeMember(me, conversationId);
+
+                const wanted = epoch === undefined ? null : Number(epoch);
+
+                if (wanted !== null && (!Number.isSafeInteger(wanted) || wanted < 1))
+                {
+                    throw new NotFoundError('That epoch does not exist in this conversation.');
+                }
+
+                const state = await epochs.state(conversationId, await device.deviceOfSession(sessionId), wanted);
+
+                return {
+                    ...(state.epoch === null ? {} : {
+                        epoch: state.epoch.epoch,
+                        mintedBy: state.epoch.minted_by,
+                        recipients: state.epoch.recipients,
+                        signature: state.epoch.signature,
+                        confirmation: state.epoch.confirmation
+                    }),
+                    ...(state.wrapped === null ? {} : {
+                        wrapped: { ephemeralKey: state.wrapped.ephemeral_key, wrapped: state.wrapped.wrapped }
+                    }),
+                    nextSeq: state.nextSeq,
+                    eligible: state.eligible,
+                    stale: state.stale
+                };
+            },
+
+            /**
+             * Claims the next epoch for this conversation.
+             *
+             * The minting device has to be the one this session is signed in on, for the same
+             * reason a message has to name its own sender: the commitment is a signature by a
+             * device, and a session speaking for a device it is not on is a claim nobody checked.
+             */
+            async mint(me, sessionId, conversationId, input)
+            {
+                await chat.mustBeMember(me, conversationId);
+
+                const mine = await device.deviceOfSession(sessionId);
+                if (mine === null || mine !== input.mintedBy)
+                {
+                    throw new ForbiddenError('An epoch has to be minted by the device that is asking.');
+                }
+
+                const minted = await epochs.mint(me, conversationId, input);
+
+                if (minted)
+                {
+                    // Everybody in the thread needs to know there is a new key to fetch before
+                    // they can read the next line. The doorbell says the conversation changed;
+                    // the store re-reads the epoch through the route that already exists.
+                    live?.chatChanged(conversationId);
+                }
+
+                return { minted, epoch: input.epoch };
+            },
+
             async messages(me, conversationId, cursor)
             {
                 const page = await chat.messages(me, conversationId, decodeCursor(cursor));
@@ -1138,9 +1253,11 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 };
             },
 
-            async send(me, conversationId, body)
+            async send(me, sessionId, conversationId, input)
             {
-                const message = asMessage(await chat.send(me, conversationId, body));
+                const message = asMessage(
+                    await chat.send(me, conversationId, await device.deviceOfSession(sessionId), input)
+                );
 
                 // One notification per conversation, counting up. Twelve messages while somebody
                 // was away is one row saying twelve, not twelve rows to swipe through - and the

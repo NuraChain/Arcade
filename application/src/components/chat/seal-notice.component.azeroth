@@ -34,40 +34,54 @@ const SAYS_MINE: Record<Blocked, MessageKey> = {
 };
 
 /**
- * Why the messages in this thread are not sealed.
+ * Whether the messages in this thread are sealed, and when they are not, why.
  *
- * It appears only when something stands in the way, and it names the person it is about, because
- * "sara.k is signed in without a wallet" is something somebody can act on and "this conversation
- * cannot be encrypted" is not.
+ * The negative case names the person it is about, because "sara.k is signed in without a wallet"
+ * is something somebody can act on and "this conversation cannot be encrypted" is not.
  *
- * There is deliberately no matching "this conversation IS sealed" banner. Nothing is sealed yet, so
- * that sentence would be false today - and a padlock that appears before the mechanism does is
- * exactly the kind of claim this codebase deletes. The positive case arrives with the sealing.
+ * The POSITIVE case exists now, and only because the mechanism does. This component shipped with a
+ * comment saying there would deliberately be no "this conversation IS sealed" line, because a
+ * padlock ahead of its mechanism is a claim rather than a fact - and at the time nothing was
+ * sealed. What it says now is what actually happens: the bodies are ciphertext, the server stores
+ * them, and it cannot open them. It is a quiet line rather than a badge, because the interesting
+ * state is still the one where sealing is NOT possible.
  *
  * `tampered` is the one that is not a shrug. Everything else here says a proof is ABSENT; that one
  * says a proof was present and did not check out, which means the device list this browser was
  * handed is not a truthful statement about who is in the conversation.
  */
-export default component SealNotice(props: { blocked: MemberSeal })
+export default component SealNotice(props: { blocked: MemberSeal | null })
 {
     const locale = useLocale();
 
-    derived state = props.blocked.state as Blocked;
+    derived state = (props.blocked?.state ?? 'ready') as Blocked;
 
-    derived alarm = state === 'tampered';
+    derived alarm = props.blocked !== null && state === 'tampered';
 
-    <p
-        class={ [
-            'flex items-start gap-2 rounded-tile border px-3 py-2 text-ui-sm',
-            alarm ? 'border-madder/40 bg-madder/10 text-madder' : 'border-line bg-field text-muted'
-        ].join(' ') }
-        role={ alarm ? 'alert' : undefined }
+    <Show
+        when={ props.blocked !== null }
+        fallback={
+            <p class="flex items-start gap-2 px-3 py-1.5 text-ui-xs text-faint">
+                <Icon name="lock" size={ 14 } class="mt-0.5 shrink-0" />
+                <span>{ locale.t('seal.sealed') }</span>
+            </p>
+        }
     >
-        <Icon name={ ICON[state] } size={ 16 } class="mt-0.5 shrink-0" />
-        <span>
-            { props.blocked.isMe
-                ? locale.t(SAYS_MINE[state])
-                : locale.t(SAYS[state], { who: props.blocked.handle }) }
-        </span>
-    </p>
+        { () =>
+            <p
+                class={ [
+                    'flex items-start gap-2 rounded-tile border px-3 py-2 text-ui-sm',
+                    alarm ? 'border-madder/40 bg-madder/10 text-madder' : 'border-line bg-field text-muted'
+                ].join(' ') }
+                role={ alarm ? 'alert' : undefined }
+            >
+                <Icon name={ ICON[state] } size={ 16 } class="mt-0.5 shrink-0" />
+                <span>
+                    { props.blocked?.isMe === true
+                        ? locale.t(SAYS_MINE[state])
+                        : locale.t(SAYS[state], { who: props.blocked?.handle ?? '' }) }
+                </span>
+            </p>
+        }
+    </Show>
 }

@@ -1,4 +1,4 @@
-import { ForbiddenError, NotFoundError } from '@azerothjs/http';
+import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '@azerothjs/http';
 import type { DataSource } from 'typeorm';
 
 import { firstRow, rowsOf } from '../../lib/rows.ts';
@@ -24,7 +24,14 @@ export interface ConversationRow
     last_body: string | null;
     last_payload: Record<string, unknown> | null;
     last_from: string | null;
+    last_sender_account_id: string | null;
     last_at: Date | null;
+    last_epoch: number | null;
+    last_seq: string | null;
+    last_iv: string | null;
+    last_sender_device_id: string | null;
+    last_signature: string | null;
+    last_client_at: Date | null;
 }
 
 export interface MessageRow
@@ -35,7 +42,29 @@ export interface MessageRow
     body: string | null;
     payload: Record<string, unknown> | null;
     sender: string | null;
+    sender_account_id: string | null;
     created_at: Date;
+
+    /** The envelope. Every field together on a sealed message, every field null on a line. */
+    epoch: number | null;
+    seq: string | null;
+    iv: string | null;
+    sender_device_id: string | null;
+    signature: string | null;
+    client_at: Date | null;
+}
+
+/** What a client states when it sends something sealed. */
+export interface SealedInput
+{
+    id: string;
+    epoch: number;
+    seq: number;
+    iv: string;
+    body: string;
+    senderDeviceId: string;
+    signature: string;
+    clientAt: string;
 }
 
 /** How many messages one page of history carries. */
@@ -185,11 +214,23 @@ export function createChatService(db: DataSource, social: SocialService)
                         last.body                                                        as last_body,
                         last.payload                                                     as last_payload,
                         last.sender                                                      as last_from,
-                        last.created_at                                                  as last_at
+                        last.sender_account_id                                           as last_sender_account_id,
+                        last.created_at                                                  as last_at,
+                        last.epoch                                                       as last_epoch,
+                        last.seq                                                         as last_seq,
+                        last.iv                                                          as last_iv,
+                        last.sender_device_id                                            as last_sender_device_id,
+                        last.signature                                                   as last_signature,
+                        last.client_at                                                   as last_client_at
                  from conversation_members m
                  join conversations c on c.id = m.conversation_id
                  left join lateral (
-                     select x.id, x.kind, x.body, x.payload, x.created_at, su.handle as sender
+                     -- The whole envelope, not only the ciphertext: the list renders a preview of
+                     -- the last message, and under the sealing that preview is something only this
+                     -- browser can produce. A row without its AAD is a row it must refuse to open.
+                     select x.id, x.kind, x.body, x.payload, x.created_at, su.handle as sender,
+                            x.sender_id as sender_account_id,
+                            x.epoch, x.seq, x.iv, x.sender_device_id, x.signature, x.client_at
                      from messages x
                      left join users su on su.id = x.sender_id
                      where x.conversation_id = c.id
@@ -223,7 +264,8 @@ export function createChatService(db: DataSource, social: SocialService)
 
             const rows = await db.query(
                 `select x.id, x.conversation_id, x.kind, x.body, x.payload, x.created_at,
-                        su.handle as sender
+                        su.handle as sender, x.sender_id as sender_account_id,
+                        x.epoch, x.seq, x.iv, x.sender_device_id, x.signature, x.client_at
                  from messages x
                  left join users su on su.id = x.sender_id
                  where x.conversation_id = $1
@@ -239,20 +281,61 @@ export function createChatService(db: DataSource, social: SocialService)
         },
 
         /**
-         * Says something, if the policy allows it.
+         * Stores something sealed, if the policy allows it.
          *
          * A direct conversation asks `mayMessage` about the OTHER member on every send, not only
          * when the thread was opened: somebody can turn strangers off, or block you, while a
          * thread you already have open is sitting there.
+         *
+         * What this does NOT do is check the signature. The only thing that would prove is that
+         * the client which sent the message could also make it, which was never in question, and
+         * the recipient has to verify for itself regardless - a server that vouched for a
+         * signature would be a server the recipient was trusting about the one fact it must not.
+         *
+         * The device is the SESSION's, resolved by the caller, and the envelope has to name it. A
+         * message claiming to come from another of the account's devices is refused rather than
+         * stored: a device signs its own words, and accepting one device's word about another's is
+         * the shape of every re-attribution the AAD exists to bind.
          */
-        async send(me: string, conversationId: string, body: string): Promise<MessageRow>
+        async send(me: string, conversationId: string, deviceId: string | null, input: SealedInput): Promise<MessageRow>
         {
             await mustBeMember(me, conversationId);
 
-            const clean = body.trim();
+            if (deviceId === null)
+            {
+                throw new ForbiddenError('This browser has no device enrolled, so it cannot seal anything.');
+            }
+
+            if (deviceId !== input.senderDeviceId)
+            {
+                throw new ForbiddenError('A message has to name the device that is sending it.');
+            }
+
+            const clean = input.body.trim();
             if (clean === '')
             {
-                throw new ForbiddenError('A message needs some words.');
+                throw new BadRequestError('A message needs a body.');
+            }
+
+            if (!Number.isSafeInteger(input.seq) || input.seq < 1)
+            {
+                throw new BadRequestError('A message needs a sequence number.');
+            }
+
+            const clientAt = new Date(input.clientAt);
+            if (Number.isNaN(clientAt.getTime()))
+            {
+                throw new BadRequestError('A message needs the time its sender wrote it.');
+            }
+
+            const known = await db.query(
+                'select 1 as ok from conversation_epochs where conversation_id = $1 and epoch = $2',
+                [conversationId, input.epoch]
+            );
+
+            if (firstRow<{ ok: number }>(known) === null)
+            {
+                throw new NotFoundError('That epoch has not been minted in this conversation.');
             }
 
             const others = await db.query(
@@ -278,14 +361,43 @@ export function createChatService(db: DataSource, social: SocialService)
                 }
             }
 
-            const inserted = await db.query(
-                `insert into messages (conversation_id, sender_id, kind, body)
-                 values ($1, $2, 'text', $3)
-                 returning id, conversation_id, kind, body, payload, created_at`,
-                [conversationId, me, clean.slice(0, 4000)]
-            );
+            let inserted;
 
-            const message = rowsOf<Omit<MessageRow, 'sender'>>(inserted)[0];
+            try
+            {
+                inserted = await db.query(
+                    `insert into messages
+                         (id, conversation_id, sender_id, kind, body, epoch, seq, iv, sender_device_id, signature, client_at)
+                     values ($1, $2, $3, 'text', $4, $5, $6, $7, $8, $9, $10)
+                     returning id, conversation_id, kind, body, payload, created_at,
+                               epoch, seq, iv, sender_device_id, signature, client_at`,
+                    [
+                        input.id,
+                        conversationId,
+                        me,
+                        clean.slice(0, 8000),
+                        input.epoch,
+                        input.seq,
+                        input.iv,
+                        input.senderDeviceId,
+                        input.signature,
+                        clientAt
+                    ]
+                );
+            }
+            catch (error)
+            {
+                // Either this device reused a number inside the epoch or it reused a message id.
+                // Both mean the same thing to the sender - the counter it is working from is stale
+                // - and both are recoverable by reading the epoch again and resending once.
+                if ((error as { code?: string }).code === '23505')
+                {
+                    throw new ConflictError('That message number has already been used. Read the epoch again and resend.');
+                }
+                throw error;
+            }
+
+            const message = rowsOf<Omit<MessageRow, 'sender' | 'sender_account_id'>>(inserted)[0];
 
             // Saying something is reading it. Without this the sender's own line comes back as
             // unread to them on the next list.
@@ -295,7 +407,11 @@ export function createChatService(db: DataSource, social: SocialService)
             );
 
             const who = await db.query('select handle from users where id = $1', [me]);
-            return { ...message, sender: firstRow<{ handle: string }>(who)?.handle ?? null };
+            return {
+                ...message,
+                sender: firstRow<{ handle: string }>(who)?.handle ?? null,
+                sender_account_id: me
+            };
         },
 
         /** A server-authored line: `{ key, params }`, never prose. */
@@ -304,17 +420,22 @@ export function createChatService(db: DataSource, social: SocialService)
             const inserted = await db.query(
                 `insert into messages (conversation_id, sender_id, kind, payload)
                  values ($1, $2, $3, $4)
-                 returning id, conversation_id, kind, body, payload, created_at`,
+                 returning id, conversation_id, kind, body, payload, created_at,
+                           epoch, seq, iv, sender_device_id, signature, client_at`,
                 [conversationId, senderId, kind, JSON.stringify(payload)]
             );
-            const message = rowsOf<Omit<MessageRow, 'sender'>>(inserted)[0];
+            const message = rowsOf<Omit<MessageRow, 'sender' | 'sender_account_id'>>(inserted)[0];
 
             if (senderId === null)
             {
-                return { ...message, sender: null };
+                return { ...message, sender: null, sender_account_id: null };
             }
             const who = await db.query('select handle from users where id = $1', [senderId]);
-            return { ...message, sender: firstRow<{ handle: string }>(who)?.handle ?? null };
+            return {
+                ...message,
+                sender: firstRow<{ handle: string }>(who)?.handle ?? null,
+                sender_account_id: senderId
+            };
         },
 
         /** Moves MY watermark forward, never back. */

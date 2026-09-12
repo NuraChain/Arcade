@@ -20,7 +20,7 @@
         "migration:run": "npm run build && typeorm migration:run -d dist/data-source.js",
         "migration:revert": "npm run build && typeorm migration:revert -d dist/data-source.js",
         "migration:show": "npm run build && typeorm migration:show -d dist/data-source.js",
-        "test:db": "vitest run --no-file-parallelism tests/social.db.spec.ts tests/chat.db.spec.ts tests/groups.db.spec.ts tests/seat-race.spec.ts tests/notify.db.spec.ts tests/device.db.spec.ts tests/peer-devices.db.spec.ts",
+        "test:db": "vitest run --no-file-parallelism tests/social.db.spec.ts tests/chat.db.spec.ts tests/groups.db.spec.ts tests/seat-race.spec.ts tests/notify.db.spec.ts tests/device.db.spec.ts tests/peer-devices.db.spec.ts tests/epochs.db.spec.ts",
         "test:ws": "vitest run --config vitest.socket.config.ts"
     },
     "dependencies": {
