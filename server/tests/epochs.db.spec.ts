@@ -338,6 +338,170 @@ describe.skipIf(!active)('the epoch a conversation is sealed under', () =>
         })).rejects.toThrow(/has not been minted/);
     });
 
+    /**
+     * Rotation, and the race the plan calls the riskiest thing in this whole project.
+     *
+     * The failure it warns about is an epoch claimed with `on conflict do nothing`: the loser
+     * believes it minted, seals under a key nobody else holds, and the messages are unreadable
+     * forever - with the symptom appearing days later in somebody else's client. `mint` therefore
+     * lets the 23505 surface and answers `false`, and the client reads the epoch again before it
+     * seals anything. These tests are that promise.
+     */
+    describe('rotation', () =>
+    {
+        it('goes stale when a second device is confirmed, and the new epoch includes it', async () =>
+        {
+            const { left, right, conversationId } = await pair();
+
+            await epochs.mint(left.id, conversationId, mintOf(left.device, [left.device, right.device]));
+            expect((await epochs.state(conversationId, left.device)).stale).toBe(false);
+
+            // A second device of the same account. It arrives pending, so nothing changes until
+            // somebody confirms it - which is the whole point of the confirmation step.
+            const second = await enrol(left.id, alice);
+            expect((await epochs.state(conversationId, left.device)).stale).toBe(false);
+
+            await devices.confirm(left.id, left.device, second);
+
+            const after = await epochs.state(conversationId, left.device);
+            expect(after.stale).toBe(true);
+            expect(after.eligible.sort()).toEqual([left.device, right.device, second].sort());
+
+            expect(await epochs.mint(left.id, conversationId, mintOf(left.device, after.eligible, 2))).toBe(true);
+            expect((await epochs.state(conversationId, second)).wrapped).not.toBeNull();
+        });
+
+        it('a device that lost the race is told so, and the winner epoch is what everybody reads', async () =>
+        {
+            const { left, right, conversationId } = await pair();
+
+            const winner = await epochs.mint(left.id, conversationId, mintOf(left.device, [left.device, right.device]));
+            expect(winner).toBe(true);
+
+            // The loser computed the same next number from the same facts. It must not believe it
+            // minted: everything it sealed under its own key would be unreadable by everybody else.
+            const loser = await epochs.mint(right.id, conversationId, mintOf(right.device, [left.device, right.device]));
+            expect(loser).toBe(false);
+
+            const state = await epochs.state(conversationId, right.device);
+            expect(state.epoch?.minted_by).toBe(left.device);
+            expect(state.wrapped?.wrapped).toBe(`box-${ right.device }`);
+        });
+
+        it('a message sealed under the epoch that lost is refused outright', async () =>
+        {
+            const { left, right, conversationId } = await pair();
+
+            await epochs.mint(left.id, conversationId, mintOf(left.device, [left.device, right.device]));
+            expect(await epochs.mint(right.id, conversationId, mintOf(right.device, [left.device, right.device]))).toBe(false);
+
+            // There is exactly one epoch 1 and the loser did not write it. A message claiming epoch
+            // 2 - the number the loser might have gone on to use - has nothing behind it.
+            await expect(chat.send(right.id, conversationId, right.device, {
+                id: crypto.randomUUID(),
+                epoch: 2,
+                seq: 1,
+                iv: 'nonce',
+                body: 'ciphertext',
+                senderDeviceId: right.device,
+                signature: 'signature',
+                clientAt: new Date().toISOString()
+            })).rejects.toThrow(/has not been minted/);
+        });
+
+        it('keeps the old epoch readable while the new one is in force', async () =>
+        {
+            const { left, right, conversationId } = await pair();
+
+            await epochs.mint(left.id, conversationId, mintOf(left.device, [left.device, right.device]));
+
+            const said = {
+                id: crypto.randomUUID(),
+                epoch: 1,
+                seq: 1,
+                iv: 'nonce',
+                body: 'the first thing',
+                senderDeviceId: left.device,
+                signature: 'signature',
+                clientAt: new Date().toISOString()
+            };
+
+            await chat.send(left.id, conversationId, left.device, said);
+            await epochs.mint(left.id, conversationId, mintOf(left.device, [left.device, right.device], 2));
+
+            // Rotating does not rewrite history. The old epoch, its wrapped keys and the messages
+            // under it are all still there - a reader fetches that epoch by number to open them.
+            const old = await epochs.state(conversationId, right.device, 1);
+            expect(old.epoch?.epoch).toBe(1);
+            expect(old.wrapped).not.toBeNull();
+
+            // And an epoch read by number is never stale: it describes the room as it WAS.
+            expect(old.stale).toBe(false);
+
+            const page = await chat.messages(right.id, conversationId, null);
+            expect(page.messages.map((one) => one.epoch)).toEqual([1]);
+        });
+
+        it('starts the sequence again in a new epoch, because the counter is per epoch', async () =>
+        {
+            const { left, right, conversationId } = await pair();
+
+            await epochs.mint(left.id, conversationId, mintOf(left.device, [left.device, right.device]));
+
+            const envelope = (epoch: number, seqNumber: number) => ({
+                id: crypto.randomUUID(),
+                epoch,
+                seq: seqNumber,
+                iv: 'nonce',
+                body: 'ciphertext',
+                senderDeviceId: left.device,
+                signature: 'signature',
+                clientAt: new Date().toISOString()
+            });
+
+            await chat.send(left.id, conversationId, left.device, envelope(1, 1));
+            await epochs.mint(left.id, conversationId, mintOf(left.device, [left.device, right.device], 2));
+
+            expect((await epochs.state(conversationId, left.device)).nextSeq).toBe(1);
+            await expect(chat.send(left.id, conversationId, left.device, envelope(2, 1))).resolves.toBeDefined();
+        });
+
+        it('a member who leaves stops being eligible, and one who joins cannot read the past', async () =>
+        {
+            const { left, right, conversationId } = await pair();
+            const third = await makeUser(outsider);
+            const theirs = await enrol(third.id, outsider);
+
+            await epochs.mint(left.id, conversationId, mintOf(left.device, [left.device, right.device]));
+
+            await db.query(
+                'insert into conversation_members (conversation_id, user_id) values ($1, $2)',
+                [conversationId, third.id]
+            );
+
+            const joined = await epochs.state(conversationId, theirs);
+            expect(joined.stale).toBe(true);
+            expect(joined.eligible.sort()).toEqual([left.device, right.device, theirs].sort());
+
+            // Joining a room does not hand you what was said before you were in it. There is no
+            // wrapped key for this device in epoch 1 and nothing can make one.
+            expect(joined.wrapped).toBeNull();
+
+            await db.query(
+                'delete from conversation_members where conversation_id = $1 and user_id = $2',
+                [conversationId, right.id]
+            );
+
+            const afterLeaving = await epochs.state(conversationId, left.device);
+            expect(afterLeaving.eligible).not.toContain(right.device);
+
+            await expect(epochs.mint(left.id, conversationId, mintOf(left.device, [left.device, right.device, theirs], 2)))
+                .rejects.toThrow(/cannot seal to/);
+
+            expect(await epochs.mint(left.id, conversationId, mintOf(left.device, [left.device, theirs], 2))).toBe(true);
+        });
+    });
+
     it('will not hold a text message without its envelope, or a line with one', async () =>
     {
         const { left, right, conversationId } = await pair();

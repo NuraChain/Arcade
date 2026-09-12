@@ -177,10 +177,28 @@ export function createChatService(db: DataSource, social: SocialService)
         return rowsOf<{ user_id: string }>(rows).map((row) => row.user_id);
     };
 
+    /**
+     * Every conversation this account is seated in.
+     *
+     * For the key schedule rather than for reading: confirming a device or revoking one changes who
+     * a conversation may be sealed to, and everybody with that thread open has to find out. It is
+     * deliberately unfiltered by blocks - a blocked pair still shares an epoch, and a client that
+     * was not told to re-read would go on sealing to a device that is no longer eligible.
+     */
+    const seatedIn = async (userId: string): Promise<string[]> =>
+    {
+        const rows = await db.query(
+            'select conversation_id from conversation_members where user_id = $1',
+            [userId]
+        );
+        return rowsOf<{ conversation_id: string }>(rows).map((row) => row.conversation_id);
+    };
+
     return {
         membership,
         mustBeMember,
         recipients,
+        seatedIn,
 
         /**
          * Every conversation I am in, each with what the list needs and nothing more.

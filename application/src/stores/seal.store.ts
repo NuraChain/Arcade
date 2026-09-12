@@ -1,9 +1,11 @@
-import { createStore, createResource, type Getter } from 'azerothjs';
+import { createStore, createResource, untrack, type Getter } from 'azerothjs';
 
 import { client } from '../api.ts';
+import { forgetSigners } from '../lib/sealing.ts';
 import { sealabilityOf, type Sealability } from '../lib/seal-state.ts';
 import { useAccount } from './account.store.ts';
 import { useChat } from './chat.store.ts';
+import { useRealtime } from './realtime.store.ts';
 
 export interface SealApi
 {
@@ -12,6 +14,9 @@ export interface SealApi
 
     loading: Getter<boolean>;
     refresh(): Promise<void>;
+
+    /** Subscribes to the doorbell. Idempotent, and stopped by the shell like every other store. */
+    start(): () => void;
 }
 
 /**
@@ -48,7 +53,32 @@ export const useSeal = createStore((): SealApi =>
 
         async refresh()
         {
+            forgetSigners();
             await answer.refetch();
+        },
+
+        /**
+         * Re-reads who can be sealed to when the server says this conversation changed.
+         *
+         * Confirming a device or revoking one moves the recipient set, and the server rings every
+         * room the account is in. Without this the open thread would keep the answer it fetched when
+         * it opened - which is the one that says a revoked laptop is still a recipient.
+         *
+         * The signer cache is dropped with it. It holds devices verified for THIS thread, and a
+         * membership change is exactly when a device that was not in it appears.
+         */
+        start()
+        {
+            return useRealtime().onNudge((scope, id) =>
+            {
+                if (scope !== 'chat' || id === undefined || id !== untrack(chat.openId))
+                {
+                    return;
+                }
+
+                forgetSigners();
+                void answer.refetch();
+            });
         }
     };
 });

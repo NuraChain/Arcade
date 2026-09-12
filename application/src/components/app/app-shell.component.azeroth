@@ -5,6 +5,7 @@ import { setHaptics } from '../../lib/haptics.ts';
 import { routeMeta } from '../../lib/route-meta.ts';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useChat } from '../../stores/chat.store.ts';
+import { useSeal } from '../../stores/seal.store.ts';
 import { useConnection } from '../../stores/connection.store.ts';
 import { useGroups } from '../../stores/groups.store.ts';
 import { useLobby } from '../../stores/lobby.store.ts';
@@ -78,6 +79,7 @@ export default component AppShell(props: { children?: MountNode })
             useGroups().start(),
             useLobby().start(),
             useChat().start(),
+            useSeal().start(),
             useNotifications().start(),
             useWallet().start()
         ];

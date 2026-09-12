@@ -434,6 +434,27 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
     const epochs = createEpochService(db);
 
     /**
+     * Tells every room this account is in that its recipient set has moved.
+     *
+     * A doorbell and nothing more, exactly like the rest of `nura-rt/v1`: the frame says the
+     * conversation changed and each client re-reads it through the route that already exists. There
+     * is no key here to hand anybody - this server holds none - so the only thing it can do about a
+     * membership change is make sure nobody misses it.
+     */
+    const ringRooms = async (userId: string): Promise<void> =>
+    {
+        if (live === undefined)
+        {
+            return;
+        }
+
+        for (const conversationId of await chat.seatedIn(userId))
+        {
+            live.chatChanged(conversationId);
+        }
+    };
+
+    /**
      * Folds the join back into one entry per member.
      *
      * The LEFT JOIN gives one row per (member, device) and one null-device row for a member with
@@ -1103,10 +1124,22 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 return asDevice(await device.enrol(me, sessionId, input));
             },
 
+            /**
+             * Confirming a device makes it ELIGIBLE, which changes every room this account is in.
+             *
+             * Rotation is the client's to perform and the server's to notice, so all this can do is
+             * ring the doorbell: everybody with one of these threads open re-reads the epoch, sees
+             * `stale`, and the next person to say something mints. Without it a peer would go on
+             * sealing to a set that no longer includes this device until something else happened to
+             * make them refetch, and the new device would be unable to read any of it.
+             */
             async confirm(me, sessionId, deviceId)
             {
                 const caller = await device.deviceOfSession(sessionId);
-                return asDevice(await device.confirm(me, caller, deviceId));
+                const row = await device.confirm(me, caller, deviceId);
+
+                await ringRooms(me);
+                return asDevice(row);
             },
 
             async rename(me, deviceId, label)
@@ -1128,6 +1161,10 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 {
                     live?.sessionsRevoked(sessions);
                 }
+
+                // The same doorbell, for the opposite reason: this device must stop being wrapped
+                // to, and nobody else learns that until they read the epoch again.
+                await ringRooms(me);
                 return asDevice(row);
             }
         },

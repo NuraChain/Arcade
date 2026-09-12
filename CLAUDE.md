@@ -1055,12 +1055,32 @@ wrong key finds out at the first message it cannot open, where a failed AES-GCM 
 key" and "corrupt ciphertext" and "edited row" all at once.
 
 **Rotation is client-driven and server-detected.** `GET /chat/:id/epoch` reports `stale` when the
-recipient set no longer equals the eligible set — which is what enrolling a second phone or revoking
-a laptop changes — and the next sender mints the next epoch. The server cannot do it: it holds no
-key it could re-wrap with, which is the point. Two devices noticing the same change both compute
-the same number and the primary key on `(conversation_id, epoch)` arbitrates; losing is ordinary,
-answered 200 with `minted: false`, and the loser usually finds the set it was going to mint already
-minted.
+recipient set no longer equals the eligible set — which is what confirming a device or revoking one
+changes — and the next sender mints the next epoch. The server cannot do it: it holds no key it
+could re-wrap with, which is the point.
+
+**Losing the race is ordinary, and `mint` must never pretend otherwise.** Two devices noticing one
+change both compute the same number and the primary key on `(conversation_id, epoch)` arbitrates;
+the loser is answered 200 with `minted: false` and reads the epoch again, where it usually finds the
+set it was going to mint already minted. Writing that insert as `on conflict do nothing` is the
+single most dangerous thing anybody could do to this codebase: the loser would believe it minted,
+seal under a key nobody else holds, and the messages would be unreadable forever — with the symptom
+appearing days later in somebody else's client. The client re-reads before it seals anything, and
+`epochs.db.spec.ts` owns the whole race.
+
+**Confirming or revoking a device rings every room the account is in.** `ringRooms` in
+`services.ts` walks `chat.seatedIn` and sends the ordinary `chat` doorbell; `seal.store.ts`
+subscribes and re-reads, dropping its signer cache with it. Without that a peer with the thread
+open goes on sealing to the set it fetched when it opened — which is the one that still lists the
+laptop somebody just signed out. It is the only thing this server can do about a membership change,
+and it is enough, because rotation happens at the next thing anybody says.
+
+**Rotating does not rewrite history.** The old epoch, its wrapped keys and the messages under it
+stay exactly where they are, and an epoch fetched BY NUMBER is never `stale` — it describes the room
+as it was. A member who joins gets no wrapped key for the epochs before them and nothing can make
+one; the thread says `no-epoch-key` for those lines, which is true rather than empty. `seq` starts
+again in each epoch, because a counter shared across epochs would make a message's position
+meaningless the first time anybody rotated.
 
 **The server's eligibility test is a SUBSET, deliberately.** Its idea of who can be sealed to is
 "confirmed, unrevoked, attested by a wallet or a contract"; the client's is narrower, because it
