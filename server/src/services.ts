@@ -3,13 +3,14 @@ import type { DataSource } from 'typeorm';
 
 import { createCatalogueService } from './domains/catalogue/service.ts';
 import { createChatService, type ConversationRow, type MessageRow } from './domains/chat/service.ts';
+import { createGroupService, type GroupRow } from './domains/group/service.ts';
 import { createIdentityService } from './domains/identity/service.ts';
 import { maySeeOnline } from './domains/social/policy.ts';
 import { createSocialService, type PersonRow } from './domains/social/service.ts';
 import type { ServerConfig } from './env.ts';
 import { readSessionToken, SESSION_TTL_SECONDS } from './http/auth.ts';
 import type { Ports } from './ports.ts';
-import type { Account, ChatMessage, ConversationSummary, PersonSummary } from './schemas.ts';
+import type { Account, ChatMessage, ConversationSummary, GroupSummary, PersonSummary } from './schemas.ts';
 
 /**
  * Builds the real implementations behind `Ports`.
@@ -39,6 +40,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
 
     const social = createSocialService(db);
     const chat = createChatService(db, social);
+    const group = createGroupService(db, social);
 
     /**
      * The cursor, as one opaque string.
@@ -123,9 +125,9 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         {
             summary.title = row.title;
         }
-        if (row.group_id !== null)
+        if (row.group_slug !== null)
         {
-            summary.groupId = row.group_id;
+            summary.groupId = row.group_slug;
         }
         if (row.table_id !== null)
         {
@@ -144,6 +146,107 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             });
         }
         return summary;
+    };
+
+    const asGroup = (row: GroupRow): GroupSummary =>
+    {
+        const summary: GroupSummary = {
+            id: row.slug,
+            slug: row.slug,
+            name: row.name,
+            blurb: row.blurb,
+            crest: row.crest,
+            hue: row.hue,
+            owner: row.owner ?? '',
+            members: row.members,
+            memberCount: row.member_count,
+            createdAt: row.created_at.toISOString()
+        };
+        if (row.game !== null)
+        {
+            summary.game = row.game;
+        }
+        if (row.role !== null)
+        {
+            summary.role = row.role;
+
+            // Only a member is given the thread. A non-member holding the id could not read it -
+            // `mustBeMember` sees to that - but an id it has no use for is an id it should not
+            // have been sent.
+            if (row.conversation_id !== null)
+            {
+                summary.conversationId = row.conversation_id;
+            }
+        }
+        return summary;
+    };
+
+    const mustSee = async (me: string, slug: string): Promise<GroupRow> =>
+    {
+        const found = await group.bySlug(me, slug);
+        if (found === null)
+        {
+            throw new NotFoundError('No group there.');
+        }
+        return found;
+    };
+
+    const reread = async (me: string, groupId: string): Promise<GroupRow> =>
+    {
+        const found = await group.byId(me, groupId);
+        if (found === null)
+        {
+            throw new NotFoundError('No group there.');
+        }
+        return found;
+    };
+
+    /**
+     * Writes the line that says what just happened, into the group's own thread.
+     *
+     * `{ key, params }`, never prose - which is what lets it follow a language switch, and what
+     * stops a server-authored row from reading like something a person said. An explicit `who`
+     * wins over the actor's handle, because "Sara was removed" names Sara while the row records
+     * that the owner wrote it.
+     *
+     * A failed line does not undo the change it describes: the membership is the fact and the
+     * announcement is the courtesy, so this is deliberately outside the transaction.
+     */
+    const announce = async (
+        row: GroupRow,
+        actor: string | null,
+        what: 'created' | 'joined' | 'left' | 'removed' | 'renamed' | 'owner',
+        params: Record<string, string>
+    ): Promise<void> =>
+    {
+        if (row.conversation_id === null)
+        {
+            return;
+        }
+
+        const named = params.who ?? (actor === null ? undefined : (await social.handlesOf([actor])).get(actor));
+        await chat.post(
+            row.conversation_id,
+            'system',
+            { key: `chat.line.group.${ what }`, params: { ...params, ...(named === undefined ? {} : { who: named }) } },
+            actor
+        );
+    };
+
+    /**
+     * The doorbell for a group that changed.
+     *
+     * Two scopes, not a third: the thread's membership moved (`chat`) and so did everybody's
+     * group list (`social`). A `group` scope would carry no information the other two do not
+     * already carry, and a wire grows for new information rather than for new vocabulary.
+     */
+    const ring = async (row: GroupRow, ...also: string[]): Promise<void> =>
+    {
+        if (row.conversation_id !== null)
+        {
+            live?.chatChanged(row.conversation_id);
+        }
+        live?.socialChanged(...await group.memberIds(row.id), ...also);
     };
 
     const identity = createIdentityService(db, {
@@ -427,6 +530,150 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                     showOnline: row.show_online,
                     isMinor: row.is_minor
                 };
+            }
+        },
+
+        group: {
+            async mine(me)
+            {
+                return (await group.mine(me)).map(asGroup);
+            },
+
+            async discover(me, limit)
+            {
+                return (await group.discover(me, limit)).map(asGroup);
+            },
+
+            async view(me, slug)
+            {
+                const found = await group.bySlug(me, slug);
+                return found === null ? null : asGroup(found);
+            },
+
+            async create(me, input)
+            {
+                const made = await group.create(me, {
+                    name: input.name,
+                    blurb: input.blurb,
+                    crest: input.crest,
+                    hue: input.hue,
+                    game: input.game === '' ? null : input.game
+                });
+
+                await announce(made, me, 'created', {});
+                live?.socialChanged(me);
+                return asGroup(made);
+            },
+
+            async edit(me, slug, input)
+            {
+                const before = await mustSee(me, slug);
+                const after = await group.update(me, before.id, {
+                    name: input.name,
+                    blurb: input.blurb,
+                    crest: input.crest,
+                    game: input.game === '' ? null : input.game
+                });
+
+                if (after.name !== before.name)
+                {
+                    await announce(after, me, 'renamed', { name: after.name });
+                }
+                await ring(after);
+                return asGroup(after);
+            },
+
+            async join(me, slug)
+            {
+                const found = await mustSee(me, slug);
+                const arrived = await group.join(me, found.id);
+
+                const after = await reread(me, found.id);
+                if (arrived)
+                {
+                    await announce(after, me, 'joined', {});
+                    await ring(after);
+                }
+                return asGroup(after);
+            },
+
+            async leave(me, slug)
+            {
+                const found = await mustSee(me, slug);
+                const members = await group.memberIds(found.id);
+
+                // The line goes in BEFORE the seat does, or it is written into a thread this
+                // account has just been removed from - and a conversation it can no longer read.
+                await announce(found, me, 'left', {});
+                const outcome = await group.leave(me, found.id);
+
+                if (outcome.newOwner !== null)
+                {
+                    await announce(found, null, 'owner', { who: outcome.newOwner });
+                }
+                if (!outcome.deleted)
+                {
+                    live?.chatChanged(found.conversation_id ?? '');
+                }
+                live?.socialChanged(...members);
+                return null;
+            },
+
+            async add(me, slug, handle)
+            {
+                const found = await mustSee(me, slug);
+                const other = await social.personByHandle(handle);
+                if (other === null)
+                {
+                    throw new NotFoundError('No account with that name.');
+                }
+
+                const arrived = await group.add(me, found.id, other.id);
+                const after = await reread(me, found.id);
+
+                if (arrived)
+                {
+                    await announce(after, me, 'joined', { who: other.handle });
+                    await ring(after, other.id);
+                }
+                return asGroup(after);
+            },
+
+            async remove(me, slug, handle)
+            {
+                const found = await mustSee(me, slug);
+                const other = await social.personByHandle(handle);
+                if (other === null)
+                {
+                    throw new NotFoundError('No account with that name.');
+                }
+
+                const removed = await group.remove(me, found.id, other.id);
+                const after = await reread(me, found.id);
+
+                if (removed)
+                {
+                    await announce(after, me, 'removed', { who: other.handle });
+                    await ring(after, other.id);
+                }
+                return asGroup(after);
+            },
+
+            async transfer(me, slug, handle)
+            {
+                const found = await mustSee(me, slug);
+                const other = await social.personByHandle(handle);
+                if (other === null)
+                {
+                    throw new NotFoundError('No account with that name.');
+                }
+
+                await group.transfer(me, found.id, other.id);
+                const after = await reread(me, found.id);
+
+                await announce(after, me, 'owner', { who: other.handle });
+                await ring(after);
+                return asGroup(after);
             }
         },
 

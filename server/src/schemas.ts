@@ -275,6 +275,75 @@ export const privacyInput = object({
     showOnline: boolean()
 });
 
+/* ------------------------------------------------------------------------ groups */
+
+export const groupRole = enumOf(['owner', 'member']);
+
+export type GroupRole = Infer<typeof groupRole>;
+
+/**
+ * A group, as everything that renders one needs it.
+ *
+ * `id` is the SLUG. Groups follow people here: the wire names a group by the thing the url
+ * carries and a person can type, and the server keys on uuid internally. One identifier at the
+ * edge means a link, a route parameter and an api call are all the same string.
+ *
+ * `members` omits anyone this viewer has blocked, which is why `memberCount` is separate: the
+ * list is who you can see, the count is how many are actually in the room.
+ */
+export const groupSummary = object({
+    id: string(),
+    slug: string(),
+    name: string(),
+    blurb: string(),
+    crest: string(),
+    hue: number(),
+    game: string().optional(),
+
+    /** The owner's handle. */
+    owner: string(),
+
+    /** Absent when this viewer is only looking. */
+    role: groupRole.optional(),
+
+    members: array(string()),
+    memberCount: number(),
+
+    /** Absent for a group this viewer is not in - a non-member has no thread to open. */
+    conversationId: string().optional(),
+
+    createdAt: string()
+});
+
+export type GroupSummary = Infer<typeof groupSummary>;
+
+export const groupList = object({ groups: array(groupSummary) });
+
+export const groupCreateInput = object({
+    name: string(),
+    blurb: string(),
+    crest: string(),
+    hue: number(),
+
+    /** Empty means the group is about the people rather than about one game. */
+    game: string()
+});
+
+/**
+ * The whole editable surface, every time.
+ *
+ * A form that submits all of itself needs no tri-state for "leave this alone" versus "clear it",
+ * which is the ambiguity a partial patch would have to encode somewhere. The slug is absent on
+ * purpose: it is claimed once, and a url that moves when somebody edits a name is a url that
+ * breaks every link anyone shared.
+ */
+export const groupEditInput = object({
+    name: string(),
+    blurb: string(),
+    crest: string(),
+    game: string()
+});
+
 /* -------------------------------------------------------------------------- chat */
 
 export const messageKind = enumOf(['text', 'system', 'invite', 'result']);
@@ -290,7 +359,10 @@ export const lineParams = object({
     game: string().optional(),
     winner: string().optional(),
     who: string().optional(),
-    tableId: string().optional()
+    tableId: string().optional(),
+
+    /** A group's name, for the line that says it changed. Free text, rendered as a value. */
+    name: string().optional()
 });
 
 export const line = object({ key: string(), params: lineParams });

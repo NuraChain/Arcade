@@ -9,7 +9,9 @@ export interface ConversationRow
 {
     id: string;
     kind: 'direct' | 'group' | 'game';
-    group_id: string | null;
+
+    /** The group's SLUG, because that is what the wire names a group by. Null for every other kind. */
+    group_slug: string | null;
     table_id: string | null;
     game: string | null;
     title: string | null;
@@ -161,7 +163,8 @@ export function createChatService(db: DataSource, social: SocialService)
         async list(me: string): Promise<ConversationRow[]>
         {
             const rows = await db.query(
-                `select c.id, c.kind, c.group_id, c.table_id, c.game, c.title,
+                `select c.id, c.kind, c.table_id, c.game, c.title,
+                        (select g.slug::text from groups g where g.id = c.group_id)      as group_slug,
                         m.pinned, m.last_read_at,
                         -- The cast is load-bearing. handle is citext, and array_agg over it
                         -- yields citext[], whose OID node-pg does not recognise - so the driver

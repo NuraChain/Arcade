@@ -1,3 +1,5 @@
+import { candidateFor, normalizeName } from '../../lib/naming.ts';
+
 /**
  * Handles: what they may look like, and how one is claimed without a race.
  */
@@ -29,17 +31,8 @@ const RESERVED = new Set([
     'alex', 'sara.k', 'kian16'
 ]);
 
-/**
- * Folds a handle to the form uniqueness is decided on.
- *
- * Lowercase, and Unicode-normalized to NFC so that a name typed with combining marks cannot sit
- * beside the same name composed differently and look like two people. The `citext` column
- * lowercases too; this makes the application agree with it rather than assume.
- */
-export function normalizeHandle(handle: string): string
-{
-    return handle.normalize('NFC').trim().toLowerCase();
-}
+/** Shared with the group slug, which is claimed against its own `citext` index the same way. */
+export const normalizeHandle = normalizeName;
 
 /**
  * Whether a handle is the right SHAPE - length and characters, nothing else.
@@ -109,20 +102,10 @@ export function handleFromAddress(address: string): string
 /**
  * The candidates to try, in order, when claiming `wanted`.
  *
- * A suffix rather than a counter query: `select max(...)` then insert is the race all over again,
- * and a random tail means two simultaneous claims for the same name almost never collide twice.
- * The first candidate is the name as asked for, so an uncontested claim gets exactly it.
+ * No separator before the tail: a handle is typed and read aloud, and `sara01` is one word where
+ * `sara-01` is two. 26 leaves room for the widest tail inside a 32-character column.
  */
 export function candidatesFor(wanted: string, attempt: number, random: () => number): string
 {
-    const base = normalizeHandle(wanted).slice(0, 26);
-    if (attempt === 0)
-    {
-        return base;
-    }
-
-    // Widening tail: a couple of digits first, more if those keep colliding.
-    const width = attempt < 3 ? 2 : 4;
-    const suffix = Math.floor(random() * 10 ** width).toString().padStart(width, '0');
-    return `${ base }${ suffix }`;
+    return candidateFor(wanted, attempt, random, { stem: 26, join: '' });
 }

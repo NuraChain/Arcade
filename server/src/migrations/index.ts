@@ -4,6 +4,7 @@ import { ReferenceCatalogue1789138458214 } from './0001-reference.ts';
 import { Identity1789139000000 } from './0002-identity.ts';
 import { Social1789147000000 } from './0003-social.ts';
 import { Chat1789148500000 } from './0004-chat.ts';
+import { Groups1789160000000 } from './0005-groups.ts';
 
 /**
  * Every migration. Appending is the only correct edit.
@@ -17,5 +18,6 @@ export const migrations: (new () => MigrationInterface)[] = [
     ReferenceCatalogue1789138458214,
     Identity1789139000000,
     Social1789147000000,
-    Chat1789148500000
+    Chat1789148500000,
+    Groups1789160000000
 ];

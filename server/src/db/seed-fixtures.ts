@@ -28,6 +28,28 @@ export interface PersonFixture
     isMinor: boolean;
 }
 
+/**
+ * A group, and the thread that belongs to it.
+ *
+ * `slug` here is the GROUP's slug and `thread` names the conversation fixture it owns, so the
+ * two are linked by the seed rather than by a coincidence of ordering. The owner is the first
+ * member: `group_members_single_owner` means there is exactly one, and stating it here rather
+ * than inferring it keeps the fixture honest about which.
+ */
+export interface GroupFixture
+{
+    slug: string;
+    name: string;
+    blurb: string;
+    crest: string;
+    hue: number;
+    game: string | null;
+    owner: string;
+    members: string[];
+    thread: string;
+    ageDays: number;
+}
+
 export interface ThreadFixture
 {
     slug: string;
@@ -108,6 +130,76 @@ export const REQUEST_FIXTURES: { from: string; to: string; minutesAgo: number }[
     { from: 'alex', to: 'maya.c', minutesAgo: 900 },
     { from: 'arash', to: 'sara.k', minutesAgo: 80 },
     { from: 'peyman', to: 'kian16', minutesAgo: 200 }
+];
+
+/**
+ * Five groups, one per group conversation.
+ *
+ * Written in ONE language each, like the threads and for the same reason: a group somebody made
+ * has a name they typed, not a pair of translations. The bilingual names in the mock were a
+ * fixture convenience the wire format does not have.
+ */
+export const GROUP_FIXTURES: GroupFixture[] = [
+    {
+        slug: 'friday-night-crew',
+        name: 'Friday Night Crew',
+        blurb: 'Hokm at nine, tea at ten, arguments until midnight.',
+        crest: 'crest-crown',
+        hue: 45,
+        game: 'hokm',
+        owner: 'babak.r',
+        members: ['babak.r', 'sara.k', 'leila.a', 'mahsa', 'mina', 'alex'],
+        thread: 'c-friday',
+        ageDays: 140
+    },
+    {
+        slug: 'balcony-backgammon',
+        name: 'Balcony Backgammon',
+        blurb: 'Two boards, one balcony, no doubling before noon.',
+        crest: 'crest-cup',
+        hue: 25,
+        game: 'backgammon',
+        owner: 'reza.t',
+        members: ['alex', 'reza.t', 'parisa', 'farhad', 'dariush'],
+        thread: 'c-balcony',
+        ageDays: 88
+    },
+    {
+        slug: 'lunch-ludo',
+        name: 'Lunch Ludo',
+        blurb: 'Twenty minutes, four colours, back to work.',
+        crest: 'crest-castle',
+        hue: 265,
+        game: 'ludo',
+        owner: 'roya.m',
+        members: ['roya.m', 'yas', 'hamed.z', 'tara.y', 'kian16'],
+        thread: 'c-lunch',
+        ageDays: 51
+    },
+    {
+        slug: 'midnight-table',
+        name: 'Midnight Table',
+        blurb: 'Play-money poker for people who should be asleep.',
+        crest: 'crest-moon',
+        hue: 220,
+        game: 'poker',
+        owner: 'omid.j',
+        members: ['nima.f', 'omid.j', 'nilou', 'sina.g', 'alex'],
+        thread: 'c-midnight',
+        ageDays: 33
+    },
+    {
+        slug: 'newcomers-table',
+        name: 'Newcomers’ Table',
+        blurb: 'Learn Hokm without anyone sighing.',
+        crest: 'crest-sprout',
+        hue: 150,
+        game: null,
+        owner: 'leila.a',
+        members: ['elham.b', 'shirin', 'maya.c', 'leila.a'],
+        thread: 'c-newcomers',
+        ageDays: 12
+    }
 ];
 
 export const THREAD_FIXTURES: ThreadFixture[] = [
@@ -321,6 +413,45 @@ export async function seedFixtures(db: DataSource): Promise<void>
             );
         }
 
+        // Groups first: a group thread carries its group's id, so the row has to exist before
+        // the conversation that points at it.
+        const groupIdOf = new Map<string, string>();
+
+        for (const group of GROUP_FIXTURES)
+        {
+            const members = group.members.map((handle) => idOf.get(handle)).filter((id): id is string => id !== undefined);
+            const owner = idOf.get(group.owner);
+            if (owner === undefined || members.length !== group.members.length)
+            {
+                continue;
+            }
+
+            await tx.query(
+                `insert into groups (slug, name, blurb, crest, hue, game, created_by, created_at)
+                 values ($1, $2, $3, $4, $5, $6, $7, now() - ($8 || ' days')::interval)
+                 on conflict (slug) do nothing`,
+                [group.slug, group.name, group.blurb, group.crest, group.hue, group.game, owner, group.ageDays]
+            );
+
+            const found = await tx.query('select id from groups where slug = $1', [group.slug]);
+            const groupId = firstRow<{ id: string }>(found)?.id;
+            if (groupId === undefined)
+            {
+                continue;
+            }
+            groupIdOf.set(group.thread, groupId);
+
+            for (const member of members)
+            {
+                await tx.query(
+                    `insert into group_members (group_id, user_id, role)
+                     values ($1, $2, $3)
+                     on conflict (group_id, user_id) do nothing`,
+                    [groupId, member, member === owner ? 'owner' : 'member']
+                );
+            }
+        }
+
         for (const thread of THREAD_FIXTURES)
         {
             const members = thread.members.map((handle) => idOf.get(handle)).filter((id): id is string => id !== undefined);
@@ -336,16 +467,34 @@ export async function seedFixtures(db: DataSource): Promise<void>
                 ? await tx.query(`select id from conversations where kind = 'direct' and pair_key = $1`, [pairKey])
                 : await tx.query(`select id from conversations where kind <> 'direct' and title = $1`, [thread.slug]);
 
-            if (firstRow<{ id: string }>(existing) !== null)
+            const already = firstRow<{ id: string }>(existing);
+            if (already !== null)
             {
+                // Idempotent, but not inert: a thread seeded before groups existed has no group
+                // to point at, and skipping it outright would leave every development database
+                // made before this migration with five groups nobody can open a chat from.
+                const owner = groupIdOf.get(thread.slug);
+                if (owner !== undefined)
+                {
+                    await tx.query(
+                        'update conversations set group_id = $2 where id = $1 and group_id is null',
+                        [already.id, owner]
+                    );
+                }
                 continue;
             }
 
             const created = await tx.query(
-                `insert into conversations (kind, pair_key, game, title)
-                 values ($1, $2, $3, $4)
+                `insert into conversations (kind, pair_key, game, title, group_id)
+                 values ($1, $2, $3, $4, $5)
                  returning id`,
-                [thread.kind, pairKey, thread.game, thread.kind === 'direct' ? null : thread.slug]
+                [
+                    thread.kind,
+                    pairKey,
+                    thread.game,
+                    thread.kind === 'direct' ? null : thread.slug,
+                    groupIdOf.get(thread.slug) ?? null
+                ]
             );
             const conversationId = rowsOf<{ id: string }>(created)[0].id;
 

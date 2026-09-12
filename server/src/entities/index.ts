@@ -5,6 +5,8 @@ import { Conversation } from './conversation.entity.ts';
 import { FriendRequest } from './friend-request.entity.ts';
 import { Friendship } from './friendship.entity.ts';
 import { GameRule } from './game-rule.entity.ts';
+import { GroupMember } from './group-member.entity.ts';
+import { Group } from './group.entity.ts';
 import { Game } from './game.entity.ts';
 import { Message } from './message.entity.ts';
 import { Mute } from './mute.entity.ts';
@@ -16,7 +18,7 @@ import { Wallet } from './wallet.entity.ts';
 
 export {
     Achievement, Block, Conversation, ConversationMember, FriendRequest, Friendship,
-    Game, GameRule, Message, Mute, Report, Session, SiweNonce, User, Wallet
+    Game, GameRule, Group, GroupMember, Message, Mute, Report, Session, SiweNonce, User, Wallet
 };
 
 /**
@@ -33,5 +35,6 @@ export const entities: Function[] = [
     Game, GameRule, Achievement,
     User, Wallet, Session, SiweNonce,
     Friendship, FriendRequest, Block, Mute, Report,
-    Conversation, ConversationMember, Message
+    Conversation, ConversationMember, Message,
+    Group, GroupMember
 ];

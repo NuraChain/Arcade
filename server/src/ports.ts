@@ -10,6 +10,7 @@ import type {
     Privacy,
     ChatMessage,
     ConversationSummary,
+    GroupSummary,
     MessagePage,
     ServerInfo,
     SocialGraph
@@ -112,6 +113,34 @@ export interface SocialPort
     setPrivacy(me: string, wanted: { allowStrangerMessages: boolean; showOnline: boolean }): Promise<Privacy>;
 }
 
+/**
+ * Every group route names its group by SLUG and its people by HANDLE, because that is what the
+ * url carries and what the browser keys by. The uuids stay behind `services.ts`.
+ *
+ * Every write answers with the group as it now stands, so a caller never has to guess what the
+ * server did with what it sent.
+ */
+export interface GroupPort
+{
+    mine(me: string): Promise<GroupSummary[]>;
+    discover(me: string, limit: number): Promise<GroupSummary[]>;
+
+    /** One group, as this viewer may see it. Null when there is no such slug. */
+    view(me: string, slug: string): Promise<GroupSummary | null>;
+
+    create(me: string, input: { name: string; blurb: string; crest: string; hue: number; game: string }): Promise<GroupSummary>;
+    edit(me: string, slug: string, input: { name: string; blurb: string; crest: string; game: string }): Promise<GroupSummary>;
+
+    join(me: string, slug: string): Promise<GroupSummary>;
+
+    /** Returns null when the group went with them: the last member out takes it. */
+    leave(me: string, slug: string): Promise<null>;
+
+    add(me: string, slug: string, handle: string): Promise<GroupSummary>;
+    remove(me: string, slug: string, handle: string): Promise<GroupSummary>;
+    transfer(me: string, slug: string, handle: string): Promise<GroupSummary>;
+}
+
 export interface ChatPort
 {
     list(me: string): Promise<ConversationSummary[]>;
@@ -131,5 +160,6 @@ export interface Ports
     catalogue: CataloguePort;
     identity: IdentityPort;
     social: SocialPort;
+    group: GroupPort;
     chat: ChatPort;
 }

@@ -15,6 +15,10 @@ import {
     challengeInput,
     demoSignIn,
     gameList,
+    groupCreateInput,
+    groupEditInput,
+    groupList,
+    groupSummary,
     guestSignIn,
     handleInput,
     handleResult,
@@ -314,6 +318,67 @@ export function buildApi(ports: Ports)
              */
             setPrivacy: routes.post('/privacy', { input: privacyInput, output: privacy },
                 (context) => ports.social.setPrivacy(context.principal.userId, context.input))
+        })),
+
+        /**
+         * Groups.
+         *
+         * Guarded at the feature, like the rest of the signed-in product. Reads are open to any
+         * signed-in account - a group is discoverable, which is the whole point of the discover
+         * list - and every write is authorised by the caller's membership row.
+         *
+         * Names in and out are slugs and handles. A group this account cannot see answers exactly
+         * as one that does not exist.
+         */
+        groups: feature('/groups', [session], (routes) => ({
+            mine: routes.get('/', { output: groupList }, async (context) => ({
+                groups: await ports.group.mine(context.principal.userId)
+            })),
+
+            discover: routes.get('/discover', { output: groupList }, async (context) => ({
+                groups: await ports.group.discover(context.principal.userId, 24)
+            })),
+
+            create: routes.post('/', { input: groupCreateInput, output: groupSummary },
+                (context) => ports.group.create(context.principal.userId, context.input)),
+
+            view: routes.get('/:slug', { output: groupSummary }, async (context) =>
+            {
+                const group = await ports.group.view(context.principal.userId, context.params.slug);
+                if (group === null)
+                {
+                    throw new NotFoundError('No group there.');
+                }
+                return group;
+            }),
+
+            edit: routes.post('/:slug', { input: groupEditInput, output: groupSummary },
+                (context) => ports.group.edit(context.principal.userId, context.params.slug, context.input)),
+
+            join: routes.post('/:slug/join', { output: groupSummary },
+                (context) => ports.group.join(context.principal.userId, context.params.slug)),
+
+            /**
+             * Leaving answers 204, not the group.
+             *
+             * There may be nothing left to answer with - the last member out takes the group with
+             * them - and a shape that is sometimes a group and sometimes nothing is a shape every
+             * caller has to branch on.
+             */
+            leave: routes.post('/:slug/leave', { output: ack }, async (context) =>
+            {
+                await ports.group.leave(context.principal.userId, context.params.slug);
+                return { ok: true };
+            }),
+
+            add: routes.post('/:slug/members', { input: personRef, output: groupSummary },
+                (context) => ports.group.add(context.principal.userId, context.params.slug, context.input.id)),
+
+            remove: routes.post('/:slug/members/remove', { input: personRef, output: groupSummary },
+                (context) => ports.group.remove(context.principal.userId, context.params.slug, context.input.id)),
+
+            transfer: routes.post('/:slug/owner', { input: personRef, output: groupSummary },
+                (context) => ports.group.transfer(context.principal.userId, context.params.slug, context.input.id))
         })),
 
         /**
