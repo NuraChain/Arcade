@@ -3,6 +3,7 @@ import type { DataSource } from 'typeorm';
 
 import { createCatalogueService } from './domains/catalogue/service.ts';
 import { createChatService, type ConversationRow, type MessageRow } from './domains/chat/service.ts';
+import { createDeviceService, type DeviceRow } from './domains/device/service.ts';
 import { createGroupService, type GroupRow } from './domains/group/service.ts';
 import { createNotifyService, type NotificationRow } from './domains/notify/service.ts';
 import { sendPush, type VapidKeys } from './domains/notify/push.ts';
@@ -17,6 +18,7 @@ import type {
     Account,
     ChatMessage,
     ConversationSummary,
+    Device,
     GroupSummary,
     Notification,
     PersonSummary,
@@ -401,6 +403,32 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         }
         live?.socialChanged(...await table.seatedIds(row.id), ...also);
     };
+
+    const device = createDeviceService(db, {
+        origin: config.origin,
+        chainId: config.chainId,
+        rpcUrl: config.rpcUrl
+    });
+
+    /**
+     * A device as the browser reads it.
+     *
+     * Both public keys go out, because the client re-derives the id from them on every read and a
+     * row it cannot check is a row it has to take on trust. `confirmed` and `revoked` are booleans
+     * rather than the timestamps behind them: nothing renders when a device was confirmed, and a
+     * date on the wire is a date somebody eventually displays in the wrong timezone.
+     */
+    const asDevice = (row: DeviceRow): Device => ({
+        id: row.id,
+        label: row.label,
+        exchangeKey: row.exchange_key,
+        signingKey: row.signing_key,
+        attested: row.attested,
+        confirmed: row.confirmed_at !== null,
+        revoked: row.revoked_at !== null,
+        createdAt: row.created_at.toISOString(),
+        ...(row.last_seen_at === null ? {} : { lastSeenAt: row.last_seen_at.toISOString() })
+    });
 
     const identity = createIdentityService(db, {
         origin: config.origin,
@@ -993,6 +1021,52 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
 
             subscribe: (me, input) => notify.subscribe(me, input),
             unsubscribe: (me, endpoint) => notify.unsubscribe(me, endpoint)
+        },
+
+        device: {
+            async list(me, sessionId)
+            {
+                const [devices, current] = await Promise.all([
+                    device.list(me),
+                    device.deviceOfSession(sessionId)
+                ]);
+                return { devices: devices.map(asDevice), ...(current === null ? {} : { current }) };
+            },
+
+            challenge: (me, deviceId) => device.challenge(me, deviceId),
+
+            async enrol(me, sessionId, input)
+            {
+                return asDevice(await device.enrol(me, sessionId, input));
+            },
+
+            async confirm(me, sessionId, deviceId)
+            {
+                const caller = await device.deviceOfSession(sessionId);
+                return asDevice(await device.confirm(me, caller, deviceId));
+            },
+
+            async rename(me, deviceId, label)
+            {
+                return asDevice(await device.rename(me, deviceId, label));
+            },
+
+            /**
+             * Revoking has to REACH the device, not merely mark it.
+             *
+             * The sessions bound to it are revoked in the same transaction, and their sockets are
+             * closed here - a revoked device holding a live connection is a device that has not
+             * been revoked yet.
+             */
+            async revoke(me, deviceId)
+            {
+                const { device: row, sessions } = await device.revoke(me, deviceId);
+                if (sessions.length > 0)
+                {
+                    live?.sessionsRevoked(sessions);
+                }
+                return asDevice(row);
+            }
         },
 
         chat: {

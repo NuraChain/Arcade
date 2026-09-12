@@ -39,6 +39,16 @@ export class Session
     @Column({ name: 'last_used_at', type: 'timestamptz', nullable: true })
     lastUsedAt!: Date | null;
 
+    /**
+     * The device this session is signed in on, once it has enrolled.
+     *
+     * This is what makes revoking a device real: revocation ends every session that names it, so
+     * the browser is signed out rather than merely losing its badge. Null for a session that has
+     * not enrolled one yet.
+     */
+    @Column({ name: 'device_id', type: 'varchar', length: 22, nullable: true })
+    deviceId!: string | null;
+
     /** For the devices list: "Chrome on Windows, last used an hour ago". Truncated, never parsed. */
     @Column({ name: 'user_agent', type: 'varchar', length: 256, default: '' })
     userAgent!: string;

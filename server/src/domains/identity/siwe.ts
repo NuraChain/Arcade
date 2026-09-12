@@ -21,6 +21,18 @@ export interface ChallengeInput
     nonce: string;
     issuedAt: Date;
     expiresAt: Date;
+
+    /** The one line a wallet shows above the details: what this signature is FOR, in plain words. */
+    statement: string;
+
+    /**
+     * EIP-4361's resource list, which is where a signature is bound to something specific.
+     *
+     * Device enrolment puts `nura:device:<id>` here, so the signature cannot be replayed to
+     * authorise a different device - the id it names is inside the bytes that were signed. Signing
+     * in names no resource, because signing in is about the account rather than about one thing.
+     */
+    resources?: string[];
 }
 
 /**
@@ -33,11 +45,11 @@ export interface ChallengeInput
  */
 export function buildSiweMessage(input: ChallengeInput): string
 {
-    return [
+    const lines = [
         `${ input.domain } wants you to sign in with your Ethereum account:`,
         normalizeAddress(input.address),
         '',
-        'Sign in to Nura Games. This proves the seat is yours. It costs nothing and moves nothing.',
+        input.statement,
         '',
         `URI: ${ input.uri }`,
         'Version: 1',
@@ -45,7 +57,14 @@ export function buildSiweMessage(input: ChallengeInput): string
         `Nonce: ${ input.nonce }`,
         `Issued At: ${ input.issuedAt.toISOString() }`,
         `Expiration Time: ${ input.expiresAt.toISOString() }`
-    ].join('\n');
+    ];
+
+    if (input.resources !== undefined && input.resources.length > 0)
+    {
+        lines.push('Resources:', ...input.resources.map((resource) => `- ${ resource }`));
+    }
+
+    return lines.join('\n');
 }
 
 export interface VerifyInput

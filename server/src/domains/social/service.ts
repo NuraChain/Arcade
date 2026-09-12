@@ -163,8 +163,14 @@ export function createSocialService(db: DataSource)
 
         async mutes(me: string): Promise<{ kind: MuteSubject; id: string }[]>
         {
+            // Ordered, because the settings page renders this list. An unordered SELECT hands
+            // back whatever Postgres finds first, which reshuffles between page loads for no
+            // reason anybody can see - and it made `social.db.spec.ts` fail once a later
+            // migration changed what "first" happened to mean.
             const rows = await db.query(
-                'select subject_kind, subject_id from mutes where user_id = $1',
+                `select subject_kind, subject_id from mutes
+                  where user_id = $1
+                  order by created_at, subject_kind, subject_id`,
                 [me]
             );
             return rowsOf<{ subject_kind: MuteSubject; subject_id: string }>(rows)

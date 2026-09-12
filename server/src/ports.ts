@@ -10,6 +10,9 @@ import type {
     Privacy,
     ChatMessage,
     ConversationSummary,
+    DeviceList,
+    Device,
+    Challenge as DeviceChallenge,
     GroupSummary,
     MessagePage,
     NotificationPage,
@@ -205,6 +208,42 @@ export interface NotifyPort
     unsubscribe(me: string, endpoint: string): Promise<void>;
 }
 
+/**
+ * Devices, which hold keys.
+ *
+ * Nothing here reaches a private key, because there is nowhere on this server one could be put.
+ * A device publishes two public keys and an id that is their hash; everything else is bookkeeping
+ * about who vouched for it and whether it is still allowed to be a device.
+ *
+ * Every route is mine-only. A device belonging to somebody else is not refused differently from
+ * one that does not exist - the WHERE clause is the authorisation, not a check in front of it.
+ */
+export interface DevicePort
+{
+    list(me: string, sessionId: string): Promise<DeviceList>;
+
+    /** The bytes a wallet signs to authorise one device. Refused for an account with no wallet. */
+    challenge(me: string, deviceId: string): Promise<DeviceChallenge>;
+
+    enrol(me: string, sessionId: string, input: {
+        id: string;
+        exchangeKey: string;
+        signingKey: string;
+        label: string;
+        nonce?: string | undefined;
+        signature?: string | undefined;
+        userAgent: string;
+    }): Promise<Device>;
+
+    /** One of the account's confirmed devices vouching for another. Never for itself. */
+    confirm(me: string, sessionId: string, deviceId: string): Promise<Device>;
+
+    rename(me: string, deviceId: string, label: string): Promise<Device>;
+
+    /** Signs the device out, burns its id for good, and closes whatever it had open. */
+    revoke(me: string, deviceId: string): Promise<Device>;
+}
+
 export interface ChatPort
 {
     list(me: string): Promise<ConversationSummary[]>;
@@ -227,5 +266,6 @@ export interface Ports
     group: GroupPort;
     table: TablePort;
     notify: NotifyPort;
+    device: DevicePort;
     chat: ChatPort;
 }

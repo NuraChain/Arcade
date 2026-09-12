@@ -14,6 +14,11 @@ import {
     challenge,
     challengeInput,
     demoSignIn,
+    device,
+    deviceLabelInput,
+    deviceList,
+    deviceRef,
+    enrolInput,
     gameList,
     groupCreateInput,
     groupEditInput,
@@ -526,6 +531,47 @@ export function buildApi(ports: Ports)
                 await ports.notify.unsubscribe(context.principal.userId, context.input.endpoint);
                 return { ok: true };
             })
+        })),
+
+        /**
+         * Devices, which will hold keys.
+         *
+         * Mine-only at the feature, like the notification routes and for the same reason: there is
+         * no signed-out view of a device list, and a route added here later should be protected by
+         * default rather than by somebody remembering.
+         *
+         * The id in every path is the one the CLIENT derived from its own keys. The server
+         * recomputes it at enrolment and refuses a mismatch, so a path parameter here names keys
+         * the caller demonstrably published rather than a number this server handed out.
+         */
+        devices: feature('/devices', [session], (routes) => ({
+            list: routes.get('/', { output: deviceList },
+                (context) => ports.device.list(context.principal.userId, context.principal.sessionId)),
+
+            /**
+             * The bytes a wallet signs to authorise a device.
+             *
+             * Refused for an account with no wallet - a guest's device is attested by this server
+             * and the badge says so. Asking a guest to sign something they cannot sign would be a
+             * dead end with a spinner on it.
+             */
+            challenge: routes.post('/challenge', { input: deviceRef, output: challenge },
+                (context) => ports.device.challenge(context.principal.userId, context.input.id)),
+
+            enrol: routes.post('/', { input: enrolInput, output: device }, (context) =>
+                ports.device.enrol(context.principal.userId, context.principal.sessionId, {
+                    ...context.input,
+                    userAgent: context.request.headers.get('user-agent') ?? ''
+                })),
+
+            confirm: routes.post('/:id/confirm', { output: device },
+                (context) => ports.device.confirm(context.principal.userId, context.principal.sessionId, context.params.id)),
+
+            rename: routes.post('/:id/label', { input: deviceLabelInput, output: device },
+                (context) => ports.device.rename(context.principal.userId, context.params.id, context.input.label)),
+
+            revoke: routes.post('/:id/revoke', { output: device },
+                (context) => ports.device.revoke(context.principal.userId, context.params.id))
         })),
 
         /**

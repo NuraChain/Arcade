@@ -155,6 +155,77 @@ export const handleResult = object({ handle: string() });
 
 export const signOutResult = object({ ended: number() });
 
+/* -------------------------------------------------------------------------- devices */
+
+/**
+ * Who vouched for a device, as a closed set.
+ *
+ * `server` means NOBODY did: a guest account has no wallet to sign with, so the row says the
+ * device is theirs on the strength of the session and nothing else. It is a required field on the
+ * wire and a required prop on the badge for the same reason - a device that cannot be proven must
+ * not be able to render as a proven one by leaving the question out.
+ */
+export const attestation = enumOf(['wallet', 'contract', 'server']);
+
+export type Attestation = Infer<typeof attestation>;
+
+/**
+ * One device.
+ *
+ * The public keys are published on purpose. The browser re-derives `id` from them on every read -
+ * `id === base64url(SHA-256(exchangeKey || signingKey)).slice(0, 22)` - so a server that swapped a
+ * device's keys for its own produces a row that no longer adds up, and the client can see that
+ * without asking anyone. PR 12 wraps epoch keys to `exchangeKey` and checks signatures against
+ * `signingKey`; there is no private half of either anywhere on this server.
+ */
+export const device = object({
+    id: string(),
+    label: string(),
+    exchangeKey: string(),
+    signingKey: string(),
+    attested: attestation,
+
+    /** Whether one of the account's other devices has vouched for it. */
+    confirmed: boolean(),
+
+    /** Revoked devices stay in the list. A signed-out device that vanished would look like a bug. */
+    revoked: boolean(),
+
+    createdAt: string(),
+    lastSeenAt: string().optional()
+});
+
+export type Device = Infer<typeof device>;
+
+export const deviceList = object({
+    devices: array(device),
+
+    /** The device the session making this request is signed in on, if it has enrolled one. */
+    current: string().optional()
+});
+
+export type DeviceList = Infer<typeof deviceList>;
+
+export const deviceRef = object({ id: string() });
+
+/**
+ * What enrolment sends.
+ *
+ * `nonce` and `signature` travel together or not at all: a wallet account must prove the device
+ * with the wallet on it, and a guest account has nothing to prove it with. The server decides
+ * which case applies from the account, never from what the caller chose to send.
+ */
+export const enrolInput = object({
+    id: string(),
+    exchangeKey: string(),
+    signingKey: string(),
+    label: string(),
+    nonce: string().optional(),
+    signature: string().optional()
+});
+
+export const deviceLabelInput = object({ label: string() });
+
 /* -------------------------------------------------------------------------- social */
 
 /** The answer to a write that has nothing to report but that it happened. */

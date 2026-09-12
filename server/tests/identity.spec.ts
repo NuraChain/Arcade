@@ -22,6 +22,7 @@ const challenge = (overrides: Partial<Parameters<typeof buildSiweMessage>[0]> = 
         nonce: 'a'.repeat(32),
         issuedAt: new Date('2026-01-01T00:00:00.000Z'),
         expiresAt: new Date('2026-01-01T00:05:00.000Z'),
+        statement: 'Sign in to Nura Games. This proves the seat is yours. It costs nothing and moves nothing.',
         ...overrides
     });
 

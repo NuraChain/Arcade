@@ -11,6 +11,15 @@ import { buildSiweMessage, verifySignature } from './siwe.ts';
 /** Five minutes. A signature older than this is refused however valid it is. */
 const NONCE_TTL_MS = 5 * 60 * 1000;
 
+/**
+ * The one line a wallet puts above the details.
+ *
+ * "It costs nothing and moves nothing" is there because the prompt a wallet shows for a signature
+ * looks very like the one it shows for a transaction, and somebody who cannot tell the difference
+ * learns to click through both.
+ */
+const SIGN_IN_STATEMENT = 'Sign in to Nura Games. This proves the seat is yours. It costs nothing and moves nothing.';
+
 /** How many suffixed handles to try before giving up and telling the caller to pick another. */
 const HANDLE_ATTEMPTS = 8;
 
@@ -175,7 +184,8 @@ export function createIdentityService(db: DataSource, config: IdentityConfig)
                 chainId: config.chainId,
                 nonce,
                 issuedAt,
-                expiresAt
+                expiresAt,
+                statement: SIGN_IN_STATEMENT
             });
 
             await db.query(
