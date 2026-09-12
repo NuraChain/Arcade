@@ -41,10 +41,25 @@ export interface DeviceRow
     confirmed_at: Date | null;
     last_seen_at: Date | null;
     revoked_at: Date | null;
+
+    /** The proof a PEER checks. All three together, or all three null for a server-attested one. */
+    attested_address: string | null;
+    attested_message: string | null;
+    attested_signature: string | null;
+}
+
+/** What a verified enrolment leaves behind, so somebody other than this server can check it. */
+export interface AttestationProof
+{
+    attested: Attestation;
+    address: string;
+    message: string;
+    signature: string;
 }
 
 const COLUMNS = `id, label, exchange_key, signing_key, attested,
-                 created_at, confirmed_at, last_seen_at, revoked_at`;
+                 created_at, confirmed_at, last_seen_at, revoked_at,
+                 attested_address, attested_message, attested_signature`;
 
 export interface EnrolInput
 {
@@ -87,6 +102,67 @@ export function createDeviceService(db: DataSource, config: DeviceConfig)
             [userId]
         );
         return firstRow<{ address: string }>(rows)?.address ?? null;
+    };
+
+    /**
+     * Burns the challenge, checks the signature, and returns the proof to keep.
+     *
+     * The order is the same one sign-in uses and for the same reason: the nonce is burned FIRST,
+     * so two requests replaying one signature race in the database and exactly one wins.
+     */
+    const proveWallet = async (address: string, input: EnrolInput): Promise<AttestationProof> =>
+    {
+        if (input.nonce === undefined || input.signature === undefined)
+        {
+            throw new UnauthorizedError('This account signs for its devices with its wallet.');
+        }
+
+        const burned = await db.query(
+            `update siwe_nonces
+                set consumed_at = now()
+              where nonce = $1
+                and address = $2
+                and consumed_at is null
+                and expires_at > now()
+             returning message`,
+            [input.nonce, normalizeAddress(address)]
+        );
+
+        const challenge = firstRow<{ message: string }>(burned);
+        if (challenge === null)
+        {
+            throw new UnauthorizedError('That authorisation expired. Try again.');
+        }
+
+        // The signed bytes must name THIS device. A challenge issued for another device - or for
+        // signing in, which names none - is a valid signature over the wrong statement, and
+        // accepting it is how one prompt authorises anything.
+        if (!challenge.message.includes(deviceResource(input.id)))
+        {
+            throw new UnauthorizedError('That authorisation was for a different device.');
+        }
+
+        const verdict = await verifySignature({
+            address,
+            message: challenge.message,
+            signature: input.signature,
+            rpcUrl: config.rpcUrl,
+            chainId: config.chainId === '' ? undefined : Number(config.chainId)
+        });
+
+        if (!verdict.ok)
+        {
+            throw verdict.reason === 'unreachable-chain'
+                ? new BadRequestError('We could not reach the network to check that signature. Try again in a moment.')
+                : new UnauthorizedError('That signature did not match the wallet on this account.');
+        }
+
+        return {
+            attested: verdict.attestation,
+            address: normalizeAddress(address),
+            message: challenge.message,
+            signature: input.signature
+        };
     };
 
     return {
@@ -185,88 +261,66 @@ export function createDeviceService(db: DataSource, config: DeviceConfig)
                 throw new ConflictError('Those keys already belong to a device.');
             }
 
+            const address = await walletOf(userId);
+
             if (existing !== null)
             {
                 // Already ours and still live: re-enrolling is how a browser says "still here"
                 // after a sign-in, and it must not ask for another signature to do it.
+                //
+                // It IS how a device gains a proof it never had. A device enrolled before this
+                // server kept the signature, or enrolled while the account had no wallet, is
+                // `attested: 'server'` and cannot be sealed to; sending a signature now upgrades it
+                // in place rather than forcing a revoke-and-re-enrol that would burn working keys
+                // for bookkeeping. A device that ALREADY has a proof is never re-attested here, so
+                // this cannot be used to move one address's claim onto another's device.
+                const upgrade = existing.attested === 'server' && address !== null && input.signature !== undefined
+                    ? await proveWallet(address, input)
+                    : null;
+
                 const touched = await db.query(
-                    `update devices set last_seen_at = now(), user_agent = $3
+                    `update devices set
+                         last_seen_at = now(),
+                         user_agent = $3,
+                         attested = coalesce($4::varchar, attested),
+                         attested_address = coalesce($5::citext, attested_address),
+                         attested_message = coalesce($6::text, attested_message),
+                         attested_signature = coalesce($7::text, attested_signature)
                       where id = $1 and user_id = $2
                      returning ${ COLUMNS }`,
-                    [input.id, userId, input.userAgent.slice(0, 256)]
+                    [
+                        input.id, userId, input.userAgent.slice(0, 256),
+                        upgrade?.attested ?? null,
+                        upgrade?.address ?? null, upgrade?.message ?? null, upgrade?.signature ?? null
+                    ]
                 );
                 await db.query('update sessions set device_id = $1 where id = $2', [input.id, sessionId]);
                 return firstRow<DeviceRow>(touched)!;
             }
 
-            const address = await walletOf(userId);
-            let attested: Attestation = 'server';
-
-            if (address !== null)
-            {
-                // A wallet account signs for its devices. Letting it skip that would make every
-                // device on a wallet account server-attested by simply not sending a signature,
-                // which is a downgrade nobody would see.
-                if (input.nonce === undefined || input.signature === undefined)
-                {
-                    throw new UnauthorizedError('This account signs for its devices with its wallet.');
-                }
-
-                const burned = await db.query(
-                    `update siwe_nonces
-                        set consumed_at = now()
-                      where nonce = $1
-                        and address = $2
-                        and consumed_at is null
-                        and expires_at > now()
-                     returning message`,
-                    [input.nonce, normalizeAddress(address)]
-                );
-
-                const challenge = firstRow<{ message: string }>(burned);
-                if (challenge === null)
-                {
-                    throw new UnauthorizedError('That authorisation expired. Try again.');
-                }
-
-                // The signed bytes must name THIS device. A challenge issued for another device -
-                // or for signing in, which names none - is a valid signature over the wrong
-                // statement, and accepting it is how one prompt authorises anything.
-                if (!challenge.message.includes(deviceResource(input.id)))
-                {
-                    throw new UnauthorizedError('That authorisation was for a different device.');
-                }
-
-                const verdict = await verifySignature({
-                    address,
-                    message: challenge.message,
-                    signature: input.signature,
-                    rpcUrl: config.rpcUrl,
-                    chainId: config.chainId === '' ? undefined : Number(config.chainId)
-                });
-
-                if (!verdict.ok)
-                {
-                    throw verdict.reason === 'unreachable-chain'
-                        ? new BadRequestError('We could not reach the network to check that signature. Try again in a moment.')
-                        : new UnauthorizedError('That signature did not match the wallet on this account.');
-                }
-
-                attested = verdict.attestation;
-            }
+            // A wallet account signs for its devices. Letting it skip that would make every device
+            // on a wallet account server-attested by simply not sending a signature, which is a
+            // downgrade nobody would see.
+            const proof = address === null ? null : await proveWallet(address, input);
 
             return db.transaction(async (tx) =>
             {
                 await tx.query('select pg_advisory_xact_lock(hashtext($1))', [userId]);
 
                 const inserted = await tx.query(
-                    `insert into devices (id, user_id, label, exchange_key, signing_key, attested, user_agent, last_seen_at, confirmed_at)
+                    `insert into devices (id, user_id, label, exchange_key, signing_key, attested, user_agent, last_seen_at, confirmed_at,
+                                          attested_address, attested_message, attested_signature)
                      select $1, $2, $3, $4, $5, $6, $7, now(),
                             case when not exists (
                                 select 1 from devices d where d.user_id = $2 and d.revoked_at is null
-                            ) then now() end
+                            ) then now() end,
+                            $8::citext, $9::text, $10::text
                      returning ${ COLUMNS }`,
-                    [input.id, userId, input.label.slice(0, 64), input.exchangeKey, input.signingKey, attested, input.userAgent.slice(0, 256)]
+                    [
+                        input.id, userId, input.label.slice(0, 64), input.exchangeKey, input.signingKey,
+                        proof?.attested ?? 'server', input.userAgent.slice(0, 256),
+                        proof?.address ?? null, proof?.message ?? null, proof?.signature ?? null
+                    ]
                 );
 
                 await tx.query('update sessions set device_id = $1 where id = $2', [input.id, sessionId]);

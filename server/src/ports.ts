@@ -9,6 +9,7 @@ import type {
     PersonView,
     Privacy,
     ChatMessage,
+    ConversationDevices,
     ConversationSummary,
     DeviceList,
     Device,
@@ -247,6 +248,15 @@ export interface DevicePort
 export interface ChatPort
 {
     list(me: string): Promise<ConversationSummary[]>;
+
+    /**
+     * The member devices of one conversation, as a peer may see them.
+     *
+     * Here rather than on `DevicePort` because the authorisation is the conversation: being in it
+     * is what entitles you to the keys of the people in it, and the membership check that answers
+     * every other chat route is the same one that answers this.
+     */
+    devices(me: string, conversationId: string): Promise<ConversationDevices>;
     messages(me: string, conversationId: string, cursor: string | undefined): Promise<MessagePage>;
     send(me: string, conversationId: string, body: string): Promise<ChatMessage>;
     markRead(me: string, conversationId: string): Promise<void>;

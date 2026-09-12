@@ -8,6 +8,7 @@ import {
     ack,
     answerInput,
     chatMessage,
+    conversationDevices,
     conversationList,
     conversationRef,
     cursorQuery,
@@ -589,6 +590,16 @@ export function buildApi(ports: Ports)
             list: routes.get('/', { output: conversationList }, async (context) => ({
                 conversations: await ports.chat.list(context.principal.userId)
             })),
+
+            /**
+             * The devices a message in this conversation could be sealed to.
+             *
+             * Guarded by membership like everything else here, and answering exactly as a
+             * conversation that does not exist when you are not in it - so this cannot be used to
+             * enumerate somebody's devices by guessing conversation ids.
+             */
+            devices: routes.get('/:id/devices', { output: conversationDevices },
+                (context) => ports.chat.devices(context.principal.userId, context.params.id)),
 
             messages: routes.get(
                 '/:id/messages',

@@ -3,6 +3,7 @@ import type { DataSource } from 'typeorm';
 
 import { createCatalogueService } from './domains/catalogue/service.ts';
 import { createChatService, type ConversationRow, type MessageRow } from './domains/chat/service.ts';
+import { createPeerDevices, type PeerDeviceRow } from './domains/device/peers.ts';
 import { createDeviceService, type DeviceRow } from './domains/device/service.ts';
 import { createGroupService, type GroupRow } from './domains/group/service.ts';
 import { createNotifyService, type NotificationRow } from './domains/notify/service.ts';
@@ -17,6 +18,7 @@ import type { Ports } from './ports.ts';
 import type {
     Account,
     ChatMessage,
+    ConversationDevices,
     ConversationSummary,
     Device,
     GroupSummary,
@@ -402,6 +404,48 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             live?.chatChanged(row.conversation_id);
         }
         live?.socialChanged(...await table.seatedIds(row.id), ...also);
+    };
+
+    const peers = createPeerDevices(db);
+
+    /**
+     * Folds the join back into one entry per member.
+     *
+     * The LEFT JOIN gives one row per (member, device) and one null-device row for a member with
+     * none. Grouping here rather than in SQL keeps the empty case obvious: the member is created
+     * with an empty array the first time their handle is seen, and a null device id simply adds
+     * nothing to it.
+     */
+    const asConversationDevices = (rows: PeerDeviceRow[]): ConversationDevices =>
+    {
+        const byHandle = new Map<string, ConversationDevices['members'][number]>();
+
+        for (const row of rows)
+        {
+            let member = byHandle.get(row.handle);
+            if (member === undefined)
+            {
+                member = { handle: row.handle, kind: row.kind, devices: [] };
+                byHandle.set(row.handle, member);
+            }
+
+            // Every proof field is non-null together by CHECK constraint, so one test covers the
+            // set; the casts are the compiler catching up with what the database already refuses.
+            if (row.device_id !== null && row.attested !== null && row.attested_address !== null)
+            {
+                member.devices.push({
+                    id: row.device_id,
+                    exchangeKey: row.exchange_key!,
+                    signingKey: row.signing_key!,
+                    attested: row.attested,
+                    address: row.attested_address,
+                    message: row.attested_message!,
+                    signature: row.attested_signature!
+                });
+            }
+        }
+
+        return { members: [...byHandle.values()] };
     };
 
     const device = createDeviceService(db, {
@@ -1073,6 +1117,18 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             async list(me)
             {
                 return (await chat.list(me)).map(asConversation);
+            },
+
+            /**
+             * Membership IS the authorisation, exactly as it is for reading the messages.
+             *
+             * `mustBeMember` throws the same NotFoundError a missing conversation does, so an id
+             * cannot be probed for existence by asking who is in it.
+             */
+            async devices(me, conversationId)
+            {
+                await chat.mustBeMember(me, conversationId);
+                return asConversationDevices(await peers.forConversation(conversationId));
             },
 
             async messages(me, conversationId, cursor)

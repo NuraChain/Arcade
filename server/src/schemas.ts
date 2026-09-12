@@ -226,6 +226,54 @@ export const enrolInput = object({
 
 export const deviceLabelInput = object({ label: string() });
 
+/**
+ * A device of somebody ELSE, as a peer may see it.
+ *
+ * A separate shape from `device` on purpose, and the difference is what is missing: no label, no
+ * last-seen, no confirmation state, no revoked flag. Those answer "what are my devices" for an
+ * owner; handing them to anyone who can open a conversation would publish a device count, a
+ * last-seen timestamp and a name somebody typed - a description of their life, for a feature that
+ * needs two public keys.
+ *
+ * What IS here is the proof. `attested` is narrowed to the two kinds that can be checked, and the
+ * address, message and signature travel with the device so the recipient recovers the signer
+ * ITSELF rather than believing this server about it. Without that, "wrap the epoch key to every
+ * member device" means wrapping it to whatever list this server hands over.
+ */
+export const peerDevice = object({
+    id: string(),
+    exchangeKey: string(),
+    signingKey: string(),
+
+    /** Only the provable kinds. A server-attested device is not listed to a peer at all. */
+    attested: enumOf(['wallet', 'contract']),
+
+    /** The address that signed the enrolment, the exact bytes, and the signature over them. */
+    address: string(),
+    message: string(),
+    signature: string()
+});
+
+export type PeerDevice = Infer<typeof peerDevice>;
+
+/**
+ * One member of a conversation and the devices a key may be wrapped to.
+ *
+ * `devices` is empty rather than absent when somebody has none, because the client has to tell
+ * "nobody on the other side can read this" from "I have not loaded the other side yet", and a
+ * missing key cannot say that. `kind` is here so the reason can be specific: a guest has no
+ * wallet, so a guest has no sealable device, and the UI says which of those it is looking at.
+ */
+export const conversationMember = object({
+    handle: string(),
+    kind: accountKind,
+    devices: array(peerDevice)
+});
+
+export const conversationDevices = object({ members: array(conversationMember) });
+
+export type ConversationDevices = Infer<typeof conversationDevices>;
+
 /* -------------------------------------------------------------------------- social */
 
 /** The answer to a write that has nothing to report but that it happened. */

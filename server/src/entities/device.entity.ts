@@ -51,6 +51,23 @@ export class Device
     @Column({ name: 'revoked_at', type: 'timestamptz', nullable: true })
     revokedAt!: Date | null;
 
+    /**
+     * The proof, kept so somebody other than this server can check it.
+     *
+     * All three together or none: the address that signed the enrolment, the exact bytes it
+     * signed, and the signature. A peer recovers the address itself and checks that the message
+     * names this device, which is what stops a device this server fabricated from being wrapped
+     * into a conversation. Null for `attested: 'server'`, where there is nothing to show.
+     */
+    @Column({ name: 'attested_address', type: 'citext', nullable: true })
+    attestedAddress!: string | null;
+
+    @Column({ name: 'attested_message', type: 'text', nullable: true })
+    attestedMessage!: string | null;
+
+    @Column({ name: 'attested_signature', type: 'text', nullable: true })
+    attestedSignature!: string | null;
+
     @Column({ name: 'user_agent', type: 'varchar', length: 256, default: '' })
     userAgent!: string;
 }

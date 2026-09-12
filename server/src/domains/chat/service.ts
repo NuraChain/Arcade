@@ -150,6 +150,7 @@ export function createChatService(db: DataSource, social: SocialService)
 
     return {
         membership,
+        mustBeMember,
         recipients,
 
         /**
