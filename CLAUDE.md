@@ -68,10 +68,11 @@ in-flight `/api/_manifest` with a 502, the page boots without its data, and the 
 fail the 44px check in their pre-hydration state. Three runs in a row each lost exactly one cell
 that way, each time to a different route. The same matrix against `npm start` is 600/600.
 
-It needs the **api** either way, because it signs in for real: one `POST /api/auth/demo` as
-`alex`, then every context is built from the resulting `storageState`. There is no longer a
-session key it could write into `localStorage` — the cookie is HttpOnly — and a matrix run against
-a database with no demo rows fails on the first line rather than touring 600 signed-out pages.
+It needs the **api** either way, because it signs in for real: the whole EIP-4361 round trip as the
+`dana.w` wallet fixture — fetch the challenge, sign it, post the signature — and every context is
+built from the resulting `storageState`. There is no session key it could write into `localStorage`,
+the cookie being HttpOnly, and a matrix run against a database the wallet seed has not touched fails
+on the first line rather than touring 640 signed-out pages.
 
 **The matrix is a load generator, not a visitor.** It pulls 600 pages as fast as it can from one
 address, so anything metered per IP will refuse it - and now that a page load makes real API
@@ -315,10 +316,12 @@ blurb ships without a migration. It is not development fixtures — those are a 
 refuses to run outside development.
 
 A seed that upserts into a table real people also write to needs a guard, and the demo personas
-are that case: their `on conflict (handle)` ends in `where users.kind = 'demo'`. Without it, a
-deploy would silently convert whoever had claimed `alex` into a shared account anyone could sign
-into through `/auth/demo`. That is not hypothetical — it happened in development the first time
-this seed ran, against an account that had claimed `sara.k` minutes earlier.
+were that case: their `on conflict (handle)` ended in `where users.kind = 'demo'`, because without
+it a deploy would silently convert whoever had claimed `alex` into a shared account anyone could
+sign into. That was not hypothetical — it happened in development the first time that seed ran,
+against an account that had claimed `sara.k` minutes earlier. The personas are gone and so is the
+guard, but the shape of the mistake is worth keeping: a seed that writes into a table people also
+write to needs to say which rows are ITS rows.
 
 One sharp edge, because it will surprise someone: `status` is deliberately never overwritten on
 conflict. An operator who disabled a game did so for a reason and a deploy must not re-enable it.
@@ -420,9 +423,10 @@ pages took the rate limiter out, and the limiter was right.
 
 ## People are handles
 
-**The client's person id IS the handle.** `person.id === person.handle` for all twenty-four mock
-people, the wire speaks handles wherever it names somebody - a conversation's members, a message's
-author - and `server/tests/fixture-parity.spec.ts` fails if that stops being true.
+**The client's person id IS the handle.** `personFor` in `people.store.ts` sets it from the handle
+and the wire speaks handles wherever it names somebody — a conversation's members, a message's
+author. The one exception is `nura-e2ee/v1`, which binds the account UUID because a signature has to
+name something a rename cannot change; see *The sealing*.
 
 The alternative was projecting the server's uuid and re-keying the browser at boot, which needs
 every `personById` call site to be correct across an async window where the ids change underneath
@@ -492,12 +496,10 @@ means a link, a route parameter and an api call are all the same string.
 view route into `null`, so the page says "No such group" rather than offering to retry the same
 missing thing. Every other status still surfaces as an error.
 
-**`application/src/data/mock/groups.ts` is gone.** The five groups are rows, seeded from
-`GROUP_FIXTURES`. What survives in the mock is `GROUP_SLUGS` — five strings that exist only so a
-development fixtures seed — and `fixture-parity.spec.ts` fails
-if that list stops matching the fixtures, the same way it does for people. The crest is a closed
-set the CLIENT owns (`data/crests.ts`): the server sends a string, `Icon` takes an `IconName`, and
-a value from a newer server draws the first crest instead of a blank square.
+**A group is a row, and nothing in the browser holds a copy of one.** `GROUP_FIXTURES` in
+`application/tests/fixtures.ts` is what the browser specs arrange, and nothing else reads it. The
+crest is a closed set the CLIENT owns (`data/crests.ts`): the server sends a string, `Icon` takes an
+`IconName`, and a value from a newer server draws the first crest instead of a blank square.
 
 Two things the browser pass caught that no type could:
 

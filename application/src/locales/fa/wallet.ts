@@ -19,7 +19,7 @@ export const wallet: Pick<Dictionary, keyof typeof reference> = {
     'wallet.noGas': 'بدون گس، بدون تراکنش',
     'wallet.selfCustody': 'کلیدها مال خودت می‌ماند',
     'wallet.install': 'نصب متامسک',
-    'wallet.installLead': 'هنوز کیف پولی در این مرورگر نیست. هر کیف پول مرورگری کار می‌کند — راه‌اندازی متامسک حدود یک دقیقه طول می‌کشد — یا با یک صندلی نمایشی پایین‌تر یک چرخی بزن.',
+    'wallet.installLead': 'هنوز کیف پولی در این مرورگر نیست. هر کیف پول مرورگری کار می‌کند — راه‌اندازی متامسک حدود یک دقیقه طول می‌کشد — یا پایین‌تر به‌عنوان مهمان یک چرخی بزن.',
     'wallet.learn': '{chain} چیست؟',
     'wallet.error.rejected': 'قبول نکردی. هیچ اتفاقی نیفتاد.',
     'wallet.error.pending': 'کیف پولت همین حالا پرسیده. بازش کن و جواب بده.',
@@ -29,7 +29,6 @@ export const wallet: Pick<Dictionary, keyof typeof reference> = {
     'wallet.retry': 'دوباره',
     'wallet.guestTitle': 'فقط سر می‌زنی؟',
     'wallet.guestLead': 'یک نام بردار و بنشین. هر وقت خواستی صندلی را نگه داری، کیف پول وصل کن.',
-    'wallet.demoBadge': 'صندلی نمایشی',
     'wallet.walletBadge': 'کیف پول',
     'wallet.address': 'نشانی کیف پول',
     'wallet.copyAddress': 'کپی نشانی',
@@ -46,5 +45,5 @@ export const wallet: Pick<Dictionary, keyof typeof reference> = {
     'wallet.qrOf': 'کد QR برای {url}',
     'wallet.copyLink': 'کپی نشانی',
     'wallet.linkCopied': 'نشانی کپی شد',
-    'wallet.otherWays': 'صندلی مهمان و نمایشی'
+    'wallet.otherWays': 'به‌جایش مهمان بنشین'
 };

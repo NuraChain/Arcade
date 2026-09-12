@@ -5,7 +5,7 @@ export const me = {
     'me.shared': 'Profile link copied',
     'me.settings': 'Settings',
     'me.keepSeat.title': 'Keep your seat.',
-    'me.keepSeat.lead': 'You’re on a demo seat. Connect a wallet and this profile, these friends and every result follow you to any device.',
+    'me.keepSeat.lead': 'You’re on a guest seat. Connect a wallet and this profile, these friends and every result follow you to any device — and what you say in a chat can be sealed.',
     'me.keepSeat.action': 'Connect a wallet',
     'me.keepSeat.later': 'Not now',
 
@@ -15,11 +15,10 @@ export const me = {
     'settings.notifications': 'Notifications',
     'settings.appearance': 'Appearance',
     'settings.premium': 'Premium',
-    'settings.demo': 'Demo controls',
 
     'settings.account.wallet': 'Signed in with {wallet}',
-    'settings.account.demo': 'Demo seat',
-    'settings.account.demoLead': 'Nothing here touches a chain. Connect a wallet to keep it.',
+    'settings.account.demo': 'Guest seat',
+    'settings.account.demoLead': 'No wallet, so nothing here can be sealed and nothing follows you to another device. Connect one to keep it.',
     'settings.account.network': 'Network',
     'settings.account.disconnect': 'Disconnect',
     'settings.account.signOut': 'Sign out',
@@ -65,14 +64,6 @@ export const me = {
     'settings.premium.refund': 'Cancel any time. Refunds within 14 days, no questions.',
     'settings.premium.subscribe': 'Coming soon',
     'settings.premium.never': 'Never: pay-to-win, ads, or safety behind a paywall.',
-
-    'settings.demo.lead': 'Levers for showing the thing off. None of this ships to players.',
-    'settings.demo.drop': 'Simulate a connection drop',
-    'settings.demo.dropped': 'Dropped. Reconnecting in a moment.',
-    'settings.demo.seed': 'World seed',
-    'settings.demo.seedHint': 'The same seed replays the same people, tables and dice.',
-    'settings.demo.reset': 'Reset the demo world',
-    'settings.demo.resetDone': 'World reset.',
 
     'devices.title': 'Devices',
     'devices.lead': 'The browsers and apps signed in to this account. Each one holds its own keys, and signing one out burns them.',

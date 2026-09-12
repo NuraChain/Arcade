@@ -16,13 +16,11 @@ import PushToggle from '../../components/app/push-toggle.component.azeroth';
 import { shortAddress } from '../../lib/wallet.ts';
 import { usePeople } from '../../stores/people.store.ts';
 import { useAccount } from '../../stores/account.store.ts';
-import { useConnection } from '../../stores/connection.store.ts';
 import { useDevice } from '../../stores/device.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useSession } from '../../stores/session.store.ts';
 import { NOTIFICATION_CATEGORIES, useSettings } from '../../stores/settings.store.ts';
 import { useSocial } from '../../stores/social.store.ts';
-import { useToasts } from '../../stores/toasts.store.ts';
 import { useWallet } from '../../stores/wallet.store.ts';
 import type { MessageKey } from '../../locales/en.ts';
 
@@ -38,9 +36,7 @@ export default component SettingsPage()
     const wallet = useWallet();
     const social = useSocial();
     const settings = useSettings();
-    const connection = useConnection();
     const device = useDevice();
-    const toasts = useToasts();
     const people = usePeople();
     const { navigate } = useNavigate();
 
@@ -359,24 +355,6 @@ export default component SettingsPage()
                 </div>
             </section>
 
-            <section aria-labelledby="settings-demo">
-                <SectionHeading id="settings-demo" title={ locale.t('settings.demo') } />
-                <div class="flex flex-col gap-3 rounded-panel border border-dashed border-line p-4">
-                    <p class="text-ui-xs text-muted">{ locale.t('settings.demo.lead') }</p>
-                    <Button
-                        variant="secondary"
-                        block
-                        leading="wifi-off"
-                        onClick={ () =>
-                        {
-                            connection.simulateDrop(6000);
-                            toasts.show({ kind: 'warning', text: locale.t('settings.demo.dropped') });
-                        } }
-                    >
-                        { locale.t('settings.demo.drop') }
-                    </Button>
-                </div>
-            </section>
         </div>
     </Page>
 }

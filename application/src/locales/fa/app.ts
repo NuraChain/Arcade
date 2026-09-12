@@ -21,14 +21,12 @@ export const app: Pick<Dictionary, keyof typeof reference> = {
     'app.nav.quickPlay': 'بازی سریع',
 
     'signIn.title': 'بیا سر میز.',
-    'signIn.lead': 'انتخاب کن امروز چه کسی باشی. این یک نسخهٔ نمایشی است: بدون گذرواژه، بدون حساب — صندلی مال توست.',
     'signIn.continue': 'نشستن به نام {name}',
     'signIn.custom': 'یا نام خودت را بگو',
     'signIn.handle': 'نام تو',
     'signIn.handleHint': 'دست‌کم سه حرف. دوستانت این نام را سر میز می‌بینند.',
     'signIn.handleShort': 'نام باید دست‌کم سه حرف داشته باشد.',
     'signIn.minor': 'زیر ۱۸ سال: پیام غریبه‌ها خاموش، فیلترها قفل.',
-    'signIn.demo': 'هویت نمایشی',
     'signIn.welcome': 'خوش برگشتی، {name}',
 
     'common.cancel': 'لغو',

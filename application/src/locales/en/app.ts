@@ -18,14 +18,12 @@ export const app = {
     'app.nav.quickPlay': 'Quick play',
 
     'signIn.title': 'Pull up a chair.',
-    'signIn.lead': 'Pick who you want to be today. This is a demo: no password, no account — the seat is yours.',
     'signIn.continue': 'Sit down as {name}',
     'signIn.custom': 'Or use your own name',
     'signIn.handle': 'Your name',
     'signIn.handleHint': 'Three characters or more. Friends see this at the table.',
     'signIn.handleShort': 'A name needs at least three characters.',
     'signIn.minor': 'Under 18: messages from strangers off, filters locked.',
-    'signIn.demo': 'Demo identity',
     'signIn.welcome': 'Welcome back, {name}',
 
     'common.cancel': 'Cancel',

@@ -8,7 +8,7 @@ export const me: Pick<Dictionary, keyof typeof reference> = {
     'me.shared': 'لینک پروفایل کپی شد',
     'me.settings': 'تنظیمات',
     'me.keepSeat.title': 'صندلی‌ات را نگه دار.',
-    'me.keepSeat.lead': 'روی یک صندلی نمایشی نشسته‌ای. کیف پول را وصل کن تا این پروفایل، این دوستان و همهٔ نتیجه‌ها روی هر دستگاهی دنبالت بیایند.',
+    'me.keepSeat.lead': 'روی یک صندلی مهمان نشسته‌ای. کیف پول را وصل کن تا این پروفایل، این دوستان و همهٔ نتیجه‌ها روی هر دستگاهی دنبالت بیایند — و آنچه در گفتگو می‌گویی بتواند مهروموم شود.',
     'me.keepSeat.action': 'اتصال کیف پول',
     'me.keepSeat.later': 'الان نه',
 
@@ -18,11 +18,10 @@ export const me: Pick<Dictionary, keyof typeof reference> = {
     'settings.notifications': 'اعلان‌ها',
     'settings.appearance': 'ظاهر',
     'settings.premium': 'ویژه',
-    'settings.demo': 'کنترل‌های نمایشی',
 
     'settings.account.wallet': 'ورود با {wallet}',
-    'settings.account.demo': 'صندلی نمایشی',
-    'settings.account.demoLead': 'هیچ‌چیز اینجا به زنجیره دست نمی‌زند. کیف پول را وصل کن تا بماند.',
+    'settings.account.demo': 'صندلی مهمان',
+    'settings.account.demoLead': 'کیف پولی در کار نیست، پس نه چیزی اینجا مهروموم می‌شود و نه چیزی به دستگاه دیگری دنبالت می‌آید. یکی وصل کن تا بماند.',
     'settings.account.network': 'شبکه',
     'settings.account.disconnect': 'قطع اتصال',
     'settings.account.signOut': 'خروج',
@@ -68,14 +67,6 @@ export const me: Pick<Dictionary, keyof typeof reference> = {
     'settings.premium.refund': 'هر وقت خواستی لغو کن. بازگشت وجه تا ۱۴ روز، بی‌سؤال.',
     'settings.premium.subscribe': 'به‌زودی',
     'settings.premium.never': 'هرگز: پرداخت برای برد، تبلیغات، یا ایمنی پشت پولی‌سازی.',
-
-    'settings.demo.lead': 'اهرم‌هایی برای نمایش دادن. هیچ‌کدام به دست بازیکن نمی‌رسد.',
-    'settings.demo.drop': 'شبیه‌سازی قطع اتصال',
-    'settings.demo.dropped': 'قطع شد. تا لحظه‌ای دیگر وصل می‌شود.',
-    'settings.demo.seed': 'بذر جهان',
-    'settings.demo.seedHint': 'همان بذر، همان آدم‌ها و میزها و تاس‌ها را دوباره می‌سازد.',
-    'settings.demo.reset': 'بازنشانی جهان نمایشی',
-    'settings.demo.resetDone': 'جهان بازنشانی شد.',
 
     'devices.title': 'دستگاه‌ها',
     'devices.lead': 'مرورگرها و برنامه‌هایی که به این حساب وارد شده‌اند. هرکدام کلیدهای خودش را دارد و بیرون‌کردن یکی، کلیدهایش را می‌سوزاند.',

@@ -11,7 +11,6 @@ export const RESTORED_MS = 2500;
 export interface ConnectionApi
 {
     state: Getter<ConnectionState>;
-    simulateDrop(ms: number): void;
     start(): () => void;
     stop(): void;
     reset(): void;
@@ -74,8 +73,6 @@ export const useConnection = createStore((): ConnectionApi =>
 
     return {
         state,
-
-        simulateDrop: (ms) => live.simulateDrop(ms),
 
         start()
         {

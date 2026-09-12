@@ -17,7 +17,7 @@ export type MemberSealState =
     /** Has at least one device this browser verified for itself. */
     | 'ready'
 
-    /** Signed in without a wallet - a guest or a demo persona - so there is no proof to check. */
+    /** Signed in without a wallet, so there is no proof to check. */
     | 'no-wallet'
 
     /** Has a wallet but no confirmed device: nothing to wrap a key to. */
