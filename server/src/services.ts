@@ -4,13 +4,14 @@ import type { DataSource } from 'typeorm';
 import { createCatalogueService } from './domains/catalogue/service.ts';
 import { createChatService, type ConversationRow, type MessageRow } from './domains/chat/service.ts';
 import { createGroupService, type GroupRow } from './domains/group/service.ts';
+import { createTableService, type TableRow } from './domains/table/service.ts';
 import { createIdentityService } from './domains/identity/service.ts';
 import { maySeeOnline } from './domains/social/policy.ts';
 import { createSocialService, type PersonRow } from './domains/social/service.ts';
 import type { ServerConfig } from './env.ts';
 import { readSessionToken, SESSION_TTL_SECONDS } from './http/auth.ts';
 import type { Ports } from './ports.ts';
-import type { Account, ChatMessage, ConversationSummary, GroupSummary, PersonSummary } from './schemas.ts';
+import type { Account, ChatMessage, ConversationSummary, GroupSummary, PersonSummary, TableSummary } from './schemas.ts';
 
 /**
  * Builds the real implementations behind `Ports`.
@@ -41,6 +42,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
     const social = createSocialService(db);
     const chat = createChatService(db, social);
     const group = createGroupService(db, social);
+    const table = createTableService(db, social);
 
     /**
      * The cursor, as one opaque string.
@@ -247,6 +249,74 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             live?.chatChanged(row.conversation_id);
         }
         live?.socialChanged(...await group.memberIds(row.id), ...also);
+    };
+
+    const asTable = (row: TableRow): TableSummary =>
+    {
+        const summary: TableSummary = {
+            id: row.id,
+            code: row.code,
+            game: row.game,
+            seats: row.seats,
+            mode: row.mode,
+            privacy: row.privacy,
+            target: row.target,
+            cube: row.cube,
+            blinds: row.blinds,
+            status: row.status,
+            chairs: row.chairs.map((chair) => ({
+                seat: chair.seat,
+                ready: chair.ready,
+                host: chair.host,
+                ...(chair.who === null ? {} : { who: chair.who }),
+                ...(chair.invited === null ? {} : { invited: chair.invited })
+            })),
+            taken: row.taken,
+            createdAt: row.created_at.toISOString()
+        };
+
+        if (row.host !== null)
+        {
+            summary.host = row.host;
+        }
+        if (row.mine !== null)
+        {
+            summary.mine = row.mine;
+
+            // Only somebody sitting here is given the thread. A non-player holding the id could
+            // not read it anyway, and an id with no use is an id that should not have been sent.
+            if (row.conversation_id !== null)
+            {
+                summary.conversationId = row.conversation_id;
+            }
+        }
+        return summary;
+    };
+
+    const mustTable = async (me: string, tableId: string): Promise<TableRow> =>
+    {
+        const found = await table.byId(me, tableId);
+        if (found === null)
+        {
+            throw new NotFoundError('No table there.');
+        }
+        return found;
+    };
+
+    /**
+     * The doorbell for a table that changed.
+     *
+     * The same two scopes groups use, for the same reason: the table thread's membership moved
+     * (`chat`) and so did everybody's list of where they are sitting (`social`). A third scope
+     * would be new vocabulary for information these two already carry.
+     */
+    const ringTable = async (row: TableRow, ...also: string[]): Promise<void> =>
+    {
+        if (row.conversation_id !== null)
+        {
+            live?.chatChanged(row.conversation_id);
+        }
+        live?.socialChanged(...await table.seatedIds(row.id), ...also);
     };
 
     const identity = createIdentityService(db, {
@@ -674,6 +744,102 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 await announce(after, me, 'owner', { who: other.handle });
                 await ring(after);
                 return asGroup(after);
+            }
+        },
+
+        table: {
+            async open(me, game, limit)
+            {
+                return (await table.open(me, game ?? null, limit)).map(asTable);
+            },
+
+            async mine(me)
+            {
+                return (await table.mine(me)).map(asTable);
+            },
+
+            async view(me, tableId)
+            {
+                const found = await table.byId(me, tableId);
+                return found === null ? null : asTable(found);
+            },
+
+            async byCode(me, code)
+            {
+                const found = await table.byCode(me, code);
+                return found === null ? null : asTable(found);
+            },
+
+            async create(me, input)
+            {
+                const guests = await Promise.all(input.invitees.map((handle) => social.personByHandle(handle)));
+                const known = guests.filter((person): person is NonNullable<typeof person> => person !== null);
+
+                const made = await table.create(me, { ...input, invitees: known.map((person) => person.id) });
+                live?.socialChanged(me, ...known.map((person) => person.id));
+                return asTable(made);
+            },
+
+            async claim(me, tableId)
+            {
+                const seat = await table.claimSeat(me, tableId);
+                const after = await mustTable(me, tableId);
+
+                if (seat !== null)
+                {
+                    await ringTable(after);
+                }
+                return { table: asTable(after), seat };
+            },
+
+            async leave(me, tableId)
+            {
+                const before = await mustTable(me, tableId);
+                const seated = await table.seatedIds(before.id);
+
+                await table.leave(me, before.id);
+
+                if (before.conversation_id !== null)
+                {
+                    live?.chatChanged(before.conversation_id);
+                }
+                live?.socialChanged(...seated);
+            },
+
+            async setReady(me, tableId, ready)
+            {
+                await table.setReady(me, tableId, ready);
+                const after = await mustTable(me, tableId);
+                await ringTable(after);
+                return asTable(after);
+            },
+
+            async invite(me, tableId, handle)
+            {
+                const other = await social.personByHandle(handle);
+                if (other === null)
+                {
+                    throw new NotFoundError('No account with that name.');
+                }
+
+                await table.invite(me, tableId, other.id);
+                const after = await mustTable(me, tableId);
+                await ringTable(after, other.id);
+                return asTable(after);
+            },
+
+            async close(me, tableId)
+            {
+                const before = await mustTable(me, tableId);
+                const seated = await table.seatedIds(before.id);
+
+                await table.close(me, before.id);
+
+                if (before.conversation_id !== null)
+                {
+                    live?.chatChanged(before.conversation_id);
+                }
+                live?.socialChanged(...seated);
             }
         },
 

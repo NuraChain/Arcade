@@ -344,6 +344,91 @@ export const groupEditInput = object({
     game: string()
 });
 
+/* ------------------------------------------------------------------------ tables */
+
+export const tableMode = enumOf(['live', 'turns']);
+
+export const tablePrivacy = enumOf(['private', 'friends', 'public']);
+
+/**
+ * `ready` means every chair is taken. It does NOT mean playing.
+ *
+ * There is no game engine behind a table and none is implied: this domain stops at the seam a
+ * game plugs into, and a status that claimed otherwise would be the first thing in it that was
+ * not true.
+ */
+export const tableStatus = enumOf(['open', 'ready', 'closed']);
+
+export type TableStatus = Infer<typeof tableStatus>;
+
+/** One chair. `who` and `invited` are handles, because that is how the wire names a person. */
+export const tableSeat = object({
+    seat: number(),
+    who: string().optional(),
+    invited: string().optional(),
+    ready: boolean(),
+    host: boolean()
+});
+
+export type TableSeat = Infer<typeof tableSeat>;
+
+/**
+ * A table, as everything that renders one needs it.
+ *
+ * `id` is the uuid and `code` is the short thing a person reads out - unlike a group, whose slug
+ * IS its id, because a table code is disposable and a table is usually reached by link.
+ */
+export const tableSummary = object({
+    id: string(),
+    code: string(),
+    game: string(),
+    seats: number(),
+    mode: tableMode,
+    privacy: tablePrivacy,
+    target: number(),
+    cube: boolean(),
+    blinds: string(),
+    status: tableStatus,
+    host: string().optional(),
+    chairs: array(tableSeat),
+    taken: number(),
+
+    /** This viewer's chair, absent when they are not sitting here. */
+    mine: number().optional(),
+
+    /** Absent for somebody who has not sat down: no chair, no thread. */
+    conversationId: string().optional(),
+
+    createdAt: string()
+});
+
+export type TableSummary = Infer<typeof tableSummary>;
+
+export const tableList = object({ tables: array(tableSummary) });
+
+export const tableCreateInput = object({
+    game: string(),
+    seats: number(),
+    mode: tableMode,
+    privacy: tablePrivacy,
+    target: number(),
+    cube: boolean(),
+    blinds: string(),
+
+    /** Handles. Each one holds a chair until they take it or the host gives it away. */
+    invitees: array(string())
+});
+
+export const readyInput = object({ ready: boolean() });
+
+export const openQuery = object({ game: string().optional() });
+
+/** What a seat claim answers: the chair, or nothing when there was none to be had. */
+export const seatResult = object({
+    table: tableSummary,
+    seat: number().optional()
+});
+
 /* -------------------------------------------------------------------------- chat */
 
 export const messageKind = enumOf(['text', 'system', 'invite', 'result']);

@@ -13,7 +13,8 @@ import type {
     GroupSummary,
     MessagePage,
     ServerInfo,
-    SocialGraph
+    SocialGraph,
+    TableSummary
 } from './schemas.ts';
 
 /**
@@ -141,6 +142,48 @@ export interface GroupPort
     transfer(me: string, slug: string, handle: string): Promise<GroupSummary>;
 }
 
+/**
+ * Tables: seat containers, and nothing about playing.
+ *
+ * Every route names people by handle and the table by its uuid - except `byCode`, which is how a
+ * link somebody pasted into a chat resolves. Every write answers with the table as it now stands.
+ */
+export interface TablePort
+{
+    /** Open public tables this viewer could sit at, optionally for one game. */
+    open(me: string, game: string | undefined, limit: number): Promise<TableSummary[]>;
+
+    /** The tables this account is sitting at. */
+    mine(me: string): Promise<TableSummary[]>;
+
+    view(me: string, tableId: string): Promise<TableSummary | null>;
+    byCode(me: string, code: string): Promise<TableSummary | null>;
+
+    create(me: string, input: {
+        game: string;
+        seats: number;
+        mode: 'live' | 'turns';
+        privacy: 'private' | 'friends' | 'public';
+        target: number;
+        cube: boolean;
+        blinds: string;
+        invitees: string[];
+    }): Promise<TableSummary>;
+
+    /**
+     * Sits down, or says there was no chair.
+     *
+     * `seat` absent means the table filled up first - an answer, not an error, because two people
+     * reaching for the last chair is ordinary rather than exceptional.
+     */
+    claim(me: string, tableId: string): Promise<{ table: TableSummary; seat: number | null }>;
+
+    leave(me: string, tableId: string): Promise<void>;
+    setReady(me: string, tableId: string, ready: boolean): Promise<TableSummary>;
+    invite(me: string, tableId: string, handle: string): Promise<TableSummary>;
+    close(me: string, tableId: string): Promise<void>;
+}
+
 export interface ChatPort
 {
     list(me: string): Promise<ConversationSummary[]>;
@@ -161,5 +204,6 @@ export interface Ports
     identity: IdentityPort;
     social: SocialPort;
     group: GroupPort;
+    table: TablePort;
     chat: ChatPort;
 }

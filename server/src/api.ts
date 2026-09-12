@@ -34,8 +34,14 @@ import {
     reportList,
     reportResult,
     requestResult,
+    openQuery,
+    readyInput,
+    seatResult,
     sendInput,
     serverInfo,
+    tableCreateInput,
+    tableList,
+    tableSummary,
     sessionState,
     signOutResult,
     socialGraph,
@@ -379,6 +385,85 @@ export function buildApi(ports: Ports)
 
             transfer: routes.post('/:slug/owner', { input: personRef, output: groupSummary },
                 (context) => ports.group.transfer(context.principal.userId, context.params.slug, context.input.id))
+        })),
+
+        /**
+         * Tables.
+         *
+         * A table is a SEAT CONTAINER. Nothing here starts, plays or scores a game, and nothing
+         * pretends to: the domain stops at the seam a game engine plugs into, so the furthest a
+         * table gets is `ready` - every chair taken.
+         *
+         * Guarded at the feature. Reads are open to any signed-in account for a public table,
+         * and a table this caller cannot see answers exactly as one that does not exist.
+         */
+        tables: feature('/tables', [session], (routes) => ({
+            /** Open public tables with a chair going. The lobby's whole search. */
+            open: routes.get('/', { output: tableList, query: openQuery }, async (context) => ({
+                tables: await ports.table.open(context.principal.userId, context.query.game, 24)
+            })),
+
+            /** Where this account is already sitting. Survives a reload and a second device. */
+            mine: routes.get('/mine', { output: tableList }, async (context) => ({
+                tables: await ports.table.mine(context.principal.userId)
+            })),
+
+            create: routes.post('/', { input: tableCreateInput, output: tableSummary },
+                (context) => ports.table.create(context.principal.userId, context.input)),
+
+            /** Resolves the short code somebody pasted into a chat. */
+            byCode: routes.get('/code/:code', { output: tableSummary }, async (context) =>
+            {
+                const table = await ports.table.byCode(context.principal.userId, context.params.code);
+                if (table === null)
+                {
+                    throw new NotFoundError('No table there.');
+                }
+                return table;
+            }),
+
+            view: routes.get('/:id', { output: tableSummary }, async (context) =>
+            {
+                const table = await ports.table.view(context.principal.userId, context.params.id);
+                if (table === null)
+                {
+                    throw new NotFoundError('No table there.');
+                }
+                return table;
+            }),
+
+            /**
+             * Sits down.
+             *
+             * 200 either way, with `seat` absent when the table filled up first. Two people
+             * reaching for the last chair is the ordinary case, not an exception - and an error
+             * would make the loser's client show a failure for something that simply happened.
+             */
+            claim: routes.post('/:id/seat', { output: seatResult }, async (context) =>
+            {
+                const claimed = await ports.table.claim(context.principal.userId, context.params.id);
+                return claimed.seat === null
+                    ? { table: claimed.table }
+                    : { table: claimed.table, seat: claimed.seat };
+            }),
+
+            leave: routes.post('/:id/leave', { output: ack }, async (context) =>
+            {
+                await ports.table.leave(context.principal.userId, context.params.id);
+                return { ok: true };
+            }),
+
+            ready: routes.post('/:id/ready', { input: readyInput, output: tableSummary },
+                (context) => ports.table.setReady(context.principal.userId, context.params.id, context.input.ready)),
+
+            invite: routes.post('/:id/invite', { input: personRef, output: tableSummary },
+                (context) => ports.table.invite(context.principal.userId, context.params.id, context.input.id)),
+
+            close: routes.post('/:id/close', { output: ack }, async (context) =>
+            {
+                await ports.table.close(context.principal.userId, context.params.id);
+                return { ok: true };
+            })
         })),
 
         /**
