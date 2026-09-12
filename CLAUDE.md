@@ -733,6 +733,58 @@ moderation sees only the excerpt a reporter chooses to disclose; a device that l
 its recovery phrase cannot get the history back, and the UI says so plainly rather than showing an
 empty thread.
 
+## Notifications, and a push that carries nothing
+
+A notification has NO TEXT. It is a kind, whoever caused it, a count and a reference, and the
+sentence is composed at display time through the message catalogue — so it follows a language
+switch. The version this replaces baked a bilingual string into the row when it was written, which
+is the same defect `nura-e2ee/v1` calls out for chat lines and the same fix.
+
+**The dedupe key is the whole design.** `notifications_dedupe` is unique over
+`(user_id, dedupe_key)` and the write is an upsert that bumps `count`, moves `created_at` to
+now and clears `read_at`. Twelve messages in one conversation are ONE row saying twelve, not
+twelve rows to swipe away. The producer composes the key — `chat:<conversationId>`,
+`friend:<actorId>`, `group:<groupId>`, `table:<tableId>` — and choosing it is the only
+interesting decision in writing one.
+
+**Five kinds, each with a producer**, the same rule `LINE_KEYS` follows: `friend-request`,
+`friend-accepted`, `group-added`, `table-invite`, `message`. A kind with nothing writing it is
+filler copy standing in for something nobody has built.
+
+**The mute is checked when the row is WRITTEN**, not when it is rendered. A notification that
+exists and is hidden is still a badge somebody has to clear. Same for a block, and for your own
+actions: nobody is told about something they did.
+
+**`ref` is a closed set** — `conversationId`, `tableId`, `groupId`, `requestId`,
+`personId` — filtered on the way in. The column is `jsonb` and would happily take a sentence;
+that filter is what stops a "structured" notification from carrying prose.
+
+**The list pages by keyset**, `(created_at, id)` descending, like chat history. `more()` appends;
+anything that CHANGES the list drops the older pages and refetches the first, because stitching a
+fresh head onto a stale tail is how a list shows one row twice.
+
+**A push carries no payload at all**, and that is why `domains/notify/push.ts` is forty lines
+rather than four hundred. A payload would have to be encrypted to the subscription's
+`p256dh`/`auth` with HKDF and AES128GCM — and an encrypted payload of a message this server will
+not be able to read under `nura-e2ee/v1` is a contradiction. What is left is the VAPID half: an
+ES256 JWT naming the endpoint's ORIGIN (never its path, which identifies the subscription) and
+expiring within the hour. The browser wakes the worker with an empty event, the worker shows one
+generic notice, and the content comes from the api when the app is opened — over a session the
+reader is already authorised on.
+
+`VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VAPID_SUBJECT` are all three optional and all
+three needed TOGETHER. With none set, `GET /notifications/push` answers with no key and the
+client never asks the browser for permission: a prompt for something that cannot be delivered is
+one somebody denies once and never sees again.
+
+**`public/push-worker.js` is plain JavaScript served as-is, never bundled.** A service worker's
+url is its identity, so a hashed filename would register a new worker on every deploy while the
+old one kept running.
+
+Sending is fire-and-forget and never blocks a request: a slow push service must not make sending a
+message slow, and a dead one must not make it fail. A 404 or 410 from the service means the
+subscription is over — the row is retired rather than retried forever.
+
 ## Realtime — `nura-rt/v1`
 
 One WebSocket at `/ws`, and it is a **doorbell, not a delivery**. A frame says "something about

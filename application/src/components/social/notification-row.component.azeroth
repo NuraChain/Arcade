@@ -1,7 +1,8 @@
+import type { Notification, NotificationKind } from '../../api.ts';
 import { personById } from '../../data/mock/index.ts';
-import type { Notification, NotificationKind } from '../../data/mock/types.ts';
 import Icon from '../../icons/icon.component.azeroth';
 import type { IconName } from '../../icons/registry.ts';
+import type { MessageKey } from '../../locales/en.ts';
 import { useDevice } from '../../stores/device.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useSocial } from '../../stores/social.store.ts';
@@ -11,11 +12,25 @@ import IconButton from '../ui/icon-button.component.azeroth';
 
 const ICON: Record<NotificationKind, IconName> = {
     'friend-request': 'friend-add',
-    invite: 'seat',
-    result: 'trophy',
-    achievement: 'medal',
-    rematch: 'refresh',
-    system: 'info'
+    'friend-accepted': 'friend-check',
+    'group-added': 'people',
+    'table-invite': 'seat',
+    'message': 'chats'
+};
+
+/**
+ * What each kind SAYS, composed here rather than stored.
+ *
+ * The row used to carry a bilingual sentence baked in when it was written, which could not follow
+ * a language switch - the same defect the chat lines had and the same fix. `message` is the only
+ * one that counts, because it is the only one that can happen twelve times before somebody looks.
+ */
+const SAYS: Record<NotificationKind, MessageKey> = {
+    'friend-request': 'notify.friendRequest',
+    'friend-accepted': 'notify.friendAccepted',
+    'group-added': 'notify.groupAdded',
+    'table-invite': 'notify.tableInvite',
+    'message': 'notify.message'
 };
 
 export default component NotificationRow(props: {
@@ -28,11 +43,16 @@ export default component NotificationRow(props: {
     const social = useSocial();
     const device = useDevice();
 
-    derived person = props.item.from === null ? null : (personById(props.item.from) ?? null);
+    derived person = props.item.actor === undefined ? null : (personById(props.item.actor) ?? null);
 
-    derived requestId = props.item.kind === 'friend-request' ? props.item.ref.requestId : undefined;
+    derived who = person === null ? (props.item.actor ?? '') : locale.text(person.name).split(' ')[0];
 
-    derived answerable = requestId !== undefined && social.incoming().some((request) => request.id === requestId);
+    derived said = props.item.kind === 'message'
+        ? locale.plural('notify.message', props.item.count, { who })
+        : locale.t(SAYS[props.item.kind], { who });
+
+    derived answerable = props.item.kind === 'friend-request'
+        && social.incoming().some((request) => request.from === props.item.actor);
 
     derived roomy = device.posture() !== 'phone';
 
@@ -54,32 +74,58 @@ export default component NotificationRow(props: {
                 </Show>
                 <span class="flex min-w-0 flex-1 flex-col">
                     <span class={ [ 'line-clamp-2 text-ui-base', props.item.read ? 'text-muted' : 'text-text' ].join(' ') }>
-                        <Show when={ person !== null }>
-                            { () => <span class="font-semibold text-text">{ locale.text(person!.name) } </span> }
-                        </Show>
-                        { locale.text(props.item.text) }
+                        { said }
                     </span>
-                    <span class="text-ui-xs text-faint">{ locale.relative(props.item.at) }</span>
+                    <span class="tally text-ui-xs text-faint">{ locale.relative(Date.parse(props.item.at)) }</span>
                 </span>
-                <Show when={ !props.item.read }>
-                    { () => <span class="h-2 w-2 shrink-0 rounded-full bg-accent" aria-hidden="true"></span> }
-                </Show>
             </button>
-            <Show when={ answerable && roomy }>
-                { () =>
-                    <span class="flex shrink-0 gap-1.5">
-                        <Button variant="primary" size="sm" class="whitespace-nowrap" onClick={ () => social.accept(requestId!) }>{ locale.t('person.accept') }</Button>
-                        <Button variant="ghost" size="sm" class="whitespace-nowrap" onClick={ () => social.decline(requestId!) }>{ locale.t('person.decline') }</Button>
-                    </span>
-                }
+            <Show when={ !props.item.read }>
+                { () => <span class="h-2 w-2 shrink-0 rounded-full bg-accent" aria-hidden="true"></span> }
             </Show>
-            <IconButton icon="close" label={ locale.t('notifications.dismiss') } variant="ghost" size="sm" onClick={ () => props.onDismiss(props.item.id) } />
+            <IconButton
+                icon="close"
+                label={ locale.t('notifications.dismiss') }
+                variant="ghost"
+                size="sm"
+                onClick={ () => props.onDismiss(props.item.id) }
+            />
         </div>
-        <Show when={ answerable && !roomy }>
+
+        <Show when={ answerable }>
             { () =>
-                <div class="flex gap-2 ps-[3.25rem]">
-                    <Button variant="primary" size="sm" class="flex-1 whitespace-nowrap" onClick={ () => social.accept(requestId!) }>{ locale.t('person.accept') }</Button>
-                    <Button variant="ghost" size="sm" class="flex-1 whitespace-nowrap" onClick={ () => social.decline(requestId!) }>{ locale.t('person.decline') }</Button>
+                <div class="flex gap-2 ps-13">
+                    <Button
+                        variant="primary"
+                        size="sm"
+                        onClick={ () =>
+                        {
+                            const request = social.incoming().find((entry) => entry.from === props.item.actor);
+                            if (request !== undefined)
+                            {
+                                void social.accept(request.id);
+                            }
+                        } }
+                    >
+                        { locale.t('person.accept') }
+                    </Button>
+                    <Show when={ roomy }>
+                        { () =>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={ () =>
+                                {
+                                    const request = social.incoming().find((entry) => entry.from === props.item.actor);
+                                    if (request !== undefined)
+                                    {
+                                        void social.decline(request.id);
+                                    }
+                                } }
+                            >
+                                { locale.t('person.decline') }
+                            </Button>
+                        }
+                    </Show>
                 </div>
             }
         </Show>

@@ -527,41 +527,6 @@ describe('chat store', () =>
     });
 });
 
-describe('notifications store', () =>
-{
-    it('shows only the friend requests addressed to me', () =>
-    {
-        const notifications = useNotifications();
-        const requests = buildDataset(9, 900_000).requests;
-        const shown = notifications.items().filter((item) => item.kind === 'friend-request');
-        for (const item of shown)
-        {
-            expect(requests.find((request) => request.id === item.ref.requestId)?.to).toBe('alex');
-        }
-        expect(shown.length).toBeGreaterThan(0);
-    });
-
-    it('marks one read, then all', () =>
-    {
-        const notifications = useNotifications();
-        const unread = notifications.unread();
-        expect(unread).toBeGreaterThan(0);
-        notifications.markRead(notifications.items()[0].id);
-        expect(notifications.unread()).toBe(unread - 1);
-        notifications.markAllRead();
-        expect(notifications.unread()).toBe(0);
-    });
-
-    it('pushes a live notification and lets it be dismissed', () =>
-    {
-        const notifications = useNotifications();
-        const id = notifications.push({ kind: 'invite', from: 'reza.t', text: { en: 'opened a table', fa: 'یک میز باز کرد' } });
-        expect(notifications.items().some((item) => item.id === id)).toBe(true);
-        notifications.remove(id);
-        expect(notifications.items().some((item) => item.id === id)).toBe(false);
-    });
-});
-
 describe('search store', () =>
 {
     it('finds people, games, groups and messages, and remembers the term', async () =>

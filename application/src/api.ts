@@ -10,6 +10,8 @@ export type {
     GroupRole,
     GroupSummary,
     MuteSubject,
+    Notification,
+    NotificationKind,
     PersonSummary,
     PersonView,
     Privacy,

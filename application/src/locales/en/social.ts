@@ -222,5 +222,19 @@ export const social = {
     'notifications.today': 'Today',
     'notifications.earlier': 'Earlier',
     'notifications.friendRequest': 'wants to be friends',
-    'notifications.dismiss': 'Dismiss'
+    'notifications.dismiss': 'Dismiss',
+
+    'notify.friendRequest': '{who} wants to be friends',
+    'notify.friendAccepted': '{who} accepted your request',
+    'notify.groupAdded': '{who} added you to a group',
+    'notify.tableInvite': '{who} saved you a seat',
+    'notify.message': { one: '{who} sent you a message', other: '{count} new messages from {who}' },
+
+    'notify.push.title': 'Push notifications',
+    'notify.push.lead': 'Get a nudge on this device when something happens. The notice never says what — the app fetches that when you open it.',
+    'notify.push.enable': 'Turn on for this device',
+    'notify.push.disable': 'Turn off for this device',
+    'notify.push.on': 'On for this device',
+    'notify.push.denied': 'This browser is blocking notifications. Allow them in its site settings first.',
+    'notify.push.unavailable': 'Push is not set up on this server yet.'
 };

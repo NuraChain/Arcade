@@ -4,7 +4,7 @@ import { GAMES, type GameId } from '../games.ts';
 import { ACHIEVEMENTS } from './achievements.ts';
 import { PEOPLE, type PersonSeed } from './people.ts';
 import { THREADS } from './threads.ts';
-import type { Activity, Conversation, FriendRequest, GameRecord, Message, Notification, Person, Skill } from './types.ts';
+import type { Activity, Conversation, FriendRequest, GameRecord, Message, Person, Skill } from './types.ts';
 
 export const MINUTE = 60000;
 export const HOUR = 60 * MINUTE;
@@ -17,7 +17,6 @@ export interface Dataset
     people: Person[];
     conversations: Conversation[];
     messages: Message[];
-    notifications: Notification[];
     activity: Activity[];
     requests: FriendRequest[];
     friends: Record<string, string[]>;
@@ -162,32 +161,6 @@ function buildActivity(people: Person[], now: number, datasetSeed: number): Acti
     return activity.sort((a, b) => b.at - a.at);
 }
 
-function buildNotifications(requests: FriendRequest[], now: number): Notification[]
-{
-    const notifications: Notification[] = [];
-    for (const request of requests)
-    {
-        notifications.push({
-            id: `n-${ request.id }`,
-            kind: 'friend-request',
-            at: request.at,
-            read: false,
-            from: request.from,
-            text: { en: 'wants to be friends', fa: 'می‌خواهد دوست شود' },
-            ref: { requestId: request.id, personId: request.from }
-        });
-    }
-    notifications.push(
-        { id: 'n-invite-sara', kind: 'invite', at: now - 13 * MINUTE, read: false, from: 'sara.k', text: { en: 'invited you to backgammon', fa: 'تو را به تخته‌نرد دعوت کرد' }, ref: { game: 'backgammon', tableId: 't-c-sara-5', conversationId: 'c-sara', personId: 'sara.k' } },
-        { id: 'n-invite-babak', kind: 'invite', at: now - 38 * MINUTE, read: false, from: 'sara.k', text: { en: 'opened a Hokm table in Friday Night Crew', fa: 'در اکیپ جمعه‌شب یک میز حکم باز کرد' }, ref: { game: 'hokm', tableId: 't-c-friday-5', conversationId: 'c-friday', personId: 'sara.k' } },
-        { id: 'n-result-reza', kind: 'result', at: now - 1488 * MINUTE, read: true, from: 'reza.t', text: { en: 'You won the backgammon game against Reza', fa: 'بازی تخته‌نرد با رضا را بردی' }, ref: { game: 'backgammon', tableId: 't-c-reza-3', personId: 'reza.t' } },
-        { id: 'n-rematch-tara', kind: 'rematch', at: now - 280 * MINUTE, read: true, from: 'tara.y', text: { en: 'wants a Ludo rematch', fa: 'بازی مجدد منچ می‌خواهد' }, ref: { game: 'ludo', conversationId: 'c-lunch', personId: 'tara.y' } },
-        { id: 'n-ach-streak', kind: 'achievement', at: now - 2 * DAY, read: true, from: null, text: { en: 'Achievement unlocked: On a roll', fa: 'دستاورد باز شد: روی دور' }, ref: { achievementId: 'streak-3' } },
-        { id: 'n-system-fair', kind: 'system', at: now - 5 * DAY, read: true, from: null, text: { en: 'Every dice table now keeps a roll log you can open after the game.', fa: 'حالا هر میز تاس یک گزارش پرتاب دارد که بعد از بازی می‌توانی بازش کنی.' }, ref: {} }
-    );
-    return notifications.sort((a, b) => b.at - a.at);
-}
-
 /**
  * The mock friend graph.
  *
@@ -234,7 +207,6 @@ export function buildDataset(seed: number, now: number): Dataset
         people,
         conversations,
         messages,
-        notifications: buildNotifications(requests, now),
         activity: buildActivity(people, now, seed),
         requests,
         friends: buildFriends(people)

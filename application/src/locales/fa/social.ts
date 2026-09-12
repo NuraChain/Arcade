@@ -225,5 +225,19 @@ export const social: Pick<Dictionary, keyof typeof reference> = {
     'notifications.today': 'امروز',
     'notifications.earlier': 'پیش‌تر',
     'notifications.friendRequest': 'می‌خواهد دوست شود',
-    'notifications.dismiss': 'بستن'
+    'notifications.dismiss': 'بستن',
+
+    'notify.friendRequest': '{who} می‌خواهد دوست شود',
+    'notify.friendAccepted': '{who} درخواستت را قبول کرد',
+    'notify.groupAdded': '{who} تو را به یک گروه اضافه کرد',
+    'notify.tableInvite': '{who} یک صندلی برایت نگه داشت',
+    'notify.message': { one: '{who} برایت پیام فرستاد', other: '{count} پیام تازه از {who}' },
+
+    'notify.push.title': 'اعلان‌ها',
+    'notify.push.lead': 'وقتی اتفاقی می‌افتد روی این دستگاه خبرت کنیم. خود اعلان چیزی نمی‌گوید — محتوا وقتی برنامه را باز می‌کنی می‌آید.',
+    'notify.push.enable': 'روشن کن برای این دستگاه',
+    'notify.push.disable': 'خاموش کن برای این دستگاه',
+    'notify.push.on': 'برای این دستگاه روشن است',
+    'notify.push.denied': 'این مرورگر اعلان‌ها را بسته است. اول از تنظیمات سایت اجازه بده.',
+    'notify.push.unavailable': 'روی این سرور هنوز اعلان تنظیم نشده.'
 };

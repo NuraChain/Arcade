@@ -4,16 +4,12 @@ import Page from '../../components/app/page.component.azeroth';
 import NotificationRow from '../../components/social/notification-row.component.azeroth';
 import Button from '../../components/ui/button.component.azeroth';
 import EmptyState from '../../components/ui/empty-state.component.azeroth';
-import Pagination from '../../components/ui/pagination.component.azeroth';
 import SectionHeading from '../../components/ui/section-heading.component.azeroth';
-import { personById } from '../../data/mock/index.ts';
-import type { Notification } from '../../data/mock/types.ts';
+import type { Notification } from '../../api.ts';
 import { runtime } from '../../lib/runtime.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useNotifications } from '../../stores/notifications.store.ts';
 import { usePresence } from '../../stores/presence.store.ts';
-
-const EARLIER_PAGE = 8;
 
 export default component NotificationsPage()
 {
@@ -24,8 +20,6 @@ export default component NotificationsPage()
 
     useHead({ title: () => locale.t('app.nav.notifications') });
 
-    state earlierPage = 1;
-
     derived items = notifications.items();
 
     derived dayStart = ((): number =>
@@ -35,20 +29,22 @@ export default component NotificationsPage()
         return reference.getTime();
     })();
 
-    derived today = items.filter((item) => item.at >= dayStart);
+    derived today = items.filter((item) => Date.parse(item.at) >= dayStart);
 
-    derived allEarlier = items.filter((item) => item.at < dayStart);
-
-    derived earlier = allEarlier.slice(0, earlierPage * EARLIER_PAGE);
+    derived earlier = items.filter((item) => Date.parse(item.at) < dayStart);
 
     const open = (item: Notification): void =>
     {
-        notifications.markRead(item.id);
-        // An invitation names the table it is for. There is nothing to reconstruct from a game
-        // id and a sender: either the notification carries a table or it is too old to act on.
-        if (item.kind === 'invite' && item.ref.tableId !== undefined)
+        void notifications.markRead(item.id);
+
+        if (item.ref.tableId !== undefined)
         {
             navigate(`/app/play/${ item.ref.tableId }`);
+            return;
+        }
+        if (item.ref.groupId !== undefined)
+        {
+            navigate(`/app/groups/${ item.ref.groupId }`);
             return;
         }
         if (item.ref.conversationId !== undefined)
@@ -56,9 +52,9 @@ export default component NotificationsPage()
             navigate(`/app/chats/${ item.ref.conversationId }`);
             return;
         }
-        if (item.from !== null)
+        if (item.actor !== undefined)
         {
-            navigate(`/app/people/${ personById(item.from)?.handle ?? item.from }`);
+            navigate(`/app/people/${ item.actor }`);
         }
     };
 
@@ -69,7 +65,7 @@ export default component NotificationsPage()
                 <p class="mt-2 text-ui-md text-muted">{ locale.t('notifications.lead') }</p>
             </div>
             <Show when={ notifications.unread() > 0 }>
-                { () => <Button variant="ghost" size="sm" leading="check-circle" onClick={ () => notifications.markAllRead() }>{ locale.t('notifications.markAll') }</Button> }
+                { () => <Button variant="ghost" size="sm" leading="check-circle" onClick={ () => void notifications.markAllRead() }>{ locale.t('notifications.markAll') }</Button> }
             </Show>
         </header>
 
@@ -85,7 +81,7 @@ export default component NotificationsPage()
                             <ul class="flex flex-col gap-0.5" aria-label={ locale.t('notifications.today') }>
                                 <For each={ today } key={ (item) => item.id } let={ item }>
                                     <li>
-                                        <NotificationRow item={ item } onOpen={ open } onDismiss={ (id) => notifications.remove(id) } />
+                                        <NotificationRow item={ item } onOpen={ open } onDismiss={ (id) => void notifications.dismiss(id) } />
                                     </li>
                                 </For>
                             </ul>
@@ -98,18 +94,22 @@ export default component NotificationsPage()
                             <ul class="flex flex-col gap-0.5" aria-label={ locale.t('notifications.earlier') }>
                                 <For each={ earlier } key={ (item) => item.id } let={ item }>
                                     <li>
-                                        <NotificationRow item={ item } onOpen={ open } onDismiss={ (id) => notifications.remove(id) } />
+                                        <NotificationRow item={ item } onOpen={ open } onDismiss={ (id) => void notifications.dismiss(id) } />
                                     </li>
                                 </For>
                             </ul>
-                            <Pagination
-                                total={ allEarlier.length }
-                                size={ EARLIER_PAGE }
-                                page={ earlierPage }
-                                mode="more"
-                                label={ locale.t('notifications.earlier') }
-                                onPage={ (page) => earlierPage = page }
-                            />
+                            <Show when={ notifications.hasMore() }>
+                                { () =>
+                                    <Button
+                                        variant="ghost"
+                                        block
+                                        class="mt-2"
+                                        onClick={ () => void notifications.more() }
+                                    >
+                                        { locale.t('common.more') }
+                                    </Button>
+                                }
+                            </Show>
                         </section>
                     </Show>
                 </div>

@@ -76,10 +76,6 @@ describe('mock dataset', () =>
             expect(message.at).toBeLessThan(NOW);
             expect(message.at).toBeGreaterThan(NOW - 30 * 24 * 3600000);
         }
-        for (const notification of data.notifications)
-        {
-            expect(notification.at).toBeLessThanOrEqual(NOW);
-        }
     });
 
     it('counts unread messages from the thread seed', () =>

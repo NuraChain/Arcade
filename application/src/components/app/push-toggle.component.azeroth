@@ -1,0 +1,140 @@
+import { client } from '../../api.ts';
+import { currentSubscription, pushSupported, subscribe, unsubscribe, type PushState } from '../../lib/push.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import { useToasts } from '../../stores/toasts.store.ts';
+import Button from '../ui/button.component.azeroth';
+
+/**
+ * Turning push on for THIS device.
+ *
+ * Per device on purpose: a subscription belongs to one browser, and a switch that looked
+ * account-wide would be a switch that lies on the phone somebody set it from the laptop.
+ *
+ * Nothing here asks for permission until the server says it can deliver. A prompt for something
+ * that cannot arrive is a prompt somebody denies once and never sees again.
+ */
+export default component PushToggle()
+{
+    const locale = useLocale();
+    const toasts = useToasts();
+
+    state state: PushState = 'unsupported';
+    state key = '';
+    state busy = false;
+
+    const settle = async (): Promise<void> =>
+    {
+        if (!pushSupported())
+        {
+            state = 'unsupported';
+            return;
+        }
+
+        const published = await client.notifications.pushKey().catch(() => ({ key: undefined }));
+        key = published.key ?? '';
+
+        if (key === '')
+        {
+            state = 'unconfigured';
+            return;
+        }
+        if (Notification.permission === 'denied')
+        {
+            state = 'denied';
+            return;
+        }
+
+        state = await currentSubscription() === null ? 'off' : 'on';
+    };
+
+    mount
+    {
+        void settle();
+    }
+
+    const turnOn = async (): Promise<void> =>
+    {
+        busy = true;
+        try
+        {
+            const subscription = await subscribe(key);
+            if (subscription === null)
+            {
+                state = Notification.permission === 'denied' ? 'denied' : 'off';
+                return;
+            }
+            await client.notifications.subscribe({ input: subscription });
+            state = 'on';
+        }
+        catch
+        {
+            toasts.show({ kind: 'warning', text: locale.t('state.errorLead') });
+        }
+        finally
+        {
+            busy = false;
+        }
+    };
+
+    const turnOff = async (): Promise<void> =>
+    {
+        busy = true;
+        try
+        {
+            const endpoint = await unsubscribe();
+            if (endpoint !== null)
+            {
+                await client.notifications.unsubscribe({ input: { endpoint } });
+            }
+            state = 'off';
+        }
+        catch
+        {
+            toasts.show({ kind: 'warning', text: locale.t('state.errorLead') });
+        }
+        finally
+        {
+            busy = false;
+        }
+    };
+
+    <Show when={ state !== 'unsupported' }>
+        { () =>
+            <div class="flex flex-col gap-3 rounded-panel border border-line bg-field p-4">
+                <div>
+                    <h3 class="text-ui-base font-semibold text-text">{ locale.t('notify.push.title') }</h3>
+                    <p class="mt-1 text-ui-sm text-muted">{ locale.t('notify.push.lead') }</p>
+                </div>
+
+                <Show when={ state === 'unconfigured' }>
+                    { () => <p class="text-ui-sm text-faint">{ locale.t('notify.push.unavailable') }</p> }
+                </Show>
+
+                <Show when={ state === 'denied' }>
+                    { () => <p class="text-ui-sm text-madder">{ locale.t('notify.push.denied') }</p> }
+                </Show>
+
+                <Show when={ state === 'off' }>
+                    { () =>
+                        <Button variant="primary" size="sm" leading="bell" loading={ busy } onClick={ () => void turnOn() }>
+                            { locale.t('notify.push.enable') }
+                        </Button>
+                    }
+                </Show>
+
+                <Show when={ state === 'on' }>
+                    { () =>
+                        <div class="flex flex-wrap items-center gap-3">
+                            <span class="flex items-center gap-1.5 text-ui-sm font-semibold text-live">
+                                { locale.t('notify.push.on') }
+                            </span>
+                            <Button variant="ghost" size="sm" loading={ busy } onClick={ () => void turnOff() }>
+                                { locale.t('notify.push.disable') }
+                            </Button>
+                        </div>
+                    }
+                </Show>
+            </div>
+        }
+    </Show>
+}

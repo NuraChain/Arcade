@@ -34,6 +34,20 @@ interface GroupWire
     createdAt: string;
 }
 
+interface NotificationWire
+{
+    id: string;
+    kind: 'friend-request' | 'friend-accepted' | 'group-added' | 'table-invite' | 'message';
+    actor?: string;
+    ref: Record<string, string>;
+    count: number;
+    at: string;
+    read: boolean;
+}
+
+/** How many a page carries here. Small on purpose, so a paging test does not need thirty rows. */
+const NOTIFY_PAGE = 3;
+
 interface SeatWire
 {
     seat: number;
@@ -148,6 +162,52 @@ export const server =
     refuseGroup: null as string | null,
     tableSeq: 0,
 
+    /**
+     * Notifications, newest first.
+     *
+     * Written by `notify()` rather than by the routes, because what a test wants to arrange is
+     * "these things have happened to me", not "the server would have written these rows".
+     */
+    notifications: [] as NotificationWire[],
+    notifySeq: 0,
+
+    /** The VAPID key this fake server publishes. Null means push is not configured. */
+    pushKey: null as string | null,
+    pushSubscriptions: [] as { endpoint: string; p256dh: string; auth: string }[],
+
+    /**
+     * Something happened to me, with the server's dedupe rule applied.
+     *
+     * One row per key: a second arrival bumps the count, moves it to the top and unreads it. The
+     * RULE is the server's and `notify.db.spec.ts` owns it against a real Postgres; this is here
+     * so a client test can arrange a list without a database.
+     */
+    notify(input: { kind: NotificationWire['kind']; actor?: string; ref?: Record<string, string>; dedupeKey: string }): void
+    {
+        const existing = server.notifications.find((one) => one.id === input.dedupeKey);
+        if (existing !== undefined)
+        {
+            existing.count += 1;
+            existing.read = false;
+            server.notifySeq += 1;
+            existing.at = new Date(server.notifySeq * 1000).toISOString();
+        }
+        else
+        {
+            server.notifySeq += 1;
+            server.notifications.push({
+                id: input.dedupeKey,
+                kind: input.kind,
+                ...(input.actor === undefined ? {} : { actor: input.actor }),
+                ref: input.ref ?? {},
+                count: 1,
+                at: new Date(server.notifySeq * 1000).toISOString(),
+                read: false
+            });
+        }
+        server.notifications.sort((a, b) => b.at.localeCompare(a.at));
+    },
+
     /** Tables, in memory. Empty until a test opens one - nobody is sitting anywhere on boot. */
     tables: [] as TableWire[],
 
@@ -178,6 +238,10 @@ export const server =
         server.refuseGroup = null;
         server.tables = [];
         server.tableSeq = 0;
+        server.notifications = [];
+        server.notifySeq = 0;
+        server.pushKey = null;
+        server.pushSubscriptions = [];
         server.account = null;
         server.issued = null;
         server.received = null;
@@ -585,6 +649,79 @@ export const client =
             group.owner = input.id;
             group.role = 'member';
             return group;
+        }
+    },
+
+    notifications:
+    {
+        async list({ query }: { query: { cursor?: string } })
+        {
+            server.calls.push('notifications.list');
+
+            const from = query.cursor === undefined
+                ? 0
+                : server.notifications.findIndex((one) => one.id === query.cursor) + 1;
+
+            const slice = server.notifications.slice(from, from + NOTIFY_PAGE);
+            const hasMore = from + NOTIFY_PAGE < server.notifications.length;
+
+            return {
+                items: slice,
+                hasMore,
+                unread: server.notifications.filter((one) => !one.read).length,
+                ...(hasMore && slice.length > 0 ? { cursor: slice[slice.length - 1].id } : {})
+            };
+        },
+
+        async read({ params }: { params: { id: string } })
+        {
+            server.calls.push('notifications.read');
+            const found = server.notifications.find((one) => one.id === params.id);
+            if (found !== undefined)
+            {
+                found.read = true;
+            }
+            return { ok: true };
+        },
+
+        async readAll()
+        {
+            server.calls.push('notifications.read-all');
+            for (const one of server.notifications)
+            {
+                one.read = true;
+            }
+            return { ok: true };
+        },
+
+        async dismiss({ params }: { params: { id: string } })
+        {
+            server.calls.push('notifications.dismiss');
+            server.notifications = server.notifications.filter((one) => one.id !== params.id);
+            return { ok: true };
+        },
+
+        async pushKey()
+        {
+            server.calls.push('notifications.push-key');
+            return server.pushKey === null ? {} : { key: server.pushKey };
+        },
+
+        async subscribe({ input }: { input: { endpoint: string; p256dh: string; auth: string } })
+        {
+            server.calls.push('notifications.subscribe');
+            server.pushSubscriptions = [
+                ...server.pushSubscriptions.filter((one) => one.endpoint !== input.endpoint),
+                input
+            ];
+            return { ok: true };
+        },
+
+        async unsubscribe({ input }: { input: { endpoint: string } })
+        {
+            server.calls.push('notifications.unsubscribe');
+            server.pushSubscriptions = server.pushSubscriptions.filter((one) => one.endpoint !== input.endpoint);
+            return { ok: true };
         }
     },
 

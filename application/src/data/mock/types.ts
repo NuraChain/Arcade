@@ -83,29 +83,6 @@ export interface Message
     ref: MessageRef | null;
 }
 
-export type NotificationKind = 'friend-request' | 'invite' | 'result' | 'achievement' | 'rematch' | 'system';
-
-export interface NotificationRef
-{
-    requestId?: string;
-    tableId?: string;
-    game?: GameId;
-    achievementId?: string;
-    conversationId?: string;
-    personId?: string;
-}
-
-export interface Notification
-{
-    id: string;
-    kind: NotificationKind;
-    at: number;
-    read: boolean;
-    from: string | null;
-    text: LocalizedText;
-    ref: NotificationRef;
-}
-
 export type ActivityKind = 'played' | 'won' | 'joined' | 'achievement' | 'invited';
 
 export interface Activity

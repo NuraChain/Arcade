@@ -13,6 +13,7 @@ import { NURA_CHAIN } from '../../data/chain.ts';
 import { personById } from '../../data/mock/index.ts';
 import type { Person } from '../../data/mock/types.ts';
 import Icon from '../../icons/icon.component.azeroth';
+import PushToggle from '../../components/app/push-toggle.component.azeroth';
 import { shortAddress } from '../../lib/wallet.ts';
 import { useAccount } from '../../stores/account.store.ts';
 import { useConnection } from '../../stores/connection.store.ts';
@@ -260,6 +261,9 @@ export default component SettingsPage()
 
             <section aria-labelledby="settings-notifications">
                 <SectionHeading id="settings-notifications" title={ locale.t('settings.notifications') } />
+                <div class="mb-3">
+                    <PushToggle />
+                </div>
                 <div class="flex flex-col gap-4 rounded-panel border border-line bg-field p-4">
                     <For each={ NOTIFICATION_CATEGORIES } key={ (category) => category } let={ category }>
                         <div>
