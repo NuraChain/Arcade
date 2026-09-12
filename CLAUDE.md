@@ -771,11 +771,12 @@ How a PEER decides whether to believe any of that is *Whose device is that?* bel
 
 ```
 'nura-e2ee/v1' ␟ 'msg' ␟ conversationId ␟ epoch ␟ seq ␟ messageId
-               ␟ senderAccountId ␟ senderDeviceId ␟ kind ␟ clientAt
+               ␟ senderAccountId ␟ senderDeviceId ␟ kind ␟ clientAt ␟ commitment
 ```
 
 Binding `kind` stops the server relabelling a fabricated row as a person's words; binding
-`clientAt` stops it re-dating one; binding `senderDeviceId` stops it re-attributing one.
+`clientAt` stops it re-dating one; binding `senderDeviceId` stops it re-attributing one; binding
+`commitment` stops either end lying about what the message can later be reported as saying.
 
 **No wallet-signature-derived backup key.** A deterministic `personal_sign` over a fixed string is
 an unrevocable, phishable, remote skeleton key to the entire archive. Recovery is a *generated*
@@ -792,9 +793,9 @@ message, when, and how large it was. E2EE hides content, not the social graph.
 
 **What it costs**, and these are consequences, not regrets: no server-side message search — the
 index is per device, over the archive that device can decrypt; push notifications are contentless;
-moderation sees only the excerpt a reporter chooses to disclose; a device that loses its keys and
-its recovery phrase cannot get the history back, and the UI says so plainly rather than showing an
-empty thread.
+moderation sees only the excerpt a reporter chooses to disclose, which is what *Franking* below
+makes worth reading; a device that loses its keys and its recovery phrase cannot get the history
+back, and the UI says so plainly rather than showing an empty thread.
 
 ## Devices, and the degraded states that shipped first
 
@@ -1209,6 +1210,51 @@ the one place the product must not be confidently wrong. The browser pass found 
 **`tools/qa/seal-pass.mjs` loses a laptop in every cell.** It makes a phrase, throws the keyring
 away, re-enrols as a pending device and types the phrase back in — at 390 and 1280, both themes,
 both languages. Two of the defects above were found that way and neither was visible to any gate.
+
+## Franking
+
+Under end-to-end encryption moderation can only ever see what a reporter chooses to show it. Without
+franking there would be no reason to believe a word of it: anybody could type a sentence, attribute
+it to somebody they disliked, and nobody — including this server — could tell. That is not a small
+gap on a social product. It turns the report button into a weapon aimed at whoever the most willing
+liar dislikes.
+
+**The construction, and what each half buys.** The sender mints a random franking key per message,
+commits with `HMAC(key, plaintext)`, and seals the KEY inside the ciphertext while the COMMITMENT
+travels in the clear. The server MACs that commitment together with the context it arrived in and
+stores the result. So: the server learns nothing at send time, because a commitment under a key it
+does not have is noise; a reporter cannot fabricate a message, because a valid frank needs the
+server's key; and a sender cannot deny one, because the commitment binds the exact words.
+
+**A disclosure is exactly one message.** The reporter picks it, and it proves nothing about any
+other. That is the shape moderation has to take here and it is not a limitation to be engineered
+around later — bulk disclosure would be a different product.
+
+**The commitment is in the AAD**, which is why `0014-franking.ts` is the second hard cutover: every
+signature before it covers ten fields and every one after covers eleven. The alternative was leaving
+the commitment outside the authenticated bytes, where the server could move one message's commitment
+onto another and a sender could publish one that does not match what they wrote — making their own
+messages quietly unreportable. Every recipient recomputes the commitment from the key inside the
+envelope, so a mismatch renders as `tampered` rather than as an unreportable message.
+
+**The franking key is 32 bytes and lives in the first 32 bytes of the plaintext.** It is read back
+out by length, so a key of any other size is silently mixed into the words — which is exactly what
+happened the first time `crypto.spec.ts` used a readable string as a fixture, and every open failed
+as `tampered` with nothing pointing at the length.
+
+**The server's frank never travels.** A client cannot check it and has no reason to hold it, and
+publishing it would hand every reader a token that only matters when a report is filed.
+
+**The key is derived from `SESSION_SECRET`** by HKDF under its own label rather than being a second
+environment variable to set, rotate and get wrong. One consequence, stated rather than discovered:
+rotating that secret invalidates every frank. Old messages stay readable — franks are not part of
+the sealing — but they stop being reportable. Splitting the two secrets is the right change the day
+rotation is a real procedure rather than a paragraph.
+
+**A report with no message attached is still a report.** Reporting a person for what they have been
+doing across a room was always legitimate and still is; attaching one message is what turns "they
+said this" into something a moderator can check. A reporter who does not want to show a specific
+message is not made to.
 
 ## Notifications, and a push that carries nothing
 

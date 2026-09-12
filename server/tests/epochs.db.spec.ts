@@ -5,6 +5,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { DataSource } from 'typeorm';
 import { privateKeyToAccount } from 'viem/accounts';
 
+import { createFranking } from '../src/domains/chat/franking.ts';
 import { createChatService } from '../src/domains/chat/service.ts';
 import { createEpochService } from '../src/domains/chat/epochs.ts';
 import { createDeviceService } from '../src/domains/device/service.ts';
@@ -141,7 +142,7 @@ describe.skipIf(!active)('the epoch a conversation is sealed under', () =>
         devices = createDeviceService(db, config);
         peers = createPeerDevices(db);
         epochs = createEpochService(db);
-        chat = createChatService(db, createSocialService(db));
+        chat = createChatService(db, createSocialService(db), createFranking('test-secret'));
     });
 
     const pair = async (): Promise<{
@@ -289,7 +290,8 @@ describe.skipIf(!active)('the epoch a conversation is sealed under', () =>
             body: 'ciphertext',
             senderDeviceId: left.device,
             signature: 'signature',
-            clientAt: new Date().toISOString()
+            clientAt: new Date().toISOString(),
+            commitment: 'a-commitment'
         });
 
         await chat.send(left.id, conversationId, left.device, envelope(1));
@@ -317,7 +319,8 @@ describe.skipIf(!active)('the epoch a conversation is sealed under', () =>
             body: 'ciphertext',
             senderDeviceId: right.device,
             signature: 'signature',
-            clientAt: new Date().toISOString()
+            clientAt: new Date().toISOString(),
+            commitment: 'a-commitment'
         })).rejects.toThrow(/name the device/);
     });
 
@@ -334,7 +337,8 @@ describe.skipIf(!active)('the epoch a conversation is sealed under', () =>
             body: 'ciphertext',
             senderDeviceId: left.device,
             signature: 'signature',
-            clientAt: new Date().toISOString()
+            clientAt: new Date().toISOString(),
+            commitment: 'a-commitment'
         })).rejects.toThrow(/has not been minted/);
     });
 
@@ -405,7 +409,8 @@ describe.skipIf(!active)('the epoch a conversation is sealed under', () =>
                 body: 'ciphertext',
                 senderDeviceId: right.device,
                 signature: 'signature',
-                clientAt: new Date().toISOString()
+                clientAt: new Date().toISOString(),
+                commitment: 'a-commitment'
             })).rejects.toThrow(/has not been minted/);
         });
 
@@ -423,7 +428,8 @@ describe.skipIf(!active)('the epoch a conversation is sealed under', () =>
                 body: 'the first thing',
                 senderDeviceId: left.device,
                 signature: 'signature',
-                clientAt: new Date().toISOString()
+                clientAt: new Date().toISOString(),
+                commitment: 'a-commitment'
             };
 
             await chat.send(left.id, conversationId, left.device, said);
@@ -456,7 +462,8 @@ describe.skipIf(!active)('the epoch a conversation is sealed under', () =>
                 body: 'ciphertext',
                 senderDeviceId: left.device,
                 signature: 'signature',
-                clientAt: new Date().toISOString()
+                clientAt: new Date().toISOString(),
+                commitment: 'a-commitment'
             });
 
             await chat.send(left.id, conversationId, left.device, envelope(1, 1));

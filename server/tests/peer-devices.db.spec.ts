@@ -5,6 +5,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { DataSource } from 'typeorm';
 import { privateKeyToAccount } from 'viem/accounts';
 
+import { createFranking } from '../src/domains/chat/franking.ts';
 import { createChatService } from '../src/domains/chat/service.ts';
 import { createPeerDevices } from '../src/domains/device/peers.ts';
 import { createDeviceService } from '../src/domains/device/service.ts';
@@ -124,7 +125,7 @@ describe.skipIf(!active)('what a peer may learn about somebody devices', () =>
         await db.query('truncate siwe_nonces');
         devices = createDeviceService(db, config);
         peers = createPeerDevices(db);
-        chat = createChatService(db, createSocialService(db));
+        chat = createChatService(db, createSocialService(db), createFranking('test-secret'));
     });
 
     it('keeps the proof, so somebody other than this server can check it', async () =>

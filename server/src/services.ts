@@ -3,6 +3,7 @@ import type { DataSource } from 'typeorm';
 
 import { createCatalogueService } from './domains/catalogue/service.ts';
 import { createChatService, type ConversationRow, type MessageRow } from './domains/chat/service.ts';
+import { createFranking, discloses } from './domains/chat/franking.ts';
 import { createEpochService } from './domains/chat/epochs.ts';
 import { createPeerDevices, type PeerDeviceRow } from './domains/device/peers.ts';
 import { createRecoveryService } from './domains/device/recovery-service.ts';
@@ -56,7 +57,8 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
     const secureCookies = config.origin.startsWith('https://');
 
     const social = createSocialService(db);
-    const chat = createChatService(db, social);
+    const franking = createFranking(config.secret);
+    const chat = createChatService(db, social, franking);
     const group = createGroupService(db, social);
     const table = createTableService(db, social);
     const notify = createNotifyService(db, social);
@@ -187,6 +189,11 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             message.senderAccountId = row.sender_account_id;
             message.signature = row.signature;
             message.clientAt = row.client_at.toISOString();
+
+            if (row.commitment !== null)
+            {
+                message.commitment = row.commitment;
+            }
         }
 
         return message;
@@ -256,7 +263,9 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 iv: row.last_iv,
                 sender_device_id: row.last_sender_device_id,
                 signature: row.last_signature,
-                client_at: row.last_client_at
+                client_at: row.last_client_at,
+                commitment: row.last_commitment,
+                frank: row.last_frank
             });
         }
         return summary;
@@ -785,8 +794,69 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             },
             setMute: (me, kind, subjectId, muted) => social.setMute(me, kind, subjectId, muted),
 
-            report: async (me, handle, category) =>
-                social.report(me, await mustResolve(handle), category as Parameters<typeof social.report>[2]),
+            /**
+             * Files a report, and CHECKS the disclosure before writing it.
+             *
+             * Two things have to hold, and they answer different questions. The commitment proves
+             * the words are the words - recomputed from the key the reporter disclosed, so a single
+             * character changed produces a different value. The frank proves the message passed
+             * through this server at all, from that sender in that conversation, because recomputing
+             * it needs a key only this server has.
+             *
+             * A disclosure that fails either is refused rather than stored without its proof: a
+             * report moderation cannot check is worse than no report, because somebody will read it
+             * anyway and act on it.
+             *
+             * Membership is checked too. A conversation the reporter is not in answers exactly as
+             * one that does not exist, here as everywhere else.
+             */
+            report: async (me, handle, category, disclosure) =>
+            {
+                const againstId = await mustResolve(handle);
+                const kind = category as Parameters<typeof social.report>[2];
+
+                if (disclosure?.conversationId === undefined || disclosure.messageId === undefined
+                    || disclosure.text === undefined || disclosure.frankingKey === undefined)
+                {
+                    return social.report(me, againstId, kind);
+                }
+
+                await chat.mustBeMember(me, disclosure.conversationId);
+
+                const row = await chat.frankedMessage(disclosure.conversationId, disclosure.messageId);
+
+                if (row === null || row.commitment === null || row.frank === null
+                    || row.client_at === null || row.sender_device_id === null
+                    || row.sender_account_id === null)
+                {
+                    throw new NotFoundError('No message with that id in this conversation.');
+                }
+
+                if (!discloses(disclosure.frankingKey, disclosure.text, row.commitment))
+                {
+                    throw new ForbiddenError('That is not what the message says.');
+                }
+
+                const seen = franking.holds({
+                    conversationId: disclosure.conversationId,
+                    messageId: row.id,
+                    senderAccountId: row.sender_account_id,
+                    senderDeviceId: row.sender_device_id,
+                    clientAt: row.client_at.getTime(),
+                    commitment: row.commitment
+                }, row.frank);
+
+                if (!seen)
+                {
+                    throw new ForbiddenError('That message cannot be verified, so it cannot be reported.');
+                }
+
+                return social.report(me, againstId, kind, {
+                    messageId: row.id,
+                    text: disclosure.text,
+                    frankingKey: disclosure.frankingKey
+                });
+            },
 
             async reports(me)
             {

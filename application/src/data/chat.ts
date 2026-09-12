@@ -85,6 +85,16 @@ export interface Message
     /** Absent when the message is readable, which is the ordinary case. */
     locked?: MessageLock;
 
+    /**
+     * The franking key this message was committed under, held in memory and nowhere else.
+     *
+     * Whoever can read a message can report it, and this is what makes the report checkable: the
+     * server recomputes the sender's commitment from these words and this key. It is deliberately
+     * never persisted - `chat.archive()` holds it only for as long as the thread is open, and a
+     * message this browser could not open does not have one at all.
+     */
+    frankingKey?: string;
+
     line?: MessageLine;
     at: number;
     ref: MessageRef | null;

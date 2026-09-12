@@ -306,7 +306,12 @@ export function buildApi(ports: Ports)
 
             report: routes.post('/reports', { input: reportInput, output: reportResult },
                 async (context) => ({
-                    id: await ports.social.report(context.principal.userId, context.input.id, context.input.category)
+                    id: await ports.social.report(
+                        context.principal.userId,
+                        context.input.id,
+                        context.input.category,
+                        context.input
+                    )
                 })),
 
             /** What I have reported, and where each one got to. Mine only - never anyone else's. */

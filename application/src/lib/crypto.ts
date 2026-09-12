@@ -26,6 +26,9 @@ import { fromBase64Url, toBase64Url } from './device-id.ts';
 const KEY_BYTES = 32;
 const IV_BYTES = 12;
 
+/** The franking key, carried in front of the plaintext inside the ciphertext. */
+const FRANK_BYTES = 32;
+
 const utf8 = new TextEncoder();
 
 /** The DER SubjectPublicKeyInfo of a published key, as it travels. */
@@ -49,6 +52,21 @@ export interface SealedBody
     iv: string;
     body: string;
     signature: string;
+}
+
+/** What a recipient gets back, and what a REPORT would disclose if they chose to file one. */
+export interface OpenedText
+{
+    text: string;
+
+    /**
+     * The franking key this message was committed under.
+     *
+     * Held by whoever can read the message and by nobody else - it is inside the ciphertext. A
+     * report discloses it alongside the words, and that pair is what lets a server it was never
+     * shown to confirm the message is real.
+     */
+    frankingKey: string;
 }
 
 const join = (...parts: Uint8Array[]): Uint8Array =>
@@ -249,6 +267,26 @@ export async function checkConfirmation(
 }
 
 /**
+ * The commitment a message is franked under: `HMAC-SHA256(frankingKey, plaintext)`.
+ *
+ * HMAC rather than a plain hash because the key is what makes it HIDING: a bare hash of a short
+ * message - "ok", "yes", an address - is a value anybody could confirm by guessing, and this value
+ * travels in the clear past a server that is not supposed to learn anything from it.
+ */
+export async function commitmentOf(frankingKey: string, text: string): Promise<string>
+{
+    const key = await crypto.subtle.importKey(
+        'raw',
+        fromBase64Url(frankingKey) as BufferSource,
+        { name: 'HMAC', hash: 'SHA-256' },
+        false,
+        ['sign']
+    );
+
+    return toBase64Url(new Uint8Array(await crypto.subtle.sign('HMAC', key, utf8.encode(text) as BufferSource)));
+}
+
+/**
  * The per-sender key a message is sealed under.
  *
  * Every member of a conversation holds the epoch key, so sealing directly under it would let any
@@ -274,17 +312,20 @@ export async function sealText(
     epochKey: Uint8Array,
     secrets: DeviceSecrets,
     aad: MessageAad,
-    text: string
+    text: string,
+    frankingKey: string
 ): Promise<SealedBody>
 {
     const key = await senderKey(epochKey, aad.conversationId, aad.epoch, aad.senderDeviceId);
     const iv = randomBytes(IV_BYTES);
     const authenticated = messageAad(aad);
 
+    // The franking key goes in FRONT of the words, inside the sealing. Everybody who can read the
+    // message can report it; the server, which can do neither, holds only the commitment.
     const ciphertext = new Uint8Array(await crypto.subtle.encrypt(
         { name: 'AES-GCM', iv: iv as BufferSource, additionalData: utf8.encode(authenticated) as BufferSource },
         key,
-        utf8.encode(text) as BufferSource
+        join(fromBase64Url(frankingKey), utf8.encode(text)) as BufferSource
     ));
 
     const signature = new Uint8Array(await crypto.subtle.sign(
@@ -294,6 +335,12 @@ export async function sealText(
     ));
 
     return { iv: toBase64Url(iv), body: toBase64Url(ciphertext), signature: toBase64Url(signature) };
+}
+
+/** A fresh franking key. One per message, never reused, never derived. */
+export function mintFrankingKey(): string
+{
+    return toBase64Url(randomBytes(FRANK_BYTES));
 }
 
 /** Why a sealed message could not be turned back into words. */
@@ -310,7 +357,7 @@ export type OpenFailure =
     /** It decrypted under a different AAD than the row states. The row has been edited. */
     | 'tampered';
 
-export type Opened = { text: string } | { failure: OpenFailure };
+export type Opened = OpenedText | { failure: OpenFailure };
 
 /**
  * Turns a sealed message back into words, or says exactly why it could not.
@@ -352,7 +399,25 @@ export async function openText(
             ciphertext as BufferSource
         );
 
-        return { text: new TextDecoder().decode(opened) };
+        const bytes = new Uint8Array(opened);
+
+        if (bytes.length < FRANK_BYTES)
+        {
+            return { failure: 'tampered' };
+        }
+
+        const frankingKey = toBase64Url(bytes.slice(0, FRANK_BYTES));
+        const text = new TextDecoder().decode(bytes.slice(FRANK_BYTES));
+
+        // The sender chose both the key and the commitment, so a mismatch means they published a
+        // commitment that does not cover what they wrote - which would make the message impossible
+        // to report. Refusing it here is what stops somebody opting out of moderation by hand.
+        if (await commitmentOf(frankingKey, text) !== aad.commitment)
+        {
+            return { failure: 'tampered' };
+        }
+
+        return { text, frankingKey };
     }
     catch
     {

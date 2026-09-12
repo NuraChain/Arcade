@@ -13,6 +13,7 @@ import { Attestation1789210000000 } from './0010-attestation.ts';
 import { DropDemo1789220000000 } from './0011-drop-demo.ts';
 import { Sealing1789230000000 } from './0012-sealing.ts';
 import { Recovery1789240000000 } from './0013-recovery.ts';
+import { Franking1789250000000 } from './0014-franking.ts';
 
 /**
  * Every migration. Appending is the only correct edit.
@@ -35,5 +36,6 @@ export const migrations: (new () => MigrationInterface)[] = [
     Attestation1789210000000,
     DropDemo1789220000000,
     Sealing1789230000000,
-    Recovery1789240000000
+    Recovery1789240000000,
+    Franking1789250000000
 ];

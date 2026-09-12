@@ -2,7 +2,16 @@ import type { Hex } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 
 import type { ChatMessage, ConversationDevices } from '../src/api.ts';
-import { confirmationOf, forget, mintEpochKey, sealText, signRecipients, wrapEpochKey } from '../src/lib/crypto.ts';
+import {
+    commitmentOf,
+    confirmationOf,
+    forget,
+    mintEpochKey,
+    mintFrankingKey,
+    sealText,
+    signRecipients,
+    wrapEpochKey
+} from '../src/lib/crypto.ts';
 import { THREAD_FIXTURES } from './fixtures.ts';
 import { makeDevice, type TestDevice } from './keys.ts';
 
@@ -138,6 +147,9 @@ export async function buildSealedFixtures(): Promise<SealedFixtures>
 
             const clientAt = Date.parse(when);
 
+            const frankingKey = mintFrankingKey();
+            const commitment = await commitmentOf(frankingKey, message.body ?? '');
+
             const sealed = await sealText(key, sender.secrets, {
                 conversationId: thread.slug,
                 epoch: 1,
@@ -146,8 +158,9 @@ export async function buildSealedFixtures(): Promise<SealedFixtures>
                 senderAccountId: accountIdOf(message.from),
                 senderDeviceId: sender.id,
                 kind: 'text',
-                clientAt
-            }, message.body ?? '');
+                clientAt,
+                commitment
+            }, message.body ?? '', frankingKey);
 
             written.push({
                 id,
@@ -162,7 +175,8 @@ export async function buildSealedFixtures(): Promise<SealedFixtures>
                 senderDeviceId: sender.id,
                 senderAccountId: accountIdOf(message.from),
                 signature: sealed.signature,
-                clientAt: new Date(clientAt).toISOString()
+                clientAt: new Date(clientAt).toISOString(),
+                commitment
             });
         }
 

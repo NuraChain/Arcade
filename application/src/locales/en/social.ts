@@ -62,6 +62,7 @@ export const social = {
     'report.category.other': 'Something else',
     'report.alsoBlock': 'Block them as well',
     'report.submit': 'Send report',
+    'report.showing': 'This message will be shown to a moderator. Nothing else from this conversation is.',
     'report.sent': 'Report sent. You can follow it in Settings.',
     'report.status.received': 'Received',
     'report.status.reviewed': 'Reviewed',

@@ -477,7 +477,28 @@ export const muteInput = object({ kind: muteSubject, id: string(), muted: boolea
 
 export const reportCategory = enumOf(['harassment', 'spam', 'cheating', 'inappropriate', 'other']);
 
-export const reportInput = object({ id: string(), category: reportCategory });
+/**
+ * What a report says, and what it may show.
+ *
+ * The disclosure is one message and never more. Under `nura-e2ee/v1` this server cannot read a
+ * conversation, so moderation sees exactly what the reporter chose to show it - and `frankingKey`
+ * is what makes that excerpt worth reading: with it the server recomputes the commitment the sender
+ * published and its own MAC over it, and a fabricated message fails both. Without franking, "they
+ * said this" would be an assertion anybody could make about anybody.
+ */
+export const reportInput = object({
+    id: string(),
+    category: reportCategory,
+
+    conversationId: string().optional(),
+    messageId: string().optional(),
+
+    /** The words, in the clear, because disclosing them is the whole point of filing. */
+    text: string().optional(),
+
+    /** The key the commitment was made under. Sealed inside the message until a reader shows it. */
+    frankingKey: string().optional()
+});
 
 export const reportResult = object({ id: string() });
 
@@ -788,7 +809,16 @@ export const chatMessage = object({
     senderDeviceId: string().optional(),
     senderAccountId: string().optional(),
     signature: string().optional(),
-    clientAt: string().optional()
+    clientAt: string().optional(),
+
+    /**
+     * The franking commitment, in the clear.
+     *
+     * The server's own MAC over it deliberately does NOT travel: a client has no way to check it and
+     * no reason to hold it, and publishing it would hand every reader a token that only matters when
+     * a report is filed.
+     */
+    commitment: string().optional()
 });
 
 export type ChatMessage = Infer<typeof chatMessage>;
@@ -854,7 +884,10 @@ export const sendInput = object({
 
     senderDeviceId: string(),
     signature: string(),
-    clientAt: string()
+    clientAt: string(),
+
+    /** `HMAC(frankingKey, plaintext)`, with the key sealed inside `body`. See *Franking*. */
+    commitment: string()
 });
 
 /* ---------------------------------------------------------------- epochs */

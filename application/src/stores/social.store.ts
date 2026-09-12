@@ -41,7 +41,19 @@ export interface SocialApi
     remove(id: string): Promise<void>;
     block(id: string): Promise<void>;
     unblock(id: string): Promise<void>;
-    report(id: string, category: ReportCategory): Promise<string>;
+    /**
+     * Files a report. `disclose` attaches ONE message, and only one, ever.
+     *
+     * Bulk disclosure is not an oversight this could grow out of - a report carries the message the
+     * reporter picked and proves nothing about any other, which is the entire shape of moderation
+     * on a product whose server cannot read a conversation.
+     */
+    report(id: string, category: ReportCategory, disclose?: {
+        conversationId: string;
+        messageId: string;
+        text: string;
+        frankingKey: string;
+    }): Promise<string>;
 
     /**
      * Asks for a list this page needs.
@@ -268,9 +280,29 @@ export const useSocial = createStore((): SocialApi =>
         block: (id) => write(() => client.social.block({ input: { id } })),
         unblock: (id) => write(() => client.social.unblock({ input: { id } })),
 
-        async report(id, category)
+        /**
+         * Files a report, optionally showing ONE message.
+         *
+         * The disclosure is what makes a report about a sealed conversation worth reading: this
+         * server cannot see what was said, so moderation sees exactly what the reporter chose to
+         * show - and the franking key is what lets it tell a real message from a typed-out
+         * accusation. Reporting a person without attaching one stays a legitimate thing to do.
+         */
+        async report(id, category, disclose)
         {
-            const filedReport = await client.social.report({ input: { id, category } });
+            const filedReport = await client.social.report({
+                input: {
+                    id,
+                    category,
+                    ...(disclose === undefined ? {} : {
+                        conversationId: disclose.conversationId,
+                        messageId: disclose.messageId,
+                        text: disclose.text,
+                        frankingKey: disclose.frankingKey
+                    })
+                }
+            });
+
             await filed.refetch();
             return filedReport.id;
         },

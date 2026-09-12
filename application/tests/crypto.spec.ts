@@ -3,8 +3,10 @@ import { describe, it, expect } from 'vitest';
 import { messageAad, type MessageAad } from '../../server/src/domains/chat/envelope.ts';
 import {
     checkConfirmation,
+    commitmentOf,
     confirmationOf,
     mintEpochKey,
+    mintFrankingKey,
     openText,
     sealText,
     signRecipients,
@@ -41,6 +43,31 @@ const devices = async (): Promise<void> =>
     mallory ??= await makeDevice(TEST_ACCOUNTS.third);
 };
 
+/**
+ * Commits to the words about to be sealed.
+ *
+ * The commitment is in the AAD, so it has to be computed BEFORE the seal and has to cover the text
+ * that seal contains - a stale one is exactly the malformed message `openText` is meant to refuse,
+ * and every test below would fail for that reason rather than its own.
+ */
+const commitTo = async (text: string): Promise<void> =>
+{
+    commitment = await commitmentOf(FRANK, text);
+};
+
+/**
+ * One franking key for the suite, minted the way a real send mints one.
+ *
+ * Fixed within a run so a commitment made before sealing still covers the message afterwards, and a
+ * REAL key rather than a readable string: the key is carried in the first 32 bytes of the plaintext
+ * and read back out by length, so anything shorter is silently mixed with the words. That is not a
+ * hypothetical - it is what this constant was on the first attempt, and every open failed as
+ * `tampered` with nothing pointing at the length.
+ */
+const FRANK = mintFrankingKey();
+
+let commitment: string;
+
 const aadFor = (overrides: Partial<MessageAad> = {}): MessageAad => ({
     conversationId: conversation,
     epoch: 1,
@@ -50,6 +77,7 @@ const aadFor = (overrides: Partial<MessageAad> = {}): MessageAad => ({
     senderDeviceId: alice.id,
     kind: 'text',
     clientAt: 1_700_000_000_000,
+    commitment,
     ...overrides
 });
 
@@ -124,13 +152,18 @@ describe('sealing a message', () =>
         await devices();
 
         const key = mintEpochKey();
+
+        await commitTo('شب‌بخیر — یک دست دیگر؟');
+
         const aad = aadFor();
-        const sealed = await sealText(key, alice.secrets, aad, 'شب‌بخیر — یک دست دیگر؟');
+        const sealed = await sealText(key, alice.secrets, aad, 'شب‌بخیر — یک دست دیگر؟', FRANK);
 
         expect(sealed.body).not.toContain('شب');
 
+        // The franking key comes back with the words, because whoever can read a message is whoever
+        // can report it. The server holds only the commitment and can do neither.
         expect(await openText(key, alice.signingKey, aad, sealed))
-            .toEqual({ text: 'شب‌بخیر — یک دست دیگر؟' });
+            .toEqual({ text: 'شب‌بخیر — یک دست دیگر؟', frankingKey: FRANK });
     });
 
     it('refuses a message re-dated after it was written', async () =>
@@ -138,7 +171,8 @@ describe('sealing a message', () =>
         await devices();
 
         const key = mintEpochKey();
-        const sealed = await sealText(key, alice.secrets, aadFor(), 'on my way');
+        await commitTo('on my way');
+        const sealed = await sealText(key, alice.secrets, aadFor(), 'on my way', FRANK);
 
         const moved = await openText(key, alice.signingKey, aadFor({ clientAt: 1_600_000_000_000 }), sealed);
 
@@ -150,7 +184,8 @@ describe('sealing a message', () =>
         await devices();
 
         const key = mintEpochKey();
-        const sealed = await sealText(key, alice.secrets, aadFor(), 'that was me');
+        await commitTo('that was me');
+        const sealed = await sealText(key, alice.secrets, aadFor(), 'that was me', FRANK);
 
         expect(await openText(key, alice.signingKey, aadFor({ senderAccountId: 'u-someone' }), sealed))
             .toEqual({ failure: 'bad-signature' });
@@ -161,7 +196,8 @@ describe('sealing a message', () =>
         await devices();
 
         const key = mintEpochKey();
-        const sealed = await sealText(key, alice.secrets, aadFor(), 'see you there');
+        await commitTo('see you there');
+        const sealed = await sealText(key, alice.secrets, aadFor(), 'see you there', FRANK);
 
         expect(await openText(key, alice.signingKey, aadFor({ conversationId: 'c-elsewhere' }), sealed))
             .toEqual({ failure: 'bad-signature' });
@@ -172,7 +208,8 @@ describe('sealing a message', () =>
         await devices();
 
         const key = mintEpochKey();
-        const sealed = await sealText(key, alice.secrets, aadFor(), 'nothing to see');
+        await commitTo('nothing to see');
+        const sealed = await sealText(key, alice.secrets, aadFor(), 'nothing to see', FRANK);
 
         expect(await openText(key, alice.signingKey, aadFor({ kind: 'system' }), sealed))
             .toEqual({ failure: 'bad-signature' });
@@ -187,7 +224,8 @@ describe('sealing a message', () =>
         // Bob holds the epoch key too - that is what an epoch key IS - so encryption alone would
         // say only "somebody in this room wrote this". The per-message signature is what makes the
         // difference between that and "alice wrote this".
-        const forged = await sealText(key, bob.secrets, aadFor(), 'alice would never say this');
+        await commitTo('alice would never say this');
+        const forged = await sealText(key, bob.secrets, aadFor(), 'alice would never say this', FRANK);
 
         expect(await openText(key, alice.signingKey, aadFor(), forged))
             .toEqual({ failure: 'bad-signature' });
@@ -198,7 +236,8 @@ describe('sealing a message', () =>
         await devices();
 
         const key = mintEpochKey();
-        const sealed = await sealText(key, alice.secrets, aadFor(), 'yes');
+        await commitTo('yes');
+        const sealed = await sealText(key, alice.secrets, aadFor(), 'yes', FRANK);
 
         const flipped = `${ sealed.body.slice(0, -2) }${ sealed.body.endsWith('AA') ? 'BB' : 'AA' }`;
 
@@ -212,7 +251,8 @@ describe('sealing a message', () =>
 
         const key = mintEpochKey();
         const other = mintEpochKey();
-        const sealed = await sealText(key, alice.secrets, aadFor(), 'later');
+        await commitTo('later');
+        const sealed = await sealText(key, alice.secrets, aadFor(), 'later', FRANK);
 
         // The signature still checks out: this message is exactly what its sender wrote. What is
         // wrong is that this device is holding a different epoch's key, and the product has to be
@@ -231,13 +271,14 @@ describe('sealing a message', () =>
             senderAccountId: 'u-5',
             senderDeviceId: 'd-6',
             kind: 'text',
-            clientAt: 7
+            clientAt: 7,
+            commitment: 'c-8'
         };
 
         // Field order is part of the format. A reordering here would verify against nothing, and
         // the symptom would be every message on earth failing with no error that named the cause.
         expect(messageAad(aad).split(String.fromCharCode(0x1f)))
-            .toEqual(['nura-e2ee/v1', 'msg', 'c-1', '2', '3', 'm-4', 'u-5', 'd-6', 'text', '7']);
+            .toEqual(['nura-e2ee/v1', 'msg', 'c-1', '2', '3', 'm-4', 'u-5', 'd-6', 'text', '7', 'c-8']);
     });
 });
 

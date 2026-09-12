@@ -273,7 +273,26 @@ export default component ChatPage()
                                             message={ message }
                                             me={ me }
                                             showAuthor={ index === 0 || shown[index - 1].from !== message.from }
-                                            onHold={ (personId) => overlay.open(PersonActions, { personId }, { label: locale.t('actions.title') }) }
+                                            onHold={ (held) => overlay.open(
+                                                PersonActions,
+                                                {
+                                                    personId: held.from,
+
+                                                    // Only a message this browser actually opened
+                                                    // can be disclosed: the franking key comes out
+                                                    // of the ciphertext, so a locked message has
+                                                    // none and there is nothing to prove.
+                                                    ...(held.frankingKey === undefined ? {} : {
+                                                        disclose: {
+                                                            conversationId: held.conversationId,
+                                                            messageId: held.id,
+                                                            text: held.text,
+                                                            frankingKey: held.frankingKey
+                                                        }
+                                                    })
+                                                },
+                                                { label: locale.t('actions.title') }
+                                            ) }
                                         />
                                     </div>
                                 </For>

@@ -5,6 +5,7 @@ import { DataSource } from 'typeorm';
 
 import { entities } from '../src/entities/index.ts';
 import { migrations } from '../src/migrations/index.ts';
+import { createFranking } from '../src/domains/chat/franking.ts';
 import { createChatService, PAGE, pairKeyOf } from '../src/domains/chat/service.ts';
 import { createSocialService } from '../src/domains/social/service.ts';
 import { rowsOf } from '../src/lib/rows.ts';
@@ -95,7 +96,8 @@ async function say(userId: string, conversationId: string, body: string): Promis
         body,
         senderDeviceId: device,
         signature: 'signature',
-        clientAt: new Date().toISOString()
+        clientAt: new Date().toISOString(),
+        commitment: 'a-commitment'
     });
 }
 
@@ -124,7 +126,7 @@ describe.skipIf(!active)('chat, against a real database', () =>
         seqOf.clear();
         mintedIn.clear();
         social = createSocialService(db);
-        chat = createChatService(db, social);
+        chat = createChatService(db, social, createFranking('test-secret'));
     });
 
     it('opens one conversation for a pair, whichever of them asks first', async () =>

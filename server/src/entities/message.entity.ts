@@ -60,4 +60,17 @@ export class Message
     /** When the SENDER says it was written. Bound into the AAD, so it cannot be re-dated. */
     @Column({ name: 'client_at', type: 'timestamptz', nullable: true })
     clientAt!: Date | null;
+
+    /**
+     * The franking commitment the sender published, and this server's MAC over it.
+     *
+     * The commitment is `HMAC(frankingKey, plaintext)` with a key sealed inside the message, so this
+     * is a value nothing here can invert or guess. The frank is what a reporter cannot forge: it is
+     * the only reason to believe a disclosed message is real.
+     */
+    @Column({ type: 'text', nullable: true })
+    commitment!: string | null;
+
+    @Column({ type: 'text', nullable: true })
+    frank!: string | null;
 }

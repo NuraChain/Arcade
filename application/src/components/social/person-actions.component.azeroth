@@ -23,7 +23,16 @@ interface Action
     run: () => void;
 }
 
-export default component PersonActions(props: OverlayProps & { personId: string })
+/**
+ * What you can do about a person, and — when this was opened from a message — about that message.
+ *
+ * `disclose` is carried through untouched to the report sheet. It is the one message the reporter
+ * long-pressed, and nothing here can widen it into two.
+ */
+export default component PersonActions(props: OverlayProps & {
+    personId: string;
+    disclose?: { conversationId: string; messageId: string; text: string; frankingKey: string };
+})
 {
     const locale = useLocale();
     const social = useSocial();
@@ -116,7 +125,11 @@ export default component PersonActions(props: OverlayProps & { personId: string 
                 run: () =>
                 {
                     props.close();
-                    overlay.open(ReportSheet, { personId: props.personId }, { label: locale.t('report.title', { name }) });
+                    overlay.open(
+                        ReportSheet,
+                        { personId: props.personId, ...(props.disclose === undefined ? {} : { disclose: props.disclose }) },
+                        { label: locale.t('report.title', { name }) }
+                    );
                 }
             }
         ];

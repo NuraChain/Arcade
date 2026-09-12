@@ -34,7 +34,7 @@ const LOCKED: Record<MessageLock, MessageKey> = {
 
 const ALARMING: MessageLock[] = ['bad-signature', 'tampered'];
 
-export default component MessageBubble(props: { message: Message; me: string; showAuthor: boolean; onHold?: (personId: string) => void })
+export default component MessageBubble(props: { message: Message; me: string; showAuthor: boolean; onHold?: (message: Message) => void })
 {
     const locale = useLocale();
     const catalogue = useCatalogue();
@@ -52,7 +52,7 @@ export default component MessageBubble(props: { message: Message; me: string; sh
         {
             return;
         }
-        return attachHold(bubble, () => props.onHold?.(props.message.from));
+        return attachHold(bubble, () => props.onHold?.(props.message));
     }
 
     derived person = people.byHandle(props.message.from) ?? null;

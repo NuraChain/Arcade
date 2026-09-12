@@ -17,6 +17,7 @@ import { loadServerConfig } from './env.ts';
 import { apiRateLimit } from './http/rate-limit.ts';
 import { createServerLogger } from './logger.ts';
 import { createChatService } from './domains/chat/service.ts';
+import { createFranking } from './domains/chat/franking.ts';
 import { createIdentityService } from './domains/identity/service.ts';
 import { createSocialService } from './domains/social/service.ts';
 import { attachRealtime } from './realtime/gateway.ts';
@@ -64,7 +65,7 @@ if (config.env === 'development')
  * DataSource, so building a second set here costs nothing and keeps the cycle from existing.
  */
 const social = createSocialService(dataSource);
-const chat = createChatService(dataSource, social);
+const chat = createChatService(dataSource, social, createFranking(config.secret));
 const identity = createIdentityService(dataSource, {
     origin: config.origin,
     chainId: config.chainId,

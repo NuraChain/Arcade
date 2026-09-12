@@ -85,7 +85,7 @@ export function createApiSource(): ChatSource
         return message;
     };
 
-    const asMessage = (wire: ChatMessage, text: string, locked: MessageFailure | null): Message =>
+    const asMessage = (wire: ChatMessage, text: string, locked: MessageFailure | null, frankingKey?: string): Message =>
     {
         const params = Object.fromEntries(
             Object.entries(wire.payload?.params ?? {}).filter((entry): entry is [string, string] => entry[1] !== undefined)
@@ -98,6 +98,7 @@ export function createApiSource(): ChatSource
             kind: wire.kind as MessageKind,
             text,
             ...(locked === null ? {} : { locked }),
+            ...(frankingKey === undefined ? {} : { frankingKey }),
             ...(wire.payload === undefined ? {} : { line: { key: wire.payload.key, params } }),
             at: Date.parse(wire.at),
             ref: wire.payload === undefined
@@ -129,7 +130,7 @@ export function createApiSource(): ChatSource
         const opened = await openMessage(wire.conversationId, wire, keyFor);
 
         return 'text' in opened
-            ? asMessage(wire, opened.text, null)
+            ? asMessage(wire, opened.text, null, opened.frankingKey)
             : asMessage(wire, '', opened.failure);
     };
 

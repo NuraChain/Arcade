@@ -403,6 +403,7 @@ interface FakeSend
     senderDeviceId: string;
     signature: string;
     clientAt: string;
+    commitment: string;
 }
 
 /**
@@ -725,8 +726,13 @@ export const client =
                 senderDeviceId: input.senderDeviceId,
                 senderAccountId: accountIdOf(server.me),
                 signature: input.signature,
-                clientAt: input.clientAt
+                clientAt: input.clientAt,
+                commitment: input.commitment
             };
+
+            // The real server also stamps its own MAC here. This one does not, because franking is
+            // a claim by the SERVER and `franking.db.spec.ts` owns it against a real Postgres -
+            // a fake that made up a frank would only prove it agreed with itself.
             server.messages.push(message);
 
             const row = server.conversations.find((one) => one.id === params.id);

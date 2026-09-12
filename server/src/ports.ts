@@ -114,7 +114,20 @@ export interface SocialPort
 
     setMute(me: string, kind: MuteSubject, subjectId: string, muted: boolean): Promise<void>;
 
-    report(me: string, handle: string, category: string): Promise<string>;
+    /**
+     * Files a report, optionally disclosing ONE message.
+     *
+     * The disclosure is verified before it is written: the server recomputes the commitment from the
+     * words and the key, and its own MAC over the context it stored. A fabricated message fails
+     * both, which is the only reason an excerpt from a conversation this server cannot read is
+     * worth anything to moderation.
+     */
+    report(me: string, handle: string, category: string, disclosure?: {
+        conversationId?: string;
+        messageId?: string;
+        text?: string;
+        frankingKey?: string;
+    }): Promise<string>;
     reports(me: string): Promise<{ id: string; against: string; category: string; status: string; at: string }[]>;
 
     privacy(me: string): Promise<Privacy>;
@@ -348,6 +361,7 @@ export interface ChatPort
         senderDeviceId: string;
         signature: string;
         clientAt: string;
+        commitment: string;
     }): Promise<ChatMessage>;
     markRead(me: string, conversationId: string): Promise<void>;
     setPinned(me: string, conversationId: string, pinned: boolean): Promise<void>;

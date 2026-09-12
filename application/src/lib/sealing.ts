@@ -4,8 +4,10 @@ import { client } from '../api.ts';
 import {
     checkConfirmation,
     confirmationOf,
+    commitmentOf,
     forget,
     mintEpochKey,
+    mintFrankingKey,
     openText,
     sealText,
     signRecipients,
@@ -361,6 +363,9 @@ export interface SealedSend
     senderDeviceId: string;
     signature: string;
     clientAt: string;
+
+    /** What this message is committed to, so it can be reported later and not fabricated. */
+    commitment: string;
 }
 
 /**
@@ -380,6 +385,9 @@ export async function sealForSend(
 {
     const id = crypto.randomUUID();
 
+    const frankingKey = mintFrankingKey();
+    const commitment = await commitmentOf(frankingKey, text);
+
     const sealed = await sealText(open.key, secrets, {
         conversationId,
         epoch: open.epoch,
@@ -388,8 +396,9 @@ export async function sealForSend(
         senderAccountId: open.accountId,
         senderDeviceId: open.deviceId,
         kind: 'text',
-        clientAt: at
-    }, text);
+        clientAt: at,
+        commitment
+    }, text, frankingKey);
 
     return {
         id,
@@ -399,7 +408,8 @@ export async function sealForSend(
         body: sealed.body,
         senderDeviceId: open.deviceId,
         signature: sealed.signature,
-        clientAt: new Date(at).toISOString()
+        clientAt: new Date(at).toISOString(),
+        commitment
     };
 }
 
@@ -420,7 +430,7 @@ export function heldKey(conversationId: string, epoch: number): Promise<Uint8Arr
 /** Why a message on the screen is not words. Every one of these renders as its own sentence. */
 export type MessageFailure = OpenFailure | 'no-epoch-key';
 
-export type OpenedMessage = { text: string } | { failure: MessageFailure };
+export type OpenedMessage = { text: string; frankingKey: string } | { failure: MessageFailure };
 
 /**
  * Turns one stored message back into what somebody typed.
@@ -437,7 +447,8 @@ export async function openMessage(
 {
     if (message.epoch === undefined || message.seq === undefined || message.iv === undefined
         || message.senderDeviceId === undefined || message.senderAccountId === undefined
-        || message.signature === undefined || message.clientAt === undefined || message.body === undefined)
+        || message.signature === undefined || message.clientAt === undefined || message.body === undefined
+        || message.commitment === undefined)
     {
         return { failure: 'tampered' };
     }
@@ -467,7 +478,8 @@ export async function openMessage(
         senderAccountId: message.senderAccountId,
         senderDeviceId: message.senderDeviceId,
         kind: message.kind,
-        clientAt: Date.parse(message.clientAt)
+        clientAt: Date.parse(message.clientAt),
+        commitment: message.commitment
     }, body);
 
     return 'text' in opened ? opened : { failure: opened.failure };

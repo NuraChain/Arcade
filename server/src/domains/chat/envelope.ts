@@ -46,6 +46,19 @@ export interface MessageAad
 
     /** When the sender says it was written, in epoch milliseconds. */
     clientAt: number;
+
+    /**
+     * The franking commitment: `HMAC(frankingKey, plaintext)`, with the key sealed inside the
+     * message and this value in the clear.
+     *
+     * It is in the AAD because both of the parties who could lie about it are covered by being
+     * there. The SERVER cannot swap one message's commitment for another's, because the signature
+     * would stop verifying. The SENDER cannot publish a commitment that does not match what they
+     * wrote, because every recipient recomputes it from the key inside the envelope - a mismatch is
+     * a malformed message rather than an unreportable one, which is the difference between a person
+     * being able to opt out of moderation and not.
+     */
+    commitment: string;
 }
 
 /**
@@ -68,7 +81,8 @@ export function messageAad(aad: MessageAad): string
         aad.senderAccountId,
         aad.senderDeviceId,
         aad.kind,
-        String(aad.clientAt)
+        String(aad.clientAt),
+        aad.commitment
     ].join(SEP);
 }
 
@@ -131,6 +145,46 @@ export function epochConfirmationText(conversationId: string, epoch: number): st
 export function label(...parts: string[]): string
 {
     return parts.join(SEP);
+}
+
+export interface FrankContext
+{
+    conversationId: string;
+    messageId: string;
+    senderAccountId: string;
+    senderDeviceId: string;
+    clientAt: number;
+    commitment: string;
+}
+
+/**
+ * What the SERVER puts its own MAC over when a message passes through it.
+ *
+ * This is franking, and it exists for one narrow, important purpose: under end-to-end encryption
+ * moderation can only ever see what a reporter chooses to show it, and without this there would be
+ * no reason to believe a word of it. Anybody could type a sentence, attribute it to somebody they
+ * disliked, and no one - including this server - could tell.
+ *
+ * The construction gives three things at once. The server learns NOTHING at send time, because a
+ * commitment under a random key it does not have is just noise. A reporter cannot fabricate a
+ * message, because a valid frank needs the server's key. And a sender cannot deny one, because the
+ * commitment binds the exact words.
+ *
+ * What it deliberately does not give is bulk access: a disclosure covers exactly one message, the
+ * one the reporter picked, and proves nothing about any other.
+ */
+export function frankContext(context: FrankContext): string
+{
+    return [
+        PROTOCOL,
+        'frank',
+        context.conversationId,
+        context.messageId,
+        context.senderAccountId,
+        context.senderDeviceId,
+        String(context.clientAt),
+        context.commitment
+    ].join(SEP);
 }
 
 /** The sorted, comma-joined recipient list, exactly as it is stored and signed. */

@@ -1,6 +1,8 @@
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '@azerothjs/http';
 import type { DataSource } from 'typeorm';
 
+import type { Franking } from './franking.ts';
+
 import { firstRow, rowsOf } from '../../lib/rows.ts';
 import type { MessageKind } from '../../entities/message.entity.ts';
 import type { SocialService } from '../social/service.ts';
@@ -32,6 +34,8 @@ export interface ConversationRow
     last_sender_device_id: string | null;
     last_signature: string | null;
     last_client_at: Date | null;
+    last_commitment: string | null;
+    last_frank: string | null;
 }
 
 export interface MessageRow
@@ -52,6 +56,10 @@ export interface MessageRow
     sender_device_id: string | null;
     signature: string | null;
     client_at: Date | null;
+    commitment: string | null;
+
+    /** The server's own MAC. Never sent to a client - it is only ever checked here. */
+    frank: string | null;
 }
 
 /** What a client states when it sends something sealed. */
@@ -65,6 +73,7 @@ export interface SealedInput
     senderDeviceId: string;
     signature: string;
     clientAt: string;
+    commitment: string;
 }
 
 /** How many messages one page of history carries. */
@@ -91,7 +100,7 @@ export function pairKeyOf(a: string, b: string): string
  */
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export function createChatService(db: DataSource, social: SocialService)
+export function createChatService(db: DataSource, social: SocialService, franking: Franking)
 {
     /**
      * The membership row, which IS the authorisation.
@@ -239,7 +248,9 @@ export function createChatService(db: DataSource, social: SocialService)
                         last.iv                                                          as last_iv,
                         last.sender_device_id                                            as last_sender_device_id,
                         last.signature                                                   as last_signature,
-                        last.client_at                                                   as last_client_at
+                        last.client_at                                                   as last_client_at,
+                        last.commitment                                                  as last_commitment,
+                        last.frank                                                       as last_frank
                  from conversation_members m
                  join conversations c on c.id = m.conversation_id
                  left join lateral (
@@ -248,7 +259,8 @@ export function createChatService(db: DataSource, social: SocialService)
                      -- browser can produce. A row without its AAD is a row it must refuse to open.
                      select x.id, x.kind, x.body, x.payload, x.created_at, su.handle as sender,
                             x.sender_id as sender_account_id,
-                            x.epoch, x.seq, x.iv, x.sender_device_id, x.signature, x.client_at
+                            x.epoch, x.seq, x.iv, x.sender_device_id, x.signature, x.client_at,
+                            x.commitment, x.frank
                      from messages x
                      left join users su on su.id = x.sender_id
                      where x.conversation_id = c.id
@@ -283,7 +295,8 @@ export function createChatService(db: DataSource, social: SocialService)
             const rows = await db.query(
                 `select x.id, x.conversation_id, x.kind, x.body, x.payload, x.created_at,
                         su.handle as sender, x.sender_id as sender_account_id,
-                        x.epoch, x.seq, x.iv, x.sender_device_id, x.signature, x.client_at
+                        x.epoch, x.seq, x.iv, x.sender_device_id, x.signature, x.client_at,
+                        x.commitment, x.frank
                  from messages x
                  left join users su on su.id = x.sender_id
                  where x.conversation_id = $1
@@ -346,6 +359,11 @@ export function createChatService(db: DataSource, social: SocialService)
                 throw new BadRequestError('A message needs the time its sender wrote it.');
             }
 
+            if (input.commitment.trim() === '')
+            {
+                throw new BadRequestError('A message needs a franking commitment.');
+            }
+
             const known = await db.query(
                 'select 1 as ok from conversation_epochs where conversation_id = $1 and epoch = $2',
                 [conversationId, input.epoch]
@@ -379,16 +397,29 @@ export function createChatService(db: DataSource, social: SocialService)
                 }
             }
 
+            // Stamped on the way in, over the commitment and the context it arrived in. This is the
+            // only value in the whole format that is the SERVER's own claim, and the only thing it
+            // ever claims is "I saw this" - which is exactly what a report needs and all it needs.
+            const frank = franking.frank({
+                conversationId,
+                messageId: input.id,
+                senderAccountId: me,
+                senderDeviceId: input.senderDeviceId,
+                clientAt: clientAt.getTime(),
+                commitment: input.commitment
+            });
+
             let inserted;
 
             try
             {
                 inserted = await db.query(
                     `insert into messages
-                         (id, conversation_id, sender_id, kind, body, epoch, seq, iv, sender_device_id, signature, client_at)
-                     values ($1, $2, $3, 'text', $4, $5, $6, $7, $8, $9, $10)
+                         (id, conversation_id, sender_id, kind, body, epoch, seq, iv, sender_device_id,
+                          signature, client_at, commitment, frank)
+                     values ($1, $2, $3, 'text', $4, $5, $6, $7, $8, $9, $10, $11, $12)
                      returning id, conversation_id, kind, body, payload, created_at,
-                               epoch, seq, iv, sender_device_id, signature, client_at`,
+                               epoch, seq, iv, sender_device_id, signature, client_at, commitment, frank`,
                     [
                         input.id,
                         conversationId,
@@ -399,7 +430,9 @@ export function createChatService(db: DataSource, social: SocialService)
                         input.iv,
                         input.senderDeviceId,
                         input.signature,
-                        clientAt
+                        clientAt,
+                        input.commitment,
+                        frank
                     ]
                 );
             }
@@ -439,7 +472,7 @@ export function createChatService(db: DataSource, social: SocialService)
                 `insert into messages (conversation_id, sender_id, kind, payload)
                  values ($1, $2, $3, $4)
                  returning id, conversation_id, kind, body, payload, created_at,
-                           epoch, seq, iv, sender_device_id, signature, client_at`,
+                           epoch, seq, iv, sender_device_id, signature, client_at, commitment, frank`,
                 [conversationId, senderId, kind, JSON.stringify(payload)]
             );
             const message = rowsOf<Omit<MessageRow, 'sender' | 'sender_account_id'>>(inserted)[0];
@@ -457,6 +490,29 @@ export function createChatService(db: DataSource, social: SocialService)
         },
 
         /** Moves MY watermark forward, never back. */
+        /**
+         * One message, for a report to be checked against.
+         *
+         * Deliberately NOT membership-guarded on the reporter's behalf by this function - the caller
+         * checks that, because the question here is "what did this server store", and the answer is
+         * needed by moderation as well as by the person filing.
+         */
+        async frankedMessage(conversationId: string, messageId: string): Promise<MessageRow | null>
+        {
+            const rows = await db.query(
+                `select x.id, x.conversation_id, x.kind, x.body, x.payload, x.created_at,
+                        su.handle as sender, x.sender_id as sender_account_id,
+                        x.epoch, x.seq, x.iv, x.sender_device_id, x.signature, x.client_at,
+                        x.commitment, x.frank
+                 from messages x
+                 left join users su on su.id = x.sender_id
+                 where x.conversation_id = $1 and x.id = $2 and x.kind = 'text'`,
+                [conversationId, messageId]
+            );
+
+            return firstRow<MessageRow>(rows);
+        },
+
         async markRead(me: string, conversationId: string): Promise<void>
         {
             await mustBeMember(me, conversationId);

@@ -10,7 +10,18 @@ import Toggle from '../ui/switch.component.azeroth';
 
 const CATEGORIES: ReportCategory[] = ['harassment', 'spam', 'cheating', 'inappropriate', 'other'];
 
-export default component ReportSheet(props: OverlayProps & { personId: string })
+/**
+ * Filing a report, and choosing whether to show a message with it.
+ *
+ * `disclose` is passed by whatever opened this sheet - a long press on a message hands over that
+ * message and nothing else. The sheet says plainly which of the two is happening, because "report
+ * this person" and "show a moderator this sentence" are different acts and somebody should know
+ * which one they are performing.
+ */
+export default component ReportSheet(props: OverlayProps & {
+    personId: string;
+    disclose?: { conversationId: string; messageId: string; text: string; frankingKey: string };
+})
 {
     const locale = useLocale();
     const social = useSocial();
@@ -26,7 +37,7 @@ export default component ReportSheet(props: OverlayProps & { personId: string })
 
     const submit = (): void =>
     {
-        social.report(props.personId, category);
+        void social.report(props.personId, category, props.disclose);
         if (alsoBlock)
         {
             social.block(props.personId);
@@ -40,6 +51,15 @@ export default component ReportSheet(props: OverlayProps & { personId: string })
             <div>
                 <h2 class="title text-ui-xl text-text">{ locale.t('report.title', { name }) }</h2>
                 <p class="mt-2 text-ui-base text-muted">{ locale.t('report.lead') }</p>
+
+                <Show when={ props.disclose !== undefined }>
+                    { () =>
+                        <p class="mt-3 rounded-tile border border-line bg-sunk px-3 py-2 text-ui-sm text-muted">
+                            <span class="block text-ui-xs text-faint">{ locale.t('report.showing') }</span>
+                            <span dir="auto" class="mt-1 block text-text">{ props.disclose?.text }</span>
+                        </p>
+                    }
+                </Show>
             </div>
             <IconButton icon="close" label={ locale.t('common.close') } variant="ghost" onClick={ () => props.close(false) } />
         </header>

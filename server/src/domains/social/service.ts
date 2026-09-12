@@ -523,15 +523,41 @@ export function createSocialService(db: DataSource)
             );
         },
 
-        async report(me: string, againstId: string, category: ReportCategory): Promise<string>
+        /**
+         * Files a report, with or without a message attached.
+         *
+         * The DISCLOSURE is optional and that is deliberate. Reporting a person for what they have
+         * been doing across a room is a legitimate thing to file and always was; attaching one
+         * message is what turns "they said this" from an assertion into something moderation can
+         * check. A reporter who does not want to show a specific message is not made to.
+         *
+         * The caller verifies the disclosure before this is reached - this writes what it is given.
+         */
+        async report(
+            me: string,
+            againstId: string,
+            category: ReportCategory,
+            disclosure: { messageId: string; text: string; frankingKey: string } | null = null
+        ): Promise<string>
         {
             if (me === againstId)
             {
                 throw new BadRequestError('You cannot report yourself.');
             }
+
             const rows = await db.query(
-                'insert into reports (reporter, against, category) values ($1, $2, $3) returning id',
-                [me, againstId, category]
+                `insert into reports (reporter, against, category, message_id, disclosed, disclosed_key, disclosed_at)
+                 values ($1, $2, $3, $4, $5, $6, $7)
+                 returning id`,
+                [
+                    me,
+                    againstId,
+                    category,
+                    disclosure?.messageId ?? null,
+                    disclosure?.text ?? null,
+                    disclosure?.frankingKey ?? null,
+                    disclosure === null ? null : new Date()
+                ]
             );
             return rowsOf<{ id: string }>(rows)[0].id;
         },
