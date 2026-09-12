@@ -236,5 +236,15 @@ export const social = {
     'notify.push.disable': 'Turn off for this device',
     'notify.push.on': 'On for this device',
     'notify.push.denied': 'This browser is blocking notifications. Allow them in its site settings first.',
+
+    'seal.noWallet': 'These messages are not sealed. {who} is signed in without a wallet, and sealing needs a wallet on both sides.',
+    'seal.noWalletMine': 'These messages are not sealed. You are signed in without a wallet, and sealing needs a wallet on both sides.',
+    'seal.noDevice': 'These messages are not sealed. {who} has not given any of their browsers keys yet.',
+    'seal.noDeviceMine': 'These messages are not sealed. This browser has no keys yet. Give it some and what you send from here can be.',
+    'seal.needsChain': 'These messages are not sealed. {who} uses a contract wallet, and this browser cannot check one without reaching the network.',
+    'seal.needsChainMine': 'These messages are not sealed. Yours is a contract wallet, and this browser cannot check one without reaching the network.',
+    'seal.tampered': 'Something is wrong with {who}\u2019s devices. One did not match the proof published beside it, so there is no telling whose it is. Nothing here is sealed to any of them.',
+    'seal.tamperedMine': 'Something is wrong with your devices. One did not match the proof published beside it. Open your devices and sign out anything you do not recognise.',
+
     'notify.push.unavailable': 'Push is not set up on this server yet.'
 };

@@ -706,10 +706,12 @@ are:
 deviceId = base64url(SHA-256(exchangeSpki || signingSpki)).slice(0, 22)
 ```
 
-so the server cannot mint an id for keys it does not hold. A device is authorised by a SIWE-shaped
+so the server cannot mint an id for keys it does not hold — which proves the keys were not SWAPPED
+and proves nothing about whose device it is. A device is authorised by a SIWE-shaped
 `personal_sign`, with an ERC-1271 `eth_call` branch for contract wallets. Guest accounts have no
 wallet, so their devices are `attested: 'server'` — and `attested` is a REQUIRED prop on the trust
 badge, so a server-asserted device cannot be rendered as wallet-verified by forgetting to say so.
+How a PEER decides whether to believe any of that is *Whose device is that?* below.
 
 **The envelope**, with its AAD fields joined by `` in exactly this order:
 
@@ -800,6 +802,79 @@ them in IndexedDB; the public halves are exported to base64url because they are 
 environment has no IndexedDB and neither does a browser in some private modes, so `setKeyStore`
 swaps it and `available()` is what `unsupported` reads. PR 12's `keyring-db.ts` extends this file
 rather than replacing it.
+
+## Whose device is that? — the proof a peer checks
+
+The self-certifying device id answers "were these keys swapped in transit?" and nothing else. It
+does NOT answer "is this device really Bob's", and the difference is the whole of end-to-end
+encryption: a device this server fabricates hashes its own keys, so it re-derives perfectly. PR 11's
+confirmation covers devices of your OWN account. Without something more, "wrap the epoch key to
+every member device" means wrapping it to whatever list this server hands over, and the product
+would be end-to-end encrypted against everyone except the one party it is supposed to be encrypted
+against.
+
+**So the enrolment signature is kept and published.** `devices.attested_address`,
+`attested_message` and `attested_signature` hold the address that signed, the exact bytes it
+signed, and the signature. PR 11 verified those and threw them away, which was enough while this
+server was the only one asking. A peer recovers the address ITSELF -
+`application/src/lib/attestation.ts`, over `@noble/curves` - and checks that the message names that
+device in its EIP-4361 `Resources` line. Two CHECK constraints make the proof non-optional: all
+three columns together or none, and `attested in ('wallet','contract')` requires them. A
+wallet-attested device with no proof beside it is not a row this database can hold.
+
+**What it cannot prove, stated plainly.** That the ADDRESS is the right person's. That is not a gap
+in the maths, it is where the trust has to come from — the address is shown so it can be compared
+out of band, the way a safety number is. A server that swapped a peer's address would have to swap
+it everywhere that person's address appears, and one comparison catches it.
+
+**`GET /chat/:id/devices` is a separate wire shape, not `devices.list` with a different WHERE.**
+The owner's list carries a label somebody typed, a last-seen time and a confirmation state; handing
+those to anybody who can open a conversation publishes a device count and a description of
+somebody's life for a feature that needs two public keys. `peerDevice` is the keys, the id, and the
+proof. Membership is the authorisation, exactly as it is for reading the messages, so a conversation
+you are not in answers precisely as one that does not exist.
+
+**Three filters, each a rule rather than a tidy-up**, and `peer-devices.db.spec.ts` owns all three
+against a real Postgres: revoked devices are absent (wrapping to a signed-out device is what
+revocation exists to prevent), UNCONFIRMED devices are absent (this is the ghost-device defence —
+confirmation is an assertion by another device of that account, and it is what finally makes PR 11's
+confirm button mean something), and server-attested devices are absent (there is no proof to
+travel, so a peer cannot check them at all).
+
+**A member with no sealable device comes back as an EMPTY ARRAY, never omitted.** "Nobody on the
+other side can read this" and "I have not loaded the other side yet" are different states, and a
+missing key cannot tell them apart.
+
+**One bad device condemns the whole list.** A list containing something that does not verify is not
+a trustworthy statement about the rest of it either, so `sealabilityOf` yields NO devices for that
+member and renders `tampered` — an alarm with `role="alert"`, not a shrug. Quietly using the good
+ones is exactly how a fabricated device ends up wrapped in beside the real ones.
+
+**Sealing needs a wallet on both sides.** A guest has no wallet, so a guest has no provable device,
+so a conversation with one is not sealed and says so. That is a product decision with a real cost —
+guests are the main onboarding path — and it is stated rather than hidden behind a padlock. A
+contract wallet is refused too, for now: ERC-1271 has no signature to recover and the answer needs
+an `eth_call` this browser does not make. Unverifiable is not verified, and the copy says which.
+
+**There is no "this conversation IS sealed" banner.** Nothing is sealed yet; a padlock ahead of its
+mechanism is a claim rather than a fact. What ships is the reason a conversation CANNOT be sealed,
+which is true of every conversation in the product today and stays true for the ones that still
+cannot be afterwards. The notice names the person it is about, and speaks in the second person when
+that person is the reader — being told about your own account in the third person reads like a bug.
+
+**Two things about the maths that fail silently.** EIP-191's prefix begins with the byte 0x19,
+written as `String.fromCharCode(0x19)` because an invisible control character in a source file is
+one an editor or a lint autofix eventually eats; and the length in that prefix is the BYTE length of
+the UTF-8 encoding, not the character count, so a Persian message is longer than it looks. Either
+mistake recovers a perfectly valid address that is simply not the signer, with no error anywhere.
+`attestation.spec.ts` signs with `viem` — the library that really produces these signatures — and
+recovers with the browser's own code, because a disagreement between the two halves would mean every
+peer device on earth failing to verify and nothing saying why.
+
+**`attestation.ts` is behind a dynamic import.** It is 14 KB gzip of elliptic-curve code for a
+question most conversations never reach — a thread where nobody has a provable device is answered
+entirely by the empty-array branch. A static import put all of it in the chat page's chunk and
+pushed that chunk from 5.7 KB to 19.8 KB, past its budget, for code that would not run.
 
 ## Notifications, and a push that carries nothing
 
@@ -1081,6 +1156,10 @@ stay true: the `/app` layout route is `lazy`, the app message catalogue is regis
 `locales/app-catalogue.ts` which only the shell and sign-in import, **`lib/guards.ts` imports
 `session.store.ts` dynamically**, and **`public-shell.component.azeroth` imports
 `connect-dialog.component.azeroth` dynamically**.
+
+A fourth is in the same family for a different reason: **`lib/seal-state.ts` imports
+`lib/attestation.ts` dynamically**, because the curve code behind it is 14 KB gzip that most
+conversations never need.
 
 That third one is not a size optimisation. Route guards are named in `routes.ts`, so `guards.ts` is
 eager; a static import there would drag `api.ts` into the landing chunk, and `api.ts` has a

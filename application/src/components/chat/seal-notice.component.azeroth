@@ -1,0 +1,73 @@
+import Icon from '../../icons/icon.component.azeroth';
+import type { IconName } from '../../icons/registry.ts';
+import type { MemberSeal, MemberSealState } from '../../lib/seal-state.ts';
+import type { MessageKey } from '../../locales/en.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+
+type Blocked = Exclude<MemberSealState, 'ready'>;
+
+const ICON: Record<Blocked, IconName> = {
+    'no-wallet': 'info',
+    'no-device': 'info',
+    'needs-chain': 'info',
+    tampered: 'alert'
+};
+
+const SAYS: Record<Blocked, MessageKey> = {
+    'no-wallet': 'seal.noWallet',
+    'no-device': 'seal.noDevice',
+    'needs-chain': 'seal.needsChain',
+    tampered: 'seal.tampered'
+};
+
+/**
+ * The same four reasons, about the person reading them.
+ *
+ * Being told "alex is signed in without a wallet" when you ARE alex reads like a bug, and it is
+ * also the one case where the sentence can say what to do about it rather than who to wait for.
+ */
+const SAYS_MINE: Record<Blocked, MessageKey> = {
+    'no-wallet': 'seal.noWalletMine',
+    'no-device': 'seal.noDeviceMine',
+    'needs-chain': 'seal.needsChainMine',
+    tampered: 'seal.tamperedMine'
+};
+
+/**
+ * Why the messages in this thread are not sealed.
+ *
+ * It appears only when something stands in the way, and it names the person it is about, because
+ * "sara.k is signed in without a wallet" is something somebody can act on and "this conversation
+ * cannot be encrypted" is not.
+ *
+ * There is deliberately no matching "this conversation IS sealed" banner. Nothing is sealed yet, so
+ * that sentence would be false today - and a padlock that appears before the mechanism does is
+ * exactly the kind of claim this codebase deletes. The positive case arrives with the sealing.
+ *
+ * `tampered` is the one that is not a shrug. Everything else here says a proof is ABSENT; that one
+ * says a proof was present and did not check out, which means the device list this browser was
+ * handed is not a truthful statement about who is in the conversation.
+ */
+export default component SealNotice(props: { blocked: MemberSeal })
+{
+    const locale = useLocale();
+
+    derived state = props.blocked.state as Blocked;
+
+    derived alarm = state === 'tampered';
+
+    <p
+        class={ [
+            'flex items-start gap-2 rounded-tile border px-3 py-2 text-ui-sm',
+            alarm ? 'border-madder/40 bg-madder/10 text-madder' : 'border-line bg-field text-muted'
+        ].join(' ') }
+        role={ alarm ? 'alert' : undefined }
+    >
+        <Icon name={ ICON[state] } size={ 16 } class="mt-0.5 shrink-0" />
+        <span>
+            { props.blocked.isMe
+                ? locale.t(SAYS_MINE[state])
+                : locale.t(SAYS[state], { who: props.blocked.handle }) }
+        </span>
+    </p>
+}

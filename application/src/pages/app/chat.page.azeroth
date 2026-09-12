@@ -4,6 +4,7 @@ import Page from '../../components/app/page.component.azeroth';
 import { groupNameOf, othersOf, titleOf } from '../../components/chat/chat-title.ts';
 import Composer from '../../components/chat/composer.component.azeroth';
 import MessageBubble from '../../components/chat/message-bubble.component.azeroth';
+import SealNotice from '../../components/chat/seal-notice.component.azeroth';
 import GroupCrest from '../../components/social/group-crest.component.azeroth';
 import PersonActions from '../../components/social/person-actions.component.azeroth';
 import Avatar from '../../components/ui/avatar.component.azeroth';
@@ -20,6 +21,7 @@ import { useLobby } from '../../stores/lobby.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useOverlay } from '../../stores/overlay.store.ts';
 import { usePresence } from '../../stores/presence.store.ts';
+import { useSeal } from '../../stores/seal.store.ts';
 import { useShell } from '../../stores/shell.store.ts';
 import { useSocial } from '../../stores/social.store.ts';
 import { useToasts } from '../../stores/toasts.store.ts';
@@ -60,7 +62,13 @@ export default component ChatPage()
         ? locale.t('chat.notFound')
         : locale.text(titleOf(conversation, me, groupNameOf(conversation, groups.byId)));
 
+    const seal = useSeal();
+
     derived messages = chat.messages();
+
+    // Only when something stands in the way. There is no matching "this is sealed" banner, because
+    // nothing is sealed yet and a padlock ahead of its mechanism is a claim rather than a fact.
+    derived blocked = seal.sealability()?.blocked ?? null;
 
     derived loading = chat.threadLoading();
 
@@ -283,6 +291,14 @@ export default component ChatPage()
                             }
                         </Show>
                     </div>
+
+                    <Show when={ blocked !== null }>
+                        { () =>
+                            <div class="px-3 pb-2">
+                                <SealNotice blocked={ blocked! } />
+                            </div>
+                        }
+                    </Show>
 
                     <Composer
                         value={ chat.draft(id) }

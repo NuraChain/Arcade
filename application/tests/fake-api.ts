@@ -1,7 +1,15 @@
 import { ApiError, applyFieldErrors } from '@azerothjs/http/api/shared';
 
 import { handleFromAddress, handleFromName } from '../../server/src/domains/identity/handle.ts';
-import type { Account, ChatMessage, ConversationSummary, Device, MuteSubject, Privacy } from '../../server/src/schemas.ts';
+import type {
+    Account,
+    ChatMessage,
+    ConversationDevices,
+    ConversationSummary,
+    Device,
+    MuteSubject,
+    Privacy
+} from '../../server/src/schemas.ts';
 import {
     FRIENDSHIP_FIXTURES,
     GROUP_FIXTURES,
@@ -182,6 +190,18 @@ export const server =
     notifySeq: 0,
 
     /**
+     * What `GET /chat/:id/devices` answers, per conversation id.
+     *
+     * Arranged by a spec rather than derived, because what a test needs to set up is "the other
+     * side of this conversation looks like THIS" - including the shapes the real server would
+     * never produce, which are exactly the ones the client has to survive.
+     *
+     * A conversation with no entry answers with no members at all, which is what an unknown id
+     * would do.
+     */
+    conversationDevices: {} as Record<string, ConversationDevices>,
+
+    /**
      * Devices, in memory.
      *
      * This fake does NOT recompute an id from the keys. That rule belongs to the real server and
@@ -287,6 +307,7 @@ export const server =
         server.tableSeq = 0;
         server.notifications = [];
         server.notifySeq = 0;
+        server.conversationDevices = {};
         server.devices = [];
         server.currentDevice = null;
         server.refuseEnrol = null;
@@ -469,6 +490,12 @@ export const client =
         {
             server.calls.push('chat.list');
             return { conversations: server.conversations.map((row) => ({ ...row })) };
+        },
+
+        async devices({ params }: { params: { id: string } })
+        {
+            server.calls.push('chat.devices');
+            return server.conversationDevices[params.id] ?? { members: [] };
         },
 
         async messages({ params }: { params: { id: string } })
