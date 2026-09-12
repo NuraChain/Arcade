@@ -14,7 +14,6 @@ import {
     cursorQuery,
     challenge,
     challengeInput,
-    demoSignIn,
     device,
     deviceLabelInput,
     deviceList,
@@ -161,26 +160,6 @@ export function buildApi(ports: Ports)
                 {
                     const established = await ports.identity.signInAsGuest({
                         name: context.input.name,
-                        userAgent: context.request.headers.get('user-agent') ?? ''
-                    });
-
-                    return reply(200, { account: established.account }, {
-                        'set-cookie': sessionCookie(established.token, ports.identity.secureCookies)
-                    });
-                }
-            ),
-
-            /**
-             * The three seeded exploration identities. Shared accounts, marked `demo`, offered
-             * because a product nobody can look inside is a product nobody tries.
-             */
-            demo: routes.post(
-                '/demo',
-                { input: demoSignIn, output: sessionState },
-                async (context) =>
-                {
-                    const established = await ports.identity.signInAsDemo({
-                        handle: context.input.handle,
                         userAgent: context.request.headers.get('user-agent') ?? ''
                     });
 

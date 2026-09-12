@@ -60,19 +60,49 @@ const ROUTES = [
 
 const LOCALES = ['en', 'fa'];
 
-// The demo persona the matrix tours as. Signing in is a real round trip now - the session is an
-// HttpOnly cookie the server sets, not a localStorage key a test can write - so this happens once
-// and the resulting storage state is handed to every context.
-const DEMO_HANDLE = 'alex';
+// The account the matrix tours as, and it signs in the way a person does: fetch the challenge,
+// sign it with the wallet, post the signature. There is no demo door any more - and there should
+// not be, because a sign-in path that exists only for the test suite is a sign-in path nobody
+// tests. This exercises the real EIP-4361 round trip on every run.
+//
+// It needs `seedWalletFixtures` to have run, exactly as the old one needed the demo rows: a matrix
+// against a database with no fixtures fails on the first line rather than touring 640 signed-out
+// pages.
+const TOUR_HANDLE = 'dana.w';
 
 async function signedIn(browser)
 {
+    const { privateKeyToAccount } = await import('viem/accounts');
+    const { WALLET_FIXTURES } = await import('../../server/src/db/wallet-fixtures.ts');
+
+    const fixture = WALLET_FIXTURES.find((one) => one.handle === TOUR_HANDLE);
+    if (fixture === undefined)
+    {
+        throw new Error(`qa: no wallet fixture called ${ TOUR_HANDLE }`);
+    }
+
+    const wallet = privateKeyToAccount(fixture.privateKey);
     const context = await browser.newContext();
-    const response = await context.request.post(`${ BASE }/api/auth/demo`, { data: { handle: DEMO_HANDLE } });
+
+    const issued = await context.request.post(`${ BASE }/api/auth/challenge`, { data: { address: wallet.address } });
+    if (!issued.ok())
+    {
+        throw new Error(`qa: no challenge for ${ TOUR_HANDLE } (${ issued.status() }). Is the api running?`);
+    }
+    const challenge = await issued.json();
+
+    const response = await context.request.post(`${ BASE }/api/auth/wallet`, {
+        data: {
+            address: wallet.address,
+            nonce: challenge.nonce,
+            signature: await wallet.signMessage({ message: challenge.message })
+        }
+    });
     if (!response.ok())
     {
-        throw new Error(`qa: could not sign in as ${ DEMO_HANDLE } (${ response.status() }). Is the api running?`);
+        throw new Error(`qa: could not sign in as ${ TOUR_HANDLE } (${ response.status() }). Has seedWalletFixtures run?`);
     }
+
     const state = await context.storageState();
     await context.close();
     return state;

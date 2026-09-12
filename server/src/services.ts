@@ -487,7 +487,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         display_name: string;
         bio: string;
         hue: number;
-        kind: 'wallet' | 'demo' | 'guest';
+        kind: 'wallet' | 'guest';
         is_minor: boolean;
         address: string | null;
     }): Account => ({
@@ -564,13 +564,6 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             async signInAsGuest(input)
             {
                 const result = await identity.signInAsGuest(input);
-                const row = await identity.profileFor(result.principal.userId);
-                return { token: result.token, account: present(row!) };
-            },
-
-            async signInAsDemo(input)
-            {
-                const result = await identity.signInAsDemo(input);
                 const row = await identity.profileFor(result.principal.userId);
                 return { token: result.token, account: present(row!) };
             },

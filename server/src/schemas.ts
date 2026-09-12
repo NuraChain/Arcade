@@ -84,7 +84,7 @@ export type AchievementList = Infer<typeof achievementList>;
 
 /* -------------------------------------------------------------------------- identity */
 
-export const accountKind = enumOf(['wallet', 'demo', 'guest']);
+export const accountKind = enumOf(['wallet', 'guest']);
 
 /**
  * The signed-in account, as the browser sees it.
@@ -147,8 +147,6 @@ export const guestSignIn = object({ name: string() });
  * shared exploration accounts, they prove nothing, and the account they open says `demo` so the
  * UI can say so too.
  */
-export const demoSignIn = object({ handle: string() });
-
 export const handleInput = object({ handle: string() });
 
 export const handleResult = object({ handle: string() });

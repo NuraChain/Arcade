@@ -81,8 +81,6 @@ export interface IdentityPort
 
     signInAsGuest(input: { name: string; userAgent: string }): Promise<Established>;
 
-    signInAsDemo(input: { handle: string; userAgent: string }): Promise<Established>;
-
     signOut(sessionId: string): Promise<void>;
     signOutEverywhere(userId: string): Promise<number>;
     claimHandle(userId: string, handle: string): Promise<string>;

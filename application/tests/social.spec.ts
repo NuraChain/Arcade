@@ -51,7 +51,7 @@ beforeEach(() =>
         displayName: 'Alex Morgan',
         bio: '',
         hue: 210,
-        kind: 'demo',
+        kind: 'guest',
         isMinor: false
     });
     server.reset();

@@ -8,7 +8,7 @@ import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn, UpdateDateCol
  * nothing, which is exactly why the distinction is a column rather than a guess: anything that
  * must not be spoofable - a device attestation, a moderation action - checks this.
  */
-export type AccountKind = 'wallet' | 'demo' | 'guest';
+export type AccountKind = 'wallet' | 'guest';
 
 @Entity('users')
 export class User

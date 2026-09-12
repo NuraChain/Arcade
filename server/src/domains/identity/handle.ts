@@ -22,13 +22,7 @@ const RESERVED = new Set([
     'nura', 'nuragames', 'nurachain', 'official', 'team', 'security', 'abuse', 'billing',
     'api', 'app', 'www', 'mail', 'ftp', 'me', 'you', 'null', 'undefined', 'anonymous', 'guest',
     'settings', 'sign-in', 'signin', 'signout', 'login', 'logout', 'register', 'new', 'edit',
-    'games', 'friends', 'chats', 'groups', 'search', 'discover', 'notifications', 'play', 'people',
-
-    // The seeded demo personas. Reserved because the product OWNS these accounts: if a person
-    // could claim one, the next deploy's seed would either fail to take the handle or - far
-    // worse - take it from them, and /auth/demo would hand their account to anyone who asked.
-    // `tests/identity.spec.ts` fails if a persona is ever added without a line here.
-    'alex', 'sara.k', 'kian16'
+    'games', 'friends', 'chats', 'groups', 'search', 'discover', 'notifications', 'play', 'people'
 ]);
 
 /** Shared with the group slug, which is claimed against its own `citext` index the same way. */

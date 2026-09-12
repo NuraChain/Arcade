@@ -4,7 +4,6 @@ import { privateKeyToAccount } from 'viem/accounts';
 import { buildSiweMessage, verifySignature } from '../src/domains/identity/siwe.ts';
 import { candidatesFor, checkHandle, handleFromAddress, handleFromName, normalizeHandle } from '../src/domains/identity/handle.ts';
 import { hashToken, isAddress, mintNonce, mintToken, normalizeAddress, secretsMatch } from '../src/lib/crypto.ts';
-import { DEMO_SEEDS } from '../src/db/seed-reference.ts';
 
 /**
  * A real key, fixed so the vectors are reproducible. It controls nothing: it exists only to
@@ -198,14 +197,6 @@ describe('handles', () =>
         expect(checkHandle('sara@k')).toBe('bad-shape');
     });
 
-    it('holds every seeded demo persona out of reach', () =>
-    {
-        for (const demo of DEMO_SEEDS)
-        {
-            expect(checkHandle(demo.handle)).toBe('reserved');
-        }
-    });
-
     it('refuses names that would impersonate the product or shadow a route', () =>
     {
         expect(checkHandle('admin')).toBe('reserved');
@@ -233,8 +224,8 @@ describe('handles', () =>
     {
         // A reserved name keeps its shape and is REFUSED by name, rather than being quietly
         // folded into a near-miss the person never asked for.
-        expect(handleFromName('sara.k')).toBe('sara.k');
-        expect(checkHandle(handleFromName('sara.k'))).toBe('reserved');
+        expect(handleFromName('settings')).toBe('settings');
+        expect(checkHandle(handleFromName('settings'))).toBe('reserved');
     });
 
     it('strips a typed name that is not, rather than refusing it outright', () =>

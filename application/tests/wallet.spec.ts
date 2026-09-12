@@ -20,7 +20,7 @@ import {
 import { personFor, useAccount } from '../src/stores/account.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
 import { useWallet } from '../src/stores/wallet.store.ts';
-import { demoAccount, guestAccount, server, walletAccount } from './fake-api.ts';
+import { fixtureAccount, guestAccount, server, walletAccount } from './fake-api.ts';
 
 vi.mock('../src/api.ts', async () => await import('./fake-api.ts'));
 
@@ -340,6 +340,6 @@ describe('wallet identity', () =>
 
     it('still resolves a demo identity from its handle', () =>
     {
-        expect(personFor(demoAccount('alex')!)?.id).toBe('alex');
+        expect(personFor(fixtureAccount('alex')!)?.id).toBe('alex');
     });
 });

@@ -147,31 +147,6 @@ export const ACHIEVEMENT_SEEDS: AchievementSeed[] = [
  *
  * Every other column is definition and is brought back in line on every boot.
  */
-/**
- * The three identities the sign-in page offers for exploring.
- *
- * Real accounts, marked `demo` so nothing mistakes one for a person who proved anything. They
- * are seeded rather than derived because the handle is the key the client joins its sample
- * social graph on: leave them to be created by whoever types the name first and the second
- * visitor gets `alex16`, an account with no friends and no history, and the tour is over.
- *
- * Seeding also puts the handles beyond reach - the unique index holds them from first boot - and
- * makes the minor a real minor, which is what the age gating in the social domain reads.
- */
-export interface DemoSeed
-{
-    handle: string;
-    displayName: string;
-    hue: number;
-    isMinor: boolean;
-}
-
-export const DEMO_SEEDS: DemoSeed[] = [
-    { handle: 'alex', displayName: 'Alex Morgan', hue: 32, isMinor: false },
-    { handle: 'sara.k', displayName: 'Sara Kamali', hue: 340, isMinor: false },
-    { handle: 'kian16', displayName: 'Kian Nazari', hue: 200, isMinor: true }
-];
-
 export async function seedReference(db: DataSource): Promise<void>
 {
     await db.transaction(async (tx) =>
@@ -257,23 +232,5 @@ export async function seedReference(db: DataSource): Promise<void>
             );
         }
 
-        for (const demo of DEMO_SEEDS)
-        {
-            await tx.query(
-                // `allow_stranger_messages` is derived from `is_minor` rather than left to the
-                // column default: `users_minor_no_strangers` refuses the pair a minor would
-                // otherwise be inserted with, and the refusal happens at BOOT, where it takes the
-                // whole server down. The constraint was right and this seed was wrong.
-                `insert into users (handle, display_name, hue, kind, is_minor, allow_stranger_messages)
-                 values ($1, $2, $3, 'demo', $4, not $4)
-                 on conflict (handle) do update set
-                    display_name = excluded.display_name,
-                    hue = excluded.hue,
-                    is_minor = excluded.is_minor,
-                    allow_stranger_messages = excluded.allow_stranger_messages
-                 where users.kind = 'demo'`,
-                [demo.handle, demo.displayName, demo.hue, demo.isMinor]
-            );
-        }
     });
 }

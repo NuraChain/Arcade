@@ -1154,7 +1154,7 @@ called connect and waited, would be a button that lies.
 connect surface) and `SiteFooter`, and remains what `lib/guards.ts` redirects to and where guest
 and demo entry live.
 
-Three ways in, and the account says which one was used through `kind`:
+Two ways in, and the account says which one was used through `kind`:
 
 - **Wallet** (`kind: 'wallet'`). `stores/wallet.store.ts` asks an EIP-1193 provider for accounts,
   switches to NuraChain when `data/chain.ts` is configured, then asks the SERVER for the message
@@ -1166,13 +1166,18 @@ Three ways in, and the account says which one was used through `kind`:
   result away, which made the whole prompt theatre.
 - **Guest** (`kind: 'guest'`). A typed name, no proof of anything, and the actual onboarding for
   most people. `handleFromName` folds the name into a handle.
-- **Demo** (`kind: 'demo'`). The three personas the sign-in page offers for exploring are REAL
-  seeded accounts (`DEMO_SEEDS` in `seed-reference.ts`), reachable only through `POST /auth/demo`,
-  which matches on `kind = 'demo'` so the route can never be a way into a real person's account.
-  Their handles are in the `RESERVED` set, which is what lets the seed own them; `identity.spec.ts`
-  fails if a persona is added without reserving its handle. The seed's `on conflict` carries
-  `where users.kind = 'demo'` as well, so it is structurally incapable of converting somebody's
-  account into a shared one.
+
+**There is no demo account and no `/auth/demo`.** Three seeded personas used to be offered on the
+sign-in page so somebody could look around without connecting anything - but a guest already does
+that, and does it as a REAL account nobody else can sign into. What `demo` added was precisely the
+shared-identity property: several people in one account, whose profile the product then rendered
+exactly like a person's. `0011-drop-demo.ts` rewrites `users_kind_known` to `('wallet','guest')`
+rather than leaving the value legal with nothing writing it.
+
+**The QA matrix signs in with a WALLET**, through the real challenge-sign-post round trip, as the
+`dana.w` fixture. It used to POST `/auth/demo`, which meant the one sign-in path exercised on every
+run was the one no real person used. It now needs `seedWalletFixtures` to have run, exactly as it
+used to need the demo rows.
 
 **The nonce is single use, and it is burned FIRST.** `signInWithWallet` runs a conditional UPDATE
 that only matches an unconsumed, unexpired row and takes the stored message from its `returning`

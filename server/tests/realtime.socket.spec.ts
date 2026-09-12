@@ -45,7 +45,7 @@ const silent = {
 const PRINCIPAL: Principal = {
     userId: '11111111-1111-4111-8111-111111111111',
     handle: 'alex',
-    kind: 'demo',
+    kind: 'guest',
     isMinor: false,
     sessionId: '22222222-2222-4222-8222-222222222222'
 };

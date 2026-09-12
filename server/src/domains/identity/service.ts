@@ -1,4 +1,4 @@
-import { BadRequestError, ConflictError, NotFoundError, UnauthorizedError } from '@azerothjs/http';
+import { BadRequestError, ConflictError, UnauthorizedError } from '@azerothjs/http';
 import type { DataSource } from 'typeorm';
 
 import type { Principal } from '../../http/auth.ts';
@@ -309,33 +309,6 @@ export function createIdentityService(db: DataSource, config: IdentityConfig)
 
             const hue = [...name].reduce((total, character) => total + character.codePointAt(0)!, 0) % 360;
             const user = await insertUser(wanted, name.slice(0, 64), 'guest', hue);
-
-            const { token, sessionId } = await openSession(user.id, input.userAgent);
-            return { token, principal: principalOf(user, sessionId) };
-        },
-
-        /**
-         * Signing in as one of the seeded demo identities.
-         *
-         * No proof, exactly like a guest - the difference is that the account already exists,
-         * with the handle, hue and minor flag the tour is built around. The `kind = 'demo'`
-         * condition is what stops this route being a way into any account whose handle you can
-         * guess: a real person's row can never match it.
-         */
-        async signInAsDemo(input: { handle: string; userAgent: string }): Promise<SignedIn>
-        {
-            const rows = await db.query(
-                `select id, handle, display_name, bio, hue, kind, is_minor, is_suspended
-                 from users
-                 where handle = $1 and kind = 'demo' and is_suspended = false`,
-                [normalizeHandle(input.handle)]
-            );
-
-            const user = firstRow<UserRow>(rows);
-            if (user === null)
-            {
-                throw new NotFoundError('That demo identity is not available.');
-            }
 
             const { token, sessionId } = await openSession(user.id, input.userAgent);
             return { token, principal: principalOf(user, sessionId) };

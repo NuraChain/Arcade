@@ -10,6 +10,7 @@ import { DropFairness1789180000000 } from './0007-drop-fairness.ts';
 import { Notifications1789190000000 } from './0008-notifications.ts';
 import { Devices1789200000000 } from './0009-devices.ts';
 import { Attestation1789210000000 } from './0010-attestation.ts';
+import { DropDemo1789220000000 } from './0011-drop-demo.ts';
 
 /**
  * Every migration. Appending is the only correct edit.
@@ -29,5 +30,6 @@ export const migrations: (new () => MigrationInterface)[] = [
     DropFairness1789180000000,
     Notifications1789190000000,
     Devices1789200000000,
-    Attestation1789210000000
+    Attestation1789210000000,
+    DropDemo1789220000000
 ];

@@ -332,10 +332,16 @@ export const server =
     }
 };
 
-const DEMO: Record<string, Account> = {
-    alex: { id: 'u-alex', handle: 'alex', displayName: 'Alex Morgan', bio: '', hue: 32, kind: 'demo', isMinor: false },
-    'sara.k': { id: 'u-sara', handle: 'sara.k', displayName: 'Sara Kamali', bio: '', hue: 340, kind: 'demo', isMinor: false },
-    kian16: { id: 'u-kian', handle: 'kian16', displayName: 'Kian Nazari', bio: '', hue: 200, kind: 'demo', isMinor: true }
+/**
+ * Three fixture people a spec can be signed in as.
+ *
+ * Ordinary guest accounts: the demo kind is gone, and these exist only so a test has somebody with
+ * a name, a hue and an age gate to be. The minor is here because the privacy rules turn on it.
+ */
+const FIXTURE_ACCOUNTS: Record<string, Account> = {
+    alex: { id: 'u-alex', handle: 'alex', displayName: 'Alex Morgan', bio: '', hue: 32, kind: 'guest', isMinor: false },
+    'sara.k': { id: 'u-sara', handle: 'sara.k', displayName: 'Sara Kamali', bio: '', hue: 340, kind: 'guest', isMinor: false },
+    kian16: { id: 'u-kian', handle: 'kian16', displayName: 'Kian Nazari', bio: '', hue: 200, kind: 'guest', isMinor: true }
 };
 
 let counter = 0;
@@ -435,9 +441,9 @@ const personWire = (handle: string): PersonSummary =>
 loadFixtures();
 loadGraph();
 
-export function demoAccount(handle: string): Account | undefined
+export function fixtureAccount(handle: string): Account | undefined
 {
-    return DEMO[handle];
+    return FIXTURE_ACCOUNTS[handle];
 }
 
 /**
@@ -1246,18 +1252,6 @@ export const client =
             }
             server.account = guestAccount(input.name);
             return { account: server.account };
-        },
-
-        async demo({ input }: { input: { handle: string } })
-        {
-            server.calls.push('auth.demo');
-            const account = demoAccount(input.handle);
-            if (account === undefined)
-            {
-                throw new ApiError(404, 'not-found', 'That demo identity is not available.', undefined);
-            }
-            server.account = account;
-            return { account };
         },
 
         async signOut()
