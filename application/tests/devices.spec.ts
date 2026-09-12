@@ -67,6 +67,13 @@ function fakeKeyStore(options: { available?: boolean } = {}): KeyStore & { minte
         {
             return held;
         },
+
+        // Nothing in this spec seals anything, and a fake that HELD private keys would be a fake
+        // that could be mistaken for the real store. It answers the question and holds nothing.
+        async secrets()
+        {
+            return null;
+        },
         async mint()
         {
             this.minted += 1;

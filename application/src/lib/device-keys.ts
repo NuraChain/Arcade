@@ -1,4 +1,5 @@
 import { cryptoAvailable, deviceIdFrom, toBase64Url } from './device-id.ts';
+import { DEVICE_STORE, keyringAvailable, transact } from './keyring-db.ts';
 
 /**
  * The keys this browser holds, and the only place they are kept.
@@ -18,10 +19,7 @@ import { cryptoAvailable, deviceIdFrom, toBase64Url } from './device-id.ts';
  * reports `unsupported` rather than throwing halfway through an enrolment.
  */
 
-const DATABASE = 'nura-keyring';
-const STORE = 'device';
 const RECORD = 'self';
-const VERSION = 1;
 
 export interface DeviceKeys
 {
@@ -30,6 +28,21 @@ export interface DeviceKeys
     /** base64url of the DER SubjectPublicKeyInfo. What goes on the wire. */
     exchangeKey: string;
     signingKey: string;
+}
+
+/**
+ * The non-extractable halves, as key HANDLES.
+ *
+ * Handing these out of the store is not handing out key material: `extractable` is false, so
+ * neither this code nor anything that gets into the page can read bytes back out of them. What a
+ * holder can do is USE them - unwrap an epoch key addressed to this device, and sign as this
+ * device - which is exactly what the sealing needs and exactly what nothing else should have, so
+ * they are fetched at the moment of use rather than kept anywhere.
+ */
+export interface DeviceSecrets
+{
+    exchange: CryptoKeyPair;
+    signing: CryptoKeyPair;
 }
 
 interface KeyRecord extends DeviceKeys
@@ -45,6 +58,9 @@ export interface KeyStore
 
     load(): Promise<DeviceKeys | null>;
 
+    /** The private halves, for the two things only this device may do. Null when there are none. */
+    secrets(): Promise<DeviceSecrets | null>;
+
     /** Generates a fresh pair of keypairs, replacing whatever was here. */
     mint(): Promise<DeviceKeys>;
 
@@ -52,37 +68,8 @@ export interface KeyStore
     forget(): Promise<void>;
 }
 
-const openDatabase = (): Promise<IDBDatabase> => new Promise((resolve, reject) =>
-{
-    const request = indexedDB.open(DATABASE, VERSION);
-    request.onupgradeneeded = () =>
-    {
-        if (!request.result.objectStoreNames.contains(STORE))
-        {
-            request.result.createObjectStore(STORE);
-        }
-    };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error ?? new Error('keyring'));
-});
-
-const transact = async <T>(mode: IDBTransactionMode, work: (store: IDBObjectStore) => IDBRequest<T>): Promise<T> =>
-{
-    const database = await openDatabase();
-    try
-    {
-        return await new Promise<T>((resolve, reject) =>
-        {
-            const request = work(database.transaction(STORE, mode).objectStore(STORE));
-            request.onsuccess = () => resolve(request.result);
-            request.onerror = () => reject(request.error ?? new Error('keyring'));
-        });
-    }
-    finally
-    {
-        database.close();
-    }
-};
+const read = <T>(mode: IDBTransactionMode, work: (store: IDBObjectStore) => IDBRequest<T>): Promise<T> =>
+    transact(DEVICE_STORE, mode, work);
 
 const exportPublic = async (key: CryptoKey): Promise<string> =>
     toBase64Url(new Uint8Array(await crypto.subtle.exportKey('spki', key)));
@@ -114,32 +101,45 @@ const generate = async (): Promise<KeyRecord> =>
     };
 };
 
-const browserKeyStore: KeyStore =
+const browserKeyStore: KeyStore & { record(): Promise<KeyRecord | null> } =
 {
     available()
     {
-        return cryptoAvailable() && typeof globalThis.indexedDB !== 'undefined';
+        return cryptoAvailable() && keyringAvailable();
     },
 
     async load()
+    {
+        const record = await this.record();
+
+        return record === null
+            ? null
+            : { id: record.id, exchangeKey: record.exchangeKey, signingKey: record.signingKey };
+    },
+
+    async secrets()
+    {
+        const record = await this.record();
+        return record === null ? null : { exchange: record.exchange, signing: record.signing };
+    },
+
+    async record(): Promise<KeyRecord | null>
     {
         if (!this.available())
         {
             return null;
         }
 
-        const record = await transact<KeyRecord | undefined>('readonly', (store) => store.get(RECORD))
+        const record = await read<KeyRecord | undefined>('readonly', (store) => store.get(RECORD))
             .catch(() => undefined);
 
-        return record === undefined
-            ? null
-            : { id: record.id, exchangeKey: record.exchangeKey, signingKey: record.signingKey };
+        return record ?? null;
     },
 
     async mint()
     {
         const record = await generate();
-        await transact('readwrite', (store) => store.put(record, RECORD));
+        await read('readwrite', (store) => store.put(record, RECORD));
         return { id: record.id, exchangeKey: record.exchangeKey, signingKey: record.signingKey };
     },
 
@@ -149,7 +149,7 @@ const browserKeyStore: KeyStore =
         {
             return;
         }
-        await transact('readwrite', (store) => store.delete(RECORD)).catch(() => undefined);
+        await read('readwrite', (store) => store.delete(RECORD)).catch(() => undefined);
     }
 };
 
