@@ -6,7 +6,7 @@ import { pairKeyOf } from '../domains/chat/service.ts';
 import { enrolMessage } from '../domains/device/enrol-message.ts';
 import { deviceIdFrom } from '../domains/device/id.ts';
 import { firstRow, rowsOf } from '../lib/rows.ts';
-import { WALLET_FIXTURES } from './wallet-fixtures.ts';
+import { WALLET_FIXTURES, WALLET_FRIENDSHIPS, WALLET_GROUP } from './wallet-fixtures.ts';
 
 /**
  * DEVELOPMENT FIXTURES: two accounts that sign in with a wallet, each holding one device whose
@@ -38,14 +38,11 @@ import { WALLET_FIXTURES } from './wallet-fixtures.ts';
  * concerned, which is exactly what the sealing path needs to have in front of it.
  */
 
-/** The conversations these two are reachable through. */
+/** The direct conversations in the development database. */
 const WALLET_THREADS: { left: string; right: string }[] = [
-    // Both sides provable: the only kind of thread in a development database that can be sealed.
     { left: 'dana.w', right: 'omid.k' },
-
-    // One side provable and one not. This is what the demo tour meets, and the reason the notice
-    // has to name a person rather than say "this cannot be encrypted".
-    { left: 'dana.w', right: 'alex' }
+    { left: 'dana.w', right: 'sara.k' },
+    { left: 'sara.k', right: 'leila.a' }
 ];
 
 const b64url = (buffer: ArrayBuffer): string => Buffer.from(buffer).toString('base64url');
@@ -160,14 +157,120 @@ export async function seedWalletFixtures(db: DataSource, config: WalletSeedConfi
         );
     }
 
+    await seedWalletFriendships(db);
     await seedWalletThreads(db);
+    await seedWalletGroup(db);
+}
+
+/** Handle to id, for everything below. */
+async function idsByHandle(db: DataSource): Promise<Map<string, string>>
+{
+    const rows = await db.query('select id, handle::text as handle from users');
+    return new Map(rowsOf<{ id: string; handle: string }>(rows).map((row) => [row.handle, row.id]));
+}
+
+/**
+ * Friendships, written BOTH ways.
+ *
+ * The same rule the social domain follows: two rows per pair, so "my friends" is one index scan
+ * rather than a union of two half-queries. A seed that wrote one direction would produce people
+ * who are friends from one side only, which is a state the product has no code for.
+ */
+async function seedWalletFriendships(db: DataSource): Promise<void>
+{
+    const idOf = await idsByHandle(db);
+
+    for (const [a, b] of WALLET_FRIENDSHIPS)
+    {
+        const left = idOf.get(a);
+        const right = idOf.get(b);
+
+        if (left === undefined || right === undefined)
+        {
+            continue;
+        }
+
+        await db.query(
+            'insert into friendships (user_id, friend_id) values ($1, $2), ($2, $1) on conflict do nothing',
+            [left, right]
+        );
+    }
+}
+
+/**
+ * One group, its single owner, and the thread it owns.
+ *
+ * Membership moves in lockstep with the conversation, the way `group/service.ts` does it: a member
+ * who is not in the thread cannot read what the group is saying.
+ */
+async function seedWalletGroup(db: DataSource): Promise<void>
+{
+    const idOf = await idsByHandle(db);
+    const members = WALLET_GROUP.members.map((handle) => idOf.get(handle)).filter((id): id is string => id !== undefined);
+
+    if (members.length === 0)
+    {
+        return;
+    }
+
+    const inserted = await db.query(
+        `insert into groups (slug, name, blurb, crest, hue, game, created_at)
+         values ($1, $2, $3, $4, $5, $6, now())
+         on conflict (slug) do nothing
+         returning id`,
+        [WALLET_GROUP.slug, WALLET_GROUP.name, WALLET_GROUP.blurb, WALLET_GROUP.crest, WALLET_GROUP.hue, WALLET_GROUP.game]
+    );
+
+    const groupId = firstRow<{ id: string }>(inserted)?.id
+        ?? firstRow<{ id: string }>(await db.query('select id from groups where slug = $1', [WALLET_GROUP.slug]))?.id;
+
+    if (groupId === undefined)
+    {
+        return;
+    }
+
+    for (const [index, member] of members.entries())
+    {
+        await db.query(
+            `insert into group_members (group_id, user_id, role, joined_at)
+             values ($1, $2, $3, now())
+             on conflict do nothing`,
+            [groupId, member, index === 0 ? 'owner' : 'member']
+        );
+    }
+
+    const thread = await db.query(
+        `insert into conversations (kind, group_id, created_at)
+         values ('group', $1, now())
+         -- The predicate has to IMPLY the index's, or Postgres cannot infer which index arbitrates
+         -- and raises 42P10. The conversations_group_one index is partial on both halves.
+         -- No backticks in here: inside a template literal they end the string.
+         on conflict (group_id) where kind = 'group' and group_id is not null do nothing
+         returning id`,
+        [groupId]
+    );
+
+    const conversationId = firstRow<{ id: string }>(thread)?.id
+        ?? firstRow<{ id: string }>(await db.query(`select id from conversations where group_id = $1 and kind = 'group'`, [groupId]))?.id;
+
+    if (conversationId === undefined)
+    {
+        return;
+    }
+
+    for (const member of members)
+    {
+        await db.query(
+            'insert into conversation_members (conversation_id, user_id) values ($1, $2) on conflict do nothing',
+            [conversationId, member]
+        );
+    }
 }
 
 /** One conversation per pair, idempotent on the unordered pair key the chat domain already uses. */
 async function seedWalletThreads(db: DataSource): Promise<void>
 {
-    const rows = await db.query('select id, handle::text as handle from users');
-    const idOf = new Map(rowsOf<{ id: string; handle: string }>(rows).map((row) => [row.handle, row.id]));
+    const idOf = await idsByHandle(db);
 
     for (const thread of WALLET_THREADS)
     {

@@ -1,5 +1,11 @@
 /**
- * WHO the development wallet accounts are, with nothing around it.
+ * WHO the development accounts are, with nothing around it.
+ *
+ * These six ARE the development population now. The twenty-four invented guests that used to fill
+ * a development database are gone; what is left is accounts that sign in through the real wallet
+ * route, hold a device whose attestation really verifies, and can therefore reach every part of the
+ * product a real person can - including the sealed half, which nothing else in this repository
+ * could get to.
  *
  * Split from the seed because `application/tests/wallet-fixtures.spec.ts` reads these constants to
  * prove the browser really accepts what the seed writes - and `seed-wallets.ts` reaches
@@ -32,5 +38,61 @@ export const WALLET_FIXTURES: WalletFixture[] = [
         hue: 96,
         privateKey: '0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d',
         label: 'Omid phone'
+    },
+    {
+        handle: 'sara.k',
+        displayName: 'Sara Kamali',
+        hue: 340,
+        privateKey: '0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a',
+        label: 'Sara laptop'
+    },
+    {
+        handle: 'reza.t',
+        displayName: 'Reza Tehrani',
+        hue: 18,
+        privateKey: '0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6',
+        label: 'Reza phone'
+    },
+    {
+        handle: 'mina',
+        displayName: 'Mina Sadeghi',
+        hue: 280,
+        privateKey: '0x47e179ec197488593b187f80a00eb0da91f1b9d0b13f8733639f19c30a34926a',
+        label: 'Mina laptop'
+    },
+    {
+        handle: 'leila.a',
+        displayName: 'Leila Ahmadi',
+        hue: 48,
+        privateKey: '0x8b3a350cf5c34c9194ca85829a2df0ec3153be0318b5e2d3348e872092edffba',
+        label: 'Leila phone'
     }
 ];
+
+/** Who knows whom. Mirrored by the seed, the way the social domain writes a friendship. */
+export const WALLET_FRIENDSHIPS: [string, string][] = [
+    ['dana.w', 'omid.k'],
+    ['dana.w', 'sara.k'],
+    ['dana.w', 'reza.t'],
+    ['sara.k', 'omid.k'],
+    ['sara.k', 'leila.a'],
+    ['reza.t', 'mina'],
+    ['mina', 'leila.a']
+];
+
+/**
+ * The group in the development database, and who is in it.
+ *
+ * One rather than five: a group is a row with an owner, a crest and a thread, and one of them
+ * exercises every path the page has. The owner is the first member, which is the rule
+ * `group_members_single_owner` enforces.
+ */
+export const WALLET_GROUP = {
+    slug: 'balcony-backgammon',
+    name: 'Balcony Backgammon',
+    blurb: 'Two boards, one balcony, every Thursday.',
+    crest: 'crest-moon',
+    hue: 212,
+    game: 'backgammon',
+    members: ['dana.w', 'sara.k', 'omid.k', 'reza.t']
+};

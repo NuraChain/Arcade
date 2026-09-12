@@ -296,8 +296,18 @@ class name is also what it records as applied, so it must never change once it h
 
 Use `npm run migration:generate` to DISCOVER the SQL; it is very good at that. Then commit the
 result by hand: the generator names the class after the file, and a file starting with a digit
-produces `export class 0001Reference…`, which is not a valid JavaScript identifier. Watch for
-backticks in SQL comments — inside a template literal they end the string.
+produces `export class 0001Reference…`, which is not a valid JavaScript identifier.
+
+**Watch for backticks in SQL comments — inside a template literal they end the string.** This has
+now cost four separate afternoons, in three different files, and it never looks like what it is: the
+comment names an index or a column in backticks, the string terminates there, and the identifier
+inside becomes a JavaScript expression. The symptom is a bare `ReferenceError: <that identifier> is
+not defined` at the point the query runs, naming something that is obviously not a variable. If you
+want to name an index in a SQL comment, write it bare.
+
+**An `on conflict` target must IMPLY the partial index's predicate**, or Postgres cannot work out
+which index arbitrates and raises 42P10. `conversations_group_one` is partial on
+`kind = 'group' and group_id is not null`, and an upsert stating only the first half fails.
 
 **Reference data** is content the product cannot run without: the games, their rules, the
 achievement definitions, and the three demo personas. `server/src/db/seed-reference.ts` upserts it on every boot, so a changed
@@ -653,10 +663,20 @@ The chat view types moved to `data/chat.ts`, which is where they always belonged
 client's view of a `ConversationSummary` and a `ChatMessage`, not fixture shapes. `Message.text` is
 a plain string now, because a message is what somebody typed.
 
-**Development fixtures** live in `server/src/db/seed-fixtures.ts` and refuse to run outside
-development. They seed twenty-four people, friendships and conversations so there is a populated
-room to look at. `tests/fake-api.ts` imports the same file, so the browser specs and the server
-agree about who exists by construction.
+**Development fixtures are six REAL accounts.** `server/src/db/seed-wallets.ts` is the whole seed:
+six wallet accounts, each holding a device whose attestation verifies, with friendships written
+both ways, three direct threads and one group. They sign in through the real wallet route, so
+everything a development database contains is something the product's own code path produced.
+
+The twenty-four invented guests that used to fill it are gone, and so is `seed-fixtures.ts`. That
+file did two jobs: it defined the arrangement the browser specs are written against, and it seeded
+those invented people into a database the product then rendered as its population. The first job is
+honest and now lives in `application/tests/fixtures.ts`, beside `fake-api.ts`, which is the
+browser's server. The second job was the problem.
+
+The seed runs on EVERY boot and is idempotent about the device as well as the account: P-256 keys
+cannot be generated deterministically from a seed, so the guard is "does this account already have
+a device" rather than a fixed id - which is also the rule a real account follows.
 
 Each fixture conversation is written in ONE language, because a real message is one language. The
 bilingual strings were a mock convenience the wire format does not have.

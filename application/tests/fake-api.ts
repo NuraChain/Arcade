@@ -17,7 +17,7 @@ import {
     PEOPLE_FIXTURES,
     REQUEST_FIXTURES,
     THREAD_FIXTURES
-} from '../../server/src/db/seed-fixtures.ts';
+} from './fixtures.ts';
 
 export type Refusal = 'challenge-unreachable' | 'bad-signature' | 'wallet-unreachable' | 'guest-taken';
 
