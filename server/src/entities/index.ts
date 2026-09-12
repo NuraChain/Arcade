@@ -12,6 +12,8 @@ import { Message } from './message.entity.ts';
 import { TableSeat } from './table-seat.entity.ts';
 import { Table } from './table.entity.ts';
 import { Mute } from './mute.entity.ts';
+import { Notification } from './notification.entity.ts';
+import { PushSubscription } from './push-subscription.entity.ts';
 import { Report } from './report.entity.ts';
 import { Session } from './session.entity.ts';
 import { SiweNonce } from './siwe-nonce.entity.ts';
@@ -20,8 +22,8 @@ import { Wallet } from './wallet.entity.ts';
 
 export {
     Achievement, Block, Conversation, ConversationMember, FriendRequest, Friendship,
-    Game, GameRule, Group, GroupMember, Message, Mute, Report, Session, SiweNonce,
-    Table, TableSeat, User, Wallet
+    Game, GameRule, Group, GroupMember, Message, Mute, Notification, PushSubscription,
+    Report, Session, SiweNonce, Table, TableSeat, User, Wallet
 };
 
 /**
@@ -40,5 +42,6 @@ export const entities: Function[] = [
     Friendship, FriendRequest, Block, Mute, Report,
     Conversation, ConversationMember, Message,
     Group, GroupMember,
-    Table, TableSeat
+    Table, TableSeat,
+    Notification, PushSubscription
 ];

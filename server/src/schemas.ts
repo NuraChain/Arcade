@@ -428,6 +428,75 @@ export const seatResult = object({
     seat: number().optional()
 });
 
+/* ----------------------------------------------------------------- notifications */
+
+export const notificationKind = enumOf([
+    'friend-request',
+    'friend-accepted',
+    'group-added',
+    'table-invite',
+    'message'
+]);
+
+export type NotificationKind = Infer<typeof notificationKind>;
+
+/**
+ * What a notification points at, as a closed set.
+ *
+ * The same rule `lineParams` follows, for the same reason: a notification carries an id the
+ * client resolves, never a sentence somebody wrote. The row is `jsonb` and would take anything;
+ * this is what stops it.
+ */
+export const notificationRef = object({
+    conversationId: string().optional(),
+    tableId: string().optional(),
+    groupId: string().optional(),
+    requestId: string().optional(),
+    personId: string().optional()
+});
+
+/**
+ * One notification.
+ *
+ * `count` is how many times it has happened since it was last read - twelve messages in one
+ * conversation are ONE of these with a count of twelve. There is no text: the client composes the
+ * sentence from `kind`, `actor` and `count` at display time, so it follows a language switch.
+ */
+export const notification = object({
+    id: string(),
+    kind: notificationKind,
+
+    /** The handle of whoever caused it, absent for anything the product announces itself. */
+    actor: string().optional(),
+
+    ref: notificationRef,
+    count: number(),
+    at: string(),
+    read: boolean()
+});
+
+export type Notification = Infer<typeof notification>;
+
+export const notificationPage = object({
+    items: array(notification),
+    hasMore: boolean(),
+    cursor: string().optional(),
+    unread: number()
+});
+
+export type NotificationPage = Infer<typeof notificationPage>;
+
+/** The VAPID public key, absent when this deployment has no push configured. */
+export const pushKey = object({ key: string().optional() });
+
+export const pushSubscribeInput = object({
+    endpoint: string(),
+    p256dh: string(),
+    auth: string()
+});
+
+export const pushEndpoint = object({ endpoint: string() });
+
 /* -------------------------------------------------------------------------- chat */
 
 export const messageKind = enumOf(['text', 'system', 'invite', 'result']);

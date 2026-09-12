@@ -4,6 +4,8 @@ import type { DataSource } from 'typeorm';
 import { createCatalogueService } from './domains/catalogue/service.ts';
 import { createChatService, type ConversationRow, type MessageRow } from './domains/chat/service.ts';
 import { createGroupService, type GroupRow } from './domains/group/service.ts';
+import { createNotifyService, type NotificationRow } from './domains/notify/service.ts';
+import { sendPush, type VapidKeys } from './domains/notify/push.ts';
 import { createTableService, type TableRow } from './domains/table/service.ts';
 import { createIdentityService } from './domains/identity/service.ts';
 import { maySeeOnline } from './domains/social/policy.ts';
@@ -11,7 +13,15 @@ import { createSocialService, type PersonRow } from './domains/social/service.ts
 import type { ServerConfig } from './env.ts';
 import { readSessionToken, SESSION_TTL_SECONDS } from './http/auth.ts';
 import type { Ports } from './ports.ts';
-import type { Account, ChatMessage, ConversationSummary, GroupSummary, PersonSummary, TableSummary } from './schemas.ts';
+import type {
+    Account,
+    ChatMessage,
+    ConversationSummary,
+    GroupSummary,
+    Notification,
+    PersonSummary,
+    TableSummary
+} from './schemas.ts';
 
 /**
  * Builds the real implementations behind `Ports`.
@@ -43,6 +53,79 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
     const chat = createChatService(db, social);
     const group = createGroupService(db, social);
     const table = createTableService(db, social);
+    const notify = createNotifyService(db, social);
+
+    /**
+     * Push, if this deployment has it.
+     *
+     * All three variables together or none: a half-configured push is one that asks for permission
+     * and then never delivers, which is worse than not asking.
+     */
+    const vapid: VapidKeys | null = config.vapidPublicKey !== '' && config.vapidPrivateKey !== '' && config.vapidSubject !== ''
+        ? { publicKey: config.vapidPublicKey, privateKey: config.vapidPrivateKey, subject: config.vapidSubject }
+        : null;
+
+    /**
+     * Wakes somebody's browsers, and never makes a request wait for it.
+     *
+     * The push carries nothing. It is a nudge to open the app, where the content comes over a
+     * session the reader is already authorised on - which is the only shape that survives
+     * `nura-e2ee/v1`, because this server will not be able to read the message either.
+     *
+     * Fire and forget on purpose: a push service being slow must not make sending a message slow,
+     * and a push service being down must not make it fail.
+     */
+    const wake = (userId: string): void =>
+    {
+        if (vapid === null)
+        {
+            return;
+        }
+
+        void (async () =>
+        {
+            for (const subscription of await notify.subscriptionsOf(userId))
+            {
+                const outcome = await sendPush(subscription.endpoint, vapid, Date.now());
+                if (outcome === 'gone')
+                {
+                    await notify.retire(subscription.id);
+                }
+            }
+        })().catch(() => undefined);
+    };
+
+    /** Tells somebody, then wakes them if they asked to be woken. */
+    const tell = async (input: {
+        userId: string;
+        kind: Notification['kind'];
+        actorId: string | null;
+        ref: Record<string, string>;
+        dedupeKey: string;
+    }): Promise<void> =>
+    {
+        if (await notify.tell(input))
+        {
+            wake(input.userId);
+        }
+    };
+
+    const asNotification = (row: NotificationRow): Notification =>
+    {
+        const item: Notification = {
+            id: row.id,
+            kind: row.kind,
+            ref: row.ref,
+            count: row.count,
+            at: row.created_at.toISOString(),
+            read: row.read_at !== null
+        };
+        if (row.actor !== null)
+        {
+            item.actor = row.actor;
+        }
+        return item;
+    };
 
     /**
      * The cursor, as one opaque string.
@@ -522,13 +605,40 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             {
                 const other = await mustResolve(handle);
                 const outcome = await social.sendRequest(me, other);
+
+                // Deduped on the SENDER, so asking twice is one notification. A request that was
+                // answered by the asking - both sides wanted it - tells the other person they
+                // were accepted rather than that they were asked.
+                await tell({
+                    userId: other,
+                    kind: outcome.outcome === 'accepted' ? 'friend-accepted' : 'friend-request',
+                    actorId: me,
+                    ref: {},
+                    dedupeKey: `friend:${ me }`
+                });
+
                 live?.socialChanged(me, other);
                 return outcome;
             },
 
             async answerRequest(me, requestId, outcome)
             {
+                const asker = await social.requesterOf(me, requestId);
                 await social.answerRequest(me, requestId, outcome);
+
+                // Only an acceptance is worth telling somebody about. A decline that announced
+                // itself would be a product that makes saying no cost something.
+                if (outcome === 'accepted' && asker !== null)
+                {
+                    await tell({
+                        userId: asker,
+                        kind: 'friend-accepted',
+                        actorId: me,
+                        ref: {},
+                        dedupeKey: `friend:${ me }`
+                    });
+                }
+
                 live?.socialChanged(me);
             },
 
@@ -704,6 +814,13 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 if (arrived)
                 {
                     await announce(after, me, 'joined', { who: other.handle });
+                    await tell({
+                        userId: other.id,
+                        kind: 'group-added',
+                        actorId: me,
+                        ref: { groupId: after.slug },
+                        dedupeKey: `group:${ after.id }`
+                    });
                     await ring(after, other.id);
                 }
                 return asGroup(after);
@@ -824,6 +941,15 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
 
                 await table.invite(me, tableId, other.id);
                 const after = await mustTable(me, tableId);
+
+                await tell({
+                    userId: other.id,
+                    kind: 'table-invite',
+                    actorId: me,
+                    ref: { tableId: after.id },
+                    dedupeKey: `table:${ after.id }`
+                });
+
                 await ringTable(after, other.id);
                 return asTable(after);
             },
@@ -841,6 +967,32 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 }
                 live?.socialChanged(...seated);
             }
+        },
+
+        notify: {
+            async page(me, cursor)
+            {
+                const page = await notify.page(me, decodeCursor(cursor));
+                const oldest = page.items[page.items.length - 1];
+
+                return {
+                    items: page.items.map(asNotification),
+                    hasMore: page.hasMore,
+                    unread: await notify.unread(me),
+                    ...(page.hasMore && oldest !== undefined
+                        ? { cursor: encodeCursor(oldest.created_at, oldest.id) }
+                        : {})
+                };
+            },
+
+            markRead: (me, id) => notify.markRead(me, id),
+            markAllRead: (me) => notify.markAllRead(me),
+            dismiss: (me, id) => notify.dismiss(me, id),
+
+            pushKey: () => (vapid === null ? undefined : vapid.publicKey),
+
+            subscribe: (me, input) => notify.subscribe(me, input),
+            unsubscribe: (me, endpoint) => notify.unsubscribe(me, endpoint)
         },
 
         chat: {
@@ -865,6 +1017,24 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             async send(me, conversationId, body)
             {
                 const message = asMessage(await chat.send(me, conversationId, body));
+
+                // One notification per conversation, counting up. Twelve messages while somebody
+                // was away is one row saying twelve, not twelve rows to swipe through - and the
+                // count resets when they read it, because that is what reading it means.
+                for (const recipient of await chat.recipients(conversationId))
+                {
+                    if (recipient !== me)
+                    {
+                        await tell({
+                            userId: recipient,
+                            kind: 'message',
+                            actorId: me,
+                            ref: { conversationId },
+                            dedupeKey: `chat:${ conversationId }`
+                        });
+                    }
+                }
+
                 live?.chatChanged(conversationId);
                 return message;
             },

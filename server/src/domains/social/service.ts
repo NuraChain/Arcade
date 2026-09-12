@@ -35,6 +35,9 @@ const partyOf = (row: PersonRow): Party => ({
 
 const PERSON_COLUMNS = 'u.id, u.handle, u.display_name, u.hue, u.is_minor, u.allow_stranger_messages, u.show_online, u.last_seen_at';
 
+/** Whether a path parameter could be an id at all. A malformed one is 22P02, which is a 500. */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export function createSocialService(db: DataSource)
 {
     const person = async (id: string): Promise<PersonRow | null> =>
@@ -387,6 +390,26 @@ export function createSocialService(db: DataSource)
          * to this account, so answering somebody else's request cannot be expressed. Accepting
          * then befriends both ways inside the same transaction as the answer.
          */
+        /**
+         * Who asked, for a request this account may answer.
+         *
+         * Read BEFORE the answer, because answering closes the row and the caller needs somebody
+         * to tell. The `to_user = $2` is the authorisation, the same as everywhere else here: a
+         * request addressed to somebody else is not visible, not refused differently.
+         */
+        async requesterOf(me: string, requestId: string): Promise<string | null>
+        {
+            if (!UUID.test(requestId))
+            {
+                return null;
+            }
+            const rows = await db.query(
+                'select from_user from friend_requests where id = $1 and to_user = $2 and answered_at is null',
+                [requestId, me]
+            );
+            return firstRow<{ from_user: string }>(rows)?.from_user ?? null;
+        },
+
         async answerRequest(me: string, requestId: string, outcome: 'accepted' | 'declined'): Promise<void>
         {
             await db.transaction(async (tx) =>

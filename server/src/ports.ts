@@ -12,6 +12,7 @@ import type {
     ConversationSummary,
     GroupSummary,
     MessagePage,
+    NotificationPage,
     ServerInfo,
     SocialGraph,
     TableSummary
@@ -184,6 +185,26 @@ export interface TablePort
     close(me: string, tableId: string): Promise<void>;
 }
 
+/**
+ * Notifications, and the browsers that asked to be woken about them.
+ *
+ * Nothing here composes a sentence. A notification is a kind, an actor, a count and a reference;
+ * the client says it in the reader's language at the moment it is read.
+ */
+export interface NotifyPort
+{
+    page(me: string, cursor: string | undefined): Promise<NotificationPage>;
+    markRead(me: string, id: string): Promise<void>;
+    markAllRead(me: string): Promise<void>;
+    dismiss(me: string, id: string): Promise<void>;
+
+    /** The VAPID public key a browser subscribes with, or nothing when push is not configured. */
+    pushKey(): string | undefined;
+
+    subscribe(me: string, input: { endpoint: string; p256dh: string; auth: string; userAgent: string }): Promise<void>;
+    unsubscribe(me: string, endpoint: string): Promise<void>;
+}
+
 export interface ChatPort
 {
     list(me: string): Promise<ConversationSummary[]>;
@@ -205,5 +226,6 @@ export interface Ports
     social: SocialPort;
     group: GroupPort;
     table: TablePort;
+    notify: NotifyPort;
     chat: ChatPort;
 }

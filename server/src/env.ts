@@ -69,6 +69,17 @@ export function loadServerConfig()
         /** Sockets ONE account may hold. Tabs are cheap; a thousand of them is not. */
         wsAccountMax: num('WS_ACCOUNT_MAX', { default: 16 }),
 
+        /**
+         * Web Push, all three optional and all three needed together.
+         *
+         * With none set the product has no push and says so: `GET /notifications/push` answers
+         * with no key, the client never asks the browser for permission, and nothing is silently
+         * dropped. A push from here carries NO payload, so there is no content key to hold.
+         */
+        vapidPublicKey: str('VAPID_PUBLIC_KEY', { default: '' }),
+        vapidPrivateKey: str('VAPID_PRIVATE_KEY', { default: '', secret: true }),
+        vapidSubject: str('VAPID_SUBJECT', { default: '' }),
+
         clientDir: str('CLIENT_DIR', { default: '../application/dist' }),
         ssrEntry: str('SSR_ENTRY', { default: '../application/dist-server/entry.server.js' }),
 

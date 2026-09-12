@@ -24,9 +24,13 @@ import {
     handleResult,
     messagePage,
     muteInput,
+    notificationPage,
     personList,
     pinInput,
     personRef,
+    pushEndpoint,
+    pushKey,
+    pushSubscribeInput,
     personView,
     privacy,
     privacyInput,
@@ -462,6 +466,64 @@ export function buildApi(ports: Ports)
             close: routes.post('/:id/close', { output: ack }, async (context) =>
             {
                 await ports.table.close(context.principal.userId, context.params.id);
+                return { ok: true };
+            })
+        })),
+
+        /**
+         * Notifications, and the browsers that asked to be woken about them.
+         *
+         * Every route is mine-only, and the WHERE clause is the authorisation rather than a check
+         * before it: a notification belonging to somebody else is not refused differently from one
+         * that does not exist.
+         */
+        notifications: feature('/notifications', [session], (routes) => ({
+            list: routes.get('/', { output: notificationPage, query: cursorQuery },
+                (context) => ports.notify.page(context.principal.userId, context.query.cursor)),
+
+            read: routes.post('/:id/read', { output: ack }, async (context) =>
+            {
+                await ports.notify.markRead(context.principal.userId, context.params.id);
+                return { ok: true };
+            }),
+
+            readAll: routes.post('/read-all', { output: ack }, async (context) =>
+            {
+                await ports.notify.markAllRead(context.principal.userId);
+                return { ok: true };
+            }),
+
+            dismiss: routes.post('/:id/dismiss', { output: ack }, async (context) =>
+            {
+                await ports.notify.dismiss(context.principal.userId, context.params.id);
+                return { ok: true };
+            }),
+
+            /**
+             * The key a browser subscribes with.
+             *
+             * Absent when this deployment has no push configured, and the client then never asks
+             * for permission - a prompt for something that cannot be delivered is worse than no
+             * prompt at all.
+             */
+            pushKey: routes.get('/push', { output: pushKey }, () =>
+            {
+                const key = ports.notify.pushKey();
+                return key === undefined ? {} : { key };
+            }),
+
+            subscribe: routes.post('/push', { input: pushSubscribeInput, output: ack }, async (context) =>
+            {
+                await ports.notify.subscribe(context.principal.userId, {
+                    ...context.input,
+                    userAgent: context.request.headers.get('user-agent') ?? ''
+                });
+                return { ok: true };
+            }),
+
+            unsubscribe: routes.post('/push/remove', { input: pushEndpoint, output: ack }, async (context) =>
+            {
+                await ports.notify.unsubscribe(context.principal.userId, context.input.endpoint);
                 return { ok: true };
             })
         })),
