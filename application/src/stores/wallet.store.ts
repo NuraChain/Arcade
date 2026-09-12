@@ -29,6 +29,15 @@ export interface WalletApi
     failure: Getter<WalletFailure | null>;
     onNuraChain: Getter<boolean>;
     connect(): Promise<Account | null>;
+
+    /**
+     * Asks the connected wallet to sign a message the SERVER composed.
+     *
+     * Null when there is no provider, no address, or the person said no - all three are answers
+     * rather than errors. Device enrolment is the caller: the bytes it passes name one device in
+     * their `Resources` line, so what comes back authorises that device and nothing else.
+     */
+    sign(message: string): Promise<string | null>;
     adopt(provider: Eip1193Provider | null): void;
     disconnect(): void;
     start(): () => void;
@@ -85,6 +94,28 @@ export const useWallet = createStore((): WalletApi =>
         failure,
 
         onNuraChain: () => !chainIsConfigured() || chainId().toLowerCase() === NURA_CHAIN.chainId.toLowerCase(),
+
+        async sign(message)
+        {
+            const wallet = provider();
+            const account = address();
+
+            if (wallet === null || account === null)
+            {
+                setFailure('no-wallet');
+                return null;
+            }
+
+            try
+            {
+                return await personalSign(wallet, account, message);
+            }
+            catch (error)
+            {
+                setFailure(failureOf(error));
+                return null;
+            }
+        },
 
         async connect()
         {

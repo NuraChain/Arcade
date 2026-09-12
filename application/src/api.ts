@@ -5,7 +5,10 @@ import type { Api } from '../../server/src/api.ts';
 export type {
     Account,
     AchievementDefinition,
+    Attestation,
     Challenge,
+    Device,
+    DeviceList,
     GameSummary,
     GroupRole,
     GroupSummary,

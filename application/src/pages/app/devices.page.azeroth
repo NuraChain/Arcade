@@ -1,0 +1,137 @@
+import { useHead } from 'azerothjs';
+
+import DeviceRow from '../../components/app/device-row.component.azeroth';
+import KeyNotice from '../../components/app/key-notice.component.azeroth';
+import Page from '../../components/app/page.component.azeroth';
+import Button from '../../components/ui/button.component.azeroth';
+import EmptyState from '../../components/ui/empty-state.component.azeroth';
+import SectionHeading from '../../components/ui/section-heading.component.azeroth';
+import { useDevice } from '../../stores/device.store.ts';
+import { useDevices } from '../../stores/devices.store.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+
+/**
+ * The devices panel.
+ *
+ * Nothing is sealed yet, and the copy on this page is careful not to pretend otherwise: it says
+ * what a device is FOR and what revoking one does today, and it does not claim that a message
+ * anywhere is unreadable. The states are the point - `pending`, `waiting`, `locked` and
+ * `tampered` are built and reachable before the feature that will lean on them.
+ */
+export default component DevicesPage()
+{
+    const locale = useLocale();
+    const devices = useDevices();
+    const device = useDevice();
+
+    useHead({ title: () => locale.t('devices.title') });
+
+    derived rows = devices.devices();
+
+    derived live = rows.filter((one) => !one.revoked);
+
+    derived retired = rows.filter((one) => one.revoked);
+
+    /**
+     * The label this browser suggests for itself.
+     *
+     * A posture, not a user-agent string. "Chrome 141 on Windows NT 10.0" is a fingerprint printed
+     * on a screen; "This phone" is what somebody actually recognises, and they can rename it.
+     */
+    derived suggestion = locale.t(device.posture() === 'phone' ? 'devices.namePhone' : 'devices.nameDesktop');
+
+    mount
+    {
+        void devices.refresh();
+    }
+
+    <Page narrow label={ locale.t('devices.title') } onRefresh={ () => void devices.refresh() }>
+        <header class="pb-4">
+            <h1 class="title text-ui-4xl">{ locale.t('devices.title') }</h1>
+            <p class="mt-2 text-ui-md text-muted">{ locale.t('devices.lead') }</p>
+        </header>
+
+        <div class="flex flex-col gap-6">
+            <KeyNotice state={ devices.readiness() }>
+                <Show when={ devices.readiness() === 'absent' }>
+                    { () =>
+                        <Button
+                            variant="primary"
+                            size="sm"
+                            leading="key"
+                            loading={ devices.busy() }
+                            onClick={ () => void devices.enrol(suggestion) }
+                        >
+                            { locale.t('devices.enrol') }
+                        </Button>
+                    }
+                </Show>
+            </KeyNotice>
+
+            <Show when={ devices.failure() !== null }>
+                { () =>
+                    <p class="text-ui-sm text-madder" role="alert">
+                        { locale.t(devices.failure() === 'refused' ? 'devices.refused' : 'devices.unavailable') }
+                    </p>
+                }
+            </Show>
+
+            <section aria-labelledby="devices-live">
+                <SectionHeading id="devices-live" title={ locale.t('devices.live') } />
+
+                <Show
+                    when={ live.length > 0 }
+                    fallback={
+                        <EmptyState
+                            icon="key"
+                            title={ locale.t('devices.empty') }
+                            lead={ locale.t('devices.emptyLead') }
+                            class="py-8"
+                        />
+                    }
+                >
+                    { () =>
+                        <ul class="flex flex-col gap-2" aria-label={ locale.t('devices.live') }>
+                            <For each={ live } key={ (one) => one.id } let={ one }>
+                                <li>
+                                    <DeviceRow
+                                        device={ one }
+                                        state={ devices.stateOf(one) }
+                                        current={ one.id === devices.current() }
+                                        busy={ devices.busy() }
+                                        onConfirm={ (id) => void devices.confirm(id) }
+                                        onRevoke={ (id) => void devices.revoke(id) }
+                                    />
+                                </li>
+                            </For>
+                        </ul>
+                    }
+                </Show>
+            </section>
+
+            <Show when={ retired.length > 0 }>
+                <section aria-labelledby="devices-retired">
+                    <SectionHeading id="devices-retired" title={ locale.t('devices.retired') } />
+                    <p class="pb-2 text-ui-sm text-muted">{ locale.t('devices.retiredLead') }</p>
+
+                    <ul class="flex flex-col gap-2" aria-label={ locale.t('devices.retired') }>
+                        <For each={ retired } key={ (one) => one.id } let={ one }>
+                            <li>
+                                <DeviceRow
+                                    device={ one }
+                                    state={ devices.stateOf(one) }
+                                    current={ false }
+                                    busy={ devices.busy() }
+                                    onConfirm={ (id) => void devices.confirm(id) }
+                                    onRevoke={ (id) => void devices.revoke(id) }
+                                />
+                            </li>
+                        </For>
+                    </ul>
+                </section>
+            </Show>
+
+            <p class="text-ui-sm text-faint">{ locale.t('devices.footnote') }</p>
+        </div>
+    </Page>
+}

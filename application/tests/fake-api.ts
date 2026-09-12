@@ -1,7 +1,7 @@
 import { ApiError, applyFieldErrors } from '@azerothjs/http/api/shared';
 
 import { handleFromAddress, handleFromName } from '../../server/src/domains/identity/handle.ts';
-import type { Account, ChatMessage, ConversationSummary, MuteSubject, Privacy } from '../../server/src/schemas.ts';
+import type { Account, ChatMessage, ConversationSummary, Device, MuteSubject, Privacy } from '../../server/src/schemas.ts';
 import {
     FRIENDSHIP_FIXTURES,
     GROUP_FIXTURES,
@@ -125,6 +125,16 @@ function mustGroup(slug: string): GroupWire
     return group;
 }
 
+function mustDevice(id: string): Device
+{
+    const found = server.devices.find((one) => one.id === id);
+    if (found === undefined)
+    {
+        throw new ApiError(404, 'not-found', 'No device there.', undefined);
+    }
+    return found;
+}
+
 export const server =
 {
     account: null as Account | null,
@@ -170,6 +180,43 @@ export const server =
      */
     notifications: [] as NotificationWire[],
     notifySeq: 0,
+
+    /**
+     * Devices, in memory.
+     *
+     * This fake does NOT recompute an id from the keys. That rule belongs to the real server and
+     * `device.db.spec.ts` owns it against a real Postgres; re-implementing it here would only
+     * prove the fake agrees with itself, and it would make arranging a tampered row - which is a
+     * state the client has to render - impossible.
+     */
+    devices: [] as Device[],
+    currentDevice: null as string | null,
+    refuseEnrol: null as 'burned' | 'unauthorized' | null,
+
+    /** Records a device the way the server would, including who is confirmed. */
+    addDevice(input: {
+        exchangeKey: string;
+        signingKey: string;
+        label?: string;
+        attested?: Device['attested'];
+        confirmed?: boolean;
+        revoked?: boolean;
+        id: string;
+    }): Device
+    {
+        const device: Device = {
+            id: input.id,
+            label: input.label ?? '',
+            exchangeKey: input.exchangeKey,
+            signingKey: input.signingKey,
+            attested: input.attested ?? 'server',
+            confirmed: input.confirmed ?? server.devices.filter((one) => !one.revoked).length === 0,
+            revoked: input.revoked ?? false,
+            createdAt: new Date(1_700_000_000_000 + server.devices.length * 1000).toISOString()
+        };
+        server.devices.push(device);
+        return device;
+    },
 
     /** The VAPID key this fake server publishes. Null means push is not configured. */
     pushKey: null as string | null,
@@ -240,6 +287,9 @@ export const server =
         server.tableSeq = 0;
         server.notifications = [];
         server.notifySeq = 0;
+        server.devices = [];
+        server.currentDevice = null;
+        server.refuseEnrol = null;
         server.pushKey = null;
         server.pushSubscriptions = [];
         server.account = null;
@@ -649,6 +699,72 @@ export const client =
             group.owner = input.id;
             group.role = 'member';
             return group;
+        }
+    },
+
+    devices:
+    {
+        async list()
+        {
+            server.calls.push('devices.list');
+            return {
+                devices: server.devices,
+                ...(server.currentDevice === null ? {} : { current: server.currentDevice })
+            };
+        },
+
+        async challenge({ input }: { input: { id: string } })
+        {
+            server.calls.push('devices.challenge');
+            return {
+                nonce: 'n-' + input.id,
+                message: 'Authorise a device.\nResources:\n- nura:device:' + input.id,
+                expiresAt: new Date(1_700_000_300_000).toISOString()
+            };
+        },
+
+        async enrol({ input }: { input: { id: string; exchangeKey: string; signingKey: string; label: string } })
+        {
+            server.calls.push('devices.enrol');
+
+            if (server.refuseEnrol === 'burned')
+            {
+                // One refusal, then the store mints fresh keys and tries once more - which is the
+                // behaviour a browser that was signed out from elsewhere has to have.
+                server.refuseEnrol = null;
+                throw new ApiError(409, 'conflict', 'That device was signed out.', undefined);
+            }
+            if (server.refuseEnrol === 'unauthorized')
+            {
+                throw new ApiError(401, 'unauthorized', 'That signature did not match.', undefined);
+            }
+            const device = server.addDevice({ ...input });
+            server.currentDevice = device.id;
+            return device;
+        },
+
+        async confirm({ params }: { params: { id: string } })
+        {
+            server.calls.push('devices.confirm');
+            const found = mustDevice(params.id);
+            found.confirmed = true;
+            return found;
+        },
+
+        async rename({ params, input }: { params: { id: string }; input: { label: string } })
+        {
+            server.calls.push('devices.rename');
+            const found = mustDevice(params.id);
+            found.label = input.label;
+            return found;
+        },
+
+        async revoke({ params }: { params: { id: string } })
+        {
+            server.calls.push('devices.revoke');
+            const found = mustDevice(params.id);
+            found.revoked = true;
+            return found;
         }
     },
 

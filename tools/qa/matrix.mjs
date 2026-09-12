@@ -54,6 +54,7 @@ const ROUTES = [
     { id: 'notifications', path: '/app/notifications' },
     { id: 'me', path: '/app/me' },
     { id: 'settings', path: '/app/me/settings' },
+    { id: 'devices', path: '/app/me/devices' },
     { id: 'sign-in', path: '/sign-in', anonymous: true }
 ];
 

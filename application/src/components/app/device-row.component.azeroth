@@ -1,0 +1,120 @@
+import type { Device } from '../../api.ts';
+import Icon from '../../icons/icon.component.azeroth';
+import type { IconName } from '../../icons/registry.ts';
+import type { DeviceState } from '../../lib/device-state.ts';
+import type { MessageKey } from '../../locales/en.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import Button from '../ui/button.component.azeroth';
+import TrustBadge from './trust-badge.component.azeroth';
+
+const ICON: Record<DeviceState, IconName> = {
+    ready: 'check-circle',
+    pending: 'clock',
+    waiting: 'clock',
+    locked: 'lock',
+    tampered: 'alert'
+};
+
+const SAYS: Record<DeviceState, MessageKey> = {
+    ready: 'devices.state.ready',
+    pending: 'devices.state.pending',
+    waiting: 'devices.state.waiting',
+    locked: 'devices.state.locked',
+    tampered: 'devices.state.tampered'
+};
+
+const LEAD: Record<DeviceState, MessageKey> = {
+    ready: 'devices.state.readyLead',
+    pending: 'devices.state.pendingLead',
+    waiting: 'devices.state.waitingLead',
+    locked: 'devices.state.lockedLead',
+    tampered: 'devices.state.tamperedLead'
+};
+
+const TONE: Record<DeviceState, string> = {
+    ready: 'text-live',
+    pending: 'text-gold',
+    waiting: 'text-muted',
+    locked: 'text-faint',
+    tampered: 'text-madder'
+};
+
+/**
+ * One device, and what is true about it.
+ *
+ * The four degraded states are drawn here rather than added when sealing arrives, so the row has
+ * already had to hold a long alarm sentence and a disabled action before anything depends on it.
+ *
+ * A `tampered` row is deliberately stripped: no trust badge, no confirm, no rename. Its id does
+ * not match the keys published beside it, which means the list is not a truthful statement about
+ * this account - and the one thing that is safe to offer about a device you cannot identify is to
+ * get rid of it.
+ */
+export default component DeviceRow(props: {
+    device: Device;
+    state: DeviceState;
+    current: boolean;
+    busy: boolean;
+    onConfirm: (id: string) => void;
+    onRevoke: (id: string) => void;
+})
+{
+    const locale = useLocale();
+
+    derived named = props.device.label === '' ? locale.t('devices.unnamed') : props.device.label;
+
+    <div class="flex flex-col gap-3 rounded-tile border border-line bg-field p-3 sm:flex-row sm:items-start sm:justify-between">
+        <div class="flex min-w-0 items-start gap-3">
+            <Icon name={ ICON[props.state] } size={ 18 } class={ `mt-0.5 shrink-0 ${ TONE[props.state] }` } />
+
+            <div class="min-w-0">
+                <p class="flex flex-wrap items-center gap-2">
+                    <span class="text-ui-base font-semibold text-text">{ named }</span>
+
+                    <Show when={ props.current }>
+                        { () => <span class="text-ui-xs font-semibold text-accent">{ locale.t('devices.thisOne') }</span> }
+                    </Show>
+
+                    <Show when={ props.state !== 'tampered' }>
+                        { () => <TrustBadge attested={ props.device.attested } /> }
+                    </Show>
+                </p>
+
+                <p class={ `mt-1 text-ui-sm font-semibold ${ TONE[props.state] }` }>{ locale.t(SAYS[props.state]) }</p>
+                <p class="mt-1 text-ui-sm text-muted">{ locale.t(LEAD[props.state]) }</p>
+
+                <p class="mt-2 font-mono text-ui-2xs tally text-faint" dir="ltr">{ props.device.id }</p>
+            </div>
+        </div>
+
+        <div class="flex shrink-0 flex-wrap gap-2">
+            <Show when={ props.state === 'pending' }>
+                { () =>
+                    <Button
+                        variant="primary"
+                        size="sm"
+                        leading="check-circle"
+                        loading={ props.busy }
+                        onClick={ () => props.onConfirm(props.device.id) }
+                    >
+                        { locale.t('devices.confirm') }
+                    </Button>
+                }
+            </Show>
+
+            <Show when={ props.state !== 'locked' }>
+                { () =>
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        leading="sign-out"
+                        loading={ props.busy }
+                        onClick={ () => props.onRevoke(props.device.id) }
+                    >
+                        { locale.t('devices.revoke') }
+                    </Button>
+                }
+            </Show>
+        </div>
+    </div>
+}

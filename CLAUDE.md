@@ -596,6 +596,11 @@ version this replaces stored bilingual strings in the chat store, which could no
 at all. A message somebody TYPED does not change - words are words - and seeing both behaviours
 in one thread is what the design is for.
 
+**A list the UI renders needs an ORDER BY.** `social.mutes()` had none, so Postgres returned
+whatever it found first and the settings page reshuffled between loads. It surfaced as
+`social.db.spec.ts` failing the day a later migration changed what "first" happened to mean, which
+is the only warning an unordered SELECT ever gives.
+
 **A message carries `dir="auto"`.** Fixture conversations are single-language now, so an English
 sentence inside a Persian page is the normal case rather than an artefact, and a paragraph that
 inherits the page direction puts its full stop on the wrong end. The direction of a message
@@ -693,7 +698,9 @@ so without a per-message signature any member could forge another's line.
 There is no ratchet. Forward secrecy is epoch-coarse and post-compromise security arrives only at
 revocation. Both are stated in the privacy copy rather than implied away.
 
-**Device identity** is client-derived and self-certifying:
+**Device identity** is client-derived and self-certifying, and it is BUILT - see *Devices, and the
+degraded states that shipped first* below for what the schema, the races and the states actually
+are:
 
 ```
 deviceId = base64url(SHA-256(exchangeSpki || signingSpki)).slice(0, 22)
@@ -732,6 +739,67 @@ index is per device, over the archive that device can decrypt; push notification
 moderation sees only the excerpt a reporter chooses to disclose; a device that loses its keys and
 its recovery phrase cannot get the history back, and the UI says so plainly rather than showing an
 empty thread.
+
+## Devices, and the degraded states that shipped first
+
+Nothing is sealed yet. This is the half of `nura-e2ee/v1` that has to exist before any of it, and
+it was built in the order the plan asks for: the states that mean something went wrong were written,
+rendered and tested BEFORE the happy path, so they are exercised rather than discovered.
+
+**A device id is derived, not issued.** `base64url(SHA-256(exchangeSpki || signingSpki)).slice(0, 22)`,
+computed by the client and recomputed by the server, which refuses a mismatch. An id the SERVER
+hands out is an id the server can mint for keys it holds itself and quietly wrap an epoch key to;
+this one can only be claimed by whoever published those two public keys. There are two
+implementations of the formula — `server/src/domains/device/id.ts` over `node:crypto` and
+`application/src/lib/device-id.ts` over WebCrypto — and `tests/devices.spec.ts` runs both over the
+same real P-256 keys, because two implementations of one formula are two chances to disagree and a
+disagreement means every enrolment on one side is refused by the other.
+
+**The browser re-derives every id it is shown.** A server that swapped a device's exchange key for
+its own would produce a row that no longer adds up, and the client can see that without trusting
+anybody. Such a row renders as `tampered`: no trust badge, no confirm, no rename, and the single
+offered action is to sign it out.
+
+**A revoked id never comes back.** The row stays forever with `revoked_at` set and enrolment
+refuses an id already in that state. Deleting it would let a stolen laptop re-present the same keys
+and be trusted again, which is the entire thing revocation exists to stop. The browser's answer to
+that 409 is to mint fresh keys and try ONCE more — a loop there would fill somebody's list with
+abandoned keys.
+
+**Revoking ends the sessions, in the same transaction.** `sessions.device_id` is what makes that
+possible, and `services.ts` closes the sockets afterwards. A revoke that leaves the browser signed
+in is a button that lies, and this is the column that stops it being one.
+
+**The first device is confirmed at birth; every one after it arrives `pending`.** There is nobody
+to ask about the first. A device cannot vouch for itself, and an UNCONFIRMED device cannot vouch for
+another — otherwise one enrolled device could bless a chain and `pending` would mean nothing. The
+"am I the first?" test and the insert are held under `pg_advisory_xact_lock(hashtext(userId))`
+together, so two browsers enrolling at the same instant cannot both decide they are the first.
+
+**Five states, and the same database fact reads two ways.** `ready`, `pending` (unconfirmed, and
+NOT this browser — you can act), `waiting` (unconfirmed, and it IS this browser — you cannot),
+`locked` (revoked), `tampered` (does not verify). Separately, `Readiness` says what THIS browser
+can do: `unsupported` (no WebCrypto or no IndexedDB — an insecure origin, or a private mode),
+`absent`, `waiting`, `ready`. Both are exhaustive `Record`s over the union, so a state added later
+cannot render as nothing.
+
+**`attested` is a required prop on the trust badge.** `'wallet' | 'contract' | 'server'`, where
+`server` means NOBODY vouched — a guest has no wallet to sign with. Required, with no default, so a
+server-asserted device cannot render as wallet-verified because somebody forgot the prop: forgetting
+it fails to compile rather than failing quietly on a screen.
+
+**A wallet account signs for its devices and cannot opt out.** Enrolment without a signature is
+refused rather than recorded as `server` — that would be a downgrade nobody would see. The message
+is the sign-in message's sibling with its own statement and the device named in EIP-4361's
+`Resources` (`nura:device:<id>`), and the server checks that the burned challenge really names the
+device being enrolled. Without that check, a signature collected for one device — or for signing in,
+which names none — would authorise any device the caller chose to name.
+
+**Keys live behind a seam.** `lib/device-keys.ts` generates both keypairs non-extractable and keeps
+them in IndexedDB; the public halves are exported to base64url because they are published. The test
+environment has no IndexedDB and neither does a browser in some private modes, so `setKeyStore`
+swaps it and `available()` is what `unsupported` reads. PR 12's `keyring-db.ts` extends this file
+rather than replacing it.
 
 ## Notifications, and a push that carries nothing
 

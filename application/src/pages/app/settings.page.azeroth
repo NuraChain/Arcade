@@ -123,6 +123,9 @@ export default component SettingsPage()
                     <Show when={ !account.isWallet() }>
                         { () => <Button variant="primary" block leading="key" onClick={ leave }>{ locale.t('me.keepSeat.action') }</Button> }
                     </Show>
+                    <Button variant="outline" block leading="key" to="/app/me/devices">
+                        { locale.t('devices.title') }
+                    </Button>
                     <Button variant="outline" block leading="sign-out" onClick={ leave }>
                         { account.isWallet() ? locale.t('settings.account.disconnect') : locale.t('settings.account.signOut') }
                     </Button>

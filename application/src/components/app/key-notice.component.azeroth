@@ -1,0 +1,62 @@
+import { type Child } from 'azerothjs';
+
+import Icon from '../../icons/icon.component.azeroth';
+import type { IconName } from '../../icons/registry.ts';
+import type { Readiness } from '../../lib/device-state.ts';
+import type { MessageKey } from '../../locales/en.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+
+const ICON: Record<Readiness, IconName> = {
+    unsupported: 'error-circle',
+    absent: 'key',
+    waiting: 'clock',
+    ready: 'check-circle'
+};
+
+const TITLE: Record<Readiness, MessageKey> = {
+    unsupported: 'devices.self.unsupported',
+    absent: 'devices.self.absent',
+    waiting: 'devices.self.waiting',
+    ready: 'devices.self.ready'
+};
+
+const LEAD: Record<Readiness, MessageKey> = {
+    unsupported: 'devices.self.unsupportedLead',
+    absent: 'devices.self.absentLead',
+    waiting: 'devices.self.waitingLead',
+    ready: 'devices.self.readyLead'
+};
+
+const TONE: Record<Readiness, string> = {
+    unsupported: 'text-madder',
+    absent: 'text-accent',
+    waiting: 'text-gold',
+    ready: 'text-live'
+};
+
+/**
+ * What this browser can do, said once at the top of the list.
+ *
+ * `state` is required and covers every value of `Readiness`, so a state added later cannot be
+ * rendered as nothing: the record would stop compiling. That matters more than it looks - the
+ * states this says are the ones nobody sees on the happy path, and a missing branch there is a
+ * blank panel somebody meets for the first time on the day their laptop is stolen.
+ */
+export default component KeyNotice(props: { state: Readiness; children?: Child })
+{
+    const locale = useLocale();
+
+    <div class="flex flex-col gap-3 rounded-panel border border-line bg-field p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div class="flex items-start gap-3">
+            <Icon name={ ICON[props.state] } size={ 18 } class={ `mt-0.5 shrink-0 ${ TONE[props.state] }` } />
+            <div class="min-w-0">
+                <p class="text-ui-base font-semibold text-text">{ locale.t(TITLE[props.state]) }</p>
+                <p class="mt-1 text-ui-sm text-muted">{ locale.t(LEAD[props.state]) }</p>
+            </div>
+        </div>
+
+        <Show when={ props.children !== undefined }>
+            { () => <div class="flex shrink-0 flex-wrap gap-2">{ props.children }</div> }
+        </Show>
+    </div>
+}
