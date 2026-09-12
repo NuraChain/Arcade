@@ -4,24 +4,13 @@ import type { DataSource } from 'typeorm';
 import type { Attestation } from '../../entities/device.entity.ts';
 import { mintNonce, normalizeAddress } from '../../lib/crypto.ts';
 import { firstRow, rowsOf } from '../../lib/rows.ts';
-import { buildSiweMessage, verifySignature } from '../identity/siwe.ts';
+import { verifySignature } from '../identity/siwe.ts';
+import { enrolMessage } from './enrol-message.ts';
 import { deviceIdMatches, isDeviceId } from './id.ts';
+import { deviceResource } from './resource.ts';
 
 /** Five minutes, the same window a sign-in challenge gets. Long enough to read the prompt. */
 const NONCE_TTL_MS = 5 * 60 * 1000;
-
-/**
- * What a wallet is being asked to agree to.
- *
- * Deliberately not the sign-in sentence. Somebody who has signed in a hundred times stops reading
- * the prompt, and the one moment it matters that they read it is the moment a new device is being
- * given the ability to read their messages.
- */
-const ENROL_STATEMENT =
-    'Authorise a device to read your messages on Nura Games. Only do this on a device you own. It costs nothing and moves nothing.';
-
-/** The resource line that binds a signature to ONE device. */
-export const deviceResource = (id: string): string => `nura:device:${ id }`;
 
 export interface DeviceConfig
 {
@@ -210,7 +199,7 @@ export function createDeviceService(db: DataSource, config: DeviceConfig)
             const issuedAt = new Date();
             const expiresAt = new Date(issuedAt.getTime() + NONCE_TTL_MS);
 
-            const message = buildSiweMessage({
+            const message = enrolMessage({
                 domain,
                 uri: config.origin,
                 address,
@@ -218,8 +207,7 @@ export function createDeviceService(db: DataSource, config: DeviceConfig)
                 nonce,
                 issuedAt,
                 expiresAt,
-                statement: ENROL_STATEMENT,
-                resources: [deviceResource(deviceId)]
+                deviceId
             });
 
             await db.query(
@@ -268,9 +256,10 @@ export function createDeviceService(db: DataSource, config: DeviceConfig)
                 // Already ours and still live: re-enrolling is how a browser says "still here"
                 // after a sign-in, and it must not ask for another signature to do it.
                 //
-                // It IS how a device gains a proof it never had. A device enrolled before this
-                // server kept the signature, or enrolled while the account had no wallet, is
-                // `attested: 'server'` and cannot be sealed to; sending a signature now upgrades it
+                // It IS how a device gains a proof it never had. A device enrolled while the
+                // account had no wallet is `attested: 'server'` and cannot be sealed to, and
+                // connecting a wallet afterwards is an ordinary thing to do; sending a signature
+                // now upgrades it
                 // in place rather than forcing a revoke-and-re-enrol that would burn working keys
                 // for bookkeeping. A device that ALREADY has a proof is never re-attested here, so
                 // this cannot be used to move one address's claim onto another's device.

@@ -2,7 +2,7 @@ import { webcrypto } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 
 import { deviceIdFrom, deviceIdMatches, isDeviceId } from '../src/domains/device/id.ts';
-import { deviceResource } from '../src/domains/device/service.ts';
+import { deviceResource } from '../src/domains/device/resource.ts';
 import { buildSiweMessage } from '../src/domains/identity/siwe.ts';
 
 /**

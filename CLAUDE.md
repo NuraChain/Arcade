@@ -24,6 +24,14 @@ npm run assets         # rebuild the GLB kit from tools/blender (needs Blender 5
 `npm run check`, `npm test`, `npm run test:shuffle` and `npm run qa` must all pass before a
 change is done.
 
+**Run `npm run check`, never `azeroth check` on its own.** The gate is
+`azeroth check && npm run check:tests --workspace server`, and the second half is a whole
+tsc program over `tests/` that the first half never looks at. Skipping it is not a smaller
+gate, it is a different one: vitest transforms specs with oxc, which strips types without
+checking them, so a spec can import a name that does not exist and still "pass" - which is
+exactly how `realtime.socket.spec.ts` came to compare every frame against `OPCODE.TEXT`
+(undefined), match nothing, and report eight green tests while reading no frames at all.
+
 `npm test` runs with **no Postgres**, and that promise is why the database-backed suite is opt-in:
 `npm run test:db --workspace server` with `TEST_DATABASE_URL` pointing at a database you do not
 mind losing. It truncates before every test, so it owns whatever it is pointed at - which is also
@@ -274,7 +282,14 @@ the whole picture.
 Two things that look alike and are not.
 
 **Migrations** change the schema. `server/src/migrations/NNNN-name.ts`, registered in the barrel,
-applied in order inside a transaction. Two names, both load-bearing: the FILE is numbered for
+applied in order inside a transaction.
+
+**There is no legacy database anywhere, and migrations must not pretend otherwise.** Every database
+is built by running the whole sequence against an empty one, so a migration can only ever meet rows
+that an earlier migration in the same sequence created. A backfill that repairs rows "from before"
+is code describing a database that does not exist - `0010-attestation.ts` carried one for exactly
+one afternoon and it is gone. The check to run after changing the sequence is the real one: drop
+both databases, recreate them, and run `npm run migration:run` from nothing. Two names, both load-bearing: the FILE is numbered for
 people so the directory reads in order, and the CLASS must end in a JavaScript timestamp because
 that is what TypeORM sorts by — it refuses a class without one ("migration name is wrong"). The
 class name is also what it records as applied, so it must never change once it has run anywhere.
@@ -875,6 +890,38 @@ peer device on earth failing to verify and nothing saying why.
 question most conversations never reach — a thread where nobody has a provable device is answered
 entirely by the empty-array branch. A static import put all of it in the chat page's chunk and
 pushed that chunk from 5.7 KB to 19.8 KB, past its budget, for code that would not run.
+
+## The wallet fixtures, and why a happy path has to be reachable
+
+`server/src/db/seed-wallets.ts` seeds two accounts that sign in with a wallet - `dana.w` and
+`omid.k` - each holding one confirmed device whose attestation really verifies, and two
+conversations: one between them, and one between `dana.w` and the `alex` persona.
+
+They exist because without them **the sealed half of this product had no reachable happy path in
+any development database.** Every person in `seed-fixtures.ts` is inserted as a guest and the three
+personas are `demo`, so `attested` is `server` for all of them, `peers.ts` publishes none of their
+devices, and `sealabilityOf` answered `no-wallet` for every conversation that had ever existed here.
+The 640-cell matrix tours as `alex` and could not reach a sealable thread; neither could a browser
+pass, because signing in as a wallet account needs a wallet. The `ready` branch shipped in a PR whose
+gates were all green and had never once rendered.
+
+**The signatures are real and the recipe is shared.** `domains/device/enrol-message.ts` composes the
+bytes for a live enrolment AND for the fixture, so the two cannot drift; `deviceResource` lives in
+`domains/device/resource.ts`, a module with NO imports, because the browser needs that one string
+too and would otherwise carry `node:crypto` or `viem` into its bundle for a template literal.
+`application/tests/wallet-fixtures.spec.ts` runs the seed's own `enrolMessage` through the browser's
+own `verifyPeerDevice`, which is what makes "the browser accepts what the seed writes" a claim
+rather than a hope.
+
+**The private keys are the published hardhat test keys**, already in this repository's specs. They
+are there so a person can sign in as one of these accounts through the REAL wallet route - fetch the
+challenge, sign it, post it - rather than through a development-only sign-in door that would have to
+exist forever afterwards. The DEVICE keys are generated at seed time and only their public halves
+are kept: nobody holds these devices, which is exactly what the other end of a conversation is.
+
+Idempotent about the device as well as the account, because P-256 keys cannot be generated
+deterministically from a seed and the fixture runs on every boot. The guard is "does this account
+already have a device", which is also the rule a real account follows.
 
 ## Notifications, and a push that carries nothing
 

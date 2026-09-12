@@ -1,6 +1,7 @@
 import { secp256k1 } from '@noble/curves/secp256k1';
 import { keccak_256 } from '@noble/hashes/sha3';
 
+import { deviceResource } from '../../../server/src/domains/device/resource.ts';
 import type { PeerDevice } from '../api.ts';
 import { deviceVerifies } from './device-id.ts';
 
@@ -28,6 +29,8 @@ import { deviceVerifies } from './device-id.ts';
  * `@noble/curves` rather than `viem` because this runs in the browser and viem is an order of
  * magnitude larger for the one thing needed here - recovering a public key from a signature.
  */
+
+export { deviceResource };
 
 export type PeerVerdict =
     | 'ok'
@@ -136,9 +139,6 @@ export function addressFromPersonalSign(message: string, signature: string): str
         return null;
     }
 }
-
-/** The `Resources` line an enrolment signature must carry to authorise one device. */
-export const deviceResource = (id: string): string => `nura:device:${ id }`;
 
 /**
  * Whether this device is what it says it is.

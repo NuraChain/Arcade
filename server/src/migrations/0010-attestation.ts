@@ -23,6 +23,10 @@ import type { MigrationInterface, QueryRunner } from 'typeorm';
  *
  * The CHECK is what stops the proof being optional. A wallet-attested device without its proof is
  * not a row this database can hold, so "attested: wallet" cannot come to mean "we said so".
+ *
+ * There is no backfill. Every database this migration runs on is created from the whole sequence,
+ * so the only rows it can meet are ones a later enrolment writes - and those carry their proof or
+ * the CHECK refuses them. A backfill here would be code describing a database that does not exist.
  */
 export class Attestation1789210000000 implements MigrationInterface
 {
@@ -43,17 +47,6 @@ export class Attestation1789210000000 implements MigrationInterface
                 add column attested_message   text,
 
                 add column attested_signature text
-        `);
-
-        // A device enrolled before this migration verified its signature and threw it away, so
-        // there is no proof for it and none can be recovered - the challenge was burned and swept.
-        // A device whose wallet claim nobody else can check is exactly what `attested = 'server'`
-        // means, so that is what it is relabelled to. This is not a downgrade of the device; it is
-        // the correct name for what we can actually show about it, and re-enrolling with a
-        // signature upgrades it again.
-        await queryRunner.query(`
-            update devices set attested = 'server'
-             where attested in ('wallet', 'contract')
         `);
 
         // All three together or none of them: half a proof is not a proof, and a nullable trio

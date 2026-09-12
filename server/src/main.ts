@@ -12,6 +12,7 @@ import { buildApp } from './app.ts';
 import { buildPorts } from './services.ts';
 import { dataSource } from './data-source.ts';
 import { seedFixtures } from './db/seed-fixtures.ts';
+import { seedWalletFixtures } from './db/seed-wallets.ts';
 import { seedReference } from './db/seed-reference.ts';
 import { loadServerConfig } from './env.ts';
 import { apiRateLimit } from './http/rate-limit.ts';
@@ -49,6 +50,11 @@ log.info('reference catalogue seeded');
 if (config.env === 'development')
 {
     await seedFixtures(dataSource);
+
+    // Two accounts that sign in with a wallet, so the sealed half of the product has a thread it
+    // can actually be seen on. Without them every conversation in every development database
+    // answers `no-wallet` and the happy path is unreachable by any browser.
+    await seedWalletFixtures(dataSource, { origin: config.origin, chainId: config.chainId });
     log.info('development fixtures seeded');
 }
 
