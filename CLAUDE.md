@@ -1657,6 +1657,21 @@ shared-identity property: several people in one account, whose profile the produ
 exactly like a person's. `0011-drop-demo.ts` rewrites `users_kind_known` to `('wallet','guest')`
 rather than leaving the value legal with nothing writing it.
 
+**Nothing signed in as a GUEST had ever been rendered by a gate**, and that is the same structural
+blind spot the wallet fixtures exist to close, seen from the other end. `tools/qa` tours 640 cells
+as `dana.w` and `seal-pass.mjs` signs in with a wallet, so every control behind
+`!account.isWallet()` shipped without once being drawn. What it hid was a PRIMARY button on settings
+reading "Connect a wallet", sitting directly above "Sign out" and carrying the identical handler:
+there is no wallet-link route on this server - `/auth/wallet` mints a NEW user from the address and
+never reads the session - and a guest handle is claimed by INSERT, so signing out of a guest account
+is the end of it. The button destroyed the account while the card that steered people to it promised
+"this profile, these friends and every result follow you to any device".
+
+The copy now says what happens, and `tests/settings.spec.ts` renders both pages as a guest so the
+branch has something looking at it. Building the link instead is a real project - a migration, a
+route, and a decision about whether a guest's `attested: 'server'` devices become wallet-attested -
+and it is not smuggled in under a copy fix.
+
 **The QA matrix signs in with a WALLET**, through the real challenge-sign-post round trip, as the
 `dana.w` fixture. It used to POST `/auth/demo`, which meant the one sign-in path exercised on every
 run was the one no real person used. It now needs `seedWalletFixtures` to have run, exactly as it

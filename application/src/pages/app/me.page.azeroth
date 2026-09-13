@@ -89,7 +89,6 @@ export default component MePage()
                                     { locale.t('me.keepSeat.title') }
                                 </h2>
                                 <p class="mt-1 text-ui-base text-muted">{ locale.t('me.keepSeat.lead') }</p>
-                                <Button variant="primary" block class="mt-4" leading="key" to="/app/me/settings">{ locale.t('me.keepSeat.action') }</Button>
                             </section>
                         }
                     </Show>

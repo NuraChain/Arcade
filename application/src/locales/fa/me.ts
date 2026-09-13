@@ -7,10 +7,8 @@ export const me: Pick<Dictionary, keyof typeof reference> = {
     'me.share': 'اشتراک پروفایل',
     'me.shared': 'لینک پروفایل کپی شد',
     'me.settings': 'تنظیمات',
-    'me.keepSeat.title': 'صندلی‌ات را نگه دار.',
-    'me.keepSeat.lead': 'روی یک صندلی مهمان نشسته‌ای. کیف پول را وصل کن تا این پروفایل، این دوستان و همهٔ نتیجه‌ها روی هر دستگاهی دنبالت بیایند — و آنچه در گفتگو می‌گویی بتواند مهروموم شود.',
-    'me.keepSeat.action': 'اتصال کیف پول',
-    'me.keepSeat.later': 'الان نه',
+    'me.keepSeat.title': 'این صندلی، همین مرورگر است.',
+    'me.keepSeat.lead': 'صندلی مهمان کیف پولی پشتش ندارد، پس نه چیزی اینجا مهروموم می‌شود و نه چیزی روی دستگاه دیگری دنبالت می‌آید. بعد از خروج هیچ راهی به حساب مهمان برنمی‌گردد — و ورود با کیف پول یک حساب تازه می‌سازد، نه اینکه این یکی را جابه‌جا کند.',
 
     'settings.title': 'تنظیمات',
     'settings.account': 'حساب',
@@ -21,7 +19,7 @@ export const me: Pick<Dictionary, keyof typeof reference> = {
 
     'settings.account.wallet': 'ورود با {wallet}',
     'settings.account.demo': 'صندلی مهمان',
-    'settings.account.demoLead': 'کیف پولی در کار نیست، پس نه چیزی اینجا مهروموم می‌شود و نه چیزی به دستگاه دیگری دنبالت می‌آید. یکی وصل کن تا بماند.',
+    'settings.account.demoLead': 'کیف پولی در کار نیست، پس نه چیزی اینجا مهروموم می‌شود و نه چیزی به دستگاه دیگری دنبالت می‌آید. خروج، این صندلی را برای همیشه تمام می‌کند.',
     'settings.account.network': 'شبکه',
     'settings.account.disconnect': 'قطع اتصال',
     'settings.account.signOut': 'خروج',

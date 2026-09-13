@@ -4,10 +4,8 @@ export const me = {
     'me.share': 'Share profile',
     'me.shared': 'Profile link copied',
     'me.settings': 'Settings',
-    'me.keepSeat.title': 'Keep your seat.',
-    'me.keepSeat.lead': 'You’re on a guest seat. Connect a wallet and this profile, these friends and every result follow you to any device — and what you say in a chat can be sealed.',
-    'me.keepSeat.action': 'Connect a wallet',
-    'me.keepSeat.later': 'Not now',
+    'me.keepSeat.title': 'This seat is this browser.',
+    'me.keepSeat.lead': 'A guest seat has no wallet behind it, so nothing here can be sealed and nothing follows you to another device. There is no way back into a guest account once you sign out — and signing in with a wallet starts a new account rather than moving this one.',
 
     'settings.title': 'Settings',
     'settings.account': 'Account',
@@ -18,7 +16,7 @@ export const me = {
 
     'settings.account.wallet': 'Signed in with {wallet}',
     'settings.account.demo': 'Guest seat',
-    'settings.account.demoLead': 'No wallet, so nothing here can be sealed and nothing follows you to another device. Connect one to keep it.',
+    'settings.account.demoLead': 'No wallet, so nothing here can be sealed and nothing follows you to another device. Signing out ends this seat for good.',
     'settings.account.network': 'Network',
     'settings.account.disconnect': 'Disconnect',
     'settings.account.signOut': 'Sign out',
