@@ -42,7 +42,7 @@ async function makeUser(): Promise<string>
 
 const openTable = async (host: string, seats: number, options: { privacy?: 'public' | 'private'; invitees?: string[] } = {}): Promise<string> =>
     (await tables.create(host, {
-        game: 'hokm',
+        game: 'seat-fixture',
         seats,
         mode: 'live',
         privacy: options.privacy ?? 'public',
@@ -60,11 +60,25 @@ describe.skipIf(!active)('claiming a seat, against a real database', () =>
         await db.initialize();
         await db.runMigrations();
 
-        // A table references a game, and the reference catalogue is not this suite's business.
+        /*
+         * A table is now CHECKED against its game's rules - the server stopped believing the seat
+         * count it was handed - so this suite needs a rules row as well as a game row.
+         *
+         * It is a fixture game rather than hokm on purpose. These tests are about the seat claim,
+         * and they contest two, three and four chairs to get at it; hokm plays four and nothing
+         * else, so borrowing its name would mean either weakening the check or rewriting every
+         * race around one seat count. A game that exists only in the test database, whose rules
+         * say exactly what this suite needs, keeps the check strict and the races intact.
+         */
         await db.query(
             `insert into games (id, slug, name_key, blurb_key, category_key, category, min_players, max_players, sort_order)
-             values ('hokm', 'hokm', 'g.n', 'g.b', 'g.c', 'cards', 4, 4, 1)
+             values ('seat-fixture', 'seat-fixture', 'g.n', 'g.b', 'g.c', 'cards', 2, 4, 1)
              on conflict (id) do nothing`
+        );
+        await db.query(
+            `insert into game_rules (game_id, seats, modes, targets, stakes, partners, has_cube, has_blinds)
+             values ('seat-fixture', '{2,3,4}', '{live}', '{7}', 'none', false, false, false)
+             on conflict (game_id) do nothing`
         );
     }, 60_000);
 
@@ -89,7 +103,7 @@ describe.skipIf(!active)('claiming a seat, against a real database', () =>
     {
         const host = await makeUser();
         const table = await tables.create(host, {
-            game: 'hokm', seats: 4, mode: 'live', privacy: 'public', target: 7, cube: false, blinds: 'low', invitees: []
+            game: 'seat-fixture', seats: 4, mode: 'live', privacy: 'public', target: 7, cube: false, blinds: 'low', invitees: []
         });
 
         expect(table.chairs.length).toBe(4);
@@ -223,12 +237,12 @@ describe.skipIf(!active)('claiming a seat, against a real database', () =>
         const priv = await openTable(host, 4, { privacy: 'private' });
         const pub = await openTable(host, 4);
 
-        const listed = (await tables.open(looker, 'hokm', 20)).map((table) => table.id);
+        const listed = (await tables.open(looker, 'seat-fixture', 20)).map((table) => table.id);
         expect(listed).toContain(pub);
         expect(listed).not.toContain(priv);
 
         await tables.claimSeat(looker, pub);
-        expect((await tables.open(looker, 'hokm', 20)).map((table) => table.id)).not.toContain(pub);
+        expect((await tables.open(looker, 'seat-fixture', 20)).map((table) => table.id)).not.toContain(pub);
     });
 
     it('does not offer a table hosted by somebody either side has blocked', async () =>
@@ -239,7 +253,7 @@ describe.skipIf(!active)('claiming a seat, against a real database', () =>
 
         await social.block(looker, host);
 
-        expect((await tables.open(looker, 'hokm', 20)).map((table) => table.id)).not.toContain(tableId);
+        expect((await tables.open(looker, 'seat-fixture', 20)).map((table) => table.id)).not.toContain(tableId);
         await expect(tables.claimSeat(looker, tableId)).rejects.toThrow();
     });
 
@@ -274,7 +288,7 @@ describe.skipIf(!active)('claiming a seat, against a real database', () =>
     {
         const host = await makeUser();
         const table = await tables.create(host, {
-            game: 'hokm', seats: 4, mode: 'live', privacy: 'private', target: 7, cube: false, blinds: 'low', invitees: []
+            game: 'seat-fixture', seats: 4, mode: 'live', privacy: 'private', target: 7, cube: false, blinds: 'low', invitees: []
         });
 
         const found = await tables.byCode(host, table.code.toUpperCase());
@@ -282,5 +296,66 @@ describe.skipIf(!active)('claiming a seat, against a real database', () =>
 
         // A code that could not be one answers as a code that is not there, never as an error.
         expect(await tables.byCode(host, 'nope!')).toBeNull();
+    });
+
+    /**
+     * The table a caller ASKS for is not the table they get to have.
+     *
+     * `isValidTable` lives in the browser, and for as long as it was the only check, every one of
+     * these opened a perfectly ordinary row. That matters more than it looks: `status` is derived
+     * from occupied chairs against `t.seats`, so a table with a seat count its game does not play
+     * is one nothing downstream can question - it simply becomes `ready` at a number no game of
+     * that kind is ever played at, and whatever plugs in here later inherits it.
+     */
+    describe('what a table may be', () =>
+    {
+        const ask = async (patch: Record<string, unknown>): Promise<unknown> =>
+        {
+            const host = await makeUser();
+            return tables.create(host, {
+                game: 'seat-fixture',
+                seats: 4,
+                mode: 'live',
+                privacy: 'public',
+                target: 7,
+                cube: false,
+                blinds: 'low',
+                invitees: [],
+                ...patch
+            } as Parameters<typeof tables.create>[1]);
+        };
+
+        it('refuses a seat count the game does not play', async () =>
+        {
+            await expect(ask({ seats: 5 })).rejects.toThrow(/not a table this game makes/i);
+        });
+
+        it('refuses a mode the game does not play', async () =>
+        {
+            await expect(ask({ mode: 'turns' })).rejects.toThrow(/not a table this game makes/i);
+        });
+
+        it('refuses a target the game is not played to', async () =>
+        {
+            await expect(ask({ target: 99 })).rejects.toThrow(/not a table this game makes/i);
+        });
+
+        it('refuses a game that is not there at all', async () =>
+        {
+            await expect(ask({ game: 'not-a-game' })).rejects.toThrow(/cannot be opened/i);
+        });
+
+        /**
+         * The form sends `cube` and `blinds` on every table, because they are fields on one config
+         * object rather than claims about the game. So they are normalized rather than refused -
+         * refusing them would reject the product's own create form, and storing what was sent
+         * would put a doubling cube on a game that has none.
+         */
+        it('stores no cube and no blind level for a game that has neither', async () =>
+        {
+            const table = await ask({ cube: true, blinds: 'high' }) as { id: string };
+            const row = await db.query('select cube, blinds from tables where id = $1', [table.id]);
+            expect(rowsOf<{ cube: boolean; blinds: string }>(row)[0]).toEqual({ cube: false, blinds: 'low' });
+        });
     });
 });

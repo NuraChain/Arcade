@@ -568,6 +568,26 @@ first time a seat moves down a path that forgot to update it. It did, in the bro
 full, and the page says so in as many words: *"Every chair is taken. The game itself is still
 being built — until it is, the table holds your seats and the chat stays open."*
 
+**The server decides what a table may BE, and for a while it did not.** `isValidTable` lives in the
+browser and is a courtesy to the person filling the form; `create` believed whatever it was handed,
+so a caller could open a three-seat hokm table or a `turns` table for a game that only runs live.
+That is worse than it sounds, because `status` is derived from occupied chairs against `t.seats`: a
+table with a seat count its game does not play is one nothing downstream can question. `create` now
+reads `game_rules` and refuses the seat count, the mode and the target; `cube` and `blinds` are
+NORMALIZED rather than refused, because the form sends both on every table - they are fields on one
+config object, not claims about the game.
+
+It caught a live bug the moment it existed: `lobby.quick()`'s fallback config was a literal four
+seats, so quick-matching backgammon - which plays two - had always asked for a four-seat table. It
+asks `catalogue.defaults(game)` now.
+
+**A wire field that reaches a bounded column says so in `schemas.ts`.** `crest` is `varchar(24)`,
+`hue` is `smallint`, `blinds` is one of three levels - and none of that was stated, so an over-long
+crest or an out-of-range hue reached Postgres and came back as 22001 or 22003, which is a 500. Any
+signed-in caller could produce one. That is the same defect class as the 22P02 `membership()` fixes
+by checking a uuid's shape before comparing it, and the fix belongs in the same place the wire shape
+is already decided once.
+
 **Matchmaking is a query.** `quick(game)` reads the open public tables for that game, claims a
 chair at the first one that still has one, and opens a table to wait in only when there is nothing
 to join. Nobody is invented to fill it.

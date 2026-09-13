@@ -4,6 +4,7 @@ import { ApiError, client, type TableSummary } from '../api.ts';
 import type { GameId } from '../data/games.ts';
 import type { TableConfig } from '../data/tables.ts';
 import { useAccount } from './account.store.ts';
+import { useCatalogue } from './catalogue.store.ts';
 import { useRealtime } from './realtime.store.ts';
 
 export interface LobbyApi
@@ -63,6 +64,7 @@ export interface LobbyApi
 export const useLobby = createStore((): LobbyApi =>
 {
     const account = useAccount();
+    const catalogue = useCatalogue();
 
     const who = (): string | null => account.user()?.id ?? null;
 
@@ -170,8 +172,14 @@ export const useLobby = createStore((): LobbyApi =>
                 }
             }
 
+            /*
+              * The table this opens has to be one the GAME plays. The fallback here was a literal
+              * four seats and no target, so quick-matching backgammon - which plays two - asked for
+              * a four-seat table, and nothing refused it until the server started checking. Asking
+              * the catalogue answers from the server's own rules, which is where seat counts live.
+              */
             const made = await client.tables.create({
-                input: asInput(game, config ?? { game, seats: 4, mode: 'live', privacy: 'public', target: 0, cube: false, blinds: 'low', quick: true }, 'public', [])
+                input: asInput(game, config ?? catalogue.defaults(game), 'public', [])
             });
             await revalidate();
             return made.id;

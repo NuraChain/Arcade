@@ -140,14 +140,14 @@ export const walletSignIn = object({
     providerRdns: string().optional()
 });
 
-export const guestSignIn = object({ name: string() });
+export const guestSignIn = object({ name: string({ trim: true, nonempty: true, max: 64 }) });
 
 /**
  * Signing in as one of the seeded demo identities. The handle is the whole request: these are
  * shared exploration accounts, they prove nothing, and the account they open says `demo` so the
  * UI can say so too.
  */
-export const handleInput = object({ handle: string() });
+export const handleInput = object({ handle: string({ trim: true, min: 2, max: 32 }) });
 
 export const handleResult = object({ handle: string() });
 
@@ -214,15 +214,15 @@ export const deviceRef = object({ id: string() });
  * which case applies from the account, never from what the caller chose to send.
  */
 export const enrolInput = object({
-    id: string(),
-    exchangeKey: string(),
-    signingKey: string(),
-    label: string(),
+    id: string({ max: 22 }),
+    exchangeKey: string({ max: 512 }),
+    signingKey: string({ max: 512 }),
+    label: string({ trim: true, max: 64 }),
     nonce: string().optional(),
     signature: string().optional()
 });
 
-export const deviceLabelInput = object({ label: string() });
+export const deviceLabelInput = object({ label: string({ trim: true, max: 64 }) });
 
 /* ---------------------------------------------------------------- recovery */
 
@@ -262,8 +262,8 @@ export const recoveryVaultInput = object({
 
 /** One epoch key, sealed to the archive key rather than to a device. */
 export const archiveInput = object({
-    conversationId: string(),
-    epoch: number(),
+    conversationId: string({ max: 36 }),
+    epoch: number({ int: true, min: 0, max: 2147483647 }),
     wrapped: string()
 });
 
@@ -586,13 +586,13 @@ export type GroupSummary = Infer<typeof groupSummary>;
 export const groupList = object({ groups: array(groupSummary) });
 
 export const groupCreateInput = object({
-    name: string(),
-    blurb: string(),
-    crest: string(),
-    hue: number(),
+    name: string({ trim: true, nonempty: true, max: 60 }),
+    blurb: string({ trim: true, max: 240 }),
+    crest: string({ max: 24 }),
+    hue: number({ int: true, min: 0, max: 359 }),
 
     /** Empty means the group is about the people rather than about one game. */
-    game: string()
+    game: string({ max: 24 })
 });
 
 /**
@@ -604,10 +604,10 @@ export const groupCreateInput = object({
  * breaks every link anyone shared.
  */
 export const groupEditInput = object({
-    name: string(),
-    blurb: string(),
-    crest: string(),
-    game: string()
+    name: string({ trim: true, nonempty: true, max: 60 }),
+    blurb: string({ trim: true, max: 240 }),
+    crest: string({ max: 24 }),
+    game: string({ max: 24 })
 });
 
 /* ------------------------------------------------------------------------ tables */
@@ -615,6 +615,9 @@ export const groupEditInput = object({
 export const tableMode = enumOf(['live', 'turns']);
 
 export const tablePrivacy = enumOf(['private', 'friends', 'public']);
+
+/** The three levels a table with blinds can be played at. A closed set, so it is an enum. */
+export const tableBlinds = enumOf(['low', 'mid', 'high']);
 
 /**
  * `ready` means every chair is taken. It does NOT mean playing.
@@ -673,16 +676,16 @@ export type TableSummary = Infer<typeof tableSummary>;
 export const tableList = object({ tables: array(tableSummary) });
 
 export const tableCreateInput = object({
-    game: string(),
-    seats: number(),
+    game: string({ max: 32 }),
+    seats: number({ int: true, min: 2, max: 32 }),
     mode: tableMode,
     privacy: tablePrivacy,
-    target: number(),
+    target: number({ int: true, min: 0, max: 9999 }),
     cube: boolean(),
-    blinds: string(),
+    blinds: tableBlinds,
 
     /** Handles. Each one holds a chair until they take it or the host gives it away. */
-    invitees: array(string())
+    invitees: array(string({ max: 32 }))
 });
 
 export const readyInput = object({ ready: boolean() });
@@ -990,8 +993,8 @@ export const wrappedKey = object({
  * every later sender would seal under a key that recipient does not hold.
  */
 export const mintEpochInput = object({
-    epoch: number(),
-    mintedBy: string(),
+    epoch: number({ int: true, min: 0, max: 2147483647 }),
+    mintedBy: string({ max: 22 }),
     recipients: array(string()),
     signature: string(),
     confirmation: string(),

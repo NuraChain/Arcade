@@ -5,6 +5,30 @@ import type { TableMode, TablePrivacy, TableStatus } from '../../entities/table.
 import { firstRow, rowsOf } from '../../lib/rows.ts';
 import type { SocialService } from '../social/service.ts';
 
+/**
+ * What the catalogue says a table of this game may be.
+ *
+ * Read here rather than taken on trust. `isValidTable` in the browser is a courtesy to the person
+ * filling the form; the server is the authority on what a game IS - CLAUDE.md says exactly that
+ * about the split catalogue - and then this route believed whatever it was handed. A caller could
+ * open a three-seat hokm table, or a `turns` table for a game that only runs live, and the row was
+ * perfectly valid to every later read: `status` is derived from seats taken against `t.seats`, so a
+ * table with a seat count its game does not play is one nothing downstream can question.
+ *
+ * `cube` and `blinds` are NORMALIZED rather than refused. The form sends both on every table -
+ * `blinds: 'low'` for hokm, `cube: false` for poker - because they are fields on one config object,
+ * not claims about the game. Refusing them would reject the product's own create form; storing the
+ * caller's value for a game that has no such concept would put a fact in the row that is not one.
+ */
+interface RulesRow
+{
+    seats: number[];
+    modes: string[];
+    targets: number[];
+    has_cube: boolean;
+    has_blinds: boolean;
+}
+
 export interface SeatRow
 {
     seat: number;
@@ -210,6 +234,34 @@ export function createTableService(db: DataSource, social: SocialService)
             invitees: string[];
         }): Promise<TableRow>
         {
+            const rules = firstRow<RulesRow>(await db.query(
+                `select r.seats, r.modes, r.targets, r.has_cube, r.has_blinds
+                   from game_rules r
+                   join games g on g.id = r.game_id
+                  where r.game_id = $1 and g.status = 'available'`,
+                [input.game]
+            ));
+
+            if (rules === null)
+            {
+                throw new ValidationError({ game: 'No such game.' }, 'That game cannot be opened.');
+            }
+            if (!rules.seats.includes(input.seats))
+            {
+                throw new ValidationError({ seats: 'Not a seat count this game plays.' }, 'That is not a table this game makes.');
+            }
+            if (!rules.modes.includes(input.mode))
+            {
+                throw new ValidationError({ mode: 'Not a mode this game plays.' }, 'That is not a table this game makes.');
+            }
+            if (input.target !== 0 && !rules.targets.includes(input.target))
+            {
+                throw new ValidationError({ target: 'Not a target this game plays to.' }, 'That is not a table this game makes.');
+            }
+
+            const cube = rules.has_cube && input.cube;
+            const blinds = rules.has_blinds ? input.blinds : 'low';
+
             if (input.invitees.length > input.seats - 1)
             {
                 throw new ValidationError({ invitees: 'More guests than chairs.' }, 'That is more people than seats.');
@@ -232,8 +284,8 @@ export function createTableService(db: DataSource, social: SocialService)
                                 input.mode,
                                 input.privacy,
                                 input.target,
-                                input.cube,
-                                input.blinds,
+                                cube,
+                                blinds,
                                 me
                             ]
                         );
