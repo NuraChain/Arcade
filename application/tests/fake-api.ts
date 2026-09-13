@@ -21,7 +21,7 @@ import {
 import type { TestDevice } from './keys.ts';
 import { accountIdOf, buildSealedFixtures } from './sealed-fixtures.ts';
 
-export type Refusal = 'challenge-unreachable' | 'bad-signature' | 'wallet-unreachable' | 'guest-taken';
+export type Refusal = 'challenge-unreachable' | 'bad-signature' | 'wallet-unreachable' | 'guest-reserved' | 'guest-unreachable';
 
 function hueOf(text: string): number
 {
@@ -1521,9 +1521,16 @@ export const client =
         async guest({ input }: { input: { name: string } })
         {
             server.calls.push('auth.guest');
-            if (server.refuse === 'guest-taken')
+            // What this server really refuses. A name that is merely TAKEN is never refused -
+            // `insertUser` claims by INSERT and suffixes on 23505 - so a fake that modelled a
+            // "taken" conflict was rehearsing a state the product cannot reach.
+            if (server.refuse === 'guest-reserved')
             {
-                throw new ApiError(409, 'conflict', 'That name is taken. Try another.', undefined);
+                throw new ApiError(409, 'conflict', 'That name is reserved. Try another.', undefined);
+            }
+            if (server.refuse === 'guest-unreachable')
+            {
+                throw new ApiError(429, 'too-many-requests', 'Slow down.', undefined);
             }
             server.account = guestAccount(input.name);
             return { account: server.account };

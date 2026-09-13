@@ -1,5 +1,7 @@
 import { useHead, useNavigate, useQuery } from 'azerothjs';
 
+import { checkHandle, handleFromName } from '../../../server/src/domains/identity/handle.ts';
+
 import WalletPanel from '../components/app/wallet-panel.component.azeroth';
 import SiteFooter from '../components/layout/site-footer.component.azeroth';
 import SiteHeader from '../components/layout/site-header.component.azeroth';
@@ -8,6 +10,7 @@ import Divider from '../components/ui/divider.component.azeroth';
 import Field from '../components/ui/field.component.azeroth';
 import Input from '../components/ui/input.component.azeroth';
 import '../locales/app-catalogue.ts';
+import { ApiError } from '../api.ts';
 import { safeNext } from '../lib/guards.ts';
 import { useAccount } from '../stores/account.store.ts';
 import { useLocale } from '../stores/locale.store.ts';
@@ -24,38 +27,106 @@ export default component SignInPage()
     useHead({ title: () => `${ locale.t('wallet.title') } · ${ locale.t('app.title') }` });
 
     state name = '';
-    state pending = '';
+    state pending = false;
     state touched = false;
+    state refused: 'name' | 'unavailable' | null = null;
 
     mount
     {
         return wallet.start();
     }
 
-    derived tooShort = name.trim().length < 3;
+    /**
+     * Why this name cannot be used, decided by the SERVER's own rule.
+     *
+     * `checkHandle` and `handleFromName` are the identity domain's, imported the way
+     * `lib/crypto.ts` imports the envelope - the alternative is a second opinion about what a
+     * legal name is, and the two halves disagreeing is how a form that says yes meets a server
+     * that says no. The length floor stays at three where the server's is two: stricter is always
+     * accepted, and "three characters" is what the hint has promised all along.
+     *
+     * The interesting cases are the ones a length check cannot see. `...` is three characters and
+     * folds to nothing; `admin` is well shaped and reserved. Both used to pass this form and be
+     * refused by the server, which is exactly the round trip that had nothing to catch it.
+     */
+    derived refusal = ((): 'short' | 'shape' | 'reserved' | null =>
+    {
+        const wanted = handleFromName(name);
+        if (wanted.length < 3)
+        {
+            return 'short';
+        }
+        const answer = checkHandle(wanted);
+        if (answer === null)
+        {
+            return null;
+        }
+        return answer === 'reserved' ? 'reserved' : (answer === 'too-short' ? 'short' : 'shape');
+    })();
+
+    derived fieldError = ((): string | null =>
+    {
+        if (refused === 'name')
+        {
+            return locale.t('signIn.handleRefused');
+        }
+        if (!touched || refusal === null)
+        {
+            return null;
+        }
+        if (refusal === 'reserved')
+        {
+            return locale.t('signIn.handleReserved');
+        }
+        return locale.t(refusal === 'shape' ? 'signIn.handleShape' : 'signIn.handleShort');
+    })();
 
     const leave = (): void =>
     {
         navigate(safeNext(query().next), { replace: true });
     };
 
-    const enter = async (key: string, sign: () => Promise<unknown>): Promise<void> =>
+    /**
+     * Signs in as a guest, and survives being told no.
+     *
+     * The version this replaces set `pending` and awaited with no `try`. `client.auth.guest`
+     * throws on any non-2xx - a reserved name, a name that folds to nothing, a 429 from the rate
+     * limiter - and on a throw the button stayed `loading` forever, the `pending` guard blocked
+     * every retry, and `void submit()` left an unhandled rejection behind. Guest sign-in, which is
+     * the actual onboarding for anybody without a wallet, was dead until the page was reloaded.
+     */
+    const submit = async (): Promise<void> =>
     {
-        if (pending !== '')
+        touched = true;
+        refused = null;
+
+        if (pending || refusal !== null)
         {
             return;
         }
-        pending = key;
-        await sign();
-        leave();
-    };
 
-    const submit = (): void =>
-    {
-        touched = true;
-        if (!tooShort)
+        pending = true;
+        try
         {
-            void enter(name.trim(), () => account.signIn(name.trim()));
+            const person = await account.signIn(name.trim());
+            if (person === null)
+            {
+                refused = 'unavailable';
+                return;
+            }
+            leave();
+        }
+        catch (error)
+        {
+            // 400 and 409 are both about the NAME, so they belong on the field rather than in the
+            // banner: "try again" is the wrong instruction for a name the server will never take.
+            refused = error instanceof ApiError && (error.status === 400 || error.status === 409)
+                ? 'name'
+                : 'unavailable';
+        }
+        finally
+        {
+            pending = false;
         }
     };
 
@@ -85,10 +156,10 @@ export default component SignInPage()
                 onSubmit={ (event) =>
                 {
                     event.preventDefault();
-                    submit();
+                    void submit();
                 } }
             >
-                <Field id="sign-in-name" label={ locale.t('signIn.handle') } hint={ locale.t('signIn.handleHint') } error={ touched && tooShort ? locale.t('signIn.handleShort') : null }>
+                <Field id="sign-in-name" label={ locale.t('signIn.handle') } hint={ locale.t('signIn.handleHint') } error={ fieldError }>
                     <Input
                         id="sign-in-name"
                         value={ name }
@@ -97,12 +168,15 @@ export default component SignInPage()
                         maxlength={ 24 }
                         autocomplete="nickname"
                         enterkeyhint="go"
-                        invalid={ touched && tooShort }
-                        describedBy={ touched && tooShort ? 'sign-in-name-error' : 'sign-in-name-hint' }
-                        onEnter={ submit }
+                        invalid={ fieldError !== null }
+                        describedBy={ fieldError !== null ? 'sign-in-name-error' : 'sign-in-name-hint' }
+                        onEnter={ () => void submit() }
                     />
                 </Field>
-                <Button variant="secondary" size="lg" block submit loading={ pending !== '' && pending === name.trim() } icon="forward">
+                <Show when={ refused === 'unavailable' }>
+                    <p class="text-ui-sm text-madder" role="alert">{ locale.t('signIn.failed') }</p>
+                </Show>
+                <Button variant="secondary" size="lg" block submit loading={ pending } icon="forward">
                     { locale.t('signIn.continue', { name: name.trim() === '' ? locale.t('common.you') : name.trim() }) }
                 </Button>
             </form>
