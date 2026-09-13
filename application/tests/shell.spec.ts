@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { cleanup, fire, renderTest } from '@azerothjs/testing';
-import { RouterProvider, createMemoryHistory, createRouter, type Route } from 'azerothjs';
+import { RouterProvider, Routes, createMemoryHistory, createRouter, type Route } from 'azerothjs';
 
 import BottomNav from '../src/components/app/bottom-nav.component.azeroth';
 import OverlayHost from '../src/components/app/overlay-host.component.azeroth';
@@ -224,6 +224,66 @@ describe('Page', () =>
         expect(root.hasAttribute('data-route-focus')).toBe(true);
         expect(root.getAttribute('tabindex')).toBe('-1');
         expect(root.classList.contains('page')).toBe(true);
+    });
+
+    /**
+     * A page has to read its scroll position while it still HAS one.
+     *
+     * `<Routes>` plays a leave transition - this app always has one, `transitionFor` never returns
+     * null - and the animated path is `removeChild`, then `destroyComponent`, then dispose. The
+     * component teardown runs last, on an element that is no longer in the document, and CSSOM View
+     * says an element with no box reports `scrollTop` as zero. So reading it there recorded 0 for
+     * every page on every navigation, and back landed at the top of every list in the product.
+     *
+     * `jsdom` has no layout, so its `scrollTop` is an ordinary property that keeps its value after
+     * detachment and cannot show the bug. This test installs the real rule on the element first -
+     * connected, the position; detached, zero - which is the only way a spec can hold this fix down.
+     * Without the fix the saved value is 0 and the restore below puts the page back at the top.
+     */
+    it('remembers how far down a page was, and puts it back on the way in', async () =>
+    {
+        const table: Route[] = [
+            { path: '/a', component: (): HTMLElement => Page({ children: 'list' }) as HTMLElement },
+            { path: '/b', component: (): HTMLElement => Page({ children: 'other' }) as HTMLElement }
+        ];
+        const router = createRouter({ routes: table, history: createMemoryHistory('/a'), scroll: false });
+        const { container } = renderTest(() =>
+            RouterProvider({
+                router,
+                children: () => Routes({ transition: () => 'page-forward', transitionDuration: 400 })
+            }) as Rendered);
+        await settle();
+
+        const asInABrowser = (element: HTMLElement, start: number): void =>
+        {
+            let position = start;
+            Object.defineProperty(element, 'scrollTop', {
+                configurable: true,
+                get: () => (element.isConnected ? position : 0),
+                set: (value: number) =>
+                {
+                    position = value;
+                }
+            });
+        };
+
+        const first = container.querySelector<HTMLElement>('.page')!;
+        asInABrowser(first, 250);
+        first.dispatchEvent(new Event('scroll'));
+
+        router.navigate('/b');
+        await settle();
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        await settle();
+        expect(first.isConnected).toBe(false);
+
+        router.back();
+        await settle();
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        await settle();
+
+        expect(router.location().pathname).toBe('/a');
+        expect(container.querySelector<HTMLElement>('.page')!.scrollTop).toBe(250);
     });
 });
 

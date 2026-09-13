@@ -32,6 +32,30 @@ export default component Page(props: { children?: Child; padded?: boolean; narro
     let release: (() => void) | null = null;
     let settle: (() => void) | null = null;
 
+    /**
+     * How far down this page is, read while it is still in the document.
+     *
+     * A teardown cannot ask the element where it is scrolled to, because by then it is not
+     * anywhere. `<Routes>` plays a leave transition and this app always has one - `transitionFor`
+     * in `App.azeroth` returns `page-fade` or `page-forward` and never null - so every navigation
+     * takes the animated path, which is `removeChild` then `destroyComponent` then dispose. The
+     * teardown runs last, against a detached element, and CSSOM View says an element with no box
+     * reports `scrollTop` as zero. So the old save wrote 0 for every page on every navigation and
+     * the restore then dutifully put every list back at the top.
+     *
+     * Nothing could see it. `npm run qa` checks overflow, hit targets, a `main` landmark and a
+     * clean console; a page confidently scrolled to the top passes all four. `jsdom` has no layout,
+     * so `scrollTop` there is an ordinary property that survives detachment and the bug is invisible
+     * in a spec that does not model the real rule - which is why `shell.spec.ts` installs that rule
+     * on the element before it navigates.
+     */
+    let depth = 0;
+
+    const track = (): void =>
+    {
+        depth = root?.scrollTop ?? depth;
+    };
+
     derived meta = routeMeta(match());
 
     derived leaving = meta.parent !== undefined || shell.depth() > 0;
@@ -64,12 +88,12 @@ export default component Page(props: { children?: Child; padded?: boolean; narro
 
     mount
     {
-        if (restored && root !== null)
-        {
-            root.scrollTop = scrollMemory.take(key) ?? 0;
-        }
         if (root !== null)
         {
+            depth = restored ? scrollMemory.take(key) ?? 0 : 0;
+            root.scrollTop = depth;
+            root.addEventListener('scroll', track, { passive: true });
+
             release = attachGestures(root, {
                 rtl: () => locale.dir() === 'rtl',
                 refresh: props.onRefresh === undefined ? undefined : refresh,
@@ -88,12 +112,10 @@ export default component Page(props: { children?: Child; padded?: boolean; narro
         }
         return () =>
         {
+            root?.removeEventListener('scroll', track);
             release?.();
             settle?.();
-            if (root !== null)
-            {
-                scrollMemory.save(key, root.scrollTop);
-            }
+            scrollMemory.save(key, depth);
         };
     }
 

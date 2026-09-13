@@ -1568,6 +1568,26 @@ starts every periodic store in `mount` and stops them on teardown, stamps `data-
 (`phone` < 768 ≤ `rail` < 1024 ≤ `sidebar`) and `data-social` on `#app-shell`, and hosts the
 overlay, toast and lobby-notice portals.
 
+**A teardown cannot measure the DOM, because by then there is none.** `<Routes>` plays a leave
+transition and this app always has one — `transitionFor` in `App.azeroth` returns `page-fade` or
+`page-forward` and never null — so every navigation takes the animated path, which is `removeChild`,
+then `destroyComponent`, then dispose. The component's teardown runs LAST, against a detached
+element, and CSSOM View says an element with no box reports `scrollTop` as zero. `Page` read its
+scroll position there, so it saved 0 for every page on every navigation and the restore then put
+every list in the product back at the top. Anything a teardown needs to know about the rendered
+element has to be captured while it is still rendered — `Page` keeps `depth` up to date from a
+passive `scroll` listener and saves that.
+
+Nothing could see it. `npm run qa` checks overflow, hit targets, a `main` landmark and a clean
+console, and a page confidently scrolled to the top passes all four. **`jsdom` has no layout**, so
+its `scrollTop` is an ordinary property that survives detachment — the bug is invisible to a spec
+unless the spec installs the real rule itself, which is what `shell.spec.ts` does before it
+navigates. That is the shape to copy for anything else that depends on layout.
+
+This is not a framework defect and does not go in the register: the element has to stay in the
+document until its leave animation finishes, so removing it before disposing is the only order that
+works. The wrong assumption was ours.
+
 **Stores own their timers.** No store schedules anything in its factory; periodic work sits
 behind idempotent `start(): () => void` / `stop()`, one-shot timers are tracked and cleared by
 `reset()`, and every one reads the clock through `runtime()` so tests can drive it.
