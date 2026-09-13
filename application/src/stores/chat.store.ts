@@ -61,6 +61,17 @@ export interface ChatApi
     markRead(id: string): Promise<void>;
     pinned(id: string): boolean;
     togglePin(id: string): Promise<void>;
+
+    /** How long a message in this room lasts, in seconds. Null is off. */
+    expireAfter(id: string): number | null;
+
+    /**
+     * Changes it for the ROOM, and says so in the thread.
+     *
+     * It applies to what is said next. Messages already sent carry their own expiry, signed by
+     * whoever wrote them, and nothing here reaches back to shorten or lengthen one.
+     */
+    setExpiry(id: string, seconds: number | null): Promise<void>;
     openDirect(personId: string): Promise<string>;
     forGroup(groupId: string): string | undefined;
     refresh(): Promise<void>;
@@ -141,7 +152,8 @@ export const useChat = createStore((): ChatApi =>
         return (seen()[id] ?? 0) >= (row.last?.at ?? 0) ? 0 : row.unread;
     };
 
-    const publish = (message: Message): Promise<void> => active.post(message).then(revalidate);
+    const publish = (message: Message, expiresAt: number): Promise<void> =>
+        active.post(message, expiresAt).then(revalidate);
 
     let sweep: (() => void) | null = null;
 
@@ -294,7 +306,14 @@ export const useChat = createStore((): ChatApi =>
             }
             setDrafts({ ...untrack(drafts), [id]: '' });
             announced.delete(id);
-            await publish(asked(id, clean));
+
+            // Computed HERE from the room's setting, at the moment of sending. A source that read
+            // the setting itself would be a second place for the two to disagree about how long a
+            // message lasts, and the value is signed - so a disagreement would be permanent.
+            const after = rowOf(id)?.conversation.expireAfter ?? null;
+            const at = runtime().clock.now();
+
+            await publish(asked(id, clean), after === null ? 0 : at + after * 1000);
         },
 
         /**
@@ -317,6 +336,18 @@ export const useChat = createStore((): ChatApi =>
         },
 
         pinned: (id) => pins()[id] ?? rowOf(id)?.conversation.pinned ?? false,
+
+        expireAfter: (id) => rowOf(id)?.conversation.expireAfter ?? null,
+
+        async setExpiry(id, seconds)
+        {
+            await client.chat.expiry({
+                params: { id },
+                input: seconds === null ? {} : { seconds }
+            });
+
+            await revalidate();
+        },
 
         async togglePin(id)
         {

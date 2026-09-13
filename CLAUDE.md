@@ -771,12 +771,19 @@ How a PEER decides whether to believe any of that is *Whose device is that?* bel
 
 ```
 'nura-e2ee/v1' ␟ 'msg' ␟ conversationId ␟ epoch ␟ seq ␟ messageId
-               ␟ senderAccountId ␟ senderDeviceId ␟ kind ␟ clientAt ␟ commitment
+               ␟ senderAccountId ␟ senderDeviceId ␟ kind ␟ clientAt
+               ␟ commitment ␟ expiresAt
 ```
 
 Binding `kind` stops the server relabelling a fabricated row as a person's words; binding
 `clientAt` stops it re-dating one; binding `senderDeviceId` stops it re-attributing one; binding
-`commitment` stops either end lying about what the message can later be reported as saying.
+`commitment` stops either end lying about what the message can later be reported as saying; binding
+`expiresAt` stops the server giving a disappearing message a longer life than its sender asked for.
+
+**The format is settled.** It took three hard cutovers to get here — the sealing, the commitment and
+the expiry — and every one of them was taken while nothing had shipped to anybody, because a wire
+format patched around after the fact is one nobody can reason about. Nothing left in the plan
+touches these bytes.
 
 **No wallet-signature-derived backup key.** A deterministic `personal_sign` over a fixed string is
 an unrevocable, phishable, remote skeleton key to the entire archive. Recovery is a *generated*
@@ -1255,6 +1262,43 @@ rotation is a real procedure rather than a paragraph.
 doing across a room was always legitimate and still is; attaching one message is what turns "they
 said this" into something a moderator can check. A reporter who does not want to show a specific
 message is not made to.
+
+## Disappearing messages
+
+**A property of the ROOM, not of a browser.** `conversations.expire_after` is seconds, null for off,
+and anybody in the conversation may change it. The version where each device decides for the
+messages it sends is the one that reads as broken: somebody turns it on, watches their own lines
+vanish, and the other half of the conversation sits there forever.
+
+**The change is ANNOUNCED.** `chat.line.expiry.on` and `.off` are written by `setExpiry`, following
+the rule every other line key follows — a key without a producer is filler copy. A rule about how
+long words last is not something to alter behind somebody's back, and a change nobody can see is one
+people discover by noticing their history is shorter than they remember.
+
+**The expiry is signed per message, not read from a column.** It rides in the AAD, so this server
+can delete the row on time and cannot extend a message's life by a second; a recipient checks the
+expiry it was signed with rather than the one a row happens to carry. That is also why changing the
+setting cannot reach backwards: every message already sent carries its own, and nothing shortens or
+lengthens one after the fact.
+
+**Two places enforce it and they are not redundant.** The read filters on `expires_at > now()`, so
+nobody ever sees a message in the window between its moment and the next sweep; the sweep deletes
+the rows every minute. Filtering alone would leave the data; sweeping alone would show it for up to
+a minute after it was supposed to be gone.
+
+**A message that has run out cannot be reported.** `frankedMessage` filters on the same condition.
+Franking proves what was said; it does not resurrect something both sides agreed would be deleted.
+
+**What it does NOT do, said before what it does.** It does not un-say anything. Anybody who read a
+message can screenshot it, copy it or simply remember it — that is true in every product with this
+feature, and `expiry.honest` says so on the screen above the choices rather than below them. What is
+real is narrower and still worth having: the row leaves this database, and it leaves the thread of
+everybody following the rule. A stolen laptop, a scrollback in a year and a backup all stop
+containing it.
+
+**The minimum is a minute, not a second.** `conversations_expire_after_positive` refuses anything
+shorter. Zero is what an off-by-one in a picker produces and it means "vanishes before it is read";
+off is expressed by null, which is a different thing and says so.
 
 ## Notifications, and a push that carries nothing
 

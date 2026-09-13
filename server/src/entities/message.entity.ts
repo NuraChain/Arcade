@@ -73,4 +73,13 @@ export class Message
 
     @Column({ type: 'text', nullable: true })
     frank!: string | null;
+
+    /**
+     * When this message stops existing. Null means it does not.
+     *
+     * Taken from the signed envelope rather than decided here, which is what makes it trustworthy:
+     * this server can delete the row on time and cannot extend a message's life by a second.
+     */
+    @Column({ name: 'expires_at', type: 'timestamptz', nullable: true })
+    expiresAt!: Date | null;
 }

@@ -159,7 +159,8 @@ export async function buildSealedFixtures(): Promise<SealedFixtures>
                 senderDeviceId: sender.id,
                 kind: 'text',
                 clientAt,
-                commitment
+                commitment,
+                expiresAt: 0
             }, message.body ?? '', frankingKey);
 
             written.push({

@@ -7,9 +7,10 @@ import { useChat } from '../../stores/chat.store.ts';
 import { useGroups } from '../../stores/groups.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useSocial } from '../../stores/social.store.ts';
-import type { OverlayProps } from '../../stores/overlay.store.ts';
+import { useOverlay, type OverlayProps } from '../../stores/overlay.store.ts';
 import IconButton from '../ui/icon-button.component.azeroth';
 import { groupNameOf, othersOf, titleOf } from './chat-title.ts';
+import ExpirySheet from './expiry-sheet.component.azeroth';
 
 interface Action
 {
@@ -26,6 +27,7 @@ export default component ChatActions(props: OverlayProps & { conversationId: str
     const chat = useChat();
     const groups = useGroups();
     const people = usePeople();
+    const overlay = useOverlay();
     const { navigate } = useNavigate();
 
     derived conversation = chat.conversation(props.conversationId) ?? null;
@@ -54,6 +56,20 @@ export default component ChatActions(props: OverlayProps & { conversationId: str
                 icon: muted ? 'sound' : 'sound-off',
                 label: locale.t(muted ? 'chat.unmute' : 'chat.mute'),
                 run: () => void social.toggleMute('conversation', props.conversationId)
+            },
+            {
+                id: 'expiry',
+                icon: 'timer',
+                label: locale.t('expiry.title'),
+                run: () =>
+                {
+                    props.close();
+                    overlay.open(
+                        ExpirySheet,
+                        { conversationId: props.conversationId },
+                        { label: locale.t('expiry.title') }
+                    );
+                }
             }
         ];
 

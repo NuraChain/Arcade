@@ -78,6 +78,7 @@ const aadFor = (overrides: Partial<MessageAad> = {}): MessageAad => ({
     kind: 'text',
     clientAt: 1_700_000_000_000,
     commitment,
+    expiresAt: 0,
     ...overrides
 });
 
@@ -272,13 +273,14 @@ describe('sealing a message', () =>
             senderDeviceId: 'd-6',
             kind: 'text',
             clientAt: 7,
-            commitment: 'c-8'
+            commitment: 'c-8',
+            expiresAt: 9
         };
 
         // Field order is part of the format. A reordering here would verify against nothing, and
         // the symptom would be every message on earth failing with no error that named the cause.
         expect(messageAad(aad).split(String.fromCharCode(0x1f)))
-            .toEqual(['nura-e2ee/v1', 'msg', 'c-1', '2', '3', 'm-4', 'u-5', 'd-6', 'text', '7', 'c-8']);
+            .toEqual(['nura-e2ee/v1', 'msg', 'c-1', '2', '3', 'm-4', 'u-5', 'd-6', 'text', '7', 'c-8', '9']);
     });
 });
 

@@ -362,7 +362,16 @@ export interface ChatPort
         signature: string;
         clientAt: string;
         commitment: string;
+        expiresAt: number;
     }): Promise<ChatMessage>;
+
+    /**
+     * How long a message in this room lasts, in seconds. Null turns it off.
+     *
+     * A property of the ROOM, settable by anybody in it, applying to what is said NEXT. It cannot
+     * reach back: every message already sent carries its own expiry, signed.
+     */
+    setExpiry(me: string, conversationId: string, seconds: number | null): Promise<number | null>;
     markRead(me: string, conversationId: string): Promise<void>;
     setPinned(me: string, conversationId: string, pinned: boolean): Promise<void>;
 

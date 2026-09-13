@@ -818,7 +818,10 @@ export const chatMessage = object({
      * no reason to hold it, and publishing it would hand every reader a token that only matters when
      * a report is filed.
      */
-    commitment: string().optional()
+    commitment: string().optional(),
+
+    /** When it stops existing, if it does. Absent on a message that lasts. */
+    expiresAt: string().optional()
 });
 
 export type ChatMessage = Infer<typeof chatMessage>;
@@ -840,7 +843,10 @@ export const conversationSummary = object({
     tableId: string().optional(),
     pinned: boolean(),
     unread: number(),
-    last: chatMessage.optional()
+    last: chatMessage.optional(),
+
+    /** How long a message in this room lasts, in seconds. Absent when it lasts. */
+    expireAfter: number().optional()
 });
 
 export type ConversationSummary = Infer<typeof conversationSummary>;
@@ -887,8 +893,22 @@ export const sendInput = object({
     clientAt: string(),
 
     /** `HMAC(frankingKey, plaintext)`, with the key sealed inside `body`. See *Franking*. */
-    commitment: string()
+    commitment: string(),
+
+    /**
+     * When this message stops existing, in epoch milliseconds. `0` means it does not.
+     *
+     * Signed into the envelope, so this server can delete the row on time and cannot extend a
+     * message's life by a second - a recipient checks the expiry it was signed with, not the one a
+     * row happens to carry.
+     */
+    expiresAt: number()
 });
+
+/** Turning disappearing messages on for a room, or off. Seconds, or absent for off. */
+export const expiryInput = object({ seconds: number().optional() });
+
+export const expiryResult = object({ seconds: number().optional() });
 
 /* ---------------------------------------------------------------- epochs */
 

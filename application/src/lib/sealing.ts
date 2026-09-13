@@ -366,6 +366,9 @@ export interface SealedSend
 
     /** What this message is committed to, so it can be reported later and not fabricated. */
     commitment: string;
+
+    /** Epoch milliseconds, or 0 for a message that lasts. */
+    expiresAt: number;
 }
 
 /**
@@ -380,7 +383,8 @@ export async function sealForSend(
     secrets: DeviceSecrets,
     conversationId: string,
     text: string,
-    at: number
+    at: number,
+    expiresAt: number
 ): Promise<SealedSend>
 {
     const id = crypto.randomUUID();
@@ -397,7 +401,8 @@ export async function sealForSend(
         senderDeviceId: open.deviceId,
         kind: 'text',
         clientAt: at,
-        commitment
+        commitment,
+        expiresAt
     }, text, frankingKey);
 
     return {
@@ -409,7 +414,8 @@ export async function sealForSend(
         senderDeviceId: open.deviceId,
         signature: sealed.signature,
         clientAt: new Date(at).toISOString(),
-        commitment
+        commitment,
+        expiresAt
     };
 }
 
@@ -428,7 +434,7 @@ export function heldKey(conversationId: string, epoch: number): Promise<Uint8Arr
 }
 
 /** Why a message on the screen is not words. Every one of these renders as its own sentence. */
-export type MessageFailure = OpenFailure | 'no-epoch-key';
+export type MessageFailure = OpenFailure | 'no-epoch-key' | 'expired';
 
 export type OpenedMessage = { text: string; frankingKey: string } | { failure: MessageFailure };
 
@@ -479,7 +485,8 @@ export async function openMessage(
         senderDeviceId: message.senderDeviceId,
         kind: message.kind,
         clientAt: Date.parse(message.clientAt),
-        commitment: message.commitment
+        commitment: message.commitment,
+        expiresAt: message.expiresAt === undefined ? 0 : Date.parse(message.expiresAt)
     }, body);
 
     return 'text' in opened ? opened : { failure: opened.failure };

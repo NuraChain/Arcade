@@ -27,6 +27,7 @@ const MESSAGE_PAGE = 10;
 const NOWHERE: Conversation = {
     id: '',
     kind: 'direct',
+    expireAfter: null,
     participants: [],
     groupId: null,
     tableId: null,

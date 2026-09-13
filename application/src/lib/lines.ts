@@ -16,7 +16,12 @@ export const LINE_KEYS = [
     'chat.line.group.left',
     'chat.line.group.removed',
     'chat.line.group.renamed',
-    'chat.line.group.owner'
+    'chat.line.group.owner',
+
+    // Written by `setExpiry` in the chat half of `services.ts`. A rule about how long words last is
+    // not something to change behind somebody's back.
+    'chat.line.expiry.on',
+    'chat.line.expiry.off'
 ] as const;
 
 export type LineKey = typeof LINE_KEYS[number];

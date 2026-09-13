@@ -3,7 +3,7 @@ import type { DataSource } from 'typeorm';
 
 import type { Franking } from './franking.ts';
 
-import { firstRow, rowsOf } from '../../lib/rows.ts';
+import { affectedBy, firstRow, rowsOf } from '../../lib/rows.ts';
 import type { MessageKind } from '../../entities/message.entity.ts';
 import type { SocialService } from '../social/service.ts';
 
@@ -36,6 +36,10 @@ export interface ConversationRow
     last_client_at: Date | null;
     last_commitment: string | null;
     last_frank: string | null;
+    last_expires_at: Date | null;
+
+    /** How long a message in this room lasts, in seconds. Null is off. */
+    expire_after: number | null;
 }
 
 export interface MessageRow
@@ -48,6 +52,9 @@ export interface MessageRow
     sender: string | null;
     sender_account_id: string | null;
     created_at: Date;
+
+    /** When this stops existing. Null on anything that does not. */
+    expires_at: Date | null;
 
     /** The envelope. Every field together on a sealed message, every field null on a line. */
     epoch: number | null;
@@ -74,6 +81,9 @@ export interface SealedInput
     signature: string;
     clientAt: string;
     commitment: string;
+
+    /** Epoch milliseconds, or 0 for a message that does not expire. Signed, so it cannot be moved. */
+    expiresAt: number;
 }
 
 /** How many messages one page of history carries. */
@@ -220,7 +230,7 @@ export function createChatService(db: DataSource, social: SocialService, frankin
         async list(me: string): Promise<ConversationRow[]>
         {
             const rows = await db.query(
-                `select c.id, c.kind, c.table_id, c.game, c.title,
+                `select c.id, c.kind, c.table_id, c.game, c.title, c.expire_after,
                         (select g.slug::text from groups g where g.id = c.group_id)      as group_slug,
                         m.pinned, m.last_read_at,
                         -- The cast is load-bearing. handle is citext, and array_agg over it
@@ -250,7 +260,8 @@ export function createChatService(db: DataSource, social: SocialService, frankin
                         last.signature                                                   as last_signature,
                         last.client_at                                                   as last_client_at,
                         last.commitment                                                  as last_commitment,
-                        last.frank                                                       as last_frank
+                        last.frank                                                       as last_frank,
+                        last.expires_at                                                  as last_expires_at
                  from conversation_members m
                  join conversations c on c.id = m.conversation_id
                  left join lateral (
@@ -260,7 +271,7 @@ export function createChatService(db: DataSource, social: SocialService, frankin
                      select x.id, x.kind, x.body, x.payload, x.created_at, su.handle as sender,
                             x.sender_id as sender_account_id,
                             x.epoch, x.seq, x.iv, x.sender_device_id, x.signature, x.client_at,
-                            x.commitment, x.frank
+                            x.commitment, x.frank, x.expires_at
                      from messages x
                      left join users su on su.id = x.sender_id
                      where x.conversation_id = c.id
@@ -296,10 +307,13 @@ export function createChatService(db: DataSource, social: SocialService, frankin
                 `select x.id, x.conversation_id, x.kind, x.body, x.payload, x.created_at,
                         su.handle as sender, x.sender_id as sender_account_id,
                         x.epoch, x.seq, x.iv, x.sender_device_id, x.signature, x.client_at,
-                        x.commitment, x.frank
+                        x.commitment, x.frank, x.expires_at
                  from messages x
                  left join users su on su.id = x.sender_id
                  where x.conversation_id = $1
+                   -- Gone is gone. The sweep deletes these on a timer, and a reader must not see
+                   -- one in the window between its moment and the next pass.
+                   and (x.expires_at is null or x.expires_at > now())
                    and ($2::timestamptz is null or (x.created_at, x.id) < ($2::timestamptz, $3::uuid))
                  order by x.created_at desc, x.id desc
                  limit $4`,
@@ -364,6 +378,15 @@ export function createChatService(db: DataSource, social: SocialService, frankin
                 throw new BadRequestError('A message needs a franking commitment.');
             }
 
+            // Taken from the signed envelope and written down, never decided here. A server that
+            // chose this could give a disappearing message a longer life than its sender asked for.
+            const expiresAt = input.expiresAt === 0 ? null : new Date(input.expiresAt);
+
+            if (expiresAt !== null && Number.isNaN(expiresAt.getTime()))
+            {
+                throw new BadRequestError('That is not a time this message could expire at.');
+            }
+
             const known = await db.query(
                 'select 1 as ok from conversation_epochs where conversation_id = $1 and epoch = $2',
                 [conversationId, input.epoch]
@@ -416,10 +439,11 @@ export function createChatService(db: DataSource, social: SocialService, frankin
                 inserted = await db.query(
                     `insert into messages
                          (id, conversation_id, sender_id, kind, body, epoch, seq, iv, sender_device_id,
-                          signature, client_at, commitment, frank)
-                     values ($1, $2, $3, 'text', $4, $5, $6, $7, $8, $9, $10, $11, $12)
+                          signature, client_at, commitment, frank, expires_at)
+                     values ($1, $2, $3, 'text', $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
                      returning id, conversation_id, kind, body, payload, created_at,
-                               epoch, seq, iv, sender_device_id, signature, client_at, commitment, frank`,
+                               epoch, seq, iv, sender_device_id, signature, client_at, commitment,
+                               frank, expires_at`,
                     [
                         input.id,
                         conversationId,
@@ -432,7 +456,8 @@ export function createChatService(db: DataSource, social: SocialService, frankin
                         input.signature,
                         clientAt,
                         input.commitment,
-                        frank
+                        frank,
+                        expiresAt
                     ]
                 );
             }
@@ -472,7 +497,8 @@ export function createChatService(db: DataSource, social: SocialService, frankin
                 `insert into messages (conversation_id, sender_id, kind, payload)
                  values ($1, $2, $3, $4)
                  returning id, conversation_id, kind, body, payload, created_at,
-                           epoch, seq, iv, sender_device_id, signature, client_at, commitment, frank`,
+                           epoch, seq, iv, sender_device_id, signature, client_at, commitment,
+                           frank, expires_at`,
                 [conversationId, senderId, kind, JSON.stringify(payload)]
             );
             const message = rowsOf<Omit<MessageRow, 'sender' | 'sender_account_id'>>(inserted)[0];
@@ -503,14 +529,49 @@ export function createChatService(db: DataSource, social: SocialService, frankin
                 `select x.id, x.conversation_id, x.kind, x.body, x.payload, x.created_at,
                         su.handle as sender, x.sender_id as sender_account_id,
                         x.epoch, x.seq, x.iv, x.sender_device_id, x.signature, x.client_at,
-                        x.commitment, x.frank
+                        x.commitment, x.frank, x.expires_at
                  from messages x
                  left join users su on su.id = x.sender_id
-                 where x.conversation_id = $1 and x.id = $2 and x.kind = 'text'`,
+                 where x.conversation_id = $1 and x.id = $2 and x.kind = 'text'
+                   and (x.expires_at is null or x.expires_at > now())`,
                 [conversationId, messageId]
             );
 
             return firstRow<MessageRow>(rows);
+        },
+
+        /**
+         * How long a message in this room lasts, and who changed it.
+         *
+         * Anybody in the conversation may set it, because it is a property of the room and not of
+         * whoever opened it. It applies to what is said NEXT: messages already sent were sealed with
+         * their own expiry signed into them, and nothing here can reach back and shorten or extend
+         * one. Turning it on does not delete history, and the copy says so.
+         */
+        async setExpiry(me: string, conversationId: string, seconds: number | null): Promise<number | null>
+        {
+            await mustBeMember(me, conversationId);
+
+            if (seconds !== null && (!Number.isSafeInteger(seconds) || seconds < 60))
+            {
+                throw new BadRequestError('That is not a length of time a message can last.');
+            }
+
+            await db.query('update conversations set expire_after = $2 where id = $1', [conversationId, seconds]);
+            return seconds;
+        },
+
+        /**
+         * Deletes what has run out.
+         *
+         * Time-based rather than read-based: a message that expires only once somebody has seen it
+         * is a message that lives forever in a thread nobody opens, which is exactly the archive
+         * this feature exists to empty.
+         */
+        async sweepExpired(): Promise<number>
+        {
+            const gone = await db.query('delete from messages where expires_at is not null and expires_at <= now()');
+            return affectedBy(gone);
         },
 
         async markRead(me: string, conversationId: string): Promise<void>

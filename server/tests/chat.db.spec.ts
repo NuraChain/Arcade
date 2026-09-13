@@ -97,7 +97,8 @@ async function say(userId: string, conversationId: string, body: string): Promis
         senderDeviceId: device,
         signature: 'signature',
         clientAt: new Date().toISOString(),
-        commitment: 'a-commitment'
+        commitment: 'a-commitment',
+        expiresAt: 0
     });
 }
 

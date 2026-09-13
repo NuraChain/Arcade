@@ -59,6 +59,20 @@ export interface MessageAad
      * being able to opt out of moderation and not.
      */
     commitment: string;
+
+    /**
+     * When this message stops existing, in epoch milliseconds. `0` means it does not.
+     *
+     * Bound here rather than left as a column, because the party that has to ACT on it is the
+     * server and the party that has to be unable to change it is also the server. Signed, it can
+     * delete the row on time and cannot extend a message's life by a second: a recipient reads the
+     * expiry out of the authenticated envelope and refuses to render anything past it, whatever the
+     * row says.
+     *
+     * What this cannot do is stop somebody who already read a message from keeping it. Nothing can,
+     * in any product, and the copy says so rather than implying otherwise.
+     */
+    expiresAt: number;
 }
 
 /**
@@ -82,7 +96,8 @@ export function messageAad(aad: MessageAad): string
         aad.senderDeviceId,
         aad.kind,
         String(aad.clientAt),
-        aad.commitment
+        aad.commitment,
+        String(aad.expiresAt)
     ].join(SEP);
 }
 

@@ -29,7 +29,8 @@ const LOCKED: Record<MessageLock, MessageKey> = {
     'bad-signature': 'locked.badSignature',
     'no-key': 'locked.noKey',
     'no-epoch-key': 'locked.noEpochKey',
-    tampered: 'locked.tampered'
+    tampered: 'locked.tampered',
+    expired: 'expiry.locked'
 };
 
 const ALARMING: MessageLock[] = ['bad-signature', 'tampered'];

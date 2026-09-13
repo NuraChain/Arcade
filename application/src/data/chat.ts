@@ -18,6 +18,9 @@ export type ConversationKind = 'direct' | 'group' | 'game';
 export interface Conversation
 {
     id: string;
+
+    /** How long a message in this room lasts, in seconds. Null is off. */
+    expireAfter: number | null;
     kind: ConversationKind;
     participants: string[];
     groupId: string | null;
@@ -70,7 +73,10 @@ export type MessageLock =
     | 'bad-signature'
     | 'no-key'
     | 'tampered'
-    | 'no-epoch-key';
+    | 'no-epoch-key'
+
+    /** It ran out. The row is on its way to being deleted and is not shown in the meantime. */
+    | 'expired';
 
 export interface Message
 {

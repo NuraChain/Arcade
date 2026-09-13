@@ -291,7 +291,8 @@ describe.skipIf(!active)('the epoch a conversation is sealed under', () =>
             senderDeviceId: left.device,
             signature: 'signature',
             clientAt: new Date().toISOString(),
-            commitment: 'a-commitment'
+            commitment: 'a-commitment',
+            expiresAt: 0
         });
 
         await chat.send(left.id, conversationId, left.device, envelope(1));
@@ -320,7 +321,8 @@ describe.skipIf(!active)('the epoch a conversation is sealed under', () =>
             senderDeviceId: right.device,
             signature: 'signature',
             clientAt: new Date().toISOString(),
-            commitment: 'a-commitment'
+            commitment: 'a-commitment',
+            expiresAt: 0
         })).rejects.toThrow(/name the device/);
     });
 
@@ -338,7 +340,8 @@ describe.skipIf(!active)('the epoch a conversation is sealed under', () =>
             senderDeviceId: left.device,
             signature: 'signature',
             clientAt: new Date().toISOString(),
-            commitment: 'a-commitment'
+            commitment: 'a-commitment',
+            expiresAt: 0
         })).rejects.toThrow(/has not been minted/);
     });
 
@@ -410,7 +413,8 @@ describe.skipIf(!active)('the epoch a conversation is sealed under', () =>
                 senderDeviceId: right.device,
                 signature: 'signature',
                 clientAt: new Date().toISOString(),
-                commitment: 'a-commitment'
+                commitment: 'a-commitment',
+                expiresAt: 0
             })).rejects.toThrow(/has not been minted/);
         });
 
@@ -429,7 +433,8 @@ describe.skipIf(!active)('the epoch a conversation is sealed under', () =>
                 senderDeviceId: left.device,
                 signature: 'signature',
                 clientAt: new Date().toISOString(),
-                commitment: 'a-commitment'
+                commitment: 'a-commitment',
+                expiresAt: 0
             };
 
             await chat.send(left.id, conversationId, left.device, said);
@@ -463,7 +468,8 @@ describe.skipIf(!active)('the epoch a conversation is sealed under', () =>
                 senderDeviceId: left.device,
                 signature: 'signature',
                 clientAt: new Date().toISOString(),
-                commitment: 'a-commitment'
+                commitment: 'a-commitment',
+                expiresAt: 0
             });
 
             await chat.send(left.id, conversationId, left.device, envelope(1, 1));
@@ -506,6 +512,114 @@ describe.skipIf(!active)('the epoch a conversation is sealed under', () =>
                 .rejects.toThrow(/cannot seal to/);
 
             expect(await epochs.mint(left.id, conversationId, mintOf(left.device, [left.device, theirs], 2))).toBe(true);
+        });
+    });
+
+    /**
+     * Disappearing messages, which are a promise about STORAGE and nothing more.
+     *
+     * The expiry arrives signed in the envelope and is written down here, so this server can delete
+     * the row on time and cannot give a message a longer life than its sender asked for. What it
+     * cannot do is un-say anything - somebody who read a message keeps it - and the copy in the
+     * product says exactly that rather than implying the words are recallable.
+     */
+    describe('expiry', () =>
+    {
+        const envelope = (device: string, seqNumber: number, expiresAt: number) => ({
+            id: crypto.randomUUID(),
+            epoch: 1,
+            seq: seqNumber,
+            iv: 'nonce',
+            body: 'ciphertext',
+            senderDeviceId: device,
+            signature: 'signature',
+            clientAt: new Date().toISOString(),
+            commitment: 'a-commitment',
+            expiresAt
+        });
+
+        it('is a property of the room, settable by anybody in it', async () =>
+        {
+            const { left, right, conversationId } = await pair();
+
+            expect(await chat.setExpiry(left.id, conversationId, 3600)).toBe(3600);
+            expect((await chat.list(right.id))[0].expire_after).toBe(3600);
+
+            // The other member can change it too. It describes the room, not whoever opened it.
+            expect(await chat.setExpiry(right.id, conversationId, null)).toBeNull();
+            expect((await chat.list(left.id))[0].expire_after).toBeNull();
+        });
+
+        it('refuses a length of time nobody means to choose', async () =>
+        {
+            const { left, conversationId } = await pair();
+
+            // Zero is what an off-by-one in a picker produces, and it means "vanishes before it is
+            // read". Off is expressed by null, which is a different thing and says so.
+            await expect(chat.setExpiry(left.id, conversationId, 0)).rejects.toThrow(/length of time/);
+            await expect(chat.setExpiry(left.id, conversationId, 30)).rejects.toThrow(/length of time/);
+        });
+
+        it('stores the expiry the SENDER signed, and hides the message once it passes', async () =>
+        {
+            const { left, right, conversationId } = await pair();
+            await epochs.mint(left.id, conversationId, mintOf(left.device, [left.device, right.device]));
+
+            const gone = Date.now() - 1000;
+            await chat.send(left.id, conversationId, left.device, envelope(left.device, 1, gone));
+            await chat.send(left.id, conversationId, left.device, envelope(left.device, 2, 0));
+
+            // Both rows are still there - the sweep has not run - and the read filters anyway. A
+            // reader must never see a message in the window between its moment and the next pass.
+            const page = await chat.messages(right.id, conversationId, null);
+            expect(page.messages).toHaveLength(1);
+            expect(page.messages[0].expires_at).toBeNull();
+        });
+
+        it('sweeps what has run out and leaves the rest', async () =>
+        {
+            const { left, right, conversationId } = await pair();
+            await epochs.mint(left.id, conversationId, mintOf(left.device, [left.device, right.device]));
+
+            await chat.send(left.id, conversationId, left.device, envelope(left.device, 1, Date.now() - 1000));
+            await chat.send(left.id, conversationId, left.device, envelope(left.device, 2, Date.now() + 3_600_000));
+            await chat.send(left.id, conversationId, left.device, envelope(left.device, 3, 0));
+
+            expect(await chat.sweepExpired()).toBe(1);
+
+            const rows = await db.query('select count(*)::int as n from messages where conversation_id = $1', [conversationId]);
+            expect(rowsOf<{ n: number }>(rows)[0].n).toBe(2);
+
+            // Idempotent: the second pass has nothing left to take.
+            expect(await chat.sweepExpired()).toBe(0);
+        });
+
+        it('cannot be reported once it is gone', async () =>
+        {
+            const { left, right, conversationId } = await pair();
+            await epochs.mint(left.id, conversationId, mintOf(left.device, [left.device, right.device]));
+
+            const said = envelope(left.device, 1, Date.now() - 1000);
+            await chat.send(left.id, conversationId, left.device, said);
+
+            // A message that has run out is not a message a report can disclose. Franking proves
+            // what was said; it does not resurrect something both sides agreed would be deleted.
+            expect(await chat.frankedMessage(conversationId, said.id)).toBeNull();
+        });
+
+        it('does not reach back when the room setting changes', async () =>
+        {
+            const { left, right, conversationId } = await pair();
+            await epochs.mint(left.id, conversationId, mintOf(left.device, [left.device, right.device]));
+
+            await chat.send(left.id, conversationId, left.device, envelope(left.device, 1, 0));
+            await chat.setExpiry(left.id, conversationId, 3600);
+
+            // The message was sealed with its own expiry signed into it. Turning the setting on
+            // afterwards changes what is said NEXT and cannot shorten what was already said.
+            const page = await chat.messages(right.id, conversationId, null);
+            expect(page.messages).toHaveLength(1);
+            expect(page.messages[0].expires_at).toBeNull();
         });
     });
 

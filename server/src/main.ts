@@ -147,6 +147,26 @@ const served = await serve(handler, { port: config.port });
 // awaited statement here widens that window from a tick into however long the await takes.
 const detachRealtime = attachRealtime(served.server, { ports, hub, config, log });
 
+/**
+ * Deletes what has run out.
+ *
+ * Every minute, because the finest grain the product offers is an hour and a message that outlives
+ * its moment by under a minute in the DATABASE has already stopped being served - the read filters
+ * on `expires_at` so nobody ever sees one. This is the pass that actually empties the rows.
+ *
+ * `unref` so it never holds the process open, and one failure is logged rather than thrown: a
+ * sweep that cannot run is a housekeeping problem, and taking the server down over it would turn a
+ * growing table into an outage.
+ */
+const expiries = setInterval(() =>
+{
+    void chat.sweepExpired()
+        .then((gone) => { if (gone > 0) { log.info('expired messages swept', { gone }); } })
+        .catch((error: unknown) => log.error('expiry sweep failed', { error }));
+}, 60_000);
+
+expiries.unref();
+
 handleShutdownSignals(served, {
     /**
      * The window where connections are still live.
@@ -161,6 +181,7 @@ handleShutdownSignals(served, {
         // left, and a destroyed socket reaches the other end as 1006 - indistinguishable from the
         // network failing, which sends every client into a reconnect backoff for a restart they
         // were told about.
+        clearInterval(expiries);
         hub.closeAll(1001, 'Server restarting');
         detachRealtime();
         log.info('sockets closed');

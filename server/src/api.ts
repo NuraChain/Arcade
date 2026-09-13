@@ -13,6 +13,8 @@ import {
     conversationDevices,
     conversationSigners,
     epochQuery,
+    expiryInput,
+    expiryResult,
     epochState,
     mintEpochInput,
     mintResult,
@@ -692,6 +694,24 @@ export function buildApi(ports: Ports)
             {
                 await ports.chat.markRead(context.principal.userId, context.params.id);
                 return { ok: true };
+            }),
+
+            /**
+             * How long a message in this room lasts.
+             *
+             * Anybody in the conversation may change it, because it is a property of the room. It
+             * applies to what is said NEXT and cannot reach back: every message already sent carries
+             * its own expiry, signed by whoever wrote it.
+             */
+            expiry: routes.post('/:id/expiry', { input: expiryInput, output: expiryResult }, async (context) =>
+            {
+                const seconds = await ports.chat.setExpiry(
+                    context.principal.userId,
+                    context.params.id,
+                    context.input.seconds ?? null
+                );
+
+                return seconds === null ? {} : { seconds };
             }),
 
             pin: routes.post('/:id/pin', { input: pinInput, output: ack }, async (context) =>

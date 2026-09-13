@@ -196,6 +196,11 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             }
         }
 
+        if (row.expires_at !== null)
+        {
+            message.expiresAt = row.expires_at.toISOString();
+        }
+
         return message;
     };
 
@@ -247,6 +252,10 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         {
             summary.tableId = row.table_id;
         }
+        if (row.expire_after !== null)
+        {
+            summary.expireAfter = row.expire_after;
+        }
         if (row.last_id !== null && row.last_at !== null && row.last_kind !== null)
         {
             summary.last = asMessage({
@@ -265,7 +274,8 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 signature: row.last_signature,
                 client_at: row.last_client_at,
                 commitment: row.last_commitment,
-                frank: row.last_frank
+                frank: row.last_frank,
+                expires_at: row.last_expires_at
             });
         }
         return summary;
@@ -1454,6 +1464,30 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
 
                 live?.chatChanged(conversationId);
                 return message;
+            },
+
+            /**
+             * Changes how long messages in this room last, and SAYS SO in the thread.
+             *
+             * The line is the point. A rule about how long words survive is not something to alter
+             * behind somebody's back, and a change nobody can see is one people discover by
+             * noticing their history is shorter than they remember.
+             */
+            async setExpiry(me, conversationId, seconds)
+            {
+                const set = await chat.setExpiry(me, conversationId, seconds);
+
+                await chat.post(
+                    conversationId,
+                    'system',
+                    set === null
+                        ? { key: 'chat.line.expiry.off', params: {} }
+                        : { key: 'chat.line.expiry.on', params: { name: String(set) } },
+                    me
+                );
+
+                live?.chatChanged(conversationId);
+                return set;
             },
 
             async markRead(me, conversationId)

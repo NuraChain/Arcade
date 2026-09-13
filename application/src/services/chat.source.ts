@@ -2,6 +2,7 @@ import { ApiError, client } from '../api.ts';
 import type { ChatMessage } from '../api.ts';
 import type { Conversation, Message, MessageKind } from '../data/chat.ts';
 import { forget } from '../lib/crypto.ts';
+import { runtime } from '../lib/runtime.ts';
 import { keyStore } from '../lib/device-keys.ts';
 import {
     currentEpoch,
@@ -41,7 +42,14 @@ export interface ChatSource
 {
     conversations(scope: ChatScope, signal: AbortSignal): Promise<ConversationRow[]>;
     thread(id: string, scope: ChatScope, signal: AbortSignal): Promise<Message[]>;
-    post(message: Message): Promise<void>;
+    /**
+     * Seals and sends. `expiresAt` is epoch milliseconds, or 0 for a message that lasts.
+     *
+     * The caller supplies it rather than this reading the room's setting, because the setting lives
+     * in the chat store and a source that fetched it would be a second place for the two to
+     * disagree about how long a message should last.
+     */
+    post(message: Message, expiresAt?: number): Promise<void>;
     openDirect(scope: ChatScope, personId: string, at: number): Promise<string>;
     archive(scope: ChatScope): Message[];
     reset(): void;
@@ -127,6 +135,14 @@ export function createApiSource(): ChatSource
             return asMessage(wire, '', null);
         }
 
+        // Gone is gone, whatever the row says. The expiry is signed into the envelope, so a server
+        // serving a message past its moment is refused here rather than trusted - which is the only
+        // reason the promise means anything.
+        if (wire.expiresAt !== undefined && Date.parse(wire.expiresAt) <= runtime().clock.now())
+        {
+            return asMessage(wire, '', 'expired');
+        }
+
         const opened = await openMessage(wire.conversationId, wire, keyFor);
 
         return 'text' in opened
@@ -143,6 +159,7 @@ export function createApiSource(): ChatSource
         groupId?: string;
         tableId?: string;
         pinned: boolean;
+        expireAfter?: number;
     }): Conversation => ({
         id: wire.id,
         kind: wire.kind as Conversation['kind'],
@@ -152,7 +169,8 @@ export function createApiSource(): ChatSource
         game: (wire.game ?? null) as Conversation['game'],
         title: null,
         pinned: wire.pinned,
-        lastReadAt: 0
+        lastReadAt: 0,
+        expireAfter: wire.expireAfter ?? null
     });
 
     return {
@@ -208,7 +226,7 @@ export function createApiSource(): ChatSource
          * recoverable case is a sequence number this device has already used - somebody sent from
          * another tab - and that is retried once against a freshly read epoch.
          */
-        async post(message)
+        async post(message, expiresAt = 0)
         {
             const secrets = await keyStore().secrets();
 
@@ -226,7 +244,14 @@ export function createApiSource(): ChatSource
                     throw new Error(`This conversation cannot be sealed: ${ epoch.failure }`);
                 }
 
-                const input = await sealForSend(epoch, secrets, message.conversationId, String(message.text), message.at);
+                const input = await sealForSend(
+                    epoch,
+                    secrets,
+                    message.conversationId,
+                    String(message.text),
+                    message.at,
+                    expiresAt
+                );
                 forget(epoch.key);
 
                 try
