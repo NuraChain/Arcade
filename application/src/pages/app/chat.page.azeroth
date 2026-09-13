@@ -53,6 +53,20 @@ export default component ChatPage()
 
     derived conversation = chat.conversation(id) ?? null;
 
+    /**
+     * Whether this conversation is genuinely not there, as opposed to not there YET.
+     *
+     * `chat.conversation(id)` reads the list, and on a cold load - somebody opening a link, or
+     * reloading on this page - the list has not arrived. Rendering the fallback on "no row" alone
+     * meant every cold load flashed "No such conversation" with a button back to the chats list,
+     * for a thread that exists and is about to appear. A person who followed a link to a
+     * conversation was told it did not exist.
+     *
+     * `npm run qa` cannot catch this: the matrix checks overflow, hit targets, a `main` landmark
+     * and a dirty console, and a page confidently rendering the wrong answer passes all four.
+     */
+    derived missing = conversation === null && !chat.listLoading() && chat.conversations().length > 0;
+
     derived me = chat.me();
 
     derived others = conversation === null ? [] : othersOf(conversation, me, people.byHandle);
@@ -60,7 +74,7 @@ export default component ChatPage()
     derived group = conversation?.groupId === undefined || conversation?.groupId === null ? null : (groups.byId(conversation.groupId) ?? null);
 
     derived title = conversation === null
-        ? locale.t('chat.notFound')
+        ? locale.t(missing ? 'chat.notFound' : 'common.loading')
         : locale.text(titleOf(conversation, me, people.byHandle, groupNameOf(conversation, groups.byId)));
 
     const seal = useSeal();
@@ -199,9 +213,20 @@ export default component ChatPage()
         <Show
             when={ conversation !== null }
             fallback={
-                <div class="px-4 py-10">
-                    <EmptyState icon="chats" title={ locale.t('chat.notFound') } action={ locale.t('app.nav.chats') } to="/app/chats" />
-                </div>
+                <Show
+                    when={ missing }
+                    fallback={
+                        <p class="m-auto px-4 py-10 text-center text-ui-base text-muted">
+                            { locale.t('common.loading') }
+                        </p>
+                    }
+                >
+                    { () =>
+                        <div class="px-4 py-10">
+                            <EmptyState icon="chats" title={ locale.t('chat.notFound') } action={ locale.t('app.nav.chats') } to="/app/chats" />
+                        </div>
+                    }
+                </Show>
             }
         >
             { () =>
