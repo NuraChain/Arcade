@@ -154,13 +154,29 @@ describe('the vault', () =>
             crypto.getRandomValues(new Uint8Array(32))
         ];
 
-        const sealed = await Promise.all(epochs.map((one) => sealForArchive(archive, one)));
+        const sealed = await Promise.all(epochs.map((one, index) => sealForArchive(archive, 'c-1', index + 1, one)));
 
-        expect(await openFromArchive(archive, sealed[0])).toEqual(epochs[0]);
-        expect(await openFromArchive(archive, sealed[1])).toEqual(epochs[1]);
+        expect(await openFromArchive(archive, 'c-1', 1, sealed[0])).toEqual(epochs[0]);
+        expect(await openFromArchive(archive, 'c-1', 2, sealed[1])).toEqual(epochs[1]);
 
         // A different archive key opens none of it, which is what makes the phrase the only way in.
-        expect(await openFromArchive(mintArchiveKey(), sealed[0])).toBeNull();
+        expect(await openFromArchive(mintArchiveKey(), 'c-1', 1, sealed[0])).toBeNull();
+    });
+
+    it('refuses an archived key that was filed under another slot', async () =>
+    {
+        const archive = mintArchiveKey();
+        const key = crypto.getRandomValues(new Uint8Array(32));
+
+        const sealed = await sealForArchive(archive, 'c-1', 1, key);
+
+        // The server hands back rows keyed by (conversation, epoch) and a recovering browser
+        // believes the labels. Relabelling one key onto another conversation would make that
+        // conversation permanently unreadable on the recovered device - and the entry is preferred
+        // over the server's own wrap and never evicted, so it would not heal.
+        expect(await openFromArchive(archive, 'c-2', 1, sealed)).toBeNull();
+        expect(await openFromArchive(archive, 'c-1', 2, sealed)).toBeNull();
+        expect(await openFromArchive(archive, 'c-1', 1, sealed)).toEqual(key);
     });
 });
 

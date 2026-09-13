@@ -346,6 +346,16 @@ export const conversationMember = object({
 
     handle: string(),
     kind: accountKind,
+
+    /**
+     * The wallet this account signs in with. Absent for a guest, who has none.
+     *
+     * It is what anchors a device attestation to a PERSON, and it is shown so it can be compared out
+     * of band the way a safety number is. Without it the attestation chain terminates in an address
+     * the server chose, agreeing only with itself.
+     */
+    address: string().optional(),
+
     devices: array(peerDevice)
 });
 
@@ -951,7 +961,20 @@ export type EpochState = Infer<typeof epochState>;
  * key - which it can only be given for an epoch it was a recipient of. Absent means "the one in
  * force now", which is what sending needs.
  */
-export const epochQuery = object({ epoch: string().optional() });
+export const epochQuery = object({
+    epoch: string().optional(),
+
+    /**
+     * Which device is asking.
+     *
+     * It used to be resolved from `sessions.device_id`, which is only ever written by an enrolment -
+     * so a browser that signed out and back in held perfectly good keys, was never offered the
+     * enrol button (its keyring is not empty), and could never be handed its own wrapped key again.
+     * The caller names its device and the server checks the device is theirs, which is the same
+     * authorisation `mint` already does and does not depend on how the session came to exist.
+     */
+    device: string().optional()
+});
 
 export const wrappedKey = object({
     deviceId: string(),

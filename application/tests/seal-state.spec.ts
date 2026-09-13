@@ -66,7 +66,7 @@ async function device(signer: typeof alice, overrides: Partial<PeerDevice> = {})
 const conversation = (...members: ConversationDevices['members']): ConversationDevices => ({ members });
 
 const me = async (): Promise<ConversationDevices['members'][number]> =>
-    ({ accountId: 'account-alex', handle: 'alex', kind: 'wallet', devices: [await device(alice)] });
+    ({ accountId: 'account-alex', handle: 'alex', kind: 'wallet', address: alice.address.toLowerCase(), devices: [await device(alice)] });
 
 beforeEach(() =>
 {
@@ -82,7 +82,7 @@ describe('whether a conversation can be sealed', () =>
     {
         const answer = await sealabilityOf(conversation(
             await me(),
-            { accountId: 'account-sara.k', handle: 'sara.k', kind: 'wallet', devices: [await device(mallory)] }
+            { accountId: 'account-sara.k', handle: 'sara.k', kind: 'wallet', address: mallory.address.toLowerCase(), devices: [await device(mallory)] }
         ), 'alex');
 
         expect(answer.ready).toBe(true);
@@ -95,7 +95,7 @@ describe('whether a conversation can be sealed', () =>
         const theirs = await device(mallory);
         const answer = await sealabilityOf(conversation(
             await me(),
-            { accountId: 'account-sara.k', handle: 'sara.k', kind: 'wallet', devices: [theirs] }
+            { accountId: 'account-sara.k', handle: 'sara.k', kind: 'wallet', address: mallory.address.toLowerCase(), devices: [theirs] }
         ), 'alex');
 
         expect(answer.members.find((one) => one.handle === 'sara.k')?.devices).toEqual([theirs]);
@@ -129,7 +129,7 @@ describe('whether a conversation can be sealed', () =>
     {
         const answer = await sealabilityOf(conversation(
             await me(),
-            { accountId: 'account-sara.k', handle: 'sara.k', kind: 'wallet', devices: [await device(mallory, { attested: 'contract' })] }
+            { accountId: 'account-sara.k', handle: 'sara.k', kind: 'wallet', address: mallory.address.toLowerCase(), devices: [await device(mallory, { attested: 'contract' })] }
         ), 'alex');
 
         expect(answer.blocked?.state).toBe('needs-chain');
@@ -144,7 +144,7 @@ describe('whether a conversation can be sealed', () =>
 
             const answer = await sealabilityOf(conversation(
                 await me(),
-                { accountId: 'account-sara.k', handle: 'sara.k', kind: 'wallet', devices: [good, swapped] }
+                { accountId: 'account-sara.k', handle: 'sara.k', kind: 'wallet', address: mallory.address.toLowerCase(), devices: [good, swapped] }
             ), 'alex');
 
             // Quietly using the good one is exactly how a fabricated device ends up wrapped in
@@ -164,6 +164,7 @@ describe('whether a conversation can be sealed', () =>
                     accountId: 'account-sara.k',
                     handle: 'sara.k',
                     kind: 'wallet',
+                    address: mallory.address.toLowerCase(),
                     devices: [theirs, { ...forged, address: alice.address.toLowerCase() }]
                 }
             ), 'alex');
@@ -178,7 +179,7 @@ describe('whether a conversation can be sealed', () =>
             const answer = await sealabilityOf(conversation(
                 { accountId: 'account-guest.one', handle: 'guest.one', kind: 'guest', devices: [] },
                 await me(),
-                { accountId: 'account-sara.k', handle: 'sara.k', kind: 'wallet', devices: [swapped] }
+                { accountId: 'account-sara.k', handle: 'sara.k', kind: 'wallet', address: mallory.address.toLowerCase(), devices: [swapped] }
             ), 'alex');
 
             // Absent proof is ordinary. A proof that was present and did not check out is not.

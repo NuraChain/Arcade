@@ -49,7 +49,16 @@ export type PeerVerdict =
      * which needs an `eth_call` this browser cannot make. Refused rather than accepted: an
      * unverifiable proof is not a verified one.
      */
-    | 'needs-chain';
+    | 'needs-chain'
+
+    /**
+     * A real signature, by an address that is not the account's.
+     *
+     * Decided by the caller rather than here, because this file only ever sees one device and the
+     * account's own wallet is a fact about the MEMBER. It is an alarm, not an absence: somebody
+     * vouched for this device, and it was not the person whose device it claims to be.
+     */
+    | 'wrong-address';
 
 const ADDRESS = /^0x[0-9a-f]{40}$/;
 

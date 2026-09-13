@@ -29,6 +29,19 @@ export type MemberSealState =
     /** A device in their list did not verify. Not a degradation - an alarm. */
     | 'tampered';
 
+/**
+ * The address a member's devices must be attested by.
+ *
+ * Comparing the attestation against the account's OWN wallet is what stops `verifyPeerDevice` being
+ * self-referential. On its own it checks four values from one response against each other: the id
+ * hashes the keys, the signed message names the id, the signature recovers to the address beside it.
+ * A server that minted a device and signed its enrolment with any key it liked passes all three.
+ * Anchoring to the wallet the account signs in with means a fabricated device has to carry that
+ * address too - so the lie has to be told in a second place, one the product shows a person.
+ */
+const attestedByTheAccount = (member: ConversationDevices['members'][number], device: PeerDevice): boolean =>
+    member.address !== undefined && device.address.toLowerCase() === member.address.toLowerCase();
+
 export interface MemberSeal
 {
     handle: string;
@@ -90,10 +103,18 @@ async function sealOf(member: ConversationDevices['members'][number], me: string
 
     const verifyPeerDevice = await checker();
 
-    const verdicts = await Promise.all(member.devices.map(async (device) => ({
-        device,
-        verdict: await verifyPeerDevice(device)
-    })));
+    const verdicts = await Promise.all(member.devices.map(async (device) =>
+    {
+        const verdict = await verifyPeerDevice(device);
+
+        // The signature has to check out AND be by this account's own wallet. A device attested by
+        // an address that is not the member's is a device somebody else vouched for - and the curve
+        // work is done once, because it is the most expensive thing on this path.
+        return {
+            device,
+            verdict: verdict === 'ok' && !attestedByTheAccount(member, device) ? 'wrong-address' as const : verdict
+        };
+    }));
 
     // One bad device condemns the whole list. A list that contains something which does not verify
     // is not a trustworthy statement about the rest of it either, and quietly using the good ones

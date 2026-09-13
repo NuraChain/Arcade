@@ -283,7 +283,15 @@ export function createDeviceService(db: DataSource, config: DeviceConfig)
                         upgrade?.address ?? null, upgrade?.message ?? null, upgrade?.signature ?? null
                     ]
                 );
-                await db.query('update sessions set device_id = $1 where id = $2', [input.id, sessionId]);
+                // The SESSION is not rebound here, and that is the whole point of this branch being
+                // narrow. Everything above is satisfied by PUBLIC data - the id is a hash of two
+                // published keys, and `GET /devices` hands every device's keys to any session on the
+                // account - so any signed-in browser could name somebody else's device and become
+                // it. That is not bookkeeping: `sessions.device_id` is what decides which wrapped
+                // epoch key a caller is handed and which device a message may claim to come from.
+                //
+                // A browser proves possession by using the key, which it does on every seal. Saying
+                // "still here" does not need to move the binding, so it does not.
                 return firstRow<DeviceRow>(touched)!;
             }
 

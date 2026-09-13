@@ -885,10 +885,19 @@ device in its EIP-4361 `Resources` line. Two CHECK constraints make the proof no
 three columns together or none, and `attested in ('wallet','contract')` requires them. A
 wallet-attested device with no proof beside it is not a row this database can hold.
 
-**What it cannot prove, stated plainly.** That the ADDRESS is the right person's. That is not a gap
-in the maths, it is where the trust has to come from — the address is shown so it can be compared
-out of band, the way a safety number is. A server that swapped a peer's address would have to swap
-it everywhere that person's address appears, and one comparison catches it.
+**The attestation is anchored to the ACCOUNT's wallet, and that is what stops it being circular.**
+`verifyPeerDevice` on its own checks four values from one response against each other: the id hashes
+the keys, the signed message names that id, the signature recovers to the address printed beside it.
+A server that minted a device and signed its enrolment with any key it liked passes all three — the
+whole chain agrees with itself and with nothing outside the response. So `conversationMember` carries
+the address the account signs in with, and `sealabilityOf` renders `wrong-address` (an alarm, not an
+absence) for any device attested by anything else. Injecting a device now means also swapping the
+member's published wallet: one value, in one place, that a person can compare.
+
+**What it still cannot prove, stated plainly.** That the ADDRESS is the right person's. That is not a
+gap in the maths, it is where the trust has to come from — the address is published so it can be
+compared out of band, the way a safety number is. A server that swapped a peer's address would have
+to swap it everywhere that person's address appears, and one comparison catches it.
 
 **`GET /chat/:id/devices` is a separate wire shape, not `devices.list` with a different WHERE.**
 The owner's list carries a label somebody typed, a last-seen time and a confirmation state; handing
@@ -1168,6 +1177,37 @@ reading the console each time. It empties the account between cells because ever
 context has an empty keyring and would otherwise enrol a second, pending device. It found two
 defects on its first run: the console error above, and copy still offering a demo seat.
 
+**What a reader is shown comes from the SIGNATURE, not from the row beside it.** The author is
+resolved from the account uuid in the AAD through the signers list — `from` is an unsigned column,
+and rendering it made the name over a message the server's to choose. The timestamp and the ordering
+are the sender's `clientAt`, also in the AAD, not `created_at`, which the server writes and can
+rewrite. The envelope's stated guarantees are only true if the read path actually looks at the
+authenticated values, and for four commits it did not.
+
+**`sessions.device_id` is written by a first enrolment and never moved again.** Re-enrolling used to
+rebind it, and everything that branch checks is satisfied by PUBLIC data — the id is a hash of two
+published keys, and `GET /devices` hands every device's keys to any session on the account — so any
+signed-in browser could name somebody else's device and become it. That binding decides which
+wrapped epoch key a caller is handed. Possession is proved by USING the key, which a browser does on
+every seal, so nothing is given up by refusing to move it.
+
+Sending is therefore authorised by device OWNERSHIP rather than by the session's binding, which also
+fixes a lockout: a browser that signed out and back in holds perfectly good keys, is never offered
+the enrolment that would set a binding (its keyring is not empty), and could otherwise never send
+again. The barrier that actually decides authorship is the per-message signature; the server's check
+is defence in depth. `GET /chat/:id/epoch` takes the caller's device for the same reason.
+
+**A sender cannot choose how long their own words last.** `send` checks the signed expiry against
+`conversations.expire_after` and refuses one the room did not agree to. The server still never
+CHOOSES the value, so it still cannot lengthen a message's life — but without the check, expiry was
+per-sender whatever the design said, and sixty seconds on your own messages in a room with expiry off
+means your words are gone before anybody can report them, taking the frank with the row.
+
+**The signer list is not a function of who is seated today.** It is anybody in the conversation now,
+plus anybody who ever sent a message or minted an epoch in it. The argument that relaxes the
+revocation filter relaxes this one: leaving a group or standing up from a table deletes a membership
+row, and joining those two facts made a departed member's entire history render as forgeries.
+
 **The browser specs run the real thing.** `tests/sealed-fixtures.ts` builds a genuinely sealed
 corpus once at module load — a device per fixture person with real P-256 keys and a real wallet
 attestation, one epoch per thread, every line sealed by its own sender — and `fake-api.ts` serves
@@ -1229,8 +1269,21 @@ the same reasoning that stops an unconfirmed device vouching for another.
 
 **Rolling a phrase keeps the archive key** and re-seals it, so everything already backed up stays
 readable and only the outer wrapping changes. Minting a fresh archive key instead would silently
-orphan every row in the archive. Turning recovery off drops the vault AND the archive together: a
-phrase that restores nothing and ciphertext nobody can open are both broken promises.
+orphan every row in the archive — and a browser confirmed the ordinary way never receives the archive
+key at all, so that was the COMMON case, not the exotic one. `setUp` refuses to roll when it cannot
+produce the existing key rather than quietly destroying the backup.
+
+**An archived key is bound to its slot.** `sealForArchive` authenticates `(conversation, epoch)`
+alongside the key, because otherwise the archive is a bag of interchangeable blobs whose labels the
+server supplies: relabelling one key onto another conversation makes that conversation permanently
+unreadable on a recovered device, and the entry is preferred over the server's own wrap and never
+evicted, so it does not heal.
+
+**An archive write replaces what is in the slot.** `do nothing` meant a slot could be poisoned once —
+junk written for an epoch before the real browser got there made every honest write afterwards a
+silent no-op. **Turning recovery off needs a confirmed device**, like writing a vault: it destroys
+the vault AND the archive irreversibly, and it was reachable by any session at all, so a stolen
+cookie could throw away somebody's only way back into their own history in one request.
 
 **`readiness` reads this browser's keyring, never the server's `current`.** It used to fall back to
 the device the SESSION is bound to, which reads as reasonable until the keyring is gone — a browser
@@ -1296,6 +1349,11 @@ every minute, forever, so nothing expired again anywhere. `0016` says what was m
 key and the moment travel together, and the pointer may go null. Expiry must not become a way to
 destroy the evidence in a report already filed.
 
+**A report says what actually happened.** The sheet used to show "Report sent" and close before the
+request resolved, so a refused disclosure — an expired message, a failed verification, a dropped
+network — read as success. On a safety surface that is the worst failure mode there is: somebody
+stops looking for another way to get help.
+
 **A report with no message attached is still a report.** Reporting a person for what they have been
 doing across a room was always legitimate and still is; attaching one message is what turns "they
 said this" into something a moderator can check. A reporter who does not want to show a specific
@@ -1326,6 +1384,10 @@ a minute after it was supposed to be gone.
 
 **A message that has run out cannot be reported.** `frankedMessage` filters on the same condition.
 Franking proves what was said; it does not resurrect something both sides agreed would be deleted.
+
+**Expired plaintext leaves the browser's archive.** `chat.archive()` is what `search.store.ts`
+reads, so a disappearing message that stayed there went on being findable by its words long after it
+stopped being readable in the thread — the opposite of what the room agreed to.
 
 **What it does NOT do, said before what it does.** It does not un-say anything. Anybody who read a
 message can screenshot it, copy it or simply remember it — that is true in every product with this
@@ -1673,6 +1735,29 @@ rendered as inline SVG with `currentColor`. **Nothing renders an emoji, a dingba
 character as content** — group identity is a crest (`components/social/group-crest.component
 .azeroth`) drawn from the registry over a hue-tinted tile, and a separator dot is a 4px
 `rounded-full` span, not a `·`. `·` and `–` inside translated sentences are punctuation and stay.
+
+## The audit, and what it found in shipped code
+
+After PRs 11–14 landed, a 137-agent workflow audited the IMPLEMENTATION along ten dimensions —
+three adversarial verifiers per finding, each prompted to refute — because everything until then had
+reviewed the DESIGN. Thirty-three findings survived refutation, six of them critical, and the worst
+was a complete break of the property the whole feature exists for: the epoch commitment signed who
+received a key and not which key it was.
+
+Two things about that are worth keeping.
+
+**A design review cannot find an implementation gap.** The two design audits run before any crypto
+was written caught thirty problems and were worth every token; neither could have caught this one,
+because the design said "the minter signs the recipient set" and the code did exactly that. The gap
+was in what the set did not include.
+
+**Green gates said nothing.** At the moment the break existed, `npm run check` passed, 445 tests
+passed, 640 QA cells passed, and the browser pass was clean. Every one of those is a real gate and
+none of them is a substitute for somebody adversarial reading the code with the threat model in hand.
+
+The findings that survived are recorded above in the sections they belong to, each beside the rule it
+produced. `tools/qa/seal-pass.mjs` and the `.db.spec` suites pin the fixes; where a fix was subtle,
+the test that would fail without it is named in a comment rather than left to be inferred.
 
 ## Verification
 

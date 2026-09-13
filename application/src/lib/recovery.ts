@@ -1,3 +1,4 @@
+import { label } from '../../../server/src/domains/chat/envelope.ts';
 import { recoveryChallenge, RECOVERY_PROTOCOL } from '../../../server/src/domains/device/recovery.ts';
 import { fromBase64Url, toBase64Url } from './device-id.ts';
 
@@ -209,10 +210,14 @@ export function mintArchiveKey(): Uint8Array
     return crypto.getRandomValues(new Uint8Array(32));
 }
 
-const seal = async (key: CryptoKey, bytes: Uint8Array): Promise<string> =>
+const seal = async (key: CryptoKey, bytes: Uint8Array, aad?: Uint8Array): Promise<string> =>
 {
     const iv = crypto.getRandomValues(new Uint8Array(IV_BYTES));
-    const sealed = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv as BufferSource }, key, bytes as BufferSource));
+    const sealed = new Uint8Array(await crypto.subtle.encrypt(
+        { name: 'AES-GCM', iv: iv as BufferSource, ...(aad === undefined ? {} : { additionalData: aad as BufferSource }) },
+        key,
+        bytes as BufferSource
+    ));
 
     const out = new Uint8Array(iv.length + sealed.length);
     out.set(iv, 0);
@@ -220,13 +225,17 @@ const seal = async (key: CryptoKey, bytes: Uint8Array): Promise<string> =>
     return toBase64Url(out);
 };
 
-const open = async (key: CryptoKey, packed: string): Promise<Uint8Array | null> =>
+const open = async (key: CryptoKey, packed: string, aad?: Uint8Array): Promise<Uint8Array | null> =>
 {
     try
     {
         const bytes = fromBase64Url(packed);
         const opened = await crypto.subtle.decrypt(
-            { name: 'AES-GCM', iv: bytes.slice(0, IV_BYTES) as BufferSource },
+            {
+                name: 'AES-GCM',
+                iv: bytes.slice(0, IV_BYTES) as BufferSource,
+                ...(aad === undefined ? {} : { additionalData: aad as BufferSource })
+            },
             key,
             bytes.slice(IV_BYTES) as BufferSource
         );
@@ -248,15 +257,36 @@ export const openArchiveKey = (keys: RecoveryKeys, wrapped: string): Promise<Uin
 const archiveAes = (archiveKey: Uint8Array): Promise<CryptoKey> =>
     crypto.subtle.importKey('raw', archiveKey as BufferSource, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
 
+/**
+ * The slot an archived key belongs to, authenticated alongside it.
+ *
+ * Without this the archive is a bag of interchangeable blobs: the server hands back rows keyed by
+ * (conversation, epoch) and a recovering browser believes the labels. Relabelling one key onto
+ * another conversation makes that conversation permanently unreadable on the recovered device -
+ * and the entry is preferred over the server's own wrap and never evicted, so it does not heal.
+ */
+const archiveAad = (conversationId: string, epoch: number): Uint8Array =>
+    utf8.encode(label(RECOVERY_PROTOCOL, 'archive', conversationId, String(epoch)));
+
 /** One epoch key, sealed to the archive so a replacement browser can be given it back. */
-export async function sealForArchive(archiveKey: Uint8Array, epochKey: Uint8Array): Promise<string>
+export async function sealForArchive(
+    archiveKey: Uint8Array,
+    conversationId: string,
+    epoch: number,
+    epochKey: Uint8Array
+): Promise<string>
 {
-    return seal(await archiveAes(archiveKey), epochKey);
+    return seal(await archiveAes(archiveKey), epochKey, archiveAad(conversationId, epoch));
 }
 
-export async function openFromArchive(archiveKey: Uint8Array, wrapped: string): Promise<Uint8Array | null>
+export async function openFromArchive(
+    archiveKey: Uint8Array,
+    conversationId: string,
+    epoch: number,
+    wrapped: string
+): Promise<Uint8Array | null>
 {
-    return open(await archiveAes(archiveKey), wrapped);
+    return open(await archiveAes(archiveKey), wrapped, archiveAad(conversationId, epoch));
 }
 
 /**

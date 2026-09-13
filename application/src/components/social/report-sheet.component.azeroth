@@ -35,13 +35,31 @@ export default component ReportSheet(props: OverlayProps & {
 
     derived name = person === null ? props.personId : person.displayName.split(' ')[0];
 
-    const submit = (): void =>
+    /**
+     * Files the report, and says what actually happened.
+     *
+     * It used to show "Report sent" and close before the request resolved, so a refused disclosure -
+     * a message that expired, a verification that failed, a network that dropped - read as success
+     * and the person believed moderation had their evidence. On a safety surface that is the worst
+     * possible failure mode: somebody stops looking for another way to get help.
+     */
+    const submit = async (): Promise<void> =>
     {
-        void social.report(props.personId, category, props.disclose);
+        try
+        {
+            await social.report(props.personId, category, props.disclose);
+        }
+        catch
+        {
+            toasts.show({ kind: 'error', text: locale.t('report.failed') });
+            return;
+        }
+
         if (alsoBlock)
         {
-            social.block(props.personId);
+            await social.block(props.personId).catch(() => undefined);
         }
+
         toasts.show({ kind: 'success', text: locale.t('report.sent') });
         props.close(true);
     };

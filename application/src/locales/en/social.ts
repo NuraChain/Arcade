@@ -63,6 +63,7 @@ export const social = {
     'report.alsoBlock': 'Block them as well',
     'report.submit': 'Send report',
     'report.showing': 'This message will be shown to a moderator. Nothing else from this conversation is.',
+    'report.failed': 'That report did not go through. Nothing was filed - try again in a moment.',
     'report.sent': 'Report sent. You can follow it in Settings.',
     'report.status.received': 'Received',
     'report.status.reviewed': 'Reviewed',

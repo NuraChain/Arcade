@@ -89,11 +89,42 @@ export function createApiSource(): ChatSource
 
     const remember = (message: Message): Message =>
     {
+        // A message that has run out leaves the archive rather than being replaced in it. The
+        // archive is what `search.store.ts` reads, so a disappearing message that stayed here would
+        // go on being findable by its words long after it stopped being readable in the thread -
+        // which is the opposite of what the room agreed to.
+        if (message.locked === 'expired')
+        {
+            archive.delete(message.id);
+            return message;
+        }
+
         archive.set(message.id, message);
         return message;
     };
 
-    const asMessage = (wire: ChatMessage, text: string, locked: MessageFailure | null, frankingKey?: string): Message =>
+    /**
+     * One message, as the client holds it.
+     *
+     * Two of these fields are deliberately NOT the ones the server sent.
+     *
+     * `from` is the handle of the device that actually signed, resolved through the signers list
+     * from the account uuid in the AAD - not `wire.from`, which is an unsigned column the server
+     * chooses and which would otherwise make the author on the screen the server's to pick.
+     *
+     * `at` is the sender's own `clientAt`, which is bound into the AAD, rather than `created_at`,
+     * which the server writes and can rewrite. The envelope's stated guarantee - "binding clientAt
+     * stops it re-dating one" - is only true if the read path actually looks at it.
+     *
+     * A server-authored line has neither, and keeps the server's timestamp: it has no envelope and
+     * no author to resolve, which is the whole point of the kind split.
+     */
+    const asMessage = (
+        wire: ChatMessage,
+        text: string,
+        locked: MessageFailure | null,
+        signed?: { from: string; frankingKey: string }
+    ): Message =>
     {
         const params = Object.fromEntries(
             Object.entries(wire.payload?.params ?? {}).filter((entry): entry is [string, string] => entry[1] !== undefined)
@@ -102,13 +133,13 @@ export function createApiSource(): ChatSource
         return remember({
             id: wire.id,
             conversationId: wire.conversationId,
-            from: wire.from ?? '',
+            from: signed?.from ?? wire.from ?? '',
             kind: wire.kind as MessageKind,
             text,
             ...(locked === null ? {} : { locked }),
-            ...(frankingKey === undefined ? {} : { frankingKey }),
+            ...(signed === undefined ? {} : { frankingKey: signed.frankingKey }),
             ...(wire.payload === undefined ? {} : { line: { key: wire.payload.key, params } }),
-            at: Date.parse(wire.at),
+            at: wire.clientAt === undefined ? Date.parse(wire.at) : Date.parse(wire.clientAt),
             ref: wire.payload === undefined
                 ? null
                 : {
@@ -146,7 +177,7 @@ export function createApiSource(): ChatSource
         const opened = await openMessage(wire.conversationId, wire, keyFor);
 
         return 'text' in opened
-            ? asMessage(wire, opened.text, null, opened.frankingKey)
+            ? asMessage(wire, opened.text, null, { from: opened.from, frankingKey: opened.frankingKey })
             : asMessage(wire, '', opened.failure);
     };
 

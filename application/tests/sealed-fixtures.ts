@@ -89,6 +89,11 @@ export async function buildSealedFixtures(): Promise<SealedFixtures>
                 accountId: accountIdOf(seat.handle),
                 handle: seat.handle,
                 kind: 'wallet' as const,
+
+                // The wallet the account signs in with, which is what anchors its devices to it.
+                // A member with no address published has no anchored device, by design.
+                address: seat.device.address,
+
                 devices: [seat.device.peer]
             }))
         };

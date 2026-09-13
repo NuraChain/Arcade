@@ -584,7 +584,7 @@ export function buildApi(ports: Ports)
 
             clearRecovery: routes.post('/recovery/off', { output: ack }, async (context) =>
             {
-                await ports.device.clearRecovery(context.principal.userId);
+                await ports.device.clearRecovery(context.principal.userId, context.principal.sessionId);
                 return { ok: true };
             }),
 
@@ -659,7 +659,8 @@ export function buildApi(ports: Ports)
                     context.principal.userId,
                     context.principal.sessionId,
                     context.params.id,
-                    context.query.epoch
+                    context.query.epoch,
+                    context.query.device
                 )),
 
             /**

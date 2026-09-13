@@ -110,7 +110,21 @@ export const useRecovery = createStore((): RecoveryApi =>
                 const salt = mintSalt();
 
                 const keys = await deriveRecovery(phrase, salt);
-                const archiveKey = await recallArchiveKey() ?? mintArchiveKey();
+
+                // Rolling a phrase has to keep the ARCHIVE key, and a browser that never held one
+                // cannot. Minting a fresh key here would leave every row in `epoch_archive` sealed
+                // to a key nothing can produce again - the archive silently orphaned, the phrase
+                // restoring nothing, and no symptom until somebody actually needed it. A device
+                // confirmed the ordinary way never receives the archive key, so this is the common
+                // case rather than the exotic one.
+                const held = await recallArchiveKey();
+
+                if (held === null && answer.data()?.configured === true)
+                {
+                    return false;
+                }
+
+                const archiveKey = held ?? mintArchiveKey();
 
                 await client.devices.setRecovery({
                     input: {
@@ -131,7 +145,7 @@ export const useRecovery = createStore((): RecoveryApi =>
                         input: {
                             conversationId: held.conversationId,
                             epoch: held.epoch,
-                            wrapped: await sealForArchive(archiveKey, held.key)
+                            wrapped: await sealForArchive(archiveKey, held.conversationId, held.epoch, held.key)
                         }
                     }).catch(() => undefined);
 
@@ -248,7 +262,7 @@ export const useRecovery = createStore((): RecoveryApi =>
 
                 for (const entry of entries)
                 {
-                    const key = await openFromArchive(archiveKey, entry.wrapped);
+                    const key = await openFromArchive(archiveKey, entry.conversationId, entry.epoch, entry.wrapped);
 
                     if (key === null)
                     {

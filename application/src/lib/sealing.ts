@@ -132,7 +132,7 @@ export async function currentEpoch(conversationId: string, me: string, retried =
 
     const [answer, state] = await Promise.all([
         client.chat.devices({ params: { id: conversationId } }),
-        client.chat.epoch({ params: { id: conversationId }, query: {} })
+        client.chat.epoch({ params: { id: conversationId }, query: { device: mine.id } })
     ]);
 
     const sealability = await sealabilityOf(answer, me);
@@ -303,7 +303,7 @@ async function keepEpochKey(conversationId: string, epoch: number, key: Uint8Arr
     try
     {
         await client.devices.archive({
-            input: { conversationId, epoch, wrapped: await sealForArchive(archiveKey, key) }
+            input: { conversationId, epoch, wrapped: await sealForArchive(archiveKey, conversationId, epoch, key) }
         });
     }
     catch
@@ -446,7 +446,9 @@ export function heldKey(conversationId: string, epoch: number): Promise<Uint8Arr
 /** Why a message on the screen is not words. Every one of these renders as its own sentence. */
 export type MessageFailure = OpenFailure | 'no-epoch-key' | 'expired';
 
-export type OpenedMessage = { text: string; frankingKey: string } | { failure: MessageFailure };
+export type OpenedMessage =
+    | { text: string; frankingKey: string; from: string }
+    | { failure: MessageFailure };
 
 /**
  * Turns one stored message back into what somebody typed.
@@ -471,8 +473,11 @@ export async function openMessage(
 
     const signer = await verifiedSigner(conversationId, message.senderDeviceId);
 
-    if (signer === null || signer.accountId !== message.senderAccountId
-        || (message.from !== undefined && signer.handle !== message.from))
+    // The ACCOUNT is signed; the handle is not, and never could be - somebody can rename themselves
+    // and an old signature would stop matching. So the account uuid is what has to line up, and the
+    // name on the screen is resolved FROM it rather than taken from the row beside it. `from` is the
+    // server's to choose, and rendering it would make the author the server's to choose too.
+    if (signer === null || signer.accountId !== message.senderAccountId)
     {
         return { failure: 'unknown-sender' };
     }
@@ -499,7 +504,9 @@ export async function openMessage(
         expiresAt: message.expiresAt === undefined ? 0 : Date.parse(message.expiresAt)
     }, body);
 
-    return 'text' in opened ? opened : { failure: opened.failure };
+    return 'text' in opened
+        ? { ...opened, from: signer.handle }
+        : { failure: opened.failure };
 }
 
 /**
@@ -520,7 +527,10 @@ export async function historicalKey(conversationId: string, epoch: number, devic
         return held;
     }
 
-    const state = await client.chat.epoch({ params: { id: conversationId }, query: { epoch: String(epoch) } });
+    const state = await client.chat.epoch({
+        params: { id: conversationId },
+        query: { epoch: String(epoch), device: deviceId }
+    });
 
     if (state.epoch !== epoch || state.wrapped === undefined || state.signature === undefined
         || state.mintedBy === undefined || state.confirmation === undefined || state.recipients === undefined)

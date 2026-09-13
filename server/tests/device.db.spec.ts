@@ -165,7 +165,11 @@ describe.skipIf(!active)('devices, against a real database', () =>
         const keys = await keypair();
 
         await device.enrol(userId, one, { ...keys, label: '', userAgent: '' });
-        await device.enrol(userId, two, { ...keys, label: '', userAgent: '' });
+
+        // Bound directly, because re-enrolling no longer moves the binding: the existing-device
+        // branch is satisfied entirely by PUBLIC data, so letting it rebind let any session on the
+        // account assert itself to be any device. This is what a second genuine enrolment produced.
+        await db.query('update sessions set device_id = $1 where id = $2', [keys.id, two]);
 
         const { sessions } = await device.revoke(userId, keys.id);
         expect(new Set(sessions)).toEqual(new Set([one, two]));
@@ -229,9 +233,14 @@ describe.skipIf(!active)('devices, against a real database', () =>
         expect(again.label).toBe('Laptop');
         expect(await device.list(userId)).toHaveLength(1);
 
-        // And the new session is bound to it, which is how signing in again on a browser that
-        // already has keys carries its device forward.
-        expect(await device.deviceOfSession(second)).toBe(keys.id);
+        // And the new session is NOT bound to it. Everything the existing-device branch checks is
+        // satisfied by public data - the id is a hash of two published keys, and `GET /devices`
+        // hands every device's keys to any session on the account - so rebinding here let any
+        // signed-in browser name somebody else's device and become it. That binding decides which
+        // wrapped epoch key a caller is handed; possession is proved by USING the key, which a
+        // browser does on every seal.
+        expect(await device.deviceOfSession(second)).toBeNull();
+        expect(await device.deviceOfSession(first)).toBe(keys.id);
     });
 
     it('refuses keys that already belong to somebody else', async () =>

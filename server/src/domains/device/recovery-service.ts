@@ -27,6 +27,10 @@ import { recoveryChallenge } from './recovery.ts';
 
 const NONCE_TTL_MS = 5 * 60 * 1000;
 
+/** Shapes checked before a value reaches a typed column. See `chat/service.ts` on 22P02. */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const DEVICE_ID = /^[A-Za-z0-9_-]{22}$/;
+
 export interface VaultRow
 {
     salt: string;
@@ -165,15 +169,42 @@ export function createRecoveryService(db: DataSource)
          * nothing, and an archive with no vault is ciphertext nobody can ever open. Leaving either
          * behind would be leaving a promise this product could not keep.
          */
-        async clearVault(userId: string): Promise<void>
+        async clearVault(userId: string, sessionDevice: string | null): Promise<void>
         {
+            // Gated like writing one. This destroys the vault AND the whole archive irreversibly,
+            // and it was reachable by any session at all - so a stolen cookie could throw away
+            // somebody's only way back into their own history, permanently, in one request.
+            if (!await confirmedDevice(userId, sessionDevice))
+            {
+                throw new ForbiddenError('Turn recovery off from a browser this account has confirmed.');
+            }
+
             await db.query('delete from epoch_archive where user_id = $1', [userId]);
             await db.query('delete from recovery_vaults where user_id = $1', [userId]);
         },
 
-        /** Adds one epoch key to the archive, or leaves the one already there alone. */
+        /**
+         * Adds one epoch key to the archive, replacing whatever was in that slot.
+         *
+         * `do update` rather than `do nothing`: a slot that could never be corrected is a slot
+         * somebody can poison once. Writing junk for an epoch before the real browser gets there
+         * would make every honest write afterwards a silent no-op, and that conversation
+         * permanently unrecoverable.
+         */
         async archive(userId: string, conversationId: string, epoch: number, wrapped: string): Promise<void>
         {
+            if (!UUID.test(conversationId))
+            {
+                // Postgres raises 22P02 comparing a non-uuid against a uuid column, which surfaces
+                // as a 500. A shape that cannot be an id answers as an id that is not there.
+                throw new NotFoundError('No conversation with that id.');
+            }
+
+            if (!Number.isSafeInteger(epoch) || epoch < 1)
+            {
+                throw new BadRequestError('That is not an epoch number.');
+            }
+
             if (await vaultOf(userId) === null)
             {
                 throw new ForbiddenError('This account has no recovery phrase to archive against.');
@@ -192,7 +223,7 @@ export function createRecoveryService(db: DataSource)
             await db.query(
                 `insert into epoch_archive (user_id, conversation_id, epoch, wrapped)
                  values ($1, $2, $3, $4)
-                 on conflict (user_id, conversation_id, epoch) do nothing`,
+                 on conflict (user_id, conversation_id, epoch) do update set wrapped = excluded.wrapped`,
                 [userId, conversationId, epoch, wrapped]
             );
         },
@@ -224,6 +255,11 @@ export function createRecoveryService(db: DataSource)
             if (vault === null)
             {
                 throw new NotFoundError('This account has no recovery phrase.');
+            }
+
+            if (!DEVICE_ID.test(deviceId))
+            {
+                throw new NotFoundError('There is no device waiting to be confirmed under that id.');
             }
 
             const device = await db.query(

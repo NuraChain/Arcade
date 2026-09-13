@@ -90,6 +90,15 @@ export interface SealedInput
 export const PAGE = 40;
 
 /**
+ * How far a message's signed expiry may sit from the room's rule.
+ *
+ * A sender computes `clientAt + expireAfter` on its own clock, and the setting can change between a
+ * client reading it and pressing send. A minute absorbs both without letting anybody choose a
+ * materially different lifetime for their own words.
+ */
+const EXPIRY_SLACK_MS = 60_000;
+
+/**
  * The pair key a direct conversation is unique on.
  *
  * Sorted, so (a,b) and (b,a) are the same string and the unique index can arbitrate. Built here
@@ -346,12 +355,28 @@ export function createChatService(db: DataSource, social: SocialService, frankin
         {
             await mustBeMember(me, conversationId);
 
-            if (deviceId === null)
+            // The device has to be THIS ACCOUNT's, confirmed and unrevoked. It used to have to be
+            // the one bound to this session, which sounds stricter and was in practice a lockout:
+            // `sessions.device_id` is written only by an enrolment, so signing out and back in left
+            // a browser with perfectly good keys unable to send at all - and never offered the
+            // enrolment that would fix it, because its keyring is not empty.
+            //
+            // Nothing is given up. This check is defence in depth; the barrier that actually decides
+            // authorship is the per-message SIGNATURE, which every recipient verifies against the
+            // named device's published key. A caller naming a device it cannot sign for produces a
+            // message that fails to open for everybody, including itself.
+            const owned = await db.query(
+                `select 1 as ok from devices
+                 where id = $1 and user_id = $2 and revoked_at is null and confirmed_at is not null`,
+                [input.senderDeviceId, me]
+            );
+
+            if (firstRow<{ ok: number }>(owned) === null)
             {
-                throw new ForbiddenError('This browser has no device enrolled, so it cannot seal anything.');
+                throw new ForbiddenError('That is not a device this account can seal with.');
             }
 
-            if (deviceId !== input.senderDeviceId)
+            if (deviceId !== null && deviceId !== input.senderDeviceId)
             {
                 throw new ForbiddenError('A message has to name the device that is sending it.');
             }
@@ -385,6 +410,27 @@ export function createChatService(db: DataSource, social: SocialService, frankin
             if (expiresAt !== null && Number.isNaN(expiresAt.getTime()))
             {
                 throw new BadRequestError('That is not a time this message could expire at.');
+            }
+
+            // And CHECKED against what the room agreed to. The server still never chooses the value,
+            // so it still cannot lengthen a message's life; it refuses one the room did not ask for.
+            // Without this, expiry is per-sender in practice whatever the design says - and somebody
+            // sets sixty seconds on their own messages in a room with expiry off, so their words are
+            // gone before anybody can report them and the frank goes with the row.
+            const room = firstRow<{ expire_after: number | null }>(
+                await db.query('select expire_after from conversations where id = $1', [conversationId])
+            );
+
+            const agreed = room?.expire_after ?? null;
+            const wanted = expiresAt === null ? null : expiresAt.getTime();
+
+            const matchesRoom = agreed === null
+                ? wanted === null
+                : wanted !== null && Math.abs(wanted - (clientAt.getTime() + agreed * 1000)) <= EXPIRY_SLACK_MS;
+
+            if (!matchesRoom)
+            {
+                throw new ForbiddenError('That is not how long a message in this conversation lasts.');
             }
 
             const known = await db.query(

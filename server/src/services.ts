@@ -492,7 +492,13 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             let member = byHandle.get(row.handle);
             if (member === undefined)
             {
-                member = { accountId: row.account_id, handle: row.handle, kind: row.kind, devices: [] };
+                member = {
+                    accountId: row.account_id,
+                    handle: row.handle,
+                    kind: row.kind,
+                    ...(row.wallet_address === null ? {} : { address: row.wallet_address }),
+                    devices: []
+                };
                 byHandle.set(row.handle, member);
             }
 
@@ -1288,9 +1294,9 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 };
             },
 
-            async clearRecovery(me)
+            async clearRecovery(me, sessionId)
             {
-                await recovery.clearVault(me);
+                await recovery.clearVault(me, await device.deviceOfSession(sessionId));
             },
 
             async archive(me, input)
@@ -1376,7 +1382,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 };
             },
 
-            async epoch(me, sessionId, conversationId, epoch)
+            async epoch(me, sessionId, conversationId, epoch, asDeviceId)
             {
                 await chat.mustBeMember(me, conversationId);
 
@@ -1387,7 +1393,21 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                     throw new NotFoundError('That epoch does not exist in this conversation.');
                 }
 
-                const state = await epochs.state(conversationId, await device.deviceOfSession(sessionId), wanted);
+                // The caller names its device and this checks the device is theirs - the same
+                // authorisation `mint` does. Falling back to the session's device keeps a browser
+                // that has not said which one working, but it is no longer the only way to be
+                // answered: a session created by signing in carries no device at all, and a browser
+                // that already holds keys is never offered the enrolment that would set one.
+                const asking = asDeviceId === undefined
+                    ? await device.deviceOfSession(sessionId)
+                    : asDeviceId;
+
+                if (asking !== null && asDeviceId !== undefined && await epochs.mine(me, asking) === null)
+                {
+                    throw new NotFoundError('There is no device of yours under that id.');
+                }
+
+                const state = await epochs.state(conversationId, asking, wanted);
 
                 return {
                     ...(state.epoch === null ? {} : {

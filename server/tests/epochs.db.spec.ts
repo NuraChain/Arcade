@@ -385,6 +385,9 @@ describe.skipIf(!active)('the epoch a conversation is sealed under', () =>
         const { left, right, conversationId } = await pair();
         await epochs.mint(left.id, conversationId, await mintOf(left.device, [left.device, right.device]));
 
+        // Another account's device entirely. The session check was narrowed to ownership - a
+        // browser that signed out and back in has no session device and must still be able to send -
+        // so what refuses this is that the device is not this account's to seal with.
         await expect(chat.send(left.id, conversationId, left.device, {
             id: crypto.randomUUID(),
             epoch: 1,
@@ -396,7 +399,7 @@ describe.skipIf(!active)('the epoch a conversation is sealed under', () =>
             clientAt: new Date().toISOString(),
             commitment: 'a-commitment',
             expiresAt: 0
-        })).rejects.toThrow(/name the device/);
+        })).rejects.toThrow(/not a device this account can seal with/);
     });
 
     it('refuses a message sealed under an epoch nobody minted', async () =>
@@ -598,7 +601,36 @@ describe.skipIf(!active)('the epoch a conversation is sealed under', () =>
      */
     describe('expiry', () =>
     {
-        const envelope = (device: string, seqNumber: number, expiresAt: number) => ({
+        /** An hour, which is what these rooms agree to. */
+        const HOUR = 3600;
+
+        /**
+         * A message whose signed expiry is the one the ROOM agreed to.
+         *
+         * The server refuses anything else now, which is what stops a sender choosing their own
+         * lifetime - so a test that wants an already-expired message has to back-date the message
+         * rather than shorten it, exactly as a real client sending an hour ago would have.
+         */
+        const envelope = (device: string, seqNumber: number, sentMinutesAgo: number) =>
+        {
+            const clientAt = Date.now() - sentMinutesAgo * 60_000;
+
+            return {
+                id: crypto.randomUUID(),
+                epoch: 1,
+                seq: seqNumber,
+                iv: 'nonce',
+                body: 'ciphertext',
+                senderDeviceId: device,
+                signature: 'signature',
+                clientAt: new Date(clientAt).toISOString(),
+                commitment: 'a-commitment',
+                expiresAt: clientAt + HOUR * 1000
+            };
+        };
+
+        /** The same, in a room with expiry off: nothing expires and the envelope has to say so. */
+        const permanent = (device: string, seqNumber: number) => ({
             id: crypto.randomUUID(),
             epoch: 1,
             seq: seqNumber,
@@ -608,7 +640,7 @@ describe.skipIf(!active)('the epoch a conversation is sealed under', () =>
             signature: 'signature',
             clientAt: new Date().toISOString(),
             commitment: 'a-commitment',
-            expiresAt
+            expiresAt: 0
         });
 
         it('is a property of the room, settable by anybody in it', async () =>
@@ -633,20 +665,38 @@ describe.skipIf(!active)('the epoch a conversation is sealed under', () =>
             await expect(chat.setExpiry(left.id, conversationId, 30)).rejects.toThrow(/length of time/);
         });
 
-        it('stores the expiry the SENDER signed, and hides the message once it passes', async () =>
+        it('refuses a message that does not last as long as the room agreed', async () =>
         {
             const { left, right, conversationId } = await pair();
             await epochs.mint(left.id, conversationId, await mintOf(left.device, [left.device, right.device]));
 
-            const gone = Date.now() - 1000;
-            await chat.send(left.id, conversationId, left.device, envelope(left.device, 1, gone));
+            // Expiry off. A sender who signs a short life for their own words would otherwise be
+            // choosing it for themselves - and words that are gone before anybody can report them
+            // take the frank with them when the row is swept.
+            await expect(chat.send(left.id, conversationId, left.device, envelope(left.device, 1, 0)))
+                .rejects.toThrow(/how long a message in this conversation lasts/);
+
+            await chat.setExpiry(left.id, conversationId, HOUR);
+
+            // And the other way: expiry on, and a sender claiming their message lasts forever.
+            await expect(chat.send(left.id, conversationId, left.device, permanent(left.device, 1)))
+                .rejects.toThrow(/how long a message in this conversation lasts/);
+        });
+
+        it('hides a message once its moment passes, before the sweep runs', async () =>
+        {
+            const { left, right, conversationId } = await pair();
+            await epochs.mint(left.id, conversationId, await mintOf(left.device, [left.device, right.device]));
+            await chat.setExpiry(left.id, conversationId, HOUR);
+
+            await chat.send(left.id, conversationId, left.device, envelope(left.device, 1, 90));
             await chat.send(left.id, conversationId, left.device, envelope(left.device, 2, 0));
 
             // Both rows are still there - the sweep has not run - and the read filters anyway. A
             // reader must never see a message in the window between its moment and the next pass.
             const page = await chat.messages(right.id, conversationId, null);
             expect(page.messages).toHaveLength(1);
-            expect(page.messages[0].expires_at).toBeNull();
+            expect(page.messages[0].seq).toBe('2');
         });
 
         it('sweeps what has run out and leaves the rest', async () =>
@@ -654,14 +704,20 @@ describe.skipIf(!active)('the epoch a conversation is sealed under', () =>
             const { left, right, conversationId } = await pair();
             await epochs.mint(left.id, conversationId, await mintOf(left.device, [left.device, right.device]));
 
-            await chat.send(left.id, conversationId, left.device, envelope(left.device, 1, Date.now() - 1000));
-            await chat.send(left.id, conversationId, left.device, envelope(left.device, 2, Date.now() + 3_600_000));
-            await chat.send(left.id, conversationId, left.device, envelope(left.device, 3, 0));
+            await chat.setExpiry(left.id, conversationId, HOUR);
+
+            await chat.send(left.id, conversationId, left.device, envelope(left.device, 1, 90));
+            await chat.send(left.id, conversationId, left.device, envelope(left.device, 2, 0));
 
             expect(await chat.sweepExpired()).toBe(1);
 
-            const rows = await db.query('select count(*)::int as n from messages where conversation_id = $1', [conversationId]);
-            expect(rowsOf<{ n: number }>(rows)[0].n).toBe(2);
+            // The expiry line `setExpiry` writes is a server-authored message and never expires, so
+            // what is left is the live sealed one and that line.
+            const rows = await db.query(
+                `select count(*)::int as n from messages where conversation_id = $1 and kind = 'text'`,
+                [conversationId]
+            );
+            expect(rowsOf<{ n: number }>(rows)[0].n).toBe(1);
 
             // Idempotent: the second pass has nothing left to take.
             expect(await chat.sweepExpired()).toBe(0);
@@ -672,7 +728,9 @@ describe.skipIf(!active)('the epoch a conversation is sealed under', () =>
             const { left, right, conversationId } = await pair();
             await epochs.mint(left.id, conversationId, await mintOf(left.device, [left.device, right.device]));
 
-            const said = envelope(left.device, 1, Date.now() - 1000);
+            await chat.setExpiry(left.id, conversationId, HOUR);
+
+            const said = envelope(left.device, 1, 90);
             await chat.send(left.id, conversationId, left.device, said);
 
             await db.query(
@@ -700,7 +758,9 @@ describe.skipIf(!active)('the epoch a conversation is sealed under', () =>
             const { left, right, conversationId } = await pair();
             await epochs.mint(left.id, conversationId, await mintOf(left.device, [left.device, right.device]));
 
-            const said = envelope(left.device, 1, Date.now() - 1000);
+            await chat.setExpiry(left.id, conversationId, HOUR);
+
+            const said = envelope(left.device, 1, 90);
             await chat.send(left.id, conversationId, left.device, said);
 
             // A message that has run out is not a message a report can disclose. Franking proves
@@ -713,8 +773,8 @@ describe.skipIf(!active)('the epoch a conversation is sealed under', () =>
             const { left, right, conversationId } = await pair();
             await epochs.mint(left.id, conversationId, await mintOf(left.device, [left.device, right.device]));
 
-            await chat.send(left.id, conversationId, left.device, envelope(left.device, 1, 0));
-            await chat.setExpiry(left.id, conversationId, 3600);
+            await chat.send(left.id, conversationId, left.device, permanent(left.device, 1));
+            await chat.setExpiry(left.id, conversationId, HOUR);
 
             // The message was sealed with its own expiry signed into it. Turning the setting on
             // afterwards changes what is said NEXT and cannot shorten what was already said.

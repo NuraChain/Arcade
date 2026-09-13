@@ -36,6 +36,15 @@ import { rowsOf } from '../../lib/rows.ts';
  * Everywhere else a person is a handle, because that is the public identifier and the url key -
  * but `nura-e2ee/v1` binds the sender's account into the AAD, and an identifier somebody can
  * rename is one that stops matching a signature made last week. See `chat/envelope.ts`.
+ *
+ * And the member's WALLET ADDRESS, which is what anchors the whole attestation chain to a person.
+ * Without it `verifyPeerDevice` is self-referential: it checks that the id hashes the keys, that the
+ * signed message names that id, and that the signature recovers to the address printed beside it -
+ * four values from one response, agreeing with each other and with nothing else. A server could mint
+ * a device, sign its enrolment with any key it liked, publish the matching address, and every check
+ * would pass. Carrying the address the ACCOUNT signs in with means a fabricated device has to be
+ * attested by that same address, so injecting one now requires swapping the member's published
+ * wallet too - one value, in one place, that a person can compare out of band.
  */
 
 export interface PeerDeviceRow
@@ -43,6 +52,10 @@ export interface PeerDeviceRow
     account_id: string;
     handle: string;
     kind: AccountKind;
+
+    /** The wallet this account signs in with. Null for a guest, who has none. */
+    wallet_address: string | null;
+
     device_id: string | null;
     exchange_key: string | null;
     signing_key: string | null;
@@ -97,6 +110,10 @@ export function createPeerDevices(db: DataSource)
                 `select u.id           as account_id,
                         u.handle::text as handle,
                         u.kind::text   as kind,
+                        (select w.address::text from wallets w
+                          where w.user_id = u.id
+                          order by w.created_at
+                          limit 1)     as wallet_address,
                         d.id           as device_id,
                         d.exchange_key,
                         d.signing_key,
@@ -139,13 +156,23 @@ export function createPeerDevices(db: DataSource)
                         d.attested_address::text as attested_address,
                         d.attested_message,
                         d.attested_signature
-                 from conversation_members cm
-                 join users u on u.id = cm.user_id
-                 join devices d
-                   on d.user_id = cm.user_id
-                  and d.confirmed_at is not null
-                  and d.attested in ('wallet', 'contract')
-                 where cm.conversation_id = $1
+                 from devices d
+                 join users u on u.id = d.user_id
+                 where d.confirmed_at is not null
+                   and d.attested in ('wallet', 'contract')
+                   -- Anybody seated here now, plus anybody who ever signed here. The same argument
+                   -- that relaxes the revocation filter relaxes this one: a device that signed in
+                   -- March still signed it, and a reader who cannot check that has a thread whose
+                   -- history turned into forgeries the day somebody left a group or stood up from a
+                   -- table. Both are routine acts, and both delete a membership row.
+                   and (
+                       exists (select 1 from conversation_members cm
+                                where cm.conversation_id = $1 and cm.user_id = d.user_id)
+                       or exists (select 1 from messages m
+                                   where m.conversation_id = $1 and m.sender_device_id = d.id)
+                       or exists (select 1 from conversation_epochs e
+                                   where e.conversation_id = $1 and e.minted_by = d.id)
+                   )
                  order by u.handle, d.created_at`,
                 [conversationId]
             );

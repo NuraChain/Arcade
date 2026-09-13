@@ -274,7 +274,7 @@ export interface DevicePort
     }): Promise<RecoveryState>;
 
     /** Throws the vault AND the archive away. A phrase that restores nothing is worse than none. */
-    clearRecovery(me: string): Promise<void>;
+    clearRecovery(me: string, sessionId: string): Promise<void>;
 
     /** Adds one epoch key to the archive. */
     archive(me: string, input: { conversationId: string; epoch: number; wrapped: string }): Promise<void>;
@@ -330,7 +330,13 @@ export interface ChatPort
      * for which epoch is still a fact about somebody's devices, and the session already knows the
      * answer without being told.
      */
-    epoch(me: string, sessionId: string, conversationId: string, epoch: string | undefined): Promise<EpochState>;
+    epoch(
+        me: string,
+        sessionId: string,
+        conversationId: string,
+        epoch: string | undefined,
+        device: string | undefined
+    ): Promise<EpochState>;
 
     /** Claims the next epoch, or reports that somebody else claimed it first. */
     mint(me: string, sessionId: string, conversationId: string, input: {

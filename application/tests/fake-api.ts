@@ -621,9 +621,13 @@ export const client =
             };
         },
 
-        async epoch({ params, query }: { params: { id: string }; query: { epoch?: string } })
+        async epoch({ params, query }: { params: { id: string }; query: { epoch?: string; device?: string } })
         {
             server.calls.push('chat.epoch');
+
+            // The caller names its device now; the session's is only the fallback. A browser that
+            // signed out and back in has no session device at all.
+            const asking = query.device ?? server.sealDevice;
 
             const held = server.epochs[params.id] ?? [];
             const wanted = query.epoch === undefined ? null : Number(query.epoch);
@@ -640,12 +644,12 @@ export const client =
                 return { nextSeq: 1, eligible, stale: eligible.length > 0 };
             }
 
-            const wrap = server.sealDevice === null ? undefined : row.keys[server.sealDevice];
+            const wrap = asking === null ? undefined : row.keys[asking];
 
             const nextSeq = server.messages.filter((one) =>
                 one.conversationId === params.id
                 && one.epoch === row.epoch
-                && one.senderDeviceId === server.sealDevice).length + 1;
+                && one.senderDeviceId === asking).length + 1;
 
             return {
                 epoch: row.epoch,

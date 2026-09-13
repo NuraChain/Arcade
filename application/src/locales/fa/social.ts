@@ -66,6 +66,7 @@ export const social: Pick<Dictionary, keyof typeof reference> = {
     'report.alsoBlock': 'او را هم مسدود کن',
     'report.submit': 'ارسال گزارش',
     'report.showing': 'این پیام به یک ناظر نشان داده می‌شود. هیچ‌چیز دیگری از این گفتگو نه.',
+    'report.failed': 'گزارش نرفت. چیزی ثبت نشد — یک لحظه دیگر دوباره امتحان کن.',
     'report.sent': 'گزارش ارسال شد. در تنظیمات می‌توانی پیگیری کنی.',
     'report.status.received': 'دریافت شد',
     'report.status.reviewed': 'بررسی شد',

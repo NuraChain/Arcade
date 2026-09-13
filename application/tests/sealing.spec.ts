@@ -27,6 +27,11 @@ const scope: ChatScope = { me: 'alex', blocked: [] };
 
 let mine: TestDevice;
 let theirs: TestDevice;
+
+/** A SECOND device of the same person, attested by the same wallet. A legitimate new phone. */
+let theirSecond: TestDevice;
+
+/** A device attested by somebody else's wallet entirely. What an injected device looks like. */
 let stranger: TestDevice;
 
 const said = (text: string): Message => ({
@@ -60,11 +65,12 @@ function arrange(options: { theirKind?: 'wallet' | 'guest' } = {}): void
     server.conversationDevices = {
         [THREAD]: {
             members: [
-                { accountId: 'u-alex', handle: 'alex', kind: 'wallet', devices: [mine.peer] },
+                { accountId: 'u-alex', handle: 'alex', kind: 'wallet', address: mine.address, devices: [mine.peer] },
                 {
                     accountId: 'u-sara.k',
                     handle: 'sara.k',
                     kind: options.theirKind ?? 'wallet',
+                    ...(options.theirKind === 'guest' ? {} : { address: theirs.address }),
                     devices: options.theirKind === 'guest' ? [] : [theirs.peer]
                 }
             ]
@@ -79,6 +85,7 @@ beforeEach(async () =>
 {
     mine ??= await makeDevice(TEST_ACCOUNTS.alex);
     theirs ??= await makeDevice(TEST_ACCOUNTS.other);
+    theirSecond ??= await makeDevice(TEST_ACCOUNTS.other);
     stranger ??= await makeDevice(TEST_ACCOUNTS.third);
 
     arrange();
@@ -132,23 +139,28 @@ describe('sealing a thread for the first time', () =>
 
 describe('what the client refuses from the server', () =>
 {
-    it('refuses an epoch whose signed recipients are not the set it can see', async () =>
+    it('refuses a device attested by somebody other than the member', async () =>
     {
         const source = createApiSource();
         await source.post(said('first'));
 
-        // The server now publishes a device it did not have when the epoch was signed. If the
-        // client took the recipient list on trust, the next message would be wrapped to it.
+        // A device the server injected into sara.k's list. Its id hashes its keys, its enrolment
+        // message names that id, and its signature recovers to the address printed beside it -
+        // every check `verifyPeerDevice` makes on its own passes, because all four values came from
+        // the same response. What gives it away is that the address is not the wallet sara.k signs
+        // in with, and that is a value the product publishes and shows.
         server.conversationDevices[THREAD].members[1].devices.push(stranger.peer);
         forgetSigners();
 
         const outcome = await currentEpoch(THREAD, 'alex');
 
-        // It does not fail - it ROTATES, which is the right answer: the set really did change, and
-        // a new epoch signed for the set this client can see is exactly what should happen next.
-        expect(outcome.ok).toBe(true);
-        expect(server.epochs[THREAD]).toHaveLength(2);
-        expect(server.epochs[THREAD][1].recipients).toBe(recipientList([mine.id, theirs.id, stranger.id]));
+        expect(outcome.ok).toBe(false);
+        expect(outcome.ok === false && outcome.failure).toBe('not-sealable');
+        expect(outcome.ok === false && outcome.blocked?.state).toBe('tampered');
+
+        // One bad device condemns the whole list: the good one is not quietly used beside it.
+        expect(outcome.ok === false && outcome.blocked?.devices).toEqual([]);
+        expect(server.epochs[THREAD]).toHaveLength(1);
     });
 
     it('refuses an epoch signed for a set that does not include a device the server lists', async () =>
@@ -159,11 +171,11 @@ describe('what the client refuses from the server', () =>
         // A server that shows the client one device list and hands it an epoch committing to
         // another. The signature is real, it simply does not cover what this client was shown.
         const epoch = server.epochs[THREAD][0];
-        epoch.recipients = recipientList([mine.id, theirs.id, stranger.id]);
-        epoch.keys[stranger.id] = { ephemeralKey: 'x', wrapped: 'y' };
+        epoch.recipients = recipientList([mine.id, theirs.id, theirSecond.id]);
+        epoch.keys[theirSecond.id] = { ephemeralKey: 'x', wrapped: 'y' };
 
         forgetSigners();
-        server.conversationDevices[THREAD].members[1].devices.push(stranger.peer);
+        server.conversationDevices[THREAD].members[1].devices.push(theirSecond.peer);
 
         const outcome = await currentEpoch(THREAD, 'alex');
 
@@ -183,6 +195,41 @@ describe('what the client refuses from the server', () =>
 
         expect(thread[0].locked).toBe('unknown-sender');
         expect(thread[0].text).toBe('');
+    });
+
+    it('shows the author the SIGNATURE names, not the one the row claims', async () =>
+    {
+        const source = createApiSource();
+        await source.post(said('mine'));
+
+        // `from` is an unsigned column. Rendering it would make the name over a message the
+        // server's to choose; the account uuid in the AAD is what the signature covers, and the
+        // handle is resolved from that.
+        server.messages[0].from = 'sara.k';
+        forgetSigners();
+
+        const thread = await source.thread(THREAD, scope, new AbortController().signal);
+
+        expect(thread[0].locked).toBeUndefined();
+        expect(thread[0].from).toBe('alex');
+    });
+
+    it('dates a message by what its sender signed, not by when the row landed', async () =>
+    {
+        const source = createApiSource();
+        await source.post(said('on time'));
+
+        const signed = Date.parse(server.messages[0].clientAt ?? '');
+
+        // `at` is the server's `created_at` and is bound by nothing. The reader uses `clientAt`,
+        // which is in the AAD - so re-dating a message means breaking its signature.
+        server.messages[0].at = new Date(1_600_000_000_000).toISOString();
+        forgetSigners();
+
+        const thread = await source.thread(THREAD, scope, new AbortController().signal);
+
+        expect(thread[0].locked).toBeUndefined();
+        expect(thread[0].at).toBe(signed);
     });
 
     it('will not open a message re-attributed to another account', async () =>
@@ -246,15 +293,15 @@ describe('rotation', () =>
         const source = createApiSource();
         await source.post(said('under one'));
 
-        // A second device appears on the other side. The eligible set moved, so the next thing
-        // said has to be sealed to a set that includes it.
-        server.conversationDevices[THREAD].members[1].devices.push(stranger.peer);
+        // A second device appears on the other side - a real one, attested by the same wallet. The
+        // eligible set moved, so the next thing said has to be sealed to a set that includes it.
+        server.conversationDevices[THREAD].members[1].devices.push(theirSecond.peer);
         forgetSigners();
 
         await source.post(said('under two'));
 
         expect(server.epochs[THREAD]).toHaveLength(2);
-        expect(server.epochs[THREAD][1].recipients).toBe(recipientList([mine.id, theirs.id, stranger.id]));
+        expect(server.epochs[THREAD][1].recipients).toBe(recipientList([mine.id, theirs.id, theirSecond.id]));
 
         const thread = await source.thread(THREAD, scope, new AbortController().signal);
 
@@ -268,7 +315,7 @@ describe('rotation', () =>
         await source.post(said('one'));
         expect(server.messages[0].seq).toBe(1);
 
-        server.conversationDevices[THREAD].members[1].devices.push(stranger.peer);
+        server.conversationDevices[THREAD].members[1].devices.push(theirSecond.peer);
         forgetSigners();
 
         await source.post(said('two'));

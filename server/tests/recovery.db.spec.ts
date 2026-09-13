@@ -347,9 +347,11 @@ describe.skipIf(!active)('recovery, against a real database', () =>
             { conversation_id: conversation, epoch: 1, wrapped: 'sealed' }
         ]);
 
-        // Idempotent, because the client archives whenever it learns a key and may learn one twice.
+        // The later write WINS. A slot that could never be corrected is a slot somebody can poison
+        // once: junk written for an epoch before the real browser gets there would make every honest
+        // write afterwards a silent no-op, and that conversation permanently unrecoverable.
         await recovery.archive(userId, conversation, 1, 'sealed-again');
-        expect((await recovery.archived(userId))[0].wrapped).toBe('sealed');
+        expect((await recovery.archived(userId))[0].wrapped).toBe('sealed-again');
     });
 
     it('refuses to archive against a vault that does not exist', async () =>
@@ -361,9 +363,35 @@ describe.skipIf(!active)('recovery, against a real database', () =>
             .rejects.toThrow(/no recovery phrase/);
     });
 
-    it('takes the archive with the vault when recovery is turned off', async () =>
+    it('answers a malformed id as one that is not there, rather than with a 500', async () =>
     {
         const { userId } = await withVault();
+
+        // Postgres raises 22P02 comparing a non-uuid against a uuid column, and that surfaces as a
+        // server error - so a typo in an address bar becomes an outage line in the log.
+        await expect(recovery.archive(userId, 'not-a-uuid', 1, 'sealed'))
+            .rejects.toThrow(/No conversation with that id/);
+
+        await expect(recovery.challenge(userId, 'not-a-device-id'))
+            .rejects.toThrow(/waiting to be confirmed/);
+    });
+
+    it('refuses to turn recovery off from a browser the account has not confirmed', async () =>
+    {
+        const { userId } = await withVault();
+        const pending = await enrol(userId, alice);
+
+        // It destroys the vault AND the whole archive, irreversibly. Reachable by any session at
+        // all, a stolen cookie could throw away somebody's only way back into their own history.
+        await expect(recovery.clearVault(userId, pending)).rejects.toThrow(/confirmed/);
+        await expect(recovery.clearVault(userId, null)).rejects.toThrow(/confirmed/);
+
+        expect(await recovery.vaultOf(userId)).not.toBeNull();
+    });
+
+    it('takes the archive with the vault when recovery is turned off', async () =>
+    {
+        const { userId, first } = await withVault();
 
         const conversation = rowsOf<{ id: string }>(await db.query(
             `insert into conversations (kind, pair_key) values ('direct', $1) returning id`,
@@ -373,7 +401,7 @@ describe.skipIf(!active)('recovery, against a real database', () =>
         await db.query('insert into conversation_members (conversation_id, user_id) values ($1, $2)', [conversation, userId]);
         await recovery.archive(userId, conversation, 1, 'sealed');
 
-        await recovery.clearVault(userId);
+        await recovery.clearVault(userId, first);
 
         // A vault with no archive restores nothing, and an archive with no vault is ciphertext
         // nobody can ever open. Leaving either behind would be leaving a broken promise.
