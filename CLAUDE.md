@@ -1029,13 +1029,31 @@ an invisible control byte in a source file is one an editor or a lint autofix ev
 the failure is a signature that verifies against different bytes than it was made over — which
 reads as "everyone's messages are forged" with nothing anywhere naming the cause.
 
-**The minter signs its recipient set, and every recipient checks it.** Without that,
-"the epoch key was wrapped to exactly the members' devices" is a promise from the one party this
-design exists to distrust: the server chooses which wrapped keys a client is shown, so it could
-withhold a device to keep somebody out of their own conversation, or add one of its own and be
-wrapped in beside the real members. `conversation_epochs.recipients` and `.signature` are the
-commitment; `verifyRecipients` in `lib/crypto.ts` is the check. A client computes the set it
-EXPECTS from the devices it verified itself and refuses an epoch signed for anything else.
+**The minter signs its recipient set AND its key check value, and every recipient checks both.**
+The recipient half stops the server choosing WHO reads an epoch: it picks which wrapped keys a
+client is shown, so without a signature it could withhold a device to keep somebody out of their own
+conversation, or wrap one of its own in beside the real members.
+
+The key half stops it choosing WHICH KEY, and it was missing for four commits. Every input to a wrap
+and to a key check value is public — the recipient's exchange key, the conversation, the epoch, the
+device id — so a server could mint its own key K', wrap it to one targeted recipient, compute a
+matching confirmation, and leave the genuine recipient signature untouched. That recipient verified
+a real signature over a real recipient set, unwrapped K', checked it against the server's own tag,
+and sealed everything it typed under a key the server had chosen. Both checks passed. **Neither of
+them was about the key.** A multi-agent audit of the shipped code found it; the live reproduction
+confirmed the substituted key unwraps cleanly and matches the server's tag, and that binding the
+confirmation into `epochCommitment` refuses it before the unwrap is ever reached.
+
+The lesson generalises and is worth keeping: a commitment is only as good as the list of things it
+commits to, and "I signed something about this epoch" is not the same as "I signed this epoch's key".
+
+**The server verifies the commitment too**, which is a different job from the client's. It cannot
+judge whether a recipient set is RIGHT — that is the recipient's check, against devices it verified
+itself — but it can tell a signature from a string, and accepting a string let any member POST an
+epoch carrying junk, wedging every other member's `adopt` forever with no product path back. Refused
+at the boundary, like the subset check beside it. `epoch` is bounded to what the column holds for the
+same reason: 2147483647 makes the NEXT mint raise 22003 rather than the 23505 the race handler
+catches.
 
 **`GET /chat/:id/signers` is a second device read, and revoked devices are IN it.** The recipient
 list must exclude a device somebody signed out — that is what revocation is for. The signer list
@@ -1135,6 +1153,13 @@ for the near end: a browser signing in as an account that already has a device e
 and every device after the first arrives `pending` — confirmable only by an existing device whose
 keys nobody holds. `dana.w` is the account a person and the QA matrix sign in as, so `enrolled` is
 false for it and the browser's own enrolment is its first.
+
+**Signing out surrenders the keyring.** `surrenderKeys` in `session.store.ts` drops the epoch keys,
+the archive key and the device's own keypairs. A session ends but IndexedDB does not, and
+`forgetEpochKeys` sat with zero callers for four commits — so signing out on a shared machine handed
+the next person every conversation the last one had open, and the ability to sign as their device.
+Each step is best-effort and independent: a browser that refuses IndexedDB must still be able to
+sign out.
 
 **`tools/qa/seal-pass.mjs` is the browser pass for this, and it is run by hand.** It injects an
 EIP-1193 provider backed by a hardhat key, signs in through the real chooser, enrols through the
@@ -1257,6 +1282,19 @@ environment variable to set, rotate and get wrong. One consequence, stated rathe
 rotating that secret invalidates every frank. Old messages stay readable — franks are not part of
 the sealing — but they stop being reportable. Splitting the two secrets is the right change the day
 rotation is a real procedure rather than a paragraph.
+
+**The disclosed message has to be the reported person's.** Franking proves what was said and that
+it passed through this server; it says nothing about who is being accused. Without that check a
+report against anybody could carry anybody else's words, and a moderator would read a real, verified,
+correctly-attributed message and act on it against the wrong person — the exact outcome the whole
+mechanism exists to prevent.
+
+**A disclosure outlives the message it discloses.** `0014` held the four disclosure columns
+all-or-none while the foreign key nulled `message_id` on delete, and those two rules cannot both be
+satisfied: the first reported disappearing message wedged `sweepExpired` for the whole deployment,
+every minute, forever, so nothing expired again anywhere. `0016` says what was meant — the words, the
+key and the moment travel together, and the pointer may go null. Expiry must not become a way to
+destroy the evidence in a report already filed.
 
 **A report with no message attached is still a report.** Reporting a person for what they have been
 doing across a room was always legitimate and still is; attaching one message is what turns "they

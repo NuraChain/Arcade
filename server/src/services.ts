@@ -842,6 +842,16 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                     throw new NotFoundError('No message with that id in this conversation.');
                 }
 
+                // The message has to be the reported person's. Franking proves what was said and
+                // that it passed through here; it says nothing about WHO is being accused, and
+                // without this a report against anybody could carry anybody else's words - a
+                // moderator would read a real, verified, correctly-attributed message and act on it
+                // against the wrong person. The one thing the whole mechanism exists to prevent.
+                if (row.sender_account_id !== againstId)
+                {
+                    throw new ForbiddenError('That message was not sent by the person being reported.');
+                }
+
                 if (!discloses(disclosure.frankingKey, disclosure.text, row.commitment))
                 {
                     throw new ForbiddenError('That is not what the message says.');

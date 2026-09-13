@@ -286,21 +286,40 @@ describe('sealing a message', () =>
 
 describe('the recipient commitment', () =>
 {
+    const KCV = 'a-key-check-value';
+
     it('verifies for the set that was signed and for no other', async () =>
     {
         await devices();
 
         const recipients = [alice.id, bob.id].sort();
-        const signature = await signRecipients(alice.secrets, conversation, 1, alice.id, recipients);
+        const signature = await signRecipients(alice.secrets, conversation, 1, alice.id, recipients, KCV);
 
-        expect(await verifyRecipients(alice, conversation, 1, recipients, signature)).toBe(true);
+        expect(await verifyRecipients(alice, conversation, 1, recipients, KCV, signature)).toBe(true);
 
         // A server that wrapped its own device in beside the real ones.
-        expect(await verifyRecipients(alice, conversation, 1, [...recipients, mallory.id].sort(), signature))
+        expect(await verifyRecipients(alice, conversation, 1, [...recipients, mallory.id].sort(), KCV, signature))
             .toBe(false);
 
         // A server that withheld a device, to keep somebody out of their own conversation.
-        expect(await verifyRecipients(alice, conversation, 1, [alice.id], signature)).toBe(false);
+        expect(await verifyRecipients(alice, conversation, 1, [alice.id], KCV, signature)).toBe(false);
+    });
+
+    it('refuses an epoch whose KEY is not the one the minter vouched for', async () =>
+    {
+        await devices();
+
+        const recipients = [alice.id, bob.id].sort();
+        const signature = await signRecipients(alice.secrets, conversation, 1, alice.id, recipients, KCV);
+
+        // This is the break the commitment shipped without. Every input to a wrap and to a key check
+        // value is public, so a server can mint its own key, wrap it to one targeted recipient and
+        // compute a matching tag - leaving the genuine recipient signature untouched. Before the
+        // confirmation was signed, that recipient verified a real signature over a real set,
+        // unwrapped the server's key, checked it against the server's own tag, and sealed everything
+        // it typed under a key the server had chosen.
+        expect(await verifyRecipients(alice, conversation, 1, recipients, 'a-tag-the-server-made', signature))
+            .toBe(false);
     });
 
     it('does not carry from one epoch or one conversation to another', async () =>
@@ -308,10 +327,10 @@ describe('the recipient commitment', () =>
         await devices();
 
         const recipients = [alice.id, bob.id].sort();
-        const signature = await signRecipients(alice.secrets, conversation, 1, alice.id, recipients);
+        const signature = await signRecipients(alice.secrets, conversation, 1, alice.id, recipients, KCV);
 
-        expect(await verifyRecipients(alice, conversation, 2, recipients, signature)).toBe(false);
-        expect(await verifyRecipients(alice, 'c-elsewhere', 1, recipients, signature)).toBe(false);
+        expect(await verifyRecipients(alice, conversation, 2, recipients, KCV, signature)).toBe(false);
+        expect(await verifyRecipients(alice, 'c-elsewhere', 1, recipients, KCV, signature)).toBe(false);
     });
 
     it('cannot be attributed to a device that did not make it', async () =>
@@ -319,19 +338,19 @@ describe('the recipient commitment', () =>
         await devices();
 
         const recipients = [alice.id, bob.id].sort();
-        const signature = await signRecipients(alice.secrets, conversation, 1, alice.id, recipients);
+        const signature = await signRecipients(alice.secrets, conversation, 1, alice.id, recipients, KCV);
 
-        expect(await verifyRecipients(mallory, conversation, 1, recipients, signature)).toBe(false);
+        expect(await verifyRecipients(mallory, conversation, 1, recipients, KCV, signature)).toBe(false);
     });
 
     it('the ORDER of the recipients does not change the commitment', async () =>
     {
         await devices();
 
-        const signature = await signRecipients(alice.secrets, conversation, 1, alice.id, [bob.id, alice.id]);
+        const signature = await signRecipients(alice.secrets, conversation, 1, alice.id, [bob.id, alice.id], KCV);
 
         // Two honest clients holding one set must produce one string, or half of them would refuse
         // an epoch that is perfectly correct.
-        expect(await verifyRecipients(alice, conversation, 1, [alice.id, bob.id], signature)).toBe(true);
+        expect(await verifyRecipients(alice, conversation, 1, [alice.id, bob.id], KCV, signature)).toBe(true);
     });
 });

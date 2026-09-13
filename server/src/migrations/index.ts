@@ -15,6 +15,7 @@ import { Sealing1789230000000 } from './0012-sealing.ts';
 import { Recovery1789240000000 } from './0013-recovery.ts';
 import { Franking1789250000000 } from './0014-franking.ts';
 import { Ephemeral1789260000000 } from './0015-ephemeral.ts';
+import { DisclosureOutlives1789270000000 } from './0016-disclosure-outlives.ts';
 
 /**
  * Every migration. Appending is the only correct edit.
@@ -39,5 +40,6 @@ export const migrations: (new () => MigrationInterface)[] = [
     Sealing1789230000000,
     Recovery1789240000000,
     Franking1789250000000,
-    Ephemeral1789260000000
+    Ephemeral1789260000000,
+    DisclosureOutlives1789270000000
 ];

@@ -431,13 +431,14 @@ export async function signRecipients(
     conversationId: string,
     epoch: number,
     minterDeviceId: string,
-    recipients: readonly string[]
+    recipients: readonly string[],
+    confirmation: string
 ): Promise<string>
 {
     const signature = await crypto.subtle.sign(
         { name: 'ECDSA', hash: 'SHA-256' },
         secrets.signing.privateKey,
-        utf8.encode(epochCommitment({ conversationId, epoch, minterDeviceId, recipients })) as BufferSource
+        utf8.encode(epochCommitment({ conversationId, epoch, minterDeviceId, recipients, confirmation })) as BufferSource
     );
 
     return toBase64Url(new Uint8Array(signature));
@@ -455,6 +456,7 @@ export async function verifyRecipients(
     conversationId: string,
     epoch: number,
     recipients: readonly string[],
+    confirmation: string,
     signature: string
 ): Promise<boolean>
 {
@@ -464,7 +466,13 @@ export async function verifyRecipients(
             { name: 'ECDSA', hash: 'SHA-256' },
             await importVerifier(minter.signingKey),
             fromBase64Url(signature) as BufferSource,
-            utf8.encode(epochCommitment({ conversationId, epoch, minterDeviceId: minter.id, recipients })) as BufferSource
+            utf8.encode(epochCommitment({
+                conversationId,
+                epoch,
+                minterDeviceId: minter.id,
+                recipients,
+                confirmation
+            })) as BufferSource
         );
     }
     catch

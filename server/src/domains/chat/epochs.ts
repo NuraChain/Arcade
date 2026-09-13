@@ -1,8 +1,50 @@
-import { ForbiddenError, NotFoundError } from '@azerothjs/http';
+import { BadRequestError, ForbiddenError, NotFoundError } from '@azerothjs/http';
+import { webcrypto } from 'node:crypto';
 import type { DataSource } from 'typeorm';
 
 import { firstRow, rowsOf } from '../../lib/rows.ts';
-import { recipientList } from './envelope.ts';
+import { epochCommitment, recipientList } from './envelope.ts';
+
+/** The largest value the `epoch` column can hold. Beyond it the next mint raises 22003, not 23505. */
+const MAX_EPOCH = 2_147_483_646;
+
+/**
+ * Whether the minter really signed this commitment.
+ *
+ * The server cannot read the key and has no business judging the recipient set - that is the
+ * client's check, against devices it verified itself. What it CAN do, and must, is refuse a
+ * commitment that is not a signature at all. Without this, any member could POST an epoch carrying
+ * junk in `signature`, every other member's `adopt` would fail `verifyRecipients` forever, and
+ * nothing would ever mint past it: the room's key schedule would be wedged by a single request,
+ * with no product path back.
+ *
+ * P-256 over the SPKI the device published, which this server already stores and already re-derives
+ * the device id from.
+ */
+async function signedByMinter(signingKey: string, commitment: string, signature: string): Promise<boolean>
+{
+    try
+    {
+        const key = await webcrypto.subtle.importKey(
+            'spki',
+            Buffer.from(signingKey, 'base64url'),
+            { name: 'ECDSA', namedCurve: 'P-256' },
+            false,
+            ['verify']
+        );
+
+        return await webcrypto.subtle.verify(
+            { name: 'ECDSA', hash: 'SHA-256' },
+            key,
+            Buffer.from(signature, 'base64url'),
+            Buffer.from(commitment, 'utf8')
+        );
+    }
+    catch
+    {
+        return false;
+    }
+}
 
 /**
  * Epochs: minted by a device, distributed by this server, opened by nobody here.
@@ -103,16 +145,16 @@ export function createEpochService(db: DataSource)
     };
 
     /** A device this account holds, still valid, and able to be a party to the sealing. */
-    const mine = async (userId: string, deviceId: string): Promise<boolean> =>
+    const mine = async (userId: string, deviceId: string): Promise<string | null> =>
     {
         const rows = await db.query(
-            `select 1 as ok from devices
+            `select signing_key from devices
              where id = $1 and user_id = $2
                and revoked_at is null and confirmed_at is not null
                and attested in ('wallet', 'contract')`,
             [deviceId, userId]
         );
-        return firstRow<{ ok: number }>(rows) !== null;
+        return firstRow<{ signing_key: string }>(rows)?.signing_key ?? null;
     };
 
     return {
@@ -191,9 +233,16 @@ export function createEpochService(db: DataSource)
          */
         async mint(userId: string, conversationId: string, input: MintInput): Promise<boolean>
         {
-            if (!await mine(userId, input.mintedBy))
+            const signingKey = await mine(userId, input.mintedBy);
+
+            if (signingKey === null)
             {
                 throw new ForbiddenError('That device cannot mint a key for this conversation.');
+            }
+
+            if (!Number.isSafeInteger(input.epoch) || input.epoch < 1 || input.epoch > MAX_EPOCH)
+            {
+                throw new BadRequestError('That is not an epoch number.');
             }
 
             if (input.recipients.length === 0)
@@ -215,6 +264,23 @@ export function createEpochService(db: DataSource)
             if (wrapped.size !== named.size || [...named].some((id) => !wrapped.has(id)))
             {
                 throw new ForbiddenError('Every recipient needs exactly one wrapped key.');
+            }
+
+            // Refused at the boundary, exactly like the recipient-subset check above. This server
+            // cannot tell whether the SET is right - that is the recipient's job, against devices it
+            // verified for itself - but it can tell a signature from a string, and accepting a
+            // string is what lets one member wedge a room's key schedule permanently.
+            const commitment = epochCommitment({
+                conversationId,
+                epoch: input.epoch,
+                minterDeviceId: input.mintedBy,
+                recipients: input.recipients,
+                confirmation: input.confirmation
+            });
+
+            if (!await signedByMinter(signingKey, commitment, input.signature))
+            {
+                throw new ForbiddenError('That epoch is not signed by the device that claims to have minted it.');
             }
 
             const runner = db.createQueryRunner();

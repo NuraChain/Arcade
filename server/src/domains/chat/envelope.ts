@@ -109,6 +109,22 @@ export interface EpochCommitment
 
     /** Every device the key was wrapped to, sorted. */
     recipients: readonly string[];
+
+    /**
+     * The key check value, which is what pins WHICH key this epoch is.
+     *
+     * Signing the recipient list alone was not enough, and the gap was a complete break. Every
+     * input to a wrap and to a key check value is PUBLIC - the recipient's exchange key, the
+     * conversation, the epoch, the device id - so a server could mint its own key K', wrap it to
+     * one targeted recipient, compute a matching confirmation, and leave the genuine recipient
+     * signature untouched. That recipient verified a real signature over a real recipient set,
+     * unwrapped K', checked it against the server's own tag, and sealed everything it typed under a
+     * key the server had chosen. Both checks passed; neither of them was about the key.
+     *
+     * With the confirmation signed, the server cannot produce a tag for K' that the minter appears
+     * to have vouched for, and replaying the genuine tag makes the recipient's own check fail.
+     */
+    confirmation: string;
 }
 
 /**
@@ -131,7 +147,8 @@ export function epochCommitment(commitment: EpochCommitment): string
         commitment.conversationId,
         String(commitment.epoch),
         commitment.minterDeviceId,
-        [...commitment.recipients].sort().join(',')
+        [...commitment.recipients].sort().join(','),
+        commitment.confirmation
     ].join(SEP);
 }
 

@@ -1,6 +1,9 @@
 import { createStore, createSignal, type Getter } from 'azerothjs';
 
 import { client, type Account } from '../api.ts';
+import { keyStore } from '../lib/device-keys.ts';
+import { forgetEpochKeys } from '../lib/epoch-keys.ts';
+import { forgetSigners } from '../lib/sealing.ts';
 
 export interface SessionApi
 {
@@ -17,6 +20,25 @@ export interface SessionApi
     refresh(): Promise<void>;
     reset(): void;
 }
+
+/**
+ * Everything this browser could read with, thrown away.
+ *
+ * A session ends but IndexedDB does not. Leaving the keyring behind means the next person to use
+ * this browser - a shared machine, a borrowed laptop, a device being sold - inherits the ability to
+ * read every conversation the last person had open, and to sign as their device. Signing out is
+ * exactly the moment somebody believes they have handed it back.
+ *
+ * The epoch keys and the archive key go first, then the device's own keypairs. Each is best-effort
+ * and independent: a browser that refuses IndexedDB must still be able to sign out, and one failure
+ * must not strand the rest.
+ */
+const surrenderKeys = async (): Promise<void> =>
+{
+    await forgetEpochKeys().catch(() => undefined);
+    await keyStore().forget().catch(() => undefined);
+    forgetSigners();
+};
 
 export const useSession = createStore((): SessionApi =>
 {
@@ -57,6 +79,7 @@ export const useSession = createStore((): SessionApi =>
         async signOut()
         {
             await client.auth.signOut().catch(() => undefined);
+            await surrenderKeys();
             setAccount(null);
             settled = Promise.resolve();
         },
@@ -64,6 +87,7 @@ export const useSession = createStore((): SessionApi =>
         async signOutEverywhere()
         {
             const result = await client.auth.signOutEverywhere().catch(() => ({ ended: 0 }));
+            await surrenderKeys();
             setAccount(null);
             settled = Promise.resolve();
             return result.ended;

@@ -97,12 +97,16 @@ export async function buildSealedFixtures(): Promise<SealedFixtures>
         const recipients = seats.map((seat) => seat.device.id).sort();
         const key = mintEpochKey();
 
+        // The confirmation is signed together with the recipients, because the signature has to pin
+        // WHICH key this epoch is and not only who may read it.
+        const confirmation = await confirmationOf(key, thread.slug, 1);
+
         epochs[thread.slug] = [{
             epoch: 1,
             mintedBy: minter.device.id,
             recipients: recipients.join(','),
-            signature: await signRecipients(minter.device.secrets, thread.slug, 1, minter.device.id, recipients),
-            confirmation: await confirmationOf(key, thread.slug, 1),
+            signature: await signRecipients(minter.device.secrets, thread.slug, 1, minter.device.id, recipients, confirmation),
+            confirmation,
             keys: Object.fromEntries(await Promise.all(seats.map(async (seat) =>
             {
                 const wrap = await wrapEpochKey(key, thread.slug, 1, seat.device);

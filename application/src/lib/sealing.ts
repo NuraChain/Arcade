@@ -57,7 +57,13 @@ export type EpochFailure =
     /** Somebody in the conversation cannot be sealed to. `blocked` says who, and why. */
     | 'not-sealable'
 
-    /** The set that was signed for is not the set this browser expects. Something edited the list. */
+    /**
+     * The commitment does not cover what this browser was handed.
+     *
+     * Either the recipient set differs from the one the minter signed, or the key check value does
+     * - and the second is the one that matters most: an epoch whose KEY is not the key the minter
+     * vouched for is an epoch a server chose, and sealing under it hands the server everything.
+     */
     | 'recipients-mismatch'
 
     /** The epoch was minted by a device this browser cannot verify. */
@@ -178,8 +184,10 @@ async function mintNext(
         devices.map((device) => wrapEpochKey(key, conversationId, epoch, device))
     );
 
-    const signature = await signRecipients(secrets, conversationId, epoch, deviceId, recipients);
+    // The confirmation is computed FIRST, because the signature has to cover it. Signing only the
+    // recipient list says who may read the epoch and nothing about which key it is.
     const confirmation = await confirmationOf(key, conversationId, epoch);
+    const signature = await signRecipients(secrets, conversationId, epoch, deviceId, recipients, confirmation);
 
     const result = await client.chat.mint({
         params: { id: conversationId },
@@ -235,7 +243,9 @@ async function adopt(
         return failed('no-signer');
     }
 
-    if (!await verifyRecipients(minter, conversationId, epoch, expected, state.signature))
+    // Recipients AND key check value together, before anything is unwrapped. Checking the key
+    // against a confirmation the server supplied would be checking it against itself.
+    if (!await verifyRecipients(minter, conversationId, epoch, expected, state.confirmation, state.signature))
     {
         return failed('recipients-mismatch');
     }
@@ -527,7 +537,7 @@ export async function historicalKey(conversationId: string, epoch: number, devic
 
     const listed = state.recipients.split(',');
 
-    if (!await verifyRecipients(minter, conversationId, epoch, listed, state.signature))
+    if (!await verifyRecipients(minter, conversationId, epoch, listed, state.confirmation, state.signature))
     {
         return null;
     }
