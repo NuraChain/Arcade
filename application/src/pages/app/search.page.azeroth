@@ -127,6 +127,11 @@ export default component SearchPage()
                         </section>
                     </Show>
                     <EmptyState icon="search" title={ locale.t('search.start') } lead={ locale.t('search.startLead') } class="py-8" />
+
+                    <p class="flex items-start gap-2 px-1 text-ui-xs text-faint">
+                        <Icon name="lock" size={ 13 } class="mt-0.5 shrink-0" />
+                        <span>{ locale.t('search.thisDevice') }</span>
+                    </p>
                 </div>
             }
         >
@@ -193,6 +198,15 @@ export default component SearchPage()
                                         </For>
                                     </ul>
                                 </section>
+                            </Show>
+
+                            <Show when={ results.locked > 0 }>
+                                { () =>
+                                    <p class="flex items-start gap-2 rounded-tile border border-line bg-field px-3 py-2 text-ui-sm text-muted">
+                                        <Icon name="lock" size={ 15 } class="mt-0.5 shrink-0" />
+                                        <span>{ locale.t('search.locked', { count: String(results.locked) }) }</span>
+                                    </p>
+                                }
                             </Show>
 
                             <Show when={ results.messages.length > 0 }>

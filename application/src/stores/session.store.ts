@@ -4,6 +4,8 @@ import { client, type Account } from '../api.ts';
 import { keyStore } from '../lib/device-keys.ts';
 import { forgetEpochKeys } from '../lib/epoch-keys.ts';
 import { forgetSigners } from '../lib/sealing.ts';
+import { forgetArchive } from '../services/chat.source.ts';
+import { forgetSearchTerms } from '../lib/search-terms.ts';
 
 export interface SessionApi
 {
@@ -35,6 +37,13 @@ export interface SessionApi
  */
 const surrenderKeys = async (): Promise<void> =>
 {
+    // The plaintext FIRST, because it is the thing a person can actually read without any key at
+    // all. Surrendering only the keys left every message this browser had already opened sitting in
+    // memory, and sign-out is a client-side navigation - no reload, same module, same Map - so the
+    // next person to sign in on this tab could search the last person's conversations.
+    forgetArchive();
+    forgetSearchTerms();
+
     await forgetEpochKeys().catch(() => undefined);
     await keyStore().forget().catch(() => undefined);
     forgetSigners();

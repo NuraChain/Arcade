@@ -712,9 +712,37 @@ readable — the connection banner is what says the network is the problem.
 
 **`chats.page` filters what the list row holds** — the title and the last message — and its search
 box says "Search conversations" because that is what it does. Full-text search over messages is
-`search.store.ts`, and it reads `chat.archive()`: the messages THIS DEVICE holds. That is the
-honest shape for E2EE, where a server-side message index cannot exist, and it is the one call site
-PR 15 changes when the archive becomes the locally decrypted one.
+`search.store.ts`, and it reads `chat.archive()`: the messages THIS DEVICE has fetched and managed
+to open. That is the only shape E2EE allows, because a server-side message index cannot exist.
+
+**The archive is the plaintext, and it has to be surrendered like a key.** Six independent audit
+routes converged on the same defect: `surrenderKeys` dropped the epoch keys, the device keypairs and
+the signer cache, and left every message those keys had already opened sitting in a module-level
+`Map`. Sign-out is a client-side navigation — no reload, same module — and signing in as somebody
+else does not replace it. So the next person at the keyboard signed in as themselves, opened search,
+typed a common word, and read the previous person's conversations **without needing a key at all**.
+The plaintext outlived the keys that produced it, while `session.store.ts`'s own docstring promised
+the opposite in so many words.
+
+`forgetArchive()` is exported from `chat.source.ts` — which imports no store, so it can be reached
+from `session.store.ts` without closing the session→chat→account cycle — and is called first in
+`surrenderKeys`, before the keys, because it is the thing a person can read with no key. Two belts
+beside it: `archive(scope)` answers nothing when `scope.me` is not the account the messages were
+opened for, and search terms move to `lib/search-terms.ts` so they are dropped on the same path.
+A search term against a sealed conversation is a fragment of what was said in it, and it was the one
+thing this product wrote down in cleartext.
+
+**The archive filters expiry on the way OUT, not only on the way in.** A message that runs out while
+it is being held is never read again — the server stops returning it — so nothing ever comes back to
+evict it, and it stayed findable by its words for as long as the tab was open. The eviction that
+looked like the fix was unreachable in the normal path.
+
+**Search says what it covers, because a person who finds nothing concludes it is not there.**
+`search.thisDevice` states the scope where somebody starts a search, and `search.locked` counts the
+messages this browser holds but could not open. "It is not there" and "it is not here" are very
+different answers when the thing being looked for is something somebody remembers reading. A locked
+message is also excluded from the results outright: its `text` is empty but its `from` is not, so it
+would otherwise match on the sender's handle and render an empty row that reads as a bug.
 
 **Sending is not optimistic.** `send` seals, posts and revalidates, so the message appears when the
 server has acknowledged it. That is a round trip plus a signature rather than a microtask now, which

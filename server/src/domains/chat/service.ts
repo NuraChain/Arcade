@@ -254,6 +254,7 @@ export function createChatService(db: DataSource, social: SocialService, frankin
                         (select count(*)::int from messages x
                           where x.conversation_id = c.id
                             and x.created_at > m.last_read_at
+                            and (x.expires_at is null or x.expires_at > now())
                             and (x.sender_id is null or x.sender_id <> $1))             as unread,
                         last.id                                                          as last_id,
                         last.kind                                                        as last_kind,
@@ -284,6 +285,10 @@ export function createChatService(db: DataSource, social: SocialService, frankin
                      from messages x
                      left join users su on su.id = x.sender_id
                      where x.conversation_id = c.id
+                       -- The same filter the thread read applies. Without it the list shows a
+                       -- preview of a message that has run out and the thread does not, which is
+                       -- the one place a disappearing message would still be visible.
+                       and (x.expires_at is null or x.expires_at > now())
                      order by x.created_at desc, x.id desc
                      limit 1
                  ) last on true

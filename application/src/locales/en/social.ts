@@ -90,7 +90,9 @@ export const social = {
     'search.empty': 'Nothing for “{query}”.',
     'search.emptyLead': 'Check the spelling, or try a shorter word.',
     'search.start': 'Search the whole place.',
-    'search.startLead': 'People by name or @handle, games, groups, and every message you can read.',
+    'search.startLead': 'People by name or @handle, games, groups, and the messages this browser has opened.',
+    'search.thisDevice': 'Messages are searched on this device only — what it has fetched and could open. Nothing is searched on our side, because nothing there can be read.',
+    'search.locked': { one: 'One message here could not be opened, so it was not searched.', other: '{count} messages here could not be opened, so they were not searched.' },
     'search.results': { one: '{count} result', other: '{count} results' },
     'search.in': 'in {where}',
 

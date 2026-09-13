@@ -3,6 +3,7 @@ import { describe, it, expect, beforeEach, afterAll } from 'vitest';
 import { recipientList } from '../../server/src/domains/chat/envelope.ts';
 import { setKeyStore } from '../src/lib/device-keys.ts';
 import { currentEpoch, forgetSigners } from '../src/lib/sealing.ts';
+import { forgetArchive } from '../src/services/chat.source.ts';
 import { createApiSource, type ChatScope } from '../src/services/chat.source.ts';
 import type { Message } from '../src/data/chat.ts';
 import { server, fixtureDevice } from './fake-api.ts';
@@ -283,6 +284,60 @@ describe('what the client refuses from the server', () =>
 
         const thread = await createApiSource().thread(THREAD, scope, new AbortController().signal);
         expect(thread[0].locked).toBe('no-epoch-key');
+    });
+});
+
+describe('what leaves the browser when somebody signs out', () =>
+{
+    it('drops every message it had decrypted, so the next account cannot search them', async () =>
+    {
+        const source = createApiSource();
+
+        await source.post(said('something private'));
+        await source.thread(THREAD, scope, new AbortController().signal);
+
+        expect(source.archive(scope).map((one) => one.text)).toContain('something private');
+
+        // Surrendering the KEYS is not enough, and that gap was real: a browser keeps what it has
+        // already opened in memory, sign-out is a client-side navigation with no reload, and signing
+        // in as somebody else does not replace the module holding it. The next person at the
+        // keyboard signed in as themselves, opened search, and read the last person's messages
+        // without needing a key at all - the plaintext outlived the keys that produced it.
+        forgetArchive();
+
+        expect(source.archive(scope)).toEqual([]);
+    });
+
+    it('will not hand one account the messages another opened', async () =>
+    {
+        const source = createApiSource();
+
+        await source.post(said('for alex only'));
+        await source.thread(THREAD, scope, new AbortController().signal);
+
+        // Belt to `forgetArchive`'s braces. If a source somehow outlives the account it was filled
+        // for, it answers nothing rather than handing one person's messages to another.
+        expect(source.archive({ me: 'sara.k', blocked: [] })).toEqual([]);
+        expect(source.archive(scope)).toHaveLength(1);
+    });
+
+    it('forgets a message that runs out while it is sitting in the archive', async () =>
+    {
+        const source = createApiSource();
+
+        await source.post(said('not for long'));
+        await source.thread(THREAD, scope, new AbortController().signal);
+
+        expect(source.archive(scope)).toHaveLength(1);
+
+        // A message that expires while it is held is never read again - the server stops returning
+        // it - so nothing comes back to evict it. Filtering on the way OUT is what stops it staying
+        // findable by its words for as long as the tab is open.
+        server.messages[0].expiresAt = new Date(1_600_000_000_000).toISOString();
+        forgetSigners();
+
+        await source.thread(THREAD, scope, new AbortController().signal);
+        expect(source.archive(scope)).toEqual([]);
     });
 });
 

@@ -58,6 +58,34 @@ export interface ChatSource
 const byAt = (a: Message, b: Message): number => a.at - b.at;
 
 /**
+ * Every live source, so the plaintext they hold can be thrown away from outside them.
+ *
+ * `session.store.ts` cannot reach `chat.store.ts` - session, chat and account form a cycle - and
+ * the archive is the one thing in this file that MUST be droppable at sign-out. Registering here
+ * keeps that one line, in the same place the keys are surrendered, rather than at each of the two
+ * sign-out buttons where the next one added would forget.
+ */
+const live = new Set<{ reset(): void }>();
+
+/**
+ * Throws away every decrypted message this browser is holding.
+ *
+ * Surrendering the KEYS is not enough and that gap was a real one: a browser keeps what it has
+ * already opened in memory, sign-out is a client-side navigation with no reload, and signing in as
+ * somebody else does not replace the module that holds it. The next person at the keyboard - a
+ * shared machine, a borrowed laptop, a device being handed back - signed in as themselves, opened
+ * search, and read the previous person's messages without needing a key at all, because the
+ * plaintext outlived the keys that produced it.
+ */
+export function forgetArchive(): void
+{
+    for (const source of live)
+    {
+        source.reset();
+    }
+}
+
+/**
  * The SERVER's chat, behind the same interface the local one implements.
  *
  * Two translations happen here and nowhere else. A server message is `body` XOR
@@ -86,6 +114,9 @@ const byAt = (a: Message, b: Message): number => a.at - b.at;
 export function createApiSource(): ChatSource
 {
     const archive = new Map<string, Message>();
+
+    /** Whose messages are in this Map. Set the first time anything is read for somebody. */
+    let openedFor = '';
 
     const remember = (message: Message): Message =>
     {
@@ -139,6 +170,7 @@ export function createApiSource(): ChatSource
             ...(locked === null ? {} : { locked }),
             ...(signed === undefined ? {} : { frankingKey: signed.frankingKey }),
             ...(wire.payload === undefined ? {} : { line: { key: wire.payload.key, params } }),
+            ...(wire.expiresAt === undefined ? {} : { expiresAt: Date.parse(wire.expiresAt) }),
             at: wire.clientAt === undefined ? Date.parse(wire.at) : Date.parse(wire.clientAt),
             ref: wire.payload === undefined
                 ? null
@@ -204,9 +236,11 @@ export function createApiSource(): ChatSource
         expireAfter: wire.expireAfter ?? null
     });
 
-    return {
-        async conversations()
+    const source: ChatSource = {
+        async conversations(scope)
         {
+            openedFor = scope.me;
+
             const answer = await client.chat.list();
 
             return Promise.all(answer.conversations.map(async (row) => ({
@@ -218,8 +252,10 @@ export function createApiSource(): ChatSource
             })));
         },
 
-        async thread(id)
+        async thread(id, scope)
         {
+            openedFor = scope.me;
+
             const [page, secrets, mine] = await Promise.all([
                 client.chat.messages({ params: { id }, query: {} }),
                 keyStore().secrets(),
@@ -306,11 +342,45 @@ export function createApiSource(): ChatSource
             return answer.id;
         },
 
-        archive: () => [...archive.values()].sort(byAt),
+        /**
+         * What this DEVICE holds, for the caller it was opened for.
+         *
+         * Filtered by `scope.me` as well as by expiry. The identity check is belt to `forgetArchive`'s
+         * braces: if a source somehow outlives the account it was filled for, it answers nothing
+         * rather than handing one person's messages to another.
+         *
+         * Expiry is filtered HERE rather than only when a message is read, because a message that
+         * runs out while it is sitting in this Map is never read again - the server stops returning
+         * it - so nothing would ever come back to evict it, and it would stay findable by its words
+         * forever. That is precisely what the room agreed would not happen.
+         */
+        archive(scope)
+        {
+            if (scope.me !== '' && openedFor !== '' && scope.me !== openedFor)
+            {
+                return [];
+            }
+
+            const now = runtime().clock.now();
+
+            for (const [id, message] of archive)
+            {
+                if (message.expiresAt !== undefined && message.expiresAt <= now)
+                {
+                    archive.delete(id);
+                }
+            }
+
+            return [...archive.values()].sort(byAt);
+        },
 
         reset()
         {
             archive.clear();
+            openedFor = '';
         }
     };
+
+    live.add(source);
+    return source;
 }

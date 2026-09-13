@@ -103,6 +103,17 @@ export interface Message
 
     line?: MessageLine;
     at: number;
+
+    /**
+     * When this stops existing, in epoch milliseconds. Absent on a message that lasts.
+     *
+     * Carried on the client's copy so the in-memory archive can evict it when its moment passes. A
+     * message that runs out while it is sitting there is never read again - the server stops
+     * returning it - so nothing would come back to remove it, and it would stay findable by its
+     * words for as long as the tab was open.
+     */
+    expiresAt?: number;
+
     ref: MessageRef | null;
 }
 
