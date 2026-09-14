@@ -1688,9 +1688,19 @@ page. `ErrorPage` takes the error now, logs it always, and shows it on screen in
 an exception's text is written for whoever wrote the code and can carry an id or a path that a
 stranger reading over somebody's shoulder should not be handed.
 
-**Stores own their timers.** No store schedules anything in its factory; periodic work sits
-behind idempotent `start(): () => void` / `stop()`, one-shot timers are tracked and cleared by
-`reset()`, and every one reads the clock through `runtime()` so tests can drive it.
+**Stores own their timers AND their listeners.** No store schedules or subscribes to anything in its
+factory; that work sits behind idempotent `start(): () => void` / `stop()`, one-shot timers are
+tracked and cleared by `reset()`, and every one reads the clock through `runtime()` so tests can
+drive it. `device` and `scroll` were the two that did not comply - four window listeners and one
+scroll listener attached at construction, two of them through `matchMedia` objects built inline, so
+no handle survived to remove them with. A browser builds one store and never noticed; a spec file
+that builds a fresh store scope per render accumulated them.
+
+**Two of them are NOT started by the app shell, and that is deliberate.** `device` starts in
+`App.azeroth` because the landing page reads it too - through the tooltips and the theme controls -
+and a watch beginning behind the sign-in would leave the public half of the site deaf to a resize.
+`scroll` starts in `site-header.component.azeroth`, which is its only reader anywhere: it is a
+landing-page concern, not an app one. Everything else starts in the shell, in the `stops` array.
 
 **A store mutator must never read the signal it writes** while it can be called from an
 `effect` — that forms a cycle and the scheduler gives up with "Reactive flush did not settle".

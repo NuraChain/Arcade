@@ -81,6 +81,36 @@ describe('device posture', () =>
         device.override(null);
         expect(device.posture()).toBe(postureFor(device.width()));
     });
+
+    /**
+     * The four window listeners used to be attached in the store's FACTORY, and two of them could
+     * never be removed at all - the `matchMedia` objects were built inline, so no handle survived to
+     * hand to `removeEventListener`. A browser builds one store and never noticed; a test file that
+     * builds a fresh store scope per render accumulated four listeners at a time.
+     *
+     * Both halves are asserted, because only the second one was ever the bug: starting has to make
+     * the store follow the window, and stopping has to make it stop.
+     */
+    it('follows the window once started, and stops watching the window when it is told to', () =>
+    {
+        const device = useDevice();
+        const stop = device.start();
+
+        (window as unknown as { innerWidth: number }).innerWidth = 500;
+        window.dispatchEvent(new Event('resize'));
+        expect(device.width()).toBe(500);
+
+        stop();
+
+        (window as unknown as { innerWidth: number }).innerWidth = 1400;
+        window.dispatchEvent(new Event('resize'));
+        expect(device.width(), 'the store kept following the window after it was stopped').toBe(500);
+
+        device.start();
+        window.dispatchEvent(new Event('resize'));
+        expect(device.width(), 'starting again did not resume the watch').toBe(1400);
+        device.stop();
+    });
 });
 
 describe('session', () =>

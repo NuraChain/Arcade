@@ -27,6 +27,24 @@ export interface DeviceApi
     standalone: Getter<boolean>;
     keyboardOpen: Getter<boolean>;
     override(posture: Posture | null): void;
+
+    /**
+     * Begins watching the window, and hands back the way to stop.
+     *
+     * The four listeners this opens used to be attached in the store's FACTORY, which broke the rule
+     * every other store follows and made two of them unremovable outright - the `matchMedia` objects
+     * were constructed inline, so there was no handle left to pass to `removeEventListener`. One
+     * document only ever built one store, so nothing accumulated in a browser; a test file that
+     * builds a fresh store scope per render accumulated four listeners a time.
+     *
+     * It is started from `App.azeroth` rather than the app shell, because the landing page reads this
+     * store too - through `Tooltip` and the theme controls - and a store started only behind the
+     * sign-in would leave the public half of the site deaf to a resize.
+     *
+     * Idempotent: calling it twice watches once.
+     */
+    start(): () => void;
+    stop(): void;
 }
 
 const hasWindow = (): boolean => typeof window !== 'undefined';
@@ -46,24 +64,61 @@ export const useDevice = createStore((): DeviceApi =>
     const [keyboardOpen, setKeyboardOpen] = createSignal(false);
     const [forced, setForced] = createSignal<Posture | null>(null);
 
-    if (hasWindow())
+    const measure = (): void =>
     {
-        const measure = (): void =>
+        if (!hasWindow())
         {
-            setWidth(window.innerWidth);
-            setHeight(window.innerHeight);
-            const viewport = window.visualViewport;
-            setKeyboardOpen(viewport !== null && viewport !== undefined && window.innerHeight - viewport.height > 150);
-        };
-        window.addEventListener('resize', measure, { passive: true });
-        window.visualViewport?.addEventListener('resize', measure, { passive: true });
-        if (typeof window.matchMedia === 'function')
-        {
-            window.matchMedia('(pointer: coarse)').addEventListener('change', (event) => setCoarse(event.matches));
-            window.matchMedia('(prefers-reduced-motion: reduce)').addEventListener('change', (event) => setReducedMotion(event.matches));
+            return;
         }
+        setWidth(window.innerWidth);
+        setHeight(window.innerHeight);
+        const viewport = window.visualViewport;
+        setKeyboardOpen(viewport !== null && viewport !== undefined && window.innerHeight - viewport.height > 150);
+    };
+
+    let watching: (() => void) | null = null;
+
+    const stop = (): void =>
+    {
+        watching?.();
+        watching = null;
+    };
+
+    const start = (): (() => void) =>
+    {
+        if (watching !== null)
+        {
+            return stop;
+        }
+        if (!hasWindow())
+        {
+            return stop;
+        }
+
+        const onCoarse = (event: MediaQueryListEvent): void => setCoarse(event.matches);
+        const onMotion = (event: MediaQueryListEvent): void => setReducedMotion(event.matches);
+        const pointer = typeof window.matchMedia === 'function' ? window.matchMedia('(pointer: coarse)') : null;
+        const motion = typeof window.matchMedia === 'function' ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
+        const viewport = window.visualViewport ?? null;
+
+        window.addEventListener('resize', measure, { passive: true });
+        viewport?.addEventListener('resize', measure, { passive: true });
+        pointer?.addEventListener('change', onCoarse);
+        motion?.addEventListener('change', onMotion);
+
+        watching = (): void =>
+        {
+            window.removeEventListener('resize', measure);
+            viewport?.removeEventListener('resize', measure);
+            pointer?.removeEventListener('change', onCoarse);
+            motion?.removeEventListener('change', onMotion);
+        };
+
         measure();
-    }
+        return stop;
+    };
+
+    measure();
 
     return {
         width,
@@ -75,6 +130,8 @@ export const useDevice = createStore((): DeviceApi =>
         reducedMotion,
         standalone,
         keyboardOpen,
-        override: (posture) => setForced(posture)
+        override: (posture) => setForced(posture),
+        start,
+        stop
     };
 });

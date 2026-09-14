@@ -37,6 +37,14 @@ export default component App(props: { url?: string; handoff?: LoaderHandoff })
         scroll: false
     });
 
+    // Started HERE rather than in the app shell: the landing page reads this store too, through the
+    // tooltips and the theme controls, and a watch that began behind the sign-in would leave the
+    // public half of the site deaf to a resize.
+    mount
+    {
+        return useDevice().start();
+    }
+
     <RouterProvider router={ router }>
         <ErrorBoundary fallback={ (error, reset) => <ErrorPage reset={ reset } error={ error } /> }>
             <Routes fallback={ () => <NotFoundPage /> } transition={ transitionFor } transitionDuration={ 400 } />

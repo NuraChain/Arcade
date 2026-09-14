@@ -21,6 +21,12 @@ export default component SiteHeader(props: { cta?: boolean })
 
     state open = false;
 
+    // The only reader of the scroll store, so the only place that needs to start it.
+    mount
+    {
+        return scroll.start();
+    }
+
     derived retracted = open === false && scroll.past() && scroll.direction() === 'down';
 
     <header
