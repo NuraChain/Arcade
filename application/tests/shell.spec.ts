@@ -174,6 +174,38 @@ describe('ToastHost', () =>
         await settle();
         expect(document.body.querySelectorAll('[role="status"]').length).toBe(0);
     });
+
+    /**
+     * The host keeps one drag recogniser per toast in a Map, and that Map was only ever written to -
+     * toast ids come from a counter that only goes up, so it grew for as long as the tab was open.
+     * It now reconciles against the toasts on screen.
+     *
+     * What this test proves is NOT that the Map shrinks: the Map is a closure variable with no
+     * observable behaviour, and a test that claimed otherwise would be asserting nothing. What it
+     * proves is the risk the fix introduces - that reconciling while toasts come and go does not
+     * throw, and does not evict a recogniser belonging to a toast that is still on screen.
+     */
+    it('survives toasts coming and going, and keeps the one still on screen', async () =>
+    {
+        renderTest(() => ToastHost({}) as Rendered);
+        const toasts = useToasts();
+
+        toasts.show({ text: 'One' });
+        toasts.show({ text: 'Two' });
+        toasts.show({ text: 'Three' });
+        await settle();
+        expect(document.body.querySelectorAll('[role="status"]').length).toBe(3);
+
+        clock.advance(TOAST_DURATION);
+        await settle();
+        expect(document.body.querySelectorAll('[role="status"]').length).toBe(0);
+
+        toasts.show({ text: 'Four' });
+        await settle();
+        const remaining = document.body.querySelectorAll('[role="status"]');
+        expect(remaining.length).toBe(1);
+        expect(remaining[0].textContent).toContain('Four');
+    });
 });
 
 describe('BottomNav', () =>

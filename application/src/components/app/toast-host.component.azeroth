@@ -61,6 +61,14 @@ export default component ToastHost()
 
     state now = runtime().clock.now();
 
+    /**
+     * One drag recogniser per toast on screen - and only per toast on screen.
+     *
+     * Toast ids come from a counter that only ever goes up and this host is mounted for the whole
+     * session, so a map that is only ever written to is a map that grows for as long as the tab is
+     * open. Nothing fails; it is simply a slow accumulation nobody would ever see, which is exactly
+     * why it needs a rule rather than a memory.
+     */
     const drags = new Map<string, ReturnType<typeof createDrag>>();
 
     const dragFor = (id: string): ReturnType<typeof createDrag> =>
@@ -77,10 +85,27 @@ export default component ToastHost()
 
     mount
     {
-        return runtime().clock.every(120, () => now = runtime().clock.now());
+        const stop = runtime().clock.every(120, () => now = runtime().clock.now());
+        return () =>
+        {
+            stop();
+            drags.clear();
+        };
     }
 
     derived items = toasts.items();
+
+    effect
+    {
+        const alive = new Set(items.map((toast) => toast.id));
+        for (const id of [...drags.keys()])
+        {
+            if (!alive.has(id))
+            {
+                drags.delete(id);
+            }
+        }
+    }
 
     derived queued = toasts.queued();
 
