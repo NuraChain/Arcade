@@ -1669,6 +1669,27 @@ icon-only control has a visible name on a mouse and a long-press name on a finge
 `Slider` is pointer-captured and keyboard-driven. `lib/anchor.ts` is the shared placement maths
 (flip, shift, RTL) and `lib/swipe.ts` the two-axis drag with axis lock.
 
+**A toast's countdown stops for a pointer AND for focus, and starts again however the touch ended.**
+Pausing takes the time spent so far out of `remaining` and deliberately leaves `startedAt` where it
+is, because that is what the subtraction was measured from — so `progress` has to read a `paused`
+flag rather than adding `now - startedAt` on top, or the bar jumps forward the instant the pointer
+arrives and goes on creeping while it sits still. `pause` is idempotent for the same reason: a
+pointer arriving and focus landing are two different callers, and hovering a toast then tabbing to
+its button took two bites out of one countdown. Resuming is idempotent too, which is what lets
+`pointercancel` say it unconditionally — a cancelled touch never reaches `pointerup`, and the toast
+used to sit there for good waiting for a resume that was never coming.
+
+**The wallet address has to be readable and copyable, because the whole peer story rests on it.**
+*Whose device is that?* asks a person to compare an address out of band "the way a safety number
+is" — and it was rendered `truncate`d, in full, with nothing to copy it with. A comparison nobody can
+perform is not a defence. It carries a tooltip with the whole value and a copy button now.
+
+**Every icon-only control in this product is an `IconButton`, and `IconButton` wraps `Tooltip`.**
+That is checkable rather than aspirational: a sweep for a bare `<button>` containing an `Icon` and no
+text finds none. Adding a tooltip to a control that already says what it is would be noise, so the
+rule is the narrow one — an icon with no words gets a name on hover and on long-press, and everything
+else does not.
+
 **Touch is not an afterthought.** Anything a finger hits clears 44px — use the `coarse:` variant
 rather than growing the control for everyone. `npm run qa` fails the build if it does not.
 

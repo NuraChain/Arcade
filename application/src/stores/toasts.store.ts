@@ -28,6 +28,17 @@ export interface Toast
     createdAt: number;
     startedAt: number;
     remaining: number;
+
+    /**
+     * Whether the countdown is stopped, which `progress` needs and cannot infer.
+     *
+     * `startedAt` is not moved by a pause - it is what `remaining` was measured FROM - so a progress
+     * bar computed from `now - startedAt` goes on advancing while the pointer sits on the toast, and
+     * jumps the moment it arrives. Reading it here is the difference between a bar that stops when
+     * you look at it and one that appears to skip.
+     */
+    paused: boolean;
+
     dedupe: string | null;
 }
 
@@ -125,7 +136,7 @@ export const useToasts = createStore((): ToastsApi =>
             const [next, ...rest] = untrack(queue);
             setQueue(rest);
             const now = runtime().clock.now();
-            const shown = { ...next, createdAt: now, startedAt: now };
+            const shown = { ...next, createdAt: now, startedAt: now, paused: false };
             setItems([...untrack(items), shown]);
             arm(shown);
         }
@@ -156,7 +167,7 @@ export const useToasts = createStore((): ToastsApi =>
                 if (existing !== undefined)
                 {
                     const now = runtime().clock.now();
-                    patchItem(existing.id, { ...input, kind, startedAt: now, remaining: durationFor(input, kind) });
+                    patchItem(existing.id, { ...input, kind, startedAt: now, remaining: durationFor(input, kind), paused: false });
                     const refreshed = untrack(items).find((toast) => toast.id === existing.id);
                     if (refreshed !== undefined)
                     {
@@ -182,6 +193,7 @@ export const useToasts = createStore((): ToastsApi =>
                 createdAt: now,
                 startedAt: now,
                 remaining: duration,
+                paused: false,
                 dedupe
             };
 
@@ -245,26 +257,34 @@ export const useToasts = createStore((): ToastsApi =>
             setQueue([]);
         },
 
+        /**
+         * Stops the countdown, and does nothing at all if it is already stopped.
+         *
+         * The guard is not tidiness. Pausing subtracts the time spent since `startedAt` from
+         * `remaining` WITHOUT moving `startedAt`, so a second pause subtracts the same stretch again
+         * - and a toast is paused by two different things, a pointer arriving and focus landing on
+         * it. Hovering a toast and tabbing to its button took two bites out of one countdown.
+         */
         pause(id)
         {
             const toast = untrack(items).find((entry) => entry.id === id);
-            if (toast === undefined || !Number.isFinite(toast.remaining))
+            if (toast === undefined || toast.paused || !Number.isFinite(toast.remaining))
             {
                 return;
             }
             stop(id);
             const spent = runtime().clock.now() - toast.startedAt;
-            patchItem(id, { remaining: Math.max(600, toast.remaining - spent) });
+            patchItem(id, { remaining: Math.max(600, toast.remaining - spent), paused: true });
         },
 
         resume(id)
         {
             const toast = untrack(items).find((entry) => entry.id === id);
-            if (toast === undefined || !Number.isFinite(toast.remaining) || timers.has(id))
+            if (toast === undefined || !toast.paused || !Number.isFinite(toast.remaining) || timers.has(id))
             {
                 return;
             }
-            patchItem(id, { startedAt: runtime().clock.now() });
+            patchItem(id, { startedAt: runtime().clock.now(), paused: false });
             const refreshed = untrack(items).find((entry) => entry.id === id);
             if (refreshed !== undefined)
             {
@@ -272,6 +292,14 @@ export const useToasts = createStore((): ToastsApi =>
             }
         },
 
+        /**
+         * How far through its life this toast is, between 0 and 1.
+         *
+         * A paused toast freezes where it stopped. `remaining` already has the spent time taken out
+         * of it at that moment, so adding `now - startedAt` on top would count the same stretch
+         * twice and then keep counting - which is what made the bar jump forward on hover and carry
+         * on creeping while the pointer sat still.
+         */
         progress(id, now)
         {
             const toast = items().find((entry) => entry.id === id);
@@ -279,7 +307,9 @@ export const useToasts = createStore((): ToastsApi =>
             {
                 return 0;
             }
-            const spent = toast.duration - toast.remaining + (now - toast.startedAt);
+            const spent = toast.paused
+                ? toast.duration - toast.remaining
+                : toast.duration - toast.remaining + (now - toast.startedAt);
             return Math.min(1, Math.max(0, spent / toast.duration));
         },
 

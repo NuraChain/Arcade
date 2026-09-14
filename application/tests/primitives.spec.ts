@@ -394,6 +394,51 @@ describe('Tooltip', () =>
         expect(document.body.querySelector('[role="tooltip"]')?.getAttribute('data-placed')).toBe('false');
     });
 
+    /**
+     * Only one tooltip is ever on screen, and it is a MODULE-level handle that makes it so.
+     *
+     * Two open at once is not a cosmetic problem: they are portalled to the same anchor root, and
+     * the second one's id would be a duplicate of the first while both are described by
+     * `aria-describedby`.
+     */
+    it('closes the one that was open when another opens', async () =>
+    {
+        const first = renderTest(() => Tooltip({ label: 'First', children: Probe(), id: 'tip-first' }) as Rendered);
+        const second = renderTest(() => Tooltip({ label: 'Second', children: Probe(), id: 'tip-second' }) as Rendered);
+        await settle();
+
+        first.container.querySelector('span')!.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+        await settle();
+        expect(document.body.querySelector('#tip-first')).not.toBeNull();
+
+        second.container.querySelector('span')!.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+        await settle();
+
+        expect(document.body.querySelector('#tip-second')).not.toBeNull();
+        expect(document.body.querySelector('#tip-first')).toBeNull();
+        expect(document.body.querySelectorAll('[role="tooltip"]').length).toBe(1);
+    });
+
+    /**
+     * A tooltip is placed once, against a box that was measured at that moment. Anything that moves
+     * the trigger leaves it pointing at empty space, so scrolling closes it rather than chasing it.
+     * The listener is on the capture phase because the product scrolls an ELEMENT, not the window.
+     */
+    it('closes when anything scrolls underneath it', async () =>
+    {
+        const { container } = renderTest(() => Tooltip({ label: 'More actions', children: Probe() }) as Rendered);
+        await settle();
+        const host = container.querySelector('span')!;
+
+        host.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+        await settle();
+        expect(document.body.querySelector('[role="tooltip"]')).not.toBeNull();
+
+        document.body.dispatchEvent(new Event('scroll', { bubbles: true }));
+        await settle();
+        expect(document.body.querySelector('[role="tooltip"]')).toBeNull();
+    });
+
     it('drops a pending open when the pointer leaves before the delay elapses', async () =>
     {
         const { container } = renderTest(() => Tooltip({ label: 'More actions', children: Probe(), delay: 300 }) as Rendered);
@@ -493,5 +538,73 @@ describe('toasts', () =>
         expect(toasts.progress(id, clock.now())).toBe(0);
         clock.advance(2000);
         expect(toasts.progress(id, clock.now())).toBeCloseTo(0.5, 2);
+    });
+
+    /**
+     * The bar has to STOP when the countdown stops, and this is what it looked like when it did not.
+     *
+     * `pause` takes the spent time out of `remaining` and deliberately leaves `startedAt` where it
+     * is, because that is what the subtraction was measured from. `progress` then added
+     * `now - startedAt` on top of the already-reduced remainder, which counted the same stretch
+     * twice - the bar jumped forward the instant the pointer arrived - and went on counting while
+     * the pointer sat still, so it crept toward the end of a toast that was not going anywhere.
+     */
+    it('freezes the progress bar while a toast is paused, rather than jumping it forward', () =>
+    {
+        const toasts = useToasts();
+        const id = toasts.show({ text: 'hover me', duration: 4000 });
+
+        clock.advance(1000);
+        const before = toasts.progress(id, clock.now());
+        expect(before).toBeCloseTo(0.25, 2);
+
+        toasts.pause(id);
+        expect(toasts.progress(id, clock.now())).toBeCloseTo(before, 2);
+
+        clock.advance(5000);
+        expect(toasts.progress(id, clock.now())).toBeCloseTo(before, 2);
+
+        toasts.resume(id);
+        clock.advance(1000);
+        expect(toasts.progress(id, clock.now())).toBeCloseTo(0.5, 2);
+    });
+
+    /**
+     * A toast is paused by two different things - a pointer arriving and focus landing on it - and
+     * both fire when somebody hovers a toast and then tabs to its button. Pausing twice used to take
+     * two bites out of one countdown, because the second subtraction measured from the same
+     * `startedAt` as the first.
+     */
+    it('does not take two bites out of the clock when it is paused twice', () =>
+    {
+        const toasts = useToasts();
+        const id = toasts.show({ text: 'hover and focus', duration: 4000 });
+
+        clock.advance(1000);
+        toasts.pause(id);
+        toasts.pause(id);
+        toasts.pause(id);
+
+        expect(toasts.items()[0].remaining).toBe(3000);
+
+        toasts.resume(id);
+        clock.advance(2900);
+        expect(toasts.items().length).toBe(1);
+        clock.advance(200);
+        expect(toasts.items().length).toBe(0);
+    });
+
+    it('ignores a resume for a toast that was never paused', () =>
+    {
+        const toasts = useToasts();
+        const id = toasts.show({ text: 'running', duration: 4000 });
+
+        clock.advance(1000);
+        toasts.resume(id);
+
+        // The countdown must not restart: it should still have 3000 of its 4000 left, so it dies on
+        // the original schedule rather than living a second longer for having been touched.
+        clock.advance(3000);
+        expect(toasts.items().length).toBe(0);
     });
 });

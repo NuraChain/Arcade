@@ -5,7 +5,9 @@ import Avatar from '../../components/ui/avatar.component.azeroth';
 import Button from '../../components/ui/button.component.azeroth';
 import Chip from '../../components/ui/chip.component.azeroth';
 import EmptyState from '../../components/ui/empty-state.component.azeroth';
+import IconButton from '../../components/ui/icon-button.component.azeroth';
 import SectionHeading from '../../components/ui/section-heading.component.azeroth';
+import Tooltip from '../../components/ui/tooltip.component.azeroth';
 import { NURA_CHAIN } from '../../data/chain.ts';
 import Icon from '../../icons/icon.component.azeroth';
 import { shortAddress } from '../../lib/wallet.ts';
@@ -33,6 +35,33 @@ export default component MePage()
     const account = useAccount();
     const social = useSocial();
     const toasts = useToasts();
+
+    /**
+     * Puts the whole address on the clipboard.
+     *
+     * The address is the ONE value the peer-verification story asks a person to compare out of band -
+     * "the way a safety number is" - and it was rendered truncated with no way to read the rest of
+     * it and nothing to copy it with. A comparison nobody can perform is not a defence.
+     */
+    const copyAddress = async (): Promise<void> =>
+    {
+        const address = account.address();
+        if (address === null)
+        {
+            return;
+        }
+        try
+        {
+            await navigator.clipboard.writeText(address);
+            toasts.show({ kind: 'success', text: locale.t('wallet.address.copied'), dedupe: 'wallet.address' });
+        }
+        catch
+        {
+            // A browser that refuses the clipboard is a state, not a crash: the tooltip still shows
+            // the whole thing and it can be read out.
+            toasts.show({ kind: 'warning', text: locale.t('state.errorLead'), dedupe: 'wallet.address' });
+        }
+    };
 
     useHead({ title: () => locale.t('app.nav.me') });
 
@@ -114,10 +143,19 @@ export default component MePage()
                                         <Icon name="key" size={ 18 } />
                                     </span>
                                     <span class="flex min-w-0 flex-1 flex-col">
-                                        <code class="tally truncate text-ui-base text-text">{ account.address() }</code>
+                                        <Tooltip label={ account.address() ?? '' } side="bottom" class="min-w-0 max-w-full">
+                                            <code class="tally truncate text-ui-base text-text">{ account.address() }</code>
+                                        </Tooltip>
                                         <span class="text-ui-xs text-muted">{ locale.t('wallet.chainReady', { chain: NURA_CHAIN.name }) }</span>
                                     </span>
+                                    <IconButton
+                                        icon="copy"
+                                        label={ locale.t('wallet.address.copy') }
+                                        variant="ghost"
+                                        onClick={ () => void copyAddress() }
+                                    />
                                 </div>
+                                <p class="mt-2 text-ui-xs text-faint">{ locale.t('wallet.address.compare') }</p>
                             </section>
                         }
                     </Show>

@@ -38,6 +38,20 @@ const BAR: Record<ToastKind, string> = {
     pending: 'bg-accent'
 };
 
+/**
+ * Why a toast pauses, and every way it has to start again.
+ *
+ * It stops for a pointer resting on it and for FOCUS landing on it - a keyboard reaches the action
+ * and close buttons too, and somebody reading with the keyboard needs the countdown to stop for the
+ * same reason somebody reading with a mouse does. `focusin`/`focusout` rather than `focus`/`blur`,
+ * because only those bubble up from the buttons inside.
+ *
+ * Starting again is the half that went wrong. `onPointerUp` returns early when no drag was active,
+ * and a pointer that is CANCELLED - a scroll taking over, the browser stealing it - never reaches
+ * that handler at all, while `onPointerDown` had already paused. The toast then sat on screen for
+ * good, waiting for a resume that was never coming. `resume` is idempotent, so saying it twice costs
+ * nothing and missing it once costs the toast its whole life.
+ */
 export default component ToastHost()
 {
     const toasts = useToasts();
@@ -89,6 +103,9 @@ export default component ToastHost()
                     ref={ (element) => element.style.setProperty('--swipe', '0px') }
                     onPointerEnter={ (event) => (event.pointerType === 'mouse' ? toasts.pause(toast.id) : undefined) }
                     onPointerLeave={ (event) => (event.pointerType === 'mouse' ? toasts.resume(toast.id) : undefined) }
+
+                    onFocusIn={ () => toasts.pause(toast.id) }
+                    onFocusOut={ () => toasts.resume(toast.id) }
                     onPointerDown={ (event) =>
                     {
                         if (!device.coarse() || !toast.dismissible)
@@ -123,6 +140,13 @@ export default component ToastHost()
                             toasts.dismiss(toast.id);
                             return;
                         }
+                        toasts.resume(toast.id);
+                    } }
+
+                    onPointerCancel={ (event) =>
+                    {
+                        drags.get(toast.id)?.end(runtime().clock.now());
+                        (event.currentTarget as HTMLElement).style.setProperty('--swipe', '0px');
                         toasts.resume(toast.id);
                     } }
                 >
