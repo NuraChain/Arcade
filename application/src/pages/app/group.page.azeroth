@@ -228,6 +228,13 @@ export default component GroupPage()
                             <Show when={ online.length > 0 }>
                                 { () => <span class="text-live">· { locale.plural('chat.online', online.length) }</span> }
                             </Show>
+                            <Show when={ group!.privacy === 'private' }>
+                                { () =>
+                                    <span class="flex items-center gap-1">
+                                        · <Icon name="lock" size={ 13 } /> { locale.t('groups.private') }
+                                    </span>
+                                }
+                            </Show>
                             <Show when={ game !== null }>
                                 { () => <span>· { locale.t(catalogue.byId(game!).nameKey) }</span> }
                             </Show>

@@ -313,6 +313,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             blurb: row.blurb,
             crest: row.crest,
             hue: row.hue,
+            privacy: row.privacy,
             owner: row.owner ?? '',
             members: row.members,
             memberCount: row.member_count,
@@ -371,7 +372,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
     const announce = async (
         row: GroupRow,
         actor: string | null,
-        what: 'created' | 'joined' | 'left' | 'removed' | 'renamed' | 'owner',
+        what: 'created' | 'joined' | 'left' | 'removed' | 'renamed' | 'owner' | 'closed' | 'opened',
         params: Record<string, string>
     ): Promise<void> =>
     {
@@ -976,7 +977,8 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                     blurb: input.blurb,
                     crest: input.crest,
                     hue: input.hue,
-                    game: input.game === '' ? null : input.game
+                    game: input.game === '' ? null : input.game,
+                    privacy: input.privacy
                 });
 
                 await announce(made, me, 'created', {});
@@ -991,8 +993,17 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                     name: input.name,
                     blurb: input.blurb,
                     crest: input.crest,
-                    game: input.game === '' ? null : input.game
+                    game: input.game === '' ? null : input.game,
+                    privacy: input.privacy
                 });
+
+                // A door closing is not something to change behind somebody's back. The same
+                // argument the expiry lines are written for: a member who does not know cannot tell
+                // "we went private" from "nobody is joining any more".
+                if (after.privacy !== before.privacy)
+                {
+                    await announce(after, me, after.privacy === 'private' ? 'closed' : 'opened', {});
+                }
 
                 if (after.name !== before.name)
                 {
@@ -1246,9 +1257,24 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
 
             challenge: (me, deviceId) => device.challenge(me, deviceId),
 
+            /**
+             * Enrolling can make an account sealable, so it rings the rooms too.
+             *
+             * An account's FIRST device is confirmed at birth, which is exactly the change `confirm`
+             * below rings for - the account goes from "nothing to wrap a key to" to eligible. Without
+             * this, a peer with the thread open goes on being told this person has not given any of
+             * their browsers keys until something else makes them refetch, and the person who just
+             * enrolled cannot be written to in the meantime.
+             *
+             * A later device arrives pending and changes nothing anybody can seal to, so the doorbell
+             * is redundant rather than wrong: whoever hears it re-reads and finds the same set.
+             */
             async enrol(me, sessionId, input)
             {
-                return asDevice(await device.enrol(me, sessionId, input));
+                const row = await device.enrol(me, sessionId, input);
+
+                await ringRooms(me);
+                return asDevice(row);
             },
 
             /**

@@ -75,19 +75,56 @@ describe('the crest set', () =>
 
 describe('the group lines', () =>
 {
-    it('declares exactly the six the group domain writes', () =>
+    /**
+     * The count is the point. A key without a producer is filler copy, and pinning the number is
+     * what stops one being added "for later" - `lines.spec.ts` reads `services.ts` to prove each of
+     * these is really written by something.
+     *
+     * `closed` and `opened` arrived with private groups, for the reason the expiry lines exist: a
+     * rule about who can walk in is not something to change behind the room's back.
+     */
+    it('declares exactly the eight the group domain writes', () =>
     {
-        for (const key of ['created', 'joined', 'left', 'removed', 'renamed', 'owner'])
+        for (const key of ['created', 'joined', 'left', 'removed', 'renamed', 'owner', 'closed', 'opened'])
         {
             expect(isLineKey(`chat.line.group.${ key }`)).toBe(true);
         }
         expect(isLineKey('chat.line.group.exploded')).toBe(false);
-        expect(LINE_KEYS.filter((key) => key.startsWith('chat.line.group.')).length).toBe(6);
+        expect(LINE_KEYS.filter((key) => key.startsWith('chat.line.group.')).length).toBe(8);
     });
 });
 
 describe('the groups store', () =>
 {
+    /**
+     * A private group is not a group you have not joined yet - it is one you are never told about.
+     *
+     * `newcomers-table` is the fixture's private one and alex is not in it, so these two are the
+     * whole rule from the browser's side: it is absent from the list of groups to join, and asking
+     * for it by slug answers exactly as a slug nobody ever claimed.
+     */
+    it('leaves a private group out of the groups anybody could join', async () =>
+    {
+        const groups = useGroups();
+        groups.want();
+        await groups.refresh();
+
+        expect(groups.elsewhere().some((group) => group.id === 'newcomers-table')).toBe(false);
+        expect(groups.elsewhere().length).toBeGreaterThan(0);
+    });
+
+    it('answers for a private group exactly as for a slug nobody claimed', async () =>
+    {
+        const groups = useGroups();
+        await groups.refresh();
+
+        groups.open('newcomers-table');
+        await settle();
+
+        expect(groups.viewing()).toBeNull();
+        expect(groups.viewFailed()).toBeNull();
+    });
+
     it('lists the groups this account is in, and nothing else', async () =>
     {
         const groups = useGroups();
@@ -117,7 +154,7 @@ describe('the groups store', () =>
         const groups = useGroups();
         await groups.refresh();
 
-        const made = await groups.create({ name: 'Sunday Hokm', blurb: 'Every week.', crest: 'crest-crown', hue: 40, game: 'hokm' });
+        const made = await groups.create({ name: 'Sunday Hokm', blurb: 'Every week.', crest: 'crest-crown', hue: 40, game: 'hokm', privacy: 'public' });
 
         expect(made.slug).toBe('sunday-hokm');
         expect(made.role).toBe('owner');
@@ -130,8 +167,8 @@ describe('the groups store', () =>
         const groups = useGroups();
         await groups.refresh();
 
-        const made = await groups.create({ name: 'Sunday Hokm', blurb: '', crest: 'crest-crown', hue: 40, game: '' });
-        const saved = await groups.edit(made.id, { name: 'Monday Hokm', blurb: 'Moved.', crest: 'crest-moon', game: 'hokm' });
+        const made = await groups.create({ name: 'Sunday Hokm', blurb: '', crest: 'crest-crown', hue: 40, game: '', privacy: 'public' });
+        const saved = await groups.edit(made.id, { name: 'Monday Hokm', blurb: 'Moved.', crest: 'crest-moon', game: 'hokm', privacy: 'public' });
 
         expect(saved.slug).toBe(made.slug);
         expect(saved.name).toBe('Monday Hokm');
@@ -158,7 +195,7 @@ describe('the groups store', () =>
         const groups = useGroups();
         await groups.refresh();
 
-        const made = await groups.create({ name: 'Small Room', blurb: '', crest: 'crest-cup', hue: 90, game: '' });
+        const made = await groups.create({ name: 'Small Room', blurb: '', crest: 'crest-cup', hue: 90, game: '', privacy: 'public' });
 
         await groups.add(made.id, 'sara.k');
         expect(groups.byId(made.id)?.members).toContain('sara.k');

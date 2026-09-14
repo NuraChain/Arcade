@@ -38,8 +38,8 @@ async function makeUser(): Promise<string>
     return rowsOf<{ id: string }>(rows)[0].id;
 }
 
-const make = async (owner: string, name: string): ReturnType<typeof groups.create> =>
-    groups.create(owner, { name, blurb: '', crest: 'crest-crown', hue: 40, game: null });
+const make = async (owner: string, name: string, privacy: 'private' | 'public' = 'public'): ReturnType<typeof groups.create> =>
+    groups.create(owner, { name, blurb: '', crest: 'crest-crown', hue: 40, game: null, privacy });
 
 describe.skipIf(!active)('groups, against a real database', () =>
 {
@@ -282,7 +282,7 @@ describe.skipIf(!active)('groups, against a real database', () =>
             expect(seen.members.length).toBe(2);
         });
 
-        it('gives a non-member the group but not its thread', async () =>
+        it('gives a non-member a PUBLIC group, but not its thread', async () =>
         {
             const owner = await makeUser();
             const stranger = await makeUser();
@@ -292,6 +292,10 @@ describe.skipIf(!active)('groups, against a real database', () =>
             const seen = (await groups.byId(stranger, id))!;
             expect(seen.role).toBeNull();
             expect(seen.name).toBe('Look But');
+
+            // Stated rather than inherited from the helper's default: this test is now about one
+            // KIND of group, and the sentence it proves is only true for that kind.
+            expect(seen.privacy).toBe('public');
 
             const listed = await groups.discover(stranger, 10);
             expect(listed.map((one) => one.slug)).toContain(group.slug);
@@ -321,6 +325,121 @@ describe.skipIf(!active)('groups, against a real database', () =>
 
             expect(renamed.name).toBe('Something Else');
             expect(renamed.slug).toBe(group.slug);
+        });
+    });
+    describe('a private group', () =>
+    {
+        it('is not in discover, while the public one beside it still is', async () =>
+        {
+            const owner = await makeUser();
+            const stranger = await makeUser();
+            const closed = await make(owner, 'Closed Doors', 'private');
+            const open = await make(owner, 'Open Doors', 'public');
+
+            const listed = (await groups.discover(stranger, 10)).map((one) => one.slug);
+
+            expect(listed).not.toContain(closed.slug);
+
+            // The positive half matters: without it this passes when discover returns nothing at
+            // all, for a reason that has nothing to do with privacy.
+            expect(listed).toContain(open.slug);
+        });
+
+        it('answers a stranger exactly as a group that was never made', async () =>
+        {
+            const owner = await makeUser();
+            const stranger = await makeUser();
+            const group = await make(owner, 'Nowhere', 'private');
+            const id = (await groups.bySlug(owner, group.slug))!.id;
+
+            expect(await groups.bySlug(stranger, group.slug)).toBeNull();
+            expect(await groups.byId(stranger, id)).toBeNull();
+        });
+
+        it('is still there for the people who are in it', async () =>
+        {
+            const owner = await makeUser();
+            const friend = await makeUser();
+            const group = await make(owner, 'Ours', 'private');
+            const id = (await groups.bySlug(owner, group.slug))!.id;
+
+            await groups.add(owner, id, friend);
+
+            expect((await groups.mine(owner)).map((one) => one.slug)).toContain(group.slug);
+            expect((await groups.mine(friend)).map((one) => one.slug)).toContain(group.slug);
+            expect((await groups.bySlug(friend, group.slug))!.role).toBe('member');
+        });
+
+        /**
+         * The refusal is NOT FOUND rather than forbidden, and that is the whole design: a 403 would
+         * confirm the group is there. A private group has to be indistinguishable from a typo.
+         */
+        it('refuses a join it will not admit is possible', async () =>
+        {
+            const owner = await makeUser();
+            const stranger = await makeUser();
+            const group = await make(owner, 'No Entry', 'private');
+            const id = (await groups.bySlug(owner, group.slug))!.id;
+
+            await expect(groups.join(stranger, id)).rejects.toThrow();
+
+            // The one that matters: a throw that still wrote a row would be the worst outcome.
+            expect(await groups.roleOf(stranger, id)).toBeNull();
+        });
+
+        it('goes back on the shelf when the owner opens it again', async () =>
+        {
+            const owner = await makeUser();
+            const stranger = await makeUser();
+            const group = await make(owner, 'Sometimes Open', 'private');
+            const id = (await groups.bySlug(owner, group.slug))!.id;
+
+            await groups.update(owner, id, { privacy: 'public' });
+
+            expect((await groups.discover(stranger, 10)).map((one) => one.slug)).toContain(group.slug);
+            expect(await groups.bySlug(stranger, group.slug)).not.toBeNull();
+
+            await groups.update(owner, id, { privacy: 'private' });
+
+            expect((await groups.discover(stranger, 10)).map((one) => one.slug)).not.toContain(group.slug);
+            expect(await groups.bySlug(stranger, group.slug)).toBeNull();
+        });
+
+        it('still leaves with its last member, like any other', async () =>
+        {
+            const owner = await makeUser();
+            const group = await make(owner, 'Briefly', 'private');
+            const id = (await groups.bySlug(owner, group.slug))!.id;
+
+            await groups.leave(owner, id);
+
+            const rows = await db.query('select count(*)::int as n from groups where id = $1', [id]);
+            expect(rowsOf<{ n: number }>(rows)[0].n).toBe(0);
+        });
+
+        /**
+         * Two levels, held by the database rather than by a comment. `tables` carries a third that
+         * no query has ever read, and this is what stops the same thing happening here.
+         */
+        it('refuses a level the column has never heard of', async () =>
+        {
+            await expect(db.query(
+                `insert into groups (slug, name, blurb, crest, hue, privacy)
+                 values ('friends-only', 'Friends Only', '', 'crest-crown', 10, 'friends')`
+            )).rejects.toThrow();
+        });
+
+        /**
+         * The column has NO default, deliberately: Postgres materialises a default into every
+         * existing row when the column is added, which is the backfill this project forbids. This
+         * test is what makes that decision enforceable rather than a note in the migration.
+         */
+        it('refuses a group that does not say which kind it is', async () =>
+        {
+            await expect(db.query(
+                `insert into groups (slug, name, blurb, crest, hue)
+                 values ('unsaid', 'Unsaid', '', 'crest-crown', 10)`
+            )).rejects.toThrow();
         });
     });
 });

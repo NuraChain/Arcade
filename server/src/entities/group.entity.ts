@@ -1,5 +1,14 @@
 import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn } from 'typeorm';
 
+/**
+ * Who can find a group. Two levels, because a third would need a query behind it.
+ *
+ * The database-facing union. `schemas.ts` declares the wire-facing one, and `asGroup` in
+ * `services.ts` assigns one into the other - so if the two ever drift by a member, that assignment
+ * stops compiling rather than shipping a value one half has never heard of.
+ */
+export type GroupPrivacy = 'private' | 'public';
+
 @Entity('groups')
 export class Group
 {
@@ -26,6 +35,10 @@ export class Group
 
     @Column({ type: 'smallint' })
     hue!: number;
+
+    /** Whether anybody can find it, or only somebody already in it can bring you. */
+    @Column({ type: 'varchar', length: 16 })
+    privacy!: GroupPrivacy;
 
     /** The game this group is about, or null for one that is about the people. */
     @Column({ type: 'varchar', length: 24, nullable: true })

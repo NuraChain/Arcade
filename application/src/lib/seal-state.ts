@@ -1,4 +1,5 @@
 import type { ConversationDevices, PeerDevice } from '../api.ts';
+import type { Readiness } from './device-state.ts';
 
 /**
  * Whether the people in a conversation can be sealed to, decided HERE.
@@ -143,4 +144,53 @@ export async function sealabilityOf(answer: ConversationDevices, me: string): Pr
         ?? null;
 
     return { members, ready: blocked === null, blocked };
+}
+
+/**
+ * Why nothing can be SENT here, which is a bigger question than whether the room can be sealed.
+ *
+ * Two facts have to agree and they come from different places. `Sealability` is the server's word
+ * about the members' ACCOUNTS: whether every one of them has published a device worth wrapping a key
+ * to. `Readiness` is about the machine in front of the reader: whether THIS browser holds keys of
+ * its own. `post` in `chat.source.ts` refuses on the second, and the composer was disabled on only
+ * the first - so a person whose account was enrolled on another browser saw the padlock, typed into
+ * an enabled box, and got `This browser has no device keys` in the console when they pressed Send.
+ */
+export type SendBlock =
+    | { reason: 'member'; member: MemberSeal }
+    | { reason: 'browser'; readiness: Exclude<Readiness, 'ready'> };
+
+/**
+ * Which of the two is in the way, in the order that serves the reader.
+ *
+ * `tampered` first, because it is the only state that means something is WRONG rather than merely
+ * absent, and it is not a thing to work around. Then this browser, because it is the one the reader
+ * can fix from where they are standing. Then everybody else.
+ *
+ * `known` is what stops the browser rule firing before anybody has looked: `readiness()` answers
+ * `absent` until the keyring has been read, so acting on it unguarded would disable the composer on
+ * every cold load and enable it a moment later. `isWallet` is the other guard - a guest's devices
+ * are server-attested and are filtered out of every peer list, so enrolling one changes nothing
+ * about sealing, and offering it would be a button that lies. A guest's honest answer is `no-wallet`.
+ */
+export function sendBlockOf(options: {
+    sealability: Sealability | null;
+    readiness: Readiness;
+    known: boolean;
+    isWallet: boolean;
+}): SendBlock | null
+{
+    const blocked = options.sealability?.blocked ?? null;
+
+    if (blocked !== null && blocked.state === 'tampered')
+    {
+        return { reason: 'member', member: blocked };
+    }
+
+    if (options.isWallet && options.known && options.readiness !== 'ready')
+    {
+        return { reason: 'browser', readiness: options.readiness };
+    }
+
+    return blocked === null ? null : { reason: 'member', member: blocked };
 }

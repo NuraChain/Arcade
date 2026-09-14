@@ -22,6 +22,25 @@ export interface DevicesApi
     failure: Getter<EnrolFailure | null>;
 
     readiness: Getter<Readiness>;
+
+    /**
+     * Whether `readiness()` is an ANSWER yet, rather than the shape of one.
+     *
+     * `readinessOf` is handed `current: local()?.id ?? null`, and `local()` is null until `refresh()`
+     * has read the keyring - so before that, every browser reports `absent`, including one that holds
+     * perfectly good keys. Anything that acts on `absent` without checking this first accuses a
+     * browser of a state nobody has measured: a composer would render disabled on every cold load and
+     * silently enable a moment later, and on a slow device list it would simply stay disabled.
+     *
+     * "Not there" and "not there YET" are different answers - the same distinction `chat.page` draws
+     * about a missing conversation, and for the same reason: a page that confidently renders the
+     * wrong one passes every gate this project has.
+     *
+     * An UNSUPPORTED browser is known immediately and with no request, because nothing about it
+     * depends on the server.
+     */
+    known: Getter<boolean>;
+
     stateOf(device: Device): DeviceState;
 
     enrol(label: string): Promise<void>;
@@ -63,6 +82,7 @@ export const useDevices = createStore((): DevicesApi =>
     const wallet = useWallet();
 
     const [local, setLocal] = createSignal<DeviceKeys | null>(null);
+    const [looked, setLooked] = createSignal(false);
     const [busy, setBusy] = createSignal(false);
     const [failure, setFailure] = createSignal<EnrolFailure | null>(null);
 
@@ -92,6 +112,7 @@ export const useDevices = createStore((): DevicesApi =>
         // The keyring FIRST, because everything below is a statement about this browser rather than
         // about the account, and a stale answer to "do I hold keys" is the one that lies.
         setLocal(await keyStore().load());
+        setLooked(true);
         await listing.refetch();
     };
 
@@ -144,6 +165,10 @@ export const useDevices = createStore((): DevicesApi =>
         busy,
         failure,
 
+        // The list has to have RESOLVED, not merely settled: a browser whose `devices.list` failed
+        // has not been able to ask, and must not be told it holds nothing.
+        known: () => !keyStore().available() || (looked() && listing.data() !== undefined),
+
         /**
          * What THIS BROWSER can do, answered by this browser's keyring and nothing else.
          *
@@ -156,6 +181,8 @@ export const useDevices = createStore((): DevicesApi =>
          *
          * The server's `current` is still what labels a row "This one" for a browser that does hold
          * keys; it is not evidence that this browser holds them.
+         *
+         * It is only an answer once `known()` is true. Before that every browser reports `absent`.
          */
         readiness: () => readinessOf({
             supported: keyStore().available(),
@@ -223,6 +250,7 @@ export const useDevices = createStore((): DevicesApi =>
         reset()
         {
             setLocal(null);
+            setLooked(false);
             setBusy(false);
             setFailure(null);
             void listing.refetch();

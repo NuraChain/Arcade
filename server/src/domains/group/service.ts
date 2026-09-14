@@ -2,6 +2,7 @@ import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@
 import type { DataSource } from 'typeorm';
 
 import type { GroupRole } from '../../entities/group-member.entity.ts';
+import type { GroupPrivacy } from '../../entities/group.entity.ts';
 import { firstRow, rowsOf } from '../../lib/rows.ts';
 import type { SocialService } from '../social/service.ts';
 import { candidatesFor, checkSlug, slugFromName } from './slug.ts';
@@ -15,6 +16,7 @@ export interface GroupRow
     crest: string;
     hue: number;
     game: string | null;
+    privacy: GroupPrivacy;
     created_at: Date;
 
     /** The owner's handle. Never null in practice - the single-owner index sees to that. */
@@ -51,7 +53,7 @@ const UNIQUE_VIOLATION = '23505';
  * literal string `{alex,sara.k}` instead of an array. It has happened once already in chat.
  */
 const GROUP_COLUMNS = `
-    g.id, g.slug::text as slug, g.name, g.blurb, g.crest, g.hue, g.game, g.created_at,
+    g.id, g.slug::text as slug, g.name, g.blurb, g.crest, g.hue, g.game, g.privacy, g.created_at,
 
     (select u.handle::text
        from group_members gm join users u on u.id = gm.user_id
@@ -71,6 +73,22 @@ const GROUP_COLUMNS = `
 
     (select c.id from conversations c
       where c.group_id = g.id and c.kind = 'group')                         as conversation_id
+`;
+
+/**
+ * Whether this viewer may be told the group exists at all.
+ *
+ * The same rule the chat domain follows for a conversation: a private group answers somebody who is
+ * not in it exactly as a group that was never made. Not a 403 - a 403 would confirm it is there, and
+ * the point of private is that a stranger cannot tell the difference between a closed door and a
+ * typo. `` is the viewer, as everywhere else in this file.
+ *
+ * One string, so the rule cannot be applied to one read and forgotten on the next.
+ */
+const VISIBLE_TO = `
+    (g.privacy = 'public'
+        or exists (select 1 from group_members gm
+                    where gm.group_id = g.id and gm.user_id = $1))
 `;
 
 export function createGroupService(db: DataSource, social: SocialService)
@@ -114,7 +132,10 @@ export function createGroupService(db: DataSource, social: SocialService)
 
     const one = async (me: string, groupId: string): Promise<GroupRow | null> =>
     {
-        const rows = await db.query(`select ${ GROUP_COLUMNS } from groups g where g.id = $2`, [me, groupId]);
+        const rows = await db.query(
+            `select ${ GROUP_COLUMNS } from groups g where g.id = $2 and ${ VISIBLE_TO }`,
+            [me, groupId]
+        );
         return firstRow<GroupRow>(rows);
     };
 
@@ -192,7 +213,8 @@ export function createGroupService(db: DataSource, social: SocialService)
             const rows = await db.query(
                 `select ${ GROUP_COLUMNS }
                  from groups g
-                 where not exists (select 1 from group_members gm
+                 where g.privacy = 'public'
+                   and not exists (select 1 from group_members gm
                                     where gm.group_id = g.id and gm.user_id = $1)
                  order by g.created_at desc
                  limit $2`,
@@ -203,7 +225,10 @@ export function createGroupService(db: DataSource, social: SocialService)
 
         async bySlug(me: string, slug: string): Promise<GroupRow | null>
         {
-            const rows = await db.query(`select ${ GROUP_COLUMNS } from groups g where g.slug = $2`, [me, slug]);
+            const rows = await db.query(
+                `select ${ GROUP_COLUMNS } from groups g where g.slug = $2 and ${ VISIBLE_TO }`,
+                [me, slug]
+            );
             return firstRow<GroupRow>(rows);
         },
 
@@ -229,7 +254,7 @@ export function createGroupService(db: DataSource, social: SocialService)
          * A name that folds to nothing - all emoji, all punctuation - falls back to a word the
          * product owns rather than to something invented from the characters.
          */
-        async create(me: string, input: { name: string; blurb: string; crest: string; hue: number; game: string | null }): Promise<GroupRow>
+        async create(me: string, input: { name: string; blurb: string; crest: string; hue: number; game: string | null; privacy: GroupPrivacy }): Promise<GroupRow>
         {
             const name = input.name.trim().slice(0, NAME_MAX);
             if (name.length < 2)
@@ -252,10 +277,10 @@ export function createGroupService(db: DataSource, social: SocialService)
                     const groupId = await db.transaction(async (tx) =>
                     {
                         const inserted = await tx.query(
-                            `insert into groups (slug, name, blurb, crest, hue, game, created_by)
-                             values ($1, $2, $3, $4, $5, $6, $7)
+                            `insert into groups (slug, name, blurb, crest, hue, game, privacy, created_by)
+                             values ($1, $2, $3, $4, $5, $6, $7, $8)
                              returning id`,
-                            [slug, name, input.blurb.trim().slice(0, BLURB_MAX), input.crest, input.hue, input.game, me]
+                            [slug, name, input.blurb.trim().slice(0, BLURB_MAX), input.crest, input.hue, input.game, input.privacy, me]
                         );
                         const id = rowsOf<{ id: string }>(inserted)[0].id;
 
@@ -437,7 +462,7 @@ export function createGroupService(db: DataSource, social: SocialService)
          * A url that changes when somebody edits a name is a url that breaks every link anyone
          * ever shared. The slug is claimed once, at creation, and the name is free after that.
          */
-        async update(me: string, groupId: string, patch: { name?: string; blurb?: string; crest?: string; game?: string | null }): Promise<GroupRow>
+        async update(me: string, groupId: string, patch: { name?: string; blurb?: string; crest?: string; game?: string | null; privacy?: GroupPrivacy }): Promise<GroupRow>
         {
             await mustOwn(me, groupId);
 
@@ -455,6 +480,7 @@ export function createGroupService(db: DataSource, social: SocialService)
                      name  = coalesce($2::text, name),
                      blurb = coalesce($3::text, blurb),
                      crest = coalesce($4::varchar, crest),
+                     privacy = coalesce($7::varchar, privacy),
                      game  = case when $5::boolean then $6::varchar else game end
                  where id = $1`,
                 [
@@ -463,7 +489,8 @@ export function createGroupService(db: DataSource, social: SocialService)
                     patch.blurb === undefined ? null : patch.blurb.trim().slice(0, BLURB_MAX),
                     patch.crest ?? null,
                     patch.game !== undefined,
-                    patch.game ?? null
+                    patch.game ?? null,
+                    patch.privacy ?? null
                 ]
             );
 

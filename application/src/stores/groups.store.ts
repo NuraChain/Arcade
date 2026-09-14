@@ -1,6 +1,6 @@
 import { createStore, createResource, createSignal, untrack, type Getter } from 'azerothjs';
 
-import { ApiError, client, type GroupSummary } from '../api.ts';
+import { ApiError, client, type GroupPrivacy, type GroupSummary } from '../api.ts';
 import { useAccount } from './account.store.ts';
 import { useRealtime } from './realtime.store.ts';
 
@@ -11,6 +11,7 @@ export interface GroupDraft
     crest: string;
     hue: number;
     game: string;
+    privacy: GroupPrivacy;
 }
 
 export interface GroupsApi

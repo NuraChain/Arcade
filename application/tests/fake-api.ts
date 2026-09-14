@@ -36,6 +36,7 @@ interface GroupWire
     blurb: string;
     crest: string;
     hue: number;
+    privacy: 'private' | 'public';
     game?: string;
     owner: string;
     role?: 'owner' | 'member';
@@ -320,6 +321,7 @@ export const server =
             blurb: group.blurb,
             crest: group.crest,
             hue: group.hue,
+            privacy: group.privacy,
             ...(group.game === null ? {} : { game: group.game }),
             owner: group.owner,
             members: [...group.members],
@@ -812,21 +814,32 @@ export const client =
         async discover()
         {
             server.calls.push('groups.discover');
-            return { groups: server.groups.filter((group) => !group.members.includes(server.me)) };
+
+            // A private group is not a group you have not joined yet - it is one you are not told
+            // about. The real server filters it out of this list, so this one has to as well, or a
+            // spec would pass against a server this product does not have.
+            return {
+                groups: server.groups.filter((group) =>
+                    group.privacy === 'public' && !group.members.includes(server.me))
+            };
         },
 
         async view({ params }: { params: { slug: string } })
         {
             server.calls.push('groups.view');
             const group = server.groups.find((one) => one.slug === params.slug);
-            if (group === undefined)
+
+            // A private group answers a non-member exactly as one that was never made. Not a 403 -
+            // that would confirm it is there, and the point is that a stranger cannot tell a closed
+            // door from a typo.
+            if (group === undefined || (group.privacy === 'private' && !group.members.includes(server.me)))
             {
                 throw new ApiError(404, 'not-found', 'No group there.', undefined);
             }
             return group;
         },
 
-        async create({ input }: { input: { name: string; blurb: string; crest: string; hue: number; game: string } })
+        async create({ input }: { input: { name: string; blurb: string; crest: string; hue: number; game: string; privacy: 'private' | 'public' } })
         {
             server.calls.push('groups.create');
             if (server.refuseGroup !== null)
@@ -847,6 +860,7 @@ export const client =
                 name: input.name.trim(),
                 blurb: input.blurb.trim(),
                 crest: input.crest,
+                privacy: input.privacy,
                 hue: input.hue,
                 ...(input.game === '' ? {} : { game: input.game }),
                 owner: server.me,
@@ -860,13 +874,14 @@ export const client =
             return made;
         },
 
-        async edit({ params, input }: { params: { slug: string }; input: { name: string; blurb: string; crest: string; game: string } })
+        async edit({ params, input }: { params: { slug: string }; input: { name: string; blurb: string; crest: string; game: string; privacy: 'private' | 'public' } })
         {
             server.calls.push('groups.edit');
             const group = mustGroup(params.slug);
             group.name = input.name.trim();
             group.blurb = input.blurb.trim();
             group.crest = input.crest;
+            group.privacy = input.privacy;
             if (input.game === '')
             {
                 delete group.game;
@@ -882,6 +897,10 @@ export const client =
         {
             server.calls.push('groups.join');
             const group = mustGroup(params.slug);
+            if (group.privacy === 'private' && !group.members.includes(server.me))
+            {
+                throw new ApiError(404, 'not-found', 'No group there.', undefined);
+            }
             if (!group.members.includes(server.me))
             {
                 group.members.push(server.me);

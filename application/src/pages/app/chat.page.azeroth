@@ -2,6 +2,7 @@ import { Link, useHead, useNavigate, useParams } from 'azerothjs';
 
 import Page from '../../components/app/page.component.azeroth';
 import { groupNameOf, othersOf, titleOf } from '../../components/chat/chat-title.ts';
+import { sendBlockOf } from '../../lib/seal-state.ts';
 import Composer from '../../components/chat/composer.component.azeroth';
 import MessageBubble from '../../components/chat/message-bubble.component.azeroth';
 import SealNotice from '../../components/chat/seal-notice.component.azeroth';
@@ -16,7 +17,9 @@ import { usePeople } from '../../stores/people.store.ts';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useChat } from '../../stores/chat.store.ts';
 import { useGroups } from '../../stores/groups.store.ts';
+import { useAccount } from '../../stores/account.store.ts';
 import { useDevice } from '../../stores/device.store.ts';
+import { useDevices } from '../../stores/devices.store.ts';
 import { useLobby } from '../../stores/lobby.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useOverlay } from '../../stores/overlay.store.ts';
@@ -25,6 +28,7 @@ import { useSeal } from '../../stores/seal.store.ts';
 import { useShell } from '../../stores/shell.store.ts';
 import { useSocial } from '../../stores/social.store.ts';
 import { useToasts } from '../../stores/toasts.store.ts';
+import { useWallet } from '../../stores/wallet.store.ts';
 
 const WINDOW = 40;
 
@@ -78,12 +82,80 @@ export default component ChatPage()
         : locale.text(titleOf(conversation, me, people.byHandle, groupNameOf(conversation, groups.byId)));
 
     const seal = useSeal();
+    const devices = useDevices();
+    const account = useAccount();
+    const wallet = useWallet();
+
+    /**
+     * Gives this browser keys without leaving the thread.
+     *
+     * The devices page is the other door and stays the whole story - names, confirmation, signing one
+     * out. This is the one step somebody stuck at a composer actually needs, offered where they are
+     * stuck.
+     *
+     * `enrol` NEVER rejects: it swallows everything into `failure()`, so awaiting it and carrying on
+     * would make a refused wallet signature silent - the button would spin, stop, and nothing would
+     * change or be said. Every outcome is read back and spoken here.
+     */
+    const giveKeys = async (): Promise<void> =>
+    {
+        if (devices.busy())
+        {
+            return;
+        }
+
+        // A locked extension has no address to sign with, and `sign` answers null rather than
+        // throwing - which `publish` turns into "the wallet did not sign", blaming a refusal that
+        // never happened. Say the true thing instead.
+        if (wallet.address() === null)
+        {
+            toasts.show({ kind: 'warning', text: locale.t('wallet.error.noWallet'), dedupe: 'devices.enrol' });
+            return;
+        }
+
+        await devices.enrol(locale.t(device.posture() === 'phone' ? 'devices.namePhone' : 'devices.nameDesktop'));
+
+        const failure = devices.failure();
+        if (failure !== null)
+        {
+            toasts.show({
+                kind: 'error',
+                text: locale.t(failure === 'refused' ? 'devices.refused' : 'devices.unavailable'),
+                dedupe: 'devices.enrol'
+            });
+            return;
+        }
+
+        // The room has to be asked again: whether it can be sealed to now depends on a device that
+        // did not exist a moment ago.
+        await seal.refresh();
+
+        // On a SECOND browser the new device arrives pending, so nothing was unblocked and saying
+        // "done" would be a lie. Confirming it needs a device that already exists, which lives on
+        // the devices page.
+        toasts.show({
+            kind: devices.readiness() === 'ready' ? 'success' : 'warning',
+            text: locale.t(devices.readiness() === 'ready' ? 'devices.enrolled' : 'devices.enrolledWaiting'),
+            dedupe: 'devices.enrol'
+        });
+    };
 
     derived messages = chat.messages();
 
-    // Only when something stands in the way. There is no matching "this is sealed" banner, because
-    // nothing is sealed yet and a padlock ahead of its mechanism is a claim rather than a fact.
-    derived blocked = seal.sealability()?.blocked ?? null;
+    /**
+     * What stands in the way of sending, which is BOTH questions at once.
+     *
+     * The room's answer and this browser's answer come from different places and used to be read
+     * separately: the composer was disabled on the room alone, while `post` refuses on this
+     * browser's own keyring. `sendBlockOf` decides between them in one place, and being a pure
+     * function it is pinned by a spec rather than by a rendered page.
+     */
+    derived stop = sendBlockOf({
+        sealability: seal.sealability(),
+        readiness: devices.readiness(),
+        known: devices.known(),
+        isWallet: account.isWallet()
+    });
 
     derived loading = chat.threadLoading();
 
@@ -351,14 +423,25 @@ export default component ChatPage()
                     <Show when={ !seal.loading() }>
                         { () =>
                             <div class="px-3 pb-2">
-                                <SealNotice blocked={ blocked } />
+                                <SealNotice
+                                    stop={ stop }
+                                    action={ stop?.reason !== 'browser' || stop.readiness === 'unsupported'
+                                        ? undefined
+                                        : (stop.readiness === 'absent'
+                                            ? <Button variant="primary" size="sm" leading="key" loading={ devices.busy() } onClick={ () => void giveKeys() }>
+                                                { locale.t('devices.enrol') }
+                                            </Button>
+                                            : <Button variant="outline" size="sm" leading="key" to="/app/me/devices">
+                                                { locale.t('devices.title') }
+                                            </Button>) }
+                                />
                             </div>
                         }
                     </Show>
 
                     <Composer
                         value={ chat.draft(id) }
-                        disabled={ blocked !== null }
+                        disabled={ stop !== null }
                         onInput={ (value) => chat.setDraft(id, value) }
                         onSend={ send }
                         onGame={ openTable }

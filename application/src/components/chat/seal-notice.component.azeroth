@@ -1,6 +1,9 @@
+import type { Child } from 'azerothjs';
+
 import Icon from '../../icons/icon.component.azeroth';
 import type { IconName } from '../../icons/registry.ts';
-import type { MemberSeal, MemberSealState } from '../../lib/seal-state.ts';
+import type { Readiness } from '../../lib/device-state.ts';
+import type { MemberSealState, SendBlock } from '../../lib/seal-state.ts';
 import type { MessageKey } from '../../locales/en.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 
@@ -18,6 +21,29 @@ const SAYS: Record<Blocked, MessageKey> = {
     'no-device': 'seal.noDevice',
     'needs-chain': 'seal.needsChain',
     tampered: 'seal.tampered'
+};
+
+/**
+ * The three states THIS BROWSER can be stuck in, which are not the same question as the four above.
+ *
+ * Those are about accounts and say who to wait for. These are about the machine in front of the
+ * reader, and each one has a different answer: `absent` takes one signature, `waiting` takes another
+ * device, and `unsupported` takes a different browser. Collapsing them into one boolean would leave
+ * the notice unable to tell somebody which of the three they are in.
+ *
+ * An exhaustive `Record`, like every other map in this file, so a readiness added later fails to
+ * compile rather than rendering as nothing.
+ */
+const BROWSER: Record<Exclude<Readiness, 'ready'>, MessageKey> = {
+    unsupported: 'seal.deviceUnsupported',
+    absent: 'seal.noKeysHere',
+    waiting: 'seal.deviceWaiting'
+};
+
+const BROWSER_ICON: Record<Exclude<Readiness, 'ready'>, IconName> = {
+    unsupported: 'error-circle',
+    absent: 'key',
+    waiting: 'clock'
 };
 
 /**
@@ -50,16 +76,20 @@ const SAYS_MINE: Record<Blocked, MessageKey> = {
  * says a proof was present and did not check out, which means the device list this browser was
  * handed is not a truthful statement about who is in the conversation.
  */
-export default component SealNotice(props: { blocked: MemberSeal | null })
+export default component SealNotice(props: { stop: SendBlock | null; action?: Child })
 {
     const locale = useLocale();
 
-    derived state = (props.blocked?.state ?? 'ready') as Blocked;
+    derived here = props.stop?.reason === 'browser' ? props.stop.readiness : null;
 
-    derived alarm = props.blocked !== null && state === 'tampered';
+    derived member = props.stop?.reason === 'member' ? props.stop.member : null;
+
+    derived state = (member?.state ?? 'ready') as Blocked;
+
+    derived alarm = member !== null && state === 'tampered';
 
     <Show
-        when={ props.blocked !== null }
+        when={ props.stop !== null }
         fallback={
             <p class="flex items-start gap-2 px-3 py-1.5 text-ui-xs text-faint">
                 <Icon name="lock" size={ 14 } class="mt-0.5 shrink-0" />
@@ -68,20 +98,25 @@ export default component SealNotice(props: { blocked: MemberSeal | null })
         }
     >
         { () =>
-            <p
+            <div
                 class={ [
-                    'flex items-start gap-2 rounded-tile border px-3 py-2 text-ui-sm',
+                    'flex flex-wrap items-start gap-2 rounded-tile border px-3 py-2 text-ui-sm',
                     alarm ? 'border-madder/40 bg-madder/10 text-madder' : 'border-line bg-field text-muted'
                 ].join(' ') }
                 role={ alarm ? 'alert' : undefined }
             >
-                <Icon name={ ICON[state] } size={ 16 } class="mt-0.5 shrink-0" />
-                <span>
-                    { props.blocked?.isMe === true
-                        ? locale.t(SAYS_MINE[state])
-                        : locale.t(SAYS[state], { who: props.blocked?.handle ?? '' }) }
+                <Icon name={ here === null ? ICON[state] : BROWSER_ICON[here] } size={ 16 } class="mt-0.5 shrink-0" />
+                <span class="min-w-0 flex-1">
+                    { here !== null
+                        ? locale.t(BROWSER[here])
+                        : (member?.isMe === true
+                            ? locale.t(SAYS_MINE[state])
+                            : locale.t(SAYS[state], { who: member?.handle ?? '' })) }
                 </span>
-            </p>
+                <Show when={ props.action !== undefined }>
+                    { () => <span class="shrink-0">{ props.action }</span> }
+                </Show>
+            </div>
         }
     </Show>
 }

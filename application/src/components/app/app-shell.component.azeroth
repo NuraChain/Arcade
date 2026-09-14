@@ -10,6 +10,7 @@ import { useConnection } from '../../stores/connection.store.ts';
 import { useGroups } from '../../stores/groups.store.ts';
 import { useLobby } from '../../stores/lobby.store.ts';
 import { useDevice } from '../../stores/device.store.ts';
+import { useDevices } from '../../stores/devices.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useOverlay } from '../../stores/overlay.store.ts';
 import { useNotifications } from '../../stores/notifications.store.ts';
@@ -83,6 +84,17 @@ export default component AppShell(props: { children?: MountNode })
             useNotifications().start(),
             useWallet().start()
         ];
+
+        // Whether THIS browser holds keys is now read outside the devices page - the chat decides
+        // whether anything can be sent with it, and the banner decides whether to offer them - so
+        // somebody has to ask once. `readiness()` answers `absent` until this runs, which would make
+        // every reader of it confidently wrong rather than merely uninformed.
+        //
+        // It is one request per SIGN-IN, not per navigation: the list is a resource keyed on the
+        // account, so navigating does not refetch it. The keyring alone would be cheaper and is not
+        // enough - telling `ready` from `waiting` needs the server's word on whether this browser's
+        // device was confirmed.
+        void useDevices().refresh();
         return () =>
         {
             // In reverse, and each one on its own. A stop that throws must not strand the sockets,

@@ -37,6 +37,7 @@ export interface GroupFixture
     crest: string;
     hue: number;
     game: string | null;
+    privacy: 'private' | 'public';
     owner: string;
     members: string[];
     thread: string;
@@ -140,6 +141,7 @@ export const GROUP_FIXTURES: GroupFixture[] = [
         crest: 'crest-crown',
         hue: 45,
         game: 'hokm',
+        privacy: 'public',
         owner: 'babak.r',
         members: ['babak.r', 'sara.k', 'leila.a', 'mahsa', 'mina', 'alex'],
         thread: 'c-friday',
@@ -152,6 +154,7 @@ export const GROUP_FIXTURES: GroupFixture[] = [
         crest: 'crest-cup',
         hue: 25,
         game: 'backgammon',
+        privacy: 'public',
         owner: 'reza.t',
         members: ['alex', 'reza.t', 'parisa', 'farhad', 'dariush'],
         thread: 'c-balcony',
@@ -164,6 +167,7 @@ export const GROUP_FIXTURES: GroupFixture[] = [
         crest: 'crest-castle',
         hue: 265,
         game: 'ludo',
+        privacy: 'public',
         owner: 'roya.m',
         members: ['roya.m', 'yas', 'hamed.z', 'tara.y', 'kian16'],
         thread: 'c-lunch',
@@ -176,6 +180,7 @@ export const GROUP_FIXTURES: GroupFixture[] = [
         crest: 'crest-moon',
         hue: 220,
         game: 'poker',
+        privacy: 'public',
         owner: 'omid.j',
         members: ['nima.f', 'omid.j', 'nilou', 'sina.g', 'alex'],
         thread: 'c-midnight',
@@ -188,6 +193,7 @@ export const GROUP_FIXTURES: GroupFixture[] = [
         crest: 'crest-sprout',
         hue: 150,
         game: null,
+        privacy: 'private',
         owner: 'leila.a',
         members: ['elham.b', 'shirin', 'maya.c', 'leila.a'],
         thread: 'c-newcomers',

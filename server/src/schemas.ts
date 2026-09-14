@@ -561,6 +561,17 @@ export const groupRole = enumOf(['owner', 'member']);
 export type GroupRole = Infer<typeof groupRole>;
 
 /**
+ * Who can find a group.
+ *
+ * Two levels, not three. `tables` carries `friends` as well and no query has ever read it - it is
+ * stored on every row and consulted by nothing, which makes it a setting that lies to whoever picks
+ * it. A level arrives here when a WHERE clause needs it.
+ */
+export const groupPrivacy = enumOf(['private', 'public']);
+
+export type GroupPrivacy = Infer<typeof groupPrivacy>;
+
+/**
  * A group, as everything that renders one needs it.
  *
  * `id` is the SLUG. Groups follow people here: the wire names a group by the thing the url
@@ -578,6 +589,7 @@ export const groupSummary = object({
     crest: string(),
     hue: number(),
     game: string().optional(),
+    privacy: groupPrivacy,
 
     /** The owner's handle. */
     owner: string(),
@@ -603,6 +615,7 @@ export const groupCreateInput = object({
     blurb: string({ trim: true, max: 240 }),
     crest: string({ max: 24 }),
     hue: number({ int: true, min: 0, max: 359 }),
+    privacy: groupPrivacy,
 
     /** Empty means the group is about the people rather than about one game. */
     game: string({ max: 24 })
@@ -620,7 +633,14 @@ export const groupEditInput = object({
     name: string({ trim: true, nonempty: true, max: 60 }),
     blurb: string({ trim: true, max: 240 }),
     crest: string({ max: 24 }),
-    game: string({ max: 24 })
+    game: string({ max: 24 }),
+
+    /*
+     * Editable, unlike a table's - and the table is not the precedent it looks like, because a table
+     * has no edit route at all. The alternative is worse than the feature: a group that wants to
+     * close its doors would have to be deleted and remade, taking its thread and its history with it.
+     */
+    privacy: groupPrivacy
 });
 
 /* ------------------------------------------------------------------------ tables */

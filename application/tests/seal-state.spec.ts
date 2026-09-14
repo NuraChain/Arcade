@@ -6,7 +6,7 @@ import type { ConversationDevices, PeerDevice } from '../src/api.ts';
 import SealNotice from '../src/components/chat/seal-notice.component.azeroth';
 import { deviceResource } from '../src/lib/attestation.ts';
 import { deviceIdFrom, toBase64Url } from '../src/lib/device-id.ts';
-import { sealabilityOf, type MemberSeal } from '../src/lib/seal-state.ts';
+import { sealabilityOf, sendBlockOf, type MemberSeal, type Sealability } from '../src/lib/seal-state.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
 import '../src/locales/app-catalogue.ts';
 
@@ -189,10 +189,72 @@ describe('whether a conversation can be sealed', () =>
     });
 });
 
+/**
+ * Which of the two answers stands in the way of SENDING.
+ *
+ * Pure, so the rule is pinned here rather than inferred from a rendered page. The bug it exists to
+ * make impossible: the composer was disabled on the room's answer alone while `post` refuses on this
+ * browser's keyring, so a browser with no keys on an account enrolled elsewhere rendered a padlock,
+ * enabled the box and threw on Send.
+ */
+describe('what stands in the way of sending', () =>
+{
+    const member = (state: MemberSeal['state'], isMe = false): MemberSeal =>
+        ({ handle: 'sara.k', state, isMe, devices: [] });
+
+    const room = (blocked: MemberSeal | null): Sealability =>
+        ({ members: [], ready: blocked === null, blocked });
+
+    it('is this browser, even when every account in the room is ready', () =>
+    {
+        const stop = sendBlockOf({ sealability: room(null), readiness: 'absent', known: true, isWallet: true });
+
+        expect(stop).toEqual({ reason: 'browser', readiness: 'absent' });
+    });
+
+    /**
+     * The anti-flash rule. `readiness()` answers `absent` until the keyring has been read, so acting
+     * on it unguarded disables the composer on every cold load and enables it a moment later.
+     */
+    it('says nothing about this browser until somebody has looked', () =>
+    {
+        expect(sendBlockOf({ sealability: room(null), readiness: 'absent', known: false, isWallet: true })).toBeNull();
+    });
+
+    it('lets a tampered device set outrank this browser, because that one is not a thing to work around', () =>
+    {
+        const stop = sendBlockOf({ sealability: room(member('tampered')), readiness: 'absent', known: true, isWallet: true });
+
+        expect(stop?.reason).toBe('member');
+    });
+
+    /**
+     * A guest's devices are attested by this server and are filtered out of every peer list, so
+     * enrolling one changes nothing about sealing. Offering it would be a button that lies.
+     */
+    it('never blames a guest browser for keys that would not help', () =>
+    {
+        const stop = sendBlockOf({ sealability: room(member('no-wallet', true)), readiness: 'absent', known: true, isWallet: false });
+
+        expect(stop).toEqual({ reason: 'member', member: member('no-wallet', true) });
+    });
+
+    it('still counts a browser waiting to be confirmed as in the way', () =>
+    {
+        expect(sendBlockOf({ sealability: room(null), readiness: 'waiting', known: true, isWallet: true }))
+            .toEqual({ reason: 'browser', readiness: 'waiting' });
+    });
+
+    it('is nothing at all when the room and the browser both answer yes', () =>
+    {
+        expect(sendBlockOf({ sealability: room(null), readiness: 'ready', known: true, isWallet: true })).toBeNull();
+    });
+});
+
 describe('what the thread says about it', () =>
 {
     const render = (blocked: MemberSeal): string =>
-        renderTest(() => SealNotice({ blocked }) as HTMLElement).container.textContent ?? '';
+        renderTest(() => SealNotice({ stop: { reason: 'member', member: blocked } }) as HTMLElement).container.textContent ?? '';
 
     const seal = (state: MemberSeal['state'], isMe = false): MemberSeal => ({ handle: 'sara.k', state, isMe, devices: [] });
 
@@ -212,7 +274,7 @@ describe('what the thread says about it', () =>
 
     it('reads as an alarm rather than a shrug when a proof did not check out', () =>
     {
-        const { container } = renderTest(() => SealNotice({ blocked: seal('tampered') }) as HTMLElement);
+        const { container } = renderTest(() => SealNotice({ stop: { reason: 'member', member: seal('tampered') } }) as HTMLElement);
 
         expect(container.querySelector('[role="alert"]')).not.toBeNull();
         expect(container.textContent).toContain('did not match the proof');
@@ -223,7 +285,7 @@ describe('what the thread says about it', () =>
         for (const state of ['no-wallet', 'no-device', 'needs-chain'] as const)
         {
             cleanup();
-            const { container } = renderTest(() => SealNotice({ blocked: seal(state) }) as HTMLElement);
+            const { container } = renderTest(() => SealNotice({ stop: { reason: 'member', member: seal(state) } }) as HTMLElement);
             expect(container.querySelector('[role="alert"]')).toBeNull();
         }
     });
@@ -237,14 +299,62 @@ describe('what the thread says about it', () =>
         expect(said).not.toContain('sara.k');
     });
 
-    it('tells the reader what to do about their own browser', () =>
+    /**
+     * The ACCOUNT sentence, which is not the browser sentence.
+     *
+     * This key used to say "This browser has no keys yet" while describing a state about the whole
+     * account - nobody anywhere has enrolled. The browser's own case now has its own key, and
+     * conflating them is what let a browser with no keys, on an account enrolled elsewhere, render
+     * the positive line.
+     */
+    it('speaks about the account when it is the account that has nothing', () =>
     {
-        expect(render(seal('no-device', true))).toContain('This browser has no keys yet');
+        expect(render(seal('no-device', true))).toContain('None of your browsers');
     });
 
     it('follows a language switch, like every other composed sentence', () =>
     {
         useLocale().setLocale('fa');
         expect(render(seal('no-wallet'))).toContain('مهروموم نشده‌اند');
+    });
+
+    it('tells a keyless browser which of the three it is, and offers only what would help', () =>
+    {
+        const said = (readiness: 'absent' | 'waiting' | 'unsupported'): string =>
+        {
+            cleanup();
+            return renderTest(() => SealNotice({ stop: { reason: 'browser', readiness } }) as HTMLElement)
+                .container.textContent ?? '';
+        };
+
+        expect(said('absent')).toContain('no keys of its own');
+        expect(said('waiting')).toContain('waiting to be confirmed');
+        expect(said('unsupported')).toContain('nowhere secure');
+    });
+
+    it('puts an action beside the sentence rather than inside it', () =>
+    {
+        const { container } = renderTest(() => SealNotice({
+            stop: { reason: 'browser', readiness: 'absent' },
+            action: (() =>
+            {
+                const button = document.createElement('button');
+                button.textContent = 'Give this browser keys';
+                return button;
+            })()
+        }) as HTMLElement);
+
+        expect(container.querySelector('button')).not.toBeNull();
+        expect(container.querySelector('p button')).toBeNull();
+    });
+
+    it('is never an alarm for anything about this browser', () =>
+    {
+        for (const readiness of ['absent', 'waiting', 'unsupported'] as const)
+        {
+            cleanup();
+            const { container } = renderTest(() => SealNotice({ stop: { reason: 'browser', readiness } }) as HTMLElement);
+            expect(container.querySelector('[role="alert"]')).toBeNull();
+        }
     });
 });

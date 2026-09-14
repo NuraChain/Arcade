@@ -473,6 +473,32 @@ again. An owner who leaves a populated group hands it to the longest-standing re
 which keeps the single-owner index satisfied — and the handover is ANNOUNCED with a line, so it is
 visible rather than silent.
 
+**A group is public or private, and private means it does not exist to anybody outside it.**
+`groups.privacy` is two levels, and the rule is the chat domain's: a private group answers a
+non-member exactly as a group that was never made - 404, "No such group." - rather than 403, because
+a 403 confirms it is there and the point is that a stranger cannot tell a closed door from a typo.
+One predicate, `VISIBLE_TO`, is shared by `bySlug` and `byId` so the rule cannot be applied to one
+read and forgotten on the next; `discover` filters on the constant half; `join` needs no code at all,
+because it already refuses what it cannot see. `mine` is deliberately untouched - it joins through
+`group_members`, so membership already is the WHERE clause.
+
+TWO levels, not three. `tables` carries `friends` as well and **no query has ever read it**: `open()`
+filters on `public` strictly, so a friends table is invisible to friends too. That is a setting that
+lies to whoever picks it, and `groups_privacy_known` is a CHECK so a third cannot be added here
+without a WHERE clause to go with it.
+
+**The column has NO default, and that is the interesting line.** Postgres materialises a column
+default into every existing row at `add column` time, which is exactly the backfill this file forbids
+elsewhere - so a default would be the forbidden thing wearing a different hat. The consequence is
+real and is the documented one: a development database that already holds a group refuses `0017`
+rather than quietly deciding for it, and the answer is to rebuild from nothing.
+`groups.db.spec.ts` pins both halves - an insert naming `friends` is refused, and an insert naming no
+privacy at all is refused - so neither decision can decay into a comment.
+
+**Closing the doors writes a line.** `chat.line.group.closed` and `.opened`, for the reason the
+expiry lines exist: a rule about who can walk in is not something to change behind the room's back,
+and a member who does not know cannot tell "we went private" from "nobody is joining any more".
+
 **Adding somebody is gated twice, and the two are different questions.** The server asks
 `mayMessage`, because putting a person in a group is writing into their chat list and that is the
 act the messaging policy already governs — blocks, stranger settings and minor safety all apply
@@ -1608,6 +1634,26 @@ This is not a framework defect and does not go in the register: the element has 
 document until its leave animation finishes, so removing it before disposing is the only order that
 works. The wrong assumption was ours.
 
+**`readiness()` is not an answer until somebody has looked.** It reads this browser's keyring, and
+the keyring is null until `devices.refresh()` runs - so before that every browser reports `absent`,
+including one holding perfectly good keys. `devices.known()` is the guard, and anything acting on
+`absent` without it accuses a browser of a state nobody measured: the composer would render disabled
+on every cold load and enable itself a moment later. The shell refreshes once per SIGN-IN, not per
+navigation, because the list is a resource keyed on the account.
+
+**Whether a message can be SENT is two questions, and they used to be one.** `sealability` is the
+server's word about the members' ACCOUNTS; `readiness` is about the machine in front of the reader.
+`post` refuses on the second while the composer was disabled on the first, so an account enrolled on
+a laptop opened on a phone showed the padlock, enabled the box, and threw
+`This browser has no device keys` into the console on Send. `sendBlockOf` decides between them in one
+pure function - tampered first because it is the only state that means something is wrong, then this
+browser because it is the one the reader can fix, then everybody else - and a spec pins the order.
+
+**Enrolment is offered where somebody is stuck, not only where it lives.** The seal notice carries a
+button when this browser is what is in the way, and `enrol` NEVER rejects - it reports through
+`failure()` - so every outcome is read back and spoken. A second browser lands `waiting` rather than
+ready, so it is offered the devices page instead of a button that would not finish the job.
+
 **Stores own their timers.** No store schedules anything in its factory; periodic work sits
 behind idempotent `start(): () => void` / `stop()`, one-shot timers are tracked and cleared by
 `reset()`, and every one reads the clock through `runtime()` so tests can drive it.
@@ -1784,6 +1830,11 @@ loading anyway. The wallet chooser is the same rule from the other end: it reach
 `wallet.store.ts` and therefore `api.ts`, so a static import in the public shell would reintroduce
 the request the dynamic guard import exists to remove. `tools/qa` does not catch either of these;
 the browser pass asserts the landing makes no api call at all.
+
+**JSX does not parse inside a `derived`.** It is legal in the markup region and in a prop expression
+there - `fallback={ <EmptyState /> }` is everywhere - but a `derived` that returns an element fails
+the BUNDLER with `Expected > but found Identifier` while `npm run check` passes, because the
+typechecker and the bundler parse `.azeroth` differently. Build an element where it is rendered.
 
 **A component cannot be held in a signal by plain assignment.** A setter treats a bare function
 argument as an updater, so `Dialog = module.default` CALLS the component with the previous value

@@ -117,5 +117,6 @@ export const WALLET_GROUP = {
     crest: 'crest-moon',
     hue: 212,
     game: 'backgammon',
+    privacy: 'public' as const,
     members: ['dana.w', 'sara.k', 'omid.k', 'reza.t']
 };

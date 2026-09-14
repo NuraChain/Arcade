@@ -15,6 +15,7 @@ export type {
     ArchiveList,
     EpochState,
     GameSummary,
+    GroupPrivacy,
     GroupRole,
     GroupSummary,
     MuteSubject,

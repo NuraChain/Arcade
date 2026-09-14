@@ -18,6 +18,7 @@ import type {
     Device,
     RecoveryState,
     Challenge as DeviceChallenge,
+    GroupPrivacy,
     GroupSummary,
     MessagePage,
     NotificationPage,
@@ -149,8 +150,8 @@ export interface GroupPort
     /** One group, as this viewer may see it. Null when there is no such slug. */
     view(me: string, slug: string): Promise<GroupSummary | null>;
 
-    create(me: string, input: { name: string; blurb: string; crest: string; hue: number; game: string }): Promise<GroupSummary>;
-    edit(me: string, slug: string, input: { name: string; blurb: string; crest: string; game: string }): Promise<GroupSummary>;
+    create(me: string, input: { name: string; blurb: string; crest: string; hue: number; game: string; privacy: GroupPrivacy }): Promise<GroupSummary>;
+    edit(me: string, slug: string, input: { name: string; blurb: string; crest: string; game: string; privacy: GroupPrivacy }): Promise<GroupSummary>;
 
     join(me: string, slug: string): Promise<GroupSummary>;
 

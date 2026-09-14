@@ -16,6 +16,7 @@ import { Recovery1789240000000 } from './0013-recovery.ts';
 import { Franking1789250000000 } from './0014-franking.ts';
 import { Ephemeral1789260000000 } from './0015-ephemeral.ts';
 import { DisclosureOutlives1789270000000 } from './0016-disclosure-outlives.ts';
+import { GroupPrivacy1789280000000 } from './0017-group-privacy.ts';
 
 /**
  * Every migration. Appending is the only correct edit.
@@ -41,5 +42,6 @@ export const migrations: (new () => MigrationInterface)[] = [
     Recovery1789240000000,
     Franking1789250000000,
     Ephemeral1789260000000,
-    DisclosureOutlives1789270000000
+    DisclosureOutlives1789270000000,
+    GroupPrivacy1789280000000
 ];

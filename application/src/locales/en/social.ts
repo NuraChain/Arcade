@@ -148,6 +148,8 @@ export const social = {
     'chat.line.group.removed': '{who} was removed',
     'chat.line.group.renamed': '{who} renamed the group to {name}',
     'chat.line.group.owner': '{who} runs the group now',
+    'chat.line.group.closed': '{who} made this group private',
+    'chat.line.group.opened': '{who} made this group public',
     'chat.line.expiry.on': 'New messages here now disappear after {name}',
     'chat.line.expiry.off': 'New messages here stay until somebody deletes them',
 
@@ -183,7 +185,13 @@ export const social = {
     'groups.none': 'No groups yet',
     'groups.noneLead': 'A group is a handful of people and a standing game. Make one, or join one below.',
     'groups.discover': 'Groups to join',
-    'groups.discoverNone': 'You are in every group there is.',
+    'groups.discoverNone': 'No public groups left to join. Private ones only show once you are in them.',
+    'groups.privacy': 'Who can find it',
+    'groups.privacy.public': 'Anyone',
+    'groups.privacy.private': 'Invite only',
+    'groups.privacy.publicHint': 'Listed where people look for groups, and anyone signed in can come in.',
+    'groups.privacy.privateHint': 'Listed nowhere. To anybody who is not in it, this group does not exist.',
+    'groups.private': 'Private',
     'groups.create': 'New group',
     'groups.createTitle': 'Start a group',
     'groups.createLead': 'A name, a crest, and whoever you play with. You can change all of it later.',
@@ -243,7 +251,17 @@ export const social = {
     'seal.noWallet': 'These messages are not sealed. {who} is signed in without a wallet, and sealing needs a wallet on both sides.',
     'seal.noWalletMine': 'These messages are not sealed. You are signed in without a wallet, and sealing needs a wallet on both sides.',
     'seal.noDevice': 'These messages are not sealed. {who} has not given any of their browsers keys yet.',
-    'seal.noDeviceMine': 'These messages are not sealed. This browser has no keys yet. Give it some and what you send from here can be.',
+    'seal.noDeviceMine': 'These messages are not sealed. None of your browsers has been given keys yet, so there is nothing to seal them to.',
+
+    /*
+     * Not the same sentence as noDeviceMine, and the difference is the whole point. That one is
+     * about the ACCOUNT - nobody anywhere holds keys. This one is about the machine in front of you
+     * while the account is perfectly well set up somewhere else, which is what happens the first
+     * time somebody opens the product on a second browser.
+     */
+    'seal.noKeysHere': 'This browser has no keys of its own, so it cannot send here yet. Your other browsers are unaffected.',
+    'seal.deviceWaiting': 'These messages are not sealed. This browser is waiting to be confirmed from one you already use, and until then it can neither open nor seal anything here.',
+    'seal.deviceUnsupported': 'These messages are not sealed. This browser has nowhere secure to keep keys, so nothing can be sealed from it.',
     'seal.needsChain': 'These messages are not sealed. {who} uses a contract wallet, and this browser cannot check one without reaching the network.',
     'seal.needsChainMine': 'These messages are not sealed. Yours is a contract wallet, and this browser cannot check one without reaching the network.',
     'seal.tampered': 'Something is wrong with {who}\u2019s devices. One did not match the proof published beside it, so there is no telling whose it is. Nothing here is sealed to any of them.',

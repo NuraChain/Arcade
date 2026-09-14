@@ -79,6 +79,8 @@ export const me = {
     'devices.nameDesktop': 'This browser',
     'devices.refused': 'The wallet did not sign, so nothing was recorded.',
     'devices.unavailable': 'We could not record that device. Try again in a moment.',
+    'devices.enrolled': 'This browser holds its own keys now.',
+    'devices.enrolledWaiting': 'Keys made. Confirm this browser from one you already use before it can seal anything.',
     'recovery.title': 'Recovery phrase',
     'recovery.offLead': 'If you lose every browser signed in here, the conversations you could read go with them. A recovery phrase is the one way back — and the only one, because nothing on our side can open a message.',
     'recovery.onLead': 'Recovery is on. Keep the phrase somewhere only you can reach; it is the one thing that gets a new browser back into your conversations.',

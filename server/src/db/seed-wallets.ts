@@ -224,11 +224,11 @@ async function seedWalletGroup(db: DataSource): Promise<void>
     }
 
     const inserted = await db.query(
-        `insert into groups (slug, name, blurb, crest, hue, game, created_at)
-         values ($1, $2, $3, $4, $5, $6, now())
+        `insert into groups (slug, name, blurb, crest, hue, game, privacy, created_at)
+         values ($1, $2, $3, $4, $5, $6, $7, now())
          on conflict (slug) do nothing
          returning id`,
-        [WALLET_GROUP.slug, WALLET_GROUP.name, WALLET_GROUP.blurb, WALLET_GROUP.crest, WALLET_GROUP.hue, WALLET_GROUP.game]
+        [WALLET_GROUP.slug, WALLET_GROUP.name, WALLET_GROUP.blurb, WALLET_GROUP.crest, WALLET_GROUP.hue, WALLET_GROUP.game, WALLET_GROUP.privacy]
     );
 
     const groupId = firstRow<{ id: string }>(inserted)?.id

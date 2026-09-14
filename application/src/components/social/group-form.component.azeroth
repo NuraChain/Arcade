@@ -1,4 +1,4 @@
-import type { GroupSummary } from '../../api.ts';
+import type { GroupPrivacy, GroupSummary } from '../../api.ts';
 import { CRESTS, crestOf } from '../../data/crests.ts';
 import { GAMES, type GameId } from '../../data/games.ts';
 import Icon from '../../icons/icon.component.azeroth';
@@ -10,6 +10,7 @@ import { useToasts } from '../../stores/toasts.store.ts';
 import Button from '../ui/button.component.azeroth';
 import Field from '../ui/field.component.azeroth';
 import Input from '../ui/input.component.azeroth';
+import Segmented from '../ui/segmented.component.azeroth';
 
 const NAME_MAX = 60;
 const BLURB_MAX = 240;
@@ -35,6 +36,7 @@ export default component GroupForm(props: OverlayProps & { group?: GroupSummary 
     state blurb = props.group?.blurb ?? '';
     state crest = crestOf(props.group?.crest ?? CRESTS[0]);
     state game = props.group?.game ?? '';
+    state privacy: GroupPrivacy = props.group?.privacy ?? 'public';
     state touched = false;
     state pending = false;
 
@@ -43,6 +45,10 @@ export default component GroupForm(props: OverlayProps & { group?: GroupSummary 
     derived hue = props.group?.hue ?? CRESTS.indexOf(crest) * 67 + 25;
 
     derived tooShort = name.trim().length < 2;
+
+    // The hint carries the actual rule. "Invite only" as a bare label does not tell anybody that a
+    // non-member gets "No such group.", and that sentence is the whole feature.
+    derived privacyHint = locale.t(privacy === 'private' ? 'groups.privacy.privateHint' : 'groups.privacy.publicHint');
 
     const submit = async (): Promise<void> =>
     {
@@ -56,8 +62,8 @@ export default component GroupForm(props: OverlayProps & { group?: GroupSummary 
         try
         {
             const saved = props.group === undefined
-                ? await groups.create({ name: name.trim(), blurb: blurb.trim(), crest, hue, game })
-                : await groups.edit(props.group.id, { name: name.trim(), blurb: blurb.trim(), crest, game });
+                ? await groups.create({ name: name.trim(), blurb: blurb.trim(), crest, hue, game, privacy })
+                : await groups.edit(props.group.id, { name: name.trim(), blurb: blurb.trim(), crest, game, privacy });
 
             toasts.show({
                 kind: 'success',
@@ -138,6 +144,21 @@ export default component GroupForm(props: OverlayProps & { group?: GroupSummary 
                     </button>
                 </For>
             </div>
+        </fieldset>
+
+        <fieldset class="flex flex-col gap-2">
+            <legend class="label text-ui-sm text-muted">{ locale.t('groups.privacy') }</legend>
+            <Segmented
+                block
+                label={ locale.t('groups.privacy') }
+                value={ privacy }
+                items={ [
+                    { id: 'public', label: locale.t('groups.privacy.public'), icon: 'discover' },
+                    { id: 'private', label: locale.t('groups.privacy.private'), icon: 'lock' }
+                ] }
+                onChange={ (id) => privacy = id as GroupPrivacy }
+            />
+            <p class="text-ui-xs text-faint">{ privacyHint }</p>
         </fieldset>
 
         <fieldset class="flex flex-col gap-2">
