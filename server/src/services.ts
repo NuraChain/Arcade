@@ -220,12 +220,35 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         return row.id;
     };
 
-    const asRequest = (row: { id: string; from_user: string; to_user: string; created_at: Date }, handles: Map<string, string>) => ({
-        id: row.id,
-        from: handles.get(row.from_user) ?? '',
-        to: handles.get(row.to_user) ?? '',
-        at: row.created_at.toISOString()
-    });
+    /**
+     * One request, carrying the person on the OTHER end of it.
+     *
+     * Which end that is depends on the direction: the sender of an incoming request, the recipient
+     * of an outgoing one. A request whose counterparty cannot be read - suspended between the two
+     * queries - keeps the handles and carries a person built from them, because a request the
+     * reader cannot render is a request they cannot answer.
+     */
+    const asRequest = (
+        row: { id: string; from_user: string; to_user: string; created_at: Date },
+        handles: Map<string, string>,
+        viewer: PersonRow,
+        people: Map<string, PersonRow>,
+        direction: 'incoming' | 'outgoing'
+    ) =>
+    {
+        const otherId = direction === 'incoming' ? row.from_user : row.to_user;
+        const other = people.get(otherId);
+        const handle = handles.get(otherId) ?? '';
+        return {
+            id: row.id,
+            from: handles.get(row.from_user) ?? '',
+            to: handles.get(row.to_user) ?? '',
+            at: row.created_at.toISOString(),
+            person: other === undefined
+                ? { id: handle, handle, displayName: handle, bio: '', hue: 0, isMinor: false }
+                : seenBy(viewer, other, direction)
+        };
+    };
 
     const asConversation = (row: ConversationRow): ConversationSummary =>
     {
@@ -678,17 +701,23 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
 
                 // A request names two people, and the wire names people by handle - so the two
                 // uuids on the row have to be resolved before it leaves.
-                const handles = await social.handlesOf([
+                const parties = [
                     ...requests.incoming.flatMap((row) => [row.from_user, row.to_user]),
                     ...requests.outgoing.flatMap((row) => [row.from_user, row.to_user])
-                ]);
+                ];
+                const handles = await social.handlesOf(parties);
+
+                // And the PERSON travels too, because the browser renders the row out of a cache of
+                // what this server has sent it. Sending only handles made a request from somebody
+                // it had never seen render as nothing at all.
+                const others = new Map((await social.peopleOf(parties)).map((row) => [row.id, row]));
 
                 return {
                     // A friend's presence is always visible to them, which is why the relation is
                     // passed as 'friend' rather than looked up again per row.
                     friends: friends.map((row) => seenBy(viewer, row, 'friend')),
-                    incoming: requests.incoming.map((row) => asRequest(row, handles)),
-                    outgoing: requests.outgoing.map((row) => asRequest(row, handles)),
+                    incoming: requests.incoming.map((row) => asRequest(row, handles, viewer, others, 'incoming')),
+                    outgoing: requests.outgoing.map((row) => asRequest(row, handles, viewer, others, 'outgoing')),
                     blocked: blocked.map((row) => seenBy(viewer, row, 'blocked')),
                     mutes
                 };

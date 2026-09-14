@@ -1334,8 +1334,15 @@ export const client =
             server.calls.push('social.graph');
             return {
                 friends: server.friends.filter(reachable).map(personWire),
-                incoming: server.incoming.filter((request) => reachable(request.from)),
-                outgoing: server.outgoing.filter((request) => reachable(request.to)),
+
+                // The person on the other end travels with the request, exactly as the server sends
+                // it. A fake that sent only handles would be rehearsing the defect this fixed: the
+                // browser renders the row out of `people.store`, so a request whose sender it has
+                // never been told about renders as nothing at all.
+                incoming: server.incoming.filter((request) => reachable(request.from))
+                    .map((request) => ({ ...request, person: personWire(request.from) })),
+                outgoing: server.outgoing.filter((request) => reachable(request.to))
+                    .map((request) => ({ ...request, person: personWire(request.to) })),
                 blocked: server.blocks.map(personWire),
                 mutes: [...server.mutes]
             };

@@ -13,6 +13,7 @@ import { useNotifications } from '../src/stores/notifications.store.ts';
 import { useSearch } from '../src/stores/search.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
 import { useSettings } from '../src/stores/settings.store.ts';
+import { usePeople } from '../src/stores/people.store.ts';
 import { useSocial } from '../src/stores/social.store.ts';
 import '../src/locales/app-catalogue.ts';
 
@@ -140,6 +141,40 @@ describe('social store', () =>
         await social.accept(request.id);
         expect(social.friends()).toContain(request.from);
         expect(social.incoming().some((entry) => entry.id === request.id)).toBe(false);
+    });
+
+    /**
+     * A request has to arrive with the person on the other end of it.
+     *
+     * `friends.page` renders the row only `when={ people.byHandle(request.from) !== null }`, and
+     * `people.store` holds nothing but what the server has actually sent - it never fetches. So
+     * when the graph carried handles alone, a request from somebody this browser had not already
+     * seen rendered as NOTHING: the Requests tab counted it in its badge and showed an empty panel,
+     * with no way to accept or decline. A stranger is exactly who sends you a friend request, so
+     * that was the ordinary case rather than an exotic one.
+     *
+     * Two browsers found it and no gate could: the seed only ever writes finished friendships, so
+     * no development database has ever held a pending request from somebody unknown.
+     */
+    it('files the person behind a request, so the row can be rendered at all', async () =>
+    {
+        const social = useSocial();
+        const people = usePeople();
+
+        // The people cache is a singleton that outlives a test, so an earlier one filing this
+        // person would make the assertion below true whatever the graph did. Empty it first, or
+        // this is a check that cannot fail.
+        people.reset();
+        await social.refresh();
+
+        const request = social.incoming()[0];
+        expect(request).toBeDefined();
+
+        // The exact condition `friends.page` gates the row on. The store does not carry a second
+        // copy of the person - `people.store` is the one place a handle has a name - so what has to
+        // be true is that loading the graph FILED them.
+        expect(people.byHandle(request.from)).not.toBeNull();
+        expect(people.byHandle(request.from)?.handle).toBe(request.from);
     });
 
     it('blocks everywhere: friends, people and suggestions all lose them', async () =>

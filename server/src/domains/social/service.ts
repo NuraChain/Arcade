@@ -328,6 +328,28 @@ export function createSocialService(db: DataSource)
             return new Map(rowsOf<{ id: string; handle: string }>(rows).map((row) => [row.id, row.handle]));
         },
 
+        /**
+         * The people behind a set of ids, for a payload that has to carry them rather than name them.
+         *
+         * `handlesOf` is enough when the wire only needs an identifier. A friend request needs the
+         * whole person: the browser renders the row from `people.store`, which holds only what the
+         * server has actually sent, so a request whose sender was never sent renders as nothing at
+         * all - see the graph payload in `services.ts`.
+         */
+        async peopleOf(ids: readonly string[]): Promise<PersonRow[]>
+        {
+            const wanted = [...new Set(ids)];
+            if (wanted.length === 0)
+            {
+                return [];
+            }
+            const rows = await db.query(
+                `select ${ PERSON_COLUMNS } from users u where u.id = any($1::uuid[]) and u.is_suspended = false`,
+                [wanted]
+            );
+            return rowsOf<PersonRow>(rows);
+        },
+
         /** How many friends two accounts share. One number, for the "why this person" line. */
         async mutualWith(me: string, others: readonly string[]): Promise<Map<string, number>>
         {

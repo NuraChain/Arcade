@@ -101,7 +101,15 @@ export const useSocial = createStore((): SocialApi =>
     const graph = createResource(who, async () =>
     {
         const answer = await client.social.graph();
-        people.remember([...answer.friends, ...answer.blocked]);
+        // The people on the other end of a request are filed too. Without them the Requests tab
+        // counted a request in its badge and rendered an empty panel, because the row is built from
+        // this cache and a stranger is exactly who has never been in it.
+        people.remember([
+            ...answer.friends,
+            ...answer.blocked,
+            ...answer.incoming.map((request) => request.person),
+            ...answer.outgoing.map((request) => request.person)
+        ]);
         return answer;
     }, { name: 'social.graph' });
 

@@ -435,11 +435,24 @@ export const personSummary = object({
 
 export type PersonSummary = Infer<typeof personSummary>;
 
+/**
+ * A request, and the PERSON on the other end of it.
+ *
+ * `from` and `to` are handles because that is how this wire names anybody, and the relation checks
+ * compare them. The person travels as well, and has to: the browser renders a request row out of
+ * `people.store`, which holds only what the server has actually sent. Sending handles alone meant a
+ * request from somebody this browser had never seen rendered as NOTHING - the Requests tab counted
+ * it in the badge and showed an empty panel underneath, with no way to accept or decline. That is
+ * the ordinary case for a friend request, not an exotic one; a stranger is who sends you one.
+ */
 export const friendRequest = object({
     id: string(),
     from: string(),
     to: string(),
-    at: string()
+    at: string(),
+
+    /** The other side, from the reader's point of view: the sender of an incoming request. */
+    person: personSummary
 });
 
 export type FriendRequest = Infer<typeof friendRequest>;
