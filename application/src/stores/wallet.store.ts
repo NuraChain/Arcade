@@ -155,7 +155,11 @@ export const useWallet = createStore((): WalletApi =>
             if (chainIsConfigured())
             {
                 await switchChain(wallet, NURA_CHAIN);
-                setChainId(await readChainId(wallet).catch(() => chainId()));
+                const switched = await readChainId(wallet).catch(() => null);
+                if (switched !== null)
+                {
+                    setChainId(switched);
+                }
             }
 
             setStatus('signing');

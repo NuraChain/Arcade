@@ -18,8 +18,8 @@ export const useShell = createStore((): ShellApi =>
 
     return {
         depth,
-        notePush: () => setDepth(depth() + 1),
-        notePop: () => setDepth(Math.max(0, depth() - 1)),
+        notePush: () => setDepth((current) => current + 1),
+        notePop: () => setDepth((current) => Math.max(0, current - 1)),
         resetDepth: () => setDepth(0),
         title: () =>
         {
@@ -28,8 +28,8 @@ export const useShell = createStore((): ShellApi =>
         },
         claimTitle: (read) =>
         {
-            setClaims([...claims(), read]);
-            return () => setClaims(claims().filter((claim) => claim !== read));
+            setClaims((current) => [...current, read]);
+            return () => setClaims((current) => current.filter((claim) => claim !== read));
         },
         reset: () =>
         {

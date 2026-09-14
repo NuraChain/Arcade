@@ -63,13 +63,13 @@ export const useOverlay = createStore((): OverlayApi =>
     let counter = 0;
 
     const patch = (id: string, change: Partial<OverlayEntry>): void =>
-        setItems(items().map((entry) => (entry.id === id ? { ...entry, ...change } : entry)));
+        setItems((current) => current.map((entry) => (entry.id === id ? { ...entry, ...change } : entry)));
 
     const settle = (id: string): void =>
     {
         backstops.get(id)?.();
         backstops.delete(id);
-        setItems(items().filter((entry) => entry.id !== id));
+        setItems((current) => current.filter((entry) => entry.id !== id));
     };
 
     const close = (id: string, result?: unknown): void =>
@@ -114,7 +114,7 @@ export const useOverlay = createStore((): OverlayApi =>
             }
             else
             {
-                setItems([...items(), {
+                setItems((current) => [...current, {
                     id,
                     kind: options.kind ?? 'auto',
                     phase: 'opening',

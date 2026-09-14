@@ -142,3 +142,80 @@ describe('what a composer must ask first', () =>
         expect(guilty, 'a composer that sends without consulting sendBlockOf').toEqual([]);
     });
 });
+
+/** The index of the `)` that closes the `(` at `open`. */
+function closesParen(text: string, open: number): number
+{
+    let depth = 0;
+    for (let at = open; at < text.length; at += 1)
+    {
+        if (text[at] === '(')
+        {
+            depth += 1;
+        }
+        else if (text[at] === ')')
+        {
+            depth -= 1;
+            if (depth === 0)
+            {
+                return at;
+            }
+        }
+    }
+    return text.length;
+}
+
+/** The same text with every `untrack( ... )` span removed, reads included. */
+function withoutUntrack(body: string): string
+{
+    let text = body;
+    for (;;)
+    {
+        const found = /\buntrack\s*\(/.exec(text);
+        if (found === null)
+        {
+            return text;
+        }
+        const open = found.index + found[0].length - 1;
+        text = text.slice(0, found.index) + text.slice(closesParen(text, open) + 1);
+    }
+}
+
+describe('what a store mutator may read', () =>
+{
+    /**
+     * A mutator must never read the signal it writes while it can be called from an `effect`. The
+     * read subscribes the effect, the write re-runs it, and the scheduler gives up with "Reactive
+     * flush did not settle". The updater form does not subscribe, and `untrack` is the escape for
+     * everything else.
+     *
+     * `shell.store.ts` broke it three times - `setDepth(depth() + 1)` among them - and
+     * `app-shell.component.azeroth` calls two of those FROM an effect. It never wedged, because that
+     * effect's own unrelated `location.key === seen` guard made the second pass return early: a
+     * cycle broken by luck, one edit away from being a hang nobody can attribute.
+     */
+    it('never writes a signal from a value it read out of that same signal', () =>
+    {
+        const guilty: string[] = [];
+
+        for (const file of FILES.filter((one) => one.path.startsWith('stores/')))
+        {
+            for (const pair of file.text.matchAll(/const\s*\[\s*([A-Za-z_$][\w$]*)\s*,\s*(set[\w$]*)\s*\]\s*=\s*create(?:Signal|Store)/g))
+            {
+                const [, getter, setter] = pair;
+                for (const call of file.text.matchAll(new RegExp(`\\b${ setter }\\s*\\(`, 'g')))
+                {
+                    const open = (call.index ?? 0) + call[0].length - 1;
+                    const argument = withoutUntrack(file.text.slice(open + 1, closesParen(file.text, open)));
+                    if (new RegExp(`\\b${ getter }\\s*\\(`).test(argument))
+                    {
+                        const line = file.text.slice(0, call.index).split('\n').length;
+                        guilty.push(`${ file.path }:${ line } ${ setter }(… ${ getter }() …)`);
+                    }
+                }
+            }
+        }
+
+        expect(guilty, 'a store mutator reads the signal it writes').toEqual([]);
+    });
+});
