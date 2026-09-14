@@ -73,13 +73,6 @@
 @custom-variant rail (&:where([data-posture='rail'], [data-posture='rail'] *));
 @custom-variant sidebar (&:where([data-posture='sidebar'], [data-posture='sidebar'] *));
 
-@utility panel
-{
-    background: var(--field);
-    border: 1px solid var(--line);
-    border-radius: var(--radius-panel);
-}
-
 @utility safe-t
 {
     padding-block-start: env(safe-area-inset-top, 0px);

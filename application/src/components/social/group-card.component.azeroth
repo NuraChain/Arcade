@@ -9,6 +9,7 @@ import { useLocale } from '../../stores/locale.store.ts';
 import { usePresence } from '../../stores/presence.store.ts';
 import AvatarGroup from '../ui/avatar-group.component.azeroth';
 import GroupCrest from './group-crest.component.azeroth';
+import { PANEL_HOVER, PANEL_TONE } from '../ui/variants.ts';
 
 export default component GroupCard(props: { group: GroupSummary; class?: string })
 {
@@ -25,7 +26,7 @@ export default component GroupCard(props: { group: GroupSummary; class?: string 
 
     <Link
         to={ `/app/groups/${ props.group.id }` }
-        class={ [ 'flex min-w-0 items-center gap-2.5 rounded-panel border border-line bg-field p-2.5 transition duration-200 hover:border-line-strong hover:bg-raised/60', props.class ?? '' ].filter(Boolean).join(' ') }
+        class={ [ `flex min-w-0 items-center gap-2.5 rounded-panel p-2.5 transition duration-200 ${ PANEL_TONE.field } ${ PANEL_HOVER.field }`, props.class ?? '' ].filter(Boolean).join(' ') }
         prefetch="hover"
     >
         <GroupCrest crest={ props.group.crest } hue={ props.group.hue } size="md" />

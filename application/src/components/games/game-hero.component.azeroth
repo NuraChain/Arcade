@@ -6,6 +6,7 @@ import Button from '../ui/button.component.azeroth';
 import Chip from '../ui/chip.component.azeroth';
 import GameArt from './game-art.component.azeroth';
 import LiveStats from './live-stats.component.azeroth';
+import Panel from '../ui/panel.component.azeroth';
 
 export default component GameHero(props: { game: Game; onQuickPlay: () => void })
 {
@@ -20,7 +21,7 @@ export default component GameHero(props: { game: Game; onQuickPlay: () => void }
         ? locale.plural('common.players', props.game.maxPlayers)
         : locale.t('games.seats.range', { min: props.game.minPlayers, max: props.game.maxPlayers });
 
-    <section class="relative overflow-hidden rounded-panel border border-line bg-field" aria-label={ name }>
+    <Panel section pad="none" label={ name } class="relative overflow-hidden">
         <GameArt game={ props.game.id } ratio="wide" priority sizes="(min-width: 1024px) 72rem, 100vw" class="max-h-[22rem] sm:max-h-[26rem]" />
         <div class="pointer-events-none absolute inset-0 bg-gradient-to-t from-field via-field/70 to-transparent" aria-hidden="true"></div>
         <div class="relative -mt-24 flex flex-col gap-4 p-4 sm:-mt-32 sm:p-6">
@@ -49,5 +50,5 @@ export default component GameHero(props: { game: Game; onQuickPlay: () => void }
                 </For>
             </ul>
         </div>
-    </section>
+    </Panel>
 }

@@ -1073,6 +1073,12 @@ Eighty catalogue entries went with the UI, along with `record-strip`, `activity-
 `achievement-tile` and `progress` — components with no remaining caller. A key whose renderer is
 deleted is the same dead weight as a key that never had one.
 
+`progress-ring` was the last survivor of that family and is gone too. It drew its value from `level`
+and `stats`, both deleted here, so nothing could ever produce one again — and it sat in
+`components/ui/` with zero importers while every gate stayed green, because nothing renders what
+nothing calls. `tests/markup.spec.ts` now fails on any primitive in that directory with no caller,
+which is the rule that would have said something.
+
 ## The wallet fixtures, and why a happy path has to be reachable
 
 `server/src/db/seed-wallets.ts` seeds the six accounts that ARE the development population, their

@@ -1,4 +1,4 @@
-import { Link, useHead, useNavigate } from 'azerothjs';
+import { useHead, useNavigate } from 'azerothjs';
 
 import Page from '../../components/app/page.component.azeroth';
 import { groupNameOf, titleOf } from '../../components/chat/chat-title.ts';
@@ -20,6 +20,7 @@ import { useGroups } from '../../stores/groups.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useSearch, SEARCH_SCOPES, type SearchScope } from '../../stores/search.store.ts';
 import { useSocial } from '../../stores/social.store.ts';
+import Panel from '../../components/ui/panel.component.azeroth';
 
 const PEOPLE_PAGE = 8;
 const MESSAGE_PAGE = 10;
@@ -171,7 +172,7 @@ export default component SearchPage()
                                     <ul class="flex flex-col gap-2" aria-label={ locale.t('search.scope.games') }>
                                         <For each={ results.games } key={ (game) => game.id } let={ game }>
                                             <li>
-                                                <Link to={ `/app/games/${ game.slug }` } class="flex items-center gap-3 rounded-panel border border-line bg-field p-2 transition-colors hover:border-accent/40">
+                                                <Panel to={ `/app/games/${ game.slug }` } pad="sm" class="flex items-center gap-3">
                                                     <span class="h-14 w-14 shrink-0 overflow-hidden rounded-tile">
                                                         <GameArt game={ game.id } ratio="square" sizes="64px" />
                                                     </span>
@@ -180,7 +181,7 @@ export default component SearchPage()
                                                         <span class="truncate text-ui-xs text-muted">{ locale.t(game.blurbKey) }</span>
                                                     </span>
                                                     <Icon name="chevron-right" size={ 16 } class="icon-flip shrink-0 text-faint" />
-                                                </Link>
+                                                </Panel>
                                             </li>
                                         </For>
                                     </ul>

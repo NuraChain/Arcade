@@ -7,6 +7,7 @@ import { usePresence } from '../../stores/presence.store.ts';
 import { useSocial } from '../../stores/social.store.ts';
 import Avatar from '../ui/avatar.component.azeroth';
 import Button from '../ui/button.component.azeroth';
+import { PANEL_TONE } from '../ui/variants.ts';
 
 export default component UserCard(props: { person: Person; onAdd: (id: string) => void })
 {
@@ -26,7 +27,7 @@ export default component UserCard(props: { person: Person; onAdd: (id: string) =
         return locale.t('friends.reason.new');
     })();
 
-    <article class="flex h-full flex-col items-center gap-2 rounded-panel border border-line bg-field p-4 text-center">
+    <article class={ `flex h-full flex-col items-center gap-2 rounded-panel p-4 text-center ${ PANEL_TONE.field }` }>
         <Link to={ `/app/people/${ props.person.handle }` } class="flex flex-col items-center gap-2" prefetch="hover">
             <Avatar person={ props.person } size="xl" presence={ presence.dot(props.person.id) } />
             <span class="flex items-center gap-1.5">

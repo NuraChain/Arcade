@@ -5,6 +5,7 @@ import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import Button from '../ui/button.component.azeroth';
 import GameArt from './game-art.component.azeroth';
+import { PANEL_TONE } from '../ui/variants.ts';
 
 export default component GameCard(props: {
     game: Game;
@@ -27,7 +28,7 @@ export default component GameCard(props: {
     derived href = `/app/games/${ props.game.slug }`;
 
     <article class={ [
-        'group relative flex flex-col overflow-hidden rounded-panel border border-line bg-field',
+        `group relative flex flex-col overflow-hidden rounded-panel ${ PANEL_TONE.field }`,
         'transition duration-200 ease-[var(--ease-ui)] hover:border-line-strong hover:shadow-2',
         props.class ?? ''
     ].filter(Boolean).join(' ') }>

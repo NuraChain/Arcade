@@ -219,3 +219,64 @@ describe('what a store mutator may read', () =>
         expect(guilty, 'a store mutator reads the signal it writes').toEqual([]);
     });
 });
+
+describe('what a surface is spelled with', () =>
+{
+    /**
+     * `rounded-panel border border-line bg-field p-4` was hand-written in ten files, and a third
+     * spelling lived in `base.css` as an `@utility panel` with one caller - while
+     * `card.component.azeroth`, which rendered exactly it, had ZERO importers for its entire life.
+     *
+     * Nothing was ever going to catch that. `npm run check` type-checks a component nobody calls,
+     * the suite passes, and 640 QA cells render every route without ever constructing it. A
+     * component with no caller is a component with no behaviour, and it drifts from the copies that
+     * replaced it silently and for free.
+     *
+     * The surface now comes from `Panel`, or from `PANEL_TONE` for the handful of elements `Panel`
+     * cannot be - a `ul`, an `article`, a class string handed to another component as a prop.
+     */
+    it('never writes the panel surface by hand', () =>
+    {
+        const guilty = FILES
+            .filter((file) => file.path !== 'components/ui/panel.component.azeroth' && file.path !== 'components/ui/variants.ts')
+            .flatMap((file) => file.text.split('\n')
+                .map((line, index) => ({ line, at: index + 1 }))
+                .filter((row) => /\brounded-panel\b/.test(row.line))
+                .filter((row) => /\bbg-(?:field|sunk)\b|\bbg-(?:accent|live|danger|madder)\/5\b/.test(row.line))
+                .map((row) => `${ file.path }:${ row.at }`));
+
+        expect(guilty, 'a panel surface spelled by hand instead of coming from Panel or PANEL_TONE').toEqual([]);
+    });
+});
+
+describe('what a primitive is for', () =>
+{
+    /**
+     * The rule that would have caught the whole class: a primitive nobody imports is a primitive
+     * nobody knows exists. `Card`, `ListItem` and `ProgressRing` were each written, reviewed,
+     * type-checked and never called - and every gate stayed green for the whole of that, because
+     * nothing renders what nothing calls.
+     *
+     * `ListItem` is still unused at the time this rule lands, so it is named here as a known
+     * exception rather than quietly excluded. It is adopted in the step after this one, and the
+     * exception goes with it.
+     */
+    const ADOPTING = [ 'components/ui/list-item.component.azeroth', 'components/ui/list-item-body.component.azeroth' ];
+
+    it('has a caller for every primitive in components/ui', () =>
+    {
+        const primitives = FILES.filter((file) => /^components\/ui\/[^/]+\.component\.azeroth$/.test(file.path));
+        expect(primitives.length, 'no primitives were found at all - the glob is wrong').toBeGreaterThan(10);
+
+        const orphans = primitives
+            .filter((primitive) => !ADOPTING.includes(primitive.path))
+            .filter((primitive) =>
+            {
+                const name = primitive.path.slice('components/ui/'.length);
+                return !FILES.some((file) => file.path !== primitive.path && file.text.includes(name));
+            })
+            .map((primitive) => primitive.path);
+
+        expect(orphans, 'a primitive that nothing imports, which is a primitive that never renders').toEqual([]);
+    });
+});

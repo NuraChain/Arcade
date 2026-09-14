@@ -16,6 +16,7 @@ import Chip from '../ui/chip.component.azeroth';
 import SearchInput from '../ui/search-input.component.azeroth';
 import Segmented from '../ui/segmented.component.azeroth';
 import Toggle from '../ui/switch.component.azeroth';
+import { PANEL_TONE } from '../ui/variants.ts';
 
 export default component CreateGameForm(props: { game: Game; onCreated: (tableId: string) => void })
 {
@@ -192,7 +193,7 @@ export default component CreateGameForm(props: { game: Game; onCreated: (tableId
                     { locale.t('create.tooMany') }
                 </p>
             </Show>
-            <ul class="flex max-h-72 flex-col gap-0.5 overflow-y-auto rounded-panel border border-line bg-field p-1.5" aria-label={ locale.t('create.invite') }>
+            <ul class={ `flex max-h-72 flex-col gap-0.5 overflow-y-auto rounded-panel p-1.5 ${ PANEL_TONE.field }` } aria-label={ locale.t('create.invite') }>
                 <For each={ friends } key={ (person) => person.id } let={ person }>
                     <li>
                         <button
