@@ -1,8 +1,14 @@
 import { isLineKey } from '../../lib/lines.ts';
+import { sendBlockOf } from '../../lib/seal-state.ts';
+import SealNotice from '../chat/seal-notice.component.azeroth';
 import { usePeople } from '../../stores/people.store.ts';
+import { useAccount } from '../../stores/account.store.ts';
 import { useChat } from '../../stores/chat.store.ts';
+import { useDevices } from '../../stores/devices.store.ts';
 import { useLobby } from '../../stores/lobby.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
+import { useSeal } from '../../stores/seal.store.ts';
+import { useToasts } from '../../stores/toasts.store.ts';
 import Avatar from '../ui/avatar.component.azeroth';
 import IconButton from '../ui/icon-button.component.azeroth';
 import Input from '../ui/input.component.azeroth';
@@ -21,6 +27,10 @@ export default component TableChat(props: { conversationId: string; onClose?: ()
     const lobby = useLobby();
     const chat = useChat();
     const people = usePeople();
+    const seal = useSeal();
+    const devices = useDevices();
+    const account = useAccount();
+    const toasts = useToasts();
 
     state draft = '';
 
@@ -41,15 +51,38 @@ export default component TableChat(props: { conversationId: string; onClose?: ()
         }
     }
 
+    /**
+     * What stands in the way of sending, asked the same way the chat page asks it.
+     *
+     * This panel used to ask nothing. The composer was always enabled, `send` cleared the box
+     * before the post resolved, and a browser with no keys got a rejected promise nobody was
+     * listening to - so the message vanished, the box emptied as though it had gone, and the only
+     * record was a console error. Clearing on the way in is what made it a lie rather than a
+     * failure: an empty box is how this product says a message was sent.
+     */
+    derived stop = sendBlockOf({
+        sealability: seal.sealability(),
+        readiness: devices.readiness(),
+        known: devices.known(),
+        isWallet: account.isWallet()
+    });
+
     const send = (): void =>
     {
         const text = draft.trim();
-        if (text === '')
+        if (text === '' || stop !== null)
         {
             return;
         }
         draft = '';
-        void chat.send(props.conversationId, text);
+        void chat.send(props.conversationId, text).catch(() =>
+        {
+            if (draft === '')
+            {
+                draft = text;
+            }
+            toasts.show({ kind: 'error', text: locale.t('chat.sealedOnly'), dedupe: 'table-chat-send' });
+        });
     };
 
     derived messages = chat.messages();
@@ -101,6 +134,13 @@ export default component TableChat(props: { conversationId: string; onClose?: ()
                 </li>
             </For>
         </ul>
+        <Show when={ !seal.loading() && stop !== null }>
+            { () =>
+                <div class="border-t border-line/60 px-3 py-2">
+                    <SealNotice stop={ stop } />
+                </div>
+            }
+        </Show>
         <form
             class="flex items-center gap-2 border-t border-line/60 px-3 py-2"
             onSubmit={ (event) =>
@@ -109,8 +149,8 @@ export default component TableChat(props: { conversationId: string; onClose?: ()
                 send();
             } }
         >
-            <Input value={ draft } onInput={ (value) => draft = value } placeholder={ locale.t('play.table.say') } label={ locale.t('play.table.say') } enterkeyhint="send" maxlength={ 240 } class="min-w-0 flex-1" onEnter={ send } />
-            <IconButton icon="send" label={ locale.t('play.table.send') } variant="primary" flip disabled={ draft.trim() === '' } onClick={ send } />
+            <Input value={ draft } onInput={ (value) => draft = value } placeholder={ locale.t('play.table.say') } label={ locale.t('play.table.say') } enterkeyhint="send" maxlength={ 240 } disabled={ stop !== null } class="min-w-0 flex-1" onEnter={ send } />
+            <IconButton icon="send" label={ locale.t('play.table.send') } variant="primary" flip disabled={ stop !== null || draft.trim() === '' } onClick={ send } />
         </form>
     </section>
 }

@@ -118,3 +118,27 @@ describe('what a Show builds eagerly', () =>
         expect(guilty, 'an eager fallback dereferences something that can be null').toEqual([]);
     });
 });
+
+describe('what a composer must ask first', () =>
+{
+    /**
+     * Sending is two questions - can the ROOM be sealed to, and does THIS BROWSER hold keys - and
+     * `sendBlockOf` is the one place that answers both. A composer that skips it is not merely
+     * ungated: `post` throws on the browser's own keyring, the draft has already been cleared, and
+     * the rejection lands in the console with nobody listening. An empty box is how this product
+     * says a message was sent, so the person is told it worked when it did not.
+     *
+     * That defect shipped, was fixed in the chat page, and came back through the table chat - which
+     * is why this is a rule about every caller rather than a test of one component.
+     */
+    it('never sends without asking what stands in the way', () =>
+    {
+        const guilty = FILES
+            .filter((file) => file.path.startsWith('components/') || file.path.startsWith('pages/'))
+            .filter((file) => /\bchat\s*\.\s*send\s*\(/.test(file.text))
+            .filter((file) => !file.text.includes('sendBlockOf'))
+            .map((file) => file.path);
+
+        expect(guilty, 'a composer that sends without consulting sendBlockOf').toEqual([]);
+    });
+});
