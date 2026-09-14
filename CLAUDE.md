@@ -1737,6 +1737,13 @@ Two ways in, and the account says which one was used through `kind`:
 - **Guest** (`kind: 'guest'`). A typed name, no proof of anything, and the actual onboarding for
   most people. `handleFromName` folds the name into a handle.
 
+**`/sign-in` offers the chooser too, and for a while only the landing page did.** `WalletPanel`
+connects to whichever provider EIP-6963 announced first, which is the right default and was the only
+option: somebody holding both MetaMask and Trust Wallet had no way to say which, and somebody holding
+neither was pointed at MetaMask specifically. The same `connect-dialog` the landing uses opens from
+the sign-in page now — **still behind a dynamic import**, because that component reaches
+`wallet.store.ts` and therefore `api.ts`, and the landing chunk must not grow by a byte for it.
+
 **There is no demo account and no `/auth/demo`.** Three seeded personas used to be offered on the
 sign-in page so somebody could look around without connecting anything - but a guest already does
 that, and does it as a REAL account nobody else can sign into. What `demo` added was precisely the

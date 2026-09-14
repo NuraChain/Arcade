@@ -381,6 +381,36 @@ console.log('\n[7] Persian — the new copy exists in both languages');
     await context.close();
 }
 
+// ------------------------------------------------------------------ 8. the wallet chooser
+console.log('\n[8] sign-in offers more than one wallet');
+{
+    const { context, page, errors } = await open();
+    try
+    {
+        await page.goto(`${ BASE }/sign-in`, { waitUntil: 'networkidle' });
+        await page.waitForTimeout(2000);
+
+        const other = page.getByRole('button', { name: /Use a different wallet/i }).first();
+        record('sign-in offers a way to pick another wallet', await other.count() > 0, '');
+
+        await other.click();
+        await page.waitForTimeout(2500);
+        const shown = await page.locator('body').innerText();
+
+        // The injected provider announces only io.metamask, so MetaMask is the present one and the
+        // other two have to be offered as something rather than omitted.
+        record('the chooser lists MetaMask', /MetaMask/.test(shown), '');
+        record('the chooser lists Trust Wallet', /Trust Wallet/.test(shown), '');
+        record('the chooser lists Nura Wallet', /Nura Wallet/.test(shown), '');
+        record('console clean with the chooser open', errors.length === 0, errors.slice(0, 3).join(' ; '));
+    }
+    catch (e)
+    {
+        record('wallet chooser', false, String(e.message).slice(0, 140));
+    }
+    await context.close();
+}
+
 await browser.close();
 
 const failed = results.filter((r) => !r.ok);

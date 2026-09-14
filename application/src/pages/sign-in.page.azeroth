@@ -1,4 +1,4 @@
-import { useHead, useNavigate, useQuery } from 'azerothjs';
+import { useHead, useNavigate, useQuery, type MountNode } from 'azerothjs';
 
 import { checkHandle, handleFromName } from '../../../server/src/domains/identity/handle.ts';
 
@@ -87,6 +87,36 @@ export default component SignInPage()
     };
 
     /**
+     * The wallet chooser, on the page that IS the connect surface.
+     *
+     * `WalletPanel` connects to whichever provider EIP-6963 put first, which is the right default
+     * and the wrong only option: somebody with both MetaMask and Trust Wallet installed had no way
+     * to say which one, and somebody with neither was told to install MetaMask specifically. The
+     * landing page has had the chooser all along and this page did not.
+     *
+     * Held in a plain `let` with a separate boolean, because a setter treats a bare function as an
+     * updater - assigning a component into a signal CALLS it with the previous value.
+     */
+    let Chooser: ((props: { close: () => void; navigate: (to: string) => void }) => MountNode) | null = null;
+
+    state chooserOpen = false;
+    state chooserLoaded = false;
+
+    const openChooser = (): void =>
+    {
+        chooserOpen = true;
+        if (chooserLoaded)
+        {
+            return;
+        }
+        void import('../components/layout/connect-dialog.component.azeroth').then((module) =>
+        {
+            Chooser = module.default;
+            chooserLoaded = true;
+        });
+    };
+
+    /**
      * Signs in as a guest, and survives being told no.
      *
      * The version this replaces set `pending` and awaited with no `try`. `client.auth.guest`
@@ -146,6 +176,16 @@ export default component SignInPage()
                     leave();
                 } }
             />
+
+            <div class="mt-3 flex justify-center">
+                <Button variant="ghost" size="sm" leading="wallet" onClick={ openChooser }>
+                    { locale.t('wallet.other') }
+                </Button>
+            </div>
+
+            <Show when={ chooserOpen && chooserLoaded }>
+                { () => Chooser!({ close: () => chooserOpen = false, navigate: () => leave() }) }
+            </Show>
 
             <Divider label={ locale.t('wallet.guestTitle') } class="my-8" />
 
