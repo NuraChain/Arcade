@@ -46,7 +46,7 @@ export default component GameCard(props: {
                 </Show>
             </div>
             <div class="mt-auto flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
-                <span class="tally min-w-0 flex-1 truncate text-ui-xs text-faint">
+                <span class="tally min-w-0 flex-1 basis-[9rem] truncate text-ui-xs text-faint">
                     { seats } · { locale.t('games.live.wait', { seconds: stats.waitSeconds }) }
                 </span>
                 <Button variant="primary" size="sm" leading="zap" class="shrink-0 whitespace-nowrap" onClick={ () => props.onQuickPlay(props.game.id) }>
