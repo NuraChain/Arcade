@@ -48,6 +48,18 @@ export interface DevicesApi
     rename(id: string, label: string): Promise<void>;
     revoke(id: string): Promise<void>;
 
+    /**
+     * Reads THIS BROWSER's keyring and asks the server nothing.
+     *
+     * The shell needs `readiness()` to be an answer on every route, and `readiness()` is decided
+     * entirely by local keys - so it called `refresh()`, which also refetches the device list. That
+     * list is a resource keyed on the account and had already fetched itself the moment the account
+     * resolved, so every page load asked the server for the same devices twice, thirteen
+     * milliseconds apart. One of the two was pure waste, and it is the shape that took the rate
+     * limiter out during the responsive matrix.
+     */
+    look(): Promise<void>;
+
     refresh(): Promise<void>;
     reset(): void;
 }
@@ -107,12 +119,17 @@ export const useDevices = createStore((): DevicesApi =>
     const devices = (): Device[] => listing.data()?.devices ?? [];
     const current = (): string | null => listing.data()?.current ?? null;
 
+    const look = async (): Promise<void> =>
+    {
+        setLocal(await keyStore().load());
+        setLooked(true);
+    };
+
     const refresh = async (): Promise<void> =>
     {
         // The keyring FIRST, because everything below is a statement about this browser rather than
         // about the account, and a stale answer to "do I hold keys" is the one that lies.
-        setLocal(await keyStore().load());
-        setLooked(true);
+        await look();
         await listing.refetch();
     };
 
@@ -245,6 +262,7 @@ export const useDevices = createStore((): DevicesApi =>
         rename: (id, label) => write(() => client.devices.rename({ params: { id }, input: { label } })),
         revoke: (id) => write(() => client.devices.revoke({ params: { id } })),
 
+        look,
         refresh,
 
         reset()

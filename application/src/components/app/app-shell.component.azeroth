@@ -90,11 +90,10 @@ export default component AppShell(props: { children?: MountNode })
         // somebody has to ask once. `readiness()` answers `absent` until this runs, which would make
         // every reader of it confidently wrong rather than merely uninformed.
         //
-        // It is one request per SIGN-IN, not per navigation: the list is a resource keyed on the
-        // account, so navigating does not refetch it. The keyring alone would be cheaper and is not
-        // enough - telling `ready` from `waiting` needs the server's word on whether this browser's
-        // device was confirmed.
-        void useDevices().refresh();
+        // `look()` and not `refresh()`: this reads the keyring and asks the server nothing. The
+        // device list is a resource keyed on the account and fetches itself as soon as the account
+        // resolves, so calling `refresh()` here asked for it a second time on every page load.
+        void useDevices().look();
         return () =>
         {
             // In reverse, and each one on its own. A stop that throws must not strand the sockets,

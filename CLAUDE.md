@@ -1645,11 +1645,18 @@ document until its leave animation finishes, so removing it before disposing is 
 works. The wrong assumption was ours.
 
 **`readiness()` is not an answer until somebody has looked.** It reads this browser's keyring, and
-the keyring is null until `devices.refresh()` runs - so before that every browser reports `absent`,
+the keyring is null until `devices.look()` runs - so before that every browser reports `absent`,
 including one holding perfectly good keys. `devices.known()` is the guard, and anything acting on
 `absent` without it accuses a browser of a state nobody measured: the composer would render disabled
-on every cold load and enable itself a moment later. The shell refreshes once per SIGN-IN, not per
-navigation, because the list is a resource keyed on the account.
+on every cold load and enable itself a moment later.
+
+**The shell calls `look()`, never `refresh()`, and the difference is a whole request.** `look()` reads
+the keyring and asks the server nothing; `refresh()` does that AND refetches the device list. But the
+list is a `createResource` keyed on the account, so it already fetches itself the moment the account
+resolves - and the shell calling `refresh()` on top of that asked for the same devices twice, thirteen
+milliseconds apart, on every page load. Nothing failed, which is why it survived: a duplicated GET is
+invisible to every gate this project has, and it is the exact shape that took the rate limiter out
+during the responsive matrix.
 
 **Whether a message can be SENT is two questions, and they used to be one.** `sealability` is the
 server's word about the members' ACCOUNTS; `readiness` is about the machine in front of the reader.
