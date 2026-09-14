@@ -1842,10 +1842,45 @@ The findings that survived are recorded above in the sections they belong to, ea
 produced. `tools/qa/seal-pass.mjs` and the `.db.spec` suites pin the fixes; where a fix was subtle,
 the test that would fail without it is named in a comment rather than left to be inferred.
 
+## The browser passes, and the wallet in them
+
+Three things drive a real browser here and they do different jobs. `npm run qa` is the 640-cell
+matrix - overflow, 44px hit targets, a `main` landmark, a dirty console - and it is a GATE.
+`tools/qa/seal-pass.mjs` is the sealing pass. `tools/qa/regression-pass.mjs` is the third, and every
+check in it is one the matrix passes while the product is wrong: a page confidently scrolled to the
+top, a thread that says it does not exist while it is still loading, a button that stays spinning
+after the server refused, a guest offered a control that destroys their account. Both hand-run
+passes need the BUILT server, because that is the one that exercises `mountPages`.
+
+**The wallet in all three is an injected EIP-1193 provider over a hardhat key, and that is a
+decision rather than a shortcut.** The signatures are real - `viem` signs, this server verifies them
+the way it verifies anybody's - so the whole EIP-4361 round trip, the device attestation and the
+sealing are exercised end to end. What is skipped is the extension's own UI.
+
+**Real MetaMask under Playwright does not work here, and the reason is worth writing down so
+nobody spends another afternoon on it.** MetaMask 13.x is Manifest V3: its background is a service
+worker that idles out, and under automation the content script's next message reports
+`Receiving end does not exist`, the inpage stream resets, the page gets
+`Extension context invalidated`, and the renderer crashes - so `eth_requestAccounts` rejects and the
+app renders "Failed to connect to MetaMask" as though the person had refused. Keeping the worker
+warm from outside does not fix it. The obvious escape is an MV2 build, whose background page is
+persistent - but Chrome 152 removed MV2 support outright, so it will not load at all. Both doors are
+shut. Driving the real extension needs a MetaMask built with LavaMoat scuttling disabled, which is
+what Synpress exists to do; it is not something `--load-extension` can reach.
+
+What IS set up, outside this repository at `~/.claude/mcp-browser/`: the extension, a Chrome profile
+with the hardhat phrase imported, and a `playwright-metamask` MCP server registered against them.
+**All six wallet fixtures are the standard hardhat accounts in order** - `dana.w` is index 0 - so the
+one phrase `test test test test test test test test test test test junk` holds every one of them.
+Two notes for anyone driving that profile by hand: the recovery phrase must be TYPED rather than
+filled, because `fill` sets the value without driving MetaMask's own handler and the box never
+expands into word fields; and the extension tab must stay OPEN, because closing it invalidates the
+content script in every other tab at once.
+
 ## Verification
 
-`npm run check` · `npm test` · `npm run test:shuffle` · `npm run build` · `npm run qa`, then a
-browser pass: every route at 390 and 1280 in both themes and both languages, console clean, and
+`npm run check` · `npm test` · `npm run test:shuffle` · `npm run build` · `npm run qa` ·
+`node tools/qa/regression-pass.mjs`, then a browser pass: every route at 390 and 1280 in both themes and both languages, console clean, and
 the disposal check — repeatedly create and dispose the world and confirm no "Too many active
 WebGL contexts" warning appears. That leak has happened twice already: once from an unreleased
 capability-probe context, once because `renderer.dispose()` alone does not free the GL context
