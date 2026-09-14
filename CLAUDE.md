@@ -2000,7 +2000,17 @@ WebGL contexts" warning appears. That leak has happened twice already: once from
 capability-probe context, once because `renderer.dispose()` alone does not free the GL context
 (`forceContextLoss()` does).
 
-Two flex traps this codebase has already hit twice, worth checking first when something
-overflows: a **grid item** defaults to `min-width: auto` and will not shrink around `truncate`
-text (give the `<li>` `min-w-0`), and an **`<input>`** carries an intrinsic ~20-character
-min-width that `flex-1` alone does not defeat (give its wrapper `min-w-0` too).
+Three sizing traps this codebase has already hit, worth checking first when something overflows
+or sits at the wrong width: a **grid item** defaults to `min-width: auto` and will not shrink
+around `truncate` text (give the `<li>` `min-w-0`); an **`<input>`** carries an intrinsic
+~20-character min-width that `flex-1` alone does not defeat (give its wrapper `min-w-0` too);
+and a **`<button>` shrink-wraps to its content even at `display: flex`**, because a form control
+sizes to `fit-content` rather than filling its parent the way a `<div>` does.
+
+That third one is the nastiest, because it only shows up when one branch of a component is a
+button and another is not. Every chair in the table lobby shares one class list, and the taken
+seat rendered a `<div>` while each open seat rendered a `<button>` to invite somebody - so the
+taken chair filled its 201px column and the open ones sat at 82px inside theirs, in a grid whose
+columns were all perfectly equal. Nothing measures this: `npm run qa` fails on overflow, hit
+targets, a missing landmark and a dirty console, and a row of undersized chairs is none of those.
+A shared class list has to state `w-full` if any branch of it can be a control.
