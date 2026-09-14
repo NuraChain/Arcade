@@ -1886,10 +1886,18 @@ loading anyway. The wallet chooser is the same rule from the other end: it reach
 the request the dynamic guard import exists to remove. `tools/qa` does not catch either of these;
 the browser pass asserts the landing makes no api call at all.
 
-**JSX does not parse inside a `derived`.** It is legal in the markup region and in a prop expression
-there - `fallback={ <EmptyState /> }` is everywhere - but a `derived` that returns an element fails
-the BUNDLER with `Expected > but found Identifier` while `npm run check` passes, because the
-typechecker and the bundler parse `.azeroth` differently. Build an element where it is rendered.
+**Markup cannot live in a declaration's value.** This is `.azeroth` markup, not JSX - there is no JSX
+runtime here - and it is converted only in the markup region and in prop expressions there, which is
+why `fallback={ <EmptyState /> }` is everywhere. A `derived` or `state` whose value contains markup is
+refused by name, `azeroth/unterminated-declaration`, and says so clearly.
+
+With ONE exception, and it is the expensive one: markup nested inside a function in that value - the
+`derived x = ((): T => ... )()` idiom this file uses elsewhere - slips past that scan entirely. `npm run
+check` is clean, and the markup is copied verbatim into the emitted JavaScript, where the bundler reads
+`<Icon name` as a type argument list and dies with `Expected > but found Identifier` - a message about
+generics, pointing into generated code, naming neither markup nor the declaration. The green gate is
+what makes it cost an afternoon: nothing suggests the source is at fault. Build the element where it is
+rendered. It is entry 10 in the framework register.
 
 **A component cannot be held in a signal by plain assignment.** A setter treats a bare function
 argument as an updater, so `Dialog = module.default` CALLS the component with the previous value
