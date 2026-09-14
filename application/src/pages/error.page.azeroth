@@ -1,13 +1,50 @@
 import Button from '../components/ui/button.component.azeroth';
 import { useLocale } from '../stores/locale.store.ts';
 
-export default component ErrorPage(props: { reset: () => void })
+/**
+ * What a page shows when it has thrown, and what the person who has to fix it gets.
+ *
+ * The boundary used to name its first argument `_error` and drop it, so a crash anywhere under
+ * `<Routes>` produced this screen and NOTHING else: no console line, no stack, no clue which page
+ * or which value. Closing a table landed here and the only way to find out why was to guess. An
+ * error that reaches a person has already failed; throwing it away as well means it fails twice.
+ *
+ * So it is always logged, and in DEVELOPMENT the message is on the screen as well. Not in
+ * production: an exception's text is written for whoever wrote the code, and can carry an id, a
+ * path or a value that a stranger reading over somebody's shoulder should not be handed.
+ */
+export default component ErrorPage(props: { reset: () => void; error?: unknown })
 {
     const locale = useLocale();
+
+    derived detail = ((): string =>
+    {
+        const error = props.error;
+        if (error === undefined || error === null)
+        {
+            return '';
+        }
+        return error instanceof Error ? `${ error.name }: ${ error.message }` : String(error);
+    })();
+
+    mount
+    {
+        if (props.error !== undefined && props.error !== null)
+        {
+            console.error('[nura] a page threw and the error boundary caught it', props.error);
+        }
+    }
 
     <section class="mx-auto flex min-h-[70dvh] w-full max-w-[42rem] flex-col items-start justify-center gap-5 px-5 sm:px-8">
         <h1 class="text-display-xl text-text">{ locale.t('error.title') }</h1>
         <p class="max-w-[46ch] text-ui-lg text-muted">{ locale.t('error.lead') }</p>
+
+        <Show when={ import.meta.env.DEV && detail !== '' }>
+            { () =>
+                <pre class="max-w-full overflow-x-auto rounded-tile border border-madder/40 bg-madder/10 px-3 py-2 text-ui-xs text-madder">{ detail }</pre>
+            }
+        </Show>
+
         <Button variant="primary" size="md" onClick={ () => props.reset() }>{ locale.t('error.cta') }</Button>
     </section>
 }

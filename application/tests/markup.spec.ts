@@ -1,0 +1,120 @@
+import { describe, it, expect } from 'vitest';
+
+/**
+ * Two rules about MARKUP that no type can hold, read off the source the way `lines.spec.ts` reads
+ * `services.ts`. Both exist because the real thing shipped and every gate stayed green.
+ *
+ * Read through the BUNDLER rather than `node:fs`, like `lib.spec.ts` does: this suite runs under
+ * jsdom, where `import.meta.url` is an http url and `readFileSync` refuses it.
+ */
+const FILES = Object.entries(
+    import.meta.glob('../src/**/*.{ts,azeroth}', { query: '?raw', import: 'default', eager: true }) as Record<string, string>
+).map(([path, text]) => ({ path: path.replace('../src/', ''), text }));
+
+/** The index of the `}` that closes the `{` at `open`. */
+function closes(text: string, open: number): number
+{
+    let depth = 0;
+    for (let at = open; at < text.length; at += 1)
+    {
+        if (text[at] === '{')
+        {
+            depth += 1;
+        }
+        else if (text[at] === '}')
+        {
+            depth -= 1;
+            if (depth === 0)
+            {
+                return at;
+            }
+        }
+    }
+    return text.length;
+}
+
+/**
+ * The same body with every `{ () => ... }` taken out of it.
+ *
+ * Those are LAZY - a nested Show's own child may assert whatever its own `when` has established -
+ * so they are not this rule's business. Brace-matched rather than pattern-matched, because a
+ * one-line child like `{ () => <Crest hue={ group!.hue } /> }` has braces inside it and any
+ * non-greedy pattern stops in the middle of one.
+ */
+function withoutLazy(body: string): string
+{
+    let text = body;
+    for (;;)
+    {
+        const lazy = /\{\s*\(\)\s*=>/.exec(text);
+        if (lazy === null)
+        {
+            return text;
+        }
+        text = text.slice(0, lazy.index) + text.slice(closes(text, lazy.index) + 1);
+    }
+}
+
+describe('what a url is built from', () =>
+{
+    /**
+     * `lobby.quick` and `lobby.host` answer with a PROMISE of a table id, and a template literal
+     * will happily call `toString` on one - so
+     *
+     *     navigate(`/app/play/${ lobby.quick(game) }`)
+     *
+     * compiles, lints, and sends every Play button in the product to `/app/play/[object%20Promise]`.
+     * Eight call sites did exactly that. `npm run qa` tours routes by url and never presses a
+     * button, so nothing saw it.
+     *
+     * `lib/open-table.ts` takes the promise instead, which is what makes the broken form
+     * unwritable: the caller never holds the id at all.
+     */
+    it('never puts a lobby call straight into a play url', () =>
+    {
+        const guilty = FILES
+            .filter((file) => file.path !== 'lib/open-table.ts')
+            .flatMap((file) => [...file.text.matchAll(/`\/app\/play\/\$\{[^}]*\}`/g)]
+                .filter((match) => /\b(?:lobby|useLobby\(\))\s*\.\s*(?:quick|host)\s*\(/.test(match[0]))
+                .map((match) => `${ file.path }: ${ match[0] }`));
+
+        expect(guilty, 'a promise reaches the address bar as [object Promise]').toEqual([]);
+    });
+});
+
+describe('what a Show builds eagerly', () =>
+{
+    /**
+     * A `<Show>`'s children are written `{ () => ... }` and are LAZY. Its `fallback` is a plain
+     * value and is built EAGERLY - whether or not it is shown, and at the moment `when` flips.
+     *
+     * So a fallback that dereferences something the surrounding guard is responsible for throws the
+     * instant that thing goes null. Closing a table did it: `table` became null, `seated` flipped
+     * false in the same tick, the inner Show reached for its fallback, and
+     * `table!.taken` sent the whole route tree to "The lights went out." The outer
+     * `<Show when={ table !== null }>` did not help, because a fallback is not a child.
+     */
+    it('never lets a fallback assert non-null on something that can go away', () =>
+    {
+        const guilty: string[] = [];
+
+        for (const file of FILES)
+        {
+            for (const open of [...file.text.matchAll(/fallback=\{/g)])
+            {
+                // `open[0]` is the whole `fallback={`, so one back from its end is the brace.
+                const brace = (open.index ?? 0) + open[0].length - 1;
+                const body = withoutLazy(file.text.slice(brace + 1, closes(file.text, brace)));
+                const asserted = [...new Set([...body.matchAll(/\b([A-Za-z_$][\w$]*)!\./g)].map((one) => one[1]))];
+
+                if (asserted.length > 0)
+                {
+                    const line = file.text.slice(0, open.index).split('\n').length;
+                    guilty.push(`${ file.path }:${ line } asserts ${ asserted.map((one) => `${ one }!`).join(', ') }`);
+                }
+            }
+        }
+
+        expect(guilty, 'an eager fallback dereferences something that can be null').toEqual([]);
+    });
+});

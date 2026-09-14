@@ -1664,6 +1664,23 @@ button when this browser is what is in the way, and `enrol` NEVER rejects - it r
 `failure()` - so every outcome is read back and spoken. A second browser lands `waiting` rather than
 ready, so it is offered the devices page instead of a button that would not finish the job.
 
+**A `<Show>`'s children are lazy and its `fallback` is NOT.** The children are written
+`{ () => ... }` and only run when `when` is true; the fallback is a plain value, built eagerly, at
+the moment `when` flips. So a fallback that dereferences something the surrounding guard is
+responsible for throws the instant that thing goes away - and closing a table did exactly that:
+`table` went null, `seated` flipped false in the same tick, the inner Show reached for its fallback,
+and `table!.taken` sent the entire route tree to "The lights went out." The outer
+`<Show when={ table !== null }>` was no help, because a fallback is not a child. Build the element
+inside a ternary that checks first. `tests/markup.spec.ts` fails on any fallback that asserts
+non-null, brace-matching past nested lazy children so a nested Show's own child can still assert.
+
+**An error that reaches a person has already failed; throwing it away makes it fail twice.** The
+boundary in `App.azeroth` named its first argument `_error` and dropped it, so a crash anywhere
+under `<Routes>` produced that screen and nothing else - no console line, no stack, no clue which
+page. `ErrorPage` takes the error now, logs it always, and shows it on screen in DEVELOPMENT only:
+an exception's text is written for whoever wrote the code and can carry an id or a path that a
+stranger reading over somebody's shoulder should not be handed.
+
 **Stores own their timers.** No store schedules anything in its factory; periodic work sits
 behind idempotent `start(): () => void` / `stop()`, one-shot timers are tracked and cleared by
 `reset()`, and every one reads the clock through `runtime()` so tests can drive it.
