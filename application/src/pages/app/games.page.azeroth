@@ -8,6 +8,7 @@ import type { GameCategory, GameId } from '../../data/games.ts';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useLobby } from '../../stores/lobby.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
+import { openTable } from '../../lib/open-table.ts';
 
 export default component GamesPage()
 {
@@ -26,7 +27,7 @@ export default component GamesPage()
 
     const quickPlay = (game: GameId): void =>
     {
-        navigate(`/app/play/${ lobby.quick(game) }`);
+        openTable(lobby.quick(game), navigate);
     };
 
     <Page label={ locale.t('app.nav.games') } onRefresh={ () => catalogue.refresh() }>

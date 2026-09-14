@@ -17,6 +17,7 @@ import { useLobby } from '../../stores/lobby.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { usePresence } from '../../stores/presence.store.ts';
 import { useShell } from '../../stores/shell.store.ts';
+import { openTable } from '../../lib/open-table.ts';
 
 export default component GamePage()
 {
@@ -63,7 +64,7 @@ export default component GamePage()
     {
         if (game !== null)
         {
-            navigate(`/app/play/${ lobby.quick(game.id) }`);
+            openTable(lobby.quick(game.id), navigate);
         }
     };
 

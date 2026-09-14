@@ -10,6 +10,7 @@ import { usePresence } from '../../stores/presence.store.ts';
 import { useSocial } from '../../stores/social.store.ts';
 import Avatar from '../ui/avatar.component.azeroth';
 import Button from '../ui/button.component.azeroth';
+import { openTable } from '../../lib/open-table.ts';
 
 export default component SocialPanel()
 {
@@ -24,7 +25,7 @@ export default component SocialPanel()
     const playWith = (person: Person): void =>
     {
         const game = catalogue.featured();
-        navigate(`/app/play/${ lobby.host(game, catalogue.defaults(game), [person.id]) }`);
+        openTable(lobby.host(game, catalogue.defaults(game), [person.id]), navigate);
     };
 
     const peopleOf = (ids: readonly string[]): Person[] => ids

@@ -9,6 +9,7 @@ import SectionHeading from '../../components/ui/section-heading.component.azerot
 import type { Game, GameId } from '../../data/games.ts';
 import type { Person } from '../../data/person.ts';
 import Icon from '../../icons/icon.component.azeroth';
+import { openTable } from '../../lib/open-table.ts';
 import { runtime } from '../../lib/runtime.ts';
 import { useSocial } from '../../stores/social.store.ts';
 import { usePeople } from '../../stores/people.store.ts';
@@ -84,7 +85,7 @@ export default component HomePage()
 
     const quickPlay = (game: GameId): void =>
     {
-        void lobby.quick(game).then((id) => navigate(`/app/play/${ id }`));
+        openTable(lobby.quick(game), navigate);
     };
 
     <Page

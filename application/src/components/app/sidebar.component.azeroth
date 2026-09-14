@@ -14,6 +14,7 @@ import Avatar from '../ui/avatar.component.azeroth';
 import Button from '../ui/button.component.azeroth';
 import IconButton from '../ui/icon-button.component.azeroth';
 import { NAV, SECONDARY } from './nav-items.ts';
+import { openTable } from '../../lib/open-table.ts';
 
 export default component Sidebar()
 {
@@ -30,7 +31,7 @@ export default component Sidebar()
 
     const quickPlay = (): void =>
     {
-        navigate(`/app/play/${ lobby.quick(catalogue.featured()) }`);
+        openTable(lobby.quick(catalogue.featured()), navigate);
     };
 
     <nav class="safe-t safe-b flex h-dvh w-[var(--sidebar-w)] flex-col border-e border-line bg-field" aria-label={ locale.t('app.nav.primary') }>

@@ -614,6 +614,16 @@ signed-in caller could produce one. That is the same defect class as the 22P02 `
 by checking a uuid's shape before comparing it, and the fix belongs in the same place the wire shape
 is already decided once.
 
+**Nothing builds a url out of a promise.** `lobby.quick` and `lobby.host` answer with a PROMISE of a
+table id, and a template literal will happily call `toString` on one - so
+`navigate(\`/app/play/${ lobby.quick(game) }\`)` compiles, lints, and sends somebody to
+`/app/play/[object%20Promise]`. Eight call sites did exactly that, which was every Play and
+Quick-play button in the product outside the home page. `npm run qa` tours routes by url and never
+presses a button, so no gate could see it. `lib/open-table.ts` takes the promise as an argument -
+the caller never holds the id, so the broken form cannot be written - and owns the refusal, which
+eight `void`-less calls had nowhere to put. `tests/markup.spec.ts` reads the source and fails if one
+comes back.
+
 **Matchmaking is a query.** `quick(game)` reads the open public tables for that game, claims a
 chair at the first one that still has one, and opens a table to wait in only when there is nothing
 to join. Nobody is invented to fill it.

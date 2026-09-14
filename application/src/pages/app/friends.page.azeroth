@@ -24,6 +24,7 @@ import { usePresence } from '../../stores/presence.store.ts';
 import { useDevice } from '../../stores/device.store.ts';
 import { useSocial } from '../../stores/social.store.ts';
 import { useToasts } from '../../stores/toasts.store.ts';
+import { openTable } from '../../lib/open-table.ts';
 
 const LIST_PAGE = 12;
 const SUGGEST_PAGE = 8;
@@ -88,7 +89,7 @@ export default component FriendsPage()
     const playWith = (person: Person): void =>
     {
         const game = catalogue.featured();
-        navigate(`/app/play/${ lobby.host(game, catalogue.defaults(game), [person.id]) }`);
+        openTable(lobby.host(game, catalogue.defaults(game), [person.id]), navigate);
     };
 
     const message = (person: Person): void =>

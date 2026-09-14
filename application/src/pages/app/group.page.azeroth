@@ -27,6 +27,7 @@ import { useOverlay } from '../../stores/overlay.store.ts';
 import { usePresence } from '../../stores/presence.store.ts';
 import { useShell } from '../../stores/shell.store.ts';
 import { useToasts } from '../../stores/toasts.store.ts';
+import { openTable } from '../../lib/open-table.ts';
 
 export default component GroupPage()
 {
@@ -96,7 +97,7 @@ export default component GroupPage()
         const invitees = online
             .filter((handle) => handle !== account.user()?.id)
             .slice(0, config.seats - 1);
-        navigate(`/app/play/${ lobby.host(pick, config, invitees) }`);
+        openTable(lobby.host(pick, config, invitees), navigate);
     };
 
     const edit = (): void =>

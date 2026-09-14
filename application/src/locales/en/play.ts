@@ -79,6 +79,7 @@ export const play = {
     'create.search': 'Search friends',
     'create.noFriends': 'No friends match.',
 
+    'play.openFailed': 'That table would not open. Try again in a moment.',
     'play.title.searching': 'Finding a table',
     'play.title.found': 'Table found',
     'play.title.lobby': 'Lobby',

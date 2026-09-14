@@ -16,6 +16,7 @@ import { useLocale } from '../../stores/locale.store.ts';
 import { usePresence } from '../../stores/presence.store.ts';
 import { useSocial } from '../../stores/social.store.ts';
 import { useToasts } from '../../stores/toasts.store.ts';
+import { openTable } from '../../lib/open-table.ts';
 
 export default component DiscoverPage()
 {
@@ -52,7 +53,7 @@ export default component DiscoverPage()
 
     const quickPlay = (game: GameId): void =>
     {
-        navigate(`/app/play/${ lobby.quick(game) }`);
+        openTable(lobby.quick(game), navigate);
     };
 
     <Page

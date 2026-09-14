@@ -19,6 +19,7 @@ import { usePresence } from '../../stores/presence.store.ts';
 import { useShell } from '../../stores/shell.store.ts';
 import { useSocial } from '../../stores/social.store.ts';
 import { useToasts } from '../../stores/toasts.store.ts';
+import { openTable } from '../../lib/open-table.ts';
 
 export default component PersonPage()
 {
@@ -68,7 +69,7 @@ export default component PersonPage()
         if (person !== null)
         {
             const game = catalogue.featured();
-            navigate(`/app/play/${ lobby.host(game, catalogue.defaults(game), [person.id]) }`);
+            openTable(lobby.host(game, catalogue.defaults(game), [person.id]), navigate);
         }
     };
 
