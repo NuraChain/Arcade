@@ -5,6 +5,14 @@ export type AvatarSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl' | '2xl';
 export type BadgeVariant = 'solid' | 'soft' | 'outline';
 export type BadgeSize = 'sm' | 'md';
 
+/**
+ * The tones a Panel can wear. `madder` is absent on purpose: it means a table is playing for
+ * something, and the destructive colour is `danger`. Leaving it out makes the wrong one unwritable.
+ */
+export type PanelTone = 'field' | 'accent' | 'live' | 'danger' | 'dashed';
+export type PanelPad = 'none' | 'sm' | 'md' | 'lg';
+export type PanelStack = 'none' | 'sm' | 'md';
+
 export const BUTTON_VARIANT: Record<ButtonVariant, string> = {
     primary: 'bg-accent text-accent-ink hover:brightness-110 active:brightness-95',
     secondary: 'bg-raised text-text hover:bg-line-strong active:brightness-95',
@@ -112,4 +120,41 @@ export const AVATAR_DOT: Record<AvatarSize, string> = {
     lg: 'h-3.5 w-3.5 ring-2',
     xl: 'h-4 w-4 ring-[3px]',
     '2xl': 'h-5 w-5 ring-4'
+};
+
+export const PANEL_TONE: Record<PanelTone, string> = {
+    field: 'border border-line bg-field',
+    accent: 'border border-accent/40 bg-accent/5',
+    live: 'border border-live/40 bg-live/5',
+    danger: 'border border-danger/40 bg-danger/5',
+    dashed: 'border border-dashed border-line'
+};
+
+export const PANEL_HOVER: Record<PanelTone, string> = {
+    field: 'hover:border-line-strong hover:bg-raised/60',
+    accent: 'hover:bg-accent/10',
+    live: 'hover:bg-live/10',
+    danger: 'hover:bg-danger/10',
+    dashed: 'hover:border-line-strong'
+};
+
+export const PANEL_PAD: Record<PanelPad, string> = {
+    none: '',
+    sm: 'p-3',
+    md: 'p-4',
+    lg: 'p-6'
+};
+
+export const PANEL_STACK: Record<PanelStack, string> = {
+    none: '',
+    sm: 'flex flex-col gap-3',
+    md: 'flex flex-col gap-4'
+};
+
+export const PANEL_GLOW: Record<PanelTone, string> = {
+    field: '',
+    accent: 'shadow-glow-accent',
+    live: 'shadow-glow-live',
+    danger: '',
+    dashed: ''
 };

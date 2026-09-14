@@ -1,6 +1,7 @@
 import { useHead } from 'azerothjs';
 
 import Page from '../../components/app/page.component.azeroth';
+import Panel from '../../components/ui/panel.component.azeroth';
 import Avatar from '../../components/ui/avatar.component.azeroth';
 import Button from '../../components/ui/button.component.azeroth';
 import Chip from '../../components/ui/chip.component.azeroth';
@@ -129,16 +130,16 @@ export default component MePage()
 
                     <section>
                         <SectionHeading title={ locale.t('person.friends') } />
-                        <p class="tally rounded-panel border border-line bg-field p-4 text-ui-md text-text">
+                        <Panel class="tally text-ui-md text-text">
                             { locale.plural('friends.count', social.friends().length) }
-                        </p>
+                        </Panel>
                     </section>
 
                     <Show when={ account.isWallet() }>
                         { () =>
                             <section>
                                 <SectionHeading title={ locale.t('wallet.address') } />
-                                <div class="flex items-center gap-3 rounded-panel border border-line bg-field p-4">
+                                <Panel class="flex items-center gap-3">
                                     <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-live/15 text-live">
                                         <Icon name="key" size={ 18 } />
                                     </span>
@@ -154,7 +155,7 @@ export default component MePage()
                                         variant="ghost"
                                         onClick={ () => void copyAddress() }
                                     />
-                                </div>
+                                </Panel>
                                 <p class="mt-2 text-ui-xs text-faint">{ locale.t('wallet.address.compare') }</p>
                             </section>
                         }

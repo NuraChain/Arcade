@@ -1,0 +1,78 @@
+import { Link, type Child, type NavigateTarget } from 'azerothjs';
+
+import { PANEL_GLOW, PANEL_HOVER, PANEL_PAD, PANEL_STACK, PANEL_TONE, type PanelPad, type PanelStack, type PanelTone } from './variants.ts';
+
+/**
+ * The bordered surface every card, notice and settings block in this product is made of.
+ *
+ * It existed before this, as `Card`, and had ZERO importers for its whole life while the string it
+ * renders - `rounded-panel border border-line bg-field p-4` - was hand-written in ten files and a
+ * third time as an unused `@utility panel`. Every gate stayed green throughout, because nothing
+ * renders what nothing calls. That is the defect this file is the answer to, and
+ * `tests/markup.spec.ts` now fails if a primitive here has no caller.
+ *
+ * Renamed from `Card` because the old name collided with four product components that are not this
+ * thing - `GameCard`, `UserCard`, `GroupCard`, `SeatCard` - which is the likeliest reason nobody
+ * ever reached for it. `Panel` is the word the design system already uses everywhere else.
+ *
+ * `madder` is deliberately absent from `PanelTone`. It means a table is playing for something; the
+ * destructive colour is `danger`. Leaving it out of the union makes the wrong one unwritable rather
+ * than merely discouraged.
+ */
+export default component Panel(props: {
+    children?: Child;
+    section?: boolean;
+    tone?: PanelTone;
+    pad?: PanelPad;
+    stack?: PanelStack;
+    glow?: boolean;
+    to?: NavigateTarget;
+    label?: string;
+    labelledBy?: string;
+    class?: string;
+    onClick?: () => void;
+})
+{
+    derived tone = props.tone ?? 'field';
+
+    derived interactive = props.to !== undefined || props.onClick !== undefined;
+
+    derived shell = [
+        'block rounded-panel text-start text-text',
+        PANEL_TONE[tone],
+        PANEL_PAD[props.pad ?? 'md'],
+        PANEL_STACK[props.stack ?? 'none'],
+        props.glow === true ? PANEL_GLOW[tone] : '',
+        interactive ? `cursor-pointer transition duration-200 ease-[var(--ease-ui)] ${ PANEL_HOVER[tone] } active:scale-[0.995]` : '',
+        props.class ?? ''
+    ].filter(Boolean).join(' ');
+
+    <Show
+        when={ props.to !== undefined }
+        fallback={
+            <Show
+                when={ props.onClick !== undefined }
+                fallback={
+                    <Show
+                        when={ props.section === true }
+                        fallback={ <div class={ shell } aria-label={ props.label } aria-labelledby={ props.labelledBy }>{ props.children }</div> }
+                    >
+                        { () =>
+                            <section class={ shell } aria-label={ props.label } aria-labelledby={ props.labelledBy }>
+                                { props.children }
+                            </section>
+                        }
+                    </Show>
+                }
+            >
+                { () =>
+                    <button type="button" class={ [ shell, 'w-full' ].join(' ') } aria-label={ props.label } onClick={ () => props.onClick?.() }>
+                        { props.children }
+                    </button>
+                }
+            </Show>
+        }
+    >
+        { () => <Link to={ props.to! } class={ shell } aria-label={ props.label }>{ props.children }</Link> }
+    </Show>
+}

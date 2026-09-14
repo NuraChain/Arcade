@@ -1,8 +1,10 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { RouterProvider, createMemoryHistory, createRouter } from 'azerothjs';
 import { cleanup, fire, renderTest } from '@azerothjs/testing';
 
 import BrandMark from '../src/components/layout/brand-mark.component.azeroth';
 import Button from '../src/components/ui/button.component.azeroth';
+import Panel from '../src/components/ui/panel.component.azeroth';
 import GameRow from '../src/components/ui/game-row.component.azeroth';
 import SectionHeading from '../src/components/ui/section-heading.component.azeroth';
 import { GAMES } from '../src/data/games.ts';
@@ -146,5 +148,77 @@ describe('focus store', () =>
         const before = focus.game();
         focus.focus('poker');
         expect(focus.game()).toBe(before);
+    });
+});
+
+describe('Panel', () =>
+{
+    /**
+     * The surface ten files used to spell by hand while `Card` - which rendered exactly it - sat with
+     * zero importers for its whole life. Every gate was green the entire time, because nothing renders
+     * what nothing calls.
+     */
+    it('is a plain div by default, wearing the panel surface', () =>
+    {
+        const { container } = renderTest(() => Panel({ children: 'Body' }) as Rendered);
+        const panel = container.querySelector('div')!;
+        expect(panel.tagName).toBe('DIV');
+        expect(panel.className).toContain('rounded-panel');
+        expect(panel.className).toContain('bg-field');
+        expect(panel.className).toContain('p-4');
+        expect(panel.textContent).toBe('Body');
+    });
+
+    it('becomes a link when given a destination, and never also a button', () =>
+    {
+        const Stub = (): HTMLElement => document.createElement('div');
+        const router = createRouter({
+            routes: [ { path: '/app', component: Stub, children: [ { path: 'games', component: Stub } ] } ],
+            history: createMemoryHistory('/app'),
+            scroll: false
+        });
+        const { container } = renderTest(() => RouterProvider({
+            router,
+            children: () => Panel({ children: 'Go', to: '/app/games' })
+        }) as Rendered);
+        expect(container.querySelector('a')?.getAttribute('href')).toBe('/app/games');
+        expect(container.querySelector('button')).toBeNull();
+    });
+
+    it('becomes a button when given a handler, and runs it once', () =>
+    {
+        const onClick = vi.fn();
+        const { container } = renderTest(() => Panel({ children: 'Press', onClick }) as Rendered);
+        const button = container.querySelector('button')!;
+        fire(button, 'click');
+        expect(onClick).toHaveBeenCalledTimes(1);
+        expect(container.querySelector('a')).toBeNull();
+    });
+
+    it('renders a section when asked, so a landmark can carry a label', () =>
+    {
+        const { container } = renderTest(() => Panel({ children: 'Body', section: true, label: 'Rules' }) as Rendered);
+        const section = container.querySelector('section')!;
+        expect(section.getAttribute('aria-label')).toBe('Rules');
+    });
+
+    it('emits no padding utility at all when told not to pad', () =>
+    {
+        const { container } = renderTest(() => Panel({ children: 'Body', pad: 'none' }) as Rendered);
+        const panel = container.querySelector('div')!;
+        expect(panel.className).not.toMatch(/\bp-[0-9]/);
+    });
+
+    /**
+     * `danger` is the destructive colour and `madder` means a table is playing for something.
+     * `PanelTone` deliberately omits `madder`, so the wrong one cannot be written here at all - this
+     * asserts the tone that IS allowed resolves to the danger surface rather than the default.
+     */
+    it('wears the danger surface, which is not the default one', () =>
+    {
+        const { container } = renderTest(() => Panel({ children: 'Careful', tone: 'danger' }) as Rendered);
+        const panel = container.querySelector('div')!;
+        expect(panel.className).toContain('border-danger/40');
+        expect(panel.className).not.toContain('bg-field');
     });
 });

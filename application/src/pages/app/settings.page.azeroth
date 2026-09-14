@@ -4,6 +4,7 @@ import Page from '../../components/app/page.component.azeroth';
 import FriendRow from '../../components/social/friend-row.component.azeroth';
 import LanguageSwitch from '../../components/layout/language-switch.component.azeroth';
 import ThemeSwitch from '../../components/layout/theme-switch.component.azeroth';
+import Panel from '../../components/ui/panel.component.azeroth';
 import Button from '../../components/ui/button.component.azeroth';
 import Pagination from '../../components/ui/pagination.component.azeroth';
 import SectionHeading from '../../components/ui/section-heading.component.azeroth';
@@ -89,7 +90,7 @@ export default component SettingsPage()
         <div class="flex flex-col gap-8">
             <section aria-labelledby="settings-account">
                 <SectionHeading id="settings-account" title={ locale.t('settings.account') } />
-                <div class="flex flex-col gap-3 rounded-panel border border-line bg-field p-4">
+                <Panel stack="sm">
                     <Show
                         when={ account.isWallet() }
                         fallback={
@@ -123,12 +124,12 @@ export default component SettingsPage()
                     <Button variant="outline" block leading="sign-out" onClick={ leave }>
                         { account.isWallet() ? locale.t('settings.account.disconnect') : locale.t('settings.account.signOut') }
                     </Button>
-                </div>
+                </Panel>
             </section>
 
             <section aria-labelledby="settings-safety">
                 <SectionHeading id="settings-safety" title={ locale.t('settings.safety') } />
-                <div class="flex flex-col gap-4 rounded-panel border border-line bg-field p-4">
+                <Panel stack="md">
                     <Toggle
                         checked={ privacy.allowStrangerMessages }
                         disabled={ privacy.isMinor }
@@ -253,7 +254,7 @@ export default component SettingsPage()
                             onPage={ (page) => reportsPage = page }
                         />
                     </div>
-                </div>
+                </Panel>
             </section>
 
             <section aria-labelledby="settings-notifications">
@@ -261,7 +262,7 @@ export default component SettingsPage()
                 <div class="mb-3">
                     <PushToggle />
                 </div>
-                <div class="flex flex-col gap-4 rounded-panel border border-line bg-field p-4">
+                <Panel stack="md">
                     <For each={ NOTIFICATION_CATEGORIES } key={ (category) => category } let={ category }>
                         <div>
                             <Toggle
@@ -286,12 +287,12 @@ export default component SettingsPage()
                             />
                         }
                     </Show>
-                </div>
+                </Panel>
             </section>
 
             <section aria-labelledby="settings-appearance">
                 <SectionHeading id="settings-appearance" title={ locale.t('settings.appearance') } />
-                <div class="flex flex-col gap-4 rounded-panel border border-line bg-field p-4">
+                <Panel stack="md">
                     <div class="flex flex-wrap items-center justify-between gap-3">
                         <span class="text-ui-md font-semibold text-text">{ locale.t('settings.appearance.theme') }</span>
                         <ThemeSwitch />
@@ -319,7 +320,7 @@ export default component SettingsPage()
                             </p>
                         }
                     </Show>
-                </div>
+                </Panel>
             </section>
 
             <section aria-labelledby="settings-premium">
