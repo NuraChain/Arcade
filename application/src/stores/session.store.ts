@@ -5,6 +5,7 @@ import { keyStore } from '../lib/device-keys.ts';
 import { forgetEpochKeys } from '../lib/epoch-keys.ts';
 import { forgetSigners } from '../lib/sealing.ts';
 import { forgetArchive } from '../services/chat.source.ts';
+import { forgetWallets } from '../lib/wallet.ts';
 import { forgetSearchTerms } from '../lib/search-terms.ts';
 
 export interface SessionApi
@@ -47,6 +48,11 @@ const surrenderKeys = async (): Promise<void> =>
     await forgetEpochKeys().catch(() => undefined);
     await keyStore().forget().catch(() => undefined);
     forgetSigners();
+
+    // The providers themselves, which are live objects belonging to the person who was signed in.
+    // Small and bounded - one per installed extension - but there is no reason for the next person
+    // at this keyboard to inherit a handle to the last one's wallet.
+    forgetWallets();
 };
 
 export const useSession = createStore((): SessionApi =>

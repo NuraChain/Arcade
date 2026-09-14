@@ -297,6 +297,56 @@ describe('wallet store', () =>
         stop();
         expect(off).toHaveBeenCalledTimes(2);
     });
+
+    /**
+     * The test above says "without leaving listeners behind" and only ever counted the PROVIDER's
+     * own two. The window listener that EIP-6963 discovery opens was never counted, and it was the
+     * one being left behind: `start()` stored its releaser in a module variable and returned a
+     * teardown that did not call it, so every mount added one and overwrote the handle to the last.
+     *
+     * Two starts and two stops, because one of each would pass even with the bug - the leak only
+     * shows when the second start overwrites a handle the first teardown never used.
+     */
+    it('leaves no provider-discovery listener behind, even across two starts', () =>
+    {
+        const wallet = useWallet();
+        const provider = fakeProvider();
+        wallet.adopt({ ...provider, on: vi.fn(), removeListener: vi.fn() });
+
+        let open = 0;
+        const add = window.addEventListener.bind(window);
+        const remove = window.removeEventListener.bind(window);
+        const addSpy = vi.spyOn(window, 'addEventListener').mockImplementation((type, ...rest) =>
+        {
+            if (type === 'eip6963:announceProvider')
+            {
+                open += 1;
+            }
+            return add(type, ...rest as [EventListenerOrEventListenerObject]);
+        });
+        const removeSpy = vi.spyOn(window, 'removeEventListener').mockImplementation((type, ...rest) =>
+        {
+            if (type === 'eip6963:announceProvider')
+            {
+                open -= 1;
+            }
+            return remove(type, ...rest as [EventListenerOrEventListenerObject]);
+        });
+
+        try
+        {
+            const first = wallet.start();
+            const second = wallet.start();
+            first();
+            second();
+            expect(open, 'a discovery listener outlived the teardown that should have released it').toBe(0);
+        }
+        finally
+        {
+            addSpy.mockRestore();
+            removeSpy.mockRestore();
+        }
+    });
 });
 
 describe('wallet identity', () =>

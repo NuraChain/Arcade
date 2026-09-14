@@ -228,14 +228,31 @@ export const useWallet = createStore((): WalletApi =>
             setFailure(null);
         },
 
+        /**
+         * Every path out of here hands back everything it took, and the discovery listener is the one
+         * that used to be missed.
+         *
+         * `start()` opened an `eip6963:announceProvider` listener, stored its releaser in `discovery`,
+         * and then returned one of three teardowns - none of which released it. Only `stop()` did, and
+         * nothing in the product calls `stop()`; the shell and the sign-in page both take the teardown
+         * `start()` returns. So each mount added a listener AND overwrote the handle to the previous
+         * one, putting it beyond reach. Navigating inside the app is safe - the shell is a layout route
+         * and mounts once - but a sign-out and back in leaks one every time.
+         */
         start()
         {
-            const stopDiscovery = discoverWallets(() =>
+            discovery?.();
+            discovery = discoverWallets(() =>
             {
                 injected = detect();
                 setPresent(injected !== null);
             });
-            discovery = stopDiscovery;
+
+            const undiscover = (): void =>
+            {
+                discovery?.();
+                discovery = null;
+            };
 
             const wallet = provider();
             if (wallet === null)
@@ -256,11 +273,17 @@ export const useWallet = createStore((): WalletApi =>
                         window.removeEventListener('ethereum#initialized', late);
                         late = null;
                     }
+                    undiscover();
                 };
             }
             if (listening !== null)
             {
-                return listening;
+                const already = listening;
+                return (): void =>
+                {
+                    already();
+                    undiscover();
+                };
             }
             wallet.on?.('accountsChanged', onAccounts);
             wallet.on?.('chainChanged', onChain);
@@ -278,7 +301,12 @@ export const useWallet = createStore((): WalletApi =>
                 wallet.removeListener?.('chainChanged', onChain);
                 listening = null;
             };
-            return listening;
+            const stopListening = listening;
+            return (): void =>
+            {
+                stopListening();
+                undiscover();
+            };
         },
 
         stop()
