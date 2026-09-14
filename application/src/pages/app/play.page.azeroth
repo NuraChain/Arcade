@@ -235,7 +235,7 @@ export default component PlayPage()
                             { () =>
                                 <button
                                     type="button"
-                                    class="mx-auto min-h-11 cursor-pointer px-3 text-ui-sm font-semibold text-madder"
+                                    class="-ms-3 flex min-h-11 w-fit cursor-pointer items-center rounded-control px-3 text-ui-sm font-semibold text-madder transition-colors duration-150 hover:bg-madder/10"
                                     onClick={ () => void end() }
                                 >
                                     { locale.t('play.close.confirm') }

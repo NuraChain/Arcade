@@ -1,5 +1,6 @@
 import type { TableSeat } from '../../api.ts';
 import Icon from '../../icons/icon.component.azeroth';
+import { useAccount } from '../../stores/account.store.ts';
 import { usePeople } from '../../stores/people.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { usePresence } from '../../stores/presence.store.ts';
@@ -15,6 +16,7 @@ export default component SeatCard(props: {
     const locale = useLocale();
     const presence = usePresence();
     const people = usePeople();
+    const account = useAccount();
 
     derived filled = props.seat.who !== undefined;
 
@@ -22,9 +24,13 @@ export default component SeatCard(props: {
 
     derived handle = props.seat.who ?? props.seat.invited ?? null;
 
-    derived person = handle === null ? null : (people.byHandle(handle) ?? null);
+    derived mine = props.seat.who !== undefined && props.seat.who === props.me;
 
-    derived name = props.seat.who === props.me
+    derived person = mine
+        ? account.user()
+        : (handle === null ? null : (people.byHandle(handle) ?? null));
+
+    derived name = mine
         ? locale.t('common.you')
         : (person === null ? (handle ?? '') : person.displayName);
 
@@ -44,7 +50,8 @@ export default component SeatCard(props: {
     })();
 
     derived shell = [
-        'relative flex min-h-[9.5rem] flex-col items-center justify-center gap-2 rounded-panel border p-3 text-center transition-colors duration-200',
+        'relative flex h-full w-full min-w-0 flex-col items-center justify-center gap-2 rounded-panel border p-3 text-center transition-colors duration-200',
+        'min-h-[9.5rem]',
         filled && props.seat.ready ? 'border-live/50 bg-live/5 shadow-glow-live' : '',
         filled && !props.seat.ready ? 'border-line bg-field' : '',
         !filled && pending ? 'border-dashed border-accent/50 bg-field' : '',

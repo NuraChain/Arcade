@@ -68,10 +68,8 @@ export default component LobbyPanel(props: {
 
         <ul class="grid grid-cols-2 gap-3 sm:grid-cols-4" aria-label={ locale.t('create.seats') }>
             <For each={ props.table.chairs } key={ (chair) => chair.seat } let={ chair }>
-                <li class="flex">
-                    <div class="flex-1">
-                        <SeatCard seat={ chair } me={ me } canInvite={ amHost } onInvite={ () => props.onInvite() } />
-                    </div>
+                <li class="flex min-w-0">
+                    <SeatCard seat={ chair } me={ me } canInvite={ amHost } onInvite={ () => props.onInvite() } />
                 </li>
             </For>
         </ul>
