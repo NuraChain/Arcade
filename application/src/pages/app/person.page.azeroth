@@ -20,6 +20,7 @@ import { useShell } from '../../stores/shell.store.ts';
 import { useSocial } from '../../stores/social.store.ts';
 import { useToasts } from '../../stores/toasts.store.ts';
 import { openTable } from '../../lib/open-table.ts';
+import Panel from '../../components/ui/panel.component.azeroth';
 
 export default component PersonPage()
 {
@@ -117,7 +118,7 @@ export default component PersonPage()
 
                     <Show when={ relation === 'blocked' }>
                         { () =>
-                            <div class="rounded-panel border border-madder/40 bg-madder/5 p-4 text-center">
+                            <Panel tone="danger" class="text-center">
                                 <p class="text-ui-md font-semibold text-text">{ locale.t('person.blockedTitle', { name: locale.text(person!.displayName).split(' ')[0] }) }</p>
                                 <p class="mt-1 text-ui-sm text-muted">{ locale.t('person.blockedLead') }</p>
                                 <Button
@@ -132,7 +133,7 @@ export default component PersonPage()
                                 >
                                     { locale.t('actions.unblock', { name: locale.text(person!.displayName).split(' ')[0] }) }
                                 </Button>
-                            </div>
+                            </Panel>
                         }
                     </Show>
 

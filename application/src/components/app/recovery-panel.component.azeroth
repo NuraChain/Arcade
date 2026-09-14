@@ -4,6 +4,7 @@ import { useRecovery } from '../../stores/recovery.store.ts';
 import { useToasts } from '../../stores/toasts.store.ts';
 import Button from '../ui/button.component.azeroth';
 import Input from '../ui/input.component.azeroth';
+import Panel from '../ui/panel.component.azeroth';
 
 /**
  * The recovery phrase: making one, seeing it once, and using one.
@@ -85,7 +86,7 @@ export default component RecoveryPanel(props: { waitingDevice?: string })
         }
     };
 
-    <div class="flex flex-col gap-3 rounded-panel border border-line bg-field p-4">
+    <Panel stack="sm">
         <Show
             when={ recovery.freshPhrase() !== null }
             fallback={
@@ -176,5 +177,5 @@ export default component RecoveryPanel(props: { waitingDevice?: string })
                 </div>
             }
         </Show>
-    </div>
+    </Panel>
 }

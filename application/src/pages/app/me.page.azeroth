@@ -113,13 +113,13 @@ export default component MePage()
 
                     <Show when={ !account.isWallet() }>
                         { () =>
-                            <section class="rounded-panel border border-accent/40 bg-accent/5 p-4">
+                            <Panel section tone="accent">
                                 <h2 class="flex items-center gap-2 title text-ui-lg text-text">
                                     <Icon name="key" size={ 18 } class="text-accent" />
                                     { locale.t('me.keepSeat.title') }
                                 </h2>
                                 <p class="mt-1 text-ui-base text-muted">{ locale.t('me.keepSeat.lead') }</p>
-                            </section>
+                            </Panel>
                         }
                     </Show>
 

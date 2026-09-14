@@ -9,7 +9,7 @@ export type BadgeSize = 'sm' | 'md';
  * The tones a Panel can wear. `madder` is absent on purpose: it means a table is playing for
  * something, and the destructive colour is `danger`. Leaving it out makes the wrong one unwritable.
  */
-export type PanelTone = 'field' | 'accent' | 'live' | 'danger' | 'dashed';
+export type PanelTone = 'field' | 'sunk' | 'accent' | 'live' | 'danger' | 'dashed';
 export type PanelPad = 'none' | 'sm' | 'md' | 'lg';
 export type PanelStack = 'none' | 'sm' | 'md';
 
@@ -124,6 +124,7 @@ export const AVATAR_DOT: Record<AvatarSize, string> = {
 
 export const PANEL_TONE: Record<PanelTone, string> = {
     field: 'border border-line bg-field',
+    sunk: 'border border-line bg-sunk',
     accent: 'border border-accent/40 bg-accent/5',
     live: 'border border-live/40 bg-live/5',
     danger: 'border border-danger/40 bg-danger/5',
@@ -132,6 +133,7 @@ export const PANEL_TONE: Record<PanelTone, string> = {
 
 export const PANEL_HOVER: Record<PanelTone, string> = {
     field: 'hover:border-line-strong hover:bg-raised/60',
+    sunk: 'hover:border-line-strong',
     accent: 'hover:bg-accent/10',
     live: 'hover:bg-live/10',
     danger: 'hover:bg-danger/10',
@@ -153,6 +155,7 @@ export const PANEL_STACK: Record<PanelStack, string> = {
 
 export const PANEL_GLOW: Record<PanelTone, string> = {
     field: '',
+    sunk: '',
     accent: 'shadow-glow-accent',
     live: 'shadow-glow-live',
     danger: '',

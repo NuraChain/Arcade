@@ -17,6 +17,7 @@ import { useLocale } from '../../stores/locale.store.ts';
 import { useOverlay } from '../../stores/overlay.store.ts';
 import { useShell } from '../../stores/shell.store.ts';
 import { useToasts } from '../../stores/toasts.store.ts';
+import Panel from '../../components/ui/panel.component.azeroth';
 
 /**
  * One table, as it stands.
@@ -205,7 +206,7 @@ export default component PlayPage()
                         <Show
                             when={ seated }
                             fallback={ table === null ? null :
-                                <div class="flex flex-col items-center gap-4 rounded-panel border border-line bg-field p-6 text-center">
+                                <Panel pad="lg" stack="md" class="items-center text-center">
                                     <p class="text-ui-lg text-text">{ locale.t('play.table.watching') }</p>
                                     <p class="max-w-[44ch] text-ui-base text-muted">
                                         { locale.plural('play.lobby.emptySeats', table.seats - table.taken) }
@@ -218,7 +219,7 @@ export default component PlayPage()
                                         disabled={ table.taken >= table.seats }
                                         onClick={ () => void sitDown() }
                                     />
-                                </div>
+                                </Panel>
                             }
                         >
                             { () =>

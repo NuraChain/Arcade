@@ -11,6 +11,7 @@ import { useSocial } from '../../stores/social.store.ts';
 import Avatar from '../ui/avatar.component.azeroth';
 import Button from '../ui/button.component.azeroth';
 import { openTable } from '../../lib/open-table.ts';
+import Panel from '../ui/panel.component.azeroth';
 
 export default component SocialPanel()
 {
@@ -57,7 +58,7 @@ export default component SocialPanel()
                 <Show
                     when={ friends.length > 0 }
                     fallback={
-                    <div class="rounded-panel border border-dashed border-line p-3">
+                    <Panel tone="dashed" pad="sm">
                         <p class="text-ui-sm text-muted">{ locale.t('home.friends.empty') }</p>
                         <Show when={ suggestions.length > 0 }>
                             { () =>
@@ -74,7 +75,7 @@ export default component SocialPanel()
                                 </ul>
                             }
                         </Show>
-                    </div>
+                    </Panel>
                 }
                 >
                 { () =>
@@ -98,14 +99,14 @@ export default component SocialPanel()
                 </Show>
             </section>
 
-            <section class="rounded-panel border border-line bg-sunk p-3">
+            <Panel section tone="sunk" pad="sm">
                 <p class="label text-ui-2xs text-faint">{ locale.t('people.stat.open') }</p>
                 <p class="tally title mt-0.5 text-ui-3xl text-text">{ locale.n(totals.tablesOpen) }</p>
                 <p class="mt-1 flex items-center gap-1.5 text-ui-xs text-muted">
                     <span class="live-dot h-1.5 w-1.5 rounded-full" aria-hidden="true"></span>
                     <span class="tally">{ locale.n(totals.playersOnline) }</span> { locale.t('common.online').toLowerCase() }
                 </p>
-            </section>
+            </Panel>
         </div>
     </aside>
 }

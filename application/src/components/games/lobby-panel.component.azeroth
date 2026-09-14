@@ -7,6 +7,7 @@ import { useLobby } from '../../stores/lobby.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import Button from '../ui/button.component.azeroth';
 import SeatCard from './seat-card.component.azeroth';
+import Panel from '../ui/panel.component.azeroth';
 
 /**
  * The table, as it stands.
@@ -76,9 +77,9 @@ export default component LobbyPanel(props: {
 
         <Show when={ full }>
             { () =>
-                <p class="rounded-panel border border-line bg-field p-4 text-center text-ui-base text-muted">
+                <Panel class="text-center text-ui-base text-muted">
                     { locale.t('play.table.notBuilt') }
-                </p>
+                </Panel>
             }
         </Show>
 

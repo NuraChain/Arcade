@@ -19,6 +19,7 @@ import { useWallet } from '../../stores/wallet.store.ts';
 import Button from '../ui/button.component.azeroth';
 import IconButton from '../ui/icon-button.component.azeroth';
 import Spinner from '../ui/spinner.component.azeroth';
+import Panel from '../ui/panel.component.azeroth';
 
 interface Choice
 {
@@ -300,7 +301,7 @@ export default component ConnectDialog(props: { close: () => void; navigate: (to
 
                         <Show when={ showNura && code !== null }>
                             { () =>
-                                <div class="flex flex-col items-center gap-3 rounded-panel border border-line bg-sunk p-4 text-center">
+                                <Panel tone="sunk" stack="sm" class="items-center text-center">
                                     <p class="max-w-[38ch] text-ui-sm text-muted">{ locale.t('wallet.nuraOnly') }</p>
                                     <svg
                                         viewBox={ `-2 -2 ${ code!.size + 4 } ${ code!.size + 4 }` }
@@ -314,7 +315,7 @@ export default component ConnectDialog(props: { close: () => void; navigate: (to
                                     <Button variant="outline" size="sm" leading="copy" onClick={ () => void copyLink() }>
                                         { locale.t(copied ? 'wallet.linkCopied' : 'wallet.copyLink') }
                                     </Button>
-                                </div>
+                                </Panel>
                             }
                         </Show>
 

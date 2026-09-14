@@ -3,6 +3,7 @@ import { currentSubscription, pushSupported, subscribe, unsubscribe, type PushSt
 import { useLocale } from '../../stores/locale.store.ts';
 import { useToasts } from '../../stores/toasts.store.ts';
 import Button from '../ui/button.component.azeroth';
+import Panel from '../ui/panel.component.azeroth';
 
 /**
  * Turning push on for THIS device.
@@ -100,7 +101,7 @@ export default component PushToggle()
 
     <Show when={ state !== 'unsupported' }>
         { () =>
-            <div class="flex flex-col gap-3 rounded-panel border border-line bg-field p-4">
+            <Panel stack="sm">
                 <div>
                     <h3 class="text-ui-base font-semibold text-text">{ locale.t('notify.push.title') }</h3>
                     <p class="mt-1 text-ui-sm text-muted">{ locale.t('notify.push.lead') }</p>
@@ -134,7 +135,7 @@ export default component PushToggle()
                         </div>
                     }
                 </Show>
-            </div>
+            </Panel>
         }
     </Show>
 }
