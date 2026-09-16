@@ -93,7 +93,7 @@ export default component SearchPage()
             />
         </header>
 
-        <Rail label={ locale.t('search.scope.all') } class="-mx-4 mb-5 sm:mx-0" inner="px-4 scroll-px-4 sm:px-0 sm:scroll-px-0">
+        <Rail label={ locale.t('search.scope.all') } bleed class="mb-5">
             <For each={ SEARCH_SCOPES } key={ (scope) => scope } let={ scope }>
                 <div class="shrink-0 snap-start">
                     <Chip selected={ search.scope() === scope } onClick={ () => search.setScope(scope as SearchScope) }>

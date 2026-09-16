@@ -178,7 +178,8 @@ describe('guards', () =>
         params: {},
         pathname,
         query: next === undefined ? {} : { next },
-        from: null
+        from: null,
+        request: null
     });
 
     it('sends a stranger to sign-in with a way back', async () =>

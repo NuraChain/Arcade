@@ -47,7 +47,7 @@ export default component App(props: { url?: string; handoff?: LoaderHandoff })
 
     <RouterProvider router={ router }>
         <ErrorBoundary fallback={ (error, reset) => <ErrorPage reset={ reset } error={ error } /> }>
-            <Routes fallback={ () => <NotFoundPage /> } transition={ transitionFor } transitionDuration={ 400 } />
+            <Routes fallback={ () => <NotFoundPage /> } transition={ transitionFor } transitionDuration={ 260 } />
         </ErrorBoundary>
     </RouterProvider>
 }

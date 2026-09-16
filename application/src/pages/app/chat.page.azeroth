@@ -1,8 +1,9 @@
 import { Link, useHead, useNavigate, useParams } from 'azerothjs';
 
 import Page from '../../components/app/page.component.azeroth';
-import { groupNameOf, othersOf, titleOf } from '../../components/chat/chat-title.ts';
+import { groupNameOf, othersOf, sealSentenceOf, titleOf } from '../../components/chat/chat-title.ts';
 import { sendBlockOf } from '../../lib/seal-state.ts';
+import { haptic } from '../../lib/haptics.ts';
 import Composer from '../../components/chat/composer.component.azeroth';
 import MessageBubble from '../../components/chat/message-bubble.component.azeroth';
 import SealNotice from '../../components/chat/seal-notice.component.azeroth';
@@ -154,7 +155,8 @@ export default component ChatPage()
         sealability: seal.sealability(),
         readiness: devices.readiness(),
         known: devices.known(),
-        isWallet: account.isWallet()
+        isWallet: account.isWallet(),
+        pending: seal.loading()
     });
 
     derived loading = chat.threadLoading();
@@ -261,10 +263,12 @@ export default component ChatPage()
      */
     const send = (): void =>
     {
-        void chat.send(id, chat.draft(id)).catch(() =>
-        {
-            toasts.show({ kind: 'error', text: locale.t('chat.sealedOnly') });
-        });
+        void chat.send(id, chat.draft(id))
+            .then(() => haptic('tick'))
+            .catch((error) =>
+            {
+                toasts.show({ kind: 'error', text: sealSentenceOf(error, locale.t), dedupe: `chat-send-${ id }` });
+            });
     };
 
     const openTable = (game: Parameters<typeof lobby.host>[0]): void =>
@@ -396,7 +400,25 @@ export default component ChatPage()
                             }
                         >
                             <Match when={ loading }>
-                                <p class="m-auto text-center text-ui-base text-muted">{ locale.t('common.loading') }</p>
+                                <div class="flex w-full flex-col gap-4 p-4" aria-hidden="true">
+                                    <div class="flex animate-pulse items-end gap-2 motion-reduce:animate-none">
+                                        <span class="h-8 w-8 shrink-0 rounded-full bg-raised"></span>
+                                        <div class="flex flex-col gap-1.5">
+                                            <span class="block h-10 w-44 rounded-panel bg-raised"></span>
+                                            <span class="block h-10 w-28 rounded-panel bg-raised"></span>
+                                        </div>
+                                    </div>
+                                    <div class="flex animate-pulse items-end justify-end gap-2 motion-reduce:animate-none">
+                                        <div class="flex flex-col items-end gap-1.5">
+                                            <span class="block h-10 w-52 rounded-panel bg-accent/15"></span>
+                                            <span class="block h-10 w-24 rounded-panel bg-accent/15"></span>
+                                        </div>
+                                    </div>
+                                    <div class="flex animate-pulse items-end gap-2 motion-reduce:animate-none">
+                                        <span class="h-8 w-8 shrink-0 rounded-full bg-raised"></span>
+                                        <span class="block h-10 w-36 rounded-panel bg-raised"></span>
+                                    </div>
+                                </div>
                             </Match>
                             <Match when={ failed && messages.length === 0 }>
                                 <div class="m-auto flex flex-col items-center gap-3 text-center">

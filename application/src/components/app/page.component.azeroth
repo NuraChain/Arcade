@@ -124,7 +124,7 @@ export default component Page(props: { children?: Child; padded?: boolean; narro
         class={ [
             'page bar bg-void',
             slide > 0 ? 'is-sliding' : '',
-            props.padded === false ? '' : 'px-4 pt-4 sm:px-6 lg:px-8 phone:pb-nav rail:pb-8 sidebar:pb-8',
+            props.padded === false ? '' : 'page-pad pt-4 phone:pb-nav rail:pb-8 sidebar:pb-8',
             props.class ?? ''
         ].filter(Boolean).join(' ') }
         style={ slide > 0 ? `--slide:${ slide }px` : undefined }
@@ -147,9 +147,9 @@ export default component Page(props: { children?: Child; padded?: boolean; narro
             }
         </Show>
         <div class={ [
-            '@container mx-auto w-full',
-            props.fill === true ? 'h-full' : '',
-            props.padded === false ? '' : (props.narrow === true ? 'max-w-[44rem]' : 'max-w-[96rem]')
+            '@container mx-auto w-full min-w-0',
+            props.fill === true ? 'flex h-full min-h-0 flex-col' : '',
+            props.narrow === true ? 'max-w-[44rem]' : 'max-w-[96rem]'
         ].filter(Boolean).join(' ') }>
             { props.children }
         </div>

@@ -133,7 +133,12 @@ describe('sealing a thread for the first time', () =>
         expect(outcome.ok === false && outcome.failure).toBe('not-sealable');
         expect(outcome.ok === false && outcome.blocked?.handle).toBe('sara.k');
 
-        await expect(createApiSource().post(said('hello?'))).rejects.toThrow(/cannot be sealed/);
+        // The failure travels as data now, not as a sentence: the page that catches it maps it to
+        // the one honest line for THIS reason, instead of a generic shrug that blamed nobody.
+        await expect(createApiSource().post(said('hello?'))).rejects.toMatchObject({
+            failure: 'not-sealable',
+            blocked: { handle: 'sara.k' }
+        });
         expect(server.messages).toHaveLength(0);
     });
 });

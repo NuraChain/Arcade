@@ -27,7 +27,7 @@ export default component PeopleStrip(props: { people: Person[]; label: string; c
         return current.state === 'away' ? locale.t('common.away') : locale.t('common.online');
     };
 
-    <Rail label={ props.label } class={ [ '-mx-4 sm:-mx-6 lg:-mx-8', props.class ?? '' ].filter(Boolean).join(' ') } inner="gap-3 px-4 pb-1 scroll-px-4 sm:px-6 sm:scroll-px-6 lg:px-8 lg:scroll-px-8">
+    <Rail label={ props.label } bleed class={ props.class ?? '' } inner="gap-3 pb-1">
         <For each={ props.people } key={ (person) => person.id } let={ person }>
             <div class="shrink-0 snap-start">
                 <Link to={ `/app/people/${ person.handle }` } class="flex w-[4.75rem] flex-col items-center gap-1.5 rounded-tile py-1 text-center" prefetch="hover">

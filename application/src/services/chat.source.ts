@@ -10,13 +10,38 @@ import {
     historicalKey,
     openMessage,
     sealForSend,
+    type EpochFailure,
     type MessageFailure
 } from '../lib/sealing.ts';
+import type { MemberSeal } from '../lib/seal-state.ts';
 
 export interface ChatScope
 {
     me: string;
     blocked: readonly string[];
+}
+
+/**
+ * Why a send could not be sealed, carried as data rather than flattened into a sentence.
+ *
+ * `post` used to throw a string with the failure interpolated into it, and the only toast a page
+ * could show was the one generic line - which told somebody whose room holds a guest that the
+ * problem was somebody else's unconfirmed browser. The failure and the member it names are both
+ * things the screen can speak precisely, so the error carries them and the page decides what to
+ * say.
+ */
+export class SealFailure extends Error
+{
+    public readonly failure: EpochFailure | 'no-keys';
+
+    public readonly blocked: MemberSeal | null;
+
+    constructor(failure: EpochFailure | 'no-keys', blocked: MemberSeal | null)
+    {
+        super(`seal: ${ failure }`);
+        this.failure = failure;
+        this.blocked = blocked;
+    }
 }
 
 export interface ConversationRow
@@ -299,7 +324,7 @@ export function createApiSource(): ChatSource
 
             if (secrets === null)
             {
-                throw new Error('This browser has no device keys, so it cannot seal a message.');
+                throw new SealFailure('no-keys', null);
             }
 
             for (const attempt of [0, 1])
@@ -308,7 +333,7 @@ export function createApiSource(): ChatSource
 
                 if (!epoch.ok)
                 {
-                    throw new Error(`This conversation cannot be sealed: ${ epoch.failure }`);
+                    throw new SealFailure(epoch.failure, epoch.blocked);
                 }
 
                 const input = await sealForSend(

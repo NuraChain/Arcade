@@ -279,3 +279,19 @@
         );
     }
 }
+
+@utility page-pad
+{
+    padding-inline: var(--page-pad, 1rem);
+}
+
+@utility bleed
+{
+    margin-inline: calc(var(--page-pad, 1rem) * -1);
+}
+
+@utility bleed-pad
+{
+    padding-inline: var(--page-pad, 1rem);
+    scroll-padding-inline: var(--page-pad, 1rem);
+}

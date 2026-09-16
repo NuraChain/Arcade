@@ -5,6 +5,8 @@ import type { Conversation, Message } from '../data/chat.ts';
 import { runtime } from '../lib/runtime.ts';
 import { createApiSource, type ChatScope, type ChatSource, type ConversationRow } from '../services/chat.source.ts';
 import { useAccount } from './account.store.ts';
+import { useGroups } from './groups.store.ts';
+import { usePeople } from './people.store.ts';
 import { useRealtime } from './realtime.store.ts';
 import { useSocial } from './social.store.ts';
 
@@ -84,10 +86,29 @@ export const useChat = createStore((): ChatApi =>
 {
     const account = useAccount();
     const social = useSocial();
+    const people = usePeople();
+    const groups = useGroups();
 
     const meId = (): string => account.user()?.id ?? 'you';
 
     const scope = (): ChatScope => ({ me: meId(), blocked: social.blocked() });
+
+    /**
+     * Files away the people and groups the rooms name, so a thread opened cold can say who it is
+     * with. The wire names participants by handle and groups by id, and only the social and group
+     * payloads carry the descriptions - so without this, a conversation reached from a link or a
+     * notification rendered as "Table chat" with an empty header until some other page happened
+     * to have loaded the people involved. `want` asks once per handle and never refetches, so
+     * re-running this on every list revalidation costs nothing.
+     */
+    const ingest = (loaded: Conversation[]): void =>
+    {
+        people.want(loaded.flatMap((conversation) => conversation.participants));
+        if (loaded.some((conversation) => conversation.groupId !== null))
+        {
+            groups.want();
+        }
+    };
 
     const [openId, setOpenId] = createSignal('');
     const [seen, setSeen] = createSignal<Record<string, number>>({});
@@ -97,7 +118,12 @@ export const useChat = createStore((): ChatApi =>
 
     const list = createResource(
         scope,
-        (current, signal) => active.conversations(current, signal),
+        async (current, signal) =>
+        {
+            const answer = await active.conversations(current, signal);
+            ingest(answer.map((row) => row.conversation));
+            return answer;
+        },
         { name: 'chat.conversations' }
     );
 

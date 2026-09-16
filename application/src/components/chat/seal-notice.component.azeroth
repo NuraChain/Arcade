@@ -80,43 +80,53 @@ export default component SealNotice(props: { stop: SendBlock | null; action?: Ch
 {
     const locale = useLocale();
 
-    derived here = props.stop?.reason === 'browser' ? props.stop.readiness : null;
+    <>
+        <Show when={ (): boolean => props.stop === null }>
+            { () =>
+                <p class="flex items-start gap-2 px-3 py-1.5 text-ui-xs text-faint">
+                    <Icon name="lock" size={ 14 } class="mt-0.5 shrink-0" />
+                    <span>{ locale.t('seal.sealed') }</span>
+                </p>
+            }
+        </Show>
 
-    derived member = props.stop?.reason === 'member' ? props.stop.member : null;
+        {/*
+            The narrowed form, and why the obvious deriveds are gone.
 
-    derived state = (member?.state ?? 'ready') as Blocked;
-
-    derived alarm = member !== null && state === 'tampered';
-
-    <Show
-        when={ props.stop !== null }
-        fallback={
-            <p class="flex items-start gap-2 px-3 py-1.5 text-ui-xs text-faint">
-                <Icon name="lock" size={ 14 } class="mt-0.5 shrink-0" />
-                <span>{ locale.t('seal.sealed') }</span>
-            </p>
-        }
-    >
-        { () =>
+            The first cut kept `here`/`member`/`state` as memos over `props.stop` and guarded the
+            branch with a separate `when`. Guard and sentence were then two reads of a moving
+            value: across a flip - and `pending` now flips on every refetch - a build could run
+            with a truthy `when` and a `member` memo that had already settled to null, which sent
+            `state` to 'ready', looked up a sentence key that does not exist, and took the page
+            down. The narrowed accessor is a pull memo over the same `when` this branch was built
+            from, so every read below sees one stop - the one the guard saw.
+        */}
+        <Show when={ (): SendBlock | null => (props.stop !== null && props.stop.reason !== 'pending' ? props.stop : null) } let={ sealed }>
             <div
                 class={ [
                     'flex flex-wrap items-start gap-2 rounded-tile border px-3 py-2 text-ui-sm',
-                    alarm ? 'border-madder/40 bg-madder/10 text-madder' : 'border-line bg-field text-muted'
+                    sealed.reason === 'member' && sealed.member.state === 'tampered'
+                        ? 'border-madder/40 bg-madder/10 text-madder'
+                        : 'border-line bg-field text-muted'
                 ].join(' ') }
-                role={ alarm ? 'alert' : undefined }
+                role={ sealed.reason === 'member' && sealed.member.state === 'tampered' ? 'alert' : undefined }
             >
-                <Icon name={ here === null ? ICON[state] : BROWSER_ICON[here] } size={ 16 } class="mt-0.5 shrink-0" />
+                <Icon
+                    name={ sealed.reason === 'browser' ? BROWSER_ICON[sealed.readiness] : ICON[sealed.member.state] }
+                    size={ 16 }
+                    class="mt-0.5 shrink-0"
+                />
                 <span class="min-w-0 flex-1">
-                    { here !== null
-                        ? locale.t(BROWSER[here])
-                        : (member?.isMe === true
-                            ? locale.t(SAYS_MINE[state])
-                            : locale.t(SAYS[state], { who: member?.handle ?? '' })) }
+                    { sealed.reason === 'browser'
+                        ? locale.t(BROWSER[sealed.readiness])
+                        : (sealed.member.isMe
+                            ? locale.t(SAYS_MINE[sealed.member.state])
+                            : locale.t(SAYS[sealed.member.state], { who: sealed.member.handle })) }
                 </span>
                 <Show when={ props.action !== undefined }>
                     { () => <span class="shrink-0">{ props.action }</span> }
                 </Show>
             </div>
-        }
-    </Show>
+        </Show>
+    </>
 }

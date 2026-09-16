@@ -1,5 +1,7 @@
 import { isLineKey } from '../../lib/lines.ts';
 import { sendBlockOf } from '../../lib/seal-state.ts';
+import { haptic } from '../../lib/haptics.ts';
+import { sealSentenceOf } from '../chat/chat-title.ts';
 import SealNotice from '../chat/seal-notice.component.azeroth';
 import { usePeople } from '../../stores/people.store.ts';
 import { useAccount } from '../../stores/account.store.ts';
@@ -64,7 +66,8 @@ export default component TableChat(props: { conversationId: string; onClose?: ()
         sealability: seal.sealability(),
         readiness: devices.readiness(),
         known: devices.known(),
-        isWallet: account.isWallet()
+        isWallet: account.isWallet(),
+        pending: seal.loading()
     });
 
     const send = (): void =>
@@ -75,13 +78,13 @@ export default component TableChat(props: { conversationId: string; onClose?: ()
             return;
         }
         draft = '';
-        void chat.send(props.conversationId, text).catch(() =>
+        void chat.send(props.conversationId, text).then(() => haptic('tick')).catch((error) =>
         {
             if (draft === '')
             {
                 draft = text;
             }
-            toasts.show({ kind: 'error', text: locale.t('chat.sealedOnly'), dedupe: 'table-chat-send' });
+            toasts.show({ kind: 'error', text: sealSentenceOf(error, locale.t), dedupe: 'table-chat-send' });
         });
     };
 

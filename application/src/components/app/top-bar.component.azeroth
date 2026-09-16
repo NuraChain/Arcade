@@ -19,7 +19,7 @@ export default component TopBar()
     const shell = useShell();
     const notifications = useNotifications();
     const match = useMatch();
-    const { back, replace } = useNavigate();
+    const { navigate } = useNavigate();
 
     derived meta = routeMeta(match());
 
@@ -27,45 +27,52 @@ export default component TopBar()
 
     derived phone = device.posture() === 'phone';
 
-    derived showBack = phone && (meta.parent !== undefined || shell.depth() > 0);
+    mount
+    {
+        /**
+         * `/` opens search. The one-key convention every desktop app shares, wired where the
+         * search affordance lives. Phone never binds it - there is no keyboard to spend - and
+         * typing in any field is left alone: a `/` typed into a message or a name is text, not a
+         * command. The search page takes it from there, focus and all.
+         */
+        const onKey = (event: KeyboardEvent): void =>
+        {
+            if (event.key !== '/' || event.defaultPrevented || device.posture() === 'phone')
+            {
+                return;
+            }
+            const target = event.target;
+            const editable = target instanceof HTMLElement
+                && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
+            if (editable || event.metaKey || event.ctrlKey || event.altKey)
+            {
+                return;
+            }
+            event.preventDefault();
+            navigate('/app/search');
+        };
+
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }
 
     derived unread = notifications.unread();
 
-    const goBack = (): void =>
-    {
-        if (shell.depth() > 0)
-        {
-            back();
-            return;
-        }
-        replace(meta.parent ?? '/app');
-    };
-
     <header class="glass z-topbar safe-t sticky top-0 border-b border-line">
         <div class="mx-auto flex h-[var(--topbar-h)] w-full max-w-[96rem] items-center gap-1 px-2 sm:px-6 lg:px-8">
-            <Show
-                when={ showBack }
-                fallback={
-                    <Show when={ phone }>
-                        { () =>
-                            <Link to="/app" class="flex h-11 items-center gap-2 rounded-full ps-2 pe-3" aria-label={ locale.t('app.nav.home') }>
-                                <span class="lit flex h-7 w-7 items-center justify-center rounded-control bg-accent text-accent-ink">
-                                    <Icon name="games" size={ 15 } />
-                                </span>
-                                <BrandMark class="text-ui-lg text-text" />
-                            </Link>
-                        }
-                    </Show>
+            <Show when={ phone }>
+                { () =>
+                    <Link to="/app" class="flex h-11 items-center gap-2 rounded-full ps-2 pe-3" aria-label={ locale.t('app.nav.home') }>
+                        <span class="lit flex h-7 w-7 items-center justify-center rounded-control bg-accent text-accent-ink">
+                            <Icon name="games" size={ 15 } />
+                        </span>
+                        <BrandMark class="text-ui-lg text-text" />
+                    </Link>
                 }
-            >
-                { () => <IconButton icon="back" label={ locale.t('app.nav.back') } flip onClick={ goBack } /> }
             </Show>
 
-            <h1 class={ [
-                'label min-w-0 flex-1 truncate text-ui-lg font-semibold text-text',
-                showBack ? 'text-start' : (phone ? 'sr-only' : 'text-start')
-            ].join(' ') }>
-                { title }
+            <h1 class="label min-w-0 flex-1 truncate text-start text-ui-lg font-semibold text-text">
+                <span class={ phone ? 'sr-only' : '' }>{ title }</span>
             </h1>
 
             <Show when={ !phone }>

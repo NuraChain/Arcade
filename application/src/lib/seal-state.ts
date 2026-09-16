@@ -158,7 +158,15 @@ export async function sealabilityOf(answer: ConversationDevices, me: string): Pr
  */
 export type SendBlock =
     | { reason: 'member'; member: MemberSeal }
-    | { reason: 'browser'; readiness: Exclude<Readiness, 'ready'> };
+    | { reason: 'browser'; readiness: Exclude<Readiness, 'ready'> }
+
+    /**
+     * The room's answer has not landed yet. This is not a reason a person is shown - both pages
+     * hide the notice while the fetch runs - but the composer has to stand down for it: without
+     * this, the first moments of a cold load read as "nothing is in the way", an enabled box took
+     * a message, and `post` refused it with the one generic sentence.
+     */
+    | { reason: 'pending' };
 
 /**
  * Which of the two is in the way, in the order that serves the reader.
@@ -178,6 +186,9 @@ export function sendBlockOf(options: {
     readiness: Readiness;
     known: boolean;
     isWallet: boolean;
+
+    /** True while the room's answer is still in flight. */
+    pending?: boolean;
 }): SendBlock | null
 {
     const blocked = options.sealability?.blocked ?? null;
@@ -185,6 +196,11 @@ export function sendBlockOf(options: {
     if (blocked !== null && blocked.state === 'tampered')
     {
         return { reason: 'member', member: blocked };
+    }
+
+    if (options.pending === true)
+    {
+        return { reason: 'pending' };
     }
 
     if (options.isWallet && options.known && options.readiness !== 'ready')

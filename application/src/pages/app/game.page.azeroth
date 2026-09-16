@@ -5,6 +5,7 @@ import GameHero from '../../components/games/game-hero.component.azeroth';
 import PeopleStrip from '../../components/social/people-strip.component.azeroth';
 import Button from '../../components/ui/button.component.azeroth';
 import EmptyState from '../../components/ui/empty-state.component.azeroth';
+import IconButton from '../../components/ui/icon-button.component.azeroth';
 import SectionHeading from '../../components/ui/section-heading.component.azeroth';
 import type { Person } from '../../data/person.ts';
 import Icon from '../../icons/icon.component.azeroth';
@@ -118,9 +119,9 @@ export default component GamePage()
                         </aside>
                     </div>
 
-                    <div class="glass safe-b sticky -mx-4 bottom-0 z-nav flex gap-2 border-t border-line/60 px-4 py-3 sm:hidden">
-                        <Button variant="primary" size="lg" block leading="zap" onClick={ quickPlay }>{ locale.t('app.nav.quickPlay') }</Button>
-                        <Button variant="outline" size="lg" leading="add" to={ `/app/games/${ game!.slug }/create` } label={ locale.t('games.create') }>{ locale.t('games.create') }</Button>
+                    <div class="glass bleed-pad fixed inset-x-0 bottom-[calc(var(--nav-h)+env(safe-area-inset-bottom,0px))] z-nav flex gap-2 border-t border-line/60 py-3 sm:hidden">
+                        <Button variant="primary" size="lg" leading="zap" class="flex-1" onClick={ quickPlay }>{ locale.t('app.nav.quickPlay') }</Button>
+                        <IconButton icon="add" label={ locale.t('games.create') } variant="outline" size="lg" to={ `/app/games/${ game!.slug }/create` } />
                     </div>
                 </div>
             }

@@ -5,7 +5,7 @@ import { stepAlong } from '../../lib/snap.ts';
 import { useDevice } from '../../stores/device.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 
-export default component Rail(props: { children?: Child; label: string; class?: string; inner?: string })
+export default component Rail(props: { children?: Child; label: string; bleed?: boolean; class?: string; inner?: string })
 {
     const device = useDevice();
     const locale = useLocale();
@@ -52,13 +52,13 @@ export default component Rail(props: { children?: Child; label: string; class?: 
     }
 
     <div
-        class={ [ 'rail', props.class ?? '' ].filter(Boolean).join(' ') }
+        class={ [ 'rail', props.bleed === true ? 'bleed' : '', props.class ?? '' ].filter(Boolean).join(' ') }
         data-start={ atStart ? 'true' : 'false' }
         data-end={ atEnd ? 'true' : 'false' }
     >
         <div
             ref={ (element) => scroller = element }
-            class={ [ 'rail-x flex snap-x gap-2.5', props.inner ?? '' ].filter(Boolean).join(' ') }
+            class={ [ 'rail-x flex snap-x gap-2.5', props.bleed === true ? 'bleed-pad' : '', props.inner ?? '' ].filter(Boolean).join(' ') }
             role="group"
             aria-label={ props.label }
             tabindex={ scrolls ? '0' : undefined }

@@ -280,3 +280,53 @@ describe('what a primitive is for', () =>
         expect(orphans, 'a primitive that nothing imports, which is a primitive that never renders').toEqual([]);
     });
 });
+
+/** Every `class={ … }` expression and `class="…"` literal in a file, each as one string. */
+function classExpressions(text: string): Array<{ body: string; at: number }>
+{
+    const found: Array<{ body: string; at: number }> = [];
+
+    for (const open of text.matchAll(/class=\{/g))
+    {
+        const brace = (open.index ?? 0) + open[0].length - 1;
+        found.push({ body: text.slice(brace + 1, closes(text, brace)), at: open.index ?? 0 });
+    }
+
+    for (const literal of text.matchAll(/class="([^"]*)"/g))
+    {
+        found.push({ body: literal[1], at: literal.index ?? 0 });
+    }
+
+    return found;
+}
+
+describe('what a spacer may be', () =>
+{
+    /**
+     * `sr-only` is `position: absolute` with a 1px box. An element carrying it is out of flow, so it
+     * cannot also be the flex item that grows - and when the growing item is the thing being hidden,
+     * the row silently stops filling its container.
+     *
+     * The app top bar did exactly that on phone: the title was `flex-1` in one branch of its class
+     * array and `sr-only` in another, so on the routes with no back button nothing pushed the search,
+     * notifications and avatar controls to the end and 89 of 390 pixels sat dead on the trailing
+     * side. Measured, not guessed - and invisible to every gate, because dead space is not overflow,
+     * not a small hit target, not a missing landmark and not a console error.
+     *
+     * The check reads the WHOLE class expression rather than a line, because the two halves were on
+     * two lines of one ternary - a line-based version of this rule passed against the broken code.
+     *
+     * Hide the TEXT in a child span and leave the box in the row.
+     */
+    it('never asks one element to both grow and be visually hidden', () =>
+    {
+        const guilty = FILES
+            .filter((file) => file.path.endsWith('.azeroth'))
+            .flatMap((file) => classExpressions(file.text)
+                .filter((one) => /\bsr-only\b/.test(one.body))
+                .filter((one) => /\bflex-1\b|\bgrow\b/.test(one.body))
+                .map((one) => `${ file.path }:${ file.text.slice(0, one.at).split('\n').length }`));
+
+        expect(guilty, 'an element is both a growing flex item and out of flow').toEqual([]);
+    });
+});

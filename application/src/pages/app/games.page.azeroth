@@ -44,7 +44,7 @@ export default component GamesPage()
             </p>
         </header>
 
-        <Rail label={ locale.t('games.filter.all') } class="-mx-4 mb-5 sm:mx-0" inner="px-4 scroll-px-4 sm:px-0 sm:scroll-px-0">
+        <Rail label={ locale.t('games.filter.all') } bleed class="mb-5">
             <Chip selected={ filter === 'all' } onClick={ () => filter = 'all' }>{ locale.t('games.filter.all') }</Chip>
             <Chip icon="cards" selected={ filter === 'cards' } onClick={ () => filter = 'cards' }>{ locale.t('games.category.cards') }</Chip>
             <Chip icon="dice" selected={ filter === 'board' } onClick={ () => filter = 'board' }>{ locale.t('games.category.board') }</Chip>

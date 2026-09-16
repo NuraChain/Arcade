@@ -1,23 +1,62 @@
-import { Link } from 'azerothjs';
+import { Link, useMatch, useNavigate } from 'azerothjs';
 
 import Icon from '../../icons/icon.component.azeroth';
+import { haptic } from '../../lib/haptics.ts';
+import { routeMeta } from '../../lib/route-meta.ts';
 import { useChat } from '../../stores/chat.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import Badge from '../ui/badge.component.azeroth';
 import { NAV } from './nav-items.ts';
+import type { NavItem } from './nav-items.ts';
 
 export default component BottomNav()
 {
     const locale = useLocale();
     const chat = useChat();
+    const match = useMatch();
+    const { navigate } = useNavigate();
 
     derived unread = chat.totalUnread();
+
+    /**
+     * What a tap on a tab does. On a tab you are not in, nothing - the link navigates. On the tab
+     * you ARE in, the link's navigation is cancelled and the tap does what a phone's own tab bar
+     * does: from somewhere inside the tab - a game, a thread - it walks back out to the tab's
+     * root, and from the root it scrolls whatever is open back to the top. Two taps were landing
+     * on an already-active tab and doing nothing, which reads as the tap being dropped.
+     *
+     * The haptic rides on every press either way: a tab bar that ticks only sometimes feels
+     * broken, not quiet.
+     */
+    const press = (item: NavItem): ((event: MouseEvent) => void) =>
+    {
+        return (event: MouseEvent) =>
+        {
+            haptic('select');
+
+            if (routeMeta(match()).tab !== item.tab)
+            {
+                return;
+            }
+
+            event.preventDefault();
+
+            const parent = routeMeta(match()).parent;
+            if (parent !== undefined)
+            {
+                void navigate(item.to);
+                return;
+            }
+
+            document.querySelector('.page')?.scrollTo({ top: 0, behavior: 'smooth' });
+        };
+    };
 
     <nav class="glass z-nav safe-b border-t border-line/60" aria-label={ locale.t('app.nav.primary') }>
         <ul class="mx-auto grid h-[var(--nav-h)] w-full max-w-[40rem] grid-cols-5">
             <For each={ NAV } key={ (item) => item.tab } let={ item }>
                 <li class="flex">
-                    <Link to={ item.to } end={ item.end } activeClass="is-active" prefetch="hover" class="nav-item flex flex-1 flex-col items-center justify-center gap-0.5 rounded-tile text-ui-2xs font-semibold text-muted">
+                    <Link to={ item.to } end={ item.end } activeClass="is-active" prefetch="hover" onClick={ press(item) } class="nav-item flex flex-1 flex-col items-center justify-center gap-0.5 rounded-tile text-ui-2xs font-semibold text-muted">
                         <span class="nav-pill relative flex h-7 w-12 items-center justify-center rounded-full transition-colors duration-200">
                             <Icon name={ item.icon } size={ 22 } />
                             <Show when={ item.tab === 'chats' && unread > 0 }>

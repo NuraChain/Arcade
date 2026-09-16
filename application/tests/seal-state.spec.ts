@@ -221,6 +221,18 @@ describe('what stands in the way of sending', () =>
         expect(sendBlockOf({ sealability: room(null), readiness: 'absent', known: false, isWallet: true })).toBeNull();
     });
 
+    /**
+     * The room's answer is a fetch, and the moments before it land read as "nothing is in the
+     * way" - which is how an enabled composer took a message `post` was always going to refuse.
+     * While the answer is in flight the composer stands down, quietly: no notice names anybody,
+     * because there is nobody to name yet.
+     */
+    it('stands the composer down while the room has not answered', () =>
+    {
+        expect(sendBlockOf({ sealability: null, readiness: 'ready', known: true, isWallet: true, pending: true }))
+            .toEqual({ reason: 'pending' });
+    });
+
     it('lets a tampered device set outrank this browser, because that one is not a thing to work around', () =>
     {
         const stop = sendBlockOf({ sealability: room(member('tampered')), readiness: 'absent', known: true, isWallet: true });
@@ -254,7 +266,7 @@ describe('what stands in the way of sending', () =>
 describe('what the thread says about it', () =>
 {
     const render = (blocked: MemberSeal): string =>
-        renderTest(() => SealNotice({ stop: { reason: 'member', member: blocked } }) as HTMLElement).container.textContent ?? '';
+        renderTest(() => SealNotice({ stop: { reason: 'member', member: blocked } }) as unknown as HTMLElement).container.textContent ?? '';
 
     const seal = (state: MemberSeal['state'], isMe = false): MemberSeal => ({ handle: 'sara.k', state, isMe, devices: [] });
 
@@ -274,7 +286,7 @@ describe('what the thread says about it', () =>
 
     it('reads as an alarm rather than a shrug when a proof did not check out', () =>
     {
-        const { container } = renderTest(() => SealNotice({ stop: { reason: 'member', member: seal('tampered') } }) as HTMLElement);
+        const { container } = renderTest(() => SealNotice({ stop: { reason: 'member', member: seal('tampered') } }) as unknown as HTMLElement);
 
         expect(container.querySelector('[role="alert"]')).not.toBeNull();
         expect(container.textContent).toContain('did not match the proof');
@@ -285,7 +297,7 @@ describe('what the thread says about it', () =>
         for (const state of ['no-wallet', 'no-device', 'needs-chain'] as const)
         {
             cleanup();
-            const { container } = renderTest(() => SealNotice({ stop: { reason: 'member', member: seal(state) } }) as HTMLElement);
+            const { container } = renderTest(() => SealNotice({ stop: { reason: 'member', member: seal(state) } }) as unknown as HTMLElement);
             expect(container.querySelector('[role="alert"]')).toBeNull();
         }
     });
@@ -323,7 +335,7 @@ describe('what the thread says about it', () =>
         const said = (readiness: 'absent' | 'waiting' | 'unsupported'): string =>
         {
             cleanup();
-            return renderTest(() => SealNotice({ stop: { reason: 'browser', readiness } }) as HTMLElement)
+            return renderTest(() => SealNotice({ stop: { reason: 'browser', readiness } }) as unknown as HTMLElement)
                 .container.textContent ?? '';
         };
 
@@ -342,7 +354,7 @@ describe('what the thread says about it', () =>
                 button.textContent = 'Give this browser keys';
                 return button;
             })()
-        }) as HTMLElement);
+        }) as unknown as HTMLElement);
 
         expect(container.querySelector('button')).not.toBeNull();
         expect(container.querySelector('p button')).toBeNull();
@@ -353,7 +365,7 @@ describe('what the thread says about it', () =>
         for (const readiness of ['absent', 'waiting', 'unsupported'] as const)
         {
             cleanup();
-            const { container } = renderTest(() => SealNotice({ stop: { reason: 'browser', readiness } }) as HTMLElement);
+            const { container } = renderTest(() => SealNotice({ stop: { reason: 'browser', readiness } }) as unknown as HTMLElement);
             expect(container.querySelector('[role="alert"]')).toBeNull();
         }
     });
