@@ -49,6 +49,7 @@ const ROUTES = [
     { id: 'chats', path: '/app/chats' },
     { id: 'chat', path: '/app/chats/:conversation' },
     { id: 'group', path: '/app/groups/balcony-backgammon' },
+    { id: 'play', path: '/app/play/:table' },
     { id: 'discover', path: '/app/discover' },
     { id: 'search', path: '/app/search' },
     { id: 'notifications', path: '/app/notifications' },
@@ -70,15 +71,18 @@ const LOCALES = ['en', 'fa'];
 // pages.
 const TOUR_HANDLE = 'dana.w';
 
-async function signedIn(browser)
+/** The second chair, so the play route has a board on it rather than a lobby. */
+const PARTNER_HANDLE = 'mina';
+
+async function signedIn(browser, handle = TOUR_HANDLE)
 {
     const { privateKeyToAccount } = await import('viem/accounts');
     const { WALLET_FIXTURES } = await import('../../server/src/db/wallet-fixtures.ts');
 
-    const fixture = WALLET_FIXTURES.find((one) => one.handle === TOUR_HANDLE);
+    const fixture = WALLET_FIXTURES.find((one) => one.handle === handle);
     if (fixture === undefined)
     {
-        throw new Error(`qa: no wallet fixture called ${ TOUR_HANDLE }`);
+        throw new Error(`qa: no wallet fixture called ${ handle }`);
     }
 
     const wallet = privateKeyToAccount(fixture.privateKey);
@@ -87,7 +91,7 @@ async function signedIn(browser)
     const issued = await context.request.post(`${ BASE }/api/auth/challenge`, { data: { address: wallet.address } });
     if (!issued.ok())
     {
-        throw new Error(`qa: no challenge for ${ TOUR_HANDLE } (${ issued.status() }). Is the api running?`);
+        throw new Error(`qa: no challenge for ${ handle } (${ issued.status() }). Is the api running?`);
     }
     const challenge = await issued.json();
 
@@ -100,12 +104,75 @@ async function signedIn(browser)
     });
     if (!response.ok())
     {
-        throw new Error(`qa: could not sign in as ${ TOUR_HANDLE } (${ response.status() }). Has seedWalletFixtures run?`);
+        throw new Error(`qa: could not sign in as ${ handle } (${ response.status() }). Has seedWalletFixtures run?`);
     }
 
     const state = await context.storageState();
     await context.close();
     return state;
+}
+
+/**
+ * A table with a game actually running on it.
+ *
+ * The play route was not in this list for a long time, which meant the one screen carrying a board
+ * was the one screen the gate never toured. Touring the LOBBY would not be enough either: the board
+ * only exists once somebody starts a match, so this seats a second wallet fixture, readies both and
+ * starts one - and reuses a live match when a previous run already left one behind, so repeated
+ * runs do not litter the database with tables.
+ */
+async function playableTable(browser, storageState)
+{
+    const mine = await browser.newContext({ storageState });
+
+    const seated = await mine.request.get(`${ BASE }/api/tables/mine`);
+    const already = seated.ok() ? (await seated.json()).tables.find((one) => one.matchId !== undefined) : undefined;
+
+    if (already !== undefined)
+    {
+        await mine.close();
+        return already.id;
+    }
+
+    const made = await mine.request.post(`${ BASE }/api/tables/`, {
+        data: {
+            game: 'ludo',
+            seats: 2,
+            mode: 'live',
+            privacy: 'public',
+            target: 0,
+            cube: false,
+            blinds: 'low',
+            invitees: []
+        }
+    });
+
+    if (!made.ok())
+    {
+        await mine.close();
+        throw new Error(`qa: could not open a ludo table (${ made.status() })`);
+    }
+
+    const table = (await made.json()).id;
+
+    const otherState = await signedIn(browser, PARTNER_HANDLE);
+    const other = await browser.newContext({ storageState: otherState });
+
+    await other.request.post(`${ BASE }/api/tables/${ table }/seat`);
+    await other.request.post(`${ BASE }/api/tables/${ table }/ready`, { data: { ready: true } });
+    await mine.request.post(`${ BASE }/api/tables/${ table }/ready`, { data: { ready: true } });
+
+    const started = await mine.request.post(`${ BASE }/api/tables/${ table }/start`);
+
+    await other.close();
+    await mine.close();
+
+    if (!started.ok())
+    {
+        throw new Error(`qa: could not start a ludo match (${ started.status() })`);
+    }
+
+    return table;
 }
 
 function heightFor(width, landscape)
@@ -228,6 +295,8 @@ async function main()
         throw new Error('qa: the signed-in account has no conversations. Are the development fixtures seeded?');
     }
     const conversation = conversations[0].id;
+
+    const table = await playableTable(browser, storageState);
     const failures = [];
     const rows = [];
     let cells = 0;
@@ -274,7 +343,9 @@ async function main()
                     const label = `${ locale }-${ width }${ landscape ? 'l' : 'p' }-${ route.id }`;
                     cells += 1;
 
-                    const target = route.path.replace(':conversation', conversation);
+                    const target = route.path
+                        .replace(':conversation', conversation)
+                        .replace(':table', table);
                     await page.goto(`${ BASE }${ target }`, { waitUntil: 'networkidle' }).catch(() => undefined);
                     await page.waitForTimeout(120);
 

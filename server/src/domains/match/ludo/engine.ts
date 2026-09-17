@@ -11,12 +11,17 @@
  * `apply` never throws. A refusal is a value, because the timeout job folds actions over a state
  * and a function that throws for ordinary control flow is one you cannot fold.
  *
- * The variant is Ludo as the board is drawn: enter on a six, eight safe squares where nobody is
- * sent home, capture by landing exactly, no stacking of your own, exact count into the five home
- * cells, a six earns another roll and three of them end the turn, and three tries to find a six
- * when every token is still in the yard. Entering on a six is a CHOICE and not an obligation -
- * standard Ludo, and the only case where it matters is a player who has tokens out, because a full
- * yard leaves nothing else to do anyway.
+ * The ruleset is the one written down for this product - Variant B, the common Iranian rules - and
+ * four of its clauses are where a generic Ludo implementation goes wrong. Own pieces MAY share a
+ * square and never block each other, on the track or in the home lane. A six with no legal move
+ * still earns the extra roll; only a non-six with nothing to do ends the turn. There is no "three
+ * tries to find a six" - a full yard rolling one to five simply passes. And entering is a choice
+ * among the legal moves, with any yard token eligible on any six.
+ *
+ * The rest: capture on exact landing only, never by passing over; eight starred squares where
+ * nobody is sent home; an exact count into the five home cells, with an overshoot simply absent
+ * from the legal set; three consecutive sixes end the turn and the third grants no roll; a
+ * capture or a finish on a six still earns the roll.
  */
 
 import {
@@ -32,8 +37,6 @@ import {
 import type { EngineAction, GameEvent, LudoPlayer, LudoState, Outcome } from './state.ts';
 
 const MAX_SIXES = 3;
-
-const MAX_TRIES = 3;
 
 export function create(seats: readonly number[], first: number): LudoState
 {
@@ -54,7 +57,6 @@ export function create(seats: readonly number[], first: number): LudoState
         turn: first % players.length,
         die: null,
         sixes: 0,
-        tries: 0,
         rev: 0,
         winner: null
     };
@@ -105,32 +107,6 @@ function advance(state: LudoState): void
     state.turn = next;
     state.die = null;
     state.sixes = 0;
-    state.tries = 0;
-}
-
-function occupiedByOwn(player: LudoPlayer, progress: number, except: number): boolean
-{
-    if (progress >= FINISHED)
-    {
-        return false;
-    }
-
-    return player.pieces.some((at, index) => index !== except && at === progress);
-}
-
-function blockedInHome(player: LudoPlayer, from: number, to: number, piece: number): boolean
-{
-    const last = Math.min(to, FINISHED - 1);
-
-    for (let step = Math.max(from + 1, RING_STEPS); step <= last; step += 1)
-    {
-        if (occupiedByOwn(player, step, piece))
-        {
-            return true;
-        }
-    }
-
-    return false;
 }
 
 function destination(player: LudoPlayer, piece: number, die: number): number | null
@@ -144,27 +120,12 @@ function destination(player: LudoPlayer, piece: number, die: number): number | n
 
     if (from === YARD)
     {
-        return die === 6 && !occupiedByOwn(player, 0, piece) ? 0 : null;
+        return die === 6 ? 0 : null;
     }
 
     const to = from + die;
 
-    if (to > FINISHED)
-    {
-        return null;
-    }
-
-    if (occupiedByOwn(player, to, piece))
-    {
-        return null;
-    }
-
-    if (to >= RING_STEPS && blockedInHome(player, from, to, piece))
-    {
-        return null;
-    }
-
-    return to;
+    return to > FINISHED ? null : to;
 }
 
 export function legalMoves(state: LudoState): number[]
@@ -265,8 +226,6 @@ function finish(state: LudoState, events: GameEvent[]): void
 
 function roll(state: LudoState, seat: number, die: number, events: GameEvent[]): void
 {
-    const player = state.players[state.turn];
-
     state.die = die;
     events.push({ e: 'roll', seat, die });
 
@@ -287,20 +246,9 @@ function roll(state: LudoState, seat: number, die: number, events: GameEvent[]):
         return;
     }
 
-    const caged = player.pieces.every((at) => at === YARD);
-
-    if (caged && die !== 6)
+    if (die === 6)
     {
-        state.tries += 1;
-
-        if (state.tries < MAX_TRIES)
-        {
-            state.die = null;
-            return;
-        }
-
-        events.push({ e: 'pass', seat, why: 'no-six' });
-        advance(state);
+        state.die = null;
         return;
     }
 
@@ -344,7 +292,6 @@ function move(state: LudoState, seat: number, piece: number, events: GameEvent[]
     if (die === 6 && state.sixes < MAX_SIXES)
     {
         state.die = null;
-        state.tries = 0;
         return;
     }
 

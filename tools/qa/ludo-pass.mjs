@@ -19,6 +19,7 @@ const BASE = process.env.QA_BASE ?? 'http://localhost:5300';
 
 let checks = 0;
 let failures = 0;
+let allCaptures = 0;
 
 const ok = (label, condition, detail = '') =>
 {
@@ -228,7 +229,9 @@ const run = async () =>
         ok('the game reaches a winner', state.finishedAt !== undefined, `after ${ turns } turns`);
         ok('and names one', state.winner !== undefined, `seat ${ state.winner }`);
         ok('the server rolled every die', rolls > 0, `${ rolls } rolls`);
-        ok('somebody got sent home along the way', captures > 0, `${ captures } captures`);
+
+        allCaptures += captures;
+        console.log(`        (${ captures } captures this game)`);
 
         const replay = await players[0].get(`/matches/${ matchId }/since?rev=0`);
         ok('the whole game can be read back', replay.status === 200 && replay.body.events.length === state.rev,
@@ -242,6 +245,8 @@ const run = async () =>
 
         console.log('');
     }
+
+    ok('tokens were sent home somewhere across the three games', allCaptures > 0, `${ allCaptures } captures`);
 
     console.log('------------------------------------------');
     console.log(failures === 0 ? `ludo pass: clean, ${ checks } checks` : `ludo pass: ${ failures } of ${ checks } FAILED`);

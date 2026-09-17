@@ -263,23 +263,27 @@ describe.skipIf(!active)('a match, against a real database', () =>
             expect(await countActions(load.match.id)).toBe(1);
         });
 
-        it('lets exactly one of two players act on one match at once', async () =>
+        it('serialises two players acting on one match at once', async () =>
         {
             const { tableId, players } = await seatedTable(2);
             const load = await matches.start(players[0], tableId);
             const turn = load.state.players[load.state.turn].seat;
 
-            const both = await Promise.allSettled([
+            await Promise.allSettled([
                 matches.act(players[turn], load.match.id, { kind: 'roll', key: 'mine' }),
                 matches.act(players[1 - turn], load.match.id, { kind: 'roll', key: 'theirs' })
             ]);
 
-            const done = both.filter((result) => result.status === 'fulfilled');
-            const refused = both.filter((result) => result.status === 'rejected');
+            const revs = rowsOf<{ rev: number }>(await db.query(
+                `select rev from match_actions where match_id = $1 order by rev`,
+                [load.match.id]
+            )).map((row) => row.rev);
 
-            expect(done).toHaveLength(1);
-            expect(refused).toHaveLength(1);
-            expect(await countActions(load.match.id)).toBe(1);
+            const after = await matches.view(players[0], load.match.id);
+
+            expect(new Set(revs).size, 'two actions produced one revision').toBe(revs.length);
+            expect(revs).toEqual(revs.map((_row, index) => index + 1));
+            expect(after!.match.rev, 'the row and the ledger agree').toBe(revs.length);
         });
 
         it('refuses a roll from somebody whose turn it is not', async () =>

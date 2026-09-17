@@ -96,26 +96,12 @@ function wrong(state: LudoState): string | null
             return `${ player.colour } has ${ player.pieces.length } tokens`;
         }
 
-        const seen = new Set<number>();
-
         for (const at of player.pieces)
         {
             if (!Number.isInteger(at) || at < YARD || at > FINISHED)
             {
                 return `${ player.colour } has a token at ${ at }`;
             }
-
-            if (at === YARD || at === FINISHED)
-            {
-                continue;
-            }
-
-            if (seen.has(at))
-            {
-                return `${ player.colour } has two tokens on ${ at }`;
-            }
-
-            seen.add(at);
         }
     }
 

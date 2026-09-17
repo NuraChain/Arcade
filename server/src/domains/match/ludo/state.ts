@@ -16,7 +16,6 @@ export interface LudoState
     turn: number;
     die: number | null;
     sixes: number;
-    tries: number;
     rev: number;
     winner: number | null;
 }
@@ -34,7 +33,7 @@ export type RefusalReason =
     | 'not-playing'
     | 'game-over';
 
-export type PassReason = 'no-move' | 'three-sixes' | 'no-six';
+export type PassReason = 'no-move' | 'three-sixes';
 
 export type GameEvent =
     | { e: 'roll'; seat: number; die: number }
