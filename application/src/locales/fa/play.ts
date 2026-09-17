@@ -112,6 +112,9 @@ export const play: Pick<Dictionary, keyof typeof reference> = {
     'play.closedLead': 'هرکسی بازش کرده بسته‌اش کرده. هر وقت خواستی یکی دیگر باز کن.',
 
     'play.table.chat': 'گفت‌وگوی میز',
+    'board.title': 'جدول برترین‌ها',
+    'board.empty': 'هنوز کسی پنج بازی اینجا انجام نداده. جدول کم‌کم پر می‌شود.',
+    'board.played': { one: '۱ بازی', other: '{count} بازی' },
     'match.over.emptied': 'میز خالی شد.',
     'match.over.nobody': 'این بازی تمام شد.',
     'match.over.noRating': 'کسی نبرد، پس امتیازی جابه‌جا نشد.',

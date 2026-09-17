@@ -1,0 +1,80 @@
+import { createResource } from 'azerothjs';
+
+import Panel from '../ui/panel.component.azeroth';
+import Avatar from '../ui/avatar.component.azeroth';
+import SectionHeading from '../ui/section-heading.component.azeroth';
+import Skeleton from '../ui/skeleton.component.azeroth';
+import { client } from '../../api.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import { usePeople } from '../../stores/people.store.ts';
+import type { GameId } from '../../data/games.ts';
+
+/**
+ * The best ratings at one game.
+ *
+ * A leaderboard used to be on this page and was deleted with the rest of the invented profile: it
+ * ranked people by `stats`, which `buildPerson` produced from a seeded RNG. This one reads
+ * `player_stats`, where a rating moves only when a match this server arbitrated was really won.
+ *
+ * **An empty board is a sentence, not a blank.** A game nobody has finished five times yet has
+ * nobody to rank, and saying so is the difference between "this is new" and "this is broken". The
+ * floor is the server's - five games - and the copy names it rather than leaving somebody to
+ * wonder why they are not on a list they are clearly good enough for.
+ *
+ * Fetched here rather than through a store: one page shows it, it is read-only, and it has no
+ * relationship to anything else on screen. A store would be a singleton for a single reader.
+ */
+export default component Leaderboard(props: { game: GameId })
+{
+    const locale = useLocale();
+    const people = usePeople();
+
+    const board = createResource(
+        () => props.game,
+        (game) => client.catalogue.leaderboard({ params: { game } }),
+        { name: 'catalogue.leaderboard' }
+    );
+
+    derived standings = board.data()?.standings ?? [];
+
+    const nameOf = (handle: string): string =>
+    {
+        const person = people.byHandle(handle);
+
+        return person === null ? handle : locale.text(person.displayName);
+    };
+
+    <section aria-labelledby="game-board">
+        <SectionHeading id="game-board" title={ locale.t('board.title') } />
+
+        <Show when={ board.loading() && standings.length === 0 }>
+            { () => <Skeleton class="h-32 w-full rounded-panel" /> }
+        </Show>
+
+        <Show when={ !board.loading() && standings.length === 0 }>
+            { () => <Panel class="text-ui-sm text-muted">{ locale.t('board.empty') }</Panel> }
+        </Show>
+
+        <Show when={ standings.length > 0 }>
+            { () =>
+                <Panel pad="sm">
+                    <ol class="flex flex-col">
+                        <For each={ standings } key={ (row) => row.handle } let={ row }>
+                            <li class="flex items-center gap-3 rounded-tile px-2 py-2 hover:bg-raised">
+                                <span class="tally w-6 shrink-0 text-end text-ui-sm font-bold text-faint">
+                                    { locale.n(standings.indexOf(row) + 1) }
+                                </span>
+                                <Avatar person={ people.byHandle(row.handle) } size="xs" />
+                                <span class="min-w-0 flex-1 truncate text-ui-sm text-text">{ nameOf(row.handle) }</span>
+                                <span class="tally shrink-0 text-ui-2xs text-muted">
+                                    { locale.plural('board.played', row.played) }
+                                </span>
+                                <span class="tally shrink-0 text-ui-sm font-bold text-text">{ locale.n(row.rating) }</span>
+                            </li>
+                        </For>
+                    </ol>
+                </Panel>
+            }
+        </Show>
+    </section>
+}

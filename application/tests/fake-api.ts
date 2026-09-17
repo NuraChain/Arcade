@@ -166,6 +166,9 @@ export const server =
      */
     live: [] as { game: string; playing: number; tables: number }[],
 
+    /** A game's leaderboard. Empty by default, which is what a game nobody has played looks like. */
+    standings: [] as { handle: string; rating: number; played: number; won: number }[],
+
     /** The social half: mutes the fake server holds, and the privacy it enforces. */
     mutes: [] as { kind: MuteSubject; id: string }[],
     allowStrangerMessages: true,
@@ -591,6 +594,11 @@ export const client =
         {
             server.calls.push('catalogue.live');
             return { games: server.live.map((row) => ({ ...row })) };
+        },
+        async leaderboard(input: { params: { game: string } })
+        {
+            server.calls.push('catalogue.leaderboard');
+            return { game: input.params.game, standings: server.standings.map((row) => ({ ...row })) };
         }
     },
 

@@ -164,6 +164,27 @@ export type MatchHistory = Infer<typeof matchHistory>;
  * opened, and the rule written beside them was that they go the moment the server answers with real
  * counts. This is that answer.
  */
+/**
+ * One row of a game's leaderboard: a person, their rating and what it was earned on.
+ *
+ * `played` travels beside `rating` deliberately. A rating on its own invites the reading that a
+ * number near the top was hard-won, and the honest qualifier is how many games are behind it -
+ * which is also what the `MIN_PLAYED` floor on the query is for.
+ */
+export const standing = object({
+    handle: string(),
+    rating: number(),
+    played: number(),
+    won: number()
+});
+
+export const leaderboard = object({
+    game: string(),
+    standings: array(standing)
+});
+
+export type Leaderboard = Infer<typeof leaderboard>;
+
 export const gameLive = object({
     game: string(),
     playing: number(),
@@ -972,7 +993,16 @@ export const notificationKind = enumOf([
     'friend-accepted',
     'group-added',
     'table-invite',
-    'message'
+    'message',
+
+    /**
+     * Your go, at a table that gives you a day to take it.
+     *
+     * Written only for `turns` tables. A live table gives forty-five seconds to somebody already
+     * looking at the board, so one of these per turn there would be noise nobody wants - and the
+     * sweep plays the turn of anybody who walked away from one.
+     */
+    'turn'
 ]);
 
 export type NotificationKind = Infer<typeof notificationKind>;

@@ -1,6 +1,7 @@
 import type { Principal } from './http/auth.ts';
 import type {
     AchievementList,
+    Leaderboard,
     LiveCounts,
     MatchHistory,
     PersonRecord,
@@ -453,6 +454,9 @@ export interface MatchPort
 
     /** A person's record and their standing against every achievement. */
     record(handle: string): Promise<PersonRecord | null>;
+
+    /** The best ratings at one game, among people who have played enough games to have one. */
+    leaderboard(game: string): Promise<Leaderboard>;
 }
 
 /** Every port the API declaration may reach. One member per domain. */

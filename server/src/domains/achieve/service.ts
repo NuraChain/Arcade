@@ -1,7 +1,7 @@
 import type { DataSource, EntityManager } from 'typeorm';
 
 import { UserAchievement } from '../../entities/index.ts';
-import type { PersonRecord } from '../../schemas.ts';
+import type { Leaderboard, PersonRecord } from '../../schemas.ts';
 import { earnedBy, type AchievementFacts } from './rules.ts';
 
 /**
@@ -106,6 +106,26 @@ interface RecordRow
     tokens_home: number;
 }
 
+/**
+ * How many games somebody has to have played before their rating is worth ranking.
+ *
+ * One win from one game puts a new account at 1216 and, on an empty board, at the top - which says
+ * nothing about anybody and makes the leaderboard a measure of who played most recently. Five is
+ * low enough to reach in an evening and high enough that the number means something.
+ */
+const MIN_PLAYED = 5;
+
+const BOARD_SIZE = 20;
+
+const LEADERBOARD_SQL = `
+    select u.handle::text as handle, s.rating, s.played, s.won
+      from player_stats s
+      join users u on u.id = s.user_id
+     where s.game = $1 and s.played >= $2
+     order by s.rating desc, s.won desc, u.handle asc
+     limit $3
+`;
+
 export function createAchieveService(db: DataSource)
 {
     const history = async (tx: EntityManager, userId: string): Promise<HistoryFacts> =>
@@ -163,6 +183,19 @@ export function createAchieveService(db: DataSource)
         async seated(tx: EntityManager, userId: string): Promise<void>
         {
             await grant(tx, userId, null, ['first-seat']);
+        },
+
+        /** The best ratings at one game, among people with enough games behind them to rank. */
+        async leaderboardOf(game: string): Promise<Leaderboard>
+        {
+            const rows = await db.query(LEADERBOARD_SQL, [game, MIN_PLAYED, BOARD_SIZE]) as {
+                handle: string;
+                rating: number;
+                played: number;
+                won: number;
+            }[];
+
+            return { game, standings: rows.map((row) => ({ ...row })) };
         },
 
         /** A person's record at every game, and where they stand against every achievement. */

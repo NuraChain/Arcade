@@ -5,6 +5,7 @@ import { clearSessionCookie, requireSession, sessionCookie } from './http/auth.t
 import type { Ports } from './ports.ts';
 import {
     achievementList,
+    leaderboard,
     liveCounts,
     matchHistory,
     personRecord,
@@ -122,7 +123,17 @@ export function buildApi(ports: Ports)
             ),
 
             /** What is actually being played. Counted from open tables, never simulated. */
-            live: routes.get('/live', { output: liveCounts }, () => ports.catalogue.live())
+            live: routes.get('/live', { output: liveCounts }, () => ports.catalogue.live()),
+
+            /**
+             * The best ratings at one game.
+             *
+             * Unguarded with the rest of the catalogue: a rating is the aggregate a profile already
+             * publishes, and a board nobody can see until they sign in is a board that cannot say
+             * what the place is like.
+             */
+            leaderboard: routes.get('/games/:game/leaderboard', { output: leaderboard }, (context) =>
+                ports.match.leaderboard(context.params.game))
         })),
 
         /**

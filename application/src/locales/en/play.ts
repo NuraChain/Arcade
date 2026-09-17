@@ -109,6 +109,9 @@ export const play = {
     'play.closedLead': 'Whoever opened it ended it. Open another whenever you like.',
 
     'play.table.chat': 'Table chat',
+    'board.title': 'Leaderboard',
+    'board.empty': 'Nobody has played five games here yet. The board fills in as people do.',
+    'board.played': { one: '1 game', other: '{count} games' },
     'match.over.emptied': 'The table emptied.',
     'match.over.nobody': 'That game is over.',
     'match.over.noRating': 'Nobody won this one, so no rating moved.',
