@@ -1,6 +1,7 @@
 import { useHead } from 'azerothjs';
 
 import Page from '../../components/app/page.component.azeroth';
+import PersonRecord from '../../components/social/person-record.component.azeroth';
 import ProfileSheet from '../../components/app/profile-sheet.component.azeroth';
 import Panel from '../../components/ui/panel.component.azeroth';
 import Avatar from '../../components/ui/avatar.component.azeroth';
@@ -29,8 +30,13 @@ import { useToasts } from '../../stores/toasts.store.ts';
  * measured and nothing could measure, because no game has ever been played here.
  *
  * What is left is what the server actually knows: who you are, what you wrote about yourself,
- * whether a wallet is behind the account, and how many friends you have. It is a smaller page and
- * a true one, and everything that was removed comes back the day something produces it.
+ * whether a wallet is behind the account, and how many friends you have.
+ *
+ * **The record is back, and this is the day it was waiting for.** `player_stats` moves only when a
+ * match this server arbitrated ended, so a rating, a win rate and a streak here are the sum of
+ * games that really happened - and the achievements beside them are awarded by `domains/achieve`
+ * against that same record. What is still absent is still absent: there is no level, no skill band
+ * and no reliability score, because nothing measures any of those either.
  */
 export default component MePage()
 {
@@ -133,6 +139,8 @@ export default component MePage()
                         <Button variant="secondary" leading="settings" to="/app/me/settings">{ locale.t('me.settings') }</Button>
                         <Button variant="outline" leading="share" onClick={ () => void share() }>{ locale.t('me.share') }</Button>
                     </div>
+
+                    <PersonRecord handle={ user!.handle } history />
 
                     <section>
                         <SectionHeading title={ locale.t('person.friends') } />
