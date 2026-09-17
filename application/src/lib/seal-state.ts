@@ -55,6 +55,19 @@ export interface MemberSeal
     devices: PeerDevice[];
 }
 
+/**
+ * A member who is in the WAY, which is a member whose state is never `ready`.
+ *
+ * `blocked` is drawn from `members.filter((member) => member.state !== 'ready')`, so it cannot be
+ * `ready` - but `filter` does not narrow an element type, so the compiler kept believing it could.
+ * Every sentence map keyed on the blocked states then had to be indexed with a value the type said
+ * might be `ready`, which is the lookup that returns undefined and takes the page down.
+ */
+export interface BlockedMember extends MemberSeal
+{
+    state: Exclude<MemberSealState, 'ready'>;
+}
+
 export interface Sealability
 {
     members: MemberSeal[];
@@ -75,7 +88,7 @@ export interface Sealability
      * own account in the third person reads like a bug, and if the only thing in the way is you,
      * the sentence should say so directly.
      */
-    blocked: MemberSeal | null;
+    blocked: BlockedMember | null;
 }
 
 /**
@@ -136,7 +149,7 @@ export async function sealabilityOf(answer: ConversationDevices, me: string): Pr
 {
     const members = await Promise.all(answer.members.map((member) => sealOf(member, me)));
 
-    const stuck = members.filter((member) => member.state !== 'ready');
+    const stuck = members.filter((member): member is BlockedMember => member.state !== 'ready');
 
     const blocked = stuck.find((member) => member.state === 'tampered')
         ?? stuck.find((member) => !member.isMe)
@@ -157,7 +170,7 @@ export async function sealabilityOf(answer: ConversationDevices, me: string): Pr
  * an enabled box, and got `This browser has no device keys` in the console when they pressed Send.
  */
 export type SendBlock =
-    | { reason: 'member'; member: MemberSeal }
+    | { reason: 'member'; member: BlockedMember }
     | { reason: 'browser'; readiness: Exclude<Readiness, 'ready'> }
 
     /**

@@ -6,7 +6,7 @@ import type { ConversationDevices, PeerDevice } from '../src/api.ts';
 import SealNotice from '../src/components/chat/seal-notice.component.azeroth';
 import { deviceResource } from '../src/lib/attestation.ts';
 import { deviceIdFrom, toBase64Url } from '../src/lib/device-id.ts';
-import { sealabilityOf, sendBlockOf, type MemberSeal, type Sealability } from '../src/lib/seal-state.ts';
+import { sealabilityOf, sendBlockOf, type BlockedMember, type Sealability } from '../src/lib/seal-state.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
 import '../src/locales/app-catalogue.ts';
 
@@ -199,10 +199,10 @@ describe('whether a conversation can be sealed', () =>
  */
 describe('what stands in the way of sending', () =>
 {
-    const member = (state: MemberSeal['state'], isMe = false): MemberSeal =>
+    const member = (state: BlockedMember['state'], isMe = false): BlockedMember =>
         ({ handle: 'sara.k', state, isMe, devices: [] });
 
-    const room = (blocked: MemberSeal | null): Sealability =>
+    const room = (blocked: BlockedMember | null): Sealability =>
         ({ members: [], ready: blocked === null, blocked });
 
     it('is this browser, even when every account in the room is ready', () =>
@@ -265,10 +265,10 @@ describe('what stands in the way of sending', () =>
 
 describe('what the thread says about it', () =>
 {
-    const render = (blocked: MemberSeal): string =>
+    const render = (blocked: BlockedMember): string =>
         renderTest(() => SealNotice({ stop: { reason: 'member', member: blocked } }) as unknown as HTMLElement).container.textContent ?? '';
 
-    const seal = (state: MemberSeal['state'], isMe = false): MemberSeal => ({ handle: 'sara.k', state, isMe, devices: [] });
+    const seal = (state: BlockedMember['state'], isMe = false): BlockedMember => ({ handle: 'sara.k', state, isMe, devices: [] });
 
     it('names the person and says what would fix it', () =>
     {

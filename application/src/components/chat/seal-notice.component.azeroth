@@ -9,6 +9,17 @@ import { useLocale } from '../../stores/locale.store.ts';
 
 type Blocked = Exclude<MemberSealState, 'ready'>;
 
+/**
+ * A stop this notice can actually render a sentence for.
+ *
+ * `pending` means the room's answer has not landed; both pages hide the notice for it and the
+ * composer stands down instead. The guard below already filters it out, but the `let` binding is
+ * typed from the accessor's ANNOTATION rather than its body - so annotating it `SendBlock` put
+ * `pending` back into the union inside the branch, and every `sealed.member` read failed to
+ * compile. Naming the narrowed type is what makes the guard and the type agree.
+ */
+type Shown = Exclude<SendBlock, { reason: 'pending' }>;
+
 const ICON: Record<Blocked, IconName> = {
     'no-wallet': 'info',
     'no-device': 'info',
@@ -101,7 +112,7 @@ export default component SealNotice(props: { stop: SendBlock | null; action?: Ch
             down. The narrowed accessor is a pull memo over the same `when` this branch was built
             from, so every read below sees one stop - the one the guard saw.
         */}
-        <Show when={ (): SendBlock | null => (props.stop !== null && props.stop.reason !== 'pending' ? props.stop : null) } let={ sealed }>
+        <Show when={ (): Shown | null => (props.stop !== null && props.stop.reason !== 'pending' ? props.stop : null) } let={ sealed }>
             <div
                 class={ [
                     'flex flex-wrap items-start gap-2 rounded-tile border px-3 py-2 text-ui-sm',
