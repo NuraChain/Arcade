@@ -146,9 +146,26 @@ export const useSocial = createStore((): SocialApi =>
     const isMuted = (kind: MuteSubject, id: string): boolean =>
         pendingMutes()[muteKey(kind, id)] ?? mutes().some((entry) => entry.kind === kind && entry.id === id);
 
-    const friends = (): string[] => (graph.data()?.friends ?? []).map((person) => person.id);
+    const stable = (): ((next: string[]) => string[]) =>
+    {
+        let held: string[] = [];
+        return (next) =>
+        {
+            if (held.length === next.length && held.every((id, at) => id === next[at]))
+            {
+                return held;
+            }
+            held = next;
+            return held;
+        };
+    };
 
-    const blocked = (): string[] => (graph.data()?.blocked ?? []).map((person) => person.id);
+    const heldFriends = stable();
+    const heldBlocked = stable();
+
+    const friends = (): string[] => heldFriends((graph.data()?.friends ?? []).map((person) => person.id));
+
+    const blocked = (): string[] => heldBlocked((graph.data()?.blocked ?? []).map((person) => person.id));
 
     const asRequest = (wire: { id: string; from: string; to: string; at: string }): FriendRequest => ({
         id: wire.id,

@@ -220,11 +220,13 @@ export default component ChatPage()
         });
     };
 
+    derived readable = conversation === null ? '' : id;
+
     effect
     {
-        if (conversation !== null)
+        if (readable !== '')
         {
-            chat.markRead(id);
+            chat.markRead(readable);
         }
     }
 

@@ -62,15 +62,21 @@ export const useSettings = createStore((): SettingsApi =>
 {
     const [settings, setSettings] = createSignal<Settings>(initial());
 
-    const write = (next: Settings): void =>
-    {
-        setSettings(next);
-        rememberJson(STORAGE_KEY, next);
-    };
+    const same = (a: Settings, b: Settings): boolean =>
+        (Object.keys(a) as (keyof Settings)[]).every((key) => a[key] === b[key]);
 
     return {
         settings,
-        update: (patch) => write({ ...settings(), ...patch }),
+        update: (patch) => setSettings((current) =>
+        {
+            const next = { ...current, ...patch };
+            if (same(next, current))
+            {
+                return current;
+            }
+            rememberJson(STORAGE_KEY, next);
+            return next;
+        }),
         reset: () =>
         {
             setSettings(defaultSettings());

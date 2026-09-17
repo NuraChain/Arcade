@@ -602,3 +602,60 @@ describe('search store', () =>
         expect(search.results().total).toBe(0);
     });
 });
+
+describe('what survives a refused send', () =>
+{
+    /**
+     * `send` used to clear the draft before the post resolved, so a refusal destroyed what somebody
+     * had typed. An empty box is how this product says a message went; showing one for a message
+     * that did not is the worst possible answer, because there is nothing left to retry from.
+     *
+     * The table panel already restored on failure. The chat store did not, and nothing measured it.
+     */
+    it('puts the words back in the box when the server refuses', async () =>
+    {
+        const chat = useChat();
+        await chat.refresh();
+
+        const id = server.conversations[0].id;
+        server.refuseSend = 'no';
+
+        chat.setDraft(id, 'the thing I typed');
+        await expect(chat.send(id, 'the thing I typed')).rejects.toBeTruthy();
+
+        expect(chat.draft(id)).toBe('the thing I typed');
+    });
+
+    it('leaves the box empty when the send succeeds', async () =>
+    {
+        const chat = useChat();
+        await chat.refresh();
+
+        const id = server.conversations[0].id;
+        chat.setDraft(id, 'this one goes');
+        await chat.send(id, 'this one goes');
+
+        expect(chat.draft(id)).toBe('');
+    });
+});
+
+describe('what a revalidation must not disturb', () =>
+{
+    /**
+     * `blocked` fed the chat list resource's source. It rebuilt the array on every read, so the
+     * source compared unequal every time the social graph revalidated and the chat list and the
+     * open thread refetched with it - on every nudge, forever.
+     */
+    it('hands back the same blocked array until it really changes', async () =>
+    {
+        const social = useSocial();
+        await social.refresh();
+
+        const first = social.blocked();
+        expect(social.blocked()).toBe(first);
+
+        await social.block('mina');
+        expect(social.blocked()).not.toBe(first);
+        expect(social.blocked()).toBe(social.blocked());
+    });
+});

@@ -307,7 +307,7 @@ export const useChat = createStore((): ChatApi =>
 
         setDraft(id, text)
         {
-            setDrafts({ ...untrack(drafts), [id]: text });
+            setDrafts((current) => (current[id] === text ? current : { ...current, [id]: text }));
 
             if (text.trim() === '')
             {
@@ -330,7 +330,7 @@ export const useChat = createStore((): ChatApi =>
             {
                 return;
             }
-            setDrafts({ ...untrack(drafts), [id]: '' });
+            setDrafts((current) => ({ ...current, [id]: '' }));
             announced.delete(id);
 
             // Computed HERE from the room's setting, at the moment of sending. A source that read
@@ -339,7 +339,15 @@ export const useChat = createStore((): ChatApi =>
             const after = rowOf(id)?.conversation.expireAfter ?? null;
             const at = runtime().clock.now();
 
-            await publish(asked(id, clean), after === null ? 0 : at + after * 1000);
+            try
+            {
+                await publish(asked(id, clean), after === null ? 0 : at + after * 1000);
+            }
+            catch (error)
+            {
+                setDrafts((current) => (current[id] === undefined || current[id] === '' ? { ...current, [id]: clean } : current));
+                throw error;
+            }
         },
 
         /**

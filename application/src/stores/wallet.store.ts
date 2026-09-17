@@ -85,6 +85,18 @@ export const useWallet = createStore((): WalletApi =>
         setChainId(typeof args[0] === 'string' ? args[0] : '');
     };
 
+    const release = (): void =>
+    {
+        listening?.();
+        discovery?.();
+        discovery = null;
+        if (late !== null && typeof window !== 'undefined')
+        {
+            window.removeEventListener('ethereum#initialized', late);
+            late = null;
+        }
+    };
+
     return {
         status,
         address,
@@ -311,14 +323,12 @@ export const useWallet = createStore((): WalletApi =>
 
         stop()
         {
-            listening?.();
-            discovery?.();
-            discovery = null;
+            release();
         },
 
         reset()
         {
-            listening?.();
+            release();
             injected = detect();
             setPresent(injected !== null);
             setStatus('idle');
