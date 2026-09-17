@@ -11,7 +11,26 @@ import { useLocale } from '../../stores/locale.store.ts';
 import { useShell } from '../../stores/shell.store.ts';
 import Spinner from '../ui/spinner.component.azeroth';
 
-export default component Page(props: { children?: Child; padded?: boolean; narrow?: boolean; fill?: boolean; class?: string; label?: string; onRefresh?: () => void })
+/**
+ * How wide the column inside a page is allowed to get.
+ *
+ * It used to be a `narrow` boolean, and "no cap at all" was not sayable - it happened as a SIDE
+ * EFFECT of `padded={ false }`, because the max-width lived inside that guard. Splitting padding
+ * from width was right, and it took the chat thread's full bleed with it: the one page that passes
+ * `padded={ false }` silently gained a 96rem cap it had never had.
+ *
+ * Three named intents instead, so the page states what it wants and nothing is inferred from an
+ * unrelated prop.
+ */
+export type PageWidth = 'narrow' | 'normal' | 'full';
+
+const PAGE_WIDTH: Record<PageWidth, string> = {
+    narrow: 'max-w-[44rem]',
+    normal: 'max-w-[96rem]',
+    full: ''
+};
+
+export default component Page(props: { children?: Child; padded?: boolean; width?: PageWidth; fill?: boolean; class?: string; label?: string; onRefresh?: () => void })
 {
     const route = useRoute();
     const match = useMatch();
@@ -149,7 +168,7 @@ export default component Page(props: { children?: Child; padded?: boolean; narro
         <div class={ [
             '@container mx-auto w-full min-w-0',
             props.fill === true ? 'flex h-full min-h-0 flex-col' : '',
-            props.narrow === true ? 'max-w-[44rem]' : 'max-w-[96rem]'
+            PAGE_WIDTH[props.width ?? 'normal']
         ].filter(Boolean).join(' ') }>
             { props.children }
         </div>

@@ -18,7 +18,7 @@ export default component CreateGamePage()
 
     useHead({ title: () => locale.t('create.title') });
 
-    <Page narrow label={ locale.t('create.title') }>
+    <Page width="narrow" label={ locale.t('create.title') }>
         <Show
             when={ game !== null }
             fallback={ <EmptyState icon="games" title={ locale.t('game.notFound') } action={ locale.t('app.nav.games') } to="/app/games" /> }

@@ -285,7 +285,7 @@ export default component ChatPage()
 
     derived phone = device.posture() === 'phone';
 
-    <Page padded={ false } fill label={ title } class="flex flex-col">
+    <Page padded={ false } width="full" fill label={ title } class="flex flex-col">
         <Show
             when={ conversation !== null }
             fallback={

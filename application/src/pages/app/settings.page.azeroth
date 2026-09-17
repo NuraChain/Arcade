@@ -82,7 +82,7 @@ export default component SettingsPage()
         navigate('/sign-in', { replace: true });
     };
 
-    <Page narrow label={ locale.t('settings.title') }>
+    <Page width="narrow" label={ locale.t('settings.title') }>
         <header class="pb-5">
             <h1 class="title text-ui-4xl">{ locale.t('settings.title') }</h1>
         </header>

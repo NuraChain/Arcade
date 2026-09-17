@@ -57,7 +57,7 @@ export default component DevicesPage()
         void recovery.refresh();
     }
 
-    <Page narrow label={ locale.t('devices.title') } onRefresh={ () => void devices.refresh() }>
+    <Page width="narrow" label={ locale.t('devices.title') } onRefresh={ () => void devices.refresh() }>
         <header class="pb-4">
             <h1 class="title text-ui-4xl">{ locale.t('devices.title') }</h1>
             <p class="mt-2 text-ui-md text-muted">{ locale.t('devices.lead') }</p>

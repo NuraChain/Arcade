@@ -84,7 +84,7 @@ export default component MePage()
         }
     };
 
-    <Page label={ locale.t('app.nav.me') }>
+    <Page width="narrow" label={ locale.t('app.nav.me') }>
         <Show
             when={ user !== null }
             fallback={ <EmptyState icon="me" title={ locale.t('person.notFound') } action={ locale.t('app.nav.home') } to="/app" class="py-12" /> }
