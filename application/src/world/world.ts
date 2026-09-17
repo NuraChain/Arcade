@@ -265,6 +265,19 @@ export async function createWorld(options: WorldOptions): Promise<WorldHandle>
     };
 
     let frame = 0;
+
+    /**
+     * Whether the loop is drawing, and whether it is SCHEDULED at all.
+     *
+     * `pause()` used to set this false and nothing else, so the callback went on waking sixty times
+     * a second to reach the guard below and return - for a canvas that is off screen, behind the
+     * signed-in half of the site, or in a background tab. The browser keeps the compositor and this
+     * closure alive for it, and on a laptop that is the difference between an idle page and one
+     * that costs battery for nothing. Cancelling the frame is what makes the pause a pause.
+     *
+     * The guard inside `tick` stays as a belt: a frame already in flight when `pause` runs must not
+     * render against state that is about to be disposed.
+     */
     let running = true;
     let last = performance.now();
     let announced = false;
@@ -353,13 +366,26 @@ export async function createWorld(options: WorldOptions): Promise<WorldHandle>
 
         pause()
         {
+            if (!running)
+            {
+                return;
+            }
+
             running = false;
+            cancelAnimationFrame(frame);
+            frame = 0;
         },
 
         resume()
         {
+            if (running)
+            {
+                return;
+            }
+
             last = performance.now();
             running = true;
+            frame = requestAnimationFrame(tick);
         },
 
         dispose()
