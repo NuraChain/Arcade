@@ -21,11 +21,5 @@ export default component LiveStats(props: { game: GameId; compact?: boolean; cla
                 <span class="tally">{ locale.plural('games.live.tables', stats.tablesOpen) }</span>
             </li>
         </Show>
-        <Show when={ props.compact !== true }>
-            <li class="flex items-center gap-1.5">
-                <Icon name="timer" size={ 14 } />
-                <span class="tally">{ locale.t('games.live.wait', { seconds: stats.waitSeconds }) }</span>
-            </li>
-        </Show>
     </ul>
 }

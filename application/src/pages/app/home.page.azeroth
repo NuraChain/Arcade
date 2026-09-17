@@ -109,7 +109,7 @@ export default component HomePage()
 
                 <div class="flex flex-col gap-3">
                     <QuickPlayButton
-                        detail={ `${ locale.t('home.quickPlay.usual', { game: locale.t(favourite.nameKey) }) } · ${ locale.t('home.quickPlay.wait', { seconds: favouriteStats.waitSeconds }) }` }
+                        detail={ `${ locale.t('home.quickPlay.usual', { game: locale.t(favourite.nameKey) }) } · ${ locale.plural('games.live.playing', favouriteStats.playersOnline) }` }
                         onClick={ () => quickPlay(favourite.id) }
                     />
                     <ul class="flex flex-wrap items-center gap-2" aria-label={ locale.t('home.quickPlay.pick') }>

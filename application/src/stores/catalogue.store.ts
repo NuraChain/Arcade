@@ -1,26 +1,44 @@
-import { createStore, createResource, createSignal, type Getter } from 'azerothjs';
+import { createStore, createResource, type Getter } from 'azerothjs';
 
 import { client } from '../api.ts';
 import { GAMES, gameBySlug, type Game, type GameId } from '../data/games.ts';
 import { TABLE_RULES, defaultTable, type TableConfig, type TableRules } from '../data/tables.ts';
-import { createRandom, hashSeed } from '../lib/random.ts';
 import { runtime } from '../lib/runtime.ts';
+
+/**
+ * How busy each game is, COUNTED.
+ *
+ * This store used to drift two numbers per game on a seeded RNG from a table of literals - "627
+ * people at the tables right now" on a product where no table had ever been opened - and the rule
+ * written beside them was that they would be deleted outright the moment the server answered with
+ * real counts. `GET /catalogue/live` is that answer, so `BASE`, `seededStats` and the six-second
+ * drift are gone.
+ *
+ * `waitSeconds` went with them and is not coming back as a zero. Nothing measures how long somebody
+ * waits for a chair - matchmaking is a query over open tables, not a queue with a length - so a
+ * number there would be the same invention wearing a smaller hat. The copy that showed it is gone
+ * too, because a sentence with a hole in it is worse than no sentence.
+ *
+ * Zeroes are the honest answer for a quiet game and they are rendered as such. "No tables open"
+ * reads as a quiet evening; a made-up 58 reads as a lie the first time somebody clicks through and
+ * finds nothing there.
+ */
 
 export interface LiveStats
 {
     tablesOpen: number;
     playersOnline: number;
-    waitSeconds: number;
 }
 
-const BASE: Record<GameId, LiveStats> = {
-    hokm: { tablesOpen: 42, playersOnline: 168, waitSeconds: 40 },
-    poker: { tablesOpen: 31, playersOnline: 124, waitSeconds: 25 },
-    backgammon: { tablesOpen: 77, playersOnline: 154, waitSeconds: 12 },
-    ludo: { tablesOpen: 58, playersOnline: 190, waitSeconds: 20 }
-};
-
-export const STATS_DRIFT_MS = 6000;
+/**
+ * How often the counts are re-read while somebody is looking at them.
+ *
+ * Slower than the six seconds the simulation used, because this is a real request rather than a
+ * local RNG and "how busy is it" does not change meaningfully in six seconds. It is a poll rather
+ * than a realtime frame on purpose: `social` already fans presence to every socket on the server
+ * and adding a table count to it would make every seat claim anywhere a broadcast to everybody.
+ */
+export const LIVE_REFRESH_MS = 30_000;
 
 export type GameStatus = 'available' | 'coming-soon' | 'disabled';
 
@@ -44,31 +62,20 @@ export interface CatalogueApi
     reset(): void;
 }
 
-function seededStats(seed: number, tick: number): Record<GameId, LiveStats>
-{
-    const out = {} as Record<GameId, LiveStats>;
-    for (const game of GAMES)
-    {
-        const random = createRandom(hashSeed(seed, 'stats', game.id, tick));
-        const base = BASE[game.id];
-        out[game.id] = {
-            tablesOpen: Math.max(1, base.tablesOpen + random.int(-6, 6)),
-            playersOnline: Math.max(2, base.playersOnline + random.int(-18, 18)),
-            waitSeconds: Math.max(5, base.waitSeconds + random.int(-8, 8))
-        };
-    }
-    return out;
-}
+const QUIET: LiveStats = { tablesOpen: 0, playersOnline: 0 };
 
 export const useCatalogue = createStore((): CatalogueApi =>
 {
-    const [tick, setTick] = createSignal(0);
-    const [stats, setStats] = createSignal<Record<GameId, LiveStats>>(seededStats(runtime().seed, 0));
     let stop: (() => void) | null = null;
 
     const catalogue = createResource(
         () => client.catalogue.games(),
         { name: 'catalogue.games' }
+    );
+
+    const live = createResource(
+        () => client.catalogue.live(),
+        { name: 'catalogue.live' }
     );
 
     const published = (): Map<string, { status: GameStatus; rules: TableRules }> =>
@@ -91,12 +98,9 @@ export const useCatalogue = createStore((): CatalogueApi =>
 
     const rulesFor = (id: GameId): TableRules => published().get(id)?.rules ?? TABLE_RULES[id];
 
-    const drift = (): void =>
-    {
-        const next = tick() + 1;
-        setTick(next);
-        setStats(seededStats(runtime().seed, next));
-    };
+    const counts = (): Map<string, LiveStats> => new Map(
+        (live.data()?.games ?? []).map((row) => [row.game, { tablesOpen: row.tables, playersOnline: row.playing }])
+    );
 
     return {
         games: GAMES,
@@ -118,27 +122,31 @@ export const useCatalogue = createStore((): CatalogueApi =>
         status: (id) => published().get(id)?.status ?? 'available',
         loading: () => catalogue.loading(),
 
-        stats: (id) => stats()[id],
+        stats: (id) => counts().get(id) ?? QUIET,
+
         totals: () =>
         {
             let tablesOpen = 0;
             let playersOnline = 0;
-            for (const game of GAMES)
+
+            for (const row of counts().values())
             {
-                tablesOpen += stats()[game.id].tablesOpen;
-                playersOnline += stats()[game.id].playersOnline;
+                tablesOpen += row.tablesOpen;
+                playersOnline += row.playersOnline;
             }
+
             return { tablesOpen, playersOnline };
         },
+
         featured: () => GAMES[Math.floor(runtime().clock.now() / (24 * 3600000)) % GAMES.length].id,
 
-        refresh: drift,
+        refresh: () => live.refetch(),
 
         start()
         {
             if (stop === null)
             {
-                const cancel = runtime().clock.every(STATS_DRIFT_MS, drift);
+                const cancel = runtime().clock.every(LIVE_REFRESH_MS, () => live.refetch());
                 stop = () =>
                 {
                     cancel();
@@ -156,8 +164,6 @@ export const useCatalogue = createStore((): CatalogueApi =>
         reset()
         {
             stop?.();
-            setTick(0);
-            setStats(seededStats(runtime().seed, 0));
         }
     };
 });

@@ -159,6 +159,13 @@ export const server =
     /** Handles `claimHandle` refuses with a 409, so the taken-name branch has something to hit. */
     takenHandles: [] as string[],
 
+    /**
+     * How busy each game is. Empty by default, which is the honest resting state for a fake: a
+     * store that used to invent these numbers should not have a fake inventing them either, and a
+     * spec that cares about a count says so by putting one here.
+     */
+    live: [] as { game: string; playing: number; tables: number }[],
+
     /** The social half: mutes the fake server holds, and the privacy it enforces. */
     mutes: [] as { kind: MuteSubject; id: string }[],
     allowStrangerMessages: true,
@@ -579,6 +586,11 @@ export const client =
         {
             server.calls.push('catalogue.achievements');
             return { achievements: [] };
+        },
+        async live()
+        {
+            server.calls.push('catalogue.live');
+            return { games: server.live.map((row) => ({ ...row })) };
         }
     },
 
