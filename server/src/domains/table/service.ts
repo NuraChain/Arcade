@@ -1,8 +1,10 @@
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@azerothjs/http';
-import type { DataSource } from 'typeorm';
+import { IsNull, Not, type DataSource } from 'typeorm';
 
 import type { TableMode, TablePrivacy, TableStatus } from '../../entities/table.entity.ts';
 import { firstRow, rowsOf } from '../../lib/rows.ts';
+import { ConversationMember } from '../../entities/conversation-member.entity.ts';
+import { TableSeat } from '../../entities/table-seat.entity.ts';
 import type { SocialService } from '../social/service.ts';
 
 /**
@@ -308,10 +310,10 @@ export function createTableService(db: DataSource, social: SocialService)
                             `insert into conversations (kind, table_id, game) values ('game', $1, $2) returning id`,
                             [id, input.game]
                         );
-                        await tx.query(
-                            'insert into conversation_members (conversation_id, user_id) values ($1, $2)',
-                            [rowsOf<{ id: string }>(conversation)[0].id, me]
-                        );
+                        await tx.getRepository(ConversationMember).insert({
+                            conversationId: rowsOf<{ id: string }>(conversation)[0].id,
+                            userId: me
+                        });
 
                         return id;
                     });
@@ -378,11 +380,13 @@ export function createTableService(db: DataSource, social: SocialService)
                     // the transaction, whichever way it ends.
                     await tx.query('select pg_advisory_xact_lock(hashtext($1), hashtext($2))', [tableId, me]);
 
-                    const held = await tx.query(
-                        'select seat from table_seats where table_id = $1 and user_id = $2',
-                        [tableId, me]
-                    );
-                    const existing = firstRow<{ seat: number }>(held);
+                    // `tx`, not a global repository: this read has to happen inside the advisory
+                    // lock taken above, and a repository off the DataSource would check out a
+                    // different pooled connection that holds no lock at all.
+                    const existing = await tx.getRepository(TableSeat).findOne({
+                        select: { seat: true },
+                        where: { tableId, userId: me }
+                    });
                     if (existing !== null)
                     {
                         return existing.seat;
@@ -496,10 +500,7 @@ export function createTableService(db: DataSource, social: SocialService)
         async setReady(me: string, tableId: string, ready: boolean): Promise<void>
         {
             await mustSee(me, tableId);
-            await db.query(
-                'update table_seats set ready = $3 where table_id = $1 and user_id = $2',
-                [tableId, me, ready]
-            );
+            await db.getRepository(TableSeat).update({ tableId, userId: me }, { ready });
         },
 
         /** Holds a chair for somebody. The host's call, and only while a chair is free. */
@@ -553,11 +554,11 @@ export function createTableService(db: DataSource, social: SocialService)
         /** Everybody sitting at it, as uuids. What the realtime layer needs to ring the doorbell. */
         async seatedIds(tableId: string): Promise<string[]>
         {
-            const rows = await db.query(
-                'select user_id from table_seats where table_id = $1 and user_id is not null',
-                [tableId]
-            );
-            return rowsOf<{ user_id: string }>(rows).map((row) => row.user_id);
+            const rows = await db.getRepository(TableSeat).find({
+                select: { userId: true },
+                where: { tableId, userId: Not(IsNull()) }
+            });
+            return rows.map((row) => row.userId).filter((id): id is string => id !== null);
         }
     };
 }
