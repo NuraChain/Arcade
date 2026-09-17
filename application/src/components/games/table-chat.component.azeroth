@@ -15,6 +15,8 @@ import { useLocale } from '../../stores/locale.store.ts';
 import { useSeal } from '../../stores/seal.store.ts';
 import { useToasts } from '../../stores/toasts.store.ts';
 import Avatar from '../ui/avatar.component.azeroth';
+import EmptyState from '../ui/empty-state.component.azeroth';
+import Icon from '../../icons/icon.component.azeroth';
 import IconButton from '../ui/icon-button.component.azeroth';
 import TextArea from '../ui/text-area.component.azeroth';
 
@@ -128,16 +130,23 @@ export default component TableChat(props: { conversationId: string; onClose?: ()
         return isLineKey(line.key) ? locale.t(line.key, line.params) : '';
     };
 
-    <section class={ () => [ 'flex min-h-0 flex-col', props.class ?? '' ].filter(Boolean).join(' ') } aria-label={ locale.t('play.table.chat') }>
-        <header class="flex items-center justify-between gap-2 border-b border-line/60 px-4 py-2.5">
-            <h2 class="text-ui-base font-semibold text-text">{ locale.t('play.table.chat') }</h2>
+    <section class={ () => [ 'flex min-h-0 flex-col bg-field', props.class ?? '' ].filter(Boolean).join(' ') } aria-label={ locale.t('play.table.chat') }>
+        <header class="flex shrink-0 items-center justify-between gap-2 border-b border-line px-4 py-3">
+            <h2 class="flex min-w-0 items-center gap-2 text-ui-base font-semibold text-text">
+                <Icon name="chats" size={ 16 } class="shrink-0 text-muted" />
+                <span class="truncate">{ locale.t('play.table.chat') }</span>
+            </h2>
             <Show when={ props.onClose !== undefined }>
                 { () => <IconButton icon="panel-close" label={ locale.t('play.table.chatHide') } variant="ghost" size="sm" flip onClick={ () => props.onClose?.() } /> }
             </Show>
         </header>
         <ul ref={ (element) => list = element } class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-3" aria-live="polite">
             <Show when={ messages.length === 0 && !chat.threadLoading() }>
-                { () => <li class="m-auto text-center text-ui-sm text-muted">{ locale.t('chat.empty') }</li> }
+                { () =>
+                    <li class="m-auto">
+                        <EmptyState icon="chats" title={ locale.t('chat.empty') } lead={ locale.t('play.table.chatLead') } class="px-2 py-6" />
+                    </li>
+                }
             </Show>
             <For each={ messages } key={ (message) => message.id } let={ message }>
                 <li class={ () => [
@@ -170,13 +179,13 @@ export default component TableChat(props: { conversationId: string; onClose?: ()
         </ul>
         <Show when={ !seal.loading() && stop !== null }>
             { () =>
-                <div class="border-t border-line/60 px-3 py-2">
+                <div class="shrink-0 border-t border-line px-3 pt-2">
                     <SealNotice stop={ stop } />
                 </div>
             }
         </Show>
         <form
-            class="flex items-end gap-2 border-t border-line/60 px-3 py-2"
+            class="flex shrink-0 items-end gap-2 border-t border-line px-3 py-3"
             onSubmit={ (event) =>
             {
                 event.preventDefault();

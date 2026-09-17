@@ -45,6 +45,33 @@ export default component PlayPage()
 
     state chatOpen = false;
 
+    /**
+     * On a phone the chat opens BELOW the board, the turn panel and the seat list - which on a
+     * 390-wide screen is well past the fold, so pressing "Show chat" looked like pressing nothing
+     * at all. Bringing it into view is what makes the button honest about what it did.
+     *
+     * Called from the element's own `ref`, which fires when it mounts, so there is no guessing at
+     * when the panel exists; and it follows the reduced-motion setting, because an unexpected
+     * smooth scroll is exactly the motion that setting is for.
+     */
+    const showChat = (element: HTMLElement | null): void =>
+    {
+        if (element === null)
+        {
+            return;
+        }
+
+        /**
+         * `start`, not `nearest`: the panel is taller than whatever is left below the seat list, so
+         * `nearest` counts its top as already visible and scrolls almost nothing - sixty pixels of
+         * chat at the bottom of the screen. And on the NEXT frame, because this runs from the ref
+         * as the element mounts, when it has no box yet and `scrollIntoView` would measure zero.
+         */
+        const smooth = !device.reducedMotion();
+
+        requestAnimationFrame(() => element.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', block: 'start' }));
+    };
+
     state starting = false;
 
     mount
@@ -324,11 +351,13 @@ export default component PlayPage()
 
                         <Show when={ phone && table!.conversationId !== undefined && chatOpen }>
                             { () =>
-                                <TableChat
-                                    conversationId={ table!.conversationId! }
-                                    class={ `min-h-[18rem] rounded-panel ${ PANEL_TONE.field }` }
-                                    onClose={ () => chatOpen = false }
-                                />
+                                <div ref={ (element) => showChat(element) }>
+                                    <TableChat
+                                        conversationId={ table!.conversationId! }
+                                        class={ `min-h-[18rem] rounded-panel ${ PANEL_TONE.field }` }
+                                        onClose={ () => chatOpen = false }
+                                    />
+                                </div>
                             }
                         </Show>
 
@@ -345,7 +374,7 @@ export default component PlayPage()
 
                     <Show when={ railVisible }>
                         { () =>
-                            <aside class="hidden w-[var(--social-w)] shrink-0 border-s border-line lg:flex lg:min-h-0 lg:flex-col">
+                            <aside class="hidden w-[var(--social-w)] shrink-0 border-s border-line bg-field lg:flex lg:min-h-0 lg:flex-col">
                                 <TableChat conversationId={ table!.conversationId! } class="min-h-0 flex-1" />
                             </aside>
                         }

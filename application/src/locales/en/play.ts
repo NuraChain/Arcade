@@ -109,6 +109,7 @@ export const play = {
     'play.closedLead': 'Whoever opened it ended it. Open another whenever you like.',
 
     'play.table.chat': 'Table chat',
+    'play.table.chatLead': 'Everyone at this table can read what you say here.',
     'play.table.chatShow': 'Show chat',
     'play.table.chatHide': 'Hide chat',
     'play.table.say': 'Say something…',

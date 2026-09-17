@@ -112,6 +112,7 @@ export const play: Pick<Dictionary, keyof typeof reference> = {
     'play.closedLead': 'هرکسی بازش کرده بسته‌اش کرده. هر وقت خواستی یکی دیگر باز کن.',
 
     'play.table.chat': 'گفت‌وگوی میز',
+    'play.table.chatLead': 'هرکسی که سر این میز است می‌تواند حرف‌هایت را بخواند.',
     'play.table.chatShow': 'نمایش گفت‌وگو',
     'play.table.chatHide': 'پنهان کردن گفت‌وگو',
     'play.table.say': 'چیزی بگو…',
