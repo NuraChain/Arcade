@@ -168,6 +168,15 @@
     --world-lamp-intensity: 1;
     --world-fog-density: 1;
     --world-env: 0.35;
+
+    --ludo-red: #CC332E;
+    --ludo-green: #2E854D;
+    --ludo-yellow: #EDBD2E;
+    --ludo-blue: #2E66B8;
+    --board-plate: #E8DCC4;
+    --board-line: #5C4C3D;
+    --board-safe: #8C7A5E;
+    --board-hint: var(--accent);
 }
 
 :root[data-theme='light']
@@ -207,6 +216,15 @@
     --world-lamp-intensity: 0.35;
     --world-fog-density: 0.6;
     --world-env: 0.7;
+
+    --ludo-red: #CC332E;
+    --ludo-green: #2E854D;
+    --ludo-yellow: #EDBD2E;
+    --ludo-blue: #2E66B8;
+    --board-plate: #F2E8D5;
+    --board-line: #6B5B48;
+    --board-safe: #A08A68;
+    --board-hint: var(--accent);
 }
 
 :root

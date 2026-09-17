@@ -4,6 +4,7 @@ import ConfirmSheet from '../../components/app/confirm-sheet.component.azeroth';
 import Page from '../../components/app/page.component.azeroth';
 import InviteSheet from '../../components/games/invite-sheet.component.azeroth';
 import LobbyPanel from '../../components/games/lobby-panel.component.azeroth';
+import MatchBoard from '../../components/games/match-board.component.azeroth';
 import TableChat from '../../components/games/table-chat.component.azeroth';
 import Button from '../../components/ui/button.component.azeroth';
 import EmptyState from '../../components/ui/empty-state.component.azeroth';
@@ -13,6 +14,7 @@ import type { GameId } from '../../data/games.ts';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useDevice } from '../../stores/device.store.ts';
 import { useLobby } from '../../stores/lobby.store.ts';
+import { useBoard } from '../../stores/match.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useOverlay } from '../../stores/overlay.store.ts';
 import { useShell } from '../../stores/shell.store.ts';
@@ -32,6 +34,7 @@ export default component PlayPage()
 {
     const locale = useLocale();
     const lobby = useLobby();
+    const board = useBoard();
     const catalogue = useCatalogue();
     const device = useDevice();
     const overlay = useOverlay();
@@ -41,6 +44,8 @@ export default component PlayPage()
     const { navigate } = useNavigate();
 
     state chatOpen = false;
+
+    state starting = false;
 
     mount
     {
@@ -64,6 +69,12 @@ export default component PlayPage()
 
     derived amHost = table?.chairs.find((chair) => chair.seat === table!.mine)?.host === true;
 
+    derived playing = table?.matchId !== undefined && board.match() !== null && board.match()!.id === table!.matchId;
+
+    derived ready = table !== null
+        && table.status === 'ready'
+        && table.chairs.every((chair) => chair.ready);
+
     derived title = table === null
         ? locale.t('play.notFound')
         : locale.t(catalogue.byId(table.game as GameId).nameKey);
@@ -73,6 +84,50 @@ export default component PlayPage()
     derived phone = device.posture() === 'phone';
 
     derived railVisible = !phone && seated && table?.conversationId !== undefined;
+
+    /**
+     * The board follows the table.
+     *
+     * A match id appears on the table the moment somebody starts one, and disappears when it ends,
+     * so the store is opened and closed from that rather than from a route parameter - which is
+     * also what makes a second person's Start reach this page through the ordinary doorbell.
+     */
+    effect
+    {
+        const id = table?.matchId;
+
+        if (id === undefined)
+        {
+            board.close();
+        }
+        else if (board.openId() !== id)
+        {
+            board.open(id);
+        }
+    }
+
+    const begin = async (): Promise<void> =>
+    {
+        if (table === null || starting)
+        {
+            return;
+        }
+
+        starting = true;
+
+        try
+        {
+            await lobby.begin(table.id);
+        }
+        catch
+        {
+            toasts.show({ kind: 'warning', text: locale.t('state.errorLead') });
+        }
+        finally
+        {
+            starting = false;
+        }
+    };
 
     const copyLink = async (): Promise<void> =>
     {
@@ -204,9 +259,24 @@ export default component PlayPage()
             { () =>
                 <div class="flex min-h-0 flex-1 gap-4">
                     <div class="flex min-w-0 flex-1 flex-col gap-5 py-2">
+                        <Show when={ playing }>
+                            { () => <MatchBoard match={ board.match()! } /> }
+                        </Show>
+
+                        <Show when={ !playing && ready && seated }>
+                            { () =>
+                                <Panel pad="md" stack="sm" class="items-center text-center">
+                                    <p class="text-ui-base text-muted">{ locale.t('match.startHint') }</p>
+                                    <Button variant="primary" size="lg" leading="zap" loading={ starting } onClick={ () => void begin() }>
+                                        { locale.t('match.start') }
+                                    </Button>
+                                </Panel>
+                            }
+                        </Show>
+
                         <Show
-                            when={ seated }
-                            fallback={ table === null ? null :
+                            when={ !playing && seated }
+                            fallback={ table === null || playing ? null :
                                 <Panel pad="lg" stack="md" class="items-center text-center">
                                     <p class="text-ui-lg text-text">{ locale.t('play.table.watching') }</p>
                                     <p class="max-w-[44ch] text-ui-base text-muted">
@@ -234,7 +304,7 @@ export default component PlayPage()
                             }
                         </Show>
 
-                        <Show when={ amHost }>
+                        <Show when={ amHost && !playing }>
                             { () =>
                                 <div class="flex">
                                     <Button variant="destructive" size="sm" leading="close" onClick={ () => void end() }>

@@ -1,0 +1,290 @@
+import Button from '../ui/button.component.azeroth';
+import Panel from '../ui/panel.component.azeroth';
+import { useLocale } from '../../stores/locale.store.ts';
+import { useBoard } from '../../stores/match.store.ts';
+import { usePeople } from '../../stores/people.store.ts';
+import type { MatchView } from '../../api.ts';
+
+/**
+ * The board, and the controls that are the real interface to it.
+ *
+ * Every move is takeable without ever pointing at the grid: the die is a button, each legal move is
+ * a button that says what it would do, and the turn is a live region. That is what makes the game
+ * playable with a keyboard and readable by a screen reader, and it is also what gives `npm run qa`
+ * something to hit-test - a drawn board is invisible to both.
+ *
+ * Colour is never the only signal. Every seat carries its colour's initial beside the swatch, so a
+ * player who cannot tell red from green still knows whose token is whose.
+ */
+
+const YARDS: Record<string, readonly [number, number]> = {
+    red: [0, 0],
+    green: [9, 0],
+    yellow: [9, 9],
+    blue: [0, 9]
+};
+
+const YARD_SPOTS: readonly (readonly [number, number])[] = [[2, 2], [4, 2], [2, 4], [4, 4]];
+
+const INITIAL: Record<string, string> = {
+    red: 'R',
+    green: 'G',
+    yellow: 'Y',
+    blue: 'B'
+};
+
+export default component MatchBoard(props: { match: MatchView })
+{
+    const locale = useLocale();
+    const board = useBoard();
+    const people = usePeople();
+
+    derived game = props.match;
+
+    derived mine = game.mine;
+
+    derived over = game.finishedAt !== undefined;
+
+    derived turnOf = game.players.find((player) => player.seat === game.turn);
+
+    derived nameOf = ((): string =>
+    {
+        if (turnOf === undefined)
+        {
+            return '';
+        }
+
+        const person = people.byHandle(turnOf.who);
+
+        return person === null ? turnOf.who : person.displayName;
+    })();
+
+    derived says = ((): string =>
+    {
+        if (over)
+        {
+            if (game.winner === undefined)
+            {
+                return locale.t('match.abandoned');
+            }
+
+            return game.winner === mine
+                ? locale.t('match.won.you')
+                : locale.t('match.won.them', { name: nameOf });
+        }
+
+        if (mine !== undefined && mine === game.turn)
+        {
+            return game.die === undefined
+                ? locale.t('match.turn.yours')
+                : locale.t('match.turn.rolled', { die: locale.n(game.die) });
+        }
+
+        return locale.t('match.turn.theirs', { name: nameOf });
+    })();
+
+    const tokenAt = (col: number, row: number): { colour: string; piece: number; seat: number } | null =>
+    {
+        for (const player of game.players)
+        {
+            for (const token of player.tokens)
+            {
+                if (token.cell !== undefined && token.cell.col === col && token.cell.row === row)
+                {
+                    return { colour: player.colour, piece: token.piece, seat: player.seat };
+                }
+            }
+
+            const parked = player.tokens.filter((token) => token.cell === undefined && token.at < 0);
+            const corner = YARDS[player.colour];
+
+            for (let index = 0; index < parked.length; index += 1)
+            {
+                const spot = YARD_SPOTS[index];
+
+                if (corner[0] + spot[0] === col && corner[1] + spot[1] === row)
+                {
+                    return { colour: player.colour, piece: parked[index].piece, seat: player.seat };
+                }
+            }
+        }
+
+        return null;
+    };
+
+    const yardOf = (col: number, row: number): string | null =>
+    {
+        for (const [colour, corner] of Object.entries(YARDS))
+        {
+            if (col >= corner[0] && col < corner[0] + 6 && row >= corner[1] && row < corner[1] + 6)
+            {
+                return colour;
+            }
+        }
+
+        return null;
+    };
+
+    const isTrack = (col: number, row: number): boolean =>
+        (col >= 6 && col <= 8 && (row <= 5 || row >= 9)) || (row >= 6 && row <= 8 && (col <= 5 || col >= 9));
+
+    const homeOf = (col: number, row: number): string | null =>
+    {
+        if (row === 7 && col >= 1 && col <= 5) { return 'red'; }
+        if (col === 7 && row >= 1 && row <= 5) { return 'green'; }
+        if (row === 7 && col >= 9 && col <= 13) { return 'yellow'; }
+        if (col === 7 && row >= 9 && row <= 13) { return 'blue'; }
+
+        return null;
+    };
+
+    derived cells = Array.from({ length: 225 }, (_unused, index) => ({ col: index % 15, row: Math.floor(index / 15) }));
+
+    const moveSays = (piece: number): string =>
+    {
+        const seat = game.players.find((player) => player.seat === game.turn);
+        const token = seat?.tokens.find((candidate) => candidate.piece === piece);
+        const label = locale.n(piece + 1);
+
+        if (token === undefined || game.die === undefined)
+        {
+            return locale.t('match.move.step', { token: label, die: locale.n(game.die ?? 0) });
+        }
+
+        if (token.at < 0)
+        {
+            return locale.t('match.move.enter', { token: label });
+        }
+
+        return token.at + game.die >= 56
+            ? locale.t('match.move.home', { token: label })
+            : locale.t('match.move.step', { token: label, die: locale.n(game.die) });
+    };
+
+    <div class="flex min-h-0 flex-1 flex-col gap-4 @3xl:flex-row">
+        <div class="board-stage">
+            <div
+                class="grid h-full w-full gap-px rounded-panel p-1"
+                style="grid-template-columns: repeat(15, 1fr); grid-template-rows: repeat(15, 1fr); background: var(--board-plate)"
+                role="img"
+                aria-label={ locale.t('match.board') }
+            >
+                <For each={ cells } key={ (cell) => `${ cell.col }-${ cell.row }` } let={ cell }>
+                    <span
+                        aria-hidden="true"
+                        class={ () => [
+                            'relative flex items-center justify-center rounded-[2px]',
+                            homeOf(cell.col, cell.row) !== null || yardOf(cell.col, cell.row) !== null
+                                ? ''
+                                : (isTrack(cell.col, cell.row) ? 'bg-white/70' : '')
+                        ].filter(Boolean).join(' ') }
+                        style={ () =>
+                        {
+                            const home = homeOf(cell.col, cell.row);
+                            const yard = yardOf(cell.col, cell.row);
+                            const paint = home ?? yard;
+
+                            return paint === null ? '' : `background: var(--ludo-${ paint })`;
+                        } }
+                    >
+                        <Show when={ tokenAt(cell.col, cell.row) !== null }>
+                            { () =>
+                                <span
+                                    class="flex h-[86%] w-[86%] items-center justify-center rounded-full border border-black/30 text-[0.5rem] font-bold text-white shadow"
+                                    style={ `background: var(--ludo-${ tokenAt(cell.col, cell.row)!.colour })` }
+                                >
+                                    { INITIAL[tokenAt(cell.col, cell.row)!.colour] }
+                                </span>
+                            }
+                        </Show>
+                    </span>
+                </For>
+            </div>
+        </div>
+
+        <div class="board-controls flex min-w-0 flex-col gap-3 @3xl:w-[20rem]">
+            <Panel pad="md" stack="sm">
+                <p class="text-ui-lg font-semibold text-text" aria-live="polite">{ says }</p>
+
+                <Show when={ !over && game.die !== undefined }>
+                    { () =>
+                        <p class="text-ui-sm text-muted">
+                            <output class="tally text-ui-2xl font-bold text-text">{ locale.n(game.die!) }</output>
+                        </p>
+                    }
+                </Show>
+
+                <Show when={ board.canRoll() }>
+                    { () =>
+                        <Button
+                            variant="primary"
+                            size="lg"
+                            leading="dice"
+                            loading={ board.busy() }
+                            onClick={ () => void board.roll() }
+                        >
+                            { locale.t('match.roll') }
+                        </Button>
+                    }
+                </Show>
+
+                <Show when={ !over && mine !== undefined && mine === game.turn && game.die !== undefined }>
+                    { () =>
+                        <div class="flex flex-col gap-1.5">
+                            <p class="label text-ui-xs text-faint">{ locale.t('match.moves') }</p>
+                            <ul class="flex flex-col gap-1.5">
+                                <For each={ board.moves() } key={ (piece) => piece } let={ piece }>
+                                    <li>
+                                        <Button
+                                            variant="secondary"
+                                            class="w-full"
+                                            disabled={ board.busy() }
+                                            onClick={ () => void board.move(piece) }
+                                        >
+                                            { moveSays(piece) }
+                                        </Button>
+                                    </li>
+                                </For>
+                            </ul>
+                        </div>
+                    }
+                </Show>
+            </Panel>
+
+            <Panel pad="md" stack="sm">
+                <ul class="flex flex-col gap-2">
+                    <For each={ game.players } key={ (player) => player.seat } let={ player }>
+                        <li
+                            class={ () => [
+                                'flex items-center gap-2 rounded-tile px-2 py-1.5',
+                                player.seat === game.turn ? 'bg-raised' : ''
+                            ].filter(Boolean).join(' ') }
+                            aria-current={ player.seat === game.turn ? 'true' : undefined }
+                        >
+                            <span
+                                class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-ui-2xs font-bold text-white"
+                                style={ `background: var(--ludo-${ player.colour })` }
+                            >
+                                { INITIAL[player.colour] }
+                            </span>
+                            <span class="min-w-0 flex-1 truncate text-ui-sm text-text">
+                                { player.seat === mine ? locale.t('match.you') : (people.byHandle(player.who)?.displayName ?? player.who) }
+                            </span>
+                            <span class="tally shrink-0 text-ui-xs text-muted">
+                                { locale.plural('match.tokens', player.home) }
+                            </span>
+                        </li>
+                    </For>
+                </ul>
+            </Panel>
+
+            <Show when={ !over && mine !== undefined }>
+                { () =>
+                    <Button variant="ghost" size="sm" onClick={ () => void board.resign() }>
+                        { locale.t('match.resign') }
+                    </Button>
+                }
+            </Show>
+        </div>
+    </div>
+}

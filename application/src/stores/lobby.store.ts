@@ -43,6 +43,9 @@ export interface LobbyApi
     invite(tableId: string, handle: string): Promise<void>;
     end(tableId: string): Promise<void>;
 
+    /** Deals the board. Any seated player may, once every chair is taken and everybody is ready. */
+    begin(tableId: string): Promise<void>;
+
     refresh(): Promise<void>;
     start(): () => void;
     stop(): void;
@@ -221,6 +224,12 @@ export const useLobby = createStore((): LobbyApi =>
             {
                 setOpenId('');
             }
+            await revalidate();
+        },
+
+        async begin(tableId)
+        {
+            await client.tables.start({ params: { id: tableId } });
             await revalidate();
         },
 

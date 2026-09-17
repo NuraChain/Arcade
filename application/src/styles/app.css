@@ -570,3 +570,41 @@
         animation-duration: 0.01ms;
     }
 }
+
+/*
+ * The board is square, and it is the height that has to give.
+ *
+ * `min()` against `100%` is what guarantees no horizontal overflow at any width - the gate reads
+ * that on every one of its cells - and `calc(100dvh - chrome)` is what stops a tall phone producing
+ * a board taller than the screen it is on. `aspect-ratio` keeps it square with no JavaScript, so
+ * nothing has to measure anything on resize.
+ */
+.board-stage
+{
+    inline-size: min(100%, var(--board-max, 34rem), calc(100dvh - var(--board-chrome, 22rem)));
+    aspect-ratio: 1;
+    margin-inline: auto;
+    flex: none;
+
+    /*
+     * A flex item stretches on the cross axis by default, and stretching wins over aspect-ratio -
+     * which is how a square board came out 544 wide and 891 tall. Opting out of the stretch is what
+     * lets the ratio decide the other side.
+     */
+    align-self: center;
+}
+
+#app-shell[data-posture='rail'] .board-stage,
+#app-shell[data-posture='sidebar'] .board-stage
+{
+    --board-chrome: 14rem;
+}
+
+@media (orientation: landscape) and (max-height: 520px)
+{
+    .board-stage
+    {
+        --board-chrome: 2rem;
+        --board-max: none;
+    }
+}

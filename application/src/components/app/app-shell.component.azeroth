@@ -9,6 +9,7 @@ import { useSeal } from '../../stores/seal.store.ts';
 import { useConnection } from '../../stores/connection.store.ts';
 import { useGroups } from '../../stores/groups.store.ts';
 import { useLobby } from '../../stores/lobby.store.ts';
+import { useBoard } from '../../stores/match.store.ts';
 import { useDevice } from '../../stores/device.store.ts';
 import { useDevices } from '../../stores/devices.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
@@ -80,6 +81,7 @@ export default component AppShell(props: { children?: MountNode })
             useSocial().start(),
             useGroups().start(),
             useLobby().start(),
+            useBoard().start(),
             useChat().start(),
             useSeal().start(),
             useNotifications().start(),
