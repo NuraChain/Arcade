@@ -9,15 +9,16 @@ import { firstRow, rowsOf } from '../lib/rows.ts';
 import { WALLET_FIXTURES, WALLET_FRIENDSHIPS, WALLET_GROUP } from './wallet-fixtures.ts';
 
 /**
- * DEVELOPMENT FIXTURES: two accounts that sign in with a wallet, each holding one device whose
- * attestation really verifies.
+ * DEVELOPMENT FIXTURES: six accounts that sign in with a wallet. Five hold a device whose
+ * attestation really verifies; `dana.w` deliberately holds none, because it is the account a
+ * person and the QA matrix sign in as, and a browser joining an account that already has a device
+ * enrols a SECOND one - pending, and confirmable only by keys nobody holds.
  *
  * They exist because without them the sealed half of this product has no reachable happy path in
- * any development database. Every person in `seed-fixtures.ts` is inserted as a guest and the three
- * personas are `demo`, so `attested` is `server` for all of them and `peers.ts` publishes none of
- * their devices - which means `sealabilityOf` answers `no-wallet` for every conversation that has
- * ever existed here. The QA matrix tours 640 cells as `alex` and cannot reach a sealable thread;
- * neither can a browser pass, because signing in as a wallet account needs a wallet.
+ * any development database. Everybody who used to be here was a guest, so `attested` was `server`,
+ * `peers.ts` published none of their devices, and `sealabilityOf` answered `no-wallet` for every
+ * conversation that had ever existed. The QA matrix could not reach a sealable thread; neither
+ * could a browser pass, because signing in as a wallet account needs a wallet.
  *
  * That is not a gap in the fixtures, it is a gap in the VERIFICATION: a happy path nothing can
  * render is a happy path exercised only by unit tests over inputs a person typed.

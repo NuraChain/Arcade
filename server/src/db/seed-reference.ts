@@ -5,12 +5,12 @@ import type { DataSource } from 'typeorm';
  *
  * This is NOT development seed data. Games, their rules and the achievement definitions are part
  * of the product the way the message catalogues are: the app is broken without them, every
- * environment needs identical rows, and a designer changing a blurb should not need a migration.
- * So it is an idempotent upsert, safe to run on every boot and every deploy.
+ * environment needs identical rows, and a designer changing a blurb should not need a schema
+ * change. So it is an idempotent upsert, safe to run on every boot and every deploy.
  *
- * Development FIXTURES - the twenty-four fake people, their conversations, their friendships -
- * are a different thing entirely and live in `seed-fixtures.ts`, which refuses to run outside
- * development.
+ * Development FIXTURES are a different thing entirely: `seed-wallets.ts`, six real wallet accounts
+ * that refuse to run outside development. The arrangement the browser specs are written against is
+ * `application/tests/fixtures.ts`, which seeds nothing.
  *
  * Kept in step with `application/src/data/games.ts` and `application/src/data/tables.ts` by
  * `tests/reference-parity.spec.ts`, which fails if the two ever disagree.

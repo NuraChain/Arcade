@@ -17,7 +17,7 @@ npm test               # every suite, both workspaces
 npm run test:shuffle   # every suite in random order — the isolation gate
 npm run qa             # 600-cell Playwright matrix: 12 widths × orientation × locale × route
 npm start              # the built server, serving the api AND the built client on one origin
-npm run migration:run  # apply pending migrations (generate/revert/show alongside)
+npm run schema:sync    # build the schema from the entities (dev does this on every boot)
 npm run assets         # rebuild the GLB kit from tools/blender (needs Blender 5.2)
 ```
 
@@ -41,16 +41,49 @@ is a claim about the DATABASE lives there - mirrored writes, partial unique inde
 constraints, the races - because a fake DataSource can only prove that the fake agrees with the
 code.
 
-**The database is Postgres.** `server/.env` carries `DATABASE_URL`, and that file is the ONE place
-the name is written down: it currently says `nuragames`, and anything that needs the name reads it
-from there rather than repeating it. `tools/qa/db.mjs` is what the browser passes use. The copy
-this replaces is the reason: both passes had `nura_games` hardcoded while the server had moved to
-`nuragames`, both databases existed, and so every SQL assertion in `social-pass.mjs` queried an
-empty one and reported a broken friend request, a missing friendship and an unconfirmed device —
-three accusations at the product, all of them the harness looking in the wrong place. Create it
-once with `psql -U postgres -c "create database <that name>"`. Nothing is ever `synchronize`d —
-every schema change is a migration in `server/src/migrations/`, applied in order inside a
-transaction.
+**The database is Postgres, and the ENTITIES are the only description of it.** `server/.env`
+carries `DATABASE_URL` and is the one place the name is written down; `tools/qa/db.mjs` reads it so
+the browser passes cannot drift from the server the way they once did. There are no migrations.
+`server/src/db/schema.ts` builds the schema with `syncSchema()`: the `citext` and `pgcrypto`
+extensions, then TypeORM's `synchronize()` from the entity metadata, then the six indexes no
+decorator can express. `main.ts` runs it on every boot IN DEVELOPMENT ONLY; production gets
+`npm run schema:sync --workspace server`, which is the same code as a deliberate act rather than a
+side effect of starting.
+
+**That only works because the entities are complete**, and making them complete was the work. They
+carry 56 `@Check` constraints, 43 relations with their `onDelete` rules, every default, every
+unique and every expressible index. Three tests hold it there, all in `npm run test:db`:
+
+- `schema.db.spec.ts` compares what `syncSchema` builds against `tests/schema-snapshot.json`, which
+  was recorded from a database built by the migration sequence on the day the migrations were
+  deleted. Tables, columns with types/nullability/defaults, CHECK expressions, foreign keys with
+  their delete rules, primary keys, uniques and index SHAPES. Names are deliberately not compared
+  for primary keys and uniques, because TypeORM calls what it generates `PK_<hash>`/`UQ_<hash>`; the
+  six hand-built indexes keep their real names and are asserted by name.
+- `converge.db.spec.ts` proves a second sync has nothing to do beyond two wrinkles it lists by
+  name, so a THIRD one appearing fails. The two: TypeORM drops the five DESC indexes it cannot
+  express (and `syncSchema` rebuilds them afterwards, which is why its order matters), and
+  `conversation_members.last_read_at` re-issues its default because TypeORM compares defaults as
+  strings and Postgres renders `to_timestamp(0)` back as `to_timestamp((0)::double precision)`.
+- `naming.db.spec.ts` proves the database stores every handle and slug the product accepts.
+
+**`uuidExtension: 'pgcrypto'` is on the DataSource and is not decoration.** Without it TypeORM
+generates `uuid_generate_v4()` and the schema silently acquires a dependency on `uuid-ossp`.
+
+**The entity graph has to stay acyclic.** Relations are owning sides only - `@ManyToOne`, and
+`@OneToOne` where the foreign key IS the primary key (`game_rules.game_id`,
+`recovery_vaults.user_id`). There are no `@OneToMany` inverses: two entity modules importing each
+other is `ReferenceError: Cannot access 'X' before initialization` at load, which is what adding
+`Table.chairs` and `ConversationEpoch.keys` produced. Nothing read them, and the owning sides alone
+carry every foreign key.
+
+**Six indexes are built by hand and always will be.** `friend_requests_pending_pair` is UNIQUE over
+`LEAST(from_user, to_user)`/`GREATEST(...)` where the request is unanswered - a functional index,
+and the only thing stopping A asking B while B is asking A from becoming two rows for one
+intention. `messages_keyset`, `notifications_keyset`, `reports_against`, `groups_public` and
+`tables_open` each order a column DESC, which `@Index` cannot say. `synchronize()` therefore drops
+all five every time, and `syncSchema` recreating them afterwards is the whole reason it exists
+rather than a bare call.
 
 **There is no `npm run preview` and no `tools/preview.mjs`.** The server serves the built client
 itself through `mountPages`, so the preview path and the production path are the same code:
@@ -147,8 +180,9 @@ server/src/
   schemas.ts       every wire shape             <- CLIENT-SAFE
   ports.ts         what the routes may call     <- CLIENT-SAFE
   services.ts      the real implementations behind Ports   (server-only, touches entities)
-  data-source.ts   the single DataSource export, for the app and the migration CLI
-  env.ts logger.ts entities/ migrations/ domains/ realtime/ jobs/ lib/
+  data-source.ts   the single DataSource export
+  db/schema.ts     syncSchema: extensions, synchronize, the six hand-built indexes
+  env.ts logger.ts entities/ domains/ realtime/ jobs/ lib/
 ```
 
 **The client-safe triangle is load-bearing.** `application/src/api.ts` does
@@ -163,9 +197,7 @@ handlers are **injected** through `Ports` rather than imported: `api.ts` names w
 source change: `decorator-metadata.spec.ts`, which pins entity registration, `design:type` metadata
 and class fields staying off the instance - precisely the surface `experimentalDecorators` +
 `emitDecoratorMetadata` + `useDefineForClassFields: false` rests on - and the whole 156-test
-`test:db` suite against a real Postgres. The migration sequence was also replayed into an empty
-database from nothing, because that is the other typeorm-sensitive path and the one a unit suite
-cannot see.
+`test:db` suite against a real Postgres.
 
 **This backend compiles.** `typeorm` in `dependencies` is what decides that — the CLI carries
 `DECORATOR_PACKAGES = ['typeorm', '@mikro-orm/core']` and the name alone flips the project from
@@ -201,7 +233,7 @@ are not obvious, each of which costs an afternoon to rediscover:
 
 **The entities had drifted from the schema, and nothing could see it.** Every query in this server
 is raw SQL through `DataSource.query()`, which never loads entity metadata - so an entity could be
-missing a column the schema had carried for fifteen migrations and every gate stayed green.
+missing a column the schema had carried for a long time and every gate stayed green.
 `users.allow_stranger_messages` and `users.show_online` were absent from `User` while
 `PERSON_COLUMNS` read them on every person payload; the whole franking disclosure from `0014` was
 absent from `Report`, whose docblock still said franking "arrives with the E2EE work"; and
@@ -340,65 +372,47 @@ any light — so they are lit differently by theme but never re-tinted. The lamp
 both themes for the same reason: the market is lamplit, and that warmth against a cool ground is
 the whole picture.
 
-## Migrations and reference data
+## The schema, and reference data
 
 Two things that look alike and are not.
 
-**Migrations** change the schema. `server/src/migrations/NNNN-name.ts`, registered in the barrel,
-applied in order inside a transaction.
+**The SCHEMA** is the entities. Changing it means changing an entity and re-recording
+`tests/schema-snapshot.json` - deliberately, as its own commit, so the change is visible rather than
+absorbed. The check to run afterwards is the real one: drop the database, boot, and let `syncSchema`
+build it from nothing.
 
-**The entities carry the 56 CHECK constraints and 33 of the indexes now**, ported from the live
-schema so they describe the database that exists rather than a weaker one. That was worth doing on
-its own - `migration:generate` now sees the real schema, and `schema-parity.db.spec.ts` compares
-both directions - and it was the half of "drop the migrations and let TypeORM synchronize" that
-survives contact with this schema.
+**There is no legacy database anywhere.** Every database is built from the entities against an empty
+one, so nothing can meet rows from before. A backfill that repairs rows "from before" is code
+describing a database that does not exist - `0010-attestation.ts` carried one for exactly one
+afternoon and it is gone, along with every other migration.
 
-**The other half does not, and `synchronize-probe.db.spec.ts` is the measurement rather than the
-opinion.** It builds one database from the migration sequence and another from the entities alone
-and diffs them. Six indexes cannot be expressed through `@Index` at all:
-`friend_requests_pending_pair` is UNIQUE over `LEAST(from_user, to_user)`/`GREATEST(...)` where the
-request is unanswered - a FUNCTIONAL index, and the only reason A asking B while B is asking A
-cannot become two rows describing one intention - and `messages_keyset`, `notifications_keyset`,
-`reports_against`, `groups_public` and `tables_open` each order a column DESC, which `@Index` has
-no way to say. Losing the first makes a documented guarantee false; losing the others makes keyset
-pagination quietly stop using its index.
+**Watch for backticks in a `@Check` expression - inside a template literal they end the string.**
+This has now cost five afternoons. The symptom is never what it looks like: the string terminates
+at the backtick and the rest becomes a JavaScript expression, so you get a bare
+`ReferenceError: <identifier> is not defined`, or `TS1002: Unterminated string literal` pointing at
+a line that reads fine. `users_handle_shape` and `groups_slug_shape` both needed a backtick in a
+character class and both broke this way; they avoid it now by checking those characters with
+`strpos` instead.
 
-That is before what `synchronize` is not FOR: it will not create the `citext` and `pgcrypto`
-extensions the schema is built on, it cannot carry a data migration (`0003` turning stranger
-messages off for every minor) or either hard cutover (`0012` deleting pre-sealing rows, `0014`
-re-signing every envelope), and it reconciles by DROPPING whatever the entities do not mention -
-which is a data-loss switch on any database with rows in it. The probe test asserts the current
-answer, so the day TypeORM can express these it goes red and somebody has to come and re-decide
-with evidence.
-
-**There is no legacy database anywhere, and migrations must not pretend otherwise.** Every database
-is built by running the whole sequence against an empty one, so a migration can only ever meet rows
-that an earlier migration in the same sequence created. A backfill that repairs rows "from before"
-is code describing a database that does not exist - `0010-attestation.ts` carried one for exactly
-one afternoon and it is gone. The check to run after changing the sequence is the real one: drop
-both databases, recreate them, and run `npm run migration:run` from nothing. Two names, both load-bearing: the FILE is numbered for
-people so the directory reads in order, and the CLASS must end in a JavaScript timestamp because
-that is what TypeORM sorts by — it refuses a class without one ("migration name is wrong"). The
-class name is also what it records as applied, so it must never change once it has run anywhere.
-
-Use `npm run migration:generate` to DISCOVER the SQL; it is very good at that. Then commit the
-result by hand: the generator names the class after the file, and a file starting with a digit
-produces `export class 0001Reference…`, which is not a valid JavaScript identifier.
-
-**Watch for backticks in SQL comments — inside a template literal they end the string.** This has
-now cost four separate afternoons, in three different files, and it never looks like what it is: the
-comment names an index or a column in backticks, the string terminates there, and the identifier
-inside becomes a JavaScript expression. The symptom is a bare `ReferenceError: <that identifier> is
-not defined` at the point the query runs, naming something that is obviously not a variable. If you
-want to name an index in a SQL comment, write it bare.
+**A shape CHECK must not use POSIX character classes.** `[[:alnum:]]` is evaluated against the
+database's ctype, which is ASCII here - so `users_handle_shape` and `groups_slug_shape` refused
+every Persian handle and every Persian slug while `checkHandle`'s own `/^[\p{L}\p{N}]/u` accepted
+them. A Persian guest sign-up was a 500 on the main onboarding path, and CLAUDE.md describes Persian
+slugs as a feature. Both are denylists now: length, no whitespace or control characters, no leading
+or trailing separator, and none of the characters that break a URL path segment. That accepts any
+letter in any script without the database having an opinion about which alphabets exist, and
+`naming.db.spec.ts` holds the two halves together.
 
 **An `on conflict` target must IMPLY the partial index's predicate**, or Postgres cannot work out
 which index arbitrates and raises 42P10. `conversations_group_one` is partial on
-`kind = 'group' and group_id is not null`, and an upsert stating only the first half fails.
+`kind = 'group' and group_id is not null`, and an upsert stating only the first half fails. The
+same rule bit `push_subscriptions`: the entity never declared `unique: true` on `endpoint`, so a
+synchronized schema had no constraint for `on conflict (endpoint)` to find and every push
+subscription was a 500.
 
 **Reference data** is content the product cannot run without: the games, their rules, the
 achievement definitions, and the three demo personas. `server/src/db/seed-reference.ts` upserts it on every boot, so a changed
-blurb ships without a migration. It is not development fixtures — those are a separate file that
+blurb ships without a schema change. It is not development fixtures — those are a separate file that
 refuses to run outside development.
 
 A seed that upserts into a table real people also write to needs a guard, and the demo personas
@@ -784,7 +798,7 @@ in one thread is what the design is for.
 
 **A list the UI renders needs an ORDER BY.** `social.mutes()` had none, so Postgres returned
 whatever it found first and the settings page reshuffled between loads. It surfaced as
-`social.db.spec.ts` failing the day a later migration changed what "first" happened to mean, which
+`social.db.spec.ts` failing the day a later schema change moved what "first" happened to mean, which
 is the only warning an unordered SELECT ever gives.
 
 **A message carries `dir="auto"`.** Fixture conversations are single-language now, so an English
@@ -2013,7 +2027,7 @@ is the end of it. The button destroyed the account while the card that steered p
 "this profile, these friends and every result follow you to any device".
 
 The copy now says what happens, and `tests/settings.spec.ts` renders both pages as a guest so the
-branch has something looking at it. Building the link instead is a real project - a migration, a
+branch has something looking at it. Building the link instead is a real project - a schema change, a
 route, and a decision about whether a guest's `attested: 'server'` devices become wallet-attested -
 and it is not smuggled in under a copy fix.
 
