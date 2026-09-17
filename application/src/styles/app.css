@@ -623,6 +623,19 @@
  */
 .board-plate
 {
+    /*
+     * The board does NOT mirror, and this is the one line that says so.
+     *
+     * Everything else in this product is authored in logical properties precisely so it flips with
+     * the reading direction - but a ludo board is a printed object, red is in the corner it is
+     * printed in, and the canvas over it has no idea what language the page is in. `.board-token`
+     * places itself with `inset-inline-start`, which on a Persian page measured from the other
+     * edge: every token appeared in the yard diagonally opposite its own. Declaring the plate's own
+     * direction keeps the rule and fixes the object, rather than spelling one child in physical
+     * properties and hoping the next one remembers.
+     */
+    direction: ltr;
+
     position: relative;
     container-type: inline-size;
     inline-size: 100%;
