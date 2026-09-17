@@ -225,6 +225,30 @@ reported "that signature did not match the address" for a perfectly good signatu
 mutating query in this server goes through `lib/rows.ts`** — `rowsOf`, `firstRow`, `affectedBy` —
 and `tests/rows.spec.ts` pins all three shapes.
 
+**What reads through a repository, and what cannot.** About thirty call sites moved to
+`getRepository(X).find/findOne/insert/update/delete` - the plain ones, where the SQL was a `where`
+and a column list and nothing else - and roughly a hundred and thirty did not. The ones that stay
+are not leftovers, and each is doing something a repository cannot say: `FOR UPDATE SKIP LOCKED`
+inside a scalar sub-query (the seat claim), `pg_advisory_xact_lock` (the double-tap, the
+first-device test), `UNION ALL`, `ON CONFLICT (target) WHERE predicate` against a partial index,
+`ON CONFLICT DO UPDATE SET count = notifications.count + 1`, `LEFT JOIN LATERAL` with `array_agg`,
+keyset pagination by row-value comparison, the `CASE WHEN` that derives a table's `status`, and the
+FROM-less select of four correlated sub-queries that exists precisely so four truths arrive as one
+row.
+
+And one whole class stays for a reason worth stating: **`now()` in a predicate**. The nonce burns,
+session expiry and validity, the presence touch, the franked-message read and the expiry sweep are
+all mechanically expressible as `MoreThan(new Date())`, and that is exactly why they should not be -
+it moves a security window onto the Node process's clock while the matching predicate elsewhere in
+the same feature still runs against Postgres `now()`. Session validity, nonce replay and
+disappearing-message lifetime are not places to introduce clock skew.
+
+Anything inside a transaction uses the callback's `EntityManager` (`tx.getRepository(X)`), or
+`runner.manager` for `epochs.ts`, which is the one bare `QueryRunner`. A global repository checks
+out a DIFFERENT pooled connection, so the write would land outside the transaction and outside its
+locks - which for the seat claim means outside the advisory lock, and for the epoch mint means
+outside the primary key that arbitrates the race.
+
 **No application test may reach the network.** `application/src/api.ts` fetches the route manifest
 at module load, so importing any store from a spec opens a real socket. `application/tests/setup.ts`
 mocks that module globally with `tests/fake-api.ts`, an in-memory server that records its calls
@@ -1173,6 +1197,22 @@ teaches people that the product's assurances are decoration. So the fields are g
 actually knows: who you are, what you wrote about yourself, whether a wallet is behind the account,
 and how many friends you have. `social.service.ts` lost `planRequestReply` and `rankSuggestions`
 entirely — neither had a caller in the product, and only their own tests were keeping them alive.
+
+**What a person CAN write is now writable.** `profile-sheet.component.azeroth` takes the display
+name, the @handle and the bio - the three things about an account that are its own - and sends them
+as TWO requests, deliberately. The name and the bio are simply stored; the handle is CLAIMED against
+a unique index and can come back 409, so it goes first and a refusal leaves the rest unwritten with
+the value still in the box. One request would half-succeed with nothing on the screen able to say
+which half. `setProfile` re-reads through `profileFor` rather than using `returning *`, because that
+is the one query that joins the wallet address in and a second composition would be a second chance
+to disagree with it; and it rings `socialChanged`, because the display name travels on every person
+payload the graph sends.
+
+**What the sheet deliberately does NOT have is anything to buy or earn.** A profile effect somebody
+unlocks is a claim about an economy this product does not have - no inventory, no balance, nothing
+that grants one - and it is the same judgement that removed the invented levels and the
+provably-fair badge. The customisation is real because it is stored; the shop would be decoration
+with nothing behind it.
 
 **A suggestion has one reason left, and it is checkable**: how many friends you already share, from
 the real graph. "Plays the same game" and "same region" compared two fixture literals.
