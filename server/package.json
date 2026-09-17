@@ -16,7 +16,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:shuffle": "vitest run --sequence.shuffle",
-    "test:db": "vitest run --no-file-parallelism tests/schema.db.spec.ts tests/naming.db.spec.ts tests/converge.db.spec.ts tests/social.db.spec.ts tests/chat.db.spec.ts tests/groups.db.spec.ts tests/seat-race.spec.ts tests/notify.db.spec.ts tests/device.db.spec.ts tests/peer-devices.db.spec.ts tests/epochs.db.spec.ts tests/recovery.db.spec.ts",
+    "test:db": "vitest run --no-file-parallelism tests/schema.db.spec.ts tests/naming.db.spec.ts tests/converge.db.spec.ts tests/social.db.spec.ts tests/chat.db.spec.ts tests/groups.db.spec.ts tests/seat-race.spec.ts tests/match.db.spec.ts tests/notify.db.spec.ts tests/device.db.spec.ts tests/peer-devices.db.spec.ts tests/epochs.db.spec.ts tests/recovery.db.spec.ts",
     "test:ws": "vitest run --config vitest.socket.config.ts",
     "schema:sync": "npm run build && node dist/db/sync-cli.js"
   },

@@ -1,4 +1,4 @@
-import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHash, randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
 
 /**
  * Server-side primitives. Small on purpose - everything here is either a one-liner over
@@ -15,6 +15,30 @@ import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 export function mintToken(): string
 {
     return randomBytes(32).toString('base64url');
+}
+
+/**
+ * A die, 1 to 6, from the same generator the tokens come from.
+ *
+ * `randomInt` rather than `randomBytes(1) % 6`: Node rejects and redraws, so every face is equally
+ * likely, where modulo over a byte quietly favours the low ones. `Math.random` is out for the
+ * reason above - it is seeded here on purpose.
+ *
+ * What this is NOT is provable fairness. The server draws, the server records, and a player cannot
+ * check that it did not draw twice and keep the one it liked. That is exactly the claim
+ * `game_rules.fairness` was deleted for, so nothing in the product says a roll is verifiable. The
+ * honest sentence is that the server rolls the dice, and commit-reveal is a mechanism to build
+ * before any copy changes.
+ */
+export function rollDie(): number
+{
+    return randomInt(1, 7);
+}
+
+/** One of `count` things, drawn the same way a die is. Used for who moves first. */
+export function pickBelow(count: number): number
+{
+    return count <= 1 ? 0 : randomInt(0, count);
 }
 
 /** A nonce: 128 bits, hex, unpredictable. Same reasoning as above. */

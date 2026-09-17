@@ -56,7 +56,7 @@ export class MatchAction
     piece!: number | null;
 
     @Column({ type: 'jsonb', default: () => `'[]'` })
-    events!: unknown;
+    events!: unknown[];
 
     @Column({ name: 'idempotency_key', type: 'varchar', length: 64, nullable: true })
     idempotencyKey!: string | null;
