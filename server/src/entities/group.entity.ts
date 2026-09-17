@@ -13,7 +13,7 @@ export type GroupPrivacy = 'private' | 'public';
 @Check('groups_hue_range', `hue between 0 and 359`)
 @Check('groups_name_present', `length(btrim(name)) > 0`)
 @Check('groups_privacy_known', `privacy in ('private', 'public')`)
-@Check('groups_slug_shape', `slug ~ '^[[:alnum:]][[:alnum:]-]{0,46}[[:alnum:]]$'`)
+@Check('groups_slug_shape', `length(slug) between 2 and 48 and slug !~ '[[:space:][:cntrl:]]' and slug !~ '^-' and slug !~ '-$' and slug !~ '[/?#@!$&''()*+,;=:%<>"|{}^~._]' and strpos(slug, '[') = 0 and strpos(slug, ']') = 0 and strpos(slug, chr(92)) = 0`)
 @Index('groups_slug', ['slug'], { unique: true })
 @Entity('groups')
 export class Group

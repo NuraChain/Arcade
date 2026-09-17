@@ -11,7 +11,7 @@ import { Check, Column, CreateDateColumn, Entity, PrimaryGeneratedColumn, Update
  */
 export type AccountKind = 'wallet' | 'guest';
 
-@Check('users_handle_shape', `handle ~ '^[[:alnum:]][[:alnum:]._-]{0,30}[[:alnum:]]$'`)
+@Check('users_handle_shape', `length(handle) between 2 and 32 and handle !~ '[[:space:][:cntrl:]]' and handle !~ '^[._-]' and handle !~ '[._-]$' and handle !~ '[/?#@!$&''()*+,;=:%<>"|{}^~]' and strpos(handle, '[') = 0 and strpos(handle, ']') = 0 and strpos(handle, chr(92)) = 0`)
 @Check('users_hue_range', `hue between 0 and 359`)
 @Check('users_kind_known', `kind in ('wallet', 'guest')`)
 @Check('users_minor_no_strangers', `not (is_minor and allow_stranger_messages)`)
