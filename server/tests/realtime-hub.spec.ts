@@ -443,3 +443,45 @@ describe('cached edges', () =>
         expect(world.hub.presenceOf('alex').map((entry) => entry.who)).toContain('alex');
     });
 });
+
+describe('typing', () =>
+{
+    /**
+     * A typing notice is a write into somebody else's room, and it was the one chat path with no
+     * membership check on it. The gateway hands `frame.id` through verbatim - any string a client
+     * cares to send - and `recipientsOf` answers "who is in this room", never "is the asker in it".
+     *
+     * So any signed-in account holding a conversation id could inject a notice into it, and anybody
+     * removed from a group kept the id and kept typing into it. One forty-byte frame bought a query
+     * and a fan-out to every member.
+     */
+    it('fans a notice out to the rest of the room when the sender is seated in it', async () =>
+    {
+        world.recipients.set('c-1', ['alex', 'sara.k']);
+
+        const alex = await connect('alex');
+        const sara = await connect('sara.k');
+
+        world.hub.typingIn(alex.connection, 'c-1');
+        await settle();
+
+        expect(sara.wire.framesOf('typing')).toHaveLength(1);
+        expect(alex.wire.framesOf('typing'), 'the sender was told about their own typing').toHaveLength(0);
+    });
+
+    it('sends nothing at all when the sender is not seated in the room they named', async () =>
+    {
+        world.recipients.set('c-1', ['sara.k']);
+
+        const sara = await connect('sara.k');
+        const stranger = await connect('alex');
+
+        world.hub.typingIn(stranger.connection, 'c-1');
+        await settle();
+
+        expect(
+            sara.wire.framesOf('typing'),
+            'a stranger injected a typing notice into a room they are not in'
+        ).toHaveLength(0);
+    });
+});

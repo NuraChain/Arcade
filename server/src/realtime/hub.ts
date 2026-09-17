@@ -470,12 +470,30 @@ export function createHub(deps: HubDeps): Hub
             }
         },
 
+        /**
+         * A typing notice is a write into somebody else's room, so it asks the same question every
+         * other chat route asks: is the sender seated here.
+         *
+         * It did not. The gateway passes `frame.id` - any string a client cares to send - straight
+         * through, and `recipientsOf` answers "who is in this room", never "is the asker in it". So
+         * any signed-in account holding a conversation id could inject a typing notice into it, and
+         * somebody removed from a group kept the id and kept typing into it. It was an amplifier
+         * too: one forty-byte frame bought a query and a fan-out to every member.
+         *
+         * The membership test costs nothing extra - the recipient list already answers it. It fails
+         * CLOSED: a sender absent from that list, for any reason, sends nothing.
+         */
         typingIn(connection, conversationId)
         {
             const socket = held(connection);
             void deps.recipientsOf(conversationId)
                 .then((recipients) =>
                 {
+                    if (!recipients.includes(socket.userId))
+                    {
+                        return;
+                    }
+
                     publish(
                         recipients.filter((userId) => userId !== socket.userId),
                         (n) => typing(n, socket.handle, conversationId)
