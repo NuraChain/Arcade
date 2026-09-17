@@ -812,6 +812,28 @@ there are. Two players take opposite quadrants - twenty-six squares apart, so ne
 behind the other. `game_rules.seats` for ludo is `[2, 3, 4]`, and `reference-parity.spec.ts` is what
 stops the client's fallback disagreeing.
 
+**The ruleset is written down, and four of its clauses are where a generic Ludo goes wrong.** It is
+Variant B - the common Iranian rules - and every one of these was wrong in the first engine:
+
+- **Own tokens share a square and never block each other**, on the track and in the home lane alike.
+  There are no barriers; a token moves through an occupied square freely.
+- **A six with no legal move still earns the extra roll.** Only a non-six with nothing to do ends the
+  turn.
+- **There is no "three tries to find a six".** A full yard rolling one to five simply passes. That
+  rule belongs to other variants and was invented here.
+- **Entering is a choice**, not an obligation: any yard token may come out on any six, with no
+  requirement to finish a previous one first.
+
+The rest is the ordinary game and is worth stating because each half is a test: capture happens on
+exact landing only and never by passing over; the eight starred squares send nobody home; the five
+home cells need an exact count, and an overshoot is simply absent from the legal set rather than
+refused after the fact; three consecutive sixes end the turn and the third grants no roll; a capture
+or a finish on a six still earns the roll.
+
+**The logical board is the authority and the renderer only draws it.** Collisions compare logical
+positions, never pixels, and an animation may interpolate but the final logical state always wins.
+That is the same split `ludo/` already enforces by importing nothing at all.
+
 **A client asks for two things and neither names a destination.** `POST /matches/:id/roll` carries no
 value at all, and `POST /matches/:id/move` names one of the caller's own tokens - the server computes
 where it lands from the die it drew itself. There is no field anywhere on the way in that carries a
