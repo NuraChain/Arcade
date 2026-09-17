@@ -4,7 +4,10 @@ import type { DataSource } from 'typeorm';
 import type { Franking } from './franking.ts';
 
 import { affectedBy, firstRow, rowsOf } from '../../lib/rows.ts';
+import { ConversationMember } from '../../entities/conversation-member.entity.ts';
+import { Conversation } from '../../entities/conversation.entity.ts';
 import type { MessageKind } from '../../entities/message.entity.ts';
+import { User } from '../../entities/user.entity.ts';
 import type { SocialService } from '../social/service.ts';
 
 export interface ConversationRow
@@ -134,11 +137,11 @@ export function createChatService(db: DataSource, social: SocialService, frankin
         {
             return null;
         }
-        const rows = await db.query(
-            'select pinned, last_read_at from conversation_members where conversation_id = $1 and user_id = $2',
-            [conversationId, me]
-        );
-        return firstRow<{ pinned: boolean; last_read_at: Date }>(rows);
+        const row = await db.getRepository(ConversationMember).findOne({
+            select: { pinned: true, lastReadAt: true },
+            where: { conversationId, userId: me }
+        });
+        return row === null ? null : { pinned: row.pinned, last_read_at: row.lastReadAt };
     };
 
     /**
@@ -205,6 +208,13 @@ export function createChatService(db: DataSource, social: SocialService, frankin
         return rowsOf<{ user_id: string }>(rows).map((row) => row.user_id);
     };
 
+    /** One person's handle, which two message builders both want and neither owns. */
+    const handleOf = async (userId: string): Promise<string | null> =>
+    {
+        const row = await db.getRepository(User).findOne({ select: { handle: true }, where: { id: userId } });
+        return row?.handle ?? null;
+    };
+
     /**
      * Every conversation this account is seated in.
      *
@@ -215,11 +225,11 @@ export function createChatService(db: DataSource, social: SocialService, frankin
      */
     const seatedIn = async (userId: string): Promise<string[]> =>
     {
-        const rows = await db.query(
-            'select conversation_id from conversation_members where user_id = $1',
-            [userId]
-        );
-        return rowsOf<{ conversation_id: string }>(rows).map((row) => row.conversation_id);
+        const rows = await db.getRepository(ConversationMember).find({
+            select: { conversationId: true },
+            where: { userId }
+        });
+        return rows.map((row) => row.conversationId);
     };
 
     return {
@@ -422,11 +432,12 @@ export function createChatService(db: DataSource, social: SocialService, frankin
             // Without this, expiry is per-sender in practice whatever the design says - and somebody
             // sets sixty seconds on their own messages in a room with expiry off, so their words are
             // gone before anybody can report them and the frank goes with the row.
-            const room = firstRow<{ expire_after: number | null }>(
-                await db.query('select expire_after from conversations where id = $1', [conversationId])
-            );
+            const room = await db.getRepository(Conversation).findOne({
+                select: { expireAfter: true },
+                where: { id: conversationId }
+            });
 
-            const agreed = room?.expire_after ?? null;
+            const agreed = room?.expireAfter ?? null;
             const wanted = expiresAt === null ? null : expiresAt.getTime();
 
             const matchesRoom = agreed === null
@@ -533,10 +544,9 @@ export function createChatService(db: DataSource, social: SocialService, frankin
                 [conversationId, me, message.created_at]
             );
 
-            const who = await db.query('select handle from users where id = $1', [me]);
             return {
                 ...message,
-                sender: firstRow<{ handle: string }>(who)?.handle ?? null,
+                sender: await handleOf(me),
                 sender_account_id: me
             };
         },
@@ -558,10 +568,9 @@ export function createChatService(db: DataSource, social: SocialService, frankin
             {
                 return { ...message, sender: null, sender_account_id: null };
             }
-            const who = await db.query('select handle from users where id = $1', [senderId]);
             return {
                 ...message,
-                sender: firstRow<{ handle: string }>(who)?.handle ?? null,
+                sender: await handleOf(senderId),
                 sender_account_id: senderId
             };
         },
@@ -608,7 +617,7 @@ export function createChatService(db: DataSource, social: SocialService, frankin
                 throw new BadRequestError('That is not a length of time a message can last.');
             }
 
-            await db.query('update conversations set expire_after = $2 where id = $1', [conversationId, seconds]);
+            await db.getRepository(Conversation).update({ id: conversationId }, { expireAfter: seconds });
             return seconds;
         },
 
@@ -637,10 +646,7 @@ export function createChatService(db: DataSource, social: SocialService, frankin
         async setPinned(me: string, conversationId: string, pinned: boolean): Promise<void>
         {
             await mustBeMember(me, conversationId);
-            await db.query(
-                'update conversation_members set pinned = $3 where conversation_id = $1 and user_id = $2',
-                [conversationId, me, pinned]
-            );
+            await db.getRepository(ConversationMember).update({ conversationId, userId: me }, { pinned });
         },
 
         /**
@@ -675,11 +681,11 @@ export function createChatService(db: DataSource, social: SocialService, frankin
                 const created = firstRow<{ id: string }>(inserted);
                 if (created === null)
                 {
-                    const existing = await tx.query(
-                        `select id from conversations where kind = 'direct' and pair_key = $1`,
-                        [key]
-                    );
-                    return rowsOf<{ id: string }>(existing)[0].id;
+                    const existing = await tx.getRepository(Conversation).findOneOrFail({
+                        select: { id: true },
+                        where: { kind: 'direct', pairKey: key }
+                    });
+                    return existing.id;
                 }
 
                 await tx.query(

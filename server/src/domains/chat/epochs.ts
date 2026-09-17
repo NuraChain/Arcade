@@ -1,8 +1,11 @@
 import { BadRequestError, ForbiddenError, NotFoundError } from '@azerothjs/http';
 import { webcrypto } from 'node:crypto';
-import type { DataSource } from 'typeorm';
+import { In, IsNull, Not, type DataSource } from 'typeorm';
 
 import { firstRow, rowsOf } from '../../lib/rows.ts';
+import { ConversationEpoch } from '../../entities/conversation-epoch.entity.ts';
+import { Device } from '../../entities/device.entity.ts';
+import { EpochKey } from '../../entities/epoch-key.entity.ts';
 import { epochCommitment, recipientList } from './envelope.ts';
 
 /** The largest value the `epoch` column can hold. Beyond it the next mint raises 22003, not 23505. */
@@ -147,14 +150,17 @@ export function createEpochService(db: DataSource)
     /** A device this account holds, still valid, and able to be a party to the sealing. */
     const mine = async (userId: string, deviceId: string): Promise<string | null> =>
     {
-        const rows = await db.query(
-            `select signing_key from devices
-             where id = $1 and user_id = $2
-               and revoked_at is null and confirmed_at is not null
-               and attested in ('wallet', 'contract')`,
-            [deviceId, userId]
-        );
-        return firstRow<{ signing_key: string }>(rows)?.signing_key ?? null;
+        const row = await db.getRepository(Device).findOne({
+            select: { signingKey: true },
+            where: {
+                id: deviceId,
+                userId,
+                revokedAt: IsNull(),
+                confirmedAt: Not(IsNull()),
+                attested: In(['wallet', 'contract'])
+            }
+        });
+        return row?.signingKey ?? null;
     };
 
     return {
@@ -200,10 +206,14 @@ export function createEpochService(db: DataSource)
                 return { epoch, wrapped: null, nextSeq: 1, eligible, stale };
             }
 
-            const keys = await db.query(
-                'select ephemeral_key, wrapped from epoch_keys where conversation_id = $1 and epoch = $2 and device_id = $3',
-                [conversationId, epoch.epoch, deviceId]
-            );
+            const key = await db.getRepository(EpochKey).findOne({
+                select: { ephemeralKey: true, wrapped: true },
+                where: { conversationId, epoch: epoch.epoch, deviceId }
+            });
+
+            const wrapped: WrappedRow | null = key === null
+                ? null
+                : { ephemeral_key: key.ephemeralKey, wrapped: key.wrapped };
 
             // bigint arrives as a string from the driver, which is correct of it and unhelpful
             // here: a sequence number is small, and the client has to put it in a signature.
@@ -216,7 +226,7 @@ export function createEpochService(db: DataSource)
 
             const last = Number(firstRow<{ last: string }>(seqs)?.last ?? 0);
 
-            return { epoch, wrapped: firstRow<WrappedRow>(keys), nextSeq: last + 1, eligible, stale };
+            return { epoch, wrapped, nextSeq: last + 1, eligible, stale };
         },
 
         /**
@@ -289,28 +299,29 @@ export function createEpochService(db: DataSource)
 
             try
             {
-                await runner.query(
-                    `insert into conversation_epochs
-                         (conversation_id, epoch, minted_by, recipients, signature, confirmation)
-                     values ($1, $2, $3, $4, $5, $6)`,
-                    [
-                        conversationId,
-                        input.epoch,
-                        input.mintedBy,
-                        recipientList(input.recipients),
-                        input.signature,
-                        input.confirmation
-                    ]
-                );
+                // `runner.manager`, not a global repository: a repository off the DataSource
+                // checks out a DIFFERENT pooled connection, so the write would land outside this
+                // transaction and outside the primary key that arbitrates the race.
+                //
+                // `insert()` and not `save()` or an upsert: losing the race MUST raise 23505 here.
+                // An insert that quietly did nothing would let the loser believe it minted, seal
+                // under a key nobody else holds, and make those messages unreadable forever.
+                await runner.manager.getRepository(ConversationEpoch).insert({
+                    conversationId,
+                    epoch: input.epoch,
+                    mintedBy: input.mintedBy,
+                    recipients: recipientList(input.recipients),
+                    signature: input.signature,
+                    confirmation: input.confirmation
+                });
 
-                for (const key of input.keys)
-                {
-                    await runner.query(
-                        `insert into epoch_keys (conversation_id, epoch, device_id, ephemeral_key, wrapped)
-                         values ($1, $2, $3, $4, $5)`,
-                        [conversationId, input.epoch, key.deviceId, key.ephemeralKey, key.wrapped]
-                    );
-                }
+                await runner.manager.getRepository(EpochKey).insert(input.keys.map((key) => ({
+                    conversationId,
+                    epoch: input.epoch,
+                    deviceId: key.deviceId,
+                    ephemeralKey: key.ephemeralKey,
+                    wrapped: key.wrapped
+                })));
 
                 await runner.commitTransaction();
                 return true;
