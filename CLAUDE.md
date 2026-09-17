@@ -235,7 +235,7 @@ are not obvious, each of which costs an afternoon to rediscover:
 is raw SQL through `DataSource.query()`, which never loads entity metadata - so an entity could be
 missing a column the schema had carried for a long time and every gate stayed green.
 `users.allow_stranger_messages` and `users.show_online` were absent from `User` while
-`PERSON_COLUMNS` read them on every person payload; the whole franking disclosure from `0014` was
+`PERSON_COLUMNS` read them on every person payload; the whole franking disclosure was
 absent from `Report`, whose docblock still said franking "arrives with the E2EE work"; and
 `GameRule.stakes` carried a duplicate `@Column` - a stray decorator with a blank line after it - so
 the property was registered twice and TypeORM silently used one of them.
@@ -383,8 +383,8 @@ build it from nothing.
 
 **There is no legacy database anywhere.** Every database is built from the entities against an empty
 one, so nothing can meet rows from before. A backfill that repairs rows "from before" is code
-describing a database that does not exist - `0010-attestation.ts` carried one for exactly one
-afternoon and it is gone, along with every other migration.
+describing a database that does not exist - the attestation work carried one for exactly one
+afternoon and it is gone, along with every migration.
 
 **Watch for backticks in a `@Check` expression - inside a template literal they end the string.**
 This has now cost five afternoons. The symptom is never what it looks like: the string terminates
@@ -590,8 +590,8 @@ without a WHERE clause to go with it.
 **The column has NO default, and that is the interesting line.** Postgres materialises a column
 default into every existing row at `add column` time, which is exactly the backfill this file forbids
 elsewhere - so a default would be the forbidden thing wearing a different hat. The consequence is
-real and is the documented one: a development database that already holds a group refuses `0017`
-rather than quietly deciding for it, and the answer is to rebuild from nothing.
+real and is the documented one: a development database that already holds a group refuses the
+column rather than quietly deciding for it, and the answer is to rebuild from nothing.
 `groups.db.spec.ts` pins both halves - an insert naming `friends` is refused, and an insert naming no
 privacy at all is refused - so neither decision can decay into a comment.
 
@@ -765,7 +765,7 @@ logged for every seat, every deal shuffled from a seed both sides can check. Nei
 neither was designed — the cryptography this product has specified is `nura-e2ee/v1`, which is
 about messages. A claim about fairness is what a player leans on when they lose, and shipping it
 ahead of the mechanism teaches people that the product's assurances are marketing.
-`0007-drop-fairness.ts` removes the column; `tests/lib.spec.ts` now asserts the key is ABSENT,
+The column is gone from the entity; `tests/lib.spec.ts` now asserts the key is ABSENT,
 so it cannot come back without the mechanism. `stakes: 'play-money'` stays: that is a fact about
 a table, not a promise about a random number.
 
@@ -1404,9 +1404,9 @@ message any more, so the composer is disabled when `sealabilityOf` is blocked an
 it names the person in the way. The browser pass found this: a send that could not seal threw into
 the console instead of being a state.
 
-**`0012-sealing.ts` is a HARD CUTOVER.** Every pre-sealing text row is deleted rather than left
-bodiless, because a text row whose body is gone renders as an empty bubble forever. There is no
-production data; a development database reseeds as empty threads.
+**Sealing was a HARD CUTOVER.** No pre-sealing text row survived it, because a text row whose body
+is gone renders as an empty bubble forever. There is no production data; a development database is
+built from nothing and reseeds as empty threads.
 
 **One wallet fixture deliberately has no device.** The seed mints device keys and throws the private
 halves away, which is the honest shape for modelling the far end of a conversation and exactly wrong
@@ -1567,7 +1567,7 @@ server's key; and a sender cannot deny one, because the commitment binds the exa
 other. That is the shape moderation has to take here and it is not a limitation to be engineered
 around later — bulk disclosure would be a different product.
 
-**The commitment is in the AAD**, which is why `0014-franking.ts` is the second hard cutover: every
+**The commitment is in the AAD**, which is why franking was the second hard cutover: every
 signature before it covers ten fields and every one after covers eleven. The alternative was leaving
 the commitment outside the authenticated bytes, where the server could move one message's commitment
 onto another and a sender could publish one that does not match what they wrote — making their own
@@ -1594,11 +1594,11 @@ report against anybody could carry anybody else's words, and a moderator would r
 correctly-attributed message and act on it against the wrong person — the exact outcome the whole
 mechanism exists to prevent.
 
-**A disclosure outlives the message it discloses.** `0014` held the four disclosure columns
-all-or-none while the foreign key nulled `message_id` on delete, and those two rules cannot both be
-satisfied: the first reported disappearing message wedged `sweepExpired` for the whole deployment,
-every minute, forever, so nothing expired again anywhere. `0016` says what was meant — the words, the
-key and the moment travel together, and the pointer may go null. Expiry must not become a way to
+**A disclosure outlives the message it discloses.** `reports_disclosure_whole` held the four
+disclosure columns all-or-none while the foreign key nulled `message_id` on delete, and those two
+rules cannot both be satisfied: the first reported disappearing message wedged `sweepExpired` for
+the whole deployment, every minute, forever, so nothing expired again anywhere. The CHECK says what
+was meant now — the words, the key and the moment travel together, and the pointer may go null. Expiry must not become a way to
 destroy the evidence in a report already filed.
 
 **A report says what actually happened.** The sheet used to show "Report sent" and close before the
@@ -2013,8 +2013,8 @@ the sign-in page now — **still behind a dynamic import**, because that compone
 sign-in page so somebody could look around without connecting anything - but a guest already does
 that, and does it as a REAL account nobody else can sign into. What `demo` added was precisely the
 shared-identity property: several people in one account, whose profile the product then rendered
-exactly like a person's. `0011-drop-demo.ts` rewrites `users_kind_known` to `('wallet','guest')`
-rather than leaving the value legal with nothing writing it.
+exactly like a person's. `users_kind_known` names `('wallet','guest')` and nothing else, rather
+than leaving the value legal with nothing writing it.
 
 **Nothing signed in as a GUEST had ever been rendered by a gate**, and that is the same structural
 blind spot the wallet fixtures exist to close, seen from the other end. `tools/qa` tours 640 cells

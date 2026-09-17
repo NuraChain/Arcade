@@ -6,8 +6,8 @@ import { Check, Column, CreateDateColumn, Entity, PrimaryGeneratedColumn, Update
  * `wallet` signed a challenge with a key it holds; `guest` is a name typed into a box and proves
  * nothing, which is exactly why the distinction is a column rather than a guess: anything that
  * must not be spoofable - a device attestation, a moderation action - checks this. There was a
- * third, `demo`, and `0011-drop-demo.ts` rewrote the CHECK rather than leaving the value legal
- * with nothing writing it.
+ * third, `demo`, and `users_kind_known` names the two that remain rather than leaving the value
+ * legal with nothing writing it.
  */
 export type AccountKind = 'wallet' | 'guest';
 
