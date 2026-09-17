@@ -185,6 +185,32 @@ describe('ToastHost', () =>
      * proves is the risk the fix introduces - that reconciling while toasts come and go does not
      * throw, and does not evict a recogniser belonging to a toast that is still on screen.
      */
+    /**
+     * The host used to arm a 120ms interval in `mount` unconditionally. It was cleared on teardown,
+     * so it was never a leak - but the host is mounted by the shell and never unmounts, so in
+     * practice it woke the reactive graph roughly eight times a second, forever, to animate nothing.
+     *
+     * `clock.pending()` counts live timers, which makes "is anything still scheduled" a thing a test
+     * can actually assert rather than a thing to reason about.
+     */
+    it('schedules nothing at all while there is no toast counting down', async () =>
+    {
+        renderTest(() => ToastHost({}) as Rendered);
+        await settle();
+
+        expect(clock.pending(), 'the host armed a timer with nothing to animate').toBe(0);
+
+        useToasts().show({ text: 'Counting' });
+        await settle();
+
+        expect(clock.pending(), 'a live toast should be driving the clock').toBeGreaterThan(0);
+
+        clock.advance(TOAST_DURATION);
+        await settle();
+
+        expect(clock.pending(), 'the clock kept running after the last toast went').toBe(0);
+    });
+
     it('survives toasts coming and going, and keeps the one still on screen', async () =>
     {
         renderTest(() => ToastHost({}) as Rendered);

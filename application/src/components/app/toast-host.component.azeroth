@@ -1,4 +1,4 @@
-import { Portal } from 'azerothjs';
+import { onCleanup, Portal } from 'azerothjs';
 
 import Icon from '../../icons/icon.component.azeroth';
 import type { IconName } from '../../icons/registry.ts';
@@ -85,15 +85,36 @@ export default component ToastHost()
 
     mount
     {
-        const stop = runtime().clock.every(120, () => now = runtime().clock.now());
-        return () =>
-        {
-            stop();
-            drags.clear();
-        };
+        return () => drags.clear();
     }
 
     derived items = toasts.items();
+
+    /**
+     * The clock only runs while something is actually counting down.
+     *
+     * It used to be armed unconditionally in `mount`, which meant a 120ms interval writing a signal
+     * roughly eight times a second for the entire life of the app - the host is mounted by the shell
+     * and never unmounts, so "cleared on teardown" was true and meaningless. Nothing was leaked; the
+     * cost was that the whole reactive graph was woken eight times a second to animate nothing.
+     *
+     * A toast with an infinite duration is held open deliberately and has no bar to advance, and a
+     * paused one is not moving either, so neither needs the tick.
+     *
+     * `onCleanup` inside an effect run fires before the NEXT run as well as on disposal, so the
+     * previous interval is always cancelled before another is armed.
+     */
+    effect
+    {
+        const ticking = items.some((toast) => Number.isFinite(toast.duration) && !toast.paused);
+        if (!ticking)
+        {
+            return;
+        }
+
+        now = runtime().clock.now();
+        onCleanup(runtime().clock.every(120, () => now = runtime().clock.now()));
+    }
 
     effect
     {
