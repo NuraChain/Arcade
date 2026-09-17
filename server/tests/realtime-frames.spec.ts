@@ -210,6 +210,37 @@ describe('client frames', () =>
         }
     });
 
+    /**
+     * The eight cases above are all malformed JSON or wrong types, and every one of them misses the
+     * way this function actually threw: a `t` that names a member of `Object.prototype`.
+     *
+     * The shape table was an object literal, so `SHAPES['toString']` answered with a FUNCTION rather
+     * than `undefined`; the `=== undefined` guard passed and `allowed.has(key)` threw a TypeError out
+     * of the one function this file promises is total. It did not even surface as itself - it left
+     * `onMessage`, became a 1011 "Internal frame error", and 1011 is not terminal on the client, so a
+     * legitimate client reconnected into the same crash and the designed 4400 never happened.
+     *
+     * Twenty-three bytes, from any signed-in socket.
+     */
+    it('refuses a frame kind that names something on Object.prototype', () =>
+    {
+        const inherited = [
+            'toString', 'constructor', 'valueOf', 'hasOwnProperty', 'isPrototypeOf',
+            'propertyIsEnumerable', 'toLocaleString', '__proto__',
+            '__defineGetter__', '__defineSetter__', '__lookupGetter__', '__lookupSetter__'
+        ];
+
+        for (const kind of inherited)
+        {
+            expect(
+                () => parseClientFrame(JSON.stringify({ v: 1, t: kind })),
+                `a frame naming ${ kind } threw instead of being refused`
+            ).not.toThrow();
+
+            expect(parseClientFrame(JSON.stringify({ v: 1, t: kind }))).toBeNull();
+        }
+    });
+
     it('refuses a frame too large to be one of ours', () =>
     {
         expect(parseClientFrame(`{"v":1,"t":"typing","id":"${ 'x'.repeat(5000) }"}`)).toBeNull();

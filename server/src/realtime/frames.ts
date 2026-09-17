@@ -44,11 +44,24 @@ export const typing = (n: number, who: string, id: string): ServerFrame =>
 
 const STATES = new Set(['online', 'away']);
 
-const SHAPES: Record<string, ReadonlySet<string>> = {
+/**
+ * The keys each frame kind may carry.
+ *
+ * `Object.create(null)` and not an object literal, and that is the whole of a real defect: a literal
+ * inherits `Object.prototype`, so `SHAPES['toString']` answered with a FUNCTION rather than
+ * `undefined`. The `=== undefined` guard below let it through and `allowed.has(key)` threw, from the
+ * one function this file promises never throws. Twenty-three bytes - `{"v":1,"t":"toString"}` - and
+ * the same for `constructor`, `valueOf`, `hasOwnProperty`, `__proto__` and the rest.
+ *
+ * The throw did not even surface as itself: it left `onMessage`, became a 1011 "Internal frame
+ * error", and 1011 is not a code the client treats as terminal - so a legitimate client reconnected
+ * into the same crash forever and the designed answer, a 4400, never happened.
+ */
+const SHAPES: Record<string, ReadonlySet<string>> = Object.assign(Object.create(null), {
     sync: new Set(['v', 't']),
     presence: new Set(['v', 't', 'state']),
     typing: new Set(['v', 't', 'id'])
-};
+});
 
 /**
  * The entire inbound attack surface, parsed strictly and totally.
