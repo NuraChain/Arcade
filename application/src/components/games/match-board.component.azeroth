@@ -5,7 +5,7 @@ import { useLocale } from '../../stores/locale.store.ts';
 import { useBoard } from '../../stores/match.store.ts';
 import { usePeople } from '../../stores/people.store.ts';
 import type { MatchView } from '../../api.ts';
-import type { BoardToken } from '../../game/bridge.ts';
+import type { BoardToken, BoardView } from '../../game/bridge.ts';
 
 /**
  * The board, and the controls that are the real interface to it.
@@ -122,13 +122,14 @@ export default component MatchBoard(props: { match: MatchView })
                 if (token.cell !== undefined)
                 {
                     placed.push({
-                    key,
-                    colour: player.colour,
-                    label,
-                    col: token.cell.col,
-                    row: token.cell.row,
-                    playable: player.seat === mine && game.moves.includes(token.piece)
-                });
+                        key,
+                        colour: player.colour,
+                        label,
+                        at: token.at,
+                        col: token.cell.col,
+                        row: token.cell.row,
+                        playable: player.seat === mine && game.moves.includes(token.piece)
+                    });
                     continue;
                 }
 
@@ -144,6 +145,7 @@ export default component MatchBoard(props: { match: MatchView })
                     key,
                     colour: player.colour,
                     label,
+                    at: token.at,
                     col: corner[0] + spot[0],
                     row: corner[1] + spot[1],
                     playable: player.seat === mine && game.moves.includes(token.piece)
@@ -153,6 +155,23 @@ export default component MatchBoard(props: { match: MatchView })
 
         return placed;
     })();
+
+    /**
+     * What the renderer is given, as one value.
+     *
+     * The die, the turn and the winner travel with the tokens rather than as three more props,
+     * because the board reads all four together: it tumbles the die only when the number CHANGED,
+     * walks a token only when its square changed, and celebrates only on the edge where nobody had
+     * won and now somebody has. Four separate props would arrive in four separate effects and every
+     * one of those edges would be a race.
+     */
+    derived view = ((): BoardView => ({
+        tokens,
+        die: game.die ?? null,
+        turn: turnOf?.colour ?? null,
+        yours: !over && mine !== undefined && mine === game.turn,
+        winner: game.players.find((player) => player.seat === game.winner)?.colour ?? null
+    }))();
 
     /**
      * Pointing at a token is a shortcut to the move list, never a second way to decide a move.
@@ -193,7 +212,7 @@ export default component MatchBoard(props: { match: MatchView })
 
     <div class="flex min-h-0 flex-1 flex-col gap-4 @3xl:flex-row">
         <div class="board-stage">
-            <BoardCanvas tokens={ tokens } onPick={ (key) => void pick(key) } />
+            <BoardCanvas view={ view } onPick={ (key) => void pick(key) } />
         </div>
 
         <div class="board-controls flex min-w-0 flex-col gap-3 @3xl:w-[20rem]">

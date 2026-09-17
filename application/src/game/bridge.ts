@@ -6,11 +6,16 @@
  * that does not ask for it. The renderer is told what the board looks like and emits which token was
  * pointed at; it never decides whether a move is legal, who was captured or who won. Those answers
  * come from the server and arrive here already made.
+ *
+ * What the renderer DOES decide is how the change is shown: which squares a token walks over on the
+ * way, whether a token that went back to its yard was captured or simply started there, how long the
+ * die tumbles. None of that touches the state - it is the difference between watching a game and
+ * reading one.
  */
 
 export interface BoardToken
 {
-    /** Stable across a move, so the renderer can tween the same sprite rather than redraw one. */
+    /** Stable across a move, so the renderer can walk the same sprite rather than redraw one. */
     key: string;
 
     colour: string;
@@ -18,11 +23,34 @@ export interface BoardToken
     /** The colour's initial, drawn on the token so colour is never the only signal. */
     label: string;
 
+    /** Progress along this colour's own path: -1 in the yard, 56 home. Drives the walk. */
+    at: number;
+
     col: number;
     row: number;
 
     /** Whether this token can be moved right now, for the affordance the canvas draws. */
     playable: boolean;
+}
+
+export interface BoardView
+{
+    tokens: readonly BoardToken[];
+
+    /** The roll waiting to be used, or null when nobody has rolled. */
+    die: number | null;
+
+    /** The colour whose turn it is, so the board can show it without reading any rule. */
+    turn: string | null;
+
+    /**
+     * Whether the turn is the reader's. The playable tokens cannot say it: before anybody rolls
+     * there are none, which is exactly the moment worth announcing.
+     */
+    yours: boolean;
+
+    /** Set once, when somebody has won. */
+    winner: string | null;
 }
 
 export interface BoardOptions
@@ -32,24 +60,32 @@ export interface BoardOptions
     /** The rendered board image. One texture, fetched once when a match starts. */
     plate: string;
 
-    tokens: readonly BoardToken[];
+    view: BoardView;
 
     reducedMotion: boolean;
+
+    sound: boolean;
 
     /** Told which token was pointed at. The DOM list is the real control; this is the shortcut. */
     onPick?: (key: string) => void;
 
+    /**
+     * Told when the scene is up. There is deliberately no `onFailed` beside it: the world has one
+     * because `createWorld` resolves either way and has to say which, and this factory REJECTS -
+     * so a second way of saying the same thing would be a callback nothing calls, which is the
+     * same dead weight as a message key with no producer.
+     */
     onReady?: () => void;
-
-    onFailed?: (reason: string) => void;
 }
 
 export interface BoardHandle
 {
-    /** The authoritative board, as it now stands. Tokens that moved are tweened to their square. */
-    show(tokens: readonly BoardToken[]): void;
+    /** The authoritative board, as it now stands. Whatever moved is walked to its square. */
+    show(view: BoardView): void;
 
     setReducedMotion(on: boolean): void;
+
+    setSound(on: boolean): void;
 
     resize(): void;
 

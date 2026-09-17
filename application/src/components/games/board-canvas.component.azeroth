@@ -1,14 +1,16 @@
 import { useDevice } from '../../stores/device.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useOverlay } from '../../stores/overlay.store.ts';
-import type { BoardHandle, BoardToken } from '../../game/bridge.ts';
+import { useSettings } from '../../stores/settings.store.ts';
+import { CELL, MARGIN } from '../../game/layout.ts';
+import type { BoardHandle, BoardView } from '../../game/bridge.ts';
 
 /**
  * The one component that touches Phaser.
  *
  * The import is dynamic and inside `mount`, which is the shape `world-canvas.component.azeroth` uses
  * for three.js and the reason the library lands in its own chunk. Nothing above this component knows
- * the renderer exists; it is handed tokens and gives back which one was pointed at.
+ * the renderer exists; it is handed a board and gives back which token was pointed at.
  *
  * The canvas is the ILLUSTRATION. Every move is takeable from the buttons beside it, the turn is a
  * live region, and this element is `aria-hidden` under a labelled host - so a keyboard or a screen
@@ -19,12 +21,23 @@ import type { BoardHandle, BoardToken } from '../../game/bridge.ts';
  * elements over the same plate, positioned from the same two fractions the canvas uses. A board
  * without animation is still a board; a blank square is not. The fallback is the default state,
  * exactly as it is for the world.
+ *
+ * **The fallback reads its geometry from `game/layout.ts`, not from a second copy in the CSS.**
+ * `.board-token` used to carry the two fractions as percentage literals beside the ones the canvas
+ * derives, which is two descriptions of where the grid sits inside the plate - agreeing exactly
+ * until somebody edited one. They are set here instead, so a change to the art moves both.
+ *
+ * **Sound is the device's preference and nothing else reads it.** `settings.sound` is off by
+ * default, so the ordinary path never opens an audio context at all - and the one the board does
+ * open waits for a gesture, because a context created without one makes Chrome log a warning that
+ * fails a matrix cell.
  */
-export default component BoardCanvas(props: { tokens: readonly BoardToken[]; onPick?: (key: string) => void })
+export default component BoardCanvas(props: { view: BoardView; onPick?: (key: string) => void })
 {
     const device = useDevice();
     const locale = useLocale();
     const overlay = useOverlay();
+    const settings = useSettings();
 
     let host: HTMLDivElement | null = null;
     let handle: BoardHandle | null = null;
@@ -54,20 +67,31 @@ export default component BoardCanvas(props: { tokens: readonly BoardToken[]; onP
                 handle = await createLudoBoard({
                     host,
                     plate: '/board/ludo-plate-1024.webp',
-                    tokens: props.tokens,
+                    view: props.view,
                     reducedMotion: device.reducedMotion(),
-                    onPick: (key) => props.onPick?.(key),
-                    onFailed: () => { failed = true; }
+                    sound: settings.settings().sound,
+                    onPick: (key) => props.onPick?.(key)
                 });
 
                 if (dropped)
                 {
                     handle.dispose();
                     handle = null;
+                    return;
                 }
+
+                handle.show(props.view);
             }
             catch
             {
+                /**
+                 * Disposed BEFORE the flag, so `failed` always means "there is no canvas". It once
+                 * meant "something threw", which is not the same thing: a renderer that booted and
+                 * then threw on its first paint left a working canvas on the page with the fallback
+                 * drawn over the top of it.
+                 */
+                handle?.dispose();
+                handle = null;
                 failed = true;
             }
         })();
@@ -80,14 +104,33 @@ export default component BoardCanvas(props: { tokens: readonly BoardToken[]; onP
         };
     }
 
+    /**
+     * Every one of these reads its signal into a local BEFORE reaching through `handle`, which is
+     * the shape `world-canvas` uses and the reason it works. Written the obvious way round,
+     * `handle?.show(props.view)` short-circuits while the renderer is still being imported - so the
+     * effect's first run reads nothing, registers no dependency, and never runs again. The board
+     * then draws the game as it stood at mount and stays there for the rest of the match, with the
+     * panel beside it updating correctly the whole time.
+     */
     effect
     {
-        handle?.show(props.tokens);
+        const view = props.view;
+
+        handle?.show(view);
     }
 
     effect
     {
-        handle?.setReducedMotion(device.reducedMotion());
+        const reduced = device.reducedMotion();
+
+        handle?.setReducedMotion(reduced);
+    }
+
+    effect
+    {
+        const sound = settings.settings().sound;
+
+        handle?.setSound(sound);
     }
 
     /**
@@ -97,7 +140,9 @@ export default component BoardCanvas(props: { tokens: readonly BoardToken[]; onP
      */
     effect
     {
-        if (overlay.blocking())
+        const blocking = overlay.blocking();
+
+        if (blocking)
         {
             handle?.pause();
         }
@@ -107,12 +152,17 @@ export default component BoardCanvas(props: { tokens: readonly BoardToken[]; onP
         }
     }
 
-    <div class="board-plate" role="img" aria-label={ locale.t('match.board') }>
+    <div
+        class="board-plate"
+        role="img"
+        aria-label={ locale.t('match.board') }
+        style={ `--rim:${ (MARGIN * 100).toFixed(4) }%; --cell:${ (CELL * 100).toFixed(4) }%` }
+    >
         <div class="board-canvas" aria-hidden="true" ref={ (element) => host = element }></div>
 
         <Show when={ failed }>
             { () =>
-                <For each={ [...props.tokens] } key={ (token) => token.key } let={ token }>
+                <For each={ [...props.view.tokens] } key={ (token) => token.key } let={ token }>
                     <span
                         class="board-token"
                         aria-hidden="true"
