@@ -97,7 +97,13 @@ export interface Hub
 
     presenceOf(userId: string): PresenceEntry[];
     size(): number;
-    closeAll(code: number, reason: string): void;
+    /**
+     * Sends a close frame with a code to every connection, and answers how many it sent.
+     *
+     * The count is not bookkeeping: the caller has to know whether there is anything to wait for
+     * before it destroys the sockets underneath those frames. See `main.ts`.
+     */
+    closeAll(code: number, reason: string): number;
 }
 
 /**
@@ -595,17 +601,21 @@ export function createHub(deps: HubDeps): Hub
                 clearTimeout(timer);
                 timer = null;
             }
+
+            let sent = 0;
             for (const sockets of [...byUser.values()])
             {
                 for (const connection of [...sockets])
                 {
                     connection.alive = false;
                     connection.wire.close(code, reason);
+                    sent += 1;
                 }
             }
             byUser.clear();
             online.clear();
             edges.clear();
+            return sent;
         }
     };
 }

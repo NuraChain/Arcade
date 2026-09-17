@@ -415,11 +415,19 @@ describe('shutting down', () =>
         const alex = await connect('alex');
         const sara = await connect('sara.k');
 
-        world.hub.closeAll(1001, 'Server restarting');
+        const saidGoodbye = world.hub.closeAll(1001, 'Server restarting');
 
         expect(alex.wire.closed).toEqual({ code: 1001, reason: 'Server restarting' });
         expect(sara.wire.closed).toEqual({ code: 1001, reason: 'Server restarting' });
         expect(world.hub.size()).toBe(0);
+
+        // The count is what `main.ts` waits on before `detach()` destroys these sockets. A close
+        // frame is a write, and destroying the socket in the same synchronous block delivered 1006
+        // to everybody - the exact outcome saying goodbye with a code exists to avoid. It has to
+        // be a number rather than void, and it has to be zero on an empty server so a restart with
+        // nobody connected does not pause for the drain.
+        expect(saidGoodbye).toBe(2);
+        expect(world.hub.closeAll(1001, 'Server restarting')).toBe(0);
     });
 });
 

@@ -158,6 +158,16 @@ const detachRealtime = attachRealtime(served.server, { ports, hub, config, log }
  * sweep that cannot run is a housekeeping problem, and taking the server down over it would turn a
  * growing table into an outage.
  */
+/**
+ * How long the close frames get before the sockets under them are destroyed.
+ *
+ * A WebSocket close is a small write; a quarter of a second is far longer than it needs on a
+ * loopback or a healthy link, and short enough that a restart does not feel stalled. Waiting for
+ * every peer to ECHO the close would be the complete answer and is not worth it here - a client
+ * that has read the frame already knows the code, which is the whole point.
+ */
+const GOODBYE_MS = 250;
+
 const expiries = setInterval(() =>
 {
     void chat.sweepExpired()
@@ -182,9 +192,24 @@ handleShutdownSignals(served, {
         // network failing, which sends every client into a reconnect backoff for a restart they
         // were told about.
         clearInterval(expiries);
-        hub.closeAll(1001, 'Server restarting');
+
+        const saidGoodbye = hub.closeAll(1001, 'Server restarting');
+
+        // And the goodbye has to actually LEAVE before the socket under it is destroyed. `close()`
+        // is a write, and `detach()` was called in the same synchronous block - so the frame was
+        // still in Node's outgoing buffer when the socket was torn down, and every client got the
+        // 1006 the comment above says this ordering prevents. The ordering was right and the
+        // timing was not.
+        //
+        // Bounded, and skipped entirely when nobody is connected: a restart must not wait a
+        // quarter of a second for an empty server.
+        if (saidGoodbye > 0)
+        {
+            await new Promise<void>((resolve) => setTimeout(resolve, GOODBYE_MS));
+        }
+
         detachRealtime();
-        log.info('sockets closed');
+        log.info('sockets closed', { saidGoodbye });
     },
 
     /** Nothing is connected any more, so the pool can go. */
