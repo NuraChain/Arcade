@@ -5,6 +5,9 @@ import { clearSessionCookie, requireSession, sessionCookie } from './http/auth.t
 import type { Ports } from './ports.ts';
 import {
     achievementList,
+    liveCounts,
+    matchHistory,
+    personRecord,
     ack,
     answerInput,
     chatMessage,
@@ -78,6 +81,7 @@ import {
     matchAck,
     matchActionInput,
     matchMoveInput,
+    historyQuery,
     sinceQuery
 } from './schemas.ts';
 
@@ -115,7 +119,10 @@ export function buildApi(ports: Ports)
                 '/achievements',
                 { output: achievementList },
                 () => ports.catalogue.achievements()
-            )
+            ),
+
+            /** What is actually being played. Counted from open tables, never simulated. */
+            live: routes.get('/live', { output: liveCounts }, () => ports.catalogue.live())
         })),
 
         /**
@@ -278,6 +285,25 @@ export function buildApi(ports: Ports)
                     throw new NotFoundError('No account with that name.');
                 }
                 return view;
+            }),
+
+            /**
+             * What somebody has played and what they have earned.
+             *
+             * Readable by any signed-in caller, like the person view beside it: discovery is public
+             * in this product and a record is the aggregate a profile has always shown. The list of
+             * individual games is NOT here - that is `/matches/history`, and it is a person's own.
+             */
+            record: routes.get('/people/:handle/record', { output: personRecord }, async (context) =>
+            {
+                const found = await ports.match.record(context.params.handle);
+
+                if (found === null)
+                {
+                    throw new NotFoundError('No account with that name.');
+                }
+
+                return found;
             }),
 
             request: routes.post('/requests', { input: personRef, output: requestResult },
@@ -518,6 +544,14 @@ export function buildApi(ports: Ports)
          * A match this caller is not playing answers exactly as one that does not exist.
          */
         matches: feature('/matches', [session], (routes) => ({
+            /**
+             * Declared BEFORE `/:id`, because a literal that a parameter pattern also matches is a
+             * route the parameter can swallow: `/matches/history` read as a match whose id is the
+             * word `history` is a 404 nobody would ever attribute to route order.
+             */
+            history: routes.get('/history', { query: historyQuery, output: matchHistory }, (context) =>
+                ports.match.history(context.principal.userId, context.query.cursor ?? null)),
+
             view: routes.get('/:id', { output: matchView }, async (context) =>
             {
                 const found = await ports.match.view(context.principal.userId, context.params.id);

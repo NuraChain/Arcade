@@ -1,7 +1,7 @@
 import type { DataSource } from 'typeorm';
 
 import type { CataloguePort } from '../../ports.ts';
-import type { AchievementList, GameList } from '../../schemas.ts';
+import type { AchievementList, GameList, LiveCounts } from '../../schemas.ts';
 
 /**
  * Row shapes. Deliberately snake_case and local to this file: the database's names are the
@@ -61,6 +61,39 @@ const ACHIEVEMENTS_SQL = `
     order by sort_order
 `;
 
+/**
+ * How busy each game is, counted.
+ *
+ * `catalogue.store.ts` drifted these two numbers on a seeded RNG, with the rule written beside them
+ * that they go the moment the server answers with real counts. Two rules make the answer honest
+ * rather than flattering: only tables a stranger could actually join are counted - open, public,
+ * not closed - and `playing` counts SEATED PEOPLE rather than chairs, so an empty table nobody has
+ * joined contributes a table and no players.
+ *
+ * A LEFT JOIN, because a game nobody is playing has to come back as a zero rather than be missing:
+ * an absent row and a quiet game are the same thing on the wire, and a client cannot tell them
+ * apart.
+ */
+const LIVE_SQL = `
+    select g.id                                                            as game,
+           count(distinct t.id)::int                                       as tables,
+           count(s.user_id)::int                                           as playing
+      from games g
+      left join tables t
+        on t.game = g.id and t.status <> 'closed' and t.privacy = 'public'
+      left join table_seats s
+        on s.table_id = t.id and s.user_id is not null
+     group by g.id, g.sort_order
+     order by g.sort_order
+`;
+
+interface LiveRow
+{
+    game: string;
+    tables: number;
+    playing: number;
+}
+
 export function createCatalogueService(db: DataSource): CataloguePort
 {
     return {
@@ -103,6 +136,13 @@ export function createCatalogueService(db: DataSource): CataloguePort
                     tier: row.tier
                 }))
             };
+        },
+
+        async live(): Promise<LiveCounts>
+        {
+            const rows = await db.query(LIVE_SQL) as LiveRow[];
+
+            return { games: rows.map((row) => ({ game: row.game, playing: row.playing, tables: row.tables })) };
         }
     };
 }

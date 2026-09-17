@@ -1,6 +1,9 @@
 import type { Principal } from './http/auth.ts';
 import type {
     AchievementList,
+    LiveCounts,
+    MatchHistory,
+    PersonRecord,
     Account,
     Challenge,
     GameList,
@@ -61,6 +64,14 @@ export interface CataloguePort
 
     /** Every achievement definition, in display order. Who has earned what is a different port. */
     achievements(): Promise<AchievementList>;
+
+    /**
+     * How many people are at a table of each game right now, counted.
+     *
+     * Unguarded like the rest of the catalogue: it is a count of open public tables, which is what
+     * a landing page shows a stranger to say the place is alive.
+     */
+    live(): Promise<LiveCounts>;
 }
 
 /** What a sign-in hands back: the account, and the bearer token the cookie will carry. */
@@ -428,6 +439,20 @@ export interface MatchPort
 
     /** Gives up. A decision, so a real loss. */
     resign(me: string, matchId: string, input: { key: string }): Promise<{ match: MatchView; applied: Applied }>;
+
+    /**
+     * This reader's finished games, newest first, by keyset.
+     *
+     * Deliberately only their OWN. A profile shows somebody's record - what they have played and
+     * won in aggregate - because that is what a profile has always shown; a list of every game
+     * somebody sat at, with who else was there and when, is a description of their week. The
+     * social graph is already the thing E2EE cannot hide, and this would be a second copy of it
+     * anybody could read.
+     */
+    history(me: string, cursor: string | null): Promise<MatchHistory>;
+
+    /** A person's record and their standing against every achievement. */
+    record(handle: string): Promise<PersonRecord | null>;
 }
 
 /** Every port the API declaration may reach. One member per domain. */

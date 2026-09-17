@@ -82,6 +82,98 @@ export const achievementList = object({ achievements: array(achievement) });
 
 export type AchievementList = Infer<typeof achievementList>;
 
+/**
+ * A definition with this person's standing against it.
+ *
+ * The whole list travels, earned or not, because an achievement nobody can see is one nobody can
+ * play towards - and the alternative, sending only what has been won, makes an empty profile
+ * indistinguishable from a profile the request failed for.
+ */
+export const earnedAchievement = object({
+    id: string(),
+    name: localizedText,
+    blurb: localizedText,
+    icon: string(),
+    tier: enumOf(['bronze', 'silver', 'gold']),
+
+    /** When it was earned, absent while it has not been. */
+    earnedAt: string().optional()
+});
+
+export type EarnedAchievement = Infer<typeof earnedAchievement>;
+
+/**
+ * A person's record at one game, and every number in it is something that happened.
+ *
+ * This is the shape that replaces the level, the skill band and the reliability score - all three
+ * deleted because a seeded RNG produced them. Nothing here is derived from a coin flip: `rating`
+ * moves only when a match this server arbitrated was really won, and the rest are counts.
+ */
+export const playerRecord = object({
+    game: string(),
+    rating: number(),
+    peak: number(),
+    played: number(),
+    won: number(),
+    abandoned: number(),
+    streak: number(),
+    bestStreak: number(),
+    captures: number(),
+    rolls: number(),
+    tokensHome: number()
+});
+
+export type PlayerRecord = Infer<typeof playerRecord>;
+
+export const personRecord = object({
+    handle: string(),
+    games: array(playerRecord),
+    achievements: array(earnedAchievement)
+});
+
+export type PersonRecord = Infer<typeof personRecord>;
+
+/** One finished game, as a history row. `seat` is this reader's chair at it. */
+export const matchHistoryEntry = object({
+    id: string(),
+    game: string(),
+    seats: number(),
+    finishedAt: string(),
+    outcome: enumOf(['won', 'abandoned', 'closed']),
+    result: enumOf(['won', 'lost', 'abandoned']),
+    ratingBefore: number().optional(),
+    ratingAfter: number().optional(),
+
+    /** Everybody who played, by handle, in seat order. */
+    players: array(string())
+});
+
+export type MatchHistoryEntry = Infer<typeof matchHistoryEntry>;
+
+export const matchHistory = object({
+    matches: array(matchHistoryEntry),
+    cursor: string().optional()
+});
+
+export type MatchHistory = Infer<typeof matchHistory>;
+
+/**
+ * How busy a game is, right now, counted rather than simulated.
+ *
+ * `catalogue.store.ts` drifted these two numbers on a seeded RNG because no table had ever been
+ * opened, and the rule written beside them was that they go the moment the server answers with real
+ * counts. This is that answer.
+ */
+export const gameLive = object({
+    game: string(),
+    playing: number(),
+    tables: number()
+});
+
+export const liveCounts = object({ games: array(gameLive) });
+
+export type LiveCounts = Infer<typeof liveCounts>;
+
 /* -------------------------------------------------------------------------- identity */
 
 export const accountKind = enumOf(['wallet', 'guest']);
@@ -862,6 +954,8 @@ export const matchMoveInput = object({
 });
 
 export const sinceQuery = object({ rev: string().optional() });
+
+export const historyQuery = object({ cursor: string().optional() });
 
 /* ----------------------------------------------------------------- notifications */
 
