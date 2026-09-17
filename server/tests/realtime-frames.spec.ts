@@ -27,6 +27,33 @@ describe('same origin', () =>
         expect(isSameOrigin('wss://example.com', 'example.com:443')).toBe(true);
     });
 
+    /**
+     * The shape a real TLS deployment actually produces, and the one this test was named after.
+     *
+     * A browser sends `Origin: https://host` and `Host: host` - no port on either side. The implied
+     * port has to come from the SCHEME for both, and the target was hardcoded to 80, so this compared
+     * 443 to 80 and refused. The same-origin arm of the admission union was therefore dead in every
+     * HTTPS deployment, leaving only the exact PUBLIC_ORIGIN match.
+     *
+     * Every https case above supplies an explicit `:443`, which is the one shape that cannot fail -
+     * which is why a test titled "matches a host with no port against the scheme default" passed
+     * against code that did not do that.
+     *
+     * One asymmetry is inherent and worth knowing rather than asserting: the Host is parsed as
+     * `http://${ host }`, and `URL` NORMALISES a scheme-default port away - so `example.com:80`
+     * reports `port === ''` and is indistinguishable from `example.com`. An https origin therefore
+     * matches a Host of `example.com:80`. The framework's own copy builds the URL the same way and
+     * behaves identically, so this is the shape of the approach rather than a divergence.
+     */
+    it('matches https against a host with no port, which is what a browser sends', () =>
+    {
+        expect(isSameOrigin('https://example.com', 'example.com')).toBe(true);
+        expect(isSameOrigin('wss://example.com', 'example.com')).toBe(true);
+        expect(isSameOrigin('http://example.com', 'example.com:80')).toBe(true);
+
+        expect(isSameOrigin('http://example.com', 'example.com:443'), 'http must not match an explicit port 443').toBe(false);
+    });
+
     it('refuses a different port, host or missing host', () =>
     {
         expect(isSameOrigin('http://example.com:3100', 'example.com:3200')).toBe(false);
