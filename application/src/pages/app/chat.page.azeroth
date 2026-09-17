@@ -1,8 +1,9 @@
-import { Link, useHead, useNavigate, useParams } from 'azerothjs';
+import { Link, untrack, useHead, useNavigate, useParams } from 'azerothjs';
 
 import Page from '../../components/app/page.component.azeroth';
 import { groupNameOf, othersOf, sealSentenceOf, titleOf } from '../../components/chat/chat-title.ts';
 import { sendBlockOf } from '../../lib/seal-state.ts';
+import { attachStick } from '../../lib/stick.ts';
 import { haptic } from '../../lib/haptics.ts';
 import Composer from '../../components/chat/composer.component.azeroth';
 import MessageBubble from '../../components/chat/message-bubble.component.azeroth';
@@ -53,6 +54,14 @@ export default component ChatPage()
     state visible = WINDOW;
 
     let list: HTMLElement | null = null;
+
+    /**
+     * Whether the reader was at the bottom BEFORE whatever just arrived.
+     *
+     * Read through `untrack` in the effect below, deliberately: it must decide the answer without
+     * making itself run again when the answer changes.
+     */
+    state near = true;
 
     derived id = params().id ?? '';
 
@@ -218,8 +227,10 @@ export default component ChatPage()
     mount
     {
         const release = shell.claimTitle(() => title);
+        const unstick = list === null ? null : attachStick(list, (value) => near = value);
         return () =>
         {
+            unstick?.();
             release();
             chat.closeThread();
         };
@@ -227,8 +238,10 @@ export default component ChatPage()
 
     effect
     {
-        const settled = messages.length + typing.length;
-        if (list !== null && settled >= 0)
+        const tail = messages[messages.length - 1]?.id ?? '';
+        const typists = typing.length;
+
+        if (list !== null && untrack(() => near) && (tail !== '' || typists > 0))
         {
             list.scrollTop = list.scrollHeight;
         }
