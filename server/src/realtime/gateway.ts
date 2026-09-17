@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { Server } from 'node:http';
 
-import { attachWebSockets, type ServerSocket } from '@azerothjs/ws';
+import { attachWebSockets } from '@azerothjs/ws';
 import type { Logger } from '@azerothjs/logger';
 
 import type { ServerConfig } from '../env.ts';
@@ -247,5 +247,3 @@ export function attachRealtime(server: Server, deps: GatewayDeps): () => void
         detach();
     };
 }
-
-export type { ServerSocket };

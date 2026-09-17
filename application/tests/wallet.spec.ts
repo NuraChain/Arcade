@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
-import { NURA_CHAIN, chainHost, chainIsConfigured } from '../src/data/chain.ts';
+import { NURA_CHAIN, chainIsConfigured } from '../src/data/chain.ts';
 import { manualClock, type ManualClock } from '../src/lib/clock.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import {
@@ -181,14 +181,6 @@ describe('provider detection', () =>
         expect(failureOf({ code: -32002 })).toBe('pending');
         expect(failureOf({ code: 4902 })).toBe('chain');
         expect(failureOf(new Error('boom'))).toBe('unknown');
-    });
-});
-
-describe('chain', () =>
-{
-    it('takes the domain from the configured chain site', () =>
-    {
-        expect(chainHost()).toBe('nurachain.net');
     });
 });
 

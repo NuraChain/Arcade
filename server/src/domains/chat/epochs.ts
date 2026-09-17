@@ -358,5 +358,3 @@ export function createEpochService(db: DataSource)
         }
     };
 }
-
-export type EpochService = ReturnType<typeof createEpochService>;

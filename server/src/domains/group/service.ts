@@ -498,5 +498,3 @@ export function createGroupService(db: DataSource, social: SocialService)
         }
     };
 }
-
-export type GroupService = ReturnType<typeof createGroupService>;

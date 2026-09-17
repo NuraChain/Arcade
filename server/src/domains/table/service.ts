@@ -562,5 +562,3 @@ export function createTableService(db: DataSource, social: SocialService)
         }
     };
 }
-
-export type TableService = ReturnType<typeof createTableService>;

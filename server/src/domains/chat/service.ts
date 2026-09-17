@@ -699,5 +699,3 @@ export function createChatService(db: DataSource, social: SocialService, frankin
         }
     };
 }
-
-export type ChatService = ReturnType<typeof createChatService>;

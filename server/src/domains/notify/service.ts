@@ -221,5 +221,3 @@ export function createNotifyService(db: DataSource, social: SocialService)
         }
     };
 }
-
-export type NotifyService = ReturnType<typeof createNotifyService>;

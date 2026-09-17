@@ -22,12 +22,10 @@ export interface PersonFixture
 }
 
 /**
- * A group, and the thread that belongs to it.
+ * A group.
  *
- * `slug` here is the GROUP's slug and `thread` names the conversation fixture it owns, so the
- * two are linked by the seed rather than by a coincidence of ordering. The owner is the first
- * member: `group_members_single_owner` means there is exactly one, and stating it here rather
- * than inferring it keeps the fixture honest about which.
+ * The owner is named rather than inferred from the member order: `group_members_single_owner`
+ * means there is exactly one, and stating it here keeps the fixture honest about which.
  */
 export interface GroupFixture
 {
@@ -40,8 +38,6 @@ export interface GroupFixture
     privacy: 'private' | 'public';
     owner: string;
     members: string[];
-    thread: string;
-    ageDays: number;
 }
 
 export interface ThreadFixture
@@ -143,9 +139,7 @@ export const GROUP_FIXTURES: GroupFixture[] = [
         game: 'hokm',
         privacy: 'public',
         owner: 'babak.r',
-        members: ['babak.r', 'sara.k', 'leila.a', 'mahsa', 'mina', 'alex'],
-        thread: 'c-friday',
-        ageDays: 140
+        members: ['babak.r', 'sara.k', 'leila.a', 'mahsa', 'mina', 'alex']
     },
     {
         slug: 'balcony-backgammon',
@@ -156,9 +150,7 @@ export const GROUP_FIXTURES: GroupFixture[] = [
         game: 'backgammon',
         privacy: 'public',
         owner: 'reza.t',
-        members: ['alex', 'reza.t', 'parisa', 'farhad', 'dariush'],
-        thread: 'c-balcony',
-        ageDays: 88
+        members: ['alex', 'reza.t', 'parisa', 'farhad', 'dariush']
     },
     {
         slug: 'lunch-ludo',
@@ -169,9 +161,7 @@ export const GROUP_FIXTURES: GroupFixture[] = [
         game: 'ludo',
         privacy: 'public',
         owner: 'roya.m',
-        members: ['roya.m', 'yas', 'hamed.z', 'tara.y', 'kian16'],
-        thread: 'c-lunch',
-        ageDays: 51
+        members: ['roya.m', 'yas', 'hamed.z', 'tara.y', 'kian16']
     },
     {
         slug: 'midnight-table',
@@ -182,9 +172,7 @@ export const GROUP_FIXTURES: GroupFixture[] = [
         game: 'poker',
         privacy: 'public',
         owner: 'omid.j',
-        members: ['nima.f', 'omid.j', 'nilou', 'sina.g', 'alex'],
-        thread: 'c-midnight',
-        ageDays: 33
+        members: ['nima.f', 'omid.j', 'nilou', 'sina.g', 'alex']
     },
     {
         slug: 'newcomers-table',
@@ -195,9 +183,7 @@ export const GROUP_FIXTURES: GroupFixture[] = [
         game: null,
         privacy: 'private',
         owner: 'leila.a',
-        members: ['elham.b', 'shirin', 'maya.c', 'leila.a'],
-        thread: 'c-newcomers',
-        ageDays: 12
+        members: ['elham.b', 'shirin', 'maya.c', 'leila.a']
     }
 ];
 

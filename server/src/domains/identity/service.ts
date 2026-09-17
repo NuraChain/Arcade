@@ -451,5 +451,3 @@ export function createIdentityService(db: DataSource, config: IdentityConfig)
         }
     };
 }
-
-export type IdentityService = ReturnType<typeof createIdentityService>;

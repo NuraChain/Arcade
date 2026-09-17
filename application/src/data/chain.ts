@@ -6,7 +6,6 @@ export interface ChainConfig
     rpcUrls: string[];
     explorerUrls: string[];
     site: string;
-    docs: string;
 }
 
 function fromEnv(key: string, fallback: string): string
@@ -25,16 +24,10 @@ export const NURA_CHAIN: ChainConfig = {
     },
     rpcUrls: fromEnv('VITE_NURA_RPC_URL', '').split(',').filter(Boolean),
     explorerUrls: fromEnv('VITE_NURA_EXPLORER_URL', '').split(',').filter(Boolean),
-    site: fromEnv('VITE_NURA_SITE', 'https://nurachain.net'),
-    docs: fromEnv('VITE_NURA_DOCS', 'https://nurachain.net')
+    site: fromEnv('VITE_NURA_SITE', 'https://nurachain.net')
 };
 
 export function chainIsConfigured(chain: ChainConfig = NURA_CHAIN): boolean
 {
     return /^0x[0-9a-fA-F]+$/.test(chain.chainId) && chain.rpcUrls.length > 0;
-}
-
-export function chainHost(chain: ChainConfig = NURA_CHAIN): string
-{
-    return chain.site.replace(/^https?:\/\//, '').replace(/\/$/, '');
 }

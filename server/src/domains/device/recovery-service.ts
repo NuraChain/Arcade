@@ -359,5 +359,3 @@ export function createRecoveryService(db: DataSource)
         }
     };
 }
-
-export type RecoveryService = ReturnType<typeof createRecoveryService>;
