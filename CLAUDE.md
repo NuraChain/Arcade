@@ -41,9 +41,16 @@ is a claim about the DATABASE lives there - mirrored writes, partial unique inde
 constraints, the races - because a fake DataSource can only prove that the fake agrees with the
 code.
 
-**The database is Postgres.** `server/.env` carries `DATABASE_URL`; create the database once with
-`psql -U postgres -c "create database nura_games"`. Nothing is ever `synchronize`d — every schema
-change is a migration in `server/src/migrations/`, applied in order inside a transaction.
+**The database is Postgres.** `server/.env` carries `DATABASE_URL`, and that file is the ONE place
+the name is written down: it currently says `nuragames`, and anything that needs the name reads it
+from there rather than repeating it. `tools/qa/db.mjs` is what the browser passes use. The copy
+this replaces is the reason: both passes had `nura_games` hardcoded while the server had moved to
+`nuragames`, both databases existed, and so every SQL assertion in `social-pass.mjs` queried an
+empty one and reported a broken friend request, a missing friendship and an unconfirmed device —
+three accusations at the product, all of them the harness looking in the wrong place. Create it
+once with `psql -U postgres -c "create database <that name>"`. Nothing is ever `synchronize`d —
+every schema change is a migration in `server/src/migrations/`, applied in order inside a
+transaction.
 
 **There is no `npm run preview` and no `tools/preview.mjs`.** The server serves the built client
 itself through `mountPages`, so the preview path and the production path are the same code:
@@ -58,8 +65,15 @@ or a dirty console. Findings land in `tools/qa/out/matrix/report.json` with a sc
 failing cell.
 
 Point it at whichever half is running: `npm run dev` (vite on 3100, the default) or the built
-server (`QA_BASE=http://localhost:3200`). The server run is the stronger one — it exercises
+server (`QA_BASE=http://localhost:<port>`). The server run is the stronger one — it exercises
 `mountPages`, the prerendered landing page and the real asset headers, which vite does not.
+
+**Give the built server its own port rather than 3200.** 3200 is the development api's, and other
+projects on this machine reach for it too, so `npm start` there fails with `EADDRINUSE` — or worse,
+answers 200 from something that is not this product at all, which reads as a passing gate until
+somebody looks at the title. `PORT=5300 PUBLIC_ORIGIN=http://localhost:5300 …` and the matching
+`QA_BASE` is what recent runs use; `PUBLIC_ORIGIN` has to move with it or the realtime origin gate
+refuses every socket and each refusal is one console error the matrix cannot suppress.
 
 Run it against the BUILT server when the result has to be trustworthy. Under `npm run dev` the
 conductor restarts the api whenever `dist/` is rewritten — a `npm run build` or `npm test` in
@@ -624,6 +638,16 @@ the caller never holds the id, so the broken form cannot be written - and owns t
 eight `void`-less calls had nowhere to put. `tests/markup.spec.ts` reads the source and fails if one
 comes back.
 
+**Every control on the table page is a `Button` with words on it.** Three of them were not, and each
+failed differently. "Take a seat" - the whole point of the watching panel - was an `IconButton`,
+which is icon-only with a tooltip, so the primary action of that screen was a bare chair glyph.
+Closing the table and showing the chat were hand-spelled `<button>`s with their own class lists.
+And the Leave button carried `text-madder` in `props.class`, which lost to the ghost variant's own
+`text-muted` - two `text-*` utilities from one layer, decided by CSS source order and not by the
+class attribute - so the class had never applied and the button had never been red. Leaving and
+closing are both `variant="destructive"` now, which is `danger`: the same red, from the shared
+variant, rather than a colour a caller appends and hopes about.
+
 **Matchmaking is a query.** `quick(game)` reads the open public tables for that game, claims a
 chair at the first one that still has one, and opens a table to wait in only when there is nothing
 to join. Nobody is invented to fill it.
@@ -633,6 +657,13 @@ table by partial unique index, and membership moves with the seats inside the sa
 sit down and you are in the thread, stand up and you are out. The version this replaces kept a
 private list of invented lines in the lobby store, which was a second message system with its own
 membership rules, its own watermark and its own future sealing problem.
+
+It follows the thread the same way the chat page does, through `lib/stick.ts`, and for the same
+reason: it used to read `chat.messages()` for the subscription and then scroll unconditionally, so
+every change yanked the panel to the bottom - including a revalidation, which is what a realtime
+nudge causes. Scrolling up to re-read a line while a table was talking was impossible. An empty
+table chat also says `chat.empty` rather than showing a void, which is the state every table is in
+until somebody speaks.
 
 **What was deleted, and why it had to be.** The lobby store was a simulation: it invented
 opponents on a timer (`planCandidates`), typed their small talk from a script (`planChatter`),
@@ -803,6 +834,25 @@ would otherwise match on the sender's handle and render an empty row that reads 
 **Sending is not optimistic.** `send` seals, posts and revalidates, so the message appears when the
 server has acknowledged it. That is a round trip plus a signature rather than a microtask now, which
 is why `chat.listLoading()` is what a test waits on rather than one macrotask.
+
+**The composer is a `TextArea`, and the limit is 500.** It was an `<input>`, so a message ran off
+the right-hand edge at about sixty characters and the only way to read back what you had written was
+to arrow through it - nothing about the control admitted the limit it had. It grows to six lines and
+scrolls after that, because past a paragraph the box is eating the conversation it belongs to. Enter
+sends and Shift+Enter breaks the line, which is what `enterkeyhint="send"` already promised on a
+phone keyboard. Two details are load-bearing: `height` is cleared before `scrollHeight` is read, or
+a box that is already tall reports the height it HAS and only ever grows; and the effect writes the
+caller's value back into the field, because a textarea holds its own content and the composer clears
+its draft after a send.
+
+**A TABLE conversation is named after its game.** `titleOf` fell through to a generic "Table chat"
+for every one of them, so a chats list holding two tables held two rows with identical titles - and
+a table nobody has spoken in has no timestamp either, so there was nothing else on the row to tell
+them apart. It takes its names as one object now (`{ group, game }`) rather than a growing tail of
+positional strings, which is what the third one would have made it. The row draws a seat tile for
+one too: `AvatarGroup` rendered NOTHING for a table nobody else has joined - which is every table
+while its host waits - while keeping its 40px box, so the row opened with a blank gutter where
+every other row has a face.
 
 **Do not put `await import()` inside a spec.** Resolving a module mid-run races the other workers
 resolving `@azerothjs/testing` through its junction, and `npm run test:shuffle` starts failing
@@ -1630,6 +1680,22 @@ starts every periodic store in `mount` and stops them on teardown, stamps `data-
 (`phone` < 768 ≤ `rail` < 1024 ≤ `sidebar`) and `data-social` on `#app-shell`, and hosts the
 overlay, toast and lobby-notice portals.
 
+**The shell's grid is what bounds a page, and nothing inside it bounds it again.** `Page` takes
+`width`, which is two intents rather than three: `full` fills the column and is the DEFAULT, and
+`narrow` is 44rem for the four pages that are a form or a reading column. The shell is already
+three columns - a fixed rail or sidebar, the page, and the social panel - so a second cap inside
+the middle one was the same job done twice by two numbers that knew nothing about each other, and
+the wider number won on a wide monitor: at 2560 the column is 2016px and the content used the
+middle 1536, leaving 240px of dead ground each side with a top bar capped to match, so its search
+box floated inwards while the social panel beside it stayed flush. `shell.spec.ts` pins the
+default, because "no cap" was once an implicit side effect of `padded={ false }` and lost the chat
+thread its full bleed the moment those two decisions were correctly separated.
+
+Filling the column is only half of it: a card grid that fills 2016px with four columns has 490px
+cards. The people and group lists take another column instead (`@5xl`, `@6xl`, `@7xl`), which
+changes nothing below 1024px of CONTAINER and is why those grids are `@container` variants rather
+than viewport ones.
+
 **A teardown cannot measure the DOM, because by then there is none.** `<Routes>` plays a leave
 transition and this app always has one — `transitionFor` in `App.azeroth` returns `page-fade` or
 `page-forward` and never null — so every navigation takes the animated path, which is `removeChild`,
@@ -1676,6 +1742,30 @@ browser because it is the one the reader can fix, then everybody else - and a sp
 button when this browser is what is in the way, and `enrol` NEVER rejects - it reports through
 `failure()` - so every outcome is read back and spoken. A second browser lands `waiting` rather than
 ready, so it is offered the devices page instead of a button that would not finish the job.
+
+**And it is offered before anybody is stuck, because both other doors need you to already be
+there.** `keys-banner.component.azeroth` sits in the shell where `ConnectionBanner` does, on every
+route, and says this browser cannot read your messages yet. The seal notice is above a composer
+somebody with no keys cannot reach the point of using, and the devices page is a page nobody opens
+unprompted - so the product's answer to "why can nobody hear me" was a screen you had to already
+know about. `absent` gets the button, because enrolling is one step and it happens there; `waiting`
+gets a LINK to the devices page, because confirming needs a device that already holds keys or the
+recovery phrase, and a button that cannot finish the job is worse than a signpost to where it can.
+
+**The routine behind that button lives in `enrolment.store.ts`, and it lives there because there are
+now two of them.** It is a sequence of DECISIONS - a locked wallet says something different from a
+refused signature, a second browser lands `waiting` and must not be told "done" - and it was written
+out inside `chat.page`. The moment a second surface offered the same button, a second copy of those
+decisions would have been a second chance to say the wrong one, which is the argument `policy.ts`
+makes about the social rules and the same shape.
+
+`gap()` is deliberately silent for two states. A GUEST gets nothing, because a guest has no wallet
+to attest with, so a key here would unblock this browser and leave them blocked on the other half -
+a button that lies about what it fixes. `unsupported` gets nothing either: there is nothing behind
+the button on a browser with no secure storage, and a strip that cannot be acted on is furniture
+that never goes away. Dismissal is held for the session and never written down - a key gap is not a
+preference, and a flag in `localStorage` would silence it for good on the one machine where the
+answer matters.
 
 **A `<Show>`'s children are lazy and its `fallback` is NOT.** The children are written
 `{ () => ... }` and only run when `when` is true; the fallback is a plain value, built eagerly, at
