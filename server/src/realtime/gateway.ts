@@ -60,7 +60,15 @@ export function attachRealtime(server: Server, deps: GatewayDeps): () => void
 
         // Client frames are three small objects. Sixteen megabytes of untrusted input per socket
         // is the wrong ceiling for an endpoint that never receives a payload.
+        //
+        // BOTH ceilings, because they bound different things and only one of them was set.
+        // `maxPayload` caps a single frame; the ASSEMBLED message is checked separately against
+        // `maxMessage`, which defaults to sixteen megabytes. A fragmented text message of four
+        // thousand frames therefore accumulated the whole sixteen megabytes in memory before the
+        // parser ever saw it and refused it for being over four kilobytes - once per socket, against
+        // a connection cap in the thousands.
         maxPayload: 4096,
+        maxMessage: 4096,
 
         verifyOrigin: admit({
             origin: deps.config.origin,
@@ -90,11 +98,30 @@ export function attachRealtime(server: Server, deps: GatewayDeps): () => void
             const lastSeen: Record<string, number> = {};
             let faults = 0;
 
+            /**
+             * Whether this socket has already been refused.
+             *
+             * `close()` sends a close FRAME and then waits up to five seconds for the peer to echo
+             * it - and the framework only stops dispatching once that handshake completes. So a
+             * client that simply ignores the close went on being parsed and served for those five
+             * seconds: still JSON-parsed at line rate, and any frame clearing its per-type floor
+             * still reached the hub, including the typing path that costs a database read.
+             *
+             * The verdict is taken here instead, where it can be immediate.
+             */
+            let refusing = false;
+
             const handle = (text: string): void =>
             {
+                if (refusing)
+                {
+                    return;
+                }
+
                 const frame = parseClientFrame(text);
                 if (frame === null)
                 {
+                    refusing = true;
                     socket.close(4400, 'Bad frame');
                     return;
                 }
@@ -106,6 +133,7 @@ export function attachRealtime(server: Server, deps: GatewayDeps): () => void
                     faults += 1;
                     if (faults > 10)
                     {
+                        refusing = true;
                         socket.close(4400, 'Too chatty');
                     }
                     return;
