@@ -1,0 +1,127 @@
+import { useDevice } from '../../stores/device.store.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import { useOverlay } from '../../stores/overlay.store.ts';
+import type { BoardHandle, BoardToken } from '../../game/bridge.ts';
+
+/**
+ * The one component that touches Phaser.
+ *
+ * The import is dynamic and inside `mount`, which is the shape `world-canvas.component.azeroth` uses
+ * for three.js and the reason the library lands in its own chunk. Nothing above this component knows
+ * the renderer exists; it is handed tokens and gives back which one was pointed at.
+ *
+ * The canvas is the ILLUSTRATION. Every move is takeable from the buttons beside it, the turn is a
+ * live region, and this element is `aria-hidden` under a labelled host - so a keyboard or a screen
+ * reader never has to reach in here, and neither does `npm run qa`, which cannot see inside a canvas
+ * at all.
+ *
+ * If WebGL is missing or Phaser fails to boot, `failed` flips and the tokens are drawn as ordinary
+ * elements over the same plate, positioned from the same two fractions the canvas uses. A board
+ * without animation is still a board; a blank square is not. The fallback is the default state,
+ * exactly as it is for the world.
+ */
+export default component BoardCanvas(props: { tokens: readonly BoardToken[]; onPick?: (key: string) => void })
+{
+    const device = useDevice();
+    const locale = useLocale();
+    const overlay = useOverlay();
+
+    let host: HTMLDivElement | null = null;
+    let handle: BoardHandle | null = null;
+
+    state failed = false;
+
+    mount
+    {
+        let dropped = false;
+
+        void (async (): Promise<void> =>
+        {
+            if (host === null)
+            {
+                return;
+            }
+
+            try
+            {
+                const { createLudoBoard } = await import('../../game/board/ludo-board.ts');
+
+                if (dropped || host === null)
+                {
+                    return;
+                }
+
+                handle = await createLudoBoard({
+                    host,
+                    plate: '/board/ludo-plate-1024.webp',
+                    tokens: props.tokens,
+                    reducedMotion: device.reducedMotion(),
+                    onPick: (key) => props.onPick?.(key),
+                    onFailed: () => { failed = true; }
+                });
+
+                if (dropped)
+                {
+                    handle.dispose();
+                    handle = null;
+                }
+            }
+            catch
+            {
+                failed = true;
+            }
+        })();
+
+        return () =>
+        {
+            dropped = true;
+            handle?.dispose();
+            handle = null;
+        };
+    }
+
+    effect
+    {
+        handle?.show(props.tokens);
+    }
+
+    effect
+    {
+        handle?.setReducedMotion(device.reducedMotion());
+    }
+
+    /**
+     * A sheet over the board is a board rendering behind something opaque. Sleeping the loop while
+     * the overlay blocks costs nothing and stops a phone spinning its GPU for a canvas nobody can
+     * see.
+     */
+    effect
+    {
+        if (overlay.blocking())
+        {
+            handle?.pause();
+        }
+        else
+        {
+            handle?.resume();
+        }
+    }
+
+    <div class="board-plate" role="img" aria-label={ locale.t('match.board') }>
+        <div class="board-canvas" aria-hidden="true" ref={ (element) => host = element }></div>
+
+        <Show when={ failed }>
+            { () =>
+                <For each={ [...props.tokens] } key={ (token) => token.key } let={ token }>
+                    <span
+                        class="board-token"
+                        aria-hidden="true"
+                        style={ `--at-col:${ token.col }; --at-row:${ token.row }; --ink: var(--ludo-${ token.colour })` }
+                    >
+                        { token.label }
+                    </span>
+                </For>
+            }
+        </Show>
+    </div>
+}

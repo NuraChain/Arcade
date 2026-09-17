@@ -608,3 +608,92 @@
         --board-max: none;
     }
 }
+
+/*
+ * The board is a photograph of the object in the market scene, with tokens drawn over it.
+ *
+ * `tools/blender/board.py` renders `set-ludo.glb` from an orthographic camera pointing straight
+ * down, so the image maps cell-for-cell onto the 15x15 grid the rules use. A token is placed by
+ * grid coordinate alone - no measuring, no magic offsets - and the printed board underneath is the
+ * same walnut-and-card object a player sees on the landing page.
+ *
+ * The tokens are CSS rather than sprites on purpose: seen from above a ludo token is a disc with a
+ * highlight and a contact shadow, and that draws crisply at 288px on a phone and 704px on a monitor
+ * from one rule, in the exact palette, with nothing extra to fetch.
+ */
+.board-plate
+{
+    position: relative;
+    container-type: inline-size;
+    inline-size: 100%;
+    block-size: 100%;
+    background-image: url('/board/ludo-plate-1024.webp');
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    border-radius: var(--radius-panel);
+    overflow: hidden;
+}
+
+.board-token
+{
+    /*
+     * Where the grid actually sits inside the render.
+     *
+     * The same two fractions `game/layout.ts` derives, and for the same reason. The walnut rim is
+     * 0.016/0.380 of the board, but the grid does not start at the paper edge: `atlas.py` draws a
+     * 32px margin inside its 1024px region and `set-ludo.py` insets the UVs by the 16px gutter, so
+     * the cells begin 5.6876% in and each one is 5.9083% across. Assuming the grid filled the paper
+     * put every token near an edge about a quarter of a cell too far out.
+     */
+    --rim: 5.6876%;
+    --cell: 5.9083%;
+
+    position: absolute;
+    inline-size: calc(var(--cell) * 0.80);
+    block-size: calc(var(--cell) * 0.80);
+
+    inset-inline-start: calc(var(--rim) + var(--at-col) * var(--cell) + var(--cell) * 0.10);
+    inset-block-start: calc(var(--rim) + var(--at-row) * var(--cell) + var(--cell) * 0.10);
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    border-radius: 50%;
+    background:
+        radial-gradient(circle at 34% 28%, color-mix(in oklab, white 62%, var(--ink)) 0%, var(--ink) 58%),
+        var(--ink);
+    box-shadow:
+        inset 0 0 0 1px color-mix(in oklab, black 26%, transparent),
+        0 1px 2px color-mix(in oklab, black 42%, transparent),
+        0 3px 6px -2px color-mix(in oklab, black 34%, transparent);
+
+    color: white;
+    font-size: clamp(6px, 1.9cqi, 13px);
+    font-weight: 700;
+    line-height: 1;
+    text-shadow: 0 1px 1px color-mix(in oklab, black 55%, transparent);
+    transition: inset-inline-start var(--duration-ui, 180ms) var(--ease-ui, ease),
+                inset-block-start var(--duration-ui, 180ms) var(--ease-ui, ease);
+}
+
+@media (prefers-reduced-motion: reduce)
+{
+    .board-token
+    {
+        transition: none;
+    }
+}
+
+.board-canvas
+{
+    position: absolute;
+    inset: 0;
+}
+
+.board-canvas canvas
+{
+    display: block;
+    inline-size: 100%;
+    block-size: 100%;
+}

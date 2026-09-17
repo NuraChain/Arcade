@@ -54,8 +54,19 @@ const MUST_BE_LAZY = [
     { match: /^world-/, why: 'three.js — dynamic import inside mount, after first paint' },
     { match: /^app-catalogue-/, why: 'the app message catalogue — only the shell and sign-in import it' },
     { match: /^session\.store-/, why: 'lib/guards.ts imports session.store.ts dynamically' },
-    { match: /^connect-dialog\.component-/, why: 'public-shell imports connect-dialog dynamically' }
+    { match: /^connect-dialog\.component-/, why: 'public-shell imports connect-dialog dynamically' },
+    { match: /^ludo-board-/, why: 'Phaser — dynamic import inside mount, only once a match is running' }
 ];
+
+/** What the board chunk may weigh. Phaser is most of it; the board code is a few KB. */
+const BOARD_BUDGET = 380 * KB;
+
+/**
+ * Phaser announces itself with this literal, and it survives minification because it sits behind a
+ * runtime flag rather than a build one. Finding the library by CONTENT rather than by chunk name is
+ * what stops a rename defeating the check.
+ */
+const PHASER_MARK = 'Phaser v';
 
 const gzip = (name) => gzipSync(readFileSync(join(ASSETS, name))).length;
 
@@ -126,6 +137,46 @@ for (const name of all)
     }
 }
 
+// ---------------------------------------------------------------- where Phaser ended up
+const BOARD_SOURCE = join(ROOT, 'application', 'src', 'game', 'board', 'ludo-board.ts');
+
+let boardChunk = null;
+
+if (existsSync(BOARD_SOURCE))
+{
+    const carries = all.filter((name) => readFileSync(join(ASSETS, name), 'utf8').includes(PHASER_MARK));
+
+    if (carries.length === 0)
+    {
+        problems.push('the board renderer exists but no chunk carries Phaser, so this check measured nothing');
+    }
+
+    if (carries.length > 1)
+    {
+        problems.push(`Phaser is in ${ carries.length } chunks (${ carries.join(', ') }) — it must be reachable from one dynamic import`);
+    }
+
+    for (const name of carries)
+    {
+        boardChunk = name;
+
+        if (initial.includes(name))
+        {
+            problems.push(`${ name } carries Phaser and is in the landing page's initial set`);
+        }
+
+        if (/\.page-/.test(name) || /\.component-/.test(name))
+        {
+            problems.push(`${ name } carries Phaser into a route or component chunk — it must stay behind the dynamic import in mount`);
+        }
+
+        if (gzip(name) > BOARD_BUDGET)
+        {
+            problems.push(`${ name } is ${ size(gzip(name)) }, over the ${ size(BOARD_BUDGET) } board budget`);
+        }
+    }
+}
+
 // ---------------------------------------------------------------- class bindings that never update
 let classBindsRead = 0;
 
@@ -184,6 +235,7 @@ const pages = all.filter((name) => /\.page-/.test(name)).map((name) => gzip(name
 console.log(`  initial JS   ${ size(initialBytes) } / ${ size(INITIAL_BUDGET) }  (${ initial.length } chunks)`);
 console.log(`  app shell    ${ shell === undefined ? 'absent' : size(gzip(shell)) } / ${ size(SHELL_BUDGET) }`);
 console.log(`  routes       ${ pages.length } chunks, largest ${ size(Math.max(0, ...pages)) } / ${ size(ROUTE_BUDGET) }`);
+console.log(`  board        ${ boardChunk === null ? 'absent' : size(gzip(boardChunk)) } / ${ size(BOARD_BUDGET) }`);
 console.log(`  class binds  ${ classBindsRead } read, ${ problems.length === 0 ? 'every one that reads a signal effect-wrapped' : 'see below' }`);
 
 if (problems.length > 0)

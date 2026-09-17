@@ -75,9 +75,17 @@ export default component PlayPage()
         && table.status === 'ready'
         && table.chairs.every((chair) => chair.ready);
 
-    derived title = table === null
-        ? locale.t('play.notFound')
-        : locale.t(catalogue.byId(table.game as GameId).nameKey);
+    /**
+     * A table still loading is not a table that does not exist.
+     *
+     * The title read `play.notFound` whenever `table` was null, which is true for the whole first
+     * fetch - so every navigation into a perfectly good table flashed "No such table." in the tab
+     * and the top bar before the data landed. The same shape `regression-pass.mjs` already guards
+     * for a chat thread.
+     */
+    derived title = table !== null
+        ? locale.t(catalogue.byId(table.game as GameId).nameKey)
+        : (loading ? locale.t('common.loading') : locale.t('play.notFound'));
 
     useHead({ title: () => title });
 
