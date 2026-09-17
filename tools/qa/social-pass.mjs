@@ -18,11 +18,12 @@
  * Both wallets are injected EIP-1193 providers over the published hardhat keys, the same shape
  * `seal-pass.mjs` uses, so every signature is real and this server verifies them normally.
  */
-import { execFileSync } from 'node:child_process';
 import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { chromium } from 'playwright';
 import { privateKeyToAccount } from 'viem/accounts';
+
+import { sql } from './db.mjs';
 
 const BASE = process.env.QA_BASE ?? 'http://localhost:3200';
 
@@ -62,11 +63,7 @@ function cachedChromium()
     return undefined;
 }
 
-const sql = (text) => execFileSync(
-    'psql',
-    ['-U', 'postgres', '-h', '127.0.0.1', '-d', process.env.PGDATABASE ?? 'nura_games', '-qtA', '-c', text],
-    { env: { ...process.env, PGPASSWORD: process.env.PGPASSWORD ?? 'root' }, encoding: 'utf8' }
-).trim();
+
 
 /**
  * Puts the two accounts back to "two strangers with no keys".

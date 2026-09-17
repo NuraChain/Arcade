@@ -3,11 +3,12 @@
  *
  * Temporary: run by hand, not part of any gate.
  */
-import { execFileSync } from 'node:child_process';
 import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { chromium } from 'playwright';
 import { privateKeyToAccount } from 'viem/accounts';
+
+import { sql as run } from './db.mjs';
 
 function cachedChromium()
 {
@@ -43,7 +44,7 @@ const SIZES = [
  */
 function emptyTheAccount()
 {
-    const sql = [
+    const statements = [
         'delete from conversation_epochs',
         "delete from messages where kind = 'text'",
         "delete from epoch_archive where user_id = (select id from users where handle = 'dana.w')",
@@ -51,10 +52,7 @@ function emptyTheAccount()
         "delete from devices where user_id = (select id from users where handle = 'dana.w')"
     ].join('; ');
 
-    execFileSync('psql', ['-U', 'postgres', '-h', '127.0.0.1', '-d', 'nura_games', '-q', '-c', sql], {
-        env: { ...process.env, PGPASSWORD: 'root' },
-        stdio: 'ignore'
-    });
+    run(statements);
 }
 
 const executablePath = cachedChromium();
