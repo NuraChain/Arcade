@@ -1,4 +1,4 @@
-import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import { Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
 
 /**
  * One browser that asked to be told.
@@ -7,6 +7,7 @@ import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn } from 'typeor
  * a subscription has them, and they are unused: this product sends contentless pushes, so there
  * is no payload to encrypt and nothing about a message leaves the origin.
  */
+@Index('push_subscriptions_user', ['userId'])
 @Entity('push_subscriptions')
 export class PushSubscription
 {

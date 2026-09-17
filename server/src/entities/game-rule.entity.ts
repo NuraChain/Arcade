@@ -1,4 +1,4 @@
-import { Column, Entity, JoinColumn, OneToOne, PrimaryColumn } from 'typeorm';
+import { Check, Column, Entity, JoinColumn, OneToOne, PrimaryColumn } from 'typeorm';
 
 import { Game } from './game.entity.ts';
 
@@ -17,6 +17,9 @@ export type Stakes = 'none' | 'play-money';
  * Every list is a Postgres array rather than a join table: they are short, fixed, read whole,
  * and never queried across. A `game_seat_options` table would be four rows of ceremony.
  */
+@Check('game_rules_modes_present', `array_length(modes, 1) >= 1`)
+@Check('game_rules_seats_present', `array_length(seats, 1) >= 1`)
+@Check('game_rules_stakes_known', `stakes in ('none', 'play-money')`)
 @Entity('game_rules')
 export class GameRule
 {

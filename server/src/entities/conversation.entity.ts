@@ -1,7 +1,13 @@
-import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import { Check, Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
 
 export type ConversationKind = 'direct' | 'group' | 'game';
 
+@Check('conversations_direct_has_pair', `(kind = 'direct') = (pair_key is not null)`)
+@Check('conversations_expire_after_positive', `expire_after is null or expire_after >= 60`)
+@Check('conversations_kind_known', `kind in ('direct', 'group', 'game')`)
+@Index('conversations_direct_pair', ['pairKey'], { unique: true, where: `kind = 'direct'` })
+@Index('conversations_group_one', ['groupId'], { unique: true, where: `kind = 'group' and group_id is not null` })
+@Index('conversations_table_one', ['tableId'], { unique: true, where: `kind = 'game' and table_id is not null` })
 @Entity('conversations')
 export class Conversation
 {

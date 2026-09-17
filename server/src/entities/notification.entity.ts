@@ -1,7 +1,11 @@
-import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import { Check, Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
 
 export type NotificationKind = 'friend-request' | 'friend-accepted' | 'group-added' | 'table-invite' | 'message';
 
+@Check('notifications_count_positive', `count > 0`)
+@Check('notifications_kind_known', `kind in ('friend-request', 'friend-accepted', 'group-added', 'table-invite', 'message')`)
+@Index('notifications_dedupe', ['userId', 'dedupeKey'], { unique: true })
+@Index('notifications_unread', ['userId'], { where: `read_at is null` })
 @Entity('notifications')
 export class Notification
 {

@@ -323,6 +323,30 @@ Two things that look alike and are not.
 **Migrations** change the schema. `server/src/migrations/NNNN-name.ts`, registered in the barrel,
 applied in order inside a transaction.
 
+**The entities carry the 56 CHECK constraints and 33 of the indexes now**, ported from the live
+schema so they describe the database that exists rather than a weaker one. That was worth doing on
+its own - `migration:generate` now sees the real schema, and `schema-parity.db.spec.ts` compares
+both directions - and it was the half of "drop the migrations and let TypeORM synchronize" that
+survives contact with this schema.
+
+**The other half does not, and `synchronize-probe.db.spec.ts` is the measurement rather than the
+opinion.** It builds one database from the migration sequence and another from the entities alone
+and diffs them. Six indexes cannot be expressed through `@Index` at all:
+`friend_requests_pending_pair` is UNIQUE over `LEAST(from_user, to_user)`/`GREATEST(...)` where the
+request is unanswered - a FUNCTIONAL index, and the only reason A asking B while B is asking A
+cannot become two rows describing one intention - and `messages_keyset`, `notifications_keyset`,
+`reports_against`, `groups_public` and `tables_open` each order a column DESC, which `@Index` has
+no way to say. Losing the first makes a documented guarantee false; losing the others makes keyset
+pagination quietly stop using its index.
+
+That is before what `synchronize` is not FOR: it will not create the `citext` and `pgcrypto`
+extensions the schema is built on, it cannot carry a data migration (`0003` turning stranger
+messages off for every minor) or either hard cutover (`0012` deleting pre-sealing rows, `0014`
+re-signing every envelope), and it reconciles by DROPPING whatever the entities do not mention -
+which is a data-loss switch on any database with rows in it. The probe test asserts the current
+answer, so the day TypeORM can express these it goes red and somebody has to come and re-decide
+with evidence.
+
 **There is no legacy database anywhere, and migrations must not pretend otherwise.** Every database
 is built by running the whole sequence against an empty one, so a migration can only ever meet rows
 that an earlier migration in the same sequence created. A backfill that repairs rows "from before"

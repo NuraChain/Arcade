@@ -1,4 +1,4 @@
-import { Column, Entity, PrimaryColumn } from 'typeorm';
+import { Check, Column, Entity, Index, PrimaryColumn } from 'typeorm';
 
 export type AchievementTier = 'bronze' | 'silver' | 'gold';
 
@@ -16,6 +16,9 @@ export type AchievementTier = 'bronze' | 'silver' | 'gold';
  * The columns are NOT NULL in both languages on purpose: a half-translated achievement would
  * render an English string inside a Persian page, which is the failure this product least wants.
  */
+@Check('achievements_tier_known', `tier in ('bronze', 'silver', 'gold')`)
+@Check('achievements_translated', `length(btrim(name_en)) > 0 and length(btrim(name_fa)) > 0 and length(btrim(blurb_en)) > 0 and length(btrim(blurb_fa)) > 0`)
+@Index('achievements_sort_order_idx', ['sortOrder'])
 @Entity('achievements')
 export class Achievement
 {

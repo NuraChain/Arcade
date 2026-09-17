@@ -1,4 +1,4 @@
-import { Column, CreateDateColumn, Entity, PrimaryColumn } from 'typeorm';
+import { Check, Column, CreateDateColumn, Entity, Index, PrimaryColumn } from 'typeorm';
 
 export type GroupRole = 'owner' | 'member';
 
@@ -10,6 +10,9 @@ export type GroupRole = 'owner' | 'member';
  * two owners unrepresentable. An `owner_id` column would make it merely unlikely, and "the group
  * has two owners now" is the kind of state nobody notices until one of them removes the other.
  */
+@Check('group_members_role_known', `role in ('owner', 'member')`)
+@Index('group_members_single_owner', ['groupId'], { unique: true, where: `role = 'owner'` })
+@Index('group_members_user', ['userId'])
 @Entity('group_members')
 export class GroupMember
 {

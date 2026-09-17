@@ -1,4 +1,4 @@
-import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import { Check, Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
 
 export type TableMode = 'live' | 'turns';
 
@@ -12,6 +12,13 @@ export type TablePrivacy = 'private' | 'friends' | 'public';
  */
 export type TableStatus = 'open' | 'ready' | 'closed';
 
+@Check('tables_blinds_known', `blinds in ('low', 'mid', 'high')`)
+@Check('tables_closed_has_at', `(status = 'closed') = (closed_at is not null)`)
+@Check('tables_mode_known', `mode in ('live', 'turns')`)
+@Check('tables_privacy_known', `privacy in ('private', 'friends', 'public')`)
+@Check('tables_seats_range', `seats between 2 and 8`)
+@Check('tables_status_known', `status in ('open', 'ready', 'closed')`)
+@Index('tables_code', ['code'], { unique: true })
 @Entity('tables')
 export class Table
 {

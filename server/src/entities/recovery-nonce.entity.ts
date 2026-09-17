@@ -1,4 +1,4 @@
-import { Column, CreateDateColumn, Entity, PrimaryColumn } from 'typeorm';
+import { Column, CreateDateColumn, Entity, Index, PrimaryColumn } from 'typeorm';
 
 /**
  * The one-shot challenge a recovery signature is made over.
@@ -7,6 +7,7 @@ import { Column, CreateDateColumn, Entity, PrimaryColumn } from 'typeorm';
  * confirm. A signature collected while confirming one browser must not confirm another, which is
  * the rule the enrolment message enforces through EIP-4361's `Resources` line.
  */
+@Index('recovery_nonces_expires_at_idx', ['expiresAt'])
 @Entity('recovery_nonces')
 export class RecoveryNonce
 {

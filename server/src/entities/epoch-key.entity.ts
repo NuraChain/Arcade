@@ -8,6 +8,7 @@ import { Column, Entity, Index, PrimaryColumn } from 'typeorm';
  * any of them. One row per recipient is what makes the recipient set an explicit, countable thing
  * rather than an implicit property of who happened to be listening.
  */
+@Index('epoch_keys_device', ['deviceId'])
 @Entity('epoch_keys')
 @Index(['deviceId'])
 export class EpochKey

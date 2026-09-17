@@ -1,4 +1,4 @@
-import { Column, CreateDateColumn, Entity, PrimaryColumn } from 'typeorm';
+import { Check, Column, CreateDateColumn, Entity, PrimaryColumn } from 'typeorm';
 
 /**
  * A frozen set of recipient devices, and the key that belongs to it.
@@ -9,6 +9,8 @@ import { Column, CreateDateColumn, Entity, PrimaryColumn } from 'typeorm';
  * actually signed for. Without that column pair, the recipient set is a claim by the one party the
  * design exists to distrust.
  */
+@Check('conversation_epochs_has_recipients', `recipients <> ''`)
+@Check('conversation_epochs_numbered', `epoch >= 1`)
 @Entity('conversation_epochs')
 export class ConversationEpoch
 {

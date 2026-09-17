@@ -1,4 +1,4 @@
-import { CreateDateColumn, Entity, PrimaryColumn } from 'typeorm';
+import { Check, CreateDateColumn, Entity, Index, PrimaryColumn } from 'typeorm';
 
 /**
  * A block, written one way and read BOTH ways.
@@ -7,6 +7,8 @@ import { CreateDateColumn, Entity, PrimaryColumn } from 'typeorm';
  * invite the other. Every check therefore looks for a row in either direction, which is what
  * the reverse index on `blocked_id` is for.
  */
+@Check('blocks_not_self', `user_id <> blocked_id`)
+@Index('blocks_blocked', ['blockedId'])
 @Entity('blocks')
 export class Block
 {

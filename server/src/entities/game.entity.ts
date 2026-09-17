@@ -1,4 +1,4 @@
-import { Column, Entity, PrimaryColumn } from 'typeorm';
+import { Check, Column, Entity, Index, PrimaryColumn } from 'typeorm';
 
 /**
  * Whether a game can be entered.
@@ -26,6 +26,10 @@ export type GameStatus = 'available' | 'coming-soon' | 'disabled';
  * follow a language switch live, and the app already owns both catalogues under
  * `application/src/locales/{en,fa}/`, where a key missing from Persian is a build error.
  */
+@Check('games_category_known', `category in ('cards', 'board')`)
+@Check('games_players_sane', `min_players between 1 and 16 and max_players between min_players and 16`)
+@Check('games_status_known', `status in ('available', 'coming-soon', 'disabled')`)
+@Index('games_sort_order_idx', ['sortOrder'])
 @Entity('games')
 export class Game
 {

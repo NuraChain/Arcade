@@ -1,4 +1,4 @@
-import { Column, Entity, PrimaryColumn } from 'typeorm';
+import { Check, Column, Entity, Index, PrimaryColumn } from 'typeorm';
 
 /**
  * One chair at one table.
@@ -8,6 +8,10 @@ import { Column, Entity, PrimaryColumn } from 'typeorm';
  * `table_seats_one_per_person`, a partial unique index over `(table_id, user_id)`, is what stops
  * one person holding two of them however many requests they send.
  */
+@Check('table_seats_empty_is_not_ready', `user_id is not null or ready = false`)
+@Check('table_seats_occupied_has_joined', `(user_id is null) = (joined_at is null)`)
+@Index('table_seats_one_per_person', ['tableId', 'userId'], { unique: true, where: `user_id is not null` })
+@Index('table_seats_user', ['userId'], { where: `user_id is not null` })
 @Entity('table_seats')
 export class TableSeat
 {

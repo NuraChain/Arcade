@@ -1,4 +1,4 @@
-import { Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
+import { Check, Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
 
 /**
  * A signed-in session.
@@ -11,6 +11,10 @@ import { Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn } from 
  * That also means there is no HMAC to get wrong. A signed cookie saves a lookup, but revocation
  * needs the lookup anyway, so the saving was never available.
  */
+@Check('sessions_token_hash_shape', `token_hash ~ '^[0-9a-f]{64}$'`)
+@Index('sessions_device_idx', ['deviceId'], { where: `revoked_at is null` })
+@Index('sessions_live_idx', ['tokenHash'], { where: `revoked_at is null` })
+@Index('sessions_user_id_idx', ['userId'])
 @Entity('sessions')
 @Index(['userId'])
 export class Session

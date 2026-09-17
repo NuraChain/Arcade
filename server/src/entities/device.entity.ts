@@ -1,4 +1,4 @@
-import { Column, CreateDateColumn, Entity, Index, PrimaryColumn } from 'typeorm';
+import { Check, Column, CreateDateColumn, Entity, Index, PrimaryColumn } from 'typeorm';
 
 /** Which authority vouched for a device. `server` means nobody did. */
 export type Attestation = 'wallet' | 'contract' | 'server';
@@ -14,6 +14,12 @@ export type Attestation = 'wallet' | 'contract' | 'server';
  * Only public halves are stored. There is no column here a private key could land in by accident,
  * which is the point: the server is not a party to the sealing, and the schema says so.
  */
+@Check('devices_attestation_matches_kind', `(attested = 'server' and attested_address is null) or (attested in ('wallet', 'contract') and attested_address is not null)`)
+@Check('devices_attestation_whole', `(attested_address is null and attested_message is null and attested_signature is null) or (attested_address is not null and attested_message is not null and attested_signature is not null)`)
+@Check('devices_attested_address_shape', `attested_address is null or attested_address ~ '^0x[0-9a-f]{40}$'`)
+@Check('devices_attested_known', `attested in ('wallet', 'contract', 'server')`)
+@Check('devices_id_shape', `id ~ '^[A-Za-z0-9_-]{22}$'`)
+@Index('devices_user_live', ['userId', 'createdAt'], { where: `revoked_at is null` })
 @Entity('devices')
 @Index(['userId'])
 export class Device

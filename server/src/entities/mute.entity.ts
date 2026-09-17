@@ -1,4 +1,4 @@
-import { CreateDateColumn, Entity, PrimaryColumn } from 'typeorm';
+import { Check, CreateDateColumn, Entity, PrimaryColumn } from 'typeorm';
 
 export type MuteSubject = 'person' | 'conversation' | 'game';
 
@@ -9,6 +9,7 @@ export type MuteSubject = 'person' | 'conversation' | 'game';
  * account being notified. One table for people, conversations and games, because the product had
  * three separate lists for the same idea and every feature had to remember all three.
  */
+@Check('mutes_kind_known', `subject_kind in ('person', 'conversation', 'game')`)
 @Entity('mutes')
 export class Mute
 {

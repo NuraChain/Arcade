@@ -1,4 +1,4 @@
-import { Column, CreateDateColumn, Entity, PrimaryColumn } from 'typeorm';
+import { Column, CreateDateColumn, Entity, Index, PrimaryColumn } from 'typeorm';
 
 /**
  * One person's place in a conversation.
@@ -7,6 +7,7 @@ import { Column, CreateDateColumn, Entity, PrimaryColumn } from 'typeorm';
  * rather than facts about the thread. The mock kept them on the conversation, which meant one
  * person pinning a chat pinned it for everyone in it.
  */
+@Index('conversation_members_user', ['userId'])
 @Entity('conversation_members')
 export class ConversationMember
 {

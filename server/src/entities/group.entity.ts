@@ -1,4 +1,4 @@
-import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import { Check, Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
 
 /**
  * Who can find a group. Two levels, because a third would need a query behind it.
@@ -9,6 +9,11 @@ import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn } from 'typeor
  */
 export type GroupPrivacy = 'private' | 'public';
 
+@Check('groups_hue_range', `hue between 0 and 359`)
+@Check('groups_name_present', `length(btrim(name)) > 0`)
+@Check('groups_privacy_known', `privacy in ('private', 'public')`)
+@Check('groups_slug_shape', `slug ~ '^[[:alnum:]][[:alnum:]-]{0,46}[[:alnum:]]$'`)
+@Index('groups_slug', ['slug'], { unique: true })
 @Entity('groups')
 export class Group
 {

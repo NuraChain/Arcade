@@ -13,6 +13,7 @@ import { Column, Entity, Index, PrimaryColumn } from 'typeorm';
  *    unconsumed row, so two requests replaying the same signature race in the database and
  *    exactly one wins. Deleting the row instead would make a replay look like an expiry.
  */
+@Index('siwe_nonces_expires_at_idx', ['expiresAt'])
 @Entity('siwe_nonces')
 @Index(['expiresAt'])
 export class SiweNonce

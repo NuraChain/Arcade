@@ -1,4 +1,4 @@
-import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import { Check, Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
 
 export type MessageKind = 'text' | 'system' | 'invite' | 'result';
 
@@ -16,6 +16,13 @@ export type MessageKind = 'text' | 'system' | 'invite' | 'result';
  * server-authored line has none. A line that could grow a signature would be a line claiming an
  * author it does not have.
  */
+@Check('messages_body_xor_payload', `(kind = 'text' and body is not null and payload is null) or (kind <> 'text' and payload is not null and body is null)`)
+@Check('messages_kind_known', `kind in ('text', 'system', 'invite', 'result')`)
+@Check('messages_line_is_plain', `kind = 'text' or ( epoch is null and seq is null and iv is null and sender_device_id is null and signature is null and client_at is null and commitment is null and frank is null )`)
+@Check('messages_text_has_sender', `kind <> 'text' or sender_id is not null`)
+@Check('messages_text_is_sealed', `kind <> 'text' or ( epoch is not null and seq is not null and iv is not null and sender_device_id is not null and signature is not null and client_at is not null and commitment is not null and frank is not null )`)
+@Index('messages_expires_at', ['expiresAt'], { where: `expires_at is not null` })
+@Index('messages_sender_seq', ['conversationId', 'epoch', 'senderDeviceId', 'seq'], { unique: true, where: `kind = 'text'` })
 @Entity('messages')
 export class Message
 {

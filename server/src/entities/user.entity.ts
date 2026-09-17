@@ -1,15 +1,20 @@
-import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
+import { Check, Column, CreateDateColumn, Entity, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
 
 /**
  * How an account proved it exists.
  *
- * `wallet` signed a challenge with a key it holds. `demo` is one of the seeded identities the
- * product offers for exploring, and `guest` is a name typed into a box. The last two prove
+ * `wallet` signed a challenge with a key it holds; `guest` is a name typed into a box and proves
  * nothing, which is exactly why the distinction is a column rather than a guess: anything that
- * must not be spoofable - a device attestation, a moderation action - checks this.
+ * must not be spoofable - a device attestation, a moderation action - checks this. There was a
+ * third, `demo`, and `0011-drop-demo.ts` rewrote the CHECK rather than leaving the value legal
+ * with nothing writing it.
  */
 export type AccountKind = 'wallet' | 'guest';
 
+@Check('users_handle_shape', `handle ~ '^[[:alnum:]][[:alnum:]._-]{0,30}[[:alnum:]]$'`)
+@Check('users_hue_range', `hue between 0 and 359`)
+@Check('users_kind_known', `kind in ('wallet', 'guest')`)
+@Check('users_minor_no_strangers', `not (is_minor and allow_stranger_messages)`)
 @Entity('users')
 export class User
 {

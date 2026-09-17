@@ -1,4 +1,4 @@
-import { Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
+import { Check, Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
 
 /** How the address proved it was the signer. */
 export type Attestation = 'wallet' | 'contract';
@@ -14,6 +14,9 @@ export type Attestation = 'wallet' | 'contract';
  * The address is stored LOWERCASE and the column is citext, so `0xAbC…` and `0xabc…` are the same
  * wallet no matter which casing a provider hands back. Checksum casing is a display concern.
  */
+@Check('wallets_address_shape', `address ~ '^0x[0-9a-f]{40}$'`)
+@Check('wallets_attestation_known', `attestation in ('wallet', 'contract')`)
+@Index('wallets_user_id_idx', ['userId'])
 @Entity('wallets')
 @Index(['userId'])
 export class Wallet
