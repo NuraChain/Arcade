@@ -159,6 +159,14 @@ parsed as an ES decorator instead of a legacy one and fails `azeroth check`. Tha
 handlers are **injected** through `Ports` rather than imported: `api.ts` names what it needs,
 `services.ts` provides it, and the decorated half never crosses the line.
 
+**TypeORM is on 1.x.** The major was taken behind its two canaries and both were green without a
+source change: `decorator-metadata.spec.ts`, which pins entity registration, `design:type` metadata
+and class fields staying off the instance - precisely the surface `experimentalDecorators` +
+`emitDecoratorMetadata` + `useDefineForClassFields: false` rests on - and the whole 156-test
+`test:db` suite against a real Postgres. The migration sequence was also replayed into an empty
+database from nothing, because that is the other typeorm-sensitive path and the one a unit suite
+cannot see.
+
 **This backend compiles.** `typeorm` in `dependencies` is what decides that — the CLI carries
 `DECORATOR_PACKAGES = ['typeorm', '@mikro-orm/core']` and the name alone flips the project from
 running `src/` directly to emitting `dist/`. Node's TypeScript support is strip-only and rejects
