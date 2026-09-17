@@ -1,9 +1,12 @@
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '@azerothjs/http';
-import type { DataSource } from 'typeorm';
+import { IsNull, type DataSource } from 'typeorm';
 
 import { affectedBy, firstRow, rowsOf } from '../../lib/rows.ts';
-import type { MuteSubject } from '../../entities/mute.entity.ts';
-import type { ReportCategory } from '../../entities/report.entity.ts';
+import { Block } from '../../entities/block.entity.ts';
+import { FriendRequest } from '../../entities/friend-request.entity.ts';
+import { Friendship } from '../../entities/friendship.entity.ts';
+import { Mute, type MuteSubject } from '../../entities/mute.entity.ts';
+import { Report, type ReportCategory } from '../../entities/report.entity.ts';
 import { clampPrivacy, mayDiscover, mayMessage, maySeeOnline, maySendRequest, type Party, type Relation } from './policy.ts';
 
 export interface PersonRow
@@ -136,14 +139,22 @@ export function createSocialService(db: DataSource)
 
         async requests(me: string): Promise<{ incoming: RequestRow[]; outgoing: RequestRow[] }>
         {
-            const rows = await db.query(
-                `select r.id, r.from_user, r.to_user, r.created_at
-                 from friend_requests r
-                 where r.answered_at is null and (r.from_user = $1 or r.to_user = $1)
-                 order by r.created_at desc`,
-                [me]
-            );
-            const all = rowsOf<RequestRow>(rows);
+            const found = await db.getRepository(FriendRequest).find({
+                select: { id: true, fromUser: true, toUser: true, createdAt: true },
+                where: [
+                    { answeredAt: IsNull(), fromUser: me },
+                    { answeredAt: IsNull(), toUser: me }
+                ],
+                order: { createdAt: 'DESC' }
+            });
+
+            const all: RequestRow[] = found.map((row) => ({
+                id: row.id,
+                from_user: row.fromUser,
+                to_user: row.toUser,
+                created_at: row.createdAt
+            }));
+
             return {
                 incoming: all.filter((request) => request.to_user === me),
                 outgoing: all.filter((request) => request.from_user === me)
@@ -168,14 +179,12 @@ export function createSocialService(db: DataSource)
             // back whatever Postgres finds first, which reshuffles between page loads for no
             // reason anybody can see - and it made `social.db.spec.ts` fail once a later
             // migration changed what "first" happened to mean.
-            const rows = await db.query(
-                `select subject_kind, subject_id from mutes
-                  where user_id = $1
-                  order by created_at, subject_kind, subject_id`,
-                [me]
-            );
-            return rowsOf<{ subject_kind: MuteSubject; subject_id: string }>(rows)
-                .map((row) => ({ kind: row.subject_kind, id: row.subject_id }));
+            const rows = await db.getRepository(Mute).find({
+                select: { subjectKind: true, subjectId: true },
+                where: { userId: me },
+                order: { createdAt: 'ASC', subjectKind: 'ASC', subjectId: 'ASC' }
+            });
+            return rows.map((row) => ({ kind: row.subjectKind, id: row.subjectId }));
         },
 
         /**
@@ -398,7 +407,7 @@ export function createSocialService(db: DataSource)
 
             try
             {
-                await db.query('insert into friend_requests (from_user, to_user) values ($1, $2)', [me, otherId]);
+                await db.getRepository(FriendRequest).insert({ fromUser: me, toUser: otherId });
             }
             catch (error)
             {
@@ -432,11 +441,11 @@ export function createSocialService(db: DataSource)
             {
                 return null;
             }
-            const rows = await db.query(
-                'select from_user from friend_requests where id = $1 and to_user = $2 and answered_at is null',
-                [requestId, me]
-            );
-            return firstRow<{ from_user: string }>(rows)?.from_user ?? null;
+            const row = await db.getRepository(FriendRequest).findOne({
+                select: { fromUser: true },
+                where: { id: requestId, toUser: me, answeredAt: IsNull() }
+            });
+            return row?.fromUser ?? null;
         },
 
         async answerRequest(me: string, requestId: string, outcome: 'accepted' | 'declined'): Promise<void>
@@ -482,10 +491,10 @@ export function createSocialService(db: DataSource)
 
         async removeFriend(me: string, otherId: string): Promise<void>
         {
-            await db.query(
-                'delete from friendships where (user_id = $1 and friend_id = $2) or (user_id = $2 and friend_id = $1)',
-                [me, otherId]
-            );
+            await db.getRepository(Friendship).delete([
+                { userId: me, friendId: otherId },
+                { userId: otherId, friendId: me }
+            ]);
         },
 
         /**
@@ -510,10 +519,10 @@ export function createSocialService(db: DataSource)
             await db.transaction(async (tx) =>
             {
                 await tx.query('insert into blocks (user_id, blocked_id) values ($1, $2) on conflict do nothing', [me, otherId]);
-                await tx.query(
-                    'delete from friendships where (user_id = $1 and friend_id = $2) or (user_id = $2 and friend_id = $1)',
-                    [me, otherId]
-                );
+                await tx.getRepository(Friendship).delete([
+                    { userId: me, friendId: otherId },
+                    { userId: otherId, friendId: me }
+                ]);
                 await tx.query(
                     `update friend_requests
                      set answered_at = now(), outcome = 'withdrawn'
@@ -526,7 +535,7 @@ export function createSocialService(db: DataSource)
 
         async unblock(me: string, otherId: string): Promise<void>
         {
-            await db.query('delete from blocks where user_id = $1 and blocked_id = $2', [me, otherId]);
+            await db.getRepository(Block).delete({ userId: me, blockedId: otherId });
         },
 
         async setMute(me: string, kind: MuteSubject, subjectId: string, muted: boolean): Promise<void>
@@ -539,10 +548,7 @@ export function createSocialService(db: DataSource)
                 );
                 return;
             }
-            await db.query(
-                'delete from mutes where user_id = $1 and subject_kind = $2 and subject_id = $3',
-                [me, kind, subjectId]
-            );
+            await db.getRepository(Mute).delete({ userId: me, subjectKind: kind, subjectId });
         },
 
         /**
@@ -586,11 +592,19 @@ export function createSocialService(db: DataSource)
 
         async reportsBy(me: string): Promise<{ id: string; against: string; category: ReportCategory; status: string; created_at: Date }[]>
         {
-            const rows = await db.query(
-                'select id, against, category, status, created_at from reports where reporter = $1 order by created_at desc limit 50',
-                [me]
-            );
-            return rowsOf(rows);
+            const rows = await db.getRepository(Report).find({
+                select: { id: true, against: true, category: true, status: true, createdAt: true },
+                where: { reporter: me },
+                order: { createdAt: 'DESC' },
+                take: 50
+            });
+            return rows.map((row) => ({
+                id: row.id,
+                against: row.against,
+                category: row.category,
+                status: row.status,
+                created_at: row.createdAt
+            }));
         },
 
         /**
