@@ -678,8 +678,8 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 // Every socket this account holds, not only the one that asked. Signing out
                 // everywhere that leaves a live socket open is the feature not working.
                 live?.socialChanged(userId);
-                live?.sessionsRevoked(await identity.sessionsOf(userId));
-                return ended;
+                live?.sessionsRevoked(ended);
+                return ended.length;
             },
             claimHandle: (userId, handle) => identity.claimHandle(userId, handle)
         },

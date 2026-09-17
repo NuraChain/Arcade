@@ -315,15 +315,6 @@ export function createIdentityService(db: DataSource, config: IdentityConfig)
         },
 
         /** Every live session id for an account, so the gateway can close each one by code. */
-        async sessionsOf(userId: string): Promise<string[]>
-        {
-            const rows = await db.query(
-                'select id from sessions where user_id = $1 and revoked_at is null',
-                [userId]
-            );
-            return rowsOf<{ id: string }>(rows).map((row) => row.id);
-        },
-
         /**
          * Which of these sessions are still usable, in ONE query.
          *
@@ -356,14 +347,26 @@ export function createIdentityService(db: DataSource, config: IdentityConfig)
             await db.query('update sessions set revoked_at = now() where id = $1 and revoked_at is null', [sessionId]);
         },
 
-        /** Ends every session for this account, including the one making the request. */
-        async signOutEverywhere(userId: string): Promise<number>
+        /**
+         * Ends every session for this account, including the one making the request, and answers
+         * with the ids it ended.
+         *
+         * It used to answer with a COUNT and throw the ids away, so the caller asked `sessionsOf`
+         * for them afterwards - and `sessionsOf` filters `revoked_at is null`, which this statement
+         * had just made false for every one of them. It therefore returned an empty array, every
+         * time, and `sessionsRevoked([])` closed no sockets at all. Signing out everywhere revoked
+         * the rows and left every browser connected, which is the feature not working.
+         *
+         * The ids come from the same statement that revokes them, so there is no window in which a
+         * new session could appear between the write and the read.
+         */
+        async signOutEverywhere(userId: string): Promise<string[]>
         {
             const rows = await db.query(
                 'update sessions set revoked_at = now() where user_id = $1 and revoked_at is null returning id',
                 [userId]
             );
-            return rowsOf<{ id: string }>(rows).length;
+            return rowsOf<{ id: string }>(rows).map((row) => row.id);
         },
 
         /**
