@@ -407,6 +407,8 @@ describe('what loading is allowed to mean', () =>
     });
 });
 
+const BLOCK_COMMENT = /\/\*[\s\S]*?\*\//g;
+
 describe('what red means', () =>
 {
     /**
@@ -443,11 +445,18 @@ describe('what red means', () =>
         'components/ui/variants.ts'
     ];
 
+    /**
+     * Block comments are stripped before the scan, the way `ludo-purity.spec.ts` strips them.
+     *
+     * A file that explains in prose why it does NOT reach for the stakes colour was guilty of
+     * naming it - so the rule punished exactly the thing it exists to encourage, and the only
+     * fix on offer was to write a worse comment. What is scanned is what renders.
+     */
     it('keeps the stakes colour out of everything that is merely wrong', () =>
     {
         const guilty = FILES
             .filter((file) => !MAY_SAY_MADDER.includes(file.path))
-            .filter((file) => /\bmadder\b/.test(file.text))
+            .filter((file) => /\bmadder\b/.test(file.text.replace(BLOCK_COMMENT, '')))
             .map((file) => file.path);
 
         expect(guilty, 'madder means a table is playing for something; the destructive colour is danger').toEqual([]);
