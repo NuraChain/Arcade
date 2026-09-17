@@ -1,10 +1,10 @@
 import { Check, Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
 import { User } from './user.entity.ts';
 
-export type NotificationKind = 'friend-request' | 'friend-accepted' | 'group-added' | 'table-invite' | 'message';
+export type NotificationKind = 'friend-request' | 'friend-accepted' | 'group-added' | 'table-invite' | 'message' | 'turn';
 
 @Check('notifications_count_positive', `count > 0`)
-@Check('notifications_kind_known', `kind in ('friend-request', 'friend-accepted', 'group-added', 'table-invite', 'message')`)
+@Check('notifications_kind_known', `kind in ('friend-request', 'friend-accepted', 'group-added', 'table-invite', 'message', 'turn')`)
 @Index('notifications_dedupe', ['userId', 'dedupeKey'], { unique: true })
 @Index('notifications_unread', ['userId'], { where: `read_at is null` })
 @Entity('notifications')
