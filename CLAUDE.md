@@ -1746,6 +1746,19 @@ no presence word — a handle, which is always true, goes in that line instead. 
 projection of `useRealtime().presence()` and nothing else: the seeded roster that used to drift on
 a timer is gone, so a page with no socket shows nobody online rather than inventing a room.
 
+**A departure is a field, because it cannot be an absence.** `announce` builds its entry from the
+presence record, and going dark is precisely the state where there is no record - so it used to send
+`people: []`, a delta naming nobody, which the client merged into no change at all. A tab left open
+showed people who had left hours earlier, and the client's own comment claimed "a delta naming
+somebody with an empty list is how the server says they went dark", which is not a thing an empty
+array can say. `gone: string[]` carries the handles instead, and is OMITTED rather than sent empty so
+a reader can tell "nobody left" from "somebody left and I could not say who". `realtime-hub.spec.ts`
+asserted the empty frame - the bug written down as an expectation - and now asserts the departure.
+
+Removing them leaves them UNKNOWN rather than offline, which is the honest answer and the reason
+`Presence.known` exists: somebody who left and somebody who turned presence off are the same thing
+from outside, and `presence.dot()` draws nothing for either.
+
 **The typing indicator is new server-visible metadata.** The server learns that somebody is typing,
 in which conversation, and when — that is on the same list as who talked to whom and how large it
 was, and it belongs in the privacy copy alongside them. A notice carries its own 4s expiry because

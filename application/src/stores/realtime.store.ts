@@ -180,9 +180,20 @@ export const useRealtime = createStore((): RealtimeApi =>
                     merged.set(entry.who, entry);
                 }
 
-                // A delta naming somebody with an empty list is how the server says they went
-                // dark, so anybody a non-full frame does not mention keeps their state and
-                // anybody it mentions with nothing is removed by the sender's own snapshot.
+                // `gone` is how a departure arrives, and it has to be a separate field: somebody
+                // who went dark has no presence record left to describe, so the server used to
+                // announce it as `people: []` - a frame naming nobody, which merged to no change
+                // at all. A tab left open showed people who had left hours earlier.
+                //
+                // Removing them leaves them UNKNOWN rather than offline, which is the honest
+                // answer: a person who left and a person who turned presence off are the same
+                // thing from here, and `presence.dot()` draws nothing for either.
+                for (const who of frame.gone ?? [])
+                {
+                    merged.delete(who);
+                }
+
+                // Anybody a delta does not mention keeps whatever they had.
                 return [...merged.values()];
             });
             return;

@@ -9,7 +9,7 @@ export interface PresenceEntry
 
 export type ServerFrame =
     | { v: 1; t: 'hello'; n: number; rt: string; self: string; at: number }
-    | { v: 1; t: 'presence'; n: number; full: boolean; people: PresenceEntry[] }
+    | { v: 1; t: 'presence'; n: number; full: boolean; people: PresenceEntry[]; gone?: string[] }
     | { v: 1; t: 'nudge'; n: number; scope: 'chat' | 'social'; id?: string; at: number }
     | { v: 1; t: 'typing'; n: number; who: string; id: string };
 
@@ -24,8 +24,24 @@ export const REALTIME_WIRE = 'nura-rt/v1';
 export const hello = (n: number, self: string, at: number): ServerFrame =>
     ({ v: 1, t: 'hello', n, rt: REALTIME_WIRE, self, at });
 
-export const presence = (n: number, full: boolean, people: PresenceEntry[]): ServerFrame =>
-    ({ v: 1, t: 'presence', n, full, people });
+/**
+ * Who is here, and - on a delta - who has just stopped being here.
+ *
+ * `gone` exists because a departure was previously UNREPRESENTABLE. `announce` built its entry from
+ * the presence record, and the record is deleted before the announcement, so somebody going dark
+ * produced `people: []` - a frame that names nobody. The client merged it, changed nothing, and a
+ * tab left open went on showing people who had left hours earlier. The client's own comment claimed
+ * "a delta naming somebody with an empty list is how the server says they went dark", which is not
+ * a thing an empty array can say.
+ *
+ * Absent from the client's map is the UNKNOWN state, not "offline", which is the honest answer: a
+ * person who left and a person who turned presence off look identical from outside, and
+ * `presence.dot()` renders nothing for either.
+ */
+export const presence = (n: number, full: boolean, people: PresenceEntry[], gone: string[] = []): ServerFrame =>
+    gone.length === 0
+        ? { v: 1, t: 'presence', n, full, people }
+        : { v: 1, t: 'presence', n, full, people, gone };
 
 /**
  * A doorbell, not a delivery.

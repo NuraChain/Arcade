@@ -93,6 +93,28 @@ describe('presence over the socket', () =>
         expect(presence.dot('mina')).toBeNull();
     });
 
+    /**
+     * The departure the wire could not express.
+     *
+     * `announce` builds its entry from the presence record, and going dark is the state where there
+     * is no record - so it sent `people: []`, a delta naming nobody, and this merge changed nothing.
+     * A tab left open showed people who had left hours earlier. `gone` is what says it.
+     */
+    it('drops somebody a delta says has gone, and leaves the rest alone', () =>
+    {
+        const presence = usePresence();
+        room([{ who: 'sara.k', state: 'online' }, { who: 'reza.t', state: 'online' }]);
+
+        socket.deliver({ v: 1, t: 'presence', n: 2, full: false, people: [], gone: ['sara.k'] });
+
+        // Unknown, not offline: somebody who left and somebody who turned presence off look the
+        // same from here, and the dot is drawn for neither.
+        expect(presence.of('sara.k').known).toBe(false);
+        expect(presence.dot('sara.k')).toBeNull();
+
+        expect(presence.dot('reza.t')).toBe('online');
+    });
+
     it('forgets the room when the socket goes, rather than freezing it', () =>
     {
         const presence = usePresence();

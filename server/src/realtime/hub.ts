@@ -343,9 +343,17 @@ export function createHub(deps: HubDeps): Hub
     const announce = (userId: string, except?: Held): void =>
     {
         const record = online.get(userId);
+        const handle = edges.get(userId)?.party.id ?? userId;
+
+        // A departure travels in `gone`, not as an empty `people`. There is no record left to build
+        // an entry from - that is what having gone dark MEANS - so the only way to say it is to name
+        // the handle separately. Sending `people: []` named nobody and changed nothing on the other
+        // end, which is why a tab left open kept showing people who had left hours ago.
         const people: PresenceEntry[] = record === undefined
             ? []
-            : [{ who: edges.get(userId)?.party.id ?? userId, state: record.state, since: record.since }];
+            : [{ who: handle, state: record.state, since: record.since }];
+
+        const gone = record === undefined ? [handle] : [];
 
         for (const [viewer, sockets] of byUser)
         {
@@ -357,7 +365,7 @@ export function createHub(deps: HubDeps): Hub
             {
                 if (connection !== except)
                 {
-                    emit(connection, (n) => presence(n, false, people));
+                    emit(connection, (n) => presence(n, false, people, gone));
                 }
             }
         }

@@ -350,7 +350,37 @@ describe('leaving', () =>
         await world.hub.sweep();
         expect(world.hub.presenceOf('sara.k').map((entry) => entry.who)).not.toContain('alex');
 
-        expect(watcher.wire.framesOf('presence').at(-1)).toMatchObject({ full: false, people: [] });
+        /**
+         * The departure has to be SAYABLE, and for a long time it was not.
+         *
+         * This line used to assert `{ full: false, people: [] }` - the empty frame - which is the
+         * bug written down as an expectation. `announce` builds its entry from the presence record,
+         * and going dark is exactly the state where there is no record, so the frame named nobody.
+         * A client merging it changed nothing, and a tab left open showed people who had left hours
+         * earlier. `presenceOf` above is the SERVER's view and was always right; what the watcher
+         * was actually told was empty.
+         */
+        expect(watcher.wire.framesOf('presence').at(-1)).toMatchObject({ full: false, people: [], gone: ['alex'] });
+    });
+
+    it('does not claim a departure when somebody is merely changing state', async () =>
+    {
+        await connect('alex');
+        const watcher = await connect('sara.k');
+        await world.hub.sweep();
+
+        const before = watcher.wire.framesOf('presence').length;
+        world.hub.setState((await connect('alex')).connection, 'away');
+
+        const frames = watcher.wire.framesOf('presence').slice(before);
+        expect(frames.length).toBeGreaterThan(0);
+
+        // `gone` is omitted rather than sent empty, so a reader can tell "nobody left" from
+        // "somebody left and I could not say who".
+        for (const frame of frames)
+        {
+            expect(frame).not.toHaveProperty('gone');
+        }
     });
 
     it('keeps somebody online while another tab of theirs is open', async () =>
