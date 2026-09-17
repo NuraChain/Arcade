@@ -210,7 +210,16 @@ export default component MatchBoard(props: { match: MatchView })
             : locale.t('match.move.step', { token: label, die: locale.n(game.die) });
     };
 
-    <div class="flex min-h-0 flex-1 flex-col gap-4 @3xl:flex-row">
+    /**
+     * The height constraint belongs to the SIDE-BY-SIDE layout and nowhere else.
+     *
+     * `flex-1 min-h-0` in a column whose height is bounded gives this element a basis of zero and
+     * lets its content run out of the bottom of its own box - so on a phone the seat list and the
+     * resign button were drawn straight over the "Show chat" button underneath, and a tap meant to
+     * give up opened the chat instead. Stacked, this is as tall as what is in it and the page
+     * scrolls; in a row, the board and the controls share a fixed height and each scrolls itself.
+     */
+    <div class="flex flex-col gap-4 @3xl:min-h-0 @3xl:flex-1 @3xl:flex-row">
         <div class="board-stage">
             <BoardCanvas view={ view } onPick={ (key) => void pick(key) } />
         </div>
@@ -293,7 +302,7 @@ export default component MatchBoard(props: { match: MatchView })
 
             <Show when={ !over && mine !== undefined }>
                 { () =>
-                    <Button variant="ghost" size="sm" onClick={ () => void board.resign() }>
+                    <Button variant="ghost" size="md" onClick={ () => void board.resign() }>
                         { locale.t('match.resign') }
                     </Button>
                 }
