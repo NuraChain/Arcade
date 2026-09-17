@@ -425,6 +425,36 @@ describe('shutting down', () =>
 
 describe('cached edges', () =>
 {
+    /**
+     * Nothing ever released them. `bind` was the only writer, a social change the only deleter and
+     * shutdown the only clear - so every account that had ever opened a socket kept a Party and two
+     * full Sets, friends and blocks, for the life of the process.
+     *
+     * Observed the way the TTL test below observes a reload: change the source, reconnect INSIDE the
+     * TTL, and see whether the new value took. If the sweep dropped the cache the reconnect reloads
+     * and `showOnline: false` applies; if it did not, the stale cache is still answering.
+     */
+    it('releases them once the account is finally gone, not merely lingering', async () =>
+    {
+        world.edges.set('alex', { party: party('alex'), friends: [], blocks: [] });
+        const first = await connect('alex');
+        world.hub.release(first.connection);
+
+        world.at += LINGER_MS + 1;
+        await world.hub.sweep();
+
+        world.edges.set('alex', { party: party('alex', { showOnline: false }), friends: [], blocks: [] });
+        world.at += 1;
+
+        await connect('sara.k');
+        await connect('alex');
+
+        expect(
+            world.hub.presenceOf('sara.k').map((entry) => entry.who),
+            'the reconnect answered from a cache the sweep should have dropped'
+        ).not.toContain('alex');
+    });
+
     it('reloads them once they are older than the ceiling', async () =>
     {
         world.edges.set('alex', { party: party('alex'), friends: [], blocks: [] });

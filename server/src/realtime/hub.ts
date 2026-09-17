@@ -529,7 +529,21 @@ export function createHub(deps: HubDeps): Hub
                 if (record.leftAt !== null && at - record.leftAt >= LINGER_MS)
                 {
                     online.delete(userId);
+
+                    // The cached social edges go with them, and this is the moment for it rather
+                    // than the disconnect: a reload closes and reopens within a second, and paying
+                    // a friends-and-blocks read for every navigation is what the linger avoids.
+                    //
+                    // Nothing released them at all before. `bind` was the only writer, a social
+                    // change the only deleter, and shutdown the only clear - so every account that
+                    // had ever opened a socket kept a Party and two full Sets for the life of the
+                    // process. On a long-lived server with churn that is the whole social graph.
+                    // ANNOUNCE FIRST. The announcement asks `partyOf` who may see this change, and
+                    // that reads the very cache being dropped - so releasing it first leaves the
+                    // going-dark frame unable to work out who to send itself to, and the watchers
+                    // never hear that the account left.
                     announce(userId);
+                    edges.delete(userId);
                 }
             }
 
