@@ -11,8 +11,16 @@
  * beside it, each is one keystroke from being undone, and each failure is silent: the page still
  * works, it just pays for the whole typed api client - and its top-level await on the route
  * manifest - on a route whose entire promise is that it paints with no JavaScript and no server.
+ *
+ * The last check is a different kind of silence. `class={ [ ..., signal() ? 'a' : 'b' ].join(' ') }`
+ * compiles to a bare `setProp`, not a `createEffect`, so the class is written once and never again:
+ * correct on first render and stale forever after. Both segmented controls shipped that way - the
+ * selected pill stayed on whichever option was chosen when the control mounted, while `aria-pressed`
+ * moved correctly, so the markup was right and only the paint was wrong. Nothing could see it:
+ * `npm run qa` reads overflow, hit targets, a landmark and the console, and an accessibility check
+ * reads the aria. This reads the emitted bundle, which is the only place the difference exists.
  */
-import { readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { gzipSync } from 'node:zlib';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -20,6 +28,7 @@ import { fileURLToPath } from 'node:url';
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const DIST = join(ROOT, 'application', 'dist');
 const ASSETS = join(DIST, 'assets');
+const SSR_ASSETS = join(ROOT, 'application', 'dist-server', 'assets');
 
 const KB = 1024;
 
@@ -117,6 +126,57 @@ for (const name of all)
     }
 }
 
+// ---------------------------------------------------------------- class bindings that never update
+let classBindsRead = 0;
+
+if (!existsSync(SSR_ASSETS))
+{
+    problems.push(`${ SSR_ASSETS } is missing, so no class binding was read - this check cannot pass by finding nothing`);
+}
+else
+{
+    for (const name of readdirSync(SSR_ASSETS).filter((file) => file.endsWith('.js')))
+    {
+        let region = name;
+
+        for (const line of readFileSync(join(SSR_ASSETS, name), 'utf8').split('\n'))
+        {
+            const marked = /^\/\/#region (.+)$/.exec(line);
+
+            if (marked !== null)
+            {
+                region = marked[1];
+            }
+
+            if (!line.includes('setProp(') || !line.includes('"class"'))
+            {
+                continue;
+            }
+
+            classBindsRead += 1;
+
+            if (line.includes('createEffect'))
+            {
+                continue;
+            }
+
+            const reads = [...line.slice(line.indexOf('"class",') + 8).matchAll(/(\w+(?:\.\w+)*)\(\)/g)]
+                .map((match) => match[1])
+                .filter((read) => !/(join|filter|trim)$/.test(read));
+
+            if (reads.length > 0)
+            {
+                problems.push(`${ region } binds class once from ${ reads.join(', ') } - write it as class={ () => [ ... ] }`);
+            }
+        }
+    }
+
+    if (classBindsRead === 0)
+    {
+        problems.push('no class binding was found in the SSR bundle, so this check measured nothing');
+    }
+}
+
 // ---------------------------------------------------------------- say what was measured, always
 const shell = all.find((name) => /^app-shell\.component-/.test(name));
 const pages = all.filter((name) => /\.page-/.test(name)).map((name) => gzip(name));
@@ -124,10 +184,11 @@ const pages = all.filter((name) => /\.page-/.test(name)).map((name) => gzip(name
 console.log(`  initial JS   ${ size(initialBytes) } / ${ size(INITIAL_BUDGET) }  (${ initial.length } chunks)`);
 console.log(`  app shell    ${ shell === undefined ? 'absent' : size(gzip(shell)) } / ${ size(SHELL_BUDGET) }`);
 console.log(`  routes       ${ pages.length } chunks, largest ${ size(Math.max(0, ...pages)) } / ${ size(ROUTE_BUDGET) }`);
+console.log(`  class binds  ${ classBindsRead } read, ${ problems.length === 0 ? 'every one that reads a signal effect-wrapped' : 'see below' }`);
 
 if (problems.length > 0)
 {
-    console.error('\n  JS budget exceeded:\n');
+    console.error('\n  build refused:\n');
     for (const problem of problems)
     {
         console.error(`    - ${ problem }`);
