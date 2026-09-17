@@ -16,13 +16,10 @@ export const app: Pick<Dictionary, keyof typeof reference> = {
     'app.nav.back': 'بازگشت',
     'app.nav.primary': 'ناوبری اصلی',
     'app.nav.signOut': 'خروج',
-    'app.nav.landing': 'بازگشت به بازار',
     'create.title': 'ساختن میز',
     'app.nav.quickPlay': 'بازی سریع',
 
-    'signIn.title': 'بیا سر میز.',
     'signIn.continue': 'نشستن به نام {name}',
-    'signIn.custom': 'یا نام خودت را بگو',
     'signIn.handle': 'نام تو',
     'signIn.handleHint': 'دست‌کم سه حرف یا رقم. دوستانت این نام را سر میز می‌بینند.',
     'signIn.handleShort': 'نام باید دست‌کم سه حرف یا رقم داشته باشد.',
@@ -30,13 +27,8 @@ export const app: Pick<Dictionary, keyof typeof reference> = {
     'signIn.handleReserved': 'این نام برای خودِ محصول نگه داشته شده. یکی دیگر بردار.',
     'signIn.handleRefused': 'این نام پذیرفته نشد. یکی دیگر بردار.',
     'signIn.failed': 'نشد. اتصالت را ببین و دوباره تلاش کن.',
-    'signIn.minor': 'زیر ۱۸ سال: پیام غریبه‌ها خاموش، فیلترها قفل.',
-    'signIn.welcome': 'خوش برگشتی، {name}',
 
     'common.cancel': 'لغو',
-    'common.confirm': 'تأیید',
-    'common.save': 'ذخیره',
-    'common.done': 'انجام شد',
     'common.more': 'بیشتر',
     'common.retry': 'دوباره تلاش کن',
     'common.loading': 'در حال بارگذاری…',
@@ -45,7 +37,6 @@ export const app: Pick<Dictionary, keyof typeof reference> = {
     'common.seeAll': 'همه',
     'common.you': 'تو',
     'common.online': 'آنلاین',
-    'common.offline': 'آفلاین',
     'common.away': 'دور از دسترس',
     'common.playing': 'در حال بازی {game}',
     'common.players': { one: '{count} بازیکن', other: '{count} بازیکن' },
@@ -63,13 +54,7 @@ export const app: Pick<Dictionary, keyof typeof reference> = {
     'toast.more': '{count} مورد دیگر…',
 
     'app.refreshing': 'در حال تازه‌سازی…',
-    'app.pull': 'برای تازه‌سازی بکش',
-    'app.railWider': 'پهن‌تر',
-    'app.railNarrower': 'باریک‌تر',
-    'app.scrollBack': 'پیمایش به عقب',
-    'app.scrollOn': 'پیمایش به جلو',
 
-    'overlay.close': 'بستن',
     'overlay.handle': 'برای بستن به پایین بکش',
 
     'connection.offline': 'آفلاین هستی. میزها تا برگشتنت صبر می‌کنند.',
@@ -83,8 +68,5 @@ export const app: Pick<Dictionary, keyof typeof reference> = {
     'keys.banner.dismiss': 'الان نه',
 
     'state.errorTitle': 'این بخش بارگذاری نشد.',
-    'state.errorLead': 'اگر ادامه داشت، اتصالت را بررسی کن.',
-    'state.emptyTitle': 'هنوز چیزی اینجا نیست.',
-    'state.notFoundTitle': 'اینجا میزی نیست.',
-    'state.notFoundLead': 'این پیوند به جایی اشاره می‌کند که هرگز ساخته نشده است.'
+    'state.errorLead': 'اگر ادامه داشت، اتصالت را بررسی کن.'
 };

@@ -9,7 +9,6 @@ export const landing: Pick<Dictionary, keyof typeof reference> = {
 
     'nav.games': 'بازی‌ها',
     'nav.rooms': 'اتاق‌ها',
-    'nav.play': 'بیا سر میز',
     'nav.connect': 'اتصال کیف پول',
     'nav.menu': 'منو',
     'nav.close': 'بستن منو',
@@ -32,7 +31,6 @@ export const landing: Pick<Dictionary, keyof typeof reference> = {
     'games.title': 'بازی‌هایی که می‌ارزد برایشان بمانی.',
     'games.lead': 'چهار میز، همیشه باز. بیشترش در راه است.',
     'games.players': 'بازیکن',
-    'games.open': 'این میز را باز کن',
 
     'games.hokm.name': 'حکم',
     'games.hokm.blurb': 'بازی چهارنفرهٔ ایرانی، دو به دو. حکم را بگو و خونسرد بمان.',
@@ -84,7 +82,6 @@ export const landing: Pick<Dictionary, keyof typeof reference> = {
 
     'a11y.scene': 'تصویری از یک بازار شبانه با میزهای بازی معلق که هرکدام زیر یک چراغ آویزان روشن است.',
     'a11y.skip': 'رفتن به محتوای اصلی',
-    'a11y.quality': 'کیفیت گرافیک',
 
     'notFound.title': 'اینجا میزی نیست.',
     'notFound.lead': 'این پیوند به اتاقی اشاره می‌کند که هرگز ساخته نشده، یا از آن زمان بسته شده است.',

@@ -1,5 +1,4 @@
 export const me = {
-    'me.title': 'Me',
     'me.edit': 'Edit profile',
     'me.share': 'Share profile',
 
@@ -142,7 +141,5 @@ export const me = {
     'devices.attested.contract': 'Contract wallet',
     'devices.attested.contractHint': 'Proved on-chain by the wallet contract on this account.',
     'devices.attested.server': 'This server',
-    'devices.attested.serverHint': 'Nobody signed for this one. It is here because it was signed in — a guest account has no wallet to prove it with.',
-
-    'settings.back': 'Settings'
+    'devices.attested.serverHint': 'Nobody signed for this one. It is here because it was signed in — a guest account has no wallet to prove it with.'
 };

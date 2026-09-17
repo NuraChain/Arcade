@@ -13,13 +13,10 @@ export const app = {
     'app.nav.back': 'Back',
     'app.nav.primary': 'Main navigation',
     'app.nav.signOut': 'Sign out',
-    'app.nav.landing': 'Back to the market',
     'create.title': 'Create a table',
     'app.nav.quickPlay': 'Quick play',
 
-    'signIn.title': 'Pull up a chair.',
     'signIn.continue': 'Sit down as {name}',
-    'signIn.custom': 'Or use your own name',
     'signIn.handle': 'Your name',
     'signIn.handleHint': 'Three letters or digits or more. Friends see this at the table.',
     'signIn.handleShort': 'A name needs at least three letters or digits.',
@@ -27,13 +24,8 @@ export const app = {
     'signIn.handleReserved': 'That name is kept for the product itself. Try another.',
     'signIn.handleRefused': 'That name was turned down. Try another.',
     'signIn.failed': 'That did not work. Check your connection and try again.',
-    'signIn.minor': 'Under 18: messages from strangers off, filters locked.',
-    'signIn.welcome': 'Welcome back, {name}',
 
     'common.cancel': 'Cancel',
-    'common.confirm': 'Confirm',
-    'common.save': 'Save',
-    'common.done': 'Done',
     'common.more': 'More',
     'common.retry': 'Try again',
     'common.loading': 'Loading…',
@@ -42,7 +34,6 @@ export const app = {
     'common.seeAll': 'See all',
     'common.you': 'You',
     'common.online': 'Online',
-    'common.offline': 'Offline',
     'common.away': 'Away',
     'common.playing': 'Playing {game}',
     'common.players': { one: '{count} player', other: '{count} players' },
@@ -60,13 +51,7 @@ export const app = {
     'toast.more': '{count} more…',
 
     'app.refreshing': 'Refreshing…',
-    'app.pull': 'Pull to refresh',
-    'app.railWider': 'Wider',
-    'app.railNarrower': 'Narrower',
-    'app.scrollBack': 'Scroll back',
-    'app.scrollOn': 'Scroll forward',
 
-    'overlay.close': 'Close',
     'overlay.handle': 'Drag down to close',
 
     'connection.offline': 'You’re offline. Tables pause until you’re back.',
@@ -80,8 +65,5 @@ export const app = {
     'keys.banner.dismiss': 'Not now',
 
     'state.errorTitle': 'Couldn’t load this.',
-    'state.errorLead': 'If this keeps happening, check your connection.',
-    'state.emptyTitle': 'Nothing here yet.',
-    'state.notFoundTitle': 'No table here.',
-    'state.notFoundLead': 'That link points somewhere that was never built.'
+    'state.errorLead': 'If this keeps happening, check your connection.'
 };

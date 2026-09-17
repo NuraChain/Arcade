@@ -6,7 +6,6 @@ export const landing = {
 
     'nav.games': 'Games',
     'nav.rooms': 'Rooms',
-    'nav.play': 'Pull up a chair',
     'nav.connect': 'Connect wallet',
     'nav.menu': 'Menu',
     'nav.close': 'Close menu',
@@ -29,7 +28,6 @@ export const landing = {
     'games.title': 'Games worth staying for.',
     'games.lead': 'Four tables, always open. More are being built.',
     'games.players': 'players',
-    'games.open': 'Open this table',
 
     'games.hokm.name': 'Hokm',
     'games.hokm.blurb': 'Persian trick-taking for four, played in pairs. Name the suit, then hold your nerve.',
@@ -81,7 +79,6 @@ export const landing = {
 
     'a11y.scene': 'An illustrated night market of floating game tables, each lit by a hanging lamp.',
     'a11y.skip': 'Skip to main content',
-    'a11y.quality': 'Graphics quality',
 
     'notFound.title': 'No table here.',
     'notFound.lead': 'That link points at a room that was never built, or one that has since closed.',

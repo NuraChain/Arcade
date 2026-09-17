@@ -2,7 +2,6 @@ import type { Dictionary } from '../en/index.ts';
 import type { me as reference } from '../en/me.ts';
 
 export const me: Pick<Dictionary, keyof typeof reference> = {
-    'me.title': 'من',
     'me.edit': 'ویرایش پروفایل',
     'me.share': 'اشتراک پروفایل',
 
@@ -145,7 +144,5 @@ export const me: Pick<Dictionary, keyof typeof reference> = {
     'devices.attested.contract': 'کیف پول قراردادی',
     'devices.attested.contractHint': 'روی زنجیره، با قرارداد کیف پولِ همین حساب ثابت شده.',
     'devices.attested.server': 'همین سرور',
-    'devices.attested.serverHint': 'کسی برایش امضا نکرده. اینجاست چون وارد شده بود — حساب مهمان کیف پولی ندارد که با آن ثابت شود.',
-
-    'settings.back': 'تنظیمات'
+    'devices.attested.serverHint': 'کسی برایش امضا نکرده. اینجاست چون وارد شده بود — حساب مهمان کیف پولی ندارد که با آن ثابت شود.'
 };
