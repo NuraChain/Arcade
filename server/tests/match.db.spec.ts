@@ -1,3 +1,5 @@
+import { seedReference } from '../src/db/seed-reference.ts';
+import { createAchieveService } from '../src/domains/achieve/service.ts';
 import 'reflect-metadata';
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -92,6 +94,16 @@ describe.skipIf(!active)('a match, against a real database', () =>
         await db.initialize();
         await syncSchema(db);
 
+        /**
+         * Reference data, seeded the way a real database has it.
+         *
+         * `first-seat` is awarded inside the seat claim, and `user_achievements.achievement_id` is
+         * a foreign key - so a database with no definitions in it refuses every claim with a 23503
+         * that looks nothing like a seating bug. A real one runs this on every boot; a test one
+         * that does not is a test database shaped differently from the thing it is standing in for.
+         */
+        await seedReference(db);
+
         await db.query(
             `insert into games (id, slug, name_key, blurb_key, category_key, category, min_players, max_players, sort_order)
              values ('ludo', 'ludo', 'g.n', 'g.b', 'g.c', 'board', 2, 4, 1)
@@ -118,8 +130,8 @@ describe.skipIf(!active)('a match, against a real database', () =>
         await db.query('truncate conversations cascade');
         await db.query('delete from users');
         social = createSocialService(db);
-        tables = createTableService(db, social);
-        matches = createMatchService(db);
+        tables = createTableService(db, social, createAchieveService(db));
+        matches = createMatchService(db, createAchieveService(db));
     });
 
     describe('starting', () =>
@@ -200,21 +212,28 @@ describe.skipIf(!active)('a match, against a real database', () =>
 
         it('will not start a game that has no engine', async () =>
         {
+            /**
+             * A game id the SEED does not define, like `seat-race.spec.ts` uses, rather than a real
+             * one. Borrowing `hokm` worked only while this database had no reference data in it -
+             * the seed writes hokm's real rules, `on conflict do nothing` then leaves them alone,
+             * and the table is refused for having the wrong seat count instead of for having no
+             * engine. The test still passed the day that happened; it just stopped testing this.
+             */
             await db.query(
                 `insert into games (id, slug, name_key, blurb_key, category_key, category, min_players, max_players, sort_order)
-                 values ('hokm', 'hokm', 'g.n', 'g.b', 'g.c', 'cards', 4, 4, 2)
+                 values ('engineless', 'engineless', 'g.n', 'g.b', 'g.c', 'cards', 2, 4, 90)
                  on conflict (id) do nothing`
             );
             await db.query(
                 `insert into game_rules (game_id, seats, modes, targets, stakes, partners, has_cube, has_blinds)
-                 values ('hokm', '{2}', '{live}', '{}', 'none', false, false, false)
+                 values ('engineless', '{2}', '{live}', '{}', 'none', false, false, false)
                  on conflict (game_id) do nothing`
             );
 
             const host = await makeUser();
             const other = await makeUser();
             const table = await tables.create(host, {
-                game: 'hokm', seats: 2, mode: 'live', privacy: 'public',
+                game: 'engineless', seats: 2, mode: 'live', privacy: 'public',
                 target: 0, cube: false, blinds: 'low', invitees: []
             });
 
