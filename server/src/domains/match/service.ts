@@ -7,10 +7,29 @@ import { Match } from '../../entities/match.entity.ts';
 import { Table } from '../../entities/table.entity.ts';
 import { TableSeat } from '../../entities/table-seat.entity.ts';
 import { pickBelow, rollDie } from '../../lib/crypto.ts';
+import type { AchieveService } from '../achieve/service.ts';
 import { firstRow } from '../../lib/rows.ts';
 import { COLOURS } from './ludo/board.ts';
 import { apply, create, indexOfSeat, legalMoves } from './ludo/engine.ts';
+import { createRecorder, outcomeOf } from './record.ts';
+import type { MatchHistory } from '../../schemas.ts';
 import type { EngineAction, GameEvent, LudoState, RefusalReason } from './ludo/state.ts';
+
+/** One page of somebody's history. Big enough to be worth a request, small enough to render. */
+const HISTORY_PAGE = 20;
+
+interface HistoryRow
+{
+    id: string;
+    game: string;
+    seats: number;
+    finished_at: Date;
+    outcome: 'won' | 'abandoned' | 'closed';
+    result: 'won' | 'lost' | 'abandoned';
+    rating_before: number | null;
+    rating_after: number | null;
+    players: string[] | null;
+}
 
 /**
  * The database half of a played game.
@@ -101,8 +120,10 @@ function stateOf(match: Match): LudoState
     return match.state as LudoState;
 }
 
-export function createMatchService(db: DataSource)
+export function createMatchService(db: DataSource, achieve: AchieveService)
 {
+    const recorder = createRecorder(achieve);
+
     const seatsOf = async (runner: EntityManager | DataSource, matchId: string): Promise<MatchSeatRow[]> =>
         await runner.getRepository(MatchPlayer)
             .createQueryBuilder('p')
@@ -166,7 +187,7 @@ export function createMatchService(db: DataSource)
                 rev: next.rev,
                 deadlineAt: over ? null : new Date(Date.now() + turnMs(mode)),
                 winnerSeat,
-                outcome: over ? 'won' : null,
+                outcome: over ? outcomeOf(next) : null,
                 finishedAt: over ? new Date() : null
             }
         );
@@ -188,21 +209,89 @@ export function createMatchService(db: DataSource)
             idempotencyKey: action.key
         });
 
+        const players = tx.getRepository(MatchPlayer);
+
+        /**
+         * Every result is written here and nowhere else, and that ordering is load-bearing.
+         *
+         * A forfeit used to be recorded by the CALLER, after `commit` returned - so a resignation
+         * that ended the game had this function write `lost` over the resigner and the caller write
+         * `abandoned` back afterwards. `record.finish` reads those rows to decide who walked out, so
+         * it would have run in the window where the loser and the quitter were indistinguishable.
+         * A quitter must not be able to launder a walkout into an ordinary loss.
+         */
+        if (action.kind === 'forfeit')
+        {
+            await players.update({ matchId: match.id, seat: action.seat, result: IsNull() }, { result: 'abandoned' });
+        }
+
         if (winnerSeat !== null)
         {
-            const players = tx.getRepository(MatchPlayer);
-
             await players.update({ matchId: match.id, seat: winnerSeat, result: IsNull() }, { result: 'won' });
             await players.createQueryBuilder()
                 .update(MatchPlayer)
                 .set({ result: 'lost' })
                 .where('match_id = :matchId and result is null', { matchId: match.id })
                 .execute();
+
+            await recorder.finish(tx, match.id, match.game, next);
         }
     };
 
+    /**
+     * A person's own finished games, newest first, by keyset over `(finished_at, id)`.
+     *
+     * Keyset rather than OFFSET for the reason `chat.db.spec.ts` already pins: a game finishing
+     * while somebody is paging back repeats or skips a row every time. The cursor is the pair it
+     * pages on, encoded as text, because an opaque token nobody can read is one nobody can debug
+     * and there is nothing secret in a timestamp the row already carries.
+     */
+    const HISTORY_SQL = `
+        select m.id, m.game, m.seats, m.finished_at, m.outcome,
+               p.result, p.rating_before, p.rating_after,
+               (select array_agg(u.handle::text order by o.seat)
+                  from match_players o
+                  join users u on u.id = o.user_id
+                 where o.match_id = m.id)                                       as players
+          from match_players p
+          join matches m on m.id = p.match_id
+         where p.user_id = $1
+           and m.finished_at is not null
+           and p.result is not null
+           and ($2::timestamptz is null or (m.finished_at, m.id) < ($2::timestamptz, $3::uuid))
+         order by m.finished_at desc, m.id desc
+         limit $4
+    `;
+
     return {
         view: read,
+
+        async history(me: string, cursor: string | null): Promise<MatchHistory>
+        {
+            const at = cursor === null ? null : cursor.slice(0, cursor.lastIndexOf('|'));
+            const after = cursor === null ? null : cursor.slice(cursor.lastIndexOf('|') + 1);
+
+            const rows = await db.query(HISTORY_SQL, [me, at, after, HISTORY_PAGE + 1]) as HistoryRow[];
+            const page = rows.slice(0, HISTORY_PAGE);
+            const last = page[page.length - 1];
+
+            return {
+                matches: page.map((row) => ({
+                    id: row.id,
+                    game: row.game,
+                    seats: row.seats,
+                    finishedAt: new Date(row.finished_at).toISOString(),
+                    outcome: row.outcome,
+                    result: row.result,
+                    players: row.players ?? [],
+                    ...(row.rating_before === null ? {} : { ratingBefore: row.rating_before }),
+                    ...(row.rating_after === null ? {} : { ratingAfter: row.rating_after })
+                })),
+                ...(rows.length > HISTORY_PAGE && last !== undefined
+                    ? { cursor: `${ new Date(last.finished_at).toISOString() }|${ last.id }` }
+                    : {})
+            };
+        },
 
         playersOf: async (matchId: string): Promise<string[]> =>
             (await db.getRepository(MatchPlayer).find({ select: { userId: true }, where: { matchId } }))
@@ -444,11 +533,6 @@ export function createMatchService(db: DataSource)
                     key: want.key
                 }, await modeOf(tx, match.tableId));
 
-                if (want.kind === 'resign')
-                {
-                    await tx.getRepository(MatchPlayer).update({ matchId, seat: seat.seat }, { result: 'abandoned' });
-                }
-
                 return 'now';
             }).catch((error: unknown) =>
             {
@@ -525,11 +609,6 @@ export function createMatchService(db: DataSource)
                     piece: action.kind === 'move' ? action.piece : null,
                     key: null
                 }, mode);
-
-                if (action.kind === 'forfeit')
-                {
-                    await tx.getRepository(MatchPlayer).update({ matchId, seat }, { result: 'abandoned' });
-                }
 
                 return true;
             })

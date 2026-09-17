@@ -119,15 +119,24 @@ interface AchievementSeed
     tier: 'bronze' | 'silver' | 'gold';
 }
 
+/**
+ * The achievements, and every one of them is reachable.
+ *
+ * Three are gone: `hokm-trump` ("Named trump and took all seven"), `gammon` ("Won before your
+ * opponent bore off a single checker") and `cube-taker` ("Accepted a double and won"). Each
+ * described a mechanic of a game this product does not have, so nothing could ever award them -
+ * which is the same dead weight as a message key with no producer, printed on a tile somebody
+ * would have spent a season trying to earn. They come back with their games.
+ *
+ * `domains/achieve/rules.ts` is what awards the rest, and `tests/achievements.spec.ts` fails if
+ * this list and that rule set ever name different things.
+ */
 export const ACHIEVEMENT_SEEDS: AchievementSeed[] = [
     { id: 'first-seat', nameEn: 'First seat', nameFa: 'اولین صندلی', blurbEn: 'Sat down at a table.', blurbFa: 'سر یک میز نشستی.', icon: 'seat', tier: 'bronze' },
     { id: 'first-win', nameEn: 'First win', nameFa: 'اولین برد', blurbEn: 'Won a game, any game.', blurbFa: 'یک بازی را بردی، هر بازی‌ای.', icon: 'trophy', tier: 'bronze' },
     { id: 'regular', nameEn: 'Regular', nameFa: 'پای ثابت', blurbEn: 'Played on seven different days.', blurbFa: 'در هفت روز متفاوت بازی کردی.', icon: 'history', tier: 'bronze' },
     { id: 'host', nameEn: 'Host', nameFa: 'میزبان', blurbEn: 'Opened a private table and filled it.', blurbFa: 'یک میز خصوصی باز کردی و پرش کردی.', icon: 'invite', tier: 'bronze' },
     { id: 'streak-3', nameEn: 'On a roll', nameFa: 'روی دور', blurbEn: 'Three wins in a row.', blurbFa: 'سه برد پشت سر هم.', icon: 'flame', tier: 'silver' },
-    { id: 'hokm-trump', nameEn: 'Called it', nameFa: 'حکمش درست بود', blurbEn: 'Named trump and took all seven.', blurbFa: 'حکم گفتی و هر هفت دست را بردی.', icon: 'cards', tier: 'silver' },
-    { id: 'gammon', nameEn: 'Gammon', nameFa: 'مارس', blurbEn: 'Won before your opponent bore off a single checker.', blurbFa: 'بردی پیش از آن‌که حریف حتی یک مهره خارج کند.', icon: 'dice', tier: 'silver' },
-    { id: 'cube-taker', nameEn: 'Cube taker', nameFa: 'دوبل‌گیر', blurbEn: 'Accepted a double and won the game.', blurbFa: 'دوبل را قبول کردی و بازی را بردی.', icon: 'dice', tier: 'silver' },
     { id: 'crew', nameEn: 'Crew', nameFa: 'اکیپ', blurbEn: 'Played with the same three people ten times.', blurbFa: 'ده بار با همان سه نفر بازی کردی.', icon: 'people', tier: 'silver' },
     { id: 'streak-7', nameEn: 'Unstoppable', nameFa: 'توقف‌ناپذیر', blurbEn: 'Seven wins in a row.', blurbFa: 'هفت برد پشت سر هم.', icon: 'zap', tier: 'gold' },
     { id: 'centurion', nameEn: 'Hundred hands', nameFa: 'صد دست', blurbEn: 'A hundred games played.', blurbFa: 'صد بازی انجام شده.', icon: 'medal', tier: 'gold' },
@@ -232,5 +241,19 @@ export async function seedReference(db: DataSource): Promise<void>
             );
         }
 
+        /**
+         * The seed OWNS this table, so a definition it no longer carries is removed rather than
+         * left behind. Reference content that can only ever be added to is how a database ends up
+         * holding a tile nobody can earn and nobody remembers writing - and the three that were
+         * just deleted are exactly that, already sitting in every development database.
+         *
+         * `user_achievements.achievement_id` cascades, which is the honest consequence: removing a
+         * definition removes the awards of it, because an award of something that no longer exists
+         * renders as a blank square.
+         */
+        await tx.query(
+            `delete from achievements where id <> all($1::text[])`,
+            [ACHIEVEMENT_SEEDS.map((achievement) => achievement.id)]
+        );
     });
 }

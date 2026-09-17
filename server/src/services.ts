@@ -11,6 +11,7 @@ import { createDeviceService, type DeviceRow } from './domains/device/service.ts
 import { createGroupService, type GroupRow } from './domains/group/service.ts';
 import { createNotifyService, type NotificationRow } from './domains/notify/service.ts';
 import { sendPush, type VapidKeys } from './domains/notify/push.ts';
+import { createAchieveService } from './domains/achieve/service.ts';
 import { createMatchService, type MatchLoad } from './domains/match/service.ts';
 import { cellAt, FINISHED } from './domains/match/ludo/board.ts';
 import { createTableService, type TableRow } from './domains/table/service.ts';
@@ -65,7 +66,8 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
     const franking = createFranking(config.secret);
     const chat = createChatService(db, social, franking);
     const group = createGroupService(db, social);
-    const table = createTableService(db, social);
+    const achieve = createAchieveService(db);
+    const table = createTableService(db, social, achieve);
     const notify = createNotifyService(db, social);
 
     /**
@@ -483,7 +485,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         live?.socialChanged(...await table.seatedIds(row.id), ...also);
     };
 
-    const match = createMatchService(db);
+    const match = createMatchService(db, achieve);
 
     /**
      * The board as a client is allowed to see it.
@@ -1384,7 +1386,11 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
 
             move: async (me, matchId, input) => await played(me, matchId, { kind: 'move', key: input.key, rev: input.rev, piece: input.piece }),
 
-            resign: async (me, matchId, input) => await played(me, matchId, { kind: 'resign', key: input.key })
+            resign: async (me, matchId, input) => await played(me, matchId, { kind: 'resign', key: input.key }),
+
+            history: (me, cursor) => match.history(me, cursor),
+
+            record: (handle) => achieve.recordOf(handle)
         },
 
         notify: {

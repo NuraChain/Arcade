@@ -5,6 +5,7 @@ import type { TableMode, TablePrivacy, TableStatus } from '../../entities/table.
 import { firstRow, rowsOf } from '../../lib/rows.ts';
 import { ConversationMember } from '../../entities/conversation-member.entity.ts';
 import { TableSeat } from '../../entities/table-seat.entity.ts';
+import type { AchieveService } from '../achieve/service.ts';
 import type { SocialService } from '../social/service.ts';
 
 /**
@@ -154,7 +155,7 @@ const TABLE_COLUMNS = `
        from table_seats s where s.table_id = t.id)                             as chairs
 `;
 
-export function createTableService(db: DataSource, social: SocialService)
+export function createTableService(db: DataSource, social: SocialService, achieve: AchieveService)
 {
     const one = async (me: string, tableId: string): Promise<TableRow | null> =>
     {
@@ -431,6 +432,14 @@ export function createTableService(db: DataSource, social: SocialService)
                          on conflict do nothing`,
                         [tableId, me]
                     );
+
+                    /**
+                     * `first-seat` says "Sat down at a table", so it is earned by sitting down -
+                     * here, in the transaction that seats somebody, rather than at the end of a
+                     * match. Awarding it at a finish instead would mean a person who took a chair
+                     * and never got to play had not, according to the product, ever sat at one.
+                     */
+                    await achieve.seated(tx, me);
 
                     return seat.seat;
                 });
