@@ -9,23 +9,27 @@ import { rowsOf } from '../src/lib/rows.ts';
 import snapshot from './schema-snapshot.json' with { type: 'json' };
 
 /**
- * The schema `syncSchema` builds is the schema this product had when it was built by migrations.
+ * The schema `syncSchema` builds, frozen.
  *
- * `tests/schema-snapshot.json` was recorded from a database built by the migration sequence on the
- * day the migrations were deleted. It is the frozen definition of "correct", and every part of it
- * has to survive the entities being the only source of truth:
+ * `tests/schema-snapshot.json` began as a recording of the database the migration sequence built on
+ * the day the migrations were deleted, and is re-recorded whenever the schema deliberately moves.
+ * It is the definition of "correct", and every part of it has to survive the entities being the
+ * only source of truth:
  *
- *   - 27 tables, 213 columns with their types and nullability
- *   - 56 CHECK constraints, every one carrying a product rule
- *   - 43 foreign keys WITH their delete rules - 32 CASCADE and 8 SET NULL. These are behaviour, not
- *     hygiene: deleting an account has to take its devices, sessions and seats with it, and
- *     `reports.message_id ON DELETE SET NULL` is the rule that stops a reported disappearing
- *     message wedging the expiry sweep.
- *   - 39 indexes, six of which TypeORM cannot express and `syncSchema` creates by hand.
+ *   - 31 tables, 251 columns with their types and nullability
+ *   - 76 CHECK constraints, every one carrying a product rule
+ *   - 51 foreign keys WITH their delete rules. These are behaviour, not hygiene: deleting an
+ *     account has to take its devices, sessions and seats with it, `reports.message_id ON DELETE
+ *     SET NULL` is the rule that stops a reported disappearing message wedging the expiry sweep,
+ *     and `match_actions.user_id ON DELETE SET NULL` is what keeps a finished game's dice history
+ *     readable after somebody closes their account.
+ *   - 79 index shapes, eight of which TypeORM cannot express and `syncSchema` creates by hand.
  *
  * A diff here means the entities and the recorded truth have parted company. Either the entity is
  * wrong, or the schema genuinely changed and the snapshot is what to re-record - deliberately, as
  * its own commit, so the change is visible rather than absorbed.
+ * `tests/record-snapshot.db.spec.ts` does the recording, behind `RECORD_SNAPSHOT=1`, and runs the
+ * queries below rather than its own so the two cannot describe different things.
  *
  * OPT-IN, like the other `.db.spec` suites: `npm run test:db --workspace server` with
  * `TEST_DATABASE_URL` pointing at a database you do not mind losing.
@@ -106,7 +110,7 @@ describe.skipIf(!active)('the schema the entities build', () =>
     });
 
     /**
-     * The six in `INDEXES_TYPEORM_CANNOT_EXPRESS` are the reason `syncSchema` exists rather than a
+     * The eight in `INDEXES_TYPEORM_CANNOT_EXPRESS` are the reason `syncSchema` exists rather than a
      * bare `synchronize()`. `friend_requests_pending_pair` is the sharpest: it is UNIQUE over
      * `LEAST(from_user, to_user)`/`GREATEST(...)` where the request is unanswered, and it is the
      * only thing stopping A asking B while B is asking A from becoming two rows for one intention.
@@ -133,16 +137,16 @@ describe.skipIf(!active)('the schema the entities build', () =>
     });
 
     /**
-     * The six in `INDEXES_TYPEORM_CANNOT_EXPRESS` are the reason `syncSchema` exists rather than a
+     * The eight in `INDEXES_TYPEORM_CANNOT_EXPRESS` are the reason `syncSchema` exists rather than a
      * bare `synchronize()`. `friend_requests_pending_pair` is the sharpest: it is UNIQUE over
      * `LEAST(from_user, to_user)`/`GREATEST(...)` where the request is unanswered, and it is the
      * only thing stopping A asking B while B is asking A from becoming two rows for one intention.
      * These keep their real names, because nothing renames them.
      */
-    it('creates the six indexes no decorator can declare', async () =>
+    it('creates the eight indexes no decorator can declare', async () =>
     {
         expect(await pick(built, `select indexname as k from pg_indexes where schemaname='public' and indexname in
-            ('friend_requests_pending_pair','groups_public','messages_keyset','notifications_keyset','reports_against','tables_open')`))
+            ('friend_requests_pending_pair','groups_public','match_actions_feed','matches_history','messages_keyset','notifications_keyset','reports_against','tables_open')`))
             .toEqual(snapshot.handBuiltIndexes);
     });
 

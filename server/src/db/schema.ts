@@ -22,7 +22,13 @@ export const INDEXES_TYPEORM_CANNOT_EXPRESS = [
 
     `create index if not exists tables_open
         on tables (game, created_at desc)
-        where status = 'open'`
+        where status = 'open'`,
+
+    `create index if not exists matches_history
+        on matches (table_id, started_at desc)`,
+
+    `create index if not exists match_actions_feed
+        on match_actions (match_id, rev desc)`
 ] as const;
 
 export async function createExtensions(db: DataSource): Promise<void>

@@ -16,7 +16,7 @@ import { syncSchema, INDEXES_TYPEORM_CANNOT_EXPRESS } from '../src/db/schema.ts'
  * Two differences are expected, and both are listed here rather than waved through, so a THIRD one
  * appearing fails this test:
  *
- *  - The five DESC indexes get dropped and rebuilt. TypeORM cannot express a descending index, so
+ *  - The seven DESC indexes get dropped and rebuilt. TypeORM cannot express a descending index, so
  *    it does not know they are wanted and removes them as strays; `syncSchema` puts them back
  *    afterwards, which is why the order inside it matters. `friend_requests_pending_pair` survives
  *    because it is functional and TypeORM leaves it alone.
@@ -74,6 +74,8 @@ describe.skipIf(!active)('syncSchema settles', () =>
 
         expect(dropped).toEqual([
             'DROP INDEX "public"."groups_public"',
+            'DROP INDEX "public"."match_actions_feed"',
+            'DROP INDEX "public"."matches_history"',
             'DROP INDEX "public"."messages_keyset"',
             'DROP INDEX "public"."notifications_keyset"',
             'DROP INDEX "public"."reports_against"',
