@@ -5,9 +5,9 @@ import Page from '../../components/app/page.component.azeroth';
 import InviteSheet from '../../components/games/invite-sheet.component.azeroth';
 import LobbyPanel from '../../components/games/lobby-panel.component.azeroth';
 import TableChat from '../../components/games/table-chat.component.azeroth';
+import Button from '../../components/ui/button.component.azeroth';
 import EmptyState from '../../components/ui/empty-state.component.azeroth';
 import ErrorState from '../../components/ui/error-state.component.azeroth';
-import IconButton from '../../components/ui/icon-button.component.azeroth';
 import Skeleton from '../../components/ui/skeleton.component.azeroth';
 import type { GameId } from '../../data/games.ts';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
@@ -212,14 +212,15 @@ export default component PlayPage()
                                     <p class="max-w-[44ch] text-ui-base text-muted">
                                         { locale.plural('play.lobby.emptySeats', table.seats - table.taken) }
                                     </p>
-                                    <IconButton
-                                        icon="seat"
-                                        label={ locale.t('play.table.sitDown') }
+                                    <Button
                                         variant="primary"
                                         size="lg"
+                                        leading="seat"
                                         disabled={ table.taken >= table.seats }
                                         onClick={ () => void sitDown() }
-                                    />
+                                    >
+                                        { locale.t('play.table.sitDown') }
+                                    </Button>
                                 </Panel>
                             }
                         >
@@ -235,13 +236,11 @@ export default component PlayPage()
 
                         <Show when={ amHost }>
                             { () =>
-                                <button
-                                    type="button"
-                                    class="-ms-3 flex min-h-11 w-fit cursor-pointer items-center rounded-control px-3 text-ui-sm font-semibold text-madder transition-colors duration-150 hover:bg-madder/10"
-                                    onClick={ () => void end() }
-                                >
-                                    { locale.t('play.close.confirm') }
-                                </button>
+                                <div class="flex">
+                                    <Button variant="destructive" size="sm" leading="close" onClick={ () => void end() }>
+                                        { locale.t('play.close.confirm') }
+                                    </Button>
+                                </div>
                             }
                         </Show>
 
@@ -257,13 +256,11 @@ export default component PlayPage()
 
                         <Show when={ phone && table!.conversationId !== undefined && !chatOpen }>
                             { () =>
-                                <button
-                                    type="button"
-                                    class="mx-auto flex min-h-11 cursor-pointer items-center gap-2 rounded-control px-3 text-ui-sm font-semibold text-accent"
-                                    onClick={ () => chatOpen = true }
-                                >
-                                    { locale.t('play.table.chat') }
-                                </button>
+                                <div class="flex justify-center">
+                                    <Button variant="outline" size="md" leading="chats" onClick={ () => chatOpen = true }>
+                                        { locale.t('play.table.chatShow') }
+                                    </Button>
+                                </div>
                             }
                         </Show>
                     </div>
