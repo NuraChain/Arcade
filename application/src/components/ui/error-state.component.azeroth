@@ -7,7 +7,7 @@ export default component ErrorState(props: { title?: string; lead?: string; clas
     const locale = useLocale();
 
     <div class={ [ 'flex flex-col items-center px-6 py-10 text-center', props.class ?? '' ].filter(Boolean).join(' ') } role="alert">
-        <span class="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-madder/15 text-madder" aria-hidden="true">
+        <span class="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-danger/15 text-danger" aria-hidden="true">
             <Icon name="alert" size={ 26 } />
         </span>
         <p class="title text-ui-xl text-text">{ props.title ?? locale.t('state.errorTitle') }</p>

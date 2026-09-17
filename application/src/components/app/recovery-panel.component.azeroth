@@ -140,7 +140,7 @@ export default component RecoveryPanel(props: { waitingDevice?: string })
                             />
 
                             <Show when={ wrong }>
-                                { () => <p class="text-ui-sm text-madder" role="alert">{ locale.t('recovery.wrong') }</p> }
+                                { () => <p class="text-ui-sm text-danger" role="alert">{ locale.t('recovery.wrong') }</p> }
                             </Show>
 
                             <Button variant="primary" block leading="key" loading={ recovery.busy() } onClick={ () => void use() }>

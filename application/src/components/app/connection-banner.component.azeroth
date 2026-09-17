@@ -16,7 +16,7 @@ interface Notice
 
 const NOTICES: Record<Exclude<ConnectionState, 'online'>, Notice> =
 {
-    offline: { tone: 'bg-madder/15 text-madder', icon: 'wifi-off', text: 'connection.offline', urgent: true },
+    offline: { tone: 'bg-danger/15 text-danger', icon: 'wifi-off', text: 'connection.offline', urgent: true },
     reconnecting: { tone: 'bg-accent/15 text-accent', icon: null, text: 'connection.reconnecting', urgent: false },
     restored: { tone: 'bg-live/15 text-live', icon: 'selected', text: 'connection.restored', urgent: false }
 };

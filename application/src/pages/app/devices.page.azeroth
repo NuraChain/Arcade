@@ -82,7 +82,7 @@ export default component DevicesPage()
 
             <Show when={ devices.failure() !== null }>
                 { () =>
-                    <p class="text-ui-sm text-madder" role="alert">
+                    <p class="text-ui-sm text-danger" role="alert">
                         { locale.t(devices.failure() === 'refused' ? 'devices.refused' : 'devices.unavailable') }
                     </p>
                 }

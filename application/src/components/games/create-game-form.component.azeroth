@@ -183,12 +183,12 @@ export default component CreateGameForm(props: { game: Game; onCreated: (tableId
         <fieldset class="flex flex-col gap-3">
             <legend class="label mb-2 flex w-full items-center justify-between text-ui-sm text-muted">
                 <span>{ locale.t('create.invite') }</span>
-                <span class={ [ 'tally text-ui-xs font-semibold', tooMany ? 'text-madder' : 'text-accent' ].join(' ') }>{ locale.plural('create.invited', invitees.length) }</span>
+                <span class={ [ 'tally text-ui-xs font-semibold', tooMany ? 'text-danger' : 'text-accent' ].join(' ') }>{ locale.plural('create.invited', invitees.length) }</span>
             </legend>
             <p class="text-ui-xs text-faint">{ locale.t('create.inviteHint') }</p>
             <SearchInput value={ query } onInput={ (value) => query = value } placeholder={ locale.t('create.search') } label={ locale.t('create.search') } />
             <Show when={ tooMany }>
-                <p class="flex items-center gap-1.5 text-ui-sm font-semibold text-madder" role="alert">
+                <p class="flex items-center gap-1.5 text-ui-sm font-semibold text-danger" role="alert">
                     <Icon name="alert" size={ 14 } />
                     { locale.t('create.tooMany') }
                 </p>

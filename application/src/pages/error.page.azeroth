@@ -41,7 +41,7 @@ export default component ErrorPage(props: { reset: () => void; error?: unknown }
 
         <Show when={ import.meta.env.DEV && detail !== '' }>
             { () =>
-                <pre class="max-w-full overflow-x-auto rounded-tile border border-madder/40 bg-madder/10 px-3 py-2 text-ui-xs text-madder">{ detail }</pre>
+                <pre class="max-w-full overflow-x-auto rounded-tile border border-danger/40 bg-danger/10 px-3 py-2 text-ui-xs text-danger">{ detail }</pre>
             }
         </Show>
 

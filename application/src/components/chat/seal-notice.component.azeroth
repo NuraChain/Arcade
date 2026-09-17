@@ -117,7 +117,7 @@ export default component SealNotice(props: { stop: SendBlock | null; action?: Ch
                 class={ [
                     'flex flex-wrap items-start gap-2 rounded-tile border px-3 py-2 text-ui-sm',
                     sealed.reason === 'member' && sealed.member.state === 'tampered'
-                        ? 'border-madder/40 bg-madder/10 text-madder'
+                        ? 'border-danger/40 bg-danger/10 text-danger'
                         : 'border-line bg-field text-muted'
                 ].join(' ') }
                 role={ sealed.reason === 'member' && sealed.member.state === 'tampered' ? 'alert' : undefined }

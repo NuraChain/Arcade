@@ -360,3 +360,50 @@ describe('what loading is allowed to mean', () =>
         expect(guilty, 'a loading branch that fires on a revalidation blanks content already on screen').toEqual([]);
     });
 });
+
+describe('what red means', () =>
+{
+    /**
+     * `madder` and `danger` are two nearly identical reds with two different jobs, and for a long
+     * time nineteen places used the wrong one.
+     *
+     * The design system is explicit: `madder` is FUNCTIONAL - it means a table is playing for
+     * something - and it is never decoration and never the destructive colour, which is `danger`.
+     * `panel.component` says so in its own docblock, and `PanelTone` leaves `madder` out precisely
+     * so the wrong one cannot be written there. Everywhere else it was reachable, and an error
+     * message, an invalid input, a tampered device and a failed sign-in had all quietly become the
+     * stakes colour.
+     *
+     * Nothing could see it. The two are hue 17 and 18 at 0.618 and 0.688 lightness - a person
+     * looking at one screen cannot tell them apart, and it only reads as wrong when a `destructive`
+     * Button (which takes `danger` from the shared variant) sits next to a hand-written
+     * `text-madder`, which is exactly where it was finally noticed on the table page.
+     *
+     * So the allowance is a list. Anything outside it is the mistake this test exists to catch.
+     */
+    const MAY_SAY_MADDER = [
+        // The landing page's compete scene: a live table playing for something, which is the one
+        // thing the colour is for.
+        'sections/scene-compete.section.azeroth',
+
+        // Declares the game accent, and names `madder` as the value that means stakes.
+        'data/games.ts',
+
+        // Explains, in prose, why `madder` is absent from `PanelTone`.
+        'components/ui/panel.component.azeroth',
+
+        // Declares the tone itself. `Tone` carries `madder` so a Badge or a Chip on a table playing
+        // for something can say so; `PanelTone` deliberately does not.
+        'components/ui/variants.ts'
+    ];
+
+    it('keeps the stakes colour out of everything that is merely wrong', () =>
+    {
+        const guilty = FILES
+            .filter((file) => !MAY_SAY_MADDER.includes(file.path))
+            .filter((file) => /\bmadder\b/.test(file.text))
+            .map((file) => file.path);
+
+        expect(guilty, 'madder means a table is playing for something; the destructive colour is danger').toEqual([]);
+    });
+});

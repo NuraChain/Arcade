@@ -32,7 +32,7 @@ export default component Input(props: {
     derived shell = [
         'flex h-12 items-center gap-2 rounded-control border bg-field px-3 text-text',
         'transition-colors duration-150 focus-within:border-accent',
-        props.invalid === true ? 'border-madder' : 'border-line',
+        props.invalid === true ? 'border-danger' : 'border-line',
         props.disabled === true ? 'opacity-50' : '',
         props.class ?? ''
     ].filter(Boolean).join(' ');

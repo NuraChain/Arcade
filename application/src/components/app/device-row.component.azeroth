@@ -36,7 +36,7 @@ const TONE: Record<DeviceState, string> = {
     pending: 'text-gold',
     waiting: 'text-muted',
     locked: 'text-faint',
-    tampered: 'text-madder'
+    tampered: 'text-danger'
 };
 
 /**

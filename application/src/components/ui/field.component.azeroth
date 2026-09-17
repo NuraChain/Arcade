@@ -30,7 +30,7 @@ export default component Field(props: {
                 </Show>
             }
         >
-            { () => <p id={ `${ props.id }-error` } class="text-ui-xs font-medium text-madder" role="alert">{ props.error }</p> }
+            { () => <p id={ `${ props.id }-error` } class="text-ui-xs font-medium text-danger" role="alert">{ props.error }</p> }
         </Show>
     </div>
 }

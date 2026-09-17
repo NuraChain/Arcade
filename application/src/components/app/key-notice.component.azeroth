@@ -29,7 +29,7 @@ const LEAD: Record<Readiness, MessageKey> = {
 };
 
 const TONE: Record<Readiness, string> = {
-    unsupported: 'text-madder',
+    unsupported: 'text-danger',
     absent: 'text-accent',
     waiting: 'text-gold',
     ready: 'text-live'

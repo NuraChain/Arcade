@@ -166,7 +166,7 @@ export default component MessageBubble(props: { message: Message; me: string; sh
                             <span
                                 class={ [
                                     'flex items-start gap-2 rounded-tile border border-dashed px-3 py-2 text-ui-sm',
-                                    alarming ? 'border-madder/50 bg-madder/10 text-madder' : 'border-line bg-field text-muted'
+                                    alarming ? 'border-danger/50 bg-danger/10 text-danger' : 'border-line bg-field text-muted'
                                 ].join(' ') }
                                 role={ alarming ? 'alert' : undefined }
                             >

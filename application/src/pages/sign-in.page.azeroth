@@ -214,7 +214,7 @@ export default component SignInPage()
                     />
                 </Field>
                 <Show when={ refused === 'unavailable' }>
-                    <p class="text-ui-sm text-madder" role="alert">{ locale.t('signIn.failed') }</p>
+                    <p class="text-ui-sm text-danger" role="alert">{ locale.t('signIn.failed') }</p>
                 </Show>
                 <Button variant="secondary" size="lg" block submit loading={ pending } icon="forward">
                     { locale.t('signIn.continue', { name: name.trim() === '' ? locale.t('common.you') : name.trim() }) }

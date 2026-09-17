@@ -112,7 +112,7 @@ export default component PushToggle()
                 </Show>
 
                 <Show when={ state === 'denied' }>
-                    { () => <p class="text-ui-sm text-madder">{ locale.t('notify.push.denied') }</p> }
+                    { () => <p class="text-ui-sm text-danger">{ locale.t('notify.push.denied') }</p> }
                 </Show>
 
                 <Show when={ state === 'off' }>
