@@ -125,7 +125,7 @@ export function createRecorder(achieve: AchieveService): Recorder
                         userId: player.userId,
                         game,
                         rating: after,
-                        peakRating: Math.max(after, row?.peakRating ?? after),
+                        peakRating: Math.max(after, before, row?.peakRating ?? 0),
                         played: (row?.played ?? 0) + 1,
                         won: (row?.won ?? 0) + (won ? 1 : 0),
                         abandoned: (row?.abandoned ?? 0) + (walked ? 1 : 0),

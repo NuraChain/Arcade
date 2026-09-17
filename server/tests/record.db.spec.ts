@@ -169,6 +169,15 @@ describe.skipIf(!active)('a record, against a real database', () =>
             expect(winner?.won).toBe(1);
             expect(loser?.won).toBe(0);
             expect(winner?.streak).toBe(1);
+
+            /**
+             * A peak is the highest rating somebody has ever HELD, and everybody starts at 1200 -
+             * so a first game that ends in a loss records a peak of 1200, not of the number they
+             * dropped to. Taking it from the new rating alone gave a new player a personal best
+             * they had never once been below.
+             */
+            expect(loser?.peak_rating).toBe(1200);
+            expect(winner?.peak_rating).toBe(1216);
         });
 
         /**
