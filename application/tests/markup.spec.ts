@@ -220,6 +220,52 @@ describe('what a store mutator may read', () =>
     });
 });
 
+describe('what an effect must read before it reaches', () =>
+{
+    /**
+     * `handle?.show(props.view)` is a dead effect, and it looks exactly like a live one.
+     *
+     * A lazily-imported renderer is null on the effect's first pass, so `?.` short-circuits and the
+     * argument is never evaluated - which means the signal inside it is never READ, so the effect
+     * subscribes to nothing and never runs again. Nothing throws, nothing logs, and the surface goes
+     * on rendering whatever it was given at mount.
+     *
+     * `board-canvas` shipped all four of its effects this way and the board drew the opening
+     * position for the whole of a match, while the panel beside it - plain markup, no optional call
+     * - updated every turn. `world-canvas` has the right shape and has always had it: read the
+     * signal into a local, THEN reach through the handle.
+     */
+    it('never hides a signal read behind an optional call', () =>
+    {
+        const guilty: string[] = [];
+
+        for (const file of FILES.filter((one) => one.path.endsWith('.azeroth')))
+        {
+            for (const block of file.text.matchAll(/\n\s*effect\s*\n\s*\{/g))
+            {
+                const open = file.text.indexOf('{', (block.index ?? 0) + block[0].length - 1);
+                const body = file.text.slice(open, closes(file.text, open));
+
+                for (const call of body.matchAll(/[A-Za-z_$][\w$]*\?\.[A-Za-z_$][\w$]*\s*\(/g))
+                {
+                    const at = (call.index ?? 0) + call[0].length - 1;
+                    const argument = body.slice(at + 1, closesParen(body, at));
+
+                    const reactive = /\bprops\.[A-Za-z_$]/.test(argument) || /[A-Za-z_$][\w$.]*\s*\(\s*\)/.test(argument);
+
+                    if (reactive)
+                    {
+                        const line = file.text.slice(0, open + at).split('\n').length;
+                        guilty.push(`${ file.path }:${ line } ${ call[0] }${ argument.trim() })`);
+                    }
+                }
+            }
+        }
+
+        expect(guilty, 'an effect reads a signal only inside an optional call, so it subscribes to nothing').toEqual([]);
+    });
+});
+
 describe('what a surface is spelled with', () =>
 {
     /**
