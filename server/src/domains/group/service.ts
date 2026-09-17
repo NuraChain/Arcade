@@ -1,8 +1,9 @@
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@azerothjs/http';
 import type { DataSource } from 'typeorm';
 
-import type { GroupRole } from '../../entities/group-member.entity.ts';
-import type { GroupPrivacy } from '../../entities/group.entity.ts';
+import { ConversationMember } from '../../entities/conversation-member.entity.ts';
+import { GroupMember, type GroupRole } from '../../entities/group-member.entity.ts';
+import { Group, type GroupPrivacy } from '../../entities/group.entity.ts';
 import { firstRow, rowsOf } from '../../lib/rows.ts';
 import type { SocialService } from '../social/service.ts';
 import { candidatesFor, checkSlug, slugFromName } from './slug.ts';
@@ -105,11 +106,11 @@ export function createGroupService(db: DataSource, social: SocialService)
         {
             return null;
         }
-        const rows = await db.query(
-            'select role from group_members where group_id = $1 and user_id = $2',
-            [groupId, me]
-        );
-        return firstRow<{ role: GroupRole }>(rows)?.role ?? null;
+        const row = await db.getRepository(GroupMember).findOne({
+            select: { role: true },
+            where: { groupId, userId: me }
+        });
+        return row?.role ?? null;
     };
 
     const mustBeMember = async (me: string, groupId: string): Promise<GroupRole> =>
@@ -177,7 +178,7 @@ export function createGroupService(db: DataSource, social: SocialService)
     {
         await db.transaction(async (tx) =>
         {
-            await tx.query('delete from group_members where group_id = $1 and user_id = $2', [groupId, userId]);
+            await tx.getRepository(GroupMember).delete({ groupId, userId });
             await tx.query(
                 `delete from conversation_members
                   where user_id = $2
@@ -239,8 +240,8 @@ export function createGroupService(db: DataSource, social: SocialService)
         /** Everyone in the group, as uuids. What the realtime layer needs to ring the doorbell. */
         async memberIds(groupId: string): Promise<string[]>
         {
-            const rows = await db.query('select user_id from group_members where group_id = $1', [groupId]);
-            return rowsOf<{ user_id: string }>(rows).map((row) => row.user_id);
+            const rows = await db.getRepository(GroupMember).find({ select: { userId: true }, where: { groupId } });
+            return rows.map((row) => row.userId);
         },
 
         /**
@@ -284,20 +285,17 @@ export function createGroupService(db: DataSource, social: SocialService)
                         );
                         const id = rowsOf<{ id: string }>(inserted)[0].id;
 
-                        await tx.query(
-                            `insert into group_members (group_id, user_id, role) values ($1, $2, 'owner')`,
-                            [id, me]
-                        );
+                        await tx.getRepository(GroupMember).insert({ groupId: id, userId: me, role: 'owner' });
 
                         const conversation = await tx.query(
                             `insert into conversations (kind, group_id, game) values ('group', $1, $2) returning id`,
                             [id, input.game]
                         );
 
-                        await tx.query(
-                            'insert into conversation_members (conversation_id, user_id) values ($1, $2)',
-                            [rowsOf<{ id: string }>(conversation)[0].id, me]
-                        );
+                        await tx.getRepository(ConversationMember).insert({
+                            conversationId: rowsOf<{ id: string }>(conversation)[0].id,
+                            userId: me
+                        });
 
                         return id;
                     });
@@ -390,17 +388,14 @@ export function createGroupService(db: DataSource, social: SocialService)
                 const heir = firstRow<{ user_id: string; handle: string }>(heirs);
                 if (heir === null)
                 {
-                    await tx.query('delete from groups where id = $1', [groupId]);
+                    await tx.getRepository(Group).delete({ id: groupId });
                     return { left: true, deleted: true, newOwner: null };
                 }
 
                 // Demote before promote, or the partial unique index refuses the second write -
                 // which is exactly what it is for.
-                await tx.query('delete from group_members where group_id = $1 and user_id = $2', [groupId, me]);
-                await tx.query(
-                    `update group_members set role = 'owner' where group_id = $1 and user_id = $2`,
-                    [groupId, heir.user_id]
-                );
+                await tx.getRepository(GroupMember).delete({ groupId, userId: me });
+                await tx.getRepository(GroupMember).update({ groupId, userId: heir.user_id }, { role: 'owner' });
                 await tx.query(
                     `delete from conversation_members
                       where user_id = $2
@@ -451,8 +446,8 @@ export function createGroupService(db: DataSource, social: SocialService)
 
             await db.transaction(async (tx) =>
             {
-                await tx.query(`update group_members set role = 'member' where group_id = $1 and user_id = $2`, [groupId, me]);
-                await tx.query(`update group_members set role = 'owner' where group_id = $1 and user_id = $2`, [groupId, otherId]);
+                await tx.getRepository(GroupMember).update({ groupId, userId: me }, { role: 'member' });
+                await tx.getRepository(GroupMember).update({ groupId, userId: otherId }, { role: 'owner' });
             });
         },
 
