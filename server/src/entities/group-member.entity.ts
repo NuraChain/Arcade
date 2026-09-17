@@ -1,4 +1,6 @@
-import { Check, Column, CreateDateColumn, Entity, Index, PrimaryColumn } from 'typeorm';
+import { Check, Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, PrimaryColumn } from 'typeorm';
+import { Group } from './group.entity.ts';
+import { User } from './user.entity.ts';
 
 export type GroupRole = 'owner' | 'member';
 
@@ -27,4 +29,12 @@ export class GroupMember
 
     @CreateDateColumn({ name: 'joined_at', type: 'timestamptz' })
     joinedAt!: Date;
+
+    @ManyToOne(() => Group, { onDelete: 'CASCADE' })
+    @JoinColumn({ name: 'group_id', referencedColumnName: 'id' })
+    group!: Group;
+
+    @ManyToOne(() => User, { onDelete: 'CASCADE' })
+    @JoinColumn({ name: 'user_id', referencedColumnName: 'id' })
+    user!: User;
 }

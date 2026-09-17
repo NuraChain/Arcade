@@ -1,4 +1,5 @@
-import { Check, CreateDateColumn, Entity, Index, PrimaryColumn } from 'typeorm';
+import { Check, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, PrimaryColumn } from 'typeorm';
+import { User } from './user.entity.ts';
 
 /**
  * One DIRECTION of a friendship. Both rows are written together, by one function.
@@ -20,4 +21,12 @@ export class Friendship
 
     @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
     createdAt!: Date;
+
+    @ManyToOne(() => User, { onDelete: 'CASCADE' })
+    @JoinColumn({ name: 'friend_id', referencedColumnName: 'id' })
+    friend!: User;
+
+    @ManyToOne(() => User, { onDelete: 'CASCADE' })
+    @JoinColumn({ name: 'user_id', referencedColumnName: 'id' })
+    user!: User;
 }

@@ -1,4 +1,6 @@
-import { Check, Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
+import { Check, Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
+import { Group } from './group.entity.ts';
+import { Table } from './table.entity.ts';
 
 export type ConversationKind = 'direct' | 'group' | 'game';
 
@@ -51,4 +53,12 @@ export class Conversation
      */
     @Column({ name: 'expire_after', type: 'int', nullable: true })
     expireAfter!: number | null;
+
+    @ManyToOne(() => Group, { onDelete: 'CASCADE', nullable: true })
+    @JoinColumn({ name: 'group_id', referencedColumnName: 'id' })
+    group!: Group | null;
+
+    @ManyToOne(() => Table, { onDelete: 'CASCADE', nullable: true })
+    @JoinColumn({ name: 'table_id', referencedColumnName: 'id' })
+    table!: Table | null;
 }

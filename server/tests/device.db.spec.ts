@@ -8,9 +8,9 @@ import { privateKeyToAccount } from 'viem/accounts';
 import { createDeviceService } from '../src/domains/device/service.ts';
 import { deviceIdFrom } from '../src/domains/device/id.ts';
 import { entities } from '../src/entities/index.ts';
-import { migrations } from '../src/migrations/index.ts';
 import { hashToken, mintToken } from '../src/lib/crypto.ts';
 import { rowsOf } from '../src/lib/rows.ts';
+import { syncSchema } from '../src/db/schema.ts';
 
 /**
  * Devices, against a real database.
@@ -91,9 +91,9 @@ describe.skipIf(!active)('devices, against a real database', () =>
 {
     beforeAll(async () =>
     {
-        db = new DataSource({ type: 'postgres', url, entities, migrations, synchronize: false, logging: ['error'] });
+        db = new DataSource({ type: 'postgres', uuidExtension: 'pgcrypto', url, entities, synchronize: false, logging: ['error'] });
         await db.initialize();
-        await db.runMigrations();
+        await syncSchema(db);
     }, 60_000);
 
     afterAll(async () =>

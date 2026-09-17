@@ -1,4 +1,5 @@
-import { Check, Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
+import { Check, Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
+import { User } from './user.entity.ts';
 
 /** How the address proved it was the signer. */
 export type Attestation = 'wallet' | 'contract';
@@ -18,7 +19,6 @@ export type Attestation = 'wallet' | 'contract';
 @Check('wallets_attestation_known', `attestation in ('wallet', 'contract')`)
 @Index('wallets_user_id_idx', ['userId'])
 @Entity('wallets')
-@Index(['userId'])
 export class Wallet
 {
     @PrimaryGeneratedColumn('uuid')
@@ -59,4 +59,8 @@ export class Wallet
 
     @Column({ name: 'last_used_at', type: 'timestamptz', nullable: true })
     lastUsedAt!: Date | null;
+
+    @ManyToOne(() => User, { onDelete: 'CASCADE' })
+    @JoinColumn({ name: 'user_id', referencedColumnName: 'id' })
+    user!: User;
 }

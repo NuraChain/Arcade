@@ -1,4 +1,5 @@
-import { Column, CreateDateColumn, Entity, PrimaryColumn, UpdateDateColumn } from 'typeorm';
+import { Column, CreateDateColumn, Entity, JoinColumn, OneToOne, PrimaryColumn, UpdateDateColumn } from 'typeorm';
+import { User } from './user.entity.ts';
 
 /**
  * One account's recovery vault: everything the phrase protects, and nothing this server can use.
@@ -32,4 +33,8 @@ export class RecoveryVault
 
     @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
     updatedAt!: Date;
+
+    @OneToOne(() => User, { onDelete: 'CASCADE' })
+    @JoinColumn({ name: 'user_id', referencedColumnName: 'id' })
+    user!: User;
 }

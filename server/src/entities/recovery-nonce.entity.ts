@@ -1,4 +1,6 @@
-import { Column, CreateDateColumn, Entity, Index, PrimaryColumn } from 'typeorm';
+import { Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, PrimaryColumn } from 'typeorm';
+import { Device } from './device.entity.ts';
+import { User } from './user.entity.ts';
 
 /**
  * The one-shot challenge a recovery signature is made over.
@@ -28,4 +30,12 @@ export class RecoveryNonce
 
     @Column({ name: 'consumed_at', type: 'timestamptz', nullable: true })
     consumedAt!: Date | null;
+
+    @ManyToOne(() => Device, { onDelete: 'CASCADE' })
+    @JoinColumn({ name: 'device_id', referencedColumnName: 'id' })
+    device!: Device;
+
+    @ManyToOne(() => User, { onDelete: 'CASCADE' })
+    @JoinColumn({ name: 'user_id', referencedColumnName: 'id' })
+    user!: User;
 }

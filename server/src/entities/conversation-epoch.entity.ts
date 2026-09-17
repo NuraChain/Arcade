@@ -1,4 +1,7 @@
-import { Check, Column, CreateDateColumn, Entity, PrimaryColumn } from 'typeorm';
+import { Check, Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryColumn } from 'typeorm';
+import { Conversation } from './conversation.entity.ts';
+import { Device } from './device.entity.ts';
+import { EpochKey } from './epoch-key.entity.ts';
 
 /**
  * A frozen set of recipient devices, and the key that belongs to it.
@@ -37,4 +40,15 @@ export class ConversationEpoch
 
     @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
     createdAt!: Date;
+
+    @ManyToOne(() => Conversation, { onDelete: 'CASCADE' })
+    @JoinColumn({ name: 'conversation_id', referencedColumnName: 'id' })
+    conversation!: Conversation;
+
+    @ManyToOne(() => Device)
+    @JoinColumn({ name: 'minted_by', referencedColumnName: 'id' })
+    minter!: Device;
+
+    @OneToMany(() => EpochKey, (epochKey) => epochKey.conversationEpoch)
+    keys!: EpochKey[];
 }

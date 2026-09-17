@@ -4,10 +4,10 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { DataSource } from 'typeorm';
 
 import { entities } from '../src/entities/index.ts';
-import { migrations } from '../src/migrations/index.ts';
 import { createSocialService } from '../src/domains/social/service.ts';
 import { createTableService } from '../src/domains/table/service.ts';
 import { rowsOf } from '../src/lib/rows.ts';
+import { syncSchema } from '../src/db/schema.ts';
 
 /**
  * The last chair, contested.
@@ -56,9 +56,9 @@ describe.skipIf(!active)('claiming a seat, against a real database', () =>
 {
     beforeAll(async () =>
     {
-        db = new DataSource({ type: 'postgres', url, entities, migrations, synchronize: false, logging: ['error'] });
+        db = new DataSource({ type: 'postgres', uuidExtension: 'pgcrypto', url, entities, synchronize: false, logging: ['error'] });
         await db.initialize();
-        await db.runMigrations();
+        await syncSchema(db);
 
         /*
          * A table is now CHECKED against its game's rules - the server stopped believing the seat

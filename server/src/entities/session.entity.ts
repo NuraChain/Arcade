@@ -1,4 +1,6 @@
-import { Check, Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
+import { Check, Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
+import { Device } from './device.entity.ts';
+import { User } from './user.entity.ts';
 
 /**
  * A signed-in session.
@@ -16,7 +18,6 @@ import { Check, Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn 
 @Index('sessions_live_idx', ['tokenHash'], { where: `revoked_at is null` })
 @Index('sessions_user_id_idx', ['userId'])
 @Entity('sessions')
-@Index(['userId'])
 export class Session
 {
     @PrimaryGeneratedColumn('uuid')
@@ -56,4 +57,12 @@ export class Session
     /** For the devices list: "Chrome on Windows, last used an hour ago". Truncated, never parsed. */
     @Column({ name: 'user_agent', type: 'varchar', length: 256, default: '' })
     userAgent!: string;
+
+    @ManyToOne(() => Device, { onDelete: 'SET NULL', nullable: true })
+    @JoinColumn({ name: 'device_id', referencedColumnName: 'id' })
+    device!: Device | null;
+
+    @ManyToOne(() => User, { onDelete: 'CASCADE' })
+    @JoinColumn({ name: 'user_id', referencedColumnName: 'id' })
+    user!: User;
 }

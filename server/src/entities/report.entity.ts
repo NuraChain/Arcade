@@ -1,4 +1,6 @@
-import { Check, Column, CreateDateColumn, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import { Check, Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
+import { Message } from './message.entity.ts';
+import { User } from './user.entity.ts';
 
 export type ReportCategory = 'harassment' | 'spam' | 'cheating' | 'inappropriate' | 'other';
 
@@ -18,7 +20,7 @@ export type ReportStatus = 'received' | 'reviewed' | 'actioned';
  * were separated; holding all four together was what wedged `sweepExpired` for a whole deployment.
  */
 @Check('reports_category_known', `category in ('harassment', 'spam', 'cheating', 'inappropriate', 'other')`)
-@Check('reports_disclosure_whole', `(message_id is null and disclosed is null and disclosed_key is null and disclosed_at is null) or (message_id is not null and disclosed is not null and disclosed_key is not null and disclosed_at is not null)`)
+@Check('reports_disclosure_whole', `(disclosed is null and disclosed_key is null and disclosed_at is null) or (disclosed is not null and disclosed_key is not null and disclosed_at is not null)`)
 @Check('reports_message_has_disclosure', `message_id is null or disclosed is not null`)
 @Check('reports_not_self', `reporter <> against`)
 @Check('reports_status_known', `status in ('received', 'reviewed', 'actioned')`)
@@ -56,4 +58,16 @@ export class Report
 
     @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
     createdAt!: Date;
+
+    @ManyToOne(() => User, { onDelete: 'CASCADE' })
+    @JoinColumn({ name: 'against', referencedColumnName: 'id' })
+    accused!: User;
+
+    @ManyToOne(() => Message, { onDelete: 'SET NULL', nullable: true })
+    @JoinColumn({ name: 'message_id', referencedColumnName: 'id' })
+    message!: Message | null;
+
+    @ManyToOne(() => User, { onDelete: 'CASCADE' })
+    @JoinColumn({ name: 'reporter', referencedColumnName: 'id' })
+    filedBy!: User;
 }

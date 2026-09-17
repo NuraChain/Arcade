@@ -1,4 +1,5 @@
-import { Check, Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
+import { Check, Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
+import { User } from './user.entity.ts';
 
 /**
  * Who can find a group. Two levels, because a third would need a query behind it.
@@ -58,4 +59,8 @@ export class Group
 
     @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
     createdAt!: Date;
+
+    @ManyToOne(() => User, { onDelete: 'SET NULL', nullable: true })
+    @JoinColumn({ name: 'created_by', referencedColumnName: 'id' })
+    createdByUser!: User | null;
 }

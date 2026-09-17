@@ -1,4 +1,6 @@
-import { Column, CreateDateColumn, Entity, PrimaryColumn } from 'typeorm';
+import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryColumn } from 'typeorm';
+import { Conversation } from './conversation.entity.ts';
+import { User } from './user.entity.ts';
 
 /**
  * One epoch key, sealed to an account's archive key rather than to a device.
@@ -25,4 +27,12 @@ export class EpochArchive
 
     @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
     createdAt!: Date;
+
+    @ManyToOne(() => Conversation, { onDelete: 'CASCADE' })
+    @JoinColumn({ name: 'conversation_id', referencedColumnName: 'id' })
+    conversation!: Conversation;
+
+    @ManyToOne(() => User, { onDelete: 'CASCADE' })
+    @JoinColumn({ name: 'user_id', referencedColumnName: 'id' })
+    user!: User;
 }

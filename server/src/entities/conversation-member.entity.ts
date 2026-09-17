@@ -1,4 +1,6 @@
-import { Column, CreateDateColumn, Entity, Index, PrimaryColumn } from 'typeorm';
+import { Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, PrimaryColumn } from 'typeorm';
+import { Conversation } from './conversation.entity.ts';
+import { User } from './user.entity.ts';
 
 /**
  * One person's place in a conversation.
@@ -25,4 +27,12 @@ export class ConversationMember
 
     @Column({ name: 'last_read_at', type: 'timestamptz', default: () => "'epoch'" })
     lastReadAt!: Date;
+
+    @ManyToOne(() => Conversation, { onDelete: 'CASCADE' })
+    @JoinColumn({ name: 'conversation_id', referencedColumnName: 'id' })
+    conversation!: Conversation;
+
+    @ManyToOne(() => User, { onDelete: 'CASCADE' })
+    @JoinColumn({ name: 'user_id', referencedColumnName: 'id' })
+    user!: User;
 }

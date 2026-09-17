@@ -1,4 +1,5 @@
-import { Check, CreateDateColumn, Entity, Index, PrimaryColumn } from 'typeorm';
+import { Check, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, PrimaryColumn } from 'typeorm';
+import { User } from './user.entity.ts';
 
 /**
  * A block, written one way and read BOTH ways.
@@ -20,4 +21,12 @@ export class Block
 
     @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
     createdAt!: Date;
+
+    @ManyToOne(() => User, { onDelete: 'CASCADE' })
+    @JoinColumn({ name: 'blocked_id', referencedColumnName: 'id' })
+    blocked!: User;
+
+    @ManyToOne(() => User, { onDelete: 'CASCADE' })
+    @JoinColumn({ name: 'user_id', referencedColumnName: 'id' })
+    user!: User;
 }

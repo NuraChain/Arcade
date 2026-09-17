@@ -1,4 +1,5 @@
-import { Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
+import { Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
+import { User } from './user.entity.ts';
 
 /**
  * One browser that asked to be told.
@@ -17,7 +18,7 @@ export class PushSubscription
     @Column({ name: 'user_id', type: 'uuid' })
     userId!: string;
 
-    @Column({ type: 'text' })
+    @Column({ type: 'text', unique: true })
     endpoint!: string;
 
     @Column({ type: 'text' })
@@ -34,4 +35,8 @@ export class PushSubscription
 
     @Column({ name: 'failed_at', type: 'timestamptz', nullable: true })
     failedAt!: Date | null;
+
+    @ManyToOne(() => User, { onDelete: 'CASCADE' })
+    @JoinColumn({ name: 'user_id', referencedColumnName: 'id' })
+    user!: User;
 }

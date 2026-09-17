@@ -15,7 +15,6 @@ import { Column, Entity, Index, PrimaryColumn } from 'typeorm';
  */
 @Index('siwe_nonces_expires_at_idx', ['expiresAt'])
 @Entity('siwe_nonces')
-@Index(['expiresAt'])
 export class SiweNonce
 {
     @PrimaryColumn({ type: 'varchar', length: 64 })
@@ -36,7 +35,7 @@ export class SiweNonce
     @Column({ type: 'text' })
     message!: string;
 
-    @Column({ name: 'issued_at', type: 'timestamptz' })
+    @Column({ name: 'issued_at', type: 'timestamptz', default: () => 'now()' })
     issuedAt!: Date;
 
     @Column({ name: 'expires_at', type: 'timestamptz' })

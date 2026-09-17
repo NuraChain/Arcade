@@ -1,4 +1,6 @@
-import { Column, Entity, Index, PrimaryColumn } from 'typeorm';
+import { Column, Entity, Index, JoinColumn, ManyToOne, PrimaryColumn } from 'typeorm';
+import { ConversationEpoch } from './conversation-epoch.entity.ts';
+import { Device } from './device.entity.ts';
 
 /**
  * One copy of an epoch key, wrapped for one recipient device.
@@ -10,7 +12,6 @@ import { Column, Entity, Index, PrimaryColumn } from 'typeorm';
  */
 @Index('epoch_keys_device', ['deviceId'])
 @Entity('epoch_keys')
-@Index(['deviceId'])
 export class EpochKey
 {
     @PrimaryColumn({ name: 'conversation_id', type: 'uuid' })
@@ -27,4 +28,12 @@ export class EpochKey
 
     @Column({ type: 'text' })
     wrapped!: string;
+
+    @ManyToOne(() => ConversationEpoch, { onDelete: 'CASCADE' })
+    @JoinColumn([{ name: 'conversation_id', referencedColumnName: 'conversationId' }, { name: 'epoch', referencedColumnName: 'epoch' }])
+    conversationEpoch!: ConversationEpoch;
+
+    @ManyToOne(() => Device, { onDelete: 'CASCADE' })
+    @JoinColumn({ name: 'device_id', referencedColumnName: 'id' })
+    device!: Device;
 }

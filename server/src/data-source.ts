@@ -3,7 +3,6 @@ import 'reflect-metadata';
 import { DataSource } from 'typeorm';
 
 import { entities } from './entities/index.ts';
-import { migrations } from './migrations/index.ts';
 
 // The TypeORM CLI never goes through main.ts, so it loads the environment itself. A missing
 // .env is not an error here: the ambient environment is a valid way to configure a deployment.
@@ -29,14 +28,10 @@ catch
 export const dataSource = new DataSource({
     type: 'postgres',
     url: process.env.DATABASE_URL,
+    uuidExtension: 'pgcrypto',
     entities,
-    migrations,
 
-    // Both stay off in every environment. `synchronize` would let a process rewrite the schema
-    // of a database holding real messages, and `migrationsRun` would re-run migrations on every
-    // save under `node --watch`.
     synchronize: false,
-    migrationsRun: false,
 
     logging: process.env.NODE_ENV === 'development' ? ['error', 'warn', 'migration'] : ['error']
 });

@@ -43,7 +43,7 @@ export class GameRule
      * leave, ludo when someone gets home. An empty array is meaningful here, not a missing value,
      * which is why it is `not null` with a `'{}'` default rather than nullable.
      */
-    @Column({ type: 'smallint', array: true })
+    @Column({ type: 'smallint', array: true, default: () => `'{}'` })
     targets!: number[];
 
     @Column({ type: 'varchar', length: 16 })

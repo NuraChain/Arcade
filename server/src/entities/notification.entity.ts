@@ -1,4 +1,5 @@
-import { Check, Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
+import { Check, Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
+import { User } from './user.entity.ts';
 
 export type NotificationKind = 'friend-request' | 'friend-accepted' | 'group-added' | 'table-invite' | 'message';
 
@@ -42,4 +43,12 @@ export class Notification
 
     @Column({ name: 'read_at', type: 'timestamptz', nullable: true })
     readAt!: Date | null;
+
+    @ManyToOne(() => User, { onDelete: 'SET NULL', nullable: true })
+    @JoinColumn({ name: 'actor_id', referencedColumnName: 'id' })
+    actor!: User | null;
+
+    @ManyToOne(() => User, { onDelete: 'CASCADE' })
+    @JoinColumn({ name: 'user_id', referencedColumnName: 'id' })
+    user!: User;
 }

@@ -13,6 +13,7 @@ import { buildPorts } from './services.ts';
 import { dataSource } from './data-source.ts';
 import { seedWalletFixtures } from './db/seed-wallets.ts';
 import { seedReference } from './db/seed-reference.ts';
+import { syncSchema } from './db/schema.ts';
 import { loadServerConfig } from './env.ts';
 import { apiRateLimit } from './http/rate-limit.ts';
 import { createServerLogger } from './logger.ts';
@@ -38,6 +39,12 @@ const log = createServerLogger(config);
 
 await dataSource.initialize();
 log.info('database ready', { pool: config.databasePoolMax });
+
+if (config.env === 'development')
+{
+    await syncSchema(dataSource);
+    log.info('schema synced from the entities');
+}
 
 // The catalogue is part of the product, not development data: every environment needs identical
 // rows and the app is broken without them. The upsert is idempotent, so running it on every boot

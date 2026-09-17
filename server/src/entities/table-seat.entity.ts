@@ -1,4 +1,6 @@
-import { Check, Column, Entity, Index, PrimaryColumn } from 'typeorm';
+import { Check, Column, Entity, Index, JoinColumn, ManyToOne, PrimaryColumn } from 'typeorm';
+import { Table } from './table.entity.ts';
+import { User } from './user.entity.ts';
 
 /**
  * One chair at one table.
@@ -33,4 +35,16 @@ export class TableSeat
 
     @Column({ name: 'joined_at', type: 'timestamptz', nullable: true })
     joinedAt!: Date | null;
+
+    @ManyToOne(() => User, { onDelete: 'SET NULL', nullable: true })
+    @JoinColumn({ name: 'invited_id', referencedColumnName: 'id' })
+    invited!: User | null;
+
+    @ManyToOne(() => Table, { onDelete: 'CASCADE' })
+    @JoinColumn({ name: 'table_id', referencedColumnName: 'id' })
+    table!: Table;
+
+    @ManyToOne(() => User, { onDelete: 'CASCADE', nullable: true })
+    @JoinColumn({ name: 'user_id', referencedColumnName: 'id' })
+    user!: User | null;
 }

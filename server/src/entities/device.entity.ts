@@ -1,4 +1,5 @@
-import { Check, Column, CreateDateColumn, Entity, Index, PrimaryColumn } from 'typeorm';
+import { Check, Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, PrimaryColumn } from 'typeorm';
+import { User } from './user.entity.ts';
 
 /** Which authority vouched for a device. `server` means nobody did. */
 export type Attestation = 'wallet' | 'contract' | 'server';
@@ -21,7 +22,6 @@ export type Attestation = 'wallet' | 'contract' | 'server';
 @Check('devices_id_shape', `id ~ '^[A-Za-z0-9_-]{22}$'`)
 @Index('devices_user_live', ['userId', 'createdAt'], { where: `revoked_at is null` })
 @Entity('devices')
-@Index(['userId'])
 export class Device
 {
     @PrimaryColumn({ type: 'varchar', length: 22 })
@@ -76,4 +76,8 @@ export class Device
 
     @Column({ name: 'user_agent', type: 'varchar', length: 256, default: '' })
     userAgent!: string;
+
+    @ManyToOne(() => User, { onDelete: 'CASCADE' })
+    @JoinColumn({ name: 'user_id', referencedColumnName: 'id' })
+    user!: User;
 }

@@ -1,4 +1,5 @@
-import { Check, Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
+import { Check, Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
+import { User } from './user.entity.ts';
 
 export type RequestOutcome = 'accepted' | 'declined' | 'withdrawn';
 
@@ -33,4 +34,12 @@ export class FriendRequest
 
     @Column({ type: 'varchar', length: 16, nullable: true })
     outcome!: RequestOutcome | null;
+
+    @ManyToOne(() => User, { onDelete: 'CASCADE' })
+    @JoinColumn({ name: 'from_user', referencedColumnName: 'id' })
+    sender!: User;
+
+    @ManyToOne(() => User, { onDelete: 'CASCADE' })
+    @JoinColumn({ name: 'to_user', referencedColumnName: 'id' })
+    recipient!: User;
 }

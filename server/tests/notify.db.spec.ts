@@ -4,10 +4,10 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { DataSource } from 'typeorm';
 
 import { entities } from '../src/entities/index.ts';
-import { migrations } from '../src/migrations/index.ts';
 import { createNotifyService, PAGE } from '../src/domains/notify/service.ts';
 import { createSocialService } from '../src/domains/social/service.ts';
 import { rowsOf } from '../src/lib/rows.ts';
+import { syncSchema } from '../src/db/schema.ts';
 
 /**
  * The two claims a notification list lives or dies on: that twelve of the same thing is one row,
@@ -42,9 +42,9 @@ describe.skipIf(!active)('notifications, against a real database', () =>
 {
     beforeAll(async () =>
     {
-        db = new DataSource({ type: 'postgres', url, entities, migrations, synchronize: false, logging: ['error'] });
+        db = new DataSource({ type: 'postgres', uuidExtension: 'pgcrypto', url, entities, synchronize: false, logging: ['error'] });
         await db.initialize();
-        await db.runMigrations();
+        await syncSchema(db);
     }, 60_000);
 
     afterAll(async () =>

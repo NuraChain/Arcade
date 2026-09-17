@@ -1,4 +1,5 @@
-import { Check, CreateDateColumn, Entity, PrimaryColumn } from 'typeorm';
+import { Check, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryColumn } from 'typeorm';
+import { User } from './user.entity.ts';
 
 export type MuteSubject = 'person' | 'conversation' | 'game';
 
@@ -24,4 +25,8 @@ export class Mute
 
     @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
     createdAt!: Date;
+
+    @ManyToOne(() => User, { onDelete: 'CASCADE' })
+    @JoinColumn({ name: 'user_id', referencedColumnName: 'id' })
+    user!: User;
 }

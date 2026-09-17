@@ -1,4 +1,8 @@
-import { Check, Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
+import { Check, Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn } from 'typeorm';
+import { Game } from './game.entity.ts';
+import { Group } from './group.entity.ts';
+import { TableSeat } from './table-seat.entity.ts';
+import { User } from './user.entity.ts';
 
 export type TableMode = 'live' | 'turns';
 
@@ -41,7 +45,7 @@ export class Table
     @Column({ type: 'varchar', length: 16 })
     privacy!: TablePrivacy;
 
-    @Column({ type: 'smallint', default: 0 })
+    @Column({ type: 'smallint', default: () => '0' })
     target!: number;
 
     @Column({ type: 'boolean', default: false })
@@ -64,4 +68,19 @@ export class Table
 
     @Column({ name: 'closed_at', type: 'timestamptz', nullable: true })
     closedAt!: Date | null;
+
+    @ManyToOne(() => Game)
+    @JoinColumn({ name: 'game', referencedColumnName: 'id' })
+    gameRef!: Game;
+
+    @ManyToOne(() => Group, { onDelete: 'SET NULL', nullable: true })
+    @JoinColumn({ name: 'group_id', referencedColumnName: 'id' })
+    group!: Group | null;
+
+    @ManyToOne(() => User, { onDelete: 'SET NULL', nullable: true })
+    @JoinColumn({ name: 'host_id', referencedColumnName: 'id' })
+    host!: User | null;
+
+    @OneToMany(() => TableSeat, (seat) => seat.table)
+    chairs!: TableSeat[];
 }

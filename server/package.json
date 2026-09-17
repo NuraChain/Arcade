@@ -1,46 +1,43 @@
 {
-    "name": "nura-games-server",
-    "private": true,
-    "version": "0.1.0",
-    "type": "module",
-    "engines": {
-        "node": ">=24.11.0"
-    },
-    "scripts": {
-        "dev": "azeroth dev",
-        "build": "tsc -p tsconfig.json",
-        "check": "azeroth check",
-        "check:tests": "tsc --noEmit -p tsconfig.test.json",
-        "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
-        "start": "node --enable-source-maps dist/main.js",
-        "test": "vitest run",
-        "test:watch": "vitest",
-        "test:shuffle": "vitest run --sequence.shuffle",
-        "migration:generate": "npm run clean && npm run build && typeorm migration:generate -d dist/data-source.js",
-        "migration:run": "npm run build && typeorm migration:run -d dist/data-source.js",
-        "migration:revert": "npm run build && typeorm migration:revert -d dist/data-source.js",
-        "migration:show": "npm run build && typeorm migration:show -d dist/data-source.js",
-        "test:db": "vitest run --no-file-parallelism tests/schema-parity.db.spec.ts tests/synchronize-probe.db.spec.ts tests/social.db.spec.ts tests/chat.db.spec.ts tests/groups.db.spec.ts tests/seat-race.spec.ts tests/notify.db.spec.ts tests/device.db.spec.ts tests/peer-devices.db.spec.ts tests/epochs.db.spec.ts tests/recovery.db.spec.ts",
-        "test:ws": "vitest run --config vitest.socket.config.ts"
-    },
-    "dependencies": {
-        "@azerothjs/cron": "file:../../../AzerothJS/packages/cron",
-        "@azerothjs/http": "file:../../../AzerothJS/packages/http",
-        "@azerothjs/kit": "file:../../../AzerothJS/packages/kit",
-        "@azerothjs/logger": "file:../../../AzerothJS/packages/logger",
-        "@azerothjs/schema": "file:../../../AzerothJS/packages/schema",
-        "@azerothjs/ws": "file:../../../AzerothJS/packages/ws",
-        "azerothjs": "file:../../../AzerothJS/packages/azerothjs",
-        "pg": "^8.16.3",
-        "reflect-metadata": "^0.2.2",
-        "typeorm": "^1.1.1",
-        "viem": "^2.56.3"
-    },
-    "devDependencies": {
-        "@azerothjs/cli": "file:../../../AzerothJS/packages/cli",
-        "@types/node": "^24.10.1",
-        "@types/pg": "^8.15.6",
-        "typescript": "^6.0.3",
-        "vitest": "^4.1.9"
-    }
+  "name": "nura-games-server",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "engines": {
+    "node": ">=24.11.0"
+  },
+  "scripts": {
+    "dev": "azeroth dev",
+    "build": "tsc -p tsconfig.json",
+    "check": "azeroth check",
+    "check:tests": "tsc --noEmit -p tsconfig.test.json",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "start": "node --enable-source-maps dist/main.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:shuffle": "vitest run --sequence.shuffle",
+    "test:db": "vitest run --no-file-parallelism tests/schema.db.spec.ts tests/social.db.spec.ts tests/chat.db.spec.ts tests/groups.db.spec.ts tests/seat-race.spec.ts tests/notify.db.spec.ts tests/device.db.spec.ts tests/peer-devices.db.spec.ts tests/epochs.db.spec.ts tests/recovery.db.spec.ts",
+    "test:ws": "vitest run --config vitest.socket.config.ts",
+    "schema:sync": "npm run build && node dist/db/sync-cli.js"
+  },
+  "dependencies": {
+    "@azerothjs/cron": "file:../../../AzerothJS/packages/cron",
+    "@azerothjs/http": "file:../../../AzerothJS/packages/http",
+    "@azerothjs/kit": "file:../../../AzerothJS/packages/kit",
+    "@azerothjs/logger": "file:../../../AzerothJS/packages/logger",
+    "@azerothjs/schema": "file:../../../AzerothJS/packages/schema",
+    "@azerothjs/ws": "file:../../../AzerothJS/packages/ws",
+    "azerothjs": "file:../../../AzerothJS/packages/azerothjs",
+    "pg": "^8.16.3",
+    "reflect-metadata": "^0.2.2",
+    "typeorm": "^1.1.1",
+    "viem": "^2.56.3"
+  },
+  "devDependencies": {
+    "@azerothjs/cli": "file:../../../AzerothJS/packages/cli",
+    "@types/node": "^24.10.1",
+    "@types/pg": "^8.15.6",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.9"
+  }
 }

@@ -1,4 +1,7 @@
-import { Check, Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
+import { Check, Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
+import { Conversation } from './conversation.entity.ts';
+import { Device } from './device.entity.ts';
+import { User } from './user.entity.ts';
 
 export type MessageKind = 'text' | 'system' | 'invite' | 'result';
 
@@ -89,4 +92,16 @@ export class Message
      */
     @Column({ name: 'expires_at', type: 'timestamptz', nullable: true })
     expiresAt!: Date | null;
+
+    @ManyToOne(() => Conversation, { onDelete: 'CASCADE' })
+    @JoinColumn({ name: 'conversation_id', referencedColumnName: 'id' })
+    conversation!: Conversation;
+
+    @ManyToOne(() => Device, { nullable: true })
+    @JoinColumn({ name: 'sender_device_id', referencedColumnName: 'id' })
+    senderDevice!: Device | null;
+
+    @ManyToOne(() => User, { onDelete: 'SET NULL', nullable: true })
+    @JoinColumn({ name: 'sender_id', referencedColumnName: 'id' })
+    sender!: User | null;
 }
