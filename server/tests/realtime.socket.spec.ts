@@ -300,41 +300,6 @@ describe('a bound socket', () =>
         talker.end();
     });
 
-    it('assigns its handlers before it can possibly yield', () =>
-    {
-        // The package replays the bytes that arrived WITH the handshake by emitting them on the
-        // raw socket after `onConnection` returns. A handler assigned behind an `await` misses
-        // them, and they are dropped against a null handler with no error at all.
-        //
-        // Asserted over the SOURCE rather than by racing a real socket. Reproducing that race
-        // from a hand-rolled client is timing-dependent and was not worth the flake; the thing
-        // that actually protects the invariant is that the function cannot yield, and that is a
-        // property of the text. A test that is deterministic beats one that is atmospheric.
-        const source = readFileSync(new URL('../src/realtime/gateway.ts', import.meta.url), 'utf8');
-        const body = source.slice(source.indexOf('onConnection: (socket, request) =>'));
-        const opened = body.indexOf('{');
-
-        let depth = 0;
-        let handler = '';
-        for (let at = opened; at < body.length; at += 1)
-        {
-            if (body[at] === '{') { depth += 1; }
-            if (body[at] === '}') { depth -= 1; }
-            handler += body[at];
-            if (depth === 0) { break; }
-        }
-
-        // The nested `.then` callback is allowed to await - it runs long after the replay.
-        const beforeTheThen = handler.slice(0, handler.indexOf('.then('));
-
-        expect(beforeTheThen).not.toMatch(/\bawait\b/);
-        expect(handler).not.toMatch(/onConnection: async/);
-
-        // And the handlers really are assigned first, before anything that could yield.
-        expect(handler.indexOf('socket.onMessage =')).toBeLessThan(handler.indexOf('.then('));
-        expect(handler.indexOf('socket.onClose =')).toBeLessThan(handler.indexOf('.then('));
-    });
-
     it('hangs up on a frame it does not recognise', async () =>
     {
         const talker = talk('/ws', { Origin: 'http://localhost:3100', Cookie: COOKIE });
@@ -374,4 +339,51 @@ describe('a bound socket', () =>
     });
 });
 
+});
+
+/**
+ * The one assertion in this file that needs no socket, no port and no database - and it spent its
+ * life inside `describe.skipIf(!active)` with everything else, so it never ran under `npm test`.
+ *
+ * It guards the rule CLAUDE.md calls the hardest-won here: nothing in `onConnection` may await,
+ * because the package replays the bytes that arrived with the handshake AFTER it returns. It was
+ * deliberately written as a text assertion so it would be deterministic rather than a race - and
+ * then opted out along with the tests that really do need a listening port.
+ */
+describe('the gateway, read as text', () =>
+{
+it('assigns its handlers before it can possibly yield', () =>
+{
+    // The package replays the bytes that arrived WITH the handshake by emitting them on the
+    // raw socket after `onConnection` returns. A handler assigned behind an `await` misses
+    // them, and they are dropped against a null handler with no error at all.
+    //
+    // Asserted over the SOURCE rather than by racing a real socket. Reproducing that race
+    // from a hand-rolled client is timing-dependent and was not worth the flake; the thing
+    // that actually protects the invariant is that the function cannot yield, and that is a
+    // property of the text. A test that is deterministic beats one that is atmospheric.
+    const source = readFileSync(new URL('../src/realtime/gateway.ts', import.meta.url), 'utf8');
+    const body = source.slice(source.indexOf('onConnection: (socket, request) =>'));
+    const opened = body.indexOf('{');
+
+    let depth = 0;
+    let handler = '';
+    for (let at = opened; at < body.length; at += 1)
+    {
+        if (body[at] === '{') { depth += 1; }
+        if (body[at] === '}') { depth -= 1; }
+        handler += body[at];
+        if (depth === 0) { break; }
+    }
+
+    // The nested `.then` callback is allowed to await - it runs long after the replay.
+    const beforeTheThen = handler.slice(0, handler.indexOf('.then('));
+
+    expect(beforeTheThen).not.toMatch(/\bawait\b/);
+    expect(handler).not.toMatch(/onConnection: async/);
+
+    // And the handlers really are assigned first, before anything that could yield.
+    expect(handler.indexOf('socket.onMessage =')).toBeLessThan(handler.indexOf('.then('));
+    expect(handler.indexOf('socket.onClose =')).toBeLessThan(handler.indexOf('.then('));
+});
 });
