@@ -2146,6 +2146,19 @@ generics, pointing into generated code, naming neither markup nor the declaratio
 what makes it cost an afternoon: nothing suggests the source is at fault. Build the element where it is
 rendered. It is entry 10 in the framework register.
 
+**A conditional class is written `class={ () => [ ... ].join(' ') }`, with the arrow.** An attribute
+whose value is an array literal plus `.join()` is bound ONCE, however reactive its contents: the
+compiler decides between `setProp` and `createEffect(() => setProp(...))` from the shape of the
+expression, and that shape defeats every one of its four tests. The same read written bare -
+`aria-pressed={ theme.theme() === name }` - is wrapped correctly, so one element ends up with a live
+aria attribute and a frozen class. That is exactly how both segmented controls shipped: the theme and
+language pills stayed on whichever option was selected when the control mounted, while `aria-pressed`
+moved, so the accessibility tree was right and only the paint was wrong. Twelve components had the
+shape. `npm run qa` cannot see it - it reads overflow, hit targets, a landmark and the console - and
+an accessibility check reads the aria, which was correct. `tools/budgets.mjs` reads the emitted SSR
+bundle and refuses the build on a bare `setProp(..., 'class', ...)` whose value calls anything,
+because the difference exists nowhere else. It is BUG-009 in the framework register.
+
 **A component cannot be held in a signal by plain assignment.** A setter treats a bare function
 argument as an updater, so `Dialog = module.default` CALLS the component with the previous value
 — null — instead of storing it, and the symptom is a component whose `props` are null at
