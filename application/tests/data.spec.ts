@@ -51,11 +51,6 @@ describe('games catalogue', () =>
         }
     });
 
-    it('spends the competitive accent on nothing by default', () =>
-    {
-        expect(GAMES.every((game) => game.accent === 'accent')).toBe(true);
-    });
-
     it('finds a game by slug and refuses one that does not exist', () =>
     {
         expect(gameBySlug('backgammon')?.id).toBe('backgammon');
