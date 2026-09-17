@@ -44,8 +44,6 @@ export class GameRule
     targets!: number[];
 
     @Column({ type: 'varchar', length: 16 })
-
-    @Column({ type: 'varchar', length: 16 })
     stakes!: Stakes;
 
     /** Whether seats pair into teams. Hokm is the only one, and it is why seat order matters. */

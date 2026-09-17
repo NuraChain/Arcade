@@ -199,6 +199,22 @@ are not obvious, each of which costs an afternoon to rediscover:
   and every `file:` link is a different string. Exit code stays 0. Do not spend an afternoon
   "aligning" it.
 
+**The entities had drifted from the schema, and nothing could see it.** Every query in this server
+is raw SQL through `DataSource.query()`, which never loads entity metadata - so an entity could be
+missing a column the schema had carried for fifteen migrations and every gate stayed green.
+`users.allow_stranger_messages` and `users.show_online` were absent from `User` while
+`PERSON_COLUMNS` read them on every person payload; the whole franking disclosure from `0014` was
+absent from `Report`, whose docblock still said franking "arrives with the E2EE work"; and
+`GameRule.stakes` carried a duplicate `@Column` - a stray decorator with a blank line after it - so
+the property was registered twice and TypeORM silently used one of them.
+
+None of that is cosmetic the moment anything reads through a repository, which is the direction this
+server is moving. `tests/schema-parity.db.spec.ts` compares `entityMetadatas` against
+`information_schema.columns` in BOTH directions and fails on a duplicate registration, because the
+two failures are different: a column in the entity and not in the table is a query that breaks
+loudly, and a column in the table and not in the entity is the drift above, which breaks nothing
+until it matters.
+
 **`DataSource.query()` does not return one shape, and the difference is silent.** A SELECT gives
 the rows. An INSERT, UPDATE or DELETE — *even with `returning`* — gives `[rows, affectedCount]`.
 So `result.length === 0` is never true for a mutation that matched nothing, and `result[0].x`

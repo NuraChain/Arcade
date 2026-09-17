@@ -49,6 +49,19 @@ export class User
     @Column({ name: 'is_suspended', type: 'boolean', default: false })
     isSuspended!: boolean;
 
+    /**
+     * Whether somebody nobody has befriended may write to this account.
+     *
+     * `users_minor_no_strangers` is a CHECK over this and `is_minor` together, so a minor who
+     * allows stranger messages is not a row this database can hold whoever writes it.
+     */
+    @Column({ name: 'allow_stranger_messages', type: 'boolean', default: true })
+    allowStrangerMessages!: boolean;
+
+    /** Whether presence is published at all. Invisible means invisible to everyone but friends. */
+    @Column({ name: 'show_online', type: 'boolean', default: true })
+    showOnline!: boolean;
+
     @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
     createdAt!: Date;
 
