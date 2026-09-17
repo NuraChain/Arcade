@@ -1,4 +1,7 @@
+import { untrack } from 'azerothjs';
+
 import { isLineKey } from '../../lib/lines.ts';
+import { attachStick } from '../../lib/stick.ts';
 import { sendBlockOf } from '../../lib/seal-state.ts';
 import { haptic } from '../../lib/haptics.ts';
 import { sealSentenceOf } from '../chat/chat-title.ts';
@@ -36,18 +39,45 @@ export default component TableChat(props: { conversationId: string; onClose?: ()
 
     state draft = '';
 
+    /**
+     * Whether the reader was at the bottom BEFORE whatever just arrived.
+     *
+     * Read through `untrack` below, deliberately: the effect must decide the answer without making
+     * itself run again when the answer changes.
+     */
+    state near = true;
+
     let list: HTMLElement | null = null;
 
     mount
     {
         chat.openThread(props.conversationId);
-        return () => chat.closeThread();
+        const unstick = list === null ? null : attachStick(list, (value) => near = value);
+        return () =>
+        {
+            unstick?.();
+            chat.closeThread();
+        };
     }
 
+    derived messages = chat.messages();
+
+    /**
+     * Follow the conversation, unless somebody is reading back through it.
+     *
+     * This used to read `chat.messages()` for the subscription and then scroll unconditionally, so
+     * every change yanked the panel to the bottom - including a revalidation, which is what happens
+     * on every realtime nudge. Scrolling up to re-read a line while a table is talking was
+     * impossible: the list snapped back before the next word was out.
+     *
+     * The guard is the chat page's, from the same module, because it is the same rule and a second
+     * copy of "near enough to the bottom" would be a second answer to it.
+     */
     effect
     {
-        chat.messages();
-        if (list !== null)
+        const tail = messages[messages.length - 1]?.id ?? '';
+
+        if (list !== null && untrack(() => near) && tail !== '')
         {
             list.scrollTop = list.scrollHeight;
         }
@@ -87,8 +117,6 @@ export default component TableChat(props: { conversationId: string; onClose?: ()
             toasts.show({ kind: 'error', text: sealSentenceOf(error, locale.t), dedupe: 'table-chat-send' });
         });
     };
-
-    derived messages = chat.messages();
 
     const said = (message: { text: { en: string; fa: string } | string; line?: { key: string; params: Record<string, string> } }): string =>
     {
