@@ -22,6 +22,7 @@ import { useGroups } from '../../stores/groups.store.ts';
 import { useAccount } from '../../stores/account.store.ts';
 import { useDevice } from '../../stores/device.store.ts';
 import { useDevices } from '../../stores/devices.store.ts';
+import { useEnrolment } from '../../stores/enrolment.store.ts';
 import { useLobby } from '../../stores/lobby.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useOverlay } from '../../stores/overlay.store.ts';
@@ -30,7 +31,6 @@ import { useSeal } from '../../stores/seal.store.ts';
 import { useShell } from '../../stores/shell.store.ts';
 import { useSocial } from '../../stores/social.store.ts';
 import { useToasts } from '../../stores/toasts.store.ts';
-import { useWallet } from '../../stores/wallet.store.ts';
 
 const WINDOW = 40;
 
@@ -93,62 +93,8 @@ export default component ChatPage()
 
     const seal = useSeal();
     const devices = useDevices();
+    const enrolment = useEnrolment();
     const account = useAccount();
-    const wallet = useWallet();
-
-    /**
-     * Gives this browser keys without leaving the thread.
-     *
-     * The devices page is the other door and stays the whole story - names, confirmation, signing one
-     * out. This is the one step somebody stuck at a composer actually needs, offered where they are
-     * stuck.
-     *
-     * `enrol` NEVER rejects: it swallows everything into `failure()`, so awaiting it and carrying on
-     * would make a refused wallet signature silent - the button would spin, stop, and nothing would
-     * change or be said. Every outcome is read back and spoken here.
-     */
-    const giveKeys = async (): Promise<void> =>
-    {
-        if (devices.busy())
-        {
-            return;
-        }
-
-        // A locked extension has no address to sign with, and `sign` answers null rather than
-        // throwing - which `publish` turns into "the wallet did not sign", blaming a refusal that
-        // never happened. Say the true thing instead.
-        if (wallet.address() === null)
-        {
-            toasts.show({ kind: 'warning', text: locale.t('wallet.error.noWallet'), dedupe: 'devices.enrol' });
-            return;
-        }
-
-        await devices.enrol(locale.t(device.posture() === 'phone' ? 'devices.namePhone' : 'devices.nameDesktop'));
-
-        const failure = devices.failure();
-        if (failure !== null)
-        {
-            toasts.show({
-                kind: 'error',
-                text: locale.t(failure === 'refused' ? 'devices.refused' : 'devices.unavailable'),
-                dedupe: 'devices.enrol'
-            });
-            return;
-        }
-
-        // The room has to be asked again: whether it can be sealed to now depends on a device that
-        // did not exist a moment ago.
-        await seal.refresh();
-
-        // On a SECOND browser the new device arrives pending, so nothing was unblocked and saying
-        // "done" would be a lie. Confirming it needs a device that already exists, which lives on
-        // the devices page.
-        toasts.show({
-            kind: devices.readiness() === 'ready' ? 'success' : 'warning',
-            text: locale.t(devices.readiness() === 'ready' ? 'devices.enrolled' : 'devices.enrolledWaiting'),
-            dedupe: 'devices.enrol'
-        });
-    };
 
     derived messages = chat.messages();
 
@@ -311,7 +257,7 @@ export default component ChatPage()
 
     derived phone = device.posture() === 'phone';
 
-    <Page padded={ false } width="full" fill label={ title } class="flex flex-col">
+    <Page padded={ false } fill label={ title } class="flex flex-col">
         <Show
             when={ conversation !== null }
             fallback={
@@ -476,7 +422,7 @@ export default component ChatPage()
                                     action={ stop?.reason !== 'browser' || stop.readiness === 'unsupported'
                                         ? undefined
                                         : (stop.readiness === 'absent'
-                                            ? <Button variant="primary" size="sm" leading="key" loading={ devices.busy() } onClick={ () => void giveKeys() }>
+                                            ? <Button variant="primary" size="sm" leading="key" loading={ devices.busy() } onClick={ () => void enrolment.give() }>
                                                 { locale.t('devices.enrol') }
                                             </Button>
                                             : <Button variant="outline" size="sm" leading="key" to="/app/me/devices">

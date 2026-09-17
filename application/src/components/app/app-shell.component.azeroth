@@ -21,6 +21,7 @@ import { useWallet } from '../../stores/wallet.store.ts';
 import { useShell } from '../../stores/shell.store.ts';
 import BottomNav from './bottom-nav.component.azeroth';
 import ConnectionBanner from './connection-banner.component.azeroth';
+import KeysBanner from './keys-banner.component.azeroth';
 import NavRail from './nav-rail.component.azeroth';
 import OverlayHost from './overlay-host.component.azeroth';
 import Sidebar from './sidebar.component.azeroth';
@@ -140,6 +141,7 @@ export default component AppShell(props: { children?: MountNode })
             <div class="flex h-dvh min-h-0 min-w-0 flex-col">
                 <Show when={ !immersive || posture !== 'phone' }>{ () => <TopBar /> }</Show>
                 <ConnectionBanner />
+                <KeysBanner />
                 <main id="app-main" class="relative min-h-0 flex-1 overflow-hidden">
                     <Outlet children={ props.children } />
                 </main>

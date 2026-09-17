@@ -73,6 +73,12 @@ export const app = {
     'connection.reconnecting': 'Connection interrupted. Reconnecting…',
     'connection.restored': 'Back online.',
 
+    'keys.banner.absent': 'This browser can’t read your messages yet.',
+    'keys.banner.absentAction': 'Give it keys',
+    'keys.banner.waiting': 'This browser is waiting to be confirmed.',
+    'keys.banner.waitingAction': 'Confirm it',
+    'keys.banner.dismiss': 'Not now',
+
     'state.errorTitle': 'Couldn’t load this.',
     'state.errorLead': 'If this keeps happening, check your connection.',
     'state.emptyTitle': 'Nothing here yet.',

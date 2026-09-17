@@ -1,0 +1,79 @@
+import { Link } from 'azerothjs';
+
+import Icon from '../../icons/icon.component.azeroth';
+import type { MessageKey } from '../../locales/en.ts';
+import { useDevices } from '../../stores/devices.store.ts';
+import { useEnrolment, type KeyGap } from '../../stores/enrolment.store.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import Button from '../ui/button.component.azeroth';
+import IconButton from '../ui/icon-button.component.azeroth';
+
+const TEXT: Record<KeyGap, MessageKey> = {
+    absent: 'keys.banner.absent',
+    waiting: 'keys.banner.waiting'
+};
+
+const ACTION: Record<KeyGap, MessageKey> = {
+    absent: 'keys.banner.absentAction',
+    waiting: 'keys.banner.waitingAction'
+};
+
+/**
+ * The one place a person is told this browser cannot read their messages.
+ *
+ * Everything about device keys used to live where somebody was already stuck - the seal notice
+ * above a composer they cannot type in, and the devices page they have no reason to open. Both are
+ * right and neither is reachable by somebody who has not opened a chat yet, so the product's answer
+ * to "why can nobody hear me" was a page you had to already know about.
+ *
+ * `absent` gets the button, because enrolling is one step and it happens here. `waiting` gets a
+ * LINK, because confirming needs a device that already holds keys or the recovery phrase, and a
+ * button that cannot finish the job is worse than a signpost to where it can.
+ */
+export default component KeysBanner()
+{
+    const devices = useDevices();
+    const enrolment = useEnrolment();
+    const locale = useLocale();
+
+    derived gap = enrolment.gap();
+
+    <Show when={ enrolment.asking() }>
+        { () =>
+            <div
+                class="z-banner flex flex-wrap items-center justify-center gap-x-3 gap-y-2 bg-gold/15 px-4 py-2 text-ui-sm text-gold"
+                role="status"
+            >
+                <span class="flex min-w-0 items-center gap-2 font-semibold">
+                    <Icon name="key" size={ 16 } class="shrink-0" />
+                    <span class="min-w-0">{ locale.t(TEXT[gap!]) }</span>
+                </span>
+
+                <span class="flex shrink-0 items-center gap-1">
+                    { gap === 'absent'
+                        ? <Button
+                            variant="primary"
+                            size="sm"
+                            loading={ devices.busy() }
+                            onClick={ () => void enrolment.give() }
+                        >
+                            { locale.t(ACTION.absent) }
+                        </Button>
+                        : <Link
+                            to="/app/devices"
+                            class="rounded-control px-2.5 py-1.5 font-semibold text-gold underline decoration-gold/40 underline-offset-4 transition-colors hover:decoration-gold coarse:min-h-11 coarse:flex coarse:items-center"
+                        >
+                            { locale.t(ACTION.waiting) }
+                        </Link> }
+
+                    <IconButton
+                        icon="close"
+                        size="sm"
+                        label={ locale.t('keys.banner.dismiss') }
+                        onClick={ () => enrolment.dismiss() }
+                    />
+                </span>
+            </div>
+        }
+    </Show>
+}

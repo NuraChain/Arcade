@@ -76,6 +76,12 @@ export const app: Pick<Dictionary, keyof typeof reference> = {
     'connection.reconnecting': 'اتصال قطع شد. در حال اتصال دوباره…',
     'connection.restored': 'دوباره آنلاین شدی.',
 
+    'keys.banner.absent': 'این مرورگر هنوز نمی‌تواند پیام‌هایت را بخواند.',
+    'keys.banner.absentAction': 'کلید بگیرد',
+    'keys.banner.waiting': 'این مرورگر منتظر تأیید است.',
+    'keys.banner.waitingAction': 'تأییدش کن',
+    'keys.banner.dismiss': 'الان نه',
+
     'state.errorTitle': 'این بخش بارگذاری نشد.',
     'state.errorLead': 'اگر ادامه داشت، اتصالت را بررسی کن.',
     'state.emptyTitle': 'هنوز چیزی اینجا نیست.',
