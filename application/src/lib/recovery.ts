@@ -164,8 +164,8 @@ const scalarFrom = (bytes: Uint8Array): Uint8Array =>
  * and `SubtleCrypto` exposes no way to import a raw ECDSA private key without already knowing the
  * public one - which is precisely what has to be computed.
  */
-const curve = async (): Promise<typeof import('@noble/curves/p256').p256> =>
-    (await import('@noble/curves/p256')).p256;
+const curve = async (): Promise<typeof import('@noble/curves/nist.js').p256> =>
+    (await import('@noble/curves/nist.js')).p256;
 
 /**
  * Turns a phrase and a salt into the two things derived from them.
@@ -327,5 +327,10 @@ export async function signRecovery(
         utf8.encode(recoveryChallenge(accountId, deviceId, nonce)) as BufferSource
     ));
 
-    return toBase64Url(p256.sign(digest, keys.signer.scalar).toCompactRawBytes());
+    // `prehash: false` says the input IS the digest. `@noble/curves` 2.x flipped this default:
+    // 1.x signed the 32 bytes it was given, 2.x hashes them first, so handing it a SHA-256 digest
+    // signs SHA-256(SHA-256(challenge)) and the server - which verifies through WebCrypto ECDSA
+    // with `hash: 'SHA-256'` over the raw challenge - rejects a perfectly well-formed 64-byte
+    // signature. Nothing about the value says so; `recovery.spec.ts` is what said so.
+    return toBase64Url(p256.sign(digest, keys.signer.scalar, { prehash: false }));
 }

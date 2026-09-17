@@ -1,5 +1,5 @@
-import { secp256k1 } from '@noble/curves/secp256k1';
-import { keccak_256 } from '@noble/hashes/sha3';
+import { secp256k1 } from '@noble/curves/secp256k1.js';
+import { keccak_256 } from '@noble/hashes/sha3.js';
 
 import { deviceResource } from '../../../server/src/domains/device/resource.ts';
 import type { PeerDevice } from '../api.ts';
@@ -139,7 +139,7 @@ export function addressFromPersonalSign(message: string, signature: string): str
 
         // An Ethereum address is the last 20 bytes of the keccak of the uncompressed public key
         // with its 0x04 prefix removed.
-        return `0x${ bytesToHex(keccak_256(point.toRawBytes(false).slice(1)).slice(-20)) }`;
+        return `0x${ bytesToHex(keccak_256(point.toBytes(false).slice(1)).slice(-20)) }`;
     }
     catch
     {

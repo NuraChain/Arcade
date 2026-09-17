@@ -1067,6 +1067,16 @@ the reader — being told about your own account in the third person reads like 
 no positive case, because a padlock ahead of its mechanism is a claim rather than a fact and at the
 time nothing was sealed; it has one now, and *The sealing* says what it claims.
 
+**`@noble/curves` 2.x flipped what `sign()` is given.** 1.x signed the 32 bytes handed to it; 2.x
+HASHES them first unless told `prehash: false`. `signRecovery` passes a SHA-256 digest, so on the
+default it signed SHA-256(SHA-256(challenge)) and the server - which verifies through WebCrypto
+ECDSA with `hash: 'SHA-256'` over the raw challenge - refused a perfectly well-formed 64-byte
+signature. Recovery would simply never have worked for anybody. `recovery.spec.ts` is what said so,
+which is the whole reason the crypto specs gate that upgrade rather than riding along with it. The
+2.x subpaths also need their `.js` (`@noble/hashes/sha3.js`), `p256` moved to
+`@noble/curves/nist.js`, `Point.toRawBytes` is `toBytes`, and `sign()` returns the compact bytes
+rather than a `Signature` to call `toCompactRawBytes()` on.
+
 **Two things about the maths that fail silently.** EIP-191's prefix begins with the byte 0x19,
 written as `String.fromCharCode(0x19)` because an invisible control character in a source file is
 one an editor or a lint autofix eventually eats; and the length in that prefix is the BYTE length of
