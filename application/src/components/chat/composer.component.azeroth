@@ -3,7 +3,7 @@ import type { GameId } from '../../data/games.ts';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import IconButton from '../ui/icon-button.component.azeroth';
-import Input from '../ui/input.component.azeroth';
+import TextArea from '../ui/text-area.component.azeroth';
 import Rail from '../ui/rail.component.azeroth';
 
 export default component Composer(props: {
@@ -42,7 +42,7 @@ export default component Composer(props: {
             }
         </Show>
         <form
-            class="flex items-center gap-1.5 px-2 py-2"
+            class="flex items-end gap-1.5 px-2 py-2"
             onSubmit={ (event) =>
             {
                 event.preventDefault();
@@ -57,7 +57,7 @@ export default component Composer(props: {
                 disabled={ props.disabled === true }
                 onClick={ () => open = !open }
             />
-            <Input
+            <TextArea
                 value={ props.value }
                 onInput={ props.onInput }
                 placeholder={ locale.t('chat.composer') }

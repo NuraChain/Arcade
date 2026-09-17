@@ -1,0 +1,111 @@
+/**
+ * How many lines it may grow to before it scrolls instead.
+ *
+ * Six is a paragraph. Past that the box is eating the conversation it belongs to, which is the
+ * thing somebody is writing about.
+ */
+const MAX_ROWS = 6;
+
+/**
+ * A single-line box that grows into the message somebody is actually writing.
+ *
+ * The composer was an `<input>`, so a message ran off the right-hand edge at about sixty
+ * characters and the only way to read back what you had typed was to arrow through it. The limit
+ * is five hundred; nothing about the control admitted that.
+ *
+ * Enter sends and Shift+Enter breaks the line, which is the arrangement every chat product uses
+ * and the one `enterkeyhint="send"` already promised on a phone keyboard.
+ *
+ * The height is measured rather than guessed: `height` is cleared before `scrollHeight` is read,
+ * because a box that is already tall reports the height it currently HAS, so measuring without
+ * clearing first makes a textarea that only ever grows - delete a line and it keeps the room.
+ */
+export default component TextArea(props: {
+    id?: string;
+    value: string;
+    onInput: (value: string) => void;
+    placeholder?: string;
+    disabled?: boolean;
+    maxlength?: number;
+    describedBy?: string;
+    label?: string;
+    enterkeyhint?: string;
+    class?: string;
+    onEnter?: () => void;
+    onFocus?: () => void;
+    onBlur?: () => void;
+})
+{
+    let field: HTMLTextAreaElement | null = null;
+
+    const fit = (): void =>
+    {
+        if (field === null)
+        {
+            return;
+        }
+
+        const styles = getComputedStyle(field);
+        const line = Number.parseFloat(styles.lineHeight);
+        const padding = Number.parseFloat(styles.paddingTop) + Number.parseFloat(styles.paddingBottom);
+        const ceiling = Number.isFinite(line) ? (line * MAX_ROWS) + padding : Number.POSITIVE_INFINITY;
+
+        field.style.height = 'auto';
+        field.style.height = `${ Math.min(field.scrollHeight, ceiling) }px`;
+        field.style.overflowY = field.scrollHeight > ceiling ? 'auto' : 'hidden';
+    };
+
+    /**
+     * Keeps the box showing what the caller says is in it, and re-measures when that changes.
+     *
+     * The write is not ceremony: the composer clears its draft after a send, and a textarea holds
+     * its own content, so without this the sent message would still be sitting in the box.
+     */
+    effect
+    {
+        const typed = props.value;
+
+        if (field !== null && field.value !== typed)
+        {
+            field.value = typed;
+        }
+        fit();
+    }
+
+    <div class={ [
+        'flex items-end gap-2 rounded-control border bg-field px-3 py-1.5 text-text',
+        'transition-colors duration-150 focus-within:border-accent',
+        'border-line',
+        props.disabled === true ? 'opacity-50' : '',
+        props.class ?? ''
+    ].filter(Boolean).join(' ') }>
+        <textarea
+            ref={ (element) => { field = element; fit(); } }
+            id={ props.id }
+            rows={ 1 }
+            class="min-h-9 w-full min-w-0 flex-1 resize-none bg-transparent py-1.5 text-ui-input leading-snug text-text outline-none placeholder:text-faint coarse:min-h-11"
+            value={ props.value }
+            placeholder={ props.placeholder }
+            disabled={ props.disabled === true }
+            maxlength={ props.maxlength }
+            enterkeyhint={ props.enterkeyhint }
+            aria-describedby={ props.describedBy }
+            aria-label={ props.label }
+            onInput={ (event) =>
+            {
+                props.onInput((event.target as HTMLTextAreaElement).value);
+                fit();
+            } }
+            onKeyDown={ (event) =>
+            {
+                if (event.key === 'Enter' && !event.shiftKey && props.onEnter !== undefined)
+                {
+                    event.preventDefault();
+                    props.onEnter();
+                }
+            } }
+            onFocus={ () => props.onFocus?.() }
+            onBlur={ () => props.onBlur?.() }
+        ></textarea>
+    </div>
+}

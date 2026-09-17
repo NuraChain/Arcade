@@ -16,7 +16,7 @@ import { useSeal } from '../../stores/seal.store.ts';
 import { useToasts } from '../../stores/toasts.store.ts';
 import Avatar from '../ui/avatar.component.azeroth';
 import IconButton from '../ui/icon-button.component.azeroth';
-import Input from '../ui/input.component.azeroth';
+import TextArea from '../ui/text-area.component.azeroth';
 
 /**
  * The table's conversation, which is a CONVERSATION.
@@ -176,14 +176,14 @@ export default component TableChat(props: { conversationId: string; onClose?: ()
             }
         </Show>
         <form
-            class="flex items-center gap-2 border-t border-line/60 px-3 py-2"
+            class="flex items-end gap-2 border-t border-line/60 px-3 py-2"
             onSubmit={ (event) =>
             {
                 event.preventDefault();
                 send();
             } }
         >
-            <Input value={ draft } onInput={ (value) => draft = value } placeholder={ locale.t('play.table.say') } label={ locale.t('play.table.say') } enterkeyhint="send" maxlength={ 240 } disabled={ stop !== null } class="min-w-0 flex-1" onEnter={ send } />
+            <TextArea value={ draft } onInput={ (value) => draft = value } placeholder={ locale.t('play.table.say') } label={ locale.t('play.table.say') } enterkeyhint="send" maxlength={ 240 } disabled={ stop !== null } class="min-w-0 flex-1" onEnter={ send } />
             <IconButton icon="send" label={ locale.t('play.table.send') } variant="primary" flip disabled={ stop !== null || draft.trim() === '' } onClick={ send } />
         </form>
     </section>
