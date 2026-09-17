@@ -1,0 +1,79 @@
+import { Check, Column, Entity, JoinColumn, ManyToOne, PrimaryColumn, UpdateDateColumn } from 'typeorm';
+import { Game } from './game.entity.ts';
+import { User } from './user.entity.ts';
+
+/**
+ * A person's record at one game, and every number in it is something that happened.
+ *
+ * The level, the skill band and the reliability score were all deleted from this product because
+ * nothing produced them - they were a seeded RNG wearing a profile. This is the same shape with the
+ * opposite property: every column here moves only when a match this server arbitrated reached an
+ * end, and `match_players.rating_before`/`rating_after` records the move on the row that caused it,
+ * so any figure can be traced back to the games that made it.
+ *
+ * It was called `game_ratings` while `rating` was the only thing in it. Played, won, captures and a
+ * streak are not ratings, and a table read for years should be named for what it holds.
+ *
+ * One row per person per game, so a profile is one query rather than a fold over a history.
+ */
+@Check('player_stats_counts', `played >= 0 and won >= 0 and abandoned >= 0 and won + abandoned <= played`)
+@Check('player_stats_range', `rating between 100 and 4000 and peak_rating between 100 and 4000`)
+@Check('player_stats_peak_reached', `peak_rating >= rating or played = 0`)
+@Check('player_stats_streaks', `streak >= 0 and best_streak >= streak`)
+@Check('player_stats_tallies', `captures >= 0 and rolls >= 0 and tokens_home >= 0`)
+@Entity('player_stats')
+export class PlayerStats
+{
+    @PrimaryColumn({ name: 'user_id', type: 'uuid' })
+    userId!: string;
+
+    @PrimaryColumn({ type: 'varchar', length: 32 })
+    game!: string;
+
+    @Column({ type: 'integer', default: 1200 })
+    rating!: number;
+
+    /**
+     * The highest this rating has ever been. A rating that only goes up is a lie and a rating that
+     * only shows today forgets the best somebody ever played, so both are kept.
+     */
+    @Column({ name: 'peak_rating', type: 'integer', default: 1200 })
+    peakRating!: number;
+
+    @Column({ type: 'integer', default: 0 })
+    played!: number;
+
+    @Column({ type: 'integer', default: 0 })
+    won!: number;
+
+    /** Games this person walked out of or was forfeited from. Never somebody else's walkout. */
+    @Column({ type: 'integer', default: 0 })
+    abandoned!: number;
+
+    /** Wins in a row, as it stands. Reset by anything that is not a win. */
+    @Column({ type: 'integer', default: 0 })
+    streak!: number;
+
+    @Column({ name: 'best_streak', type: 'integer', default: 0 })
+    bestStreak!: number;
+
+    @Column({ type: 'integer', default: 0 })
+    captures!: number;
+
+    @Column({ type: 'integer', default: 0 })
+    rolls!: number;
+
+    @Column({ name: 'tokens_home', type: 'integer', default: 0 })
+    tokensHome!: number;
+
+    @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
+    updatedAt!: Date;
+
+    @ManyToOne(() => Game, { onDelete: 'CASCADE' })
+    @JoinColumn({ name: 'game', referencedColumnName: 'id' })
+    gameRef!: Game;
+
+    @ManyToOne(() => User, { onDelete: 'CASCADE' })
+    @JoinColumn({ name: 'user_id', referencedColumnName: 'id' })
+    user!: User;
+}

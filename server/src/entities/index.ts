@@ -8,7 +8,7 @@ import { EpochKey } from './epoch-key.entity.ts';
 import { Conversation } from './conversation.entity.ts';
 import { FriendRequest } from './friend-request.entity.ts';
 import { Friendship } from './friendship.entity.ts';
-import { GameRating } from './game-rating.entity.ts';
+import { PlayerStats } from './player-stats.entity.ts';
 import { GameRule } from './game-rule.entity.ts';
 import { GroupMember } from './group-member.entity.ts';
 import { Group } from './group.entity.ts';
@@ -28,14 +28,16 @@ import { Report } from './report.entity.ts';
 import { Session } from './session.entity.ts';
 import { SiweNonce } from './siwe-nonce.entity.ts';
 import { User } from './user.entity.ts';
+import { UserAchievement } from './user-achievement.entity.ts';
 import { Wallet } from './wallet.entity.ts';
 
 export {
     Achievement, Block, Conversation, ConversationEpoch, ConversationMember, Device, EpochKey,
     EpochArchive, FriendRequest, Friendship,
-    Game, GameRating, GameRule, Group, GroupMember, Match, MatchAction, MatchPlayer, Message, Mute,
-    Notification, PushSubscription,
-    RecoveryNonce, RecoveryVault, Report, Session, SiweNonce, Table, TableSeat, User, Wallet
+    Game, GameRule, Group, GroupMember, Match, MatchAction, MatchPlayer, Message, Mute,
+    Notification, PlayerStats, PushSubscription,
+    RecoveryNonce, RecoveryVault, Report, Session, SiweNonce, Table, TableSeat, User, UserAchievement,
+    Wallet
 };
 
 /**
@@ -56,6 +58,6 @@ export const entities: Function[] = [
     RecoveryVault, RecoveryNonce,
     Group, GroupMember,
     Table, TableSeat,
-    Match, MatchPlayer, MatchAction, GameRating,
+    Match, MatchPlayer, MatchAction, PlayerStats, UserAchievement,
     Notification, PushSubscription
 ];
