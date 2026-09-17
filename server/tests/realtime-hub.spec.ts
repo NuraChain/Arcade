@@ -474,6 +474,33 @@ describe('cached edges', () =>
     });
 });
 
+describe('releasing twice', () =>
+{
+    /**
+     * The gateway clears `pending` BEFORE awaiting `bind`, so a socket that dies inside that window
+     * releases against a hub that has not registered it yet - an early return that stamps nothing.
+     * The gateway now releases again once the bind finishes, which is the only moment the hub can
+     * actually do it.
+     *
+     * That recovery only works if a second release is harmless, so this pins it: the first is a
+     * no-op, the second does the work, and the account is left neither registered nor online.
+     */
+    it('tolerates a release that arrives before the bind, and one after', async () =>
+    {
+        const alex = await connect('alex');
+
+        world.hub.release(alex.connection);
+        world.hub.release(alex.connection);
+
+        expect(world.hub.size(), 'a released socket was still counted').toBe(0);
+
+        world.at += LINGER_MS + 1;
+        await world.hub.sweep();
+
+        expect(world.hub.presenceOf('alex').map((entry) => entry.who)).not.toContain('alex');
+    });
+});
+
 describe('typing', () =>
 {
     /**

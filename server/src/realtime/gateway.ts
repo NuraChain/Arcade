@@ -143,8 +143,21 @@ export function attachRealtime(server: Server, deps: GatewayDeps): () => void
                 handle(text);
             };
 
+            /**
+             * Whether the socket went away, which is not the same question as whether it was bound.
+             *
+             * `bind` awaits a database read, and `pending` is cleared BEFORE it. So a socket that
+             * died inside that window ran `release` against a hub that had not registered it yet -
+             * an early return, no `leftAt` stamped - and then `bind` resumed and registered a dead
+             * socket. Nothing could ever release it again: it sat in `byUser` forever, held a slot
+             * against the per-account cap, and kept the person `online` with `leftAt: null` so the
+             * sweep's linger check could never fire.
+             */
+            let closed = false;
+
             socket.onClose = () =>
             {
+                closed = true;
                 if (!connection.pending)
                 {
                     deps.hub.release(connection);
@@ -179,6 +192,12 @@ export function attachRealtime(server: Server, deps: GatewayDeps): () => void
 
                     connection.pending = false;
                     await deps.hub.bind(connection, principal);
+
+                    if (closed)
+                    {
+                        deps.hub.release(connection);
+                        return;
+                    }
 
                     for (const text of buffered.splice(0))
                     {
