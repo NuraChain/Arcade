@@ -1,7 +1,6 @@
-import { Check, Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn } from 'typeorm';
+import { Check, Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
 import { Game } from './game.entity.ts';
 import { Group } from './group.entity.ts';
-import { TableSeat } from './table-seat.entity.ts';
 import { User } from './user.entity.ts';
 
 export type TableMode = 'live' | 'turns';
@@ -45,7 +44,7 @@ export class Table
     @Column({ type: 'varchar', length: 16 })
     privacy!: TablePrivacy;
 
-    @Column({ type: 'smallint', default: () => '0' })
+    @Column({ type: 'smallint', default: 0 })
     target!: number;
 
     @Column({ type: 'boolean', default: false })
@@ -80,7 +79,4 @@ export class Table
     @ManyToOne(() => User, { onDelete: 'SET NULL', nullable: true })
     @JoinColumn({ name: 'host_id', referencedColumnName: 'id' })
     host!: User | null;
-
-    @OneToMany(() => TableSeat, (seat) => seat.table)
-    chairs!: TableSeat[];
 }

@@ -1,7 +1,6 @@
-import { Check, Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryColumn } from 'typeorm';
+import { Check, Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryColumn } from 'typeorm';
 import { Conversation } from './conversation.entity.ts';
 import { Device } from './device.entity.ts';
-import { EpochKey } from './epoch-key.entity.ts';
 
 /**
  * A frozen set of recipient devices, and the key that belongs to it.
@@ -48,7 +47,4 @@ export class ConversationEpoch
     @ManyToOne(() => Device)
     @JoinColumn({ name: 'minted_by', referencedColumnName: 'id' })
     minter!: Device;
-
-    @OneToMany(() => EpochKey, (epochKey) => epochKey.conversationEpoch)
-    keys!: EpochKey[];
 }

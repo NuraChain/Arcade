@@ -22,7 +22,7 @@ export class Notification
     @Column({ name: 'actor_id', type: 'uuid', nullable: true })
     actorId!: string | null;
 
-    @Column({ type: 'jsonb', default: () => "'{}'::jsonb" })
+    @Column({ type: 'jsonb', default: () => "'{}'" })
     ref!: Record<string, string>;
 
     /**

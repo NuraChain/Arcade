@@ -25,7 +25,7 @@ export class ConversationMember
     @Column({ type: 'boolean', default: false })
     pinned!: boolean;
 
-    @Column({ name: 'last_read_at', type: 'timestamptz', default: () => "'epoch'" })
+    @Column({ name: 'last_read_at', type: 'timestamptz', default: () => 'to_timestamp((0)::double precision)' })
     lastReadAt!: Date;
 
     @ManyToOne(() => Conversation, { onDelete: 'CASCADE' })
