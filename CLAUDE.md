@@ -983,6 +983,65 @@ board was the one route the 640-cell gate never toured. `matrix.mjs` seats a sec
 readies both and starts a match in its setup, reusing a live one when a previous run left one
 behind, and the matrix is 680 cells.
 
+**A move is drawn over time, and the renderer decides only that.** A token walks the squares it
+really crossed - `game/board/path.ts` asks the SERVER's own `ludo/board.ts` which ones those are,
+rather than the renderer keeping a second copy of a fifty-two square ring that would agree right up
+until somebody edited one - so a capture happens on the squares it happened on instead of the piece
+cutting across the middle of the board. A captured token is knocked back to its yard with a spin,
+because being sent home is done TO a piece and must not look like a move its owner chose. A token
+that comes home is ABSENT from the next view, so the walk it never got to make is reconstructed from
+where it stood; destroying it the moment the list shortens made a finished token vanish from under
+the pointer that had just moved it. A second update landing mid-walk cancels the first rather than
+queueing behind it, because the newest state is always the one worth being on the way to.
+
+**The affordance ring is two strokes, white inside dark, and that is not decoration.** It began as a
+glow in the token's own colour, on the reasoning that a white ring on a yellow piece against cream
+paper is a ring nobody sees - which is true, and which misses that a red ring around a red piece in
+the red yard is invisible exactly where every game begins. Two strokes is the trick a map legend
+uses: the white carries on walnut and on red, the dark carries on cream, and neither depends on
+which colour is playing.
+
+**The table's sounds are synthesised, and armed by a gesture.** Six cues in `game/sound.ts`, each an
+envelope over one or two oscillators - a few hundred bytes of code against the hundred kilobytes a
+sprite sheet of the same six would cost, with nothing to decode and nothing that can 404 halfway
+through a game. `settings.sound` is off by default, so the ordinary path never opens an audio context
+at all; the one it does open waits for a pointer or a key, because a context constructed without one
+makes Chrome log "The AudioContext was not allowed to start" and the matrix reads every console line.
+That is the same reason Phaser's own audio is off in the config.
+
+**`scene.start` does not start a scene, it QUEUES one.** `init`, `preload` and `create` run on the
+next step of the game loop, so everything the scene owns is absent for a frame or two after
+`createLudoBoard` would otherwise have returned - and a caller that shows a board into that window
+throws inside Phaser. The component caught the throw, concluded the renderer had failed, and drew its
+fallback ON TOP of a canvas that was working perfectly. In English the two layers land on the same
+squares and nothing looks wrong at all; it took a Persian page to see it. So the handle is not handed
+out until the scene says it is up, with a timeout so a scene that never boots still REJECTS - and
+`failed` now means "there is no canvas" rather than "something threw", because the catch disposes
+before it sets the flag.
+
+**The board does not mirror, and `.board-plate` declares `direction: ltr` to say so.** Everything
+else in this product is authored in logical properties precisely so it flips with the reading
+direction, but a ludo board is a printed object: red is in the corner it is printed in, and the
+canvas over it has no idea what language the page is in. The DOM fallback places its tokens with
+`inset-inline-start`, which on a Persian page measured from the other edge and put every token in the
+yard diagonally opposite its own. One line on the container keeps the house rule and fixes the object,
+rather than spelling one child in physical properties and hoping the next one remembers.
+
+**The two fractions are derived once.** `.board-token` carried `--rim` and `--cell` as percentage
+literals beside the ones `game/layout.ts` derives from the art - two descriptions of where the grid
+sits inside the plate, agreeing exactly until somebody edited one. The component sets them from
+`layout.ts` now, and `application/tests/game.spec.ts` pins that the fallback's own box arithmetic
+(`rim + col * cell + cell * 0.10`, `cell * 0.80` across) lands exactly where `centreOf` and
+`tokenRadius` put the drawn one.
+
+**An effect that hides its only signal read behind an optional call subscribes to NOTHING.**
+`handle?.show(props.view)` short-circuits while the renderer is still being imported, so the first
+pass reads nothing, registers no dependency, and the effect never runs again - and the board draws the
+position it was given at mount for the rest of the match while the panel beside it updates every turn.
+Nothing throws and nothing logs. `world-canvas` has always had the right shape and this is what it is
+for: read the signal into a local, THEN reach through the handle. `tests/markup.spec.ts` fails on any
+`effect` that does it the other way round, which is the only place the difference exists.
+
 ## Chat is the server's
 
 `server/src/domains/chat/` owns conversations, membership and messages; the browser reads them
