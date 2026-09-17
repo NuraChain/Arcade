@@ -191,7 +191,7 @@ export default component SearchPage()
                             <Show when={ results.groups.length > 0 }>
                                 <section>
                                     <SectionHeading title={ locale.t('search.scope.groups') } />
-                                    <ul class="grid gap-2 @2xl:grid-cols-2" aria-label={ locale.t('search.scope.groups') }>
+                                    <ul class="grid gap-2 @2xl:grid-cols-2 @6xl:grid-cols-3" aria-label={ locale.t('search.scope.groups') }>
                                         <For each={ results.groups } key={ (group) => group.id } let={ group }>
                                             <li class="flex min-w-0">
                                                 <GroupCard group={ group } class="flex-1" />

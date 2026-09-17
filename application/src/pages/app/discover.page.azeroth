@@ -72,7 +72,7 @@ export default component DiscoverPage()
         <div class="flex flex-col gap-8">
             <section>
                 <SectionHeading title={ locale.t('discover.people') } more={ locale.t('common.seeAll') } to="/app/friends" />
-                <ul class="grid grid-cols-2 gap-3 @lg:grid-cols-3 @3xl:grid-cols-4" aria-label={ locale.t('discover.people') }>
+                <ul class="grid grid-cols-2 gap-3 @lg:grid-cols-3 @3xl:grid-cols-4 @5xl:grid-cols-5 @7xl:grid-cols-6" aria-label={ locale.t('discover.people') }>
                     <For each={ suggestions } key={ (person) => person.id } let={ person }>
                         <li class="flex min-w-0">
                             <div class="flex-1">
@@ -99,7 +99,7 @@ export default component DiscoverPage()
 
             <section>
                 <SectionHeading title={ locale.t('discover.rooms') } />
-                <ul class="grid gap-2 @2xl:grid-cols-2" aria-label={ locale.t('discover.rooms') }>
+                <ul class="grid gap-2 @2xl:grid-cols-2 @6xl:grid-cols-3" aria-label={ locale.t('discover.rooms') }>
                     <For each={ groups } key={ (group) => group.id } let={ group }>
                         <li class="flex min-w-0">
                             <GroupCard group={ group } class="flex-1" />
