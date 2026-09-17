@@ -7,8 +7,12 @@
  * producer can only be filler copy standing in for a sentence nobody has written yet.
  */
 export const LINE_KEYS = [
+    // Written by the table half of `services.ts` when somebody is invited to a table, and by
+    // `declareResult` when a game ends. Both were declared with nothing writing either for a long
+    // time, which is the filler copy this list exists to refuse.
     'chat.line.invite',
     'chat.line.result',
+    'chat.line.result.none',
 
     // The group domain writes all six, and `groups.db.spec.ts` walks the producers.
     'chat.line.group.created',

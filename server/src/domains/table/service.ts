@@ -571,6 +571,27 @@ export function createTableService(db: DataSource, social: SocialService, achiev
         },
 
         /** Everybody sitting at it, as uuids. What the realtime layer needs to ring the doorbell. */
+        /**
+         * The table's own thread and how long a turn lasts there, for callers with no viewer.
+         *
+         * `byId` takes a reader because half of what it returns is shaped for one - the chair they
+         * are in, whether they host it, which seats are held for them. The turn sweep has no reader
+         * at all and the result line is written by the server rather than by anybody, so this is the
+         * two facts they need with nobody's name on them.
+         */
+        async roomOf(tableId: string): Promise<{ conversationId: string | null; mode: TableMode } | null>
+        {
+            const [row] = await db.query(
+                `select t.mode,
+                        (select c.id from conversations c
+                          where c.table_id = t.id and c.kind = 'game') as conversation_id
+                   from tables t where t.id = $1`,
+                [tableId]
+            ) as { mode: TableMode; conversation_id: string | null }[];
+
+            return row === undefined ? null : { conversationId: row.conversation_id, mode: row.mode };
+        },
+
         async seatedIds(tableId: string): Promise<string[]>
         {
             const rows = await db.getRepository(TableSeat).find({

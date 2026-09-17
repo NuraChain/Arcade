@@ -12,6 +12,7 @@ import { createGroupService, type GroupRow } from './domains/group/service.ts';
 import { createNotifyService, type NotificationRow } from './domains/notify/service.ts';
 import { sendPush, type VapidKeys } from './domains/notify/push.ts';
 import { createAchieveService } from './domains/achieve/service.ts';
+import { endingOf } from './domains/match/declare.ts';
 import { createMatchService, type MatchLoad } from './domains/match/service.ts';
 import { cellAt, FINISHED } from './domains/match/ludo/board.ts';
 import { createTableService, type TableRow } from './domains/table/service.ts';
@@ -55,7 +56,22 @@ export interface WriteListener
     sessionsRevoked(sessionIds: readonly string[]): void;
 }
 
-export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteListener): Ports
+/**
+ * Everything the composition root gets: the ports the API may call, plus the periodic work.
+ *
+ * `Ports` is the CLIENT-SAFE contract - `api.ts` imports it as a type and the browser's typecheck
+ * program follows - so a sweep that only the server runs does not belong in it. It belongs here,
+ * where `main.ts` already reaches, and the api still takes the narrower thing.
+ */
+export interface Services extends Ports
+{
+    jobs: {
+        /** Plays the turns whose deadline has passed. Answers how many it played. */
+        sweepTurns(limit: number): Promise<number>;
+    };
+}
+
+export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteListener): Services
 {
     // Secure cookies require TLS, and the browser silently drops a Secure cookie on plain http -
     // which in development is every request. Decided from configuration, never from a header a
@@ -589,6 +605,90 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         live?.gameChanged(matchId, await match.playersOf(matchId));
     };
 
+    /**
+     * Everything that happens AFTER a move has landed, and none of it may unland it.
+     *
+     * The move is the fact; the line in the thread and the notification are the courtesy. They run
+     * outside the transaction for that reason - and they have to be unable to fail the request for
+     * the same one. A stale CHECK constraint on `notifications.kind` turned a perfectly good roll
+     * into a 500 the first time this ran: the game had already been played, the row was already
+     * written, and the person was told their move failed.
+     *
+     * It is the rule `wake` already follows for push, and for the identical reason: a courtesy
+     * being broken must not make the thing it is a courtesy about broken too. The failure is not
+     * swallowed silently - it goes to stderr, which is where an unhandled rejection would have
+     * gone anyway.
+     */
+    const courtesy = (what: string, run: () => Promise<void>): Promise<void> =>
+        run().catch((error: unknown) =>
+        {
+            process.stderr.write(`${ what } failed: ${ error instanceof Error ? error.message : String(error) }\n`);
+        });
+
+    /**
+     * Writes the line that says how a game ended, into the table's own thread.
+     *
+     * Outside the transaction that finished it, exactly like the group lines: the result is the fact
+     * and the announcement is the courtesy, so a line that fails to write must not roll back a game
+     * somebody won.
+     */
+    const declareResult = async (matchId: string): Promise<void> =>
+    {
+        const ending = await endingOf(db, matchId);
+
+        if (ending === null)
+        {
+            return;
+        }
+
+        await chat.post(ending.conversationId, 'result', { key: ending.key, params: ending.params }, null);
+        live?.chatChanged(ending.conversationId);
+    };
+
+    /**
+     * Tells whoever the turn passed to, but only where nobody is watching for it.
+     *
+     * A `turns` table gives a player twenty-four hours, so without this the product's answer to
+     * "whose go is it?" is to keep opening the page - which is not a correspondence game, it is a
+     * page somebody has to remember. A `live` table gives forty-five seconds and the person is
+     * already looking at the board, so a notification per turn there would be pure noise, and the
+     * sweep plays the turn of anybody who walked away.
+     *
+     * The dedupe key is the MATCH rather than the table, because `table:<id>` is what an invite to
+     * the same table already uses - and one key shared by two kinds is two different things
+     * collapsing into one row that says neither.
+     */
+    const nudgeTurn = async (load: MatchLoad): Promise<void> =>
+    {
+        if (load.match.finishedAt !== null)
+        {
+            return;
+        }
+
+        const room = await table.roomOf(load.match.tableId);
+
+        if (room === null || room.mode !== 'turns')
+        {
+            return;
+        }
+
+        const seat = load.state.players[load.state.turn]?.seat;
+        const next = load.players.find((one) => one.seat === seat);
+
+        if (next === undefined)
+        {
+            return;
+        }
+
+        await tell({
+            userId: next.user_id,
+            kind: 'turn',
+            actorId: null,
+            ref: { tableId: load.match.tableId },
+            dedupeKey: `turn:${ load.match.id }`
+        });
+    };
+
     const played = async (
         me: string,
         matchId: string,
@@ -601,13 +701,66 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         {
             await ringMatch(matchId);
 
-            if (answer.load.match.finishedAt !== null)
+            if (answer.load.match.finishedAt === null)
             {
+                await courtesy('turn notice', () => nudgeTurn(answer.load));
+            }
+            else
+            {
+                await courtesy('result line', () => declareResult(matchId));
                 live?.socialChanged(...await match.playersOf(matchId));
             }
         }
 
         return { match: asMatch(answer.load), applied: answer.applied };
+    };
+
+    /**
+     * Plays the turns that ran out, and is the FIRST caller `match.due`/`match.expire` have ever had.
+     *
+     * Both were written, tested against a real Postgres and wired to nothing - so a turn that
+     * expired was never played, no seat was ever forfeited, and a table somebody walked away from
+     * sat on its deadline forever while this file's own notes described the sweep in the present
+     * tense.
+     *
+     * `skip locked` inside `due` is what makes two ticks safe: a match another pass already holds is
+     * one this pass should look past, which is the exact opposite of the `for update` an action
+     * takes. Each expiry is rung and declared on its own rather than in a batch, because one that
+     * throws must not take the rest of the tick with it.
+     */
+    const sweepTurns = async (limit: number): Promise<number> =>
+    {
+        let swept = 0;
+
+        for (const matchId of await match.due(limit))
+        {
+            if (!await match.expire(matchId))
+            {
+                continue;
+            }
+
+            swept += 1;
+            await ringMatch(matchId);
+
+            const load = await match.peek(matchId);
+
+            if (load === null)
+            {
+                continue;
+            }
+
+            if (load.match.finishedAt === null)
+            {
+                await courtesy('turn notice', () => nudgeTurn(load));
+            }
+            else
+            {
+                await courtesy('result line', () => declareResult(matchId));
+                live?.socialChanged(...await match.playersOf(matchId));
+            }
+        }
+
+        return swept;
     };
 
     const peers = createPeerDevices(db);
@@ -764,6 +917,8 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
     };
 
     return {
+        jobs: { sweepTurns },
+
         meta: {
             info: () => ({ wire: 'nura-e2ee/v1', env: process.env.NODE_ENV ?? 'development' })
         },
@@ -1346,6 +1501,29 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                     dedupeKey: `table:${ after.id }`
                 });
 
+                /**
+                 * And the table's own thread records who was asked.
+                 *
+                 * `MessageKind: 'invite'` and `chat.line.invite` were both reserved with nothing
+                 * writing either. It goes in the TABLE's room rather than into a direct message,
+                 * deliberately: a line in a DM would create a conversation between two people as a
+                 * side effect of an invitation, which is a thing nobody asked for. Who was invited
+                 * is part of this room's history the way who joined a group is part of that one's.
+                 */
+                if (after.conversation_id !== null)
+                {
+                    await courtesy('invite line', async () =>
+                    {
+                        await chat.post(
+                            after.conversation_id!,
+                            'invite',
+                            { key: 'chat.line.invite', params: { who: handle } },
+                            me
+                        );
+                        live?.chatChanged(after.conversation_id!);
+                    });
+                }
+
                 await ringTable(after, other.id);
                 return asTable(after);
             },
@@ -1411,7 +1589,9 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
 
             history: (me, cursor) => match.history(me, cursor),
 
-            record: (handle) => achieve.recordOf(handle)
+            record: (handle) => achieve.recordOf(handle),
+
+            leaderboard: (game) => achieve.leaderboardOf(game)
         },
 
         notify: {

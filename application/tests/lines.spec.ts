@@ -68,6 +68,13 @@ afterEach(() =>
  */
 const SERVICES = (import.meta.glob('../../server/src/services.ts', { query: '?raw', import: 'default', eager: true }) as Record<string, string>)['../../server/src/services.ts'];
 
+/**
+ * The result line is composed in its own module rather than in `services.ts`, because a game ends
+ * two ways - somebody plays the last move, or the sweep forfeits the last player holding a turn -
+ * and both have to say it identically.
+ */
+const DECLARE = (import.meta.glob('../../server/src/domains/match/declare.ts', { query: '?raw', import: 'default', eager: true }) as Record<string, string>)['../../server/src/domains/match/declare.ts'];
+
 describe('a server-authored line', () =>
 {
     it('is composed at display time, so a language switch re-renders it', () =>
@@ -94,18 +101,29 @@ describe('a server-authored line', () =>
         expect(container.textContent ?? '').not.toContain('from-the-future');
     });
 
+    /**
+     * The rule from CLAUDE.md, as a test: a key with no producer is filler copy standing in for a
+     * sentence nobody has written.
+     *
+     * It used to check only the `chat.line.group.*` keys, and two slipped through for a long time
+     * behind exactly that gap - `chat.line.invite` and `chat.line.result` had copy in both
+     * languages, a reserved `MessageKind` each, and nothing anywhere writing either. Every key is
+     * checked now, which is why the group keys keep their own shape below: they are composed from a
+     * suffix (`chat.line.group.${ what }`) and so never appear whole in the source.
+     */
     it('has a producer for every key it declares', () =>
     {
-        // The rule from CLAUDE.md, as a test: a key with no producer is filler copy standing in
-        // for a sentence nobody has written. Every group key is written by `services.ts`.
-        const written = SERVICES;
+        const written = SERVICES + DECLARE;
 
-        for (const key of LINE_KEYS.filter((one) => one.startsWith('chat.line.group.')))
+        for (const key of LINE_KEYS)
         {
-            const what = key.slice('chat.line.group.'.length);
-            expect(written, key).toContain(`'${ what }'`);
+            const whole = written.includes(`'${ key }'`);
+            const composed = key.startsWith('chat.line.group.')
+                && written.includes(`'${ key.slice('chat.line.group.'.length) }'`)
+                && written.includes('chat.line.group.');
+
+            expect(whole || composed, `${ key } has no producer`).toBe(true);
         }
-        expect(written).toContain('chat.line.group.');
     });
 
     it('knows exactly which keys it can render, and they are all in both catalogues', () =>

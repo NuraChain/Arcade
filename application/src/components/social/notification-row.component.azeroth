@@ -15,7 +15,8 @@ const ICON: Record<NotificationKind, IconName> = {
     'friend-accepted': 'friend-check',
     'group-added': 'people',
     'table-invite': 'seat',
-    'message': 'chats'
+    'message': 'chats',
+    'turn': 'dice'
 };
 
 /**
@@ -30,6 +31,7 @@ const SAYS: Record<NotificationKind, MessageKey> = {
     'friend-accepted': 'notify.friendAccepted',
     'group-added': 'notify.groupAdded',
     'table-invite': 'notify.tableInvite',
+    'turn': 'notify.turn',
     'message': 'notify.message'
 };
 

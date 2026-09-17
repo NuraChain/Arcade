@@ -72,6 +72,14 @@ export interface MatchSeatRow
 {
     seat: number;
     who: string;
+
+    /**
+     * The account behind the chair. `who` is the handle, which is what the wire speaks - but a
+     * notification is addressed to an id, and looking it up again from the handle would be a second
+     * query for something this join already had in its hand.
+     */
+    user_id: string;
+
     colour: number;
     result: string | null;
     rating_before: number | null;
@@ -132,6 +140,7 @@ export function createMatchService(db: DataSource, achieve: AchieveService)
             .innerJoin('users', 'u', 'u.id = p.user_id')
             .select('p.seat', 'seat')
             .addSelect('u.handle::text', 'who')
+            .addSelect('p.user_id', 'user_id')
             .addSelect('p.colour', 'colour')
             .addSelect('p.result', 'result')
             .addSelect('p.rating_before', 'rating_before')
@@ -553,6 +562,23 @@ export function createMatchService(db: DataSource, achieve: AchieveService)
 
         legal: (state: LudoState, seat: number): number[] =>
             indexOfSeat(state, seat) === state.turn ? legalMoves(state) : [],
+
+        /**
+         * The board with nobody looking at it.
+         *
+         * `view` resolves the CALLER's chair and refuses anybody who has none, which is right for a
+         * request and useless to the turn sweep - that has no caller at all. `mine` is -1 here for
+         * the same reason: there is no seat to name, and a number nothing reads is better than a
+         * seat belonging to whoever happened to trigger the tick.
+         */
+        peek: async (matchId: string): Promise<MatchLoad | null> =>
+        {
+            const found = await db.getRepository(Match).findOne({ where: { id: matchId } });
+
+            return found === null
+                ? null
+                : { match: found, state: stateOf(found), players: await seatsOf(db, matchId), mine: -1 };
+        },
 
         due: async (limit: number): Promise<string[]> =>
             (await db.getRepository(Match)
