@@ -136,6 +136,9 @@ export default component TableChat(props: { conversationId: string; onClose?: ()
             </Show>
         </header>
         <ul ref={ (element) => list = element } class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-3" aria-live="polite">
+            <Show when={ messages.length === 0 && !chat.threadLoading() }>
+                { () => <li class="m-auto text-center text-ui-sm text-muted">{ locale.t('chat.empty') }</li> }
+            </Show>
             <For each={ messages } key={ (message) => message.id } let={ message }>
                 <li class={ [
                     'flex',
