@@ -1450,6 +1450,104 @@ question most conversations never reach — a thread where nobody has a provable
 entirely by the empty-array branch. A static import put all of it in the chat page's chunk and
 pushed that chunk from 5.7 KB to 19.8 KB, past its budget, for code that would not run.
 
+## Five things that were written and never called
+
+Each of these was built, reviewed and left wired to nothing, and every gate was green over all of
+them. They are grouped because the shape repeats: something is declared, something else is supposed
+to use it, and nothing ever does - which no test catches, because a test asserts what the code does
+rather than noticing what it never does.
+
+**The turn sweep had no caller.** `match.due` and `match.expire` were written, tested against a real
+Postgres and driven by nothing - so a turn that ran out was never played, no seat was ever forfeited,
+and a table somebody closed the tab on sat on its deadline forever while this file described the
+sweep in the present tense. `main.ts` runs it every fifteen seconds now, beside the expiry sweep and
+cleared in the same `beforeShutdown`.
+
+**`chat.line.result` and `chat.line.invite` had no producer**, and `MessageKind` reserved a slot for
+each. `lines.spec.ts` was supposed to be the rule - a key with no producer is filler copy - and it
+only ever checked the `chat.line.group.*` keys, which is how two slipped past it for months. It
+checks every key now, and the group keys keep a shape of their own because they are composed from a
+suffix and never appear whole in the source.
+
+`declareResult` writes the result line into the table's own thread, and it lives in its own
+zero-import module because a game ends TWO ways - somebody plays the last move, or the sweep
+forfeits the last player holding a turn - and both have to say it identically. A game somebody won
+names them; a room that emptied does not, and must not, because the engine calls the last player
+standing a winner so the board can stop.
+
+The invite line goes in the TABLE's thread rather than into a direct message. A line in a DM would
+create a conversation between two people as a side effect of an invitation, which is a thing nobody
+asked for; who was invited is part of this room's history the way who joined a group is part of
+that one's.
+
+**Nothing told anybody it was their go.** `game_rules` offers ludo in `turns` mode, whose deadline is
+twenty-four hours, so the product's answer to "whose go is it?" was to keep opening the page. The
+`turn` notification is written only for `turns` tables - a live table gives forty-five seconds to
+somebody already looking at the board, so one per turn there is noise nobody wants, and the sweep
+plays the turn of anybody who walked away. Its dedupe key is the MATCH, because `table:<id>` is what
+an invite to the same table already uses and one key shared by two kinds is two things collapsing
+into one row that says neither.
+
+**Nothing ranked anybody.** `player_stats` made a leaderboard possible the day it existed.
+`GET /catalogue/games/:game/leaderboard` is unguarded with the rest of the catalogue and has a
+five-game floor: one win from one game puts a new account at 1216 and, on an empty board, at the
+top - which says nothing about anybody and makes the board a measure of who played most recently.
+
+**A courtesy must not be able to fail the thing it is a courtesy about.** The first turn notice ever
+written hit a stale CHECK and turned a perfectly good roll into a 500: the game had been played, the
+row was written, and the person was told their move failed. Everything that runs after a move has
+landed - the result line, the invite line, the turn notice - goes through `courtesy()`, which is the
+rule `wake` already followed for push.
+
+## A changed CHECK is not a schema change TypeORM makes
+
+`synchronize()` creates a CHECK constraint on a new table and leaves a CHANGED one exactly as it was
+on a table that already exists. `notifications_kind_known` gained a sixth kind in the entity; both
+real databases went on refusing it.
+
+**No test could have caught it, and that is the part worth keeping.** `schema.db.spec.ts`,
+`converge.db.spec.ts` and the snapshot recorder all build a database FROM NOTHING, where a changed
+constraint and a new one are the same thing - and the documented check after a schema change, "drop
+the database, boot, and let `syncSchema` build it from nothing", passes for exactly the same reason.
+Production runs the same function through `npm run schema:sync`, so a deployed database would have
+kept the old rule forever.
+
+`rewriteChecks` is the third thing `syncSchema` exists for, beside the extensions and the six
+hand-built indexes. Every `@Check` the entities declare is dropped and re-added rather than compared,
+because Postgres stores one normalised (`(kind)::text = ANY (ARRAY[...])`) while the entity declares
+it as somebody wrote it, and any textual comparison is a guess that fails open. The cost is a
+validating scan per constraint on a sync - a development boot or a deliberate `schema:sync`, never
+something a request waits for. `not valid` is deliberately not used: a constraint that is not
+validated is one that lets the rows it was added to stop obeying it.
+
+## The play pass
+
+`tools/qa/play-pass.mjs` is two real browsers playing one game through the interface, run by hand
+against the built server. It seats two wallet fixtures at one table, presses Start, takes ten turns
+by CLICKING the roll button and the move list, plays the rest out over the api, and then asserts in
+BOTH browsers that the finished game is still on screen, says what it did to the ratings and offers
+another.
+
+It exists because of what the other gates cannot see. `ludo-pass.mjs` plays complete games over the
+api in seconds and never presses a button; `npm run qa` tours the play route in 680 cells and never
+presses one either. Everything this checks was found by hand, one at a time: a board that drew the
+opening position for an entire match because an effect subscribed to nothing, a fallback drawn on
+top of a working canvas, a resign button drawn over the one that opens the chat, a finished game
+that vanished at the moment it had something to say. Every one of those is a green matrix and a
+wrong product.
+
+Two of its assertions are deliberately made in the OTHER browser, because a move only the mover can
+see is the failure it exists to catch.
+
+## The game page splits on its container
+
+`lg:grid-cols-[minmax(0,1fr)_22rem]` fires at 1024px of SCREEN, and that column is nothing like the
+screen: with the social panel open at 1280 the grid has 660px to divide, the 22rem aside takes 352 of
+it, and everything on the left was laid out in 284px - three-word rule cards and a leaderboard whose
+names all ended in an ellipsis. It is `@4xl:` now, for the same reason the people and group grids are
+container variants. Nothing measured it: the matrix fails on overflow, hit targets, a landmark and
+the console, and a column of truncated text is none of those.
+
 ## What a game leaves behind
 
 The profile got its numbers back, and the difference from the ones that were deleted is the whole
@@ -2604,7 +2702,8 @@ content script in every other tab at once.
 ## Verification
 
 `npm run check` · `npm test` · `npm run test:shuffle` · `npm run build` · `npm run qa` ·
-`node tools/qa/regression-pass.mjs` · `node tools/qa/ludo-pass.mjs`, then a browser pass: every route at
+`node tools/qa/regression-pass.mjs` · `node tools/qa/ludo-pass.mjs` · `node tools/qa/play-pass.mjs`,
+then a browser pass: every route at
 390 and 1280 in both themes and both languages, console clean, and
 the disposal check — repeatedly create and dispose the world and confirm no "Too many active
 WebGL contexts" warning appears. That leak has happened twice already: once from an unreleased
