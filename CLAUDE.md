@@ -1967,11 +1967,20 @@ interactively must be written back into a script; the scripts stay the source of
 
 ## Performance
 
+**`npm run build` fails on these now.** `tools/budgets.mjs` runs after `azeroth build`, gzips the
+chunks the prerendered `index.html` actually pulls, and exits 1 over budget - so the table below is
+a gate rather than a paragraph. It also asserts the four chunks that must NOT be in that initial
+set: three.js, the app catalogue, `session.store` behind `lib/guards.ts`, and `connect-dialog`
+behind the public shell. Each of those is one keystroke from being undone and every one of them
+fails silently - the page still works, it just pays for the whole typed api client, and its
+top-level await on `/api/_manifest`, on a route prerendered to a file precisely so it needs no
+server.
+
 | | budget | actual |
 |---|---|---|
-| initial JS, gzip | < 60 KB | 53.8 KB |
-| three.js chunk | lazy | 160.9 KB gzip, after first paint |
-| `/app` shell + page | lazy per route | 12 KB gzip shell, 1–15 KB per page |
+| initial JS, gzip | < 60 KB | 55.1 KB |
+| three.js chunk | lazy | 165.3 KB gzip, after first paint |
+| `/app` shell + page | lazy per route | 10.0 KB gzip shell, ≤ 6.2 KB per page |
 | GLB kit + textures | < 4.5 MB | see `npm run assets` |
 | game card art, 640 | < 60 KB each | 15–28 KB |
 | game hero art, 1280 | < 110 KB each | 40–70 KB |

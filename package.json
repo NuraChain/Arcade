@@ -12,7 +12,7 @@
     ],
     "scripts": {
         "dev": "azeroth dev",
-        "build": "azeroth build",
+        "build": "azeroth build && node tools/budgets.mjs",
         "check": "azeroth check && npm run check:tests --workspace server",
         "test": "azeroth test",
         "test:watch": "npm run test:watch --workspace application",
