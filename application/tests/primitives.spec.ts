@@ -339,6 +339,54 @@ describe('Tooltip', () =>
         return button;
     };
 
+    /**
+     * The scroll watch exists to hide a VISIBLE tooltip when the page moves under it, and it used to
+     * be armed in `mount` for every instance whether shown or not. `IconButton` wraps every
+     * icon-only control in a `Tooltip`, and the listener is registered with `capture: true` - so it
+     * ran for a scroll of any scrollable element anywhere, once per icon button on screen. Scrolling
+     * a chat thread meant dozens of callbacks per event, each one hiding something already hidden.
+     */
+    it('holds a scroll listener only while it is actually showing', async () =>
+    {
+        const added = new Set<EventListenerOrEventListenerObject>();
+        const realAdd = window.addEventListener.bind(window);
+        const realRemove = window.removeEventListener.bind(window);
+        let live = 0;
+
+        const addSpy = vi.spyOn(window, 'addEventListener').mockImplementation((type, listener, options) =>
+        {
+            if (type === 'scroll') { live += 1; added.add(listener as EventListenerOrEventListenerObject); }
+            return realAdd(type, listener as EventListenerOrEventListenerObject, options as boolean);
+        });
+        const removeSpy = vi.spyOn(window, 'removeEventListener').mockImplementation((type, listener, options) =>
+        {
+            if (type === 'scroll' && added.has(listener as EventListenerOrEventListenerObject)) { live -= 1; }
+            return realRemove(type, listener as EventListenerOrEventListenerObject, options as boolean);
+        });
+
+        try
+        {
+            const { container } = renderTest(() => Tooltip({ label: 'More actions', children: Probe() }) as Rendered);
+            await settle();
+
+            expect(live, 'a hidden tooltip was already listening to every scroll on the page').toBe(0);
+
+            const host = container.querySelector('span')!;
+            host.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+            await settle();
+            expect(live, 'a shown tooltip must watch for the page moving under it').toBe(1);
+
+            host.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+            await settle();
+            expect(live, 'the watch outlived the tooltip it was serving').toBe(0);
+        }
+        finally
+        {
+            addSpy.mockRestore();
+            removeSpy.mockRestore();
+        }
+    });
+
     it('stays closed until focus arrives, then describes its trigger', async () =>
     {
         const { container } = renderTest(() => Tooltip({ label: 'More actions', children: Probe(), id: 'tip-probe' }) as Rendered);

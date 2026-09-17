@@ -44,16 +44,55 @@ export default component Tooltip(props: {
         placed = true;
     };
 
+    /**
+     * The scroll and resize watch, held only while this tooltip is actually on screen.
+     *
+     * It used to be armed in `mount` for every instance. The listeners exist to HIDE a visible
+     * tooltip when the page moves under it - so for the overwhelming majority of tooltips, which are
+     * not showing, they had nothing to do. And `IconButton` wraps every icon-only control in a
+     * `Tooltip`, with `capture: true` so the handler runs for a scroll of ANY scrollable element:
+     * scrolling the chat thread ran one hide-a-hidden-tooltip callback per icon button on screen,
+     * per scroll event.
+     *
+     * Released on hide as well as on teardown, so it lives exactly as long as the thing it serves.
+     */
+    let watching: (() => void) | null = null;
+
+    const unwatch = (): void =>
+    {
+        watching?.();
+        watching = null;
+    };
+
     const hide = (): void =>
     {
         cancel?.();
         cancel = null;
         shown = false;
         placed = false;
+        unwatch();
         if (openTooltip === hide)
         {
             openTooltip = null;
         }
+    };
+
+    const watch = (): void =>
+    {
+        if (watching !== null)
+        {
+            return;
+        }
+
+        const onMoved = (): void => hide();
+        window.addEventListener('scroll', onMoved, true);
+        window.addEventListener('resize', onMoved, { passive: true });
+
+        watching = (): void =>
+        {
+            window.removeEventListener('scroll', onMoved, true);
+            window.removeEventListener('resize', onMoved);
+        };
     };
 
     const show = (immediate: boolean): void =>
@@ -69,6 +108,7 @@ export default component Tooltip(props: {
         if (immediate)
         {
             shown = true;
+            watch();
             requestAnimationFrame(settle);
             return;
         }
@@ -76,21 +116,14 @@ export default component Tooltip(props: {
         {
             cancel = null;
             shown = true;
+            watch();
             requestAnimationFrame(settle);
         });
     };
 
     mount
     {
-        const onScroll = (): void => hide();
-        window.addEventListener('scroll', onScroll, true);
-        window.addEventListener('resize', onScroll, { passive: true });
-        return () =>
-        {
-            window.removeEventListener('scroll', onScroll, true);
-            window.removeEventListener('resize', onScroll);
-            hide();
-        };
+        return () => hide();
     }
 
     <span
