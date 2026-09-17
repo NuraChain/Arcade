@@ -860,7 +860,15 @@ export const matchPlayer = object({
     tokens: array(matchToken),
     home: number(),
     out: boolean(),
-    result: enumOf(['won', 'lost', 'abandoned']).optional()
+    result: enumOf(['won', 'lost', 'abandoned']).optional(),
+
+    /**
+     * What the game did to this seat's rating. Both or neither, and absent for a match that did not
+     * move one - a room that emptied is recorded and scores nothing, so a client that renders a
+     * change here is rendering something that happened.
+     */
+    ratingBefore: number().optional(),
+    ratingAfter: number().optional()
 });
 
 export const matchView = object({

@@ -74,6 +74,8 @@ export interface MatchSeatRow
     who: string;
     colour: number;
     result: string | null;
+    rating_before: number | null;
+    rating_after: number | null;
 }
 
 export interface MatchLoad
@@ -132,6 +134,8 @@ export function createMatchService(db: DataSource, achieve: AchieveService)
             .addSelect('u.handle::text', 'who')
             .addSelect('p.colour', 'colour')
             .addSelect('p.result', 'result')
+            .addSelect('p.rating_before', 'rating_before')
+            .addSelect('p.rating_after', 'rating_after')
             .where('p.match_id = :matchId', { matchId })
             .orderBy('p.seat', 'ASC')
             .getRawMany<MatchSeatRow>();

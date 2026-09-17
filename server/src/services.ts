@@ -495,6 +495,30 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
      * viewer only and is empty unless it is their turn - a client is told what it may do, never
      * left to work it out, so an older client renders fewer options rather than an illegal one.
      */
+    /**
+     * The half of a seat that is only there once there is something to say.
+     *
+     * `result` exists after a match ends; the rating pair exists only when the match MOVED one, so
+     * a room that emptied carries a result and no numbers. Spread rather than set to null, because
+     * an absent field and a null are different answers and the wire shape says optional.
+     */
+    const seatExtras = (load: MatchLoad, seat: number): Partial<MatchView['players'][number]> =>
+    {
+        const row = load.players.find((one) => one.seat === seat);
+
+        if (row === undefined)
+        {
+            return {};
+        }
+
+        return {
+            ...(row.result == null ? {} : { result: row.result as 'won' | 'lost' | 'abandoned' }),
+            ...(row.rating_before == null || row.rating_after == null
+                ? {}
+                : { ratingBefore: row.rating_before, ratingAfter: row.rating_after })
+        };
+    };
+
     const asMatch = (load: MatchLoad): MatchView =>
     {
         const state = load.state;
@@ -506,7 +530,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             game: load.match.game,
             rev: load.match.rev,
             seats: load.match.seats,
-            players: state.players.map((player, index) => ({
+            players: state.players.map((player) => ({
                 seat: player.seat,
                 who: load.players.find((row) => row.seat === player.seat)?.who ?? '',
                 colour: player.colour,
@@ -518,10 +542,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 }),
                 home: player.pieces.filter((at) => at === FINISHED).length,
                 out: player.out,
-                ...(load.players.find((row) => row.seat === player.seat)?.result == null
-                    ? {}
-                    : { result: load.players.find((row) => row.seat === player.seat)!.result as 'won' | 'lost' | 'abandoned' }),
-                ...(index === -1 ? {} : {})
+                ...seatExtras(load, player.seat)
             })),
             turn: seatOf(state.turn),
             moves: match.legal(state, load.mine),
