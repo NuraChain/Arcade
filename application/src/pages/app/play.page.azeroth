@@ -96,7 +96,8 @@ export default component PlayPage()
 
     derived amHost = table?.chairs.find((chair) => chair.seat === table!.mine)?.host === true;
 
-    derived playing = table?.matchId !== undefined && board.match() !== null && board.match()!.id === table!.matchId;
+    /** A board worth drawing: this table's game, live or just finished. */
+    derived showing = board.match() !== null && board.match()!.tableId === table?.id;
 
     derived ready = table !== null
         && table.status === 'ready'
@@ -131,13 +132,35 @@ export default component PlayPage()
     {
         const id = table?.matchId;
 
-        if (id === undefined)
+        if (id !== undefined)
+        {
+            if (board.openId() !== id)
+            {
+                board.open(id);
+            }
+
+            return;
+        }
+
+        /**
+         * A finished match is not a match to close, it is a match to LOOK at.
+         *
+         * `matchId` is the LIVE one, so it clears the instant somebody wins - and closing on that
+         * took the board off the screen at the exact moment it had something to say, dropping the
+         * winner straight back to a lobby with a Start button. It stays until this page is left or
+         * another game is dealt, and the result panel is what offers the rematch.
+         *
+         * The test is which TABLE the held match belongs to, deliberately, and not whether it has
+         * finished yet. Two reads learn about the end separately: the table's own refetch drops
+         * `matchId` first and the match view is still the one from before the final move, so asking
+         * "has it finished?" here closes the board in the window between them - which is exactly the
+         * moment it is wanted. Belonging to this table is true throughout.
+         */
+        const held = board.match();
+
+        if (held === null || held.tableId !== table?.id)
         {
             board.close();
-        }
-        else if (board.openId() !== id)
-        {
-            board.open(id);
         }
     }
 
@@ -294,11 +317,17 @@ export default component PlayPage()
             { () =>
                 <div class="flex min-h-0 flex-1 gap-4">
                     <div class="flex min-w-0 flex-1 flex-col gap-5 py-2">
-                        <Show when={ playing }>
-                            { () => <MatchBoard match={ board.match()! } /> }
+                        <Show when={ showing }>
+                            { () =>
+                                <MatchBoard
+                                    match={ board.match()! }
+                                    starting={ starting }
+                                    onAgain={ seated ? () => void begin() : undefined }
+                                />
+                            }
                         </Show>
 
-                        <Show when={ !playing && ready && seated }>
+                        <Show when={ !showing && ready && seated }>
                             { () =>
                                 <Panel pad="md" stack="sm" class="items-center text-center">
                                     <p class="text-ui-base text-muted">{ locale.t('match.startHint') }</p>
@@ -310,8 +339,8 @@ export default component PlayPage()
                         </Show>
 
                         <Show
-                            when={ !playing && seated }
-                            fallback={ table === null || playing ? null :
+                            when={ !showing && seated }
+                            fallback={ table === null || showing ? null :
                                 <Panel pad="lg" stack="md" class="items-center text-center">
                                     <p class="text-ui-lg text-text">{ locale.t('play.table.watching') }</p>
                                     <p class="max-w-[44ch] text-ui-base text-muted">
@@ -339,7 +368,7 @@ export default component PlayPage()
                             }
                         </Show>
 
-                        <Show when={ amHost && !playing }>
+                        <Show when={ amHost && !showing }>
                             { () =>
                                 <div class="flex">
                                     <Button variant="destructive" size="sm" leading="close" onClick={ () => void end() }>

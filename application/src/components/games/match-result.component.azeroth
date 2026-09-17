@@ -1,0 +1,139 @@
+import Button from '../ui/button.component.azeroth';
+import Panel from '../ui/panel.component.azeroth';
+import Icon from '../../icons/icon.component.azeroth';
+import { useLocale } from '../../stores/locale.store.ts';
+import { usePeople } from '../../stores/people.store.ts';
+import type { MatchView } from '../../api.ts';
+
+/**
+ * How a game ended, and the offer to play another.
+ *
+ * A component of this name was deleted with the matchmaking simulation, where it declared a winner
+ * nobody had beaten. This one reads the finished match: who won, what it did to each rating, and
+ * whether it ended at all - because two quite different things end a game here and the product must
+ * not call them the same. Four tokens home is `won`. Being the last one left in a room everybody
+ * else walked out of is `abandoned`, and it moves no rating, so there is no number to print beside
+ * it and the copy says what happened rather than congratulating anybody.
+ *
+ * **Playing again is the table's verb, not the match's.** A finished match leaves the seats exactly
+ * where they were, so a rematch is the same Start this table already has - which is why this panel
+ * asks its caller for one rather than knowing how to deal a board.
+ */
+export default component MatchResult(props: { match: MatchView; mine?: number; busy?: boolean; onAgain?: () => void })
+{
+    const locale = useLocale();
+    const people = usePeople();
+
+    derived players = [...props.match.players].sort((a, b) =>
+        (a.result === 'won' ? 0 : 1) - (b.result === 'won' ? 0 : 1) || a.seat - b.seat);
+
+    derived champion = props.match.players.find((player) => player.result === 'won');
+
+    derived emptied = props.match.outcome !== 'won';
+
+    derived headline = ((): string =>
+    {
+        if (emptied)
+        {
+            return locale.t('match.over.emptied');
+        }
+
+        if (champion === undefined)
+        {
+            return locale.t('match.over.nobody');
+        }
+
+        if (props.mine !== undefined && champion.seat === props.mine)
+        {
+            return locale.t('match.won.you');
+        }
+
+        const person = people.byHandle(champion.who);
+
+        return locale.t('match.won.them', { name: person === null ? champion.who : locale.text(person.displayName) });
+    })();
+
+    const nameOf = (handle: string): string =>
+    {
+        const person = people.byHandle(handle);
+
+        return person === null ? handle : locale.text(person.displayName);
+    };
+
+    const moved = (player: MatchView['players'][number]): number | null =>
+        player.ratingAfter === undefined || player.ratingBefore === undefined
+            ? null
+            : player.ratingAfter - player.ratingBefore;
+
+    /**
+     * Composed here rather than in the catalogue, because it is a sign, a number and a separator
+     * and nothing else - and a string that reads identically in both languages fails
+     * `data.spec.ts` for exactly that reason. The digits go through `locale.n`, which is what
+     * makes them Persian numerals on a Persian page.
+     */
+    const swing = (points: number, after: number): string =>
+        `${ points >= 0 ? '+' : '−' }${ locale.n(Math.abs(points)) } · ${ locale.n(after) }`;
+
+    <Panel pad="md" stack="md" tone={ emptied ? 'field' : 'accent' }>
+        <div class="flex items-center gap-3">
+            <span
+                class={ () => [
+                    'flex h-11 w-11 shrink-0 items-center justify-center rounded-full',
+                    emptied ? 'bg-raised text-muted' : 'bg-win/15 text-win'
+                ].join(' ') }
+                aria-hidden="true"
+            >
+                <Icon name={ emptied ? 'clock' : 'trophy' } size={ 22 } />
+            </span>
+            <p class="min-w-0 flex-1 text-ui-lg font-semibold text-text" aria-live="polite">{ headline }</p>
+        </div>
+
+        <ul class="flex flex-col gap-1.5">
+            <For each={ players } key={ (player) => player.seat } let={ player }>
+                <li class="flex items-center gap-2 rounded-tile bg-raised/50 px-2.5 py-2">
+                    <span
+                        class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-ui-2xs font-bold text-white"
+                        style={ `background: var(--ludo-${ player.colour })` }
+                        aria-hidden="true"
+                    >
+                        { player.home }
+                    </span>
+                    <span class="min-w-0 flex-1 truncate text-ui-sm text-text">
+                        { player.seat === props.mine ? locale.t('match.you') : nameOf(player.who) }
+                    </span>
+                    <Show when={ player.result !== undefined }>
+                        { () =>
+                            <span class="shrink-0 text-ui-2xs text-muted">
+                                { locale.t(`history.result.${ player.result! }`) }
+                            </span>
+                        }
+                    </Show>
+                    <Show when={ moved(player) !== null }>
+                        { () =>
+                            <span
+                                class={ () => [
+                                    'tally shrink-0 text-ui-xs font-semibold',
+                                    moved(player)! >= 0 ? 'text-win' : 'text-muted'
+                                ].join(' ') }
+                            >
+                                { swing(moved(player)!, player.ratingAfter!) }
+                            </span>
+                        }
+                    </Show>
+                </li>
+            </For>
+        </ul>
+
+        <Show when={ emptied }>
+            { () => <p class="text-ui-xs text-muted">{ locale.t('match.over.noRating') }</p> }
+        </Show>
+
+        <Show when={ props.onAgain !== undefined }>
+            { () =>
+                <Button variant="primary" size="lg" leading="zap" loading={ props.busy === true } onClick={ () => props.onAgain?.() }>
+                    { locale.t('match.rematch') }
+                </Button>
+            }
+        </Show>
+    </Panel>
+}

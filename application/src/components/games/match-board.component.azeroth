@@ -1,4 +1,5 @@
 import BoardCanvas from './board-canvas.component.azeroth';
+import MatchResult from './match-result.component.azeroth';
 import Button from '../ui/button.component.azeroth';
 import Panel from '../ui/panel.component.azeroth';
 import { useLocale } from '../../stores/locale.store.ts';
@@ -48,7 +49,7 @@ const INITIAL: Record<string, string> = {
     blue: 'B'
 };
 
-export default component MatchBoard(props: { match: MatchView })
+export default component MatchBoard(props: { match: MatchView; starting?: boolean; onAgain?: () => void })
 {
     const locale = useLocale();
     const board = useBoard();
@@ -225,6 +226,19 @@ export default component MatchBoard(props: { match: MatchView })
         </div>
 
         <div class="board-controls flex min-w-0 flex-col gap-3 @3xl:w-[20rem]">
+            <Show when={ over }>
+                { () =>
+                    <MatchResult
+                        match={ game }
+                        mine={ mine }
+                        busy={ props.starting === true }
+                        onAgain={ props.onAgain }
+                    />
+                }
+            </Show>
+
+            <Show when={ !over }>
+                { () =>
             <Panel pad="md" stack="sm">
                 <p class="text-ui-lg font-semibold text-text" aria-live="polite">{ says }</p>
 
@@ -272,7 +286,11 @@ export default component MatchBoard(props: { match: MatchView })
                     }
                 </Show>
             </Panel>
+                }
+            </Show>
 
+            <Show when={ !over }>
+                { () =>
             <Panel pad="md" stack="sm">
                 <ul class="flex flex-col gap-2">
                     <For each={ game.players } key={ (player) => player.seat } let={ player }>
@@ -299,6 +317,8 @@ export default component MatchBoard(props: { match: MatchView })
                     </For>
                 </ul>
             </Panel>
+                }
+            </Show>
 
             <Show when={ !over && mine !== undefined }>
                 { () =>
