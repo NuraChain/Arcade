@@ -10,7 +10,7 @@ export interface PresenceEntry
 export type ServerFrame =
     | { v: 1; t: 'hello'; n: number; rt: string; self: string; at: number }
     | { v: 1; t: 'presence'; n: number; full: boolean; people: PresenceEntry[]; gone?: string[] }
-    | { v: 1; t: 'nudge'; n: number; scope: 'chat' | 'social'; id?: string; at: number }
+    | { v: 1; t: 'nudge'; n: number; scope: 'chat' | 'social' | 'game'; id?: string; at: number }
     | { v: 1; t: 'typing'; n: number; who: string; id: string };
 
 export type ClientFrame =
@@ -52,7 +52,7 @@ export const presence = (n: number, full: boolean, people: PresenceEntry[], gone
  * with a message body on it would be a second place for all three to be got wrong, and it would
  * have to be rewritten again when a body becomes ciphertext.
  */
-export const nudge = (n: number, scope: 'chat' | 'social', at: number, id?: string): ServerFrame =>
+export const nudge = (n: number, scope: 'chat' | 'social' | 'game', at: number, id?: string): ServerFrame =>
     id === undefined ? { v: 1, t: 'nudge', n, scope, at } : { v: 1, t: 'nudge', n, scope, id, at };
 
 export const typing = (n: number, who: string, id: string): ServerFrame =>

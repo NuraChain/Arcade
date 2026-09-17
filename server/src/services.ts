@@ -11,6 +11,8 @@ import { createDeviceService, type DeviceRow } from './domains/device/service.ts
 import { createGroupService, type GroupRow } from './domains/group/service.ts';
 import { createNotifyService, type NotificationRow } from './domains/notify/service.ts';
 import { sendPush, type VapidKeys } from './domains/notify/push.ts';
+import { createMatchService, type MatchLoad } from './domains/match/service.ts';
+import { cellAt, FINISHED } from './domains/match/ludo/board.ts';
 import { createTableService, type TableRow } from './domains/table/service.ts';
 import { createIdentityService } from './domains/identity/service.ts';
 import { maySeeOnline } from './domains/social/policy.ts';
@@ -27,8 +29,10 @@ import type {
     GroupSummary,
     Notification,
     PersonSummary,
+    MatchView,
     TableSummary
 } from './schemas.ts';
+import type { MatchEventLog } from './ports.ts';
 
 /**
  * Builds the real implementations behind `Ports`.
@@ -46,6 +50,7 @@ export interface WriteListener
 {
     chatChanged(conversationId: string): void;
     socialChanged(...userIds: string[]): void;
+    gameChanged(matchId: string, players: readonly string[]): void;
     sessionsRevoked(sessionIds: readonly string[]): void;
 }
 
@@ -445,6 +450,10 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 summary.conversationId = row.conversation_id;
             }
         }
+        if (row.match_id !== null)
+        {
+            summary.matchId = row.match_id;
+        }
         return summary;
     };
 
@@ -472,6 +481,110 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             live?.chatChanged(row.conversation_id);
         }
         live?.socialChanged(...await table.seatedIds(row.id), ...also);
+    };
+
+    const match = createMatchService(db);
+
+    /**
+     * The board as a client is allowed to see it.
+     *
+     * `turn` and `winner` become SEATS here: the engine counts players by their index in its own
+     * array, and that index is meaningless to anybody outside it. `moves` is computed for this
+     * viewer only and is empty unless it is their turn - a client is told what it may do, never
+     * left to work it out, so an older client renders fewer options rather than an illegal one.
+     */
+    const asMatch = (load: MatchLoad): MatchView =>
+    {
+        const state = load.state;
+        const seatOf = (index: number): number => state.players[index].seat;
+
+        const view: MatchView = {
+            id: load.match.id,
+            tableId: load.match.tableId,
+            game: load.match.game,
+            rev: load.match.rev,
+            seats: load.match.seats,
+            players: state.players.map((player, index) => ({
+                seat: player.seat,
+                who: load.players.find((row) => row.seat === player.seat)?.who ?? '',
+                colour: player.colour,
+                tokens: player.pieces.map((at, piece) =>
+                {
+                    const cell = cellAt(player.colour, at);
+
+                    return cell === null ? { piece, at } : { piece, at, cell };
+                }),
+                home: player.pieces.filter((at) => at === FINISHED).length,
+                out: player.out,
+                ...(load.players.find((row) => row.seat === player.seat)?.result == null
+                    ? {}
+                    : { result: load.players.find((row) => row.seat === player.seat)!.result as 'won' | 'lost' | 'abandoned' }),
+                ...(index === -1 ? {} : {})
+            })),
+            turn: seatOf(state.turn),
+            moves: match.legal(state, load.mine),
+            mine: load.mine,
+            startedAt: load.match.startedAt.toISOString()
+        };
+
+        if (state.die !== null)
+        {
+            view.die = state.die;
+        }
+        if (load.match.deadlineAt !== null)
+        {
+            view.deadline = load.match.deadlineAt.toISOString();
+        }
+        if (state.winner !== null)
+        {
+            view.winner = seatOf(state.winner);
+        }
+        if (load.match.outcome !== null)
+        {
+            view.outcome = load.match.outcome;
+        }
+        if (load.match.finishedAt !== null)
+        {
+            view.finishedAt = load.match.finishedAt.toISOString();
+        }
+
+        return view;
+    };
+
+    /**
+     * The doorbell for a board that moved.
+     *
+     * A third scope, where groups and tables deliberately reuse two. The objection recorded beside
+     * `ringTable` - that a third would be new vocabulary for information `chat` and `social` already
+     * carry - does not hold here: a move is genuinely new, `social` fans a presence snapshot to
+     * every socket on the server and could not be afforded per roll, and a `chat` nudge would hand
+     * the chat store an id it would resolve as a conversation. It stays a doorbell: the frame
+     * carries the match id and nothing about the move.
+     */
+    const ringMatch = async (matchId: string): Promise<void> =>
+    {
+        live?.gameChanged(matchId, await match.playersOf(matchId));
+    };
+
+    const played = async (
+        me: string,
+        matchId: string,
+        want: { kind: 'roll' | 'move' | 'resign'; key: string; rev?: number; piece?: number }
+    ): Promise<{ match: MatchView; applied: 'now' | 'already' | 'stale' }> =>
+    {
+        const answer = await match.act(me, matchId, want);
+
+        if (answer.applied === 'now')
+        {
+            await ringMatch(matchId);
+
+            if (answer.load.match.finishedAt !== null)
+            {
+                live?.socialChanged(...await match.playersOf(matchId));
+            }
+        }
+
+        return { match: asMatch(answer.load), applied: answer.applied };
     };
 
     const peers = createPeerDevices(db);
@@ -1227,6 +1340,51 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 }
                 live?.socialChanged(...seated);
             }
+        },
+
+        match: {
+            view: async (me, matchId) =>
+            {
+                const load = await match.view(me, matchId);
+
+                return load === null ? null : asMatch(load);
+            },
+
+            since: async (me, matchId, rev) =>
+            {
+                const found = await match.since(me, matchId, rev);
+
+                if (found === null)
+                {
+                    return null;
+                }
+
+                return {
+                    match: asMatch(found.load),
+                    events: found.events.map((entry) => ({
+                        rev: entry.rev,
+                        seat: entry.seat,
+                        at: entry.at.toISOString(),
+                        events: entry.events as MatchEventLog['events']
+                    }))
+                };
+            },
+
+            start: async (me, tableId) =>
+            {
+                const load = await match.start(me, tableId);
+
+                await ringMatch(load.match.id);
+                live?.socialChanged(...await table.seatedIds(tableId));
+
+                return asMatch(load);
+            },
+
+            roll: async (me, matchId, input) => await played(me, matchId, { kind: 'roll', key: input.key, rev: input.rev }),
+
+            move: async (me, matchId, input) => await played(me, matchId, { kind: 'move', key: input.key, rev: input.rev, piece: input.piece }),
+
+            resign: async (me, matchId, input) => await played(me, matchId, { kind: 'resign', key: input.key })
         },
 
         notify: {

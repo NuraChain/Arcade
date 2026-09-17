@@ -86,6 +86,7 @@ export interface Hub
 
     chatChanged(conversationId: string): void;
     socialChanged(...userIds: string[]): void;
+    gameChanged(matchId: string, players: readonly string[]): void;
     sessionsRevoked(sessionIds: readonly string[]): void;
 
     typingIn(connection: Connection, conversationId: string): void;
@@ -126,6 +127,16 @@ export function createHub(deps: HubDeps): Hub
     const online = new Map<string, { state: PresenceState; since: number; leftAt: number | null }>();
 
     const pendingChat = new Map<string, number>();
+
+    /**
+     * A board that moved, and who is playing on it.
+     *
+     * The players ride along rather than being resolved at flush time, because unlike a
+     * conversation's membership this set cannot change while the frame is in the air - a match's
+     * seats are fixed the moment it is dealt. It saves a query per burst and removes the only
+     * asynchronous step the other two fan-outs have.
+     */
+    const pendingGame = new Map<string, { at: number; players: readonly string[] }>();
     const pendingSocial = new Set<string>();
     let timer: ReturnType<typeof setTimeout> | null = null;
 
@@ -293,8 +304,10 @@ export function createHub(deps: HubDeps): Hub
     {
         const chat = [...pendingChat.entries()];
         const social = [...pendingSocial];
+        const games = [...pendingGame.entries()];
         pendingChat.clear();
         pendingSocial.clear();
+        pendingGame.clear();
 
         for (const userId of social)
         {
@@ -323,6 +336,11 @@ export function createHub(deps: HubDeps): Hub
             void deps.recipientsOf(conversationId)
                 .then((recipients) => publish(recipients, (n) => nudge(n, 'chat', at, conversationId)))
                 .catch((error) => deps.report(error, 'realtime.recipients'));
+        }
+
+        for (const [matchId, { at, players }] of games)
+        {
+            publish(players, (n) => nudge(n, 'game', at, matchId));
         }
     }
 
@@ -452,6 +470,12 @@ export function createHub(deps: HubDeps): Hub
         chatChanged(conversationId)
         {
             pendingChat.set(conversationId, deps.now());
+            schedule();
+        },
+
+        gameChanged(matchId, players)
+        {
+            pendingGame.set(matchId, { at: deps.now(), players });
             schedule();
         },
 

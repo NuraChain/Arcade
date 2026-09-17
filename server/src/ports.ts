@@ -24,8 +24,11 @@ import type {
     NotificationPage,
     ServerInfo,
     SocialGraph,
-    TableSummary
+    TableSummary,
+    MatchView
 } from './schemas.ts';
+import type { Infer } from '@azerothjs/schema';
+import type { matchEvent } from './schemas.ts';
 
 /**
  * What the route declarations are allowed to know about the rest of the server.
@@ -394,6 +397,39 @@ export interface ChatPort
     openDirect(me: string, handle: string): Promise<string>;
 }
 
+/**
+ * A game in progress.
+ *
+ * The two verbs a player has are `roll` and `move`, and neither names a destination: `move` names a
+ * token, the server computes where it lands from the die it drew itself, and there is no field
+ * anywhere on the way in that carries a dice value. Everything else here is a read.
+ *
+ * `view` and `since` answer null for somebody who is not playing this game, which the route turns
+ * into the same 404 a game that never existed gets - a match belonging to other people is not
+ * refused differently from one that is not there.
+ */
+export type Applied = 'now' | 'already' | 'stale';
+
+export type MatchEventLog = Infer<typeof matchEvent>;
+
+export interface MatchPort
+{
+    view(me: string, matchId: string): Promise<MatchView | null>;
+
+    /** Everything after `rev`, for a client that missed a doorbell. */
+    since(me: string, matchId: string, rev: number): Promise<{ match: MatchView; events: MatchEventLog[] } | null>;
+
+    /** Deals the board. Refuses a table with an empty chair or anybody not ready. */
+    start(me: string, tableId: string): Promise<MatchView>;
+
+    roll(me: string, matchId: string, input: { key: string; rev?: number }): Promise<{ match: MatchView; applied: Applied }>;
+
+    move(me: string, matchId: string, input: { key: string; rev?: number; piece: number }): Promise<{ match: MatchView; applied: Applied }>;
+
+    /** Gives up. A decision, so a real loss. */
+    resign(me: string, matchId: string, input: { key: string }): Promise<{ match: MatchView; applied: Applied }>;
+}
+
 /** Every port the API declaration may reach. One member per domain. */
 export interface Ports
 {
@@ -403,6 +439,7 @@ export interface Ports
     social: SocialPort;
     group: GroupPort;
     table: TablePort;
+    match: MatchPort;
     notify: NotifyPort;
     device: DevicePort;
     chat: ChatPort;

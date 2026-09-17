@@ -59,7 +59,7 @@ export interface RealtimeApi
 
     presence: Getter<PresenceEntry[] | null>;
 
-    onNudge(listener: (scope: 'chat' | 'social', id: string | undefined) => void): () => void;
+    onNudge(listener: (scope: 'chat' | 'social' | 'game', id: string | undefined) => void): () => void;
 
     /**
      * Somebody is typing, right now, in one conversation.
@@ -112,10 +112,10 @@ export const useRealtime = createStore((): RealtimeApi =>
     const [stalled, setStalled] = createSignal(false);
     const [presence, setPresence] = createSignal<PresenceEntry[] | null>(null);
 
-    const listeners = new Set<(scope: 'chat' | 'social', id: string | undefined) => void>();
+    const listeners = new Set<(scope: 'chat' | 'social' | 'game', id: string | undefined) => void>();
     const watchers = new Set<(status: RealtimeStatus) => void>();
     const typists = new Set<(who: string, conversationId: string) => void>();
-    const pending = new Map<string, { scope: 'chat' | 'social'; id: string | undefined }>();
+    const pending = new Map<string, { scope: 'chat' | 'social' | 'game'; id: string | undefined }>();
 
     let close: (() => void) | null = null;
     let retry: (() => void) | null = null;
@@ -155,7 +155,7 @@ export const useRealtime = createStore((): RealtimeApi =>
         }
     };
 
-    const nudge = (scope: 'chat' | 'social', id: string | undefined): void =>
+    const nudge = (scope: 'chat' | 'social' | 'game', id: string | undefined): void =>
     {
         pending.set(`${ scope }:${ id ?? '' }`, { scope, id });
         if (coalesce === null)

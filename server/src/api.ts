@@ -72,7 +72,13 @@ import {
     signOutResult,
     socialGraph,
     suggestionList,
-    walletSignIn
+    walletSignIn,
+    matchView,
+    matchDelta,
+    matchAck,
+    matchActionInput,
+    matchMoveInput,
+    sinceQuery
 } from './schemas.ts';
 
 /**
@@ -486,7 +492,65 @@ export function buildApi(ports: Ports)
             {
                 await ports.table.close(context.principal.userId, context.params.id);
                 return { ok: true };
-            })
+            }),
+
+            /**
+             * Deals the board.
+             *
+             * A table verb rather than a match one, because until this runs there is no match to
+             * address. Any seated player may press it once every chair is taken and everybody is
+             * ready: the precondition is already unanimous, so asking the host as well would be
+             * ceremony that strands a table whose host closed the tab. Pressing it twice, or four
+             * people pressing it at once, answers with the one match that exists.
+             */
+            start: routes.post('/:id/start', { output: matchView },
+                (context) => ports.match.start(context.principal.userId, context.params.id))
+        })),
+
+        /**
+         * A game being played.
+         *
+         * Two verbs, and neither names a destination. `roll` carries no value - the die is drawn on
+         * this side, inside the transaction, after the caller has been authorised - and `move`
+         * names one of the caller's own tokens, never a square. There is no route anywhere that
+         * accepts a dice result, and `tests/ludo-dice.spec.ts` reads these declarations to prove it.
+         *
+         * A match this caller is not playing answers exactly as one that does not exist.
+         */
+        matches: feature('/matches', [session], (routes) => ({
+            view: routes.get('/:id', { output: matchView }, async (context) =>
+            {
+                const found = await ports.match.view(context.principal.userId, context.params.id);
+
+                if (found === null)
+                {
+                    throw new NotFoundError('No game there.');
+                }
+
+                return found;
+            }),
+
+            since: routes.get('/:id/since', { query: sinceQuery, output: matchDelta }, async (context) =>
+            {
+                const rev = Number.parseInt(context.query.rev ?? '0', 10);
+                const found = await ports.match.since(context.principal.userId, context.params.id, Number.isFinite(rev) ? rev : 0);
+
+                if (found === null)
+                {
+                    throw new NotFoundError('No game there.');
+                }
+
+                return found;
+            }),
+
+            roll: routes.post('/:id/roll', { input: matchActionInput, output: matchAck },
+                (context) => ports.match.roll(context.principal.userId, context.params.id, context.input)),
+
+            move: routes.post('/:id/move', { input: matchMoveInput, output: matchAck },
+                (context) => ports.match.move(context.principal.userId, context.params.id, context.input)),
+
+            resign: routes.post('/:id/resign', { input: matchActionInput, output: matchAck },
+                (context) => ports.match.resign(context.principal.userId, context.params.id, context.input))
         })),
 
         /**

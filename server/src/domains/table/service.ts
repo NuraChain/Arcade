@@ -73,6 +73,9 @@ export interface TableRow
 
     is_host: boolean;
     conversation_id: string | null;
+
+    /** The game running here, or null when nobody has started one. */
+    match_id: string | null;
 }
 
 /** The alphabet a table code is drawn from: no 0/O, no 1/I/l, so it survives being read aloud. */
@@ -110,14 +113,21 @@ const TABLE_COLUMNS = `
     t.target, t.cube, t.blinds, t.created_at,
 
     -- Derived, never stored. A closed table is a decision somebody made and lives in the column;
-    -- open-versus-ready is a fact about how many chairs are full, and a stored copy of it is a
-    -- copy that goes stale the first time a seat moves down a path that forgot to update it.
+    -- everything else is a fact about the world right now, and a stored copy of it is a copy that
+    -- goes stale the first time it moves down a path that forgot to update it. Playing has three
+    -- such paths already - a win, a timeout cascade and the host closing the table - so it is read
+    -- from whether a match is still running rather than written beside one.
     case
         when t.status = 'closed' then 'closed'
+        when exists (select 1 from matches m
+                      where m.table_id = t.id and m.finished_at is null) then 'playing'
         when (select count(*) from table_seats s
                where s.table_id = t.id and s.user_id is not null) >= t.seats then 'ready'
         else 'open'
     end                                                                        as status,
+
+    (select m.id from matches m
+      where m.table_id = t.id and m.finished_at is null)                       as match_id,
 
     (select u.handle::text from users u where u.id = t.host_id)                as host,
 

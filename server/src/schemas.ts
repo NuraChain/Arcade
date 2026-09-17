@@ -670,7 +670,7 @@ export const tableBlinds = enumOf(['low', 'mid', 'high']);
  * game plugs into, and a status that claimed otherwise would be the first thing in it that was
  * not true.
  */
-export const tableStatus = enumOf(['open', 'ready', 'closed']);
+export const tableStatus = enumOf(['open', 'ready', 'playing', 'closed']);
 
 export type TableStatus = Infer<typeof tableStatus>;
 
@@ -712,6 +712,9 @@ export const tableSummary = object({
     /** Absent for somebody who has not sat down: no chair, no thread. */
     conversationId: string().optional(),
 
+    /** The game being played here, absent until somebody starts one. */
+    matchId: string().optional(),
+
     createdAt: string()
 });
 
@@ -741,6 +744,124 @@ export const seatResult = object({
     table: tableSummary,
     seat: number().optional()
 });
+
+/* ----------------------------------------------------------------- matches */
+
+/**
+ * A game somebody is playing.
+ *
+ * The board is the server's. A client is told where every token stands and, when it is their turn,
+ * which of their own tokens may move - it is never asked to work either out, and there is no field
+ * anywhere on the way in that carries a dice value. `rev` is how a client notices it missed a
+ * realtime frame: every answer carries it, and a doorbell naming a higher one means read again.
+ */
+export const matchToken = object({
+    piece: number(),
+    at: number(),
+    cell: object({ col: number(), row: number() }).optional()
+});
+
+export const matchPlayer = object({
+    seat: number(),
+    who: string(),
+    colour: string(),
+    tokens: array(matchToken),
+    home: number(),
+    out: boolean(),
+    result: enumOf(['won', 'lost', 'abandoned']).optional()
+});
+
+export const matchView = object({
+    id: string(),
+    tableId: string(),
+    game: string(),
+    rev: number(),
+    seats: number(),
+    players: array(matchPlayer),
+
+    /** Whose turn it is, as a seat. The engine's own index never crosses the wire. */
+    turn: number(),
+
+    /** The roll waiting to be used, absent when the player still has to roll. */
+    die: number().optional(),
+
+    /** This viewer's chair, absent for somebody who is only watching. */
+    mine: number().optional(),
+
+    /** This viewer's legal moves, empty unless it is their turn and they have rolled. */
+    moves: array(number()),
+
+    deadline: string().optional(),
+    winner: number().optional(),
+    outcome: enumOf(['won', 'abandoned', 'closed']).optional(),
+    startedAt: string(),
+    finishedAt: string().optional()
+});
+
+export type MatchView = Infer<typeof matchView>;
+
+/**
+ * One thing that happened, flattened.
+ *
+ * The engine's events are a union and the wire is a record, so every arm's fields are optional here
+ * and `e` says which ones are filled. Declared rather than left open: this is what the board
+ * animates from, and a payload nobody has described is one a renderer guesses at.
+ */
+export const matchMove = object({
+    e: enumOf(['roll', 'enter', 'step', 'capture', 'home', 'pass', 'forfeit', 'finish']),
+    seat: number().optional(),
+    piece: number().optional(),
+    from: number().optional(),
+    to: number().optional(),
+    victim: number().optional(),
+    victimPiece: number().optional(),
+    die: number().optional(),
+    why: string().optional(),
+    reason: string().optional(),
+    winner: number().optional()
+});
+
+export const matchEvent = object({
+    rev: number(),
+    seat: number(),
+    at: string(),
+    events: array(matchMove)
+});
+
+export const matchDelta = object({ match: matchView, events: array(matchEvent) });
+
+/**
+ * What an action answers.
+ *
+ * `applied` is three values rather than a boolean because "you already did this" and "the board
+ * moved on" are different answers, and neither is a failure: a retried request and a tap that
+ * crossed a realtime frame are both ordinary. Conflating them is the shape that made an empty
+ * presence delta unable to say somebody had left.
+ */
+export const matchAck = object({
+    match: matchView,
+    applied: enumOf(['now', 'already', 'stale'])
+});
+
+/**
+ * `key` is the caller's name for ONE intention, held across retries. Without it two identical rolls
+ * both apply - after a six the turn has not passed, so the second is perfectly legal.
+ *
+ * `rev` is the revision the caller believed it was acting on, so an action composed against a board
+ * that has since moved writes nothing rather than landing for a different reason.
+ */
+export const matchActionInput = object({
+    key: string({ max: 64 }),
+    rev: number({ int: true, min: 0 }).optional()
+});
+
+export const matchMoveInput = object({
+    key: string({ max: 64 }),
+    rev: number({ int: true, min: 0 }).optional(),
+    piece: number({ int: true, min: 0, max: 3 })
+});
+
+export const sinceQuery = object({ rev: string().optional() });
 
 /* ----------------------------------------------------------------- notifications */
 
