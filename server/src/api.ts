@@ -40,8 +40,10 @@ import {
     groupList,
     groupSummary,
     guestSignIn,
+    account,
     handleInput,
     handleResult,
+    profileInput,
     messagePage,
     muteInput,
     notificationPage,
@@ -220,6 +222,18 @@ export function buildApi(ports: Ports)
                     const handle = await ports.identity.claimHandle(context.principal.userId, context.input.handle);
                     return { handle };
                 }
+            ),
+
+            /**
+             * The display name and the bio, which are the account's to write.
+             *
+             * Separate from `/handle` because a handle is CLAIMED and can be refused, and one
+             * request that half-succeeds leaves somebody unable to tell which half did.
+             */
+            profile: routes.with(session).post(
+                '/profile',
+                { input: profileInput, output: account },
+                (context) => ports.identity.setProfile(context.principal.userId, context.input)
             )
         })),
 

@@ -681,7 +681,17 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 live?.sessionsRevoked(ended);
                 return ended.length;
             },
-            claimHandle: (userId, handle) => identity.claimHandle(userId, handle)
+            claimHandle: (userId, handle) => identity.claimHandle(userId, handle),
+
+            async setProfile(userId, input)
+            {
+                const row = await identity.setProfile(userId, input);
+
+                // The display name travels on every person payload the social graph sends, so
+                // everybody with this account on screen has to be told to re-read it.
+                live?.socialChanged(userId);
+                return present(row);
+            }
         },
 
         social: {

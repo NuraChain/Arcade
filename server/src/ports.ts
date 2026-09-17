@@ -90,6 +90,14 @@ export interface IdentityPort
     signOutEverywhere(userId: string): Promise<number>;
     claimHandle(userId: string, handle: string): Promise<string>;
 
+    /**
+     * Writes the part of a profile somebody writes for themselves.
+     *
+     * Separate from `claimHandle` because a handle can be REFUSED - it is claimed against a unique
+     * index - and one request that half-succeeds is worse than two that each say what happened.
+     */
+    setProfile(userId: string, input: { displayName: string; bio: string }): Promise<Account>;
+
     /** Whether cookies must carry Secure. Decided by configuration, never by a request. */
     readonly secureCookies: boolean;
 }

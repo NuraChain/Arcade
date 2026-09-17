@@ -50,6 +50,22 @@ export interface AccountApi
 
     signIn(name: string): Promise<Person | null>;
 
+    /**
+     * Writes the display name and the bio, and adopts what the server answers with.
+     *
+     * The ANSWER is adopted rather than the input: the server trims and bounds both fields, and a
+     * store that kept what was typed would disagree with every other surface the moment it did.
+     */
+    setProfile(input: { displayName: string; bio: string }): Promise<void>;
+
+    /**
+     * Claims a different @handle, separately, because this one can be REFUSED.
+     *
+     * A taken handle throws, and the caller says so. Folding it into `setProfile` would make one
+     * request that half-succeeds, with nothing on the screen able to say which half.
+     */
+    claimHandle(handle: string): Promise<void>;
+
     adoptWallet(account: Account): Person | null;
 }
 
@@ -66,6 +82,21 @@ export const useAccount = createStore((): AccountApi =>
         {
             session.establish(account);
             return personFor(account);
+        },
+
+        async setProfile(input)
+        {
+            session.establish(await client.auth.profile({ input }));
+        },
+
+        async claimHandle(handle)
+        {
+            const claimed = await client.auth.claimHandle({ input: { handle } });
+            const current = session.account();
+            if (current !== null)
+            {
+                session.establish({ ...current, handle: claimed.handle });
+            }
         },
 
         async signIn(name)

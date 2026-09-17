@@ -1,6 +1,7 @@
 import { useHead } from 'azerothjs';
 
 import Page from '../../components/app/page.component.azeroth';
+import ProfileSheet from '../../components/app/profile-sheet.component.azeroth';
 import Panel from '../../components/ui/panel.component.azeroth';
 import Avatar from '../../components/ui/avatar.component.azeroth';
 import Button from '../../components/ui/button.component.azeroth';
@@ -14,6 +15,7 @@ import Icon from '../../icons/icon.component.azeroth';
 import { shortAddress } from '../../lib/wallet.ts';
 import { useAccount } from '../../stores/account.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
+import { useOverlay } from '../../stores/overlay.store.ts';
 import { useSocial } from '../../stores/social.store.ts';
 import { useToasts } from '../../stores/toasts.store.ts';
 
@@ -33,6 +35,7 @@ import { useToasts } from '../../stores/toasts.store.ts';
 export default component MePage()
 {
     const locale = useLocale();
+    const overlay = useOverlay();
     const account = useAccount();
     const social = useSocial();
     const toasts = useToasts();
@@ -124,6 +127,9 @@ export default component MePage()
                     </Show>
 
                     <div class="flex flex-wrap items-center justify-center gap-2">
+                        <Button variant="primary" leading="edit" onClick={ () => void overlay.open(ProfileSheet, {}, { label: locale.t('profile.title') }).closed }>
+                            { locale.t('me.edit') }
+                        </Button>
                         <Button variant="secondary" leading="settings" to="/app/me/settings">{ locale.t('me.settings') }</Button>
                         <Button variant="outline" leading="share" onClick={ () => void share() }>{ locale.t('me.share') }</Button>
                     </div>

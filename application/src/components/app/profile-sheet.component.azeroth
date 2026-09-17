@@ -1,0 +1,142 @@
+import { ApiError } from '../../api.ts';
+import { useAccount } from '../../stores/account.store.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import type { OverlayProps } from '../../stores/overlay.store.ts';
+import { useToasts } from '../../stores/toasts.store.ts';
+import Button from '../ui/button.component.azeroth';
+import Field from '../ui/field.component.azeroth';
+import IconButton from '../ui/icon-button.component.azeroth';
+import Input from '../ui/input.component.azeroth';
+import TextArea from '../ui/text-area.component.azeroth';
+
+/** The column bounds, stated in `schemas.ts` and repeated here so the box stops before the server does. */
+const NAME_MAX = 40;
+const BIO_MAX = 240;
+const HANDLE_MAX = 32;
+
+/**
+ * The three things about an account that are its own to write.
+ *
+ * Two requests, not one, and the sheet is honest about which is which: the display name and the
+ * bio are simply STORED, while the @handle is CLAIMED against a unique index and can come back
+ * refused. Sending them together would make one request that half-succeeds, with nothing on the
+ * screen able to say which half - so the handle goes first, and if it is taken nothing else is
+ * written and the box says so with the value still in it.
+ *
+ * What is deliberately NOT here: anything to buy or earn. A profile effect somebody can unlock is
+ * a claim about an economy this product does not have - no inventory, no balance, nothing that
+ * grants one - and the same judgement that removed the invented levels and the provably-fair
+ * badge applies to a shop with nothing behind it.
+ */
+export default component ProfileSheet(props: OverlayProps)
+{
+    const locale = useLocale();
+    const account = useAccount();
+    const toasts = useToasts();
+
+    const current = account.user();
+
+    state displayName = current?.displayName ?? '';
+    state handle = current?.handle ?? '';
+    state bio = current?.bio ?? '';
+    state busy = false;
+    state refusal = '';
+
+    derived trimmedName = displayName.trim();
+
+    derived changedHandle = handle.trim().toLowerCase() !== (current?.handle ?? '').toLowerCase();
+
+    derived valid = trimmedName.length > 0 && handle.trim().length >= 2;
+
+    const save = async (): Promise<void> =>
+    {
+        if (busy || !valid)
+        {
+            return;
+        }
+
+        busy = true;
+        refusal = '';
+
+        try
+        {
+            // The handle first, because it is the half that can be refused. Writing the name and
+            // then failing here would leave the sheet open over an account that had already
+            // half-changed.
+            if (changedHandle)
+            {
+                await account.claimHandle(handle.trim());
+            }
+
+            await account.setProfile({ displayName: trimmedName, bio: bio.trim() });
+        }
+        catch (error)
+        {
+            busy = false;
+            refusal = error instanceof ApiError && error.status === 409
+                ? locale.t('profile.handleTaken')
+                : locale.t('profile.failed');
+            return;
+        }
+
+        busy = false;
+        toasts.show({ kind: 'success', text: locale.t('profile.saved') });
+        props.close(true);
+    };
+
+    <div class="flex flex-col gap-5 p-5">
+        <header class="flex items-start justify-between gap-3">
+            <div class="min-w-0">
+                <h2 class="title text-ui-xl text-text">{ locale.t('profile.title') }</h2>
+                <p class="mt-2 text-ui-base text-muted">{ locale.t('profile.lead') }</p>
+            </div>
+            <IconButton icon="close" label={ locale.t('common.close') } variant="ghost" onClick={ () => props.close(false) } />
+        </header>
+
+        <Field id="profile-name" label={ locale.t('profile.name') } hint={ locale.t('profile.nameHint') }>
+            <Input
+                id="profile-name"
+                value={ displayName }
+                onInput={ (value) => displayName = value }
+                maxlength={ NAME_MAX }
+                autocomplete="nickname"
+                label={ locale.t('profile.name') }
+            />
+        </Field>
+
+        <Field
+            id="profile-handle"
+            label={ locale.t('profile.handle') }
+            hint={ locale.t('profile.handleHint') }
+            error={ refusal === '' ? undefined : refusal }
+        >
+            <Input
+                id="profile-handle"
+                value={ handle }
+                onInput={ (value) => handle = value }
+                maxlength={ HANDLE_MAX }
+                leading="me"
+                invalid={ refusal !== '' }
+                autocomplete="username"
+                label={ locale.t('profile.handle') }
+            />
+        </Field>
+
+        <Field id="profile-bio" label={ locale.t('profile.bio') } hint={ locale.plural('profile.bioLeft', BIO_MAX - bio.length) }>
+            <TextArea
+                id="profile-bio"
+                value={ bio }
+                onInput={ (value) => bio = value }
+                maxlength={ BIO_MAX }
+                label={ locale.t('profile.bio') }
+            />
+        </Field>
+
+        <div class="flex justify-end gap-2">
+            <Button variant="ghost" onClick={ () => props.close(false) }>{ locale.t('common.cancel') }</Button>
+            <Button variant="primary" leading="check-circle" loading={ busy } disabled={ !valid } onClick={ () => void save() }>
+                { locale.t('profile.save') }
+            </Button>
+        </div>
+    </div>
+}

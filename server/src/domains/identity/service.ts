@@ -6,6 +6,7 @@ import { hashToken, isAddress, mintNonce, mintToken, normalizeAddress } from '..
 import type { AccountKind } from '../../entities/user.entity.ts';
 import { firstRow, rowsOf } from '../../lib/rows.ts';
 import { SiweNonce } from '../../entities/siwe-nonce.entity.ts';
+import { User } from '../../entities/user.entity.ts';
 import { candidatesFor, checkHandle, handleFromAddress, handleFromName, normalizeHandle } from './handle.ts';
 import { buildSiweMessage, verifySignature } from './siwe.ts';
 
@@ -387,6 +388,28 @@ export function createIdentityService(db: DataSource, config: IdentityConfig)
                 [userId]
             );
             return firstRow<ProfileRow>(rows);
+        },
+
+        /**
+         * Writes the display name and the bio.
+         *
+         * `update` then re-READ through `profileFor` rather than `returning *`: that is the one
+         * query that joins the wallet address in, and a second composition here would be a second
+         * chance to disagree with it.
+         */
+        async setProfile(userId: string, input: { displayName: string; bio: string }): Promise<ProfileRow>
+        {
+            await db.getRepository(User).update(
+                { id: userId },
+                { displayName: input.displayName, bio: input.bio, updatedAt: new Date() }
+            );
+
+            const row = await this.profileFor(userId);
+            if (row === null)
+            {
+                throw new UnauthorizedError('Sign in to continue.');
+            }
+            return row;
         },
 
         /** Renames an account. The unique index arbitrates, exactly as it does at creation. */

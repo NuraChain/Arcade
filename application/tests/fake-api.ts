@@ -156,6 +156,9 @@ export const server =
     calls: [] as string[],
     sessions: 3,
 
+    /** Handles `claimHandle` refuses with a 409, so the taken-name branch has something to hit. */
+    takenHandles: [] as string[],
+
     /** The social half: mutes the fake server holds, and the privacy it enforces. */
     mutes: [] as { kind: MuteSubject; id: string }[],
     allowStrangerMessages: true,
@@ -1581,11 +1584,38 @@ export const client =
         async claimHandle({ input }: { input: { handle: string } })
         {
             server.calls.push('auth.handle');
+
+            // The real route claims against a unique index and answers 409 when it is taken. The
+            // fake has to be able to do that too, or the one branch of the profile sheet that
+            // cannot simply be retried has nothing exercising it.
+            if (server.takenHandles.includes(input.handle.toLowerCase()))
+            {
+                throw new ApiError(409, 'conflict', 'That name is taken.', undefined);
+            }
+
             if (server.account !== null)
             {
                 server.account = { ...server.account, handle: input.handle };
             }
             return { handle: input.handle };
+        },
+
+        async profile({ input }: { input: { displayName: string; bio: string } })
+        {
+            server.calls.push('auth.profile');
+            if (server.account === null)
+            {
+                throw new ApiError(401, 'unauthorized', 'Sign in to continue.', undefined);
+            }
+
+            // Trimmed and bounded the way the wire shape says, so a store that adopted the INPUT
+            // rather than the answer would visibly disagree here.
+            server.account = {
+                ...server.account,
+                displayName: input.displayName.trim().slice(0, 40),
+                bio: input.bio.trim().slice(0, 240)
+            };
+            return server.account;
         }
     }
 };

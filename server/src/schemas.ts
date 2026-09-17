@@ -142,12 +142,23 @@ export const walletSignIn = object({
 
 export const guestSignIn = object({ name: string({ trim: true, nonempty: true, max: 64 }) });
 
-/**
- * Signing in as one of the seeded demo identities. The handle is the whole request: these are
- * shared exploration accounts, they prove nothing, and the account they open says `demo` so the
- * UI can say so too.
- */
+/** Claiming a different @handle. The unique index arbitrates, exactly as it does at creation. */
 export const handleInput = object({ handle: string({ trim: true, min: 2, max: 32 }) });
+
+/**
+ * The part of a profile somebody writes for themselves.
+ *
+ * Both bounds are the COLUMN's, stated here because that is where a wire shape is decided once:
+ * `display_name` is `text` but the product renders it in one line, and a bio that reached Postgres
+ * over-long would come back as 22001, which is a 500 any signed-in caller could produce.
+ *
+ * The handle is not here. It is claimed by INSERT against a unique index and can be REFUSED, so it
+ * has its own route and its own answer; folding it in would make one request that half-succeeds.
+ */
+export const profileInput = object({
+    displayName: string({ trim: true, min: 1, max: 40 }),
+    bio: string({ trim: true, max: 240 })
+});
 
 export const handleResult = object({ handle: string() });
 
