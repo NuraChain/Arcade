@@ -2363,7 +2363,8 @@ content script in every other tab at once.
 ## Verification
 
 `npm run check` · `npm test` · `npm run test:shuffle` · `npm run build` · `npm run qa` ·
-`node tools/qa/regression-pass.mjs` . `node tools/qa/ludo-pass.mjs`, then a browser pass: every route at 390 and 1280 in both themes and both languages, console clean, and
+`node tools/qa/regression-pass.mjs` · `node tools/qa/ludo-pass.mjs`, then a browser pass: every route at
+390 and 1280 in both themes and both languages, console clean, and
 the disposal check — repeatedly create and dispose the world and confirm no "Too many active
 WebGL contexts" warning appears. That leak has happened twice already: once from an unreleased
 capability-probe context, once because `renderer.dispose()` alone does not free the GL context
