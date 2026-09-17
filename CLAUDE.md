@@ -769,6 +769,115 @@ The column is gone from the entity; `tests/lib.spec.ts` now asserts the key is A
 so it cannot come back without the mechanism. `stakes: 'play-money'` stays: that is a fact about
 a table, not a promise about a random number.
 
+## Playing a game
+
+`server/src/domains/match/` is the first real game engine in this product, and it is what the table
+domain always said it was stopping short of. A table is still a seat container; a **match** is one
+game played at one, and the two are joined by `matches.table_id` with a partial unique index over
+`(table_id) where finished_at is null` - one live game per table, enforced rather than assumed.
+
+**The board is not invented, it is read off the art.** `tools/blender/lib/atlas.py` has drawn the
+Ludo field since long before any of this, and `tools/blender/assets/set-ludo.py` builds the GLB from
+the same 15x15 grid: 72 painted track cells, minus the four five-cell home columns, is the standard
+52-square ring; `starts` gives each colour its entry; eight cells carry a star and are safe.
+`ludo/board.ts` derives all of it by walking segments and `tests/ludo-board.spec.ts` re-derives the
+art's own literals to compare, so the squares a token walks and the squares underneath it cannot
+drift apart.
+
+One trap, recorded because it costs nothing to avoid and an afternoon to find: `set-ludo.py` ALSO
+carries `track_spots`, and those are not the entry squares - they are where the 3D model parks its
+loose tokens for the market scene, two cells off. Taking the wrong dictionary would put every
+token's entry beside the star it is drawn on, and nothing anywhere would fail.
+
+**The engine is pure, and that is enforced rather than intended.** `ludo/` imports nothing but
+itself: no `typeorm`, no `node:`, no clock, no randomness. `tests/ludo-purity.spec.ts` reads the
+directory as text and fails on any of those tokens, which is the same technique
+`realtime.socket.spec.ts` uses for "nothing in onConnection may await" - a deterministic test beats
+an atmospheric one. Three things follow, and each is the reason: the rules run in the default
+`npm test` with no Postgres, the same function can later run in the browser for move highlighting
+without dragging a decorator into the web program, and a game is replayable because the same state
+and the same die always give the same result.
+
+**`apply` never throws.** A refusal is a value - `{ ok: false, reason }` over a closed union - so the
+service maps reasons onto statuses in one place and the timeout sweep can fold actions over a state.
+A pure function that throws for ordinary control flow is one nothing can fold.
+
+**The engine never sees a uuid.** It is handed a seat number and answers with one. `match_players` is
+the only join between a seat and a person, which turns "you cannot move somebody else's token" into
+a lookup rather than a rule somebody remembers to write.
+
+**One engine plays two, three and four.** The seat count chooses which of the four colours are in
+play and nothing else; the rotation is over the players array, so the board never knows how many
+there are. Two players take opposite quadrants - twenty-six squares apart, so neither starts a walk
+behind the other. `game_rules.seats` for ludo is `[2, 3, 4]`, and `reference-parity.spec.ts` is what
+stops the client's fallback disagreeing.
+
+**A client asks for two things and neither names a destination.** `POST /matches/:id/roll` carries no
+value at all, and `POST /matches/:id/move` names one of the caller's own tokens - the server computes
+where it lands from the die it drew itself. There is no field anywhere on the way in that carries a
+dice result, and `tests/ludo-dice.spec.ts` reads `schemas.ts` and `api.ts` as text to keep it that
+way.
+
+**The die is `randomInt` from `node:crypto`, and the product says only that the server rolls it.**
+Not `randomBytes(1) % 6`, which quietly favours the low faces. What cannot be claimed is fairness: a
+player cannot check that the server did not draw twice and keep the one it liked, because the process
+that draws is the process that records. That is exactly the claim `game_rules.fairness` was deleted
+for, so `ludo-dice.spec.ts` also fails on the words *provable* and *verifiable* anywhere near this
+domain. Commit-reveal is a mechanism to build before any copy changes, not a sentence to add.
+
+**Every action is one transaction that opens with `for update` on the match row.** Deliberately NOT
+the `skip locked` the seat claim uses, and the contrast is the whole point: skipping is right when a
+held chair is one the claimer should look past, and wrong here, where one of four people acting at
+once must win and the others must queue rather than be told nothing happened. `skip locked` returns
+in the timeout sweep, where passing over a match another tick already holds IS correct.
+
+**Two guards make a retry safe and neither subsumes the other.** The idempotency key is unique per
+`(match, user, key)` and answers a repeated request with the state as it now stands - without it two
+identical rolls both apply, because after a six the turn has not passed and the second is perfectly
+legal. The revision precondition refuses an action composed against a board that has since moved -
+without it a stale "move token 2" is still legal at the new revision, for a different reason, on a
+different board. Neither is an error: `applied` is `now`, `already` or `stale`, because a retried tap
+and a tap that crossed a realtime frame are both ordinary. Two values could not say which happened.
+
+**Starting is a table verb and its preconditions live in the WHERE clause.** `POST /tables/:id/start`
+inserts with `not exists`, a seat count and a readiness check all inside one statement, so there is
+no window between reading a ready table and writing a match against it. That is still not enough on
+its own - `not exists` cannot see another transaction's uncommitted row - so `matches_one_live`
+arbitrates and a 23505 is read as "somebody else started it", which answers with their match. Any
+seated player may press it: the precondition is already unanimous, so host-only would be ceremony
+that strands a table whose host closed the tab.
+
+**A table says `playing` and it is DERIVED, never stored.** `TABLE_COLUMNS` reads it from whether an
+unfinished match exists, for the same reason `ready` is read from occupied chairs - and with more
+force, because playing has three ways to end: a win, a timeout cascade and the host closing the
+table. A stored copy would go stale the first time one of them forgot.
+
+**Realtime gets a third scope, `game`, and this is the first one that earns it.** The objection beside
+`ringTable` - that a third scope would be new vocabulary for information `chat` and `social` already
+carry - is right about groups and tables and wrong about a move. `social` fans a presence snapshot to
+every socket on the server and could not be afforded per roll; a `chat` nudge would hand the chat
+store an id it would resolve as a conversation. It stays a doorbell: the frame carries the match id
+and nothing about the move, and the client re-reads through the same route with the same
+authorisation. The players ride along in the pending entry rather than being resolved at flush time,
+because unlike a conversation's membership a match's seats cannot change while the frame is in the
+air.
+
+**A turn that runs out is played, not punished.** The sweep finds due matches by Postgres `now()` -
+never `MoreThan(new Date())`, because the deadline was written by Postgres and a Node clock would
+disagree with it - rolls or plays the lowest legal token, and bumps `timeouts`. The third miss in a
+row forfeits that seat, and when forfeits leave one player standing the match ends `abandoned`. The
+server's own actions are written with `user_id = null`, which is what distinguishes them in the
+ledger.
+
+**`match_actions` is an audit trail, an idempotency ledger and a catch-up feed - and NOT a rebuild
+log.** `matches.state` is the authority and nothing replays those rows to reconstruct a board. A
+fixed rule would change the fold, and a finished game would stop being a fact.
+
+**`tools/qa/ludo-pass.mjs` plays complete games over the real api**, at two, three and four players,
+through the routes a browser uses. It is API-level on purpose: it proves the rules, the persistence,
+the turn order, the authorisation and the wire agree end to end, over hundreds of turns, in seconds.
+What it cannot prove is that any of it is visible, which is the browser pass's job.
+
 ## Chat is the server's
 
 `server/src/domains/chat/` owns conversations, membership and messages; the browser reads them
@@ -2254,7 +2363,7 @@ content script in every other tab at once.
 ## Verification
 
 `npm run check` · `npm test` · `npm run test:shuffle` · `npm run build` · `npm run qa` ·
-`node tools/qa/regression-pass.mjs`, then a browser pass: every route at 390 and 1280 in both themes and both languages, console clean, and
+`node tools/qa/regression-pass.mjs` . `node tools/qa/ludo-pass.mjs`, then a browser pass: every route at 390 and 1280 in both themes and both languages, console clean, and
 the disposal check — repeatedly create and dispose the world and confirm no "Too many active
 WebGL contexts" warning appears. That leak has happened twice already: once from an unreleased
 capability-probe context, once because `renderer.dispose()` alone does not free the GL context
