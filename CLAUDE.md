@@ -1450,6 +1450,82 @@ question most conversations never reach — a thread where nobody has a provable
 entirely by the empty-array branch. A static import put all of it in the chat page's chunk and
 pushed that chunk from 5.7 KB to 19.8 KB, past its budget, for code that would not run.
 
+## What a game leaves behind
+
+The profile got its numbers back, and the difference from the ones that were deleted is the whole
+point: every figure now moves because a match this server arbitrated ended. `player_stats` is one
+row per person per game holding the rating, the peak, played, won, abandoned, the streak and the
+tallies; `user_achievements` is who has earned what. Both are written inside the transaction that
+finishes the match, because a match that is over and a record that has not moved are two rows
+disagreeing about the same game.
+
+The table was called `game_ratings` while `rating` was the only thing in it. Played, won, captures
+and a streak are not ratings.
+
+**Being the last one left in an empty room is not a win, and until `record.ts` existed it paid like
+one.** The engine declares a winner in two quite different situations - somebody brought four
+tokens home, or everybody else walked out - and `commit` recorded both as `outcome: 'won'`. That is
+a rating farm: three accounts sit down, two leave, the third is handed the win. `outcomeOf` tells
+them apart by looking at the board, the second is `abandoned`, and an abandoned match moves the
+counts and the streaks and nothing else. `record.db.spec.ts` owns it against a real Postgres.
+
+**A rating is Elo over a FIELD.** Two players is ordinary Elo; three and four score every pair and
+average over the opponents faced, so beating a strong field is worth more than beating a weak one
+and the answer does not depend on how the seats were numbered. Ludo only ever declares a first, so
+`placementsOf` reads the rest off the board - tokens home, then distance travelled - and anybody who
+forfeited is last whatever their position says, or walking out while ahead would be a placement
+somebody earned by leaving. K is 32 and the result is clamped to what the column takes, because a
+write Postgres refuses after a match has finished strands the match rather than the rating.
+
+**A peak is the highest rating somebody has ever HELD**, which includes the 1200 they started at.
+Taking it from the new rating alone recorded a personal best of 1184 for a player who had never been
+below 1200 in their life.
+
+**Nine achievements, and three were deleted for the reason every unproduced thing here is deleted.**
+`hokm-trump`, `gammon` and `cube-taker` describe naming trump, bearing off and taking a double -
+mechanics of games this product does not have - so nothing could ever award them. They were tiles
+somebody would have spent a season trying to earn. `achieve/rules.ts` is pure and `rating.spec.ts`
+fails if the seed and the rule set ever name different things; `seed-reference.ts` now DELETES any
+definition it no longer carries, because reference content that can only be added to is how a
+database ends up holding a tile nobody remembers writing.
+
+**Awarding re-evaluates everything and lets the primary key dedupe.** `earnedBy` answers what the
+record deserves rather than what has changed, so a retried action, a replayed idempotency key and a
+reconnect all converge on the same `on conflict do nothing` rows. A "what is new since last time"
+version would have to be right about last time.
+
+**`first-seat` is earned by sitting down**, in the table domain, inside the transaction that seats
+somebody. Awarding it at the end of a match would mean a person who took a chair and never got to
+play had not, according to the product, ever sat at a table.
+
+**Three facts are questions rather than counters.** "Seven different days", "a private table you
+filled" and "the same three people ten times" are questions about the shape of a history, answered
+by one FROM-less select of correlated sub-queries at the end of a match - which happens once per
+game. A `distinct days` column would be a number that has to be right on every write forever; this
+is right by construction every time it is asked.
+
+**A RECORD is anybody's to read and a HISTORY is your own.** The aggregate is what a profile has
+always shown. A list of the games somebody sat at, with who else was there and when, is a
+description of their week - the social graph is already the thing E2EE cannot hide, and this would
+be a second copy of it that anybody could read. `GET /matches/history` takes no handle at all and
+pages by keyset over `(finished_at, id)`, like chat history and for the same reason.
+
+**The live counts are counted.** `catalogue.store.ts` drifted "627 people at the tables" on a seeded
+RNG, and the rule written beside it was that it goes the moment the server answers with real counts.
+`GET /catalogue/live` counts SEATED PEOPLE at open public tables, LEFT JOINed from `games` so a quiet
+game comes back as a zero rather than as a missing row. `waitSeconds` went with it and is not coming
+back as a zero either: nothing measures how long somebody waits for a chair, because matchmaking is
+a query over open tables rather than a queue with a length.
+
+**A finished match stays on screen, and the test for that is which TABLE it belongs to.**
+`tables.match_id` is the LIVE one, so it clears the instant somebody wins - and closing the board on
+that dropped the winner straight back to a lobby with a Start button at the exact moment the game had
+something to say. Asking "has it finished?" instead does not work either: the table's refetch and the
+match's are two reads that learn about the end separately, so there is a window where the table has
+dropped the id and the match view is still the one from before the final move. Belonging to this
+table is true throughout. The rematch is offered from the result panel and is the table's ordinary
+Start, because a finished match leaves every seat exactly where it was.
+
 ## What was deleted because nothing produced it
 
 A person used to carry a level, a skill band, a reliability score, a favourite game, a region, a
@@ -1480,9 +1556,10 @@ teaches people that the product's assurances are decoration. So the fields are g
 | `portrait` | an `<img>` pointing at a file that has never existed — every row was null |
 | `dataset().activity` | the whole home activity feed, forty invented events |
 
-`me` and `person` lost their tab bars with the tabs. What is left on a profile is what the server
-actually knows: who you are, what you wrote about yourself, whether a wallet is behind the account,
-and how many friends you have. `social.service.ts` lost `planRequestReply` and `rankSuggestions`
+`me` and `person` lost their tab bars with the tabs. The record and the achievements are BACK, and
+measured - see *What a game leaves behind*. What has not come back is anything nothing measures:
+there is still no level, no skill band, no reliability score, no favourite game, no region and no
+portrait, because the match domain produces none of those. `social.service.ts` lost `planRequestReply` and `rankSuggestions`
 entirely — neither had a caller in the product, and only their own tests were keeping them alive.
 
 **What a person CAN write is now writable.** `profile-sheet.component.azeroth` takes the display
