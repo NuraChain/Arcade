@@ -1,3 +1,4 @@
+import type { GameId } from '../../data/games.ts';
 import { useNavigate } from 'azerothjs';
 
 import Icon from '../../icons/icon.component.azeroth';
@@ -5,11 +6,12 @@ import type { IconName } from '../../icons/registry.ts';
 import { usePeople } from '../../stores/people.store.ts';
 import { useChat } from '../../stores/chat.store.ts';
 import { useGroups } from '../../stores/groups.store.ts';
+import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useSocial } from '../../stores/social.store.ts';
 import { useOverlay, type OverlayProps } from '../../stores/overlay.store.ts';
 import IconButton from '../ui/icon-button.component.azeroth';
-import { groupNameOf, othersOf, titleOf } from './chat-title.ts';
+import { gameNameOf, groupNameOf, othersOf, titleOf } from './chat-title.ts';
 import ExpirySheet from './expiry-sheet.component.azeroth';
 
 interface Action
@@ -23,6 +25,9 @@ interface Action
 export default component ChatActions(props: OverlayProps & { conversationId: string })
 {
     const locale = useLocale();
+    const catalogue = useCatalogue();
+
+    const gameName = (game: GameId): string => locale.t(catalogue.byId(game).nameKey);
     const social = useSocial();
     const chat = useChat();
     const groups = useGroups();
@@ -34,7 +39,7 @@ export default component ChatActions(props: OverlayProps & { conversationId: str
 
     derived title = conversation === null
         ? props.conversationId
-        : locale.text(titleOf(conversation, chat.me(), people.byHandle, groupNameOf(conversation, groups.byId)));
+        : locale.text(titleOf(conversation, chat.me(), people.byHandle, { group: groupNameOf(conversation, groups.byId), game: gameNameOf(conversation, gameName) }));
 
     derived pinned = chat.pinned(props.conversationId);
 

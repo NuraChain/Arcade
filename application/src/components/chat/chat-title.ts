@@ -1,5 +1,6 @@
 import type { GroupSummary } from '../../api.ts';
 import type { Person } from '../../data/person.ts';
+import type { GameId } from '../../data/games.ts';
 import type { Conversation } from '../../data/chat.ts';
 import type { LocalizedText } from '../../lib/text.ts';
 import { SealFailure } from '../../services/chat.source.ts';
@@ -35,25 +36,53 @@ export function groupNameOf(conversation: Conversation, find: (slug: string) => 
     return conversation.groupId === null ? undefined : find(conversation.groupId)?.name;
 }
 
+/**
+ * The name of the game a table conversation belongs to, if it belongs to one.
+ *
+ * Takes the lookup for the reason `groupNameOf` does: this module is imported by a page, a list
+ * row, an actions sheet and a search result, and a store call inside a `derived` would subscribe
+ * four times over.
+ */
+export function gameNameOf(conversation: Conversation, name: (game: GameId) => string): string | undefined
+{
+    return conversation.game === null ? undefined : name(conversation.game);
+}
+
+/**
+ * What a conversation is called, given the names the caller could look up.
+ *
+ * The names arrive as one object rather than as a growing tail of positional strings, which is
+ * what the third one would have made it.
+ *
+ * A TABLE is named after its game. It used to fall through to a generic "Table chat" for every
+ * one of them, so a chats list holding two tables held two rows with identical titles and no way
+ * to tell which was which - the timestamp is the only other thing on the row, and a table nobody
+ * has spoken in yet has no timestamp either. The generic name survives as the last resort, for a
+ * table whose game this client has not heard of.
+ */
 export function titleOf(
     conversation: Conversation,
     me: string,
     find: (handle: string) => Person | null,
-    groupName?: string
+    names: { group?: string; game?: string } = {}
 ): LocalizedText | string
 {
     if (conversation.title !== null)
     {
         return conversation.title;
     }
-    if (groupName !== undefined && groupName !== '')
+    if (names.group !== undefined && names.group !== '')
     {
-        return groupName;
+        return names.group;
     }
     const others = othersOf(conversation, me, find);
     if (others.length === 1)
     {
         return others[0].displayName;
+    }
+    if (names.game !== undefined && names.game !== '')
+    {
+        return names.game;
     }
     return { en: 'Table chat', fa: 'گفت‌وگوی میز' };
 }

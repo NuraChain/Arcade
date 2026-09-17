@@ -1,7 +1,8 @@
+import type { GameId } from '../../data/games.ts';
 import { Link, untrack, useHead, useNavigate, useParams } from 'azerothjs';
 
 import Page from '../../components/app/page.component.azeroth';
-import { groupNameOf, othersOf, sealSentenceOf, titleOf } from '../../components/chat/chat-title.ts';
+import { gameNameOf, groupNameOf, othersOf, sealSentenceOf, titleOf } from '../../components/chat/chat-title.ts';
 import { sendBlockOf } from '../../lib/seal-state.ts';
 import { attachStick } from '../../lib/stick.ts';
 import { haptic } from '../../lib/haptics.ts';
@@ -43,6 +44,8 @@ export default component ChatPage()
     const groups = useGroups();
     const presence = usePresence();
     const catalogue = useCatalogue();
+
+    const gameName = (game: GameId): string => locale.t(catalogue.byId(game).nameKey);
     const lobby = useLobby();
     const overlay = useOverlay();
     const shell = useShell();
@@ -89,7 +92,7 @@ export default component ChatPage()
 
     derived title = conversation === null
         ? locale.t(missing ? 'chat.notFound' : 'common.loading')
-        : locale.text(titleOf(conversation, me, people.byHandle, groupNameOf(conversation, groups.byId)));
+        : locale.text(titleOf(conversation, me, people.byHandle, { group: groupNameOf(conversation, groups.byId), game: gameNameOf(conversation, gameName) }));
 
     const seal = useSeal();
     const devices = useDevices();

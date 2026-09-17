@@ -1,7 +1,8 @@
+import type { GameId } from '../../data/games.ts';
 import { useHead, useNavigate } from 'azerothjs';
 
 import Page from '../../components/app/page.component.azeroth';
-import { groupNameOf, titleOf } from '../../components/chat/chat-title.ts';
+import { gameNameOf, groupNameOf, titleOf } from '../../components/chat/chat-title.ts';
 import GameArt from '../../components/games/game-art.component.azeroth';
 import FriendRow from '../../components/social/friend-row.component.azeroth';
 import GroupCard from '../../components/social/group-card.component.azeroth';
@@ -17,6 +18,7 @@ import Icon from '../../icons/icon.component.azeroth';
 import { usePeople } from '../../stores/people.store.ts';
 import { useChat } from '../../stores/chat.store.ts';
 import { useGroups } from '../../stores/groups.store.ts';
+import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useSearch, SEARCH_SCOPES, type SearchScope } from '../../stores/search.store.ts';
 import { useSocial } from '../../stores/social.store.ts';
@@ -41,6 +43,9 @@ const NOWHERE: Conversation = {
 export default component SearchPage()
 {
     const locale = useLocale();
+    const catalogue = useCatalogue();
+
+    const gameName = (game: GameId): string => locale.t(catalogue.byId(game).nameKey);
     const search = useSearch();
     const chat = useChat();
     const groups = useGroups();
@@ -223,7 +228,7 @@ export default component SearchPage()
                                                 >
                                                     <span class="truncate text-ui-base text-text">{ locale.text(message.text) }</span>
                                                     <span class="truncate text-ui-xs text-faint">
-                                                        { locale.t('search.in', { where: locale.text(titleOf(whereOf(message.conversationId), chat.me(), people.byHandle, groupNameOf(whereOf(message.conversationId), groups.byId))) }) }
+                                                        { locale.t('search.in', { where: locale.text(titleOf(whereOf(message.conversationId), chat.me(), people.byHandle, { group: groupNameOf(whereOf(message.conversationId), groups.byId), game: gameNameOf(whereOf(message.conversationId), gameName) })) }) }
                                                         <span class="mx-1.5 inline-block h-1 w-1 rounded-full bg-faint align-middle" aria-hidden="true"></span>
                                                         { locale.relative(message.at) }
                                                     </span>

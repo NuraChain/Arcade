@@ -1,9 +1,10 @@
+import type { GameId } from '../../data/games.ts';
 import { useHead } from 'azerothjs';
 
 import Page from '../../components/app/page.component.azeroth';
 import ChatActions from '../../components/chat/chat-actions.component.azeroth';
 import ChatListItem from '../../components/chat/chat-list-item.component.azeroth';
-import { groupNameOf, titleOf } from '../../components/chat/chat-title.ts';
+import { gameNameOf, groupNameOf, titleOf } from '../../components/chat/chat-title.ts';
 import EmptyState from '../../components/ui/empty-state.component.azeroth';
 import SearchInput from '../../components/ui/search-input.component.azeroth';
 import Skeleton from '../../components/ui/skeleton.component.azeroth';
@@ -12,6 +13,7 @@ import type { Conversation } from '../../data/chat.ts';
 import { fold } from '../../services/search.service.ts';
 import { usePeople } from '../../stores/people.store.ts';
 import { useChat } from '../../stores/chat.store.ts';
+import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useOverlay } from '../../stores/overlay.store.ts';
 import { useGroups } from '../../stores/groups.store.ts';
@@ -20,6 +22,9 @@ import { usePresence } from '../../stores/presence.store.ts';
 export default component ChatsPage()
 {
     const locale = useLocale();
+    const catalogue = useCatalogue();
+
+    const gameName = (game: GameId): string => locale.t(catalogue.byId(game).nameKey);
     const chat = useChat();
     const overlay = useOverlay();
     const presence = usePresence();
@@ -51,7 +56,7 @@ export default component ChatsPage()
             : byTab.filter((conversation) =>
             {
                 const last = chat.lastOf(conversation.id);
-                return fold(locale.text(titleOf(conversation, mine, people.byHandle, groupNameOf(conversation, groups.byId)))).includes(needle)
+                return fold(locale.text(titleOf(conversation, mine, people.byHandle, { group: groupNameOf(conversation, groups.byId), game: gameNameOf(conversation, gameName) }))).includes(needle)
                     || (last !== undefined && fold(locale.text(last.text)).includes(needle));
             });
         return [...matched].sort((a, b) =>
