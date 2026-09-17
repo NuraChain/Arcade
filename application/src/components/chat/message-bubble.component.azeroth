@@ -107,13 +107,13 @@ export default component MessageBubble(props: { message: Message; me: string; sh
             <Show
                 when={ props.message.kind === 'system' }
                 fallback={
-                    <div class={ [
+                    <div class={ () => [
                         'flex w-full max-w-[22rem] flex-col gap-3 rounded-panel border p-3',
                         props.message.kind === 'result' ? 'border-win/40 bg-win/5' : 'border-accent/40 bg-accent/5',
                         mine ? 'ms-auto' : ''
                     ].filter(Boolean).join(' ') }>
                         <div class="flex items-center gap-2.5">
-                            <span class={ [
+                            <span class={ () => [
                                 'flex h-9 w-9 shrink-0 items-center justify-center rounded-full',
                                 props.message.kind === 'result' ? 'bg-win/20 text-win' : 'bg-accent/20 text-accent'
                             ].join(' ') }>
@@ -148,7 +148,7 @@ export default component MessageBubble(props: { message: Message; me: string; sh
         }
     >
         { () =>
-            <div class={ [ 'flex w-full items-end gap-2', mine ? 'flex-row-reverse' : '' ].filter(Boolean).join(' ') }>
+            <div class={ () => [ 'flex w-full items-end gap-2', mine ? 'flex-row-reverse' : '' ].filter(Boolean).join(' ') }>
                 <Show when={ !mine && props.showAuthor } fallback={ <span class="w-8 shrink-0" aria-hidden="true"></span> }>
                     { () =>
                         <Link to={ `/app/people/${ person?.handle ?? props.message.from }` } data-inline class="shrink-0">
@@ -156,7 +156,7 @@ export default component MessageBubble(props: { message: Message; me: string; sh
                         </Link>
                     }
                 </Show>
-                <div class={ [ 'flex max-w-[min(30rem,78%)] flex-col gap-0.5', mine ? 'items-end' : 'items-start' ].join(' ') }>
+                <div class={ () => [ 'flex max-w-[min(30rem,78%)] flex-col gap-0.5', mine ? 'items-end' : 'items-start' ].join(' ') }>
                     <Show when={ !mine && props.showAuthor }>
                         { () => <span class="px-1 text-ui-2xs font-semibold text-muted">{ firstName }</span> }
                     </Show>
@@ -164,7 +164,7 @@ export default component MessageBubble(props: { message: Message; me: string; sh
                         when={ locked === null }
                         fallback={
                             <span
-                                class={ [
+                                class={ () => [
                                     'flex items-start gap-2 rounded-tile border border-dashed px-3 py-2 text-ui-sm',
                                     alarming ? 'border-danger/50 bg-danger/10 text-danger' : 'border-line bg-field text-muted'
                                 ].join(' ') }
@@ -179,7 +179,7 @@ export default component MessageBubble(props: { message: Message; me: string; sh
                             <span
                                 ref={ (element) => bubble = element }
                                 dir="auto"
-                                class={ [
+                                class={ () => [
                                     'rounded-tile px-3 py-2 text-ui-base leading-snug',
                                     mine ? 'bg-accent text-accent-ink' : 'bg-raised text-text'
                                 ].join(' ') }

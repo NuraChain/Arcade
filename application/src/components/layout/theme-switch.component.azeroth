@@ -17,7 +17,7 @@ export default component ThemeSwitch()
         <For each={ THEMES } key={ (name) => name } let={ name }>
             <button
                 type="button"
-                class={ [
+                class={ () => [
                     'flex h-8 w-8 items-center justify-center rounded-full transition-colors duration-150',
                     theme.theme() === name ? 'cursor-default bg-raised text-accent' : 'cursor-pointer text-muted hover:text-text'
                 ].join(' ') }

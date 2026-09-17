@@ -170,7 +170,7 @@ export default component PersonActions(props: OverlayProps & {
                 <li>
                     <button
                         type="button"
-                        class={ [
+                        class={ () => [
                             'flex min-h-12 w-full cursor-pointer items-center gap-3 rounded-tile px-3 text-start text-ui-md transition-colors hover:bg-raised/70',
                             action.danger === true ? 'text-danger' : 'text-text'
                         ].join(' ') }

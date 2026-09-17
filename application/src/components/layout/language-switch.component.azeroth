@@ -17,7 +17,7 @@ export default component LanguageSwitch()
             <button
                 type="button"
                 lang={ name }
-                class={ [
+                class={ () => [
                     'flex h-8 items-center justify-center rounded-full px-3 text-ui-sm font-semibold transition-colors duration-150',
                     locale.locale() === name ? 'cursor-default bg-raised text-accent' : 'cursor-pointer text-muted hover:text-text'
                 ].join(' ') }

@@ -13,16 +13,16 @@ export default component AvatarGroup(props: { people: Person[]; size?: AvatarSiz
 
     derived rest = Math.max(0, props.people.length - limit);
 
-    <span class={ [ 'inline-flex items-center', props.class ?? '' ].filter(Boolean).join(' ') }>
+    <span class={ () => [ 'inline-flex items-center', props.class ?? '' ].filter(Boolean).join(' ') }>
         <For each={ shown } key={ (person) => person.id } let={ person } index={ index }>
-            <span class={ [ 'rounded-full ring-2 ring-field', index > 0 ? '-ms-2' : '' ].filter(Boolean).join(' ') }>
+            <span class={ () => [ 'rounded-full ring-2 ring-field', index > 0 ? '-ms-2' : '' ].filter(Boolean).join(' ') }>
                 <Avatar person={ person } size={ props.size ?? 'sm' } />
             </span>
         </For>
         <Show when={ rest > 0 }>
             { () =>
                 <span
-                    class={ [
+                    class={ () => [
                         'tally -ms-2 inline-flex items-center justify-center rounded-full bg-raised font-semibold text-muted ring-2 ring-field',
                         AVATAR_SIZE[props.size ?? 'sm']
                     ].join(' ') }

@@ -196,7 +196,7 @@ export default component ToastHost()
                         toasts.resume(toast.id);
                     } }
                 >
-                    <span class={ [ 'shrink-0', TONE[toast.kind] ].join(' ') } aria-hidden="true">
+                    <span class={ () => [ 'shrink-0', TONE[toast.kind] ].join(' ') } aria-hidden="true">
                         <Show
                             when={ toast.avatar !== null }
                             fallback={

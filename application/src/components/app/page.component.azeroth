@@ -147,7 +147,7 @@ export default component Page(props: { children?: Child; padded?: boolean; width
 
     <div
         ref={ (element) => root = element }
-        class={ [
+        class={ () => [
             'page bar bg-void',
             slide > 0 ? 'is-sliding' : '',
             props.padded === false ? '' : 'page-pad pt-4 phone:pb-nav rail:pb-8 sidebar:pb-8',
@@ -161,7 +161,7 @@ export default component Page(props: { children?: Child; padded?: boolean; width
         <Show when={ props.onRefresh !== undefined && device.coarse() }>
             { () =>
                 <div class="pull-indicator" style={ `--pull:${ indicator }` } aria-hidden={ !busy }>
-                    <span class={ [
+                    <span class={ () => [
                         'flex h-9 w-9 items-center justify-center rounded-full border border-line bg-lifted text-muted shadow-2 transition-colors duration-150',
                         armed || busy ? 'border-accent/60 text-accent' : ''
                     ].filter(Boolean).join(' ') }>
@@ -172,7 +172,7 @@ export default component Page(props: { children?: Child; padded?: boolean; width
                 </div>
             }
         </Show>
-        <div class={ [
+        <div class={ () => [
             '@container mx-auto w-full min-w-0',
             props.fill === true ? 'flex h-full min-h-0 flex-col' : '',
             PAGE_WIDTH[props.width ?? 'full']

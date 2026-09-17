@@ -73,7 +73,7 @@ export default component SeatCard(props: {
                 }
             >
                 { () =>
-                    <button type="button" class={ [ shell, 'cursor-pointer hover:border-accent/60 hover:bg-raised/40' ].join(' ') } onClick={ () => props.onInvite?.() }>
+                    <button type="button" class={ () => [ shell, 'cursor-pointer hover:border-accent/60 hover:bg-raised/40' ].join(' ') } onClick={ () => props.onInvite?.() }>
                         <span class="flex h-14 w-14 items-center justify-center rounded-full border border-dashed border-line text-accent">
                             <Icon name="friend-add" size={ 22 } />
                         </span>
@@ -98,10 +98,10 @@ export default component SeatCard(props: {
                     presence={ pending || person === null ? null : presence.dot(person.id) }
                     class={ pending ? 'opacity-60' : '' }
                 />
-                <span class={ [ 'w-full truncate text-ui-base font-semibold', pending ? 'text-muted' : 'text-text' ].join(' ') }>{ name }</span>
+                <span class={ () => [ 'w-full truncate text-ui-base font-semibold', pending ? 'text-muted' : 'text-text' ].join(' ') }>{ name }</span>
                 <Show when={ tag !== null }>
                     { () =>
-                        <span class={ [ 'rounded-full px-2 py-0.5 text-ui-2xs font-semibold', tag!.tone, pending ? 'animate-pulse motion-reduce:animate-none' : '' ].filter(Boolean).join(' ') }>
+                        <span class={ () => [ 'rounded-full px-2 py-0.5 text-ui-2xs font-semibold', tag!.tone, pending ? 'animate-pulse motion-reduce:animate-none' : '' ].filter(Boolean).join(' ') }>
                             { tag!.text }
                         </span>
                     }

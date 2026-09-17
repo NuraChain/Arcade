@@ -33,7 +33,7 @@ export default component ConnectionBanner()
     <Show when={ notice !== null }>
         { () =>
             <div
-                class={ [ 'z-banner flex items-center justify-center gap-2 px-4 py-2 text-ui-sm font-semibold', notice!.tone ].join(' ') }
+                class={ () => [ 'z-banner flex items-center justify-center gap-2 px-4 py-2 text-ui-sm font-semibold', notice!.tone ].join(' ') }
                 role="status"
                 aria-live={ notice!.urgent ? 'assertive' : 'polite' }
             >

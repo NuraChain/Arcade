@@ -234,7 +234,7 @@ export default component SettingsPage()
                                                 </span>
                                                 <span class="text-ui-2xs text-faint">{ locale.relative(report.at) }</span>
                                             </span>
-                                            <span class={ [
+                                            <span class={ () => [
                                                 'shrink-0 rounded-full px-2 py-0.5 text-ui-2xs font-semibold',
                                                 report.status === 'actioned' ? 'bg-win/15 text-win' : (report.status === 'reviewed' ? 'bg-live/15 text-live' : 'bg-raised text-muted')
                                             ].join(' ') }>

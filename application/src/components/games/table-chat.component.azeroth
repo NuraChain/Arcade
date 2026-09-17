@@ -128,7 +128,7 @@ export default component TableChat(props: { conversationId: string; onClose?: ()
         return isLineKey(line.key) ? locale.t(line.key, line.params) : '';
     };
 
-    <section class={ [ 'flex min-h-0 flex-col', props.class ?? '' ].filter(Boolean).join(' ') } aria-label={ locale.t('play.table.chat') }>
+    <section class={ () => [ 'flex min-h-0 flex-col', props.class ?? '' ].filter(Boolean).join(' ') } aria-label={ locale.t('play.table.chat') }>
         <header class="flex items-center justify-between gap-2 border-b border-line/60 px-4 py-2.5">
             <h2 class="text-ui-base font-semibold text-text">{ locale.t('play.table.chat') }</h2>
             <Show when={ props.onClose !== undefined }>
@@ -140,7 +140,7 @@ export default component TableChat(props: { conversationId: string; onClose?: ()
                 { () => <li class="m-auto text-center text-ui-sm text-muted">{ locale.t('chat.empty') }</li> }
             </Show>
             <For each={ messages } key={ (message) => message.id } let={ message }>
-                <li class={ [
+                <li class={ () => [
                     'flex',
                     message.kind === 'text'
                         ? (message.from === lobby.me() ? 'flex-row-reverse items-end gap-2' : 'items-end gap-2')
@@ -153,7 +153,7 @@ export default component TableChat(props: { conversationId: string; onClose?: ()
                         { () =>
                             <>
                                 <Avatar person={ people.byHandle(message.from) ?? null } size="xs" />
-                                <span class={ [
+                                <span class={ () => [
                                     'max-w-[80%] rounded-tile px-3 py-2 text-ui-base leading-snug',
                                     message.from === lobby.me() ? 'bg-accent/15 text-text' : 'bg-raised text-text'
                                 ].join(' ') } dir="auto">
