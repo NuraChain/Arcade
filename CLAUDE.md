@@ -900,6 +900,89 @@ through the routes a browser uses. It is API-level on purpose: it proves the rul
 the turn order, the authorisation and the wire agree end to end, over hundreds of turns, in seconds.
 What it cannot prove is that any of it is visible, which is the browser pass's job.
 
+## Drawing the board
+
+The board a player moves tokens on is a **photograph of the object the market scene already stands
+on**. `tools/blender/board.py` imports `application/public/world/set-ludo.glb`, keeps the walnut body
+and the printed face, drops the loose tokens and dice, and renders it with an orthographic camera
+pointing straight down into `application/public/board/ludo-plate-1024.webp`. Run by hand, like
+`art.py`: `blender -b -P tools/blender/board.py`.
+
+That is not a flourish. Drawing the field a second time in CSS or in canvas would be a second
+description of one object, agreeing until somebody edited one of them. Photographing it means the
+2D board and the 3D board cannot disagree, and the orthographic camera means the image maps
+cell-for-cell onto the 15x15 grid the rules already use.
+
+**Three things about that render cost an afternoon each and are worth stating.**
+
+Export swaps every image for an 8x8 stub, because three.js loads the atlas separately at run time -
+so rendering straight from the GLB gives a blank field. The script re-points the image node at the
+real `atlas-2048.webp`, and refuses to render if it finds no node to re-point.
+
+`AgX` is the view transform the hero art uses, and it desaturates hard: the first plate turned the
+four strong palette colours into pastels. This render uses `Standard` with the exposure pulled down,
+because a flat top-down board has no bright highlights to roll off and its colours are the product's
+own. The default 4% specular was doing the same thing more quietly - lifting red's green channel -
+and is turned down for the same reason.
+
+`set-ludo.py` runs `kit.bake_ao` with the tokens standing on the field, so **the pawns' contact
+shadows are baked into the field's vertex colours**. They showed on the plate as dark smudges inside
+all four home squares, and they are exactly the pieces the client draws itself. The script repaints
+the face's colour attribute to the flat white it had before the bake.
+
+**The grid does not fill the paper, and assuming it does is a bug you look straight at.** `atlas.py`
+draws the field with a 32px margin inside its 1024px region and `set-ludo.py` insets the face's UVs
+by the 16px `GUTTER`, so the cells start further in than the walnut rim and are slightly smaller
+than a fifteenth of the paper. `application/src/game/layout.ts` derives both fractions from those
+two constants:
+
+```
+RIM    = 0.016 / 0.380              the walnut, from the mesh
+MARGIN = RIM + FIELD * 16 / 992     where the first cell actually starts
+CELL   = FIELD * 960 / 992 / 15     one square
+```
+
+With the paper's own numbers instead, every token near an edge sits about a quarter of a cell too
+far out, exact in the middle and worst in the corners. The yard wells have the same trap from the
+other end: `atlas.py` draws them at `corner + 3 +/- 0.95`, which is a POSITION, and `centreOf` adds
+the half cell that turns an index into a centre - so passing 2 and 4 puts every parked token half a
+cell off the circle it belongs in.
+
+**Phaser draws it**, and `application/src/game/` is framework-free exactly as `world/` is: no
+AzerothJS import anywhere under it, one bridge interface, and one `.azeroth` component that reaches
+the library through a dynamic `import()` inside `mount`. Phaser therefore lands in its own chunk -
+about 350 KB gzip - which no route and no landing payload ever pays for, and `tools/budgets.mjs`
+enforces that by finding the library through the `Phaser v` literal it prints rather than by chunk
+name: more than one chunk carrying it, or a chunk that is a route or a component, or no chunk at all
+while the renderer exists, all fail the build.
+
+Four of the config values are load-bearing and each costs something real if left out. `audio` off,
+because Phaser opens a WebAudio context and Chrome warns about it, and the matrix reads every
+warning. `keyboard` off, because Phaser's plugin preventDefaults space and the arrows, and the
+keyboard belongs to the DOM controls. `autoFocus` off, because the default steals focus
+mid-navigation. `Scale.NONE` with a `ResizeObserver`, because this canvas changes size without a
+window resize - the chat rail opening, the posture flipping, a sheet over it.
+
+**Phaser's `destroy` is deferred**, which is a live context leak with this codebase's exact history.
+It sets a pending flag and tears down at the end of the next game step, and a slept loop never takes
+that step - so the teardown wakes the loop, destroys, drains the pending destroy directly, and only
+then loses the context. The extension handle is captured BEFORE the destroy because afterwards the
+renderer is gone, and losing the context first would make every texture delete a no-op and fill the
+console with warnings.
+
+**The canvas is the illustration, not the interface.** Every move is takeable from a button beside
+it, the turn is an `aria-live` region, and the canvas is `aria-hidden` inside a labelled host. That
+is what makes the game playable by keyboard and readable by a screen reader - and it is what gives
+`npm run qa` something to hit-test, because the matrix cannot see inside a canvas at all. Pointing
+at a token is a shortcut to the move list and nothing more: a tap on a token the server did not call
+legal does nothing. If WebGL is missing or Phaser fails to boot, the tokens render as ordinary
+elements over the same plate, from the same two fractions. The fallback is the default state.
+
+**`/app/play/:id` is in the matrix now**, and was not for a long time - so the one route carrying a
+board was the one route the 640-cell gate never toured. `matrix.mjs` seats a second wallet fixture,
+readies both and starts a match in its setup, reusing a live one when a previous run left one
+behind, and the matrix is 680 cells.
+
 ## Chat is the server's
 
 `server/src/domains/chat/` owns conversations, membership and messages; the browser reads them
