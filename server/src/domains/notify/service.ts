@@ -1,7 +1,9 @@
-import type { DataSource } from 'typeorm';
+import { IsNull, type DataSource } from 'typeorm';
 
 import type { NotificationKind } from '../../entities/notification.entity.ts';
 import { firstRow, rowsOf } from '../../lib/rows.ts';
+import { Notification } from '../../entities/notification.entity.ts';
+import { PushSubscription } from '../../entities/push-subscription.entity.ts';
 import type { SocialService } from '../social/service.ts';
 
 export interface NotificationRow
@@ -173,7 +175,7 @@ export function createNotifyService(db: DataSource, social: SocialService)
 
         async dismiss(me: string, id: string): Promise<void>
         {
-            await db.query('delete from notifications where user_id = $1 and id = $2', [me, id]);
+            await db.getRepository(Notification).delete({ userId: me, id });
         },
 
         /**
@@ -200,17 +202,16 @@ export function createNotifyService(db: DataSource, social: SocialService)
 
         async unsubscribe(me: string, endpoint: string): Promise<void>
         {
-            await db.query('delete from push_subscriptions where user_id = $1 and endpoint = $2', [me, endpoint]);
+            await db.getRepository(PushSubscription).delete({ userId: me, endpoint });
         },
 
         /** Every live subscription for an account. What the push sender walks. */
         async subscriptionsOf(userId: string): Promise<{ id: string; endpoint: string }[]>
         {
-            const rows = await db.query(
-                'select id, endpoint from push_subscriptions where user_id = $1 and failed_at is null',
-                [userId]
-            );
-            return rowsOf<{ id: string; endpoint: string }>(rows);
+            return await db.getRepository(PushSubscription).find({
+                select: { id: true, endpoint: true },
+                where: { userId, failedAt: IsNull() }
+            });
         },
 
         /** A push service that says a subscription is gone. Marked, then swept. */

@@ -5,6 +5,7 @@ import type { Principal } from '../../http/auth.ts';
 import { hashToken, isAddress, mintNonce, mintToken, normalizeAddress } from '../../lib/crypto.ts';
 import type { AccountKind } from '../../entities/user.entity.ts';
 import { firstRow, rowsOf } from '../../lib/rows.ts';
+import { SiweNonce } from '../../entities/siwe-nonce.entity.ts';
 import { candidatesFor, checkHandle, handleFromAddress, handleFromName, normalizeHandle } from './handle.ts';
 import { buildSiweMessage, verifySignature } from './siwe.ts';
 
@@ -188,10 +189,7 @@ export function createIdentityService(db: DataSource, config: IdentityConfig)
                 statement: SIGN_IN_STATEMENT
             });
 
-            await db.query(
-                'insert into siwe_nonces (nonce, address, message, issued_at, expires_at) values ($1, $2, $3, $4, $5)',
-                [nonce, address, message, issuedAt, expiresAt]
-            );
+            await db.getRepository(SiweNonce).insert({ nonce, address, message, issuedAt, expiresAt });
 
             return { nonce, message, expiresAt: expiresAt.toISOString() };
         },
