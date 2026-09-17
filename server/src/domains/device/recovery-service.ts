@@ -2,7 +2,10 @@ import { BadRequestError, ForbiddenError, NotFoundError, UnauthorizedError } fro
 import { webcrypto } from 'node:crypto';
 import type { DataSource } from 'typeorm';
 
-import { firstRow, rowsOf } from '../../lib/rows.ts';
+import { firstRow } from '../../lib/rows.ts';
+import { EpochArchive } from '../../entities/epoch-archive.entity.ts';
+import { RecoveryNonce } from '../../entities/recovery-nonce.entity.ts';
+import { RecoveryVault } from '../../entities/recovery-vault.entity.ts';
 import { mintToken } from '../../lib/crypto.ts';
 import { recoveryChallenge } from './recovery.ts';
 
@@ -104,10 +107,20 @@ async function holdsPhrase(publicKey: string, signature: string, challenge: stri
 export function createRecoveryService(db: DataSource)
 {
     const vaultOf = async (userId: string): Promise<VaultRow | null> =>
-        firstRow<VaultRow>(await db.query(
-            'select salt, public_key, wrapped, check_value, created_at from recovery_vaults where user_id = $1',
-            [userId]
-        ));
+    {
+        const row = await db.getRepository(RecoveryVault).findOne({
+            select: { salt: true, publicKey: true, wrapped: true, checkValue: true, createdAt: true },
+            where: { userId }
+        });
+
+        return row === null ? null : {
+            salt: row.salt,
+            public_key: row.publicKey,
+            wrapped: row.wrapped,
+            check_value: row.checkValue,
+            created_at: row.createdAt
+        };
+    };
 
     const confirmedDevice = async (userId: string, deviceId: string | null): Promise<boolean> =>
     {
@@ -179,8 +192,8 @@ export function createRecoveryService(db: DataSource)
                 throw new ForbiddenError('Turn recovery off from a browser this account has confirmed.');
             }
 
-            await db.query('delete from epoch_archive where user_id = $1', [userId]);
-            await db.query('delete from recovery_vaults where user_id = $1', [userId]);
+            await db.getRepository(EpochArchive).delete({ userId });
+            await db.getRepository(RecoveryVault).delete({ userId });
         },
 
         /**
@@ -231,14 +244,16 @@ export function createRecoveryService(db: DataSource)
         /** Everything this account has archived, for a browser that has just proved the phrase. */
         async archived(userId: string): Promise<ArchiveRow[]>
         {
-            const rows = await db.query(
-                `select conversation_id, epoch, wrapped
-                 from epoch_archive
-                 where user_id = $1
-                 order by conversation_id, epoch`,
-                [userId]
-            );
-            return rowsOf<ArchiveRow>(rows);
+            const rows = await db.getRepository(EpochArchive).find({
+                select: { conversationId: true, epoch: true, wrapped: true },
+                where: { userId },
+                order: { conversationId: 'ASC', epoch: 'ASC' }
+            });
+            return rows.map((row) => ({
+                conversation_id: row.conversationId,
+                epoch: row.epoch,
+                wrapped: row.wrapped
+            }));
         },
 
         /**
@@ -276,10 +291,7 @@ export function createRecoveryService(db: DataSource)
             const nonce = mintToken();
             const expiresAt = new Date(Date.now() + NONCE_TTL_MS);
 
-            await db.query(
-                'insert into recovery_nonces (nonce, user_id, device_id, expires_at) values ($1, $2, $3, $4)',
-                [nonce, userId, deviceId, expiresAt]
-            );
+            await db.getRepository(RecoveryNonce).insert({ nonce, userId, deviceId, expiresAt });
 
             return { nonce, salt: vault.salt, expiresAt: expiresAt.toISOString() };
         },

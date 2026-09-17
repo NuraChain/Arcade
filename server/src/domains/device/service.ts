@@ -1,9 +1,12 @@
 import { BadRequestError, ConflictError, NotFoundError, UnauthorizedError } from '@azerothjs/http';
-import type { DataSource } from 'typeorm';
+import { IsNull, type DataSource } from 'typeorm';
 
-import type { Attestation } from '../../entities/device.entity.ts';
 import { mintNonce, normalizeAddress } from '../../lib/crypto.ts';
 import { firstRow, rowsOf } from '../../lib/rows.ts';
+import { Device, type Attestation } from '../../entities/device.entity.ts';
+import { Session } from '../../entities/session.entity.ts';
+import { SiweNonce } from '../../entities/siwe-nonce.entity.ts';
+import { Wallet } from '../../entities/wallet.entity.ts';
 import { verifySignature } from '../identity/siwe.ts';
 import { enrolMessage } from './enrol-message.ts';
 import { deviceIdMatches, isDeviceId } from './id.ts';
@@ -83,14 +86,12 @@ export function createDeviceService(db: DataSource, config: DeviceConfig)
     /** The account's most recently used wallet, or null for a guest or a demo persona. */
     const walletOf = async (userId: string): Promise<string | null> =>
     {
-        const rows = await db.query(
-            `select address from wallets
-              where user_id = $1
-              order by last_used_at desc nulls last
-              limit 1`,
-            [userId]
-        );
-        return firstRow<{ address: string }>(rows)?.address ?? null;
+        const row = await db.getRepository(Wallet).findOne({
+            select: { address: true },
+            where: { userId },
+            order: { lastUsedAt: { direction: 'DESC', nulls: 'LAST' } }
+        });
+        return row?.address ?? null;
     };
 
     /**
@@ -170,8 +171,11 @@ export function createDeviceService(db: DataSource, config: DeviceConfig)
         /** Which device the session making this request is signed in on, if it has enrolled one. */
         async deviceOfSession(sessionId: string): Promise<string | null>
         {
-            const rows = await db.query('select device_id from sessions where id = $1', [sessionId]);
-            return firstRow<{ device_id: string | null }>(rows)?.device_id ?? null;
+            const row = await db.getRepository(Session).findOne({
+                select: { deviceId: true },
+                where: { id: sessionId }
+            });
+            return row?.deviceId ?? null;
         },
 
         /**
@@ -210,10 +214,7 @@ export function createDeviceService(db: DataSource, config: DeviceConfig)
                 deviceId
             });
 
-            await db.query(
-                'insert into siwe_nonces (nonce, address, message, issued_at, expires_at) values ($1, $2, $3, $4, $5)',
-                [nonce, address, message, issuedAt, expiresAt]
-            );
+            await db.getRepository(SiweNonce).insert({ nonce, address, message, issuedAt, expiresAt });
 
             return { nonce, message, expiresAt: expiresAt.toISOString() };
         },
@@ -320,7 +321,7 @@ export function createDeviceService(db: DataSource, config: DeviceConfig)
                     ]
                 );
 
-                await tx.query('update sessions set device_id = $1 where id = $2', [input.id, sessionId]);
+                await tx.getRepository(Session).update({ id: sessionId }, { deviceId: input.id });
                 return firstRow<DeviceRow>(inserted)!;
             });
         },
@@ -343,12 +344,12 @@ export function createDeviceService(db: DataSource, config: DeviceConfig)
                 throw new BadRequestError('A device cannot vouch for itself.');
             }
 
-            const caller = firstRow<{ confirmed_at: Date | null }>(await db.query(
-                'select confirmed_at from devices where id = $1 and user_id = $2 and revoked_at is null',
-                [callerDeviceId, userId]
-            ));
+            const caller = await db.getRepository(Device).findOne({
+                select: { confirmedAt: true },
+                where: { id: callerDeviceId, userId, revokedAt: IsNull() }
+            });
 
-            if (caller === null || caller.confirmed_at === null)
+            if (caller === null || caller.confirmedAt === null)
             {
                 throw new BadRequestError('This device is not confirmed yet, so it cannot confirm another.');
             }
