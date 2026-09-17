@@ -47,9 +47,51 @@ export async function createUnexpressibleIndexes(db: DataSource): Promise<void>
     }
 }
 
+/**
+ * Rewrites every `@Check` the entities declare, because `synchronize()` will not.
+ *
+ * This is the third thing `syncSchema` exists for, and it was found the way the other two were - by
+ * something not working. A CHECK that CHANGES is left exactly as it was on a table that already
+ * exists: `notifications_kind_known` gained a sixth kind in the entity, the development database
+ * went on refusing it, and a perfectly good roll came back a 500 because the notification after it
+ * could not be written.
+ *
+ * **No test could have caught it, and that is the part worth keeping.** `schema.db.spec.ts`,
+ * `converge.db.spec.ts` and the snapshot recorder all build a database FROM NOTHING, where a
+ * changed constraint and a new one are the same thing. Every gate was green while both real
+ * databases held the old rule - and production runs this same function through
+ * `npm run schema:sync`, so a deployed database would have kept it forever.
+ *
+ * Dropped and re-added rather than compared: Postgres stores a check normalised
+ * (`(kind)::text = ANY (ARRAY[...])`) and the entity declares it as somebody wrote it, so any
+ * textual comparison is a guess that fails open. The cost is a validating scan per constraint on a
+ * sync, which is a deliberate act - a development boot or `npm run schema:sync` - and not something
+ * a request ever waits for.
+ *
+ * `not valid` is deliberately NOT used. A constraint that is not validated is one that lets the
+ * rows it was added to stop obeying it, which is the opposite of why any of these exist.
+ */
+export async function rewriteChecks(db: DataSource): Promise<void>
+{
+    for (const entity of db.entityMetadatas)
+    {
+        for (const check of entity.checks)
+        {
+            if (check.name === undefined || check.expression === undefined)
+            {
+                continue;
+            }
+
+            await db.query(`alter table ${ entity.tablePath } drop constraint if exists "${ check.name }"`);
+            await db.query(`alter table ${ entity.tablePath } add constraint "${ check.name }" check (${ check.expression })`);
+        }
+    }
+}
+
 export async function syncSchema(db: DataSource): Promise<void>
 {
     await createExtensions(db);
     await db.synchronize();
     await createUnexpressibleIndexes(db);
+    await rewriteChecks(db);
 }
