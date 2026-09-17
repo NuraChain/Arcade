@@ -637,17 +637,14 @@
 .board-token
 {
     /*
-     * Where the grid actually sits inside the render.
-     *
-     * The same two fractions `game/layout.ts` derives, and for the same reason. The walnut rim is
-     * 0.016/0.380 of the board, but the grid does not start at the paper edge: `atlas.py` draws a
-     * 32px margin inside its 1024px region and `set-ludo.py` insets the UVs by the 16px gutter, so
-     * the cells begin 5.6876% in and each one is 5.9083% across. Assuming the grid filled the paper
-     * put every token near an edge about a quarter of a cell too far out.
+     * `--rim` and `--cell` are set on `.board-plate` from `game/layout.ts`, which derives both from
+     * the constants the art is drawn with. They were written here as percentages too, and two
+     * spellings of one measurement is one measurement that goes wrong: the grid does not start at
+     * the paper edge - `atlas.py` draws a 32px margin inside its 1024px region and `set-ludo.py`
+     * insets the UVs by the 16px gutter - and assuming it did put every token near an edge about a
+     * quarter of a cell too far out. The offsets below turn a cell into a centred token, and are the
+     * same 0.5 and 0.40 the canvas uses.
      */
-    --rim: 5.6876%;
-    --cell: 5.9083%;
-
     position: absolute;
     inline-size: calc(var(--cell) * 0.80);
     block-size: calc(var(--cell) * 0.80);
