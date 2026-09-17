@@ -1,0 +1,67 @@
+import Icon from '../../icons/icon.component.azeroth';
+import type { IconName } from '../../icons/registry.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import type { EarnedAchievement } from '../../api.ts';
+
+/**
+ * One achievement, earned or not.
+ *
+ * The unearned ones are shown, deliberately: an achievement nobody can see is one nobody can play
+ * towards, and a grid that holds only what has been won makes a new account's empty profile look
+ * identical to a request that failed. They are dimmed rather than hidden, and the blurb - which is
+ * the instruction - stays legible either way.
+ *
+ * The icon is a name in the CLIENT's registry, exactly like a group crest: the server sends a
+ * string, `Icon` takes an `IconName`, and a value from a newer server draws something rather than
+ * a blank square. Nothing here renders a glyph the OS draws.
+ */
+
+/**
+ * Three tiers, out of tokens that already mean something.
+ *
+ * `gold` is the design system's reward colour and the gold tier is exactly that. There is no bronze
+ * token and there should not be one: the first reach was `madder`, which is FUNCTIONAL in this
+ * product - it means a table is playing for something - and borrowing it for a tier would make the
+ * one colour that carries a meaning carry two. Bronze and silver are the neutral surfaces at two
+ * weights instead, which reads as a ladder without inventing a hue.
+ */
+const TIER_TONE: Record<string, string> = {
+    bronze: 'bg-raised text-muted',
+    silver: 'bg-raised text-text',
+    gold: 'bg-gold/15 text-gold'
+};
+
+export default component AchievementTile(props: { achievement: EarnedAchievement })
+{
+    const locale = useLocale();
+
+    derived earned = props.achievement.earnedAt !== undefined;
+
+    <div
+        class={ () => [
+            'flex gap-3 rounded-tile border border-line p-3',
+            earned ? 'bg-field' : 'bg-field/40'
+        ].join(' ') }
+        aria-label={ locale.text(props.achievement.name) }
+    >
+        <span
+            class={ () => [
+                'flex h-10 w-10 shrink-0 items-center justify-center rounded-full',
+                earned ? (TIER_TONE[props.achievement.tier] ?? 'bg-raised text-text') : 'bg-sunk text-faint'
+            ].join(' ') }
+            aria-hidden="true"
+        >
+            <Icon name={ props.achievement.icon as IconName } size={ 20 } />
+        </span>
+
+        <div class="min-w-0 flex-1">
+            <p class={ () => [ 'truncate text-ui-sm font-semibold', earned ? 'text-text' : 'text-muted' ].join(' ') }>
+                { locale.text(props.achievement.name) }
+            </p>
+            <p class="text-ui-2xs text-muted">{ locale.text(props.achievement.blurb) }</p>
+            <Show when={ !earned }>
+                { () => <p class="mt-0.5 text-ui-2xs text-faint">{ locale.t('achievements.locked') }</p> }
+            </Show>
+        </div>
+    </div>
+}

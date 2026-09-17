@@ -1,0 +1,81 @@
+import Panel from '../ui/panel.component.azeroth';
+import { useCatalogue } from '../../stores/catalogue.store.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import type { PlayerRecord } from '../../api.ts';
+
+/**
+ * A person's record at one game, and every figure on it is something that happened.
+ *
+ * A component of this name existed before and was deleted with the rest of the invented profile:
+ * it read `stats`, which `buildPerson` produced from a seeded RNG and `blank()` handed to every
+ * real account as four zeroes. This one reads `player_stats`, where a number moves only when a
+ * match this server arbitrated ended - so a win rate is a count of wins over a count of games, and
+ * a rating is the sum of what happened at the tables that moved it.
+ *
+ * **A win rate is not shown until there is a game to divide by.** Nought out of nought is not zero
+ * percent, it is a question nobody has answered, and printing 0% against a brand-new account is
+ * the same untruth the seeded version told with more decimal places.
+ */
+
+const WIN_RATE_NEEDS = 1;
+
+export default component RecordStrip(props: { record: PlayerRecord })
+{
+    const locale = useLocale();
+    const catalogue = useCatalogue();
+
+    derived game = catalogue.byId(props.record.game as never);
+
+    derived rate = props.record.played < WIN_RATE_NEEDS
+        ? null
+        : Math.round((props.record.won / props.record.played) * 100);
+
+    <Panel pad="md" stack="sm">
+        <div class="flex items-baseline justify-between gap-3">
+            <h3 class="min-w-0 truncate text-ui-base font-semibold text-text">{ locale.t(game.nameKey) }</h3>
+            <p class="flex shrink-0 items-baseline gap-1.5">
+                <span class="tally text-ui-xl font-bold text-text">{ locale.n(props.record.rating) }</span>
+                <span class="text-ui-2xs text-faint">{ locale.t('record.rating') }</span>
+            </p>
+        </div>
+
+        <dl class="grid grid-cols-2 gap-x-4 gap-y-2 @xs:grid-cols-3">
+            <div class="min-w-0">
+                <dt class="text-ui-2xs text-faint">{ locale.t('record.played') }</dt>
+                <dd class="tally text-ui-md font-semibold text-text">{ locale.n(props.record.played) }</dd>
+            </div>
+            <div class="min-w-0">
+                <dt class="text-ui-2xs text-faint">{ locale.t('record.won') }</dt>
+                <dd class="tally text-ui-md font-semibold text-text">{ locale.n(props.record.won) }</dd>
+            </div>
+            <Show when={ rate !== null }>
+                { () =>
+                    <div class="min-w-0">
+                        <dt class="text-ui-2xs text-faint">{ locale.t('record.winRate') }</dt>
+                        <dd class="tally text-ui-md font-semibold text-text">{ locale.t('record.percent', { value: locale.n(rate!) }) }</dd>
+                    </div>
+                }
+            </Show>
+            <div class="min-w-0">
+                <dt class="text-ui-2xs text-faint">{ locale.t('record.streak') }</dt>
+                <dd class="tally text-ui-md font-semibold text-text">{ locale.n(props.record.streak) }</dd>
+            </div>
+            <div class="min-w-0">
+                <dt class="text-ui-2xs text-faint">{ locale.t('record.best') }</dt>
+                <dd class="tally text-ui-md font-semibold text-text">{ locale.n(props.record.bestStreak) }</dd>
+            </div>
+            <div class="min-w-0">
+                <dt class="text-ui-2xs text-faint">{ locale.t('record.peak') }</dt>
+                <dd class="tally text-ui-md font-semibold text-text">{ locale.n(props.record.peak) }</dd>
+            </div>
+        </dl>
+
+        <p class="tally text-ui-2xs text-muted">
+            { locale.t('record.tallies', {
+                captures: locale.n(props.record.captures),
+                home: locale.n(props.record.tokensHome),
+                rolls: locale.n(props.record.rolls)
+            }) }
+        </p>
+    </Panel>
+}
