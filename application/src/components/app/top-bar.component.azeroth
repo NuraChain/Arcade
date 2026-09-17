@@ -59,7 +59,7 @@ export default component TopBar()
     derived unread = notifications.unread();
 
     <header class="glass z-topbar safe-t sticky top-0 border-b border-line">
-        <div class="mx-auto flex h-[var(--topbar-h)] w-full max-w-[96rem] items-center gap-1 px-2 sm:px-6 lg:px-8">
+        <div class="flex h-[var(--topbar-h)] w-full items-center gap-1 px-2 sm:px-6 lg:px-8">
             <Show when={ phone }>
                 { () =>
                     <Link to="/app" class="flex h-11 items-center gap-2 rounded-full ps-2 pe-3" aria-label={ locale.t('app.nav.home') }>

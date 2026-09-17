@@ -285,6 +285,33 @@ describe('Page', () =>
     });
 
     /**
+     * The page fills the column the shell gives it, and only says otherwise for a reading width.
+     *
+     * The shell is already a three-column grid, so the column is bounded by the rail and the social
+     * panel either side of it. A second cap inside it is the same job done twice by two numbers that
+     * know nothing about each other, and the wider number won on a wide monitor: at 2560 the column
+     * is 2016px and the content used the middle 1536, leaving 240px of dead ground on each side.
+     *
+     * This is pinned rather than left to the default, because "no cap" was once an implicit side
+     * effect of `padded={ false }` and lost the chat thread its full bleed the moment those two
+     * decisions were correctly separated. It is the default now; a spec is what keeps it one.
+     */
+    it('fills its column by default, and takes a reading width only when asked', async () =>
+    {
+        const Stub = (): HTMLElement => document.createElement('div');
+        const router = createRouter({ routes: [{ path: '/x', component: Stub }], history: createMemoryHistory('/x'), scroll: false });
+
+        const wide = renderTest(() => RouterProvider({ router, children: () => Page({ children: 'body' }) }) as Rendered);
+        await settle();
+        const filled = wide.container.querySelector('.page > div')!;
+        expect([...filled.classList].some((name) => name.startsWith('max-w-'))).toBe(false);
+
+        const narrow = renderTest(() => RouterProvider({ router, children: () => Page({ children: 'body', width: 'narrow' }) }) as Rendered);
+        await settle();
+        expect(narrow.container.querySelector('.page > div')!.classList.contains('max-w-[44rem]')).toBe(true);
+    });
+
+    /**
      * A page has to read its scroll position while it still HAS one.
      *
      * `<Routes>` plays a leave transition - this app always has one, `transitionFor` never returns

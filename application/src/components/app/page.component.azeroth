@@ -19,14 +19,21 @@ import Spinner from '../ui/spinner.component.azeroth';
  * from width was right, and it took the chat thread's full bleed with it: the one page that passes
  * `padded={ false }` silently gained a 96rem cap it had never had.
  *
- * Three named intents instead, so the page states what it wants and nothing is inferred from an
- * unrelated prop.
+ * TWO intents, and the default is to fill. The shell is already a three-column grid - a fixed rail
+ * or sidebar, the page, and the social panel - so the page's column is ALREADY bounded by the
+ * things either side of it. A second cap inside that column is the same job done twice by two
+ * numbers that know nothing about each other, and on a wide monitor the 96rem one won: at 2560 the
+ * column is 2016px and the content sat in the middle 1536 of it, with 240px of dead ground on each
+ * side and a top bar capped to match, so its search box floated inwards while the social panel
+ * beside it stayed flush against the edge.
+ *
+ * `narrow` is the exception and says what it is for: a form or a page of prose, where the limit is
+ * the reading line rather than the furniture. Four pages ask for it.
  */
-export type PageWidth = 'narrow' | 'normal' | 'full';
+export type PageWidth = 'narrow' | 'full';
 
 const PAGE_WIDTH: Record<PageWidth, string> = {
     narrow: 'max-w-[44rem]',
-    normal: 'max-w-[96rem]',
     full: ''
 };
 
@@ -168,7 +175,7 @@ export default component Page(props: { children?: Child; padded?: boolean; width
         <div class={ [
             '@container mx-auto w-full min-w-0',
             props.fill === true ? 'flex h-full min-h-0 flex-col' : '',
-            PAGE_WIDTH[props.width ?? 'normal']
+            PAGE_WIDTH[props.width ?? 'full']
         ].filter(Boolean).join(' ') }>
             { props.children }
         </div>
