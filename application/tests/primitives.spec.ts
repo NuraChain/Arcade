@@ -355,12 +355,19 @@ describe('Tooltip', () =>
 
         const addSpy = vi.spyOn(window, 'addEventListener').mockImplementation((type, listener, options) =>
         {
-            if (type === 'scroll') { live += 1; added.add(listener as EventListenerOrEventListenerObject); }
+            if (type === 'scroll')
+            {
+                live += 1;
+                added.add(listener as EventListenerOrEventListenerObject);
+            }
             return realAdd(type, listener as EventListenerOrEventListenerObject, options as boolean);
         });
         const removeSpy = vi.spyOn(window, 'removeEventListener').mockImplementation((type, listener, options) =>
         {
-            if (type === 'scroll' && added.has(listener as EventListenerOrEventListenerObject)) { live -= 1; }
+            if (type === 'scroll' && added.has(listener as EventListenerOrEventListenerObject))
+            {
+                live -= 1;
+            }
             return realRemove(type, listener as EventListenerOrEventListenerObject, options as boolean);
         });
 
