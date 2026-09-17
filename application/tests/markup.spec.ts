@@ -330,3 +330,33 @@ describe('what a spacer may be', () =>
         expect(guilty, 'an element is both a growing flex item and out of flow').toEqual([]);
     });
 });
+
+describe('what loading is allowed to mean', () =>
+{
+    /**
+     * `loading` must mean "there is nothing to show yet", never "a fetch is in flight".
+     *
+     * `createResource` reports `loading` on a REVALIDATION as well as a cold load, and this product
+     * revalidates constantly - sending a message posts then refetches, and a realtime nudge refetches
+     * the open thread and the list. So a loading branch gated on the raw flag replaces content that
+     * is already on screen, every time. `<Switch>` disposes the losing branch rather than hiding it,
+     * so it is not a repaint: the whole list is destroyed and rebuilt, long-press recognisers and all.
+     *
+     * That is what "the chat flickers when you chat" was. `group.page` and `play.page` already had
+     * the guard - `groups.viewLoading() && group === null`, `lobby.loading() && table === null` - and
+     * the two chat pages were the outliers, which is exactly the shape a rule is for.
+     *
+     * The failure branches were already gated this way and always have been; this is the same
+     * sentence applied to the other half.
+     */
+    it('never derives a loading flag straight from a resource', () =>
+    {
+        const guilty = FILES
+            .filter((file) => file.path.startsWith('pages/'))
+            .flatMap((file) => [...file.text.matchAll(/derived\s+loading\s*=\s*([^;]+);/g)]
+                .filter((one) => !/===\s*null|\.length\s*===\s*0|===\s*undefined/.test(one[1]))
+                .map((one) => `${ file.path }: derived loading = ${ one[1].trim() }`));
+
+        expect(guilty, 'a loading branch that fires on a revalidation blanks content already on screen').toEqual([]);
+    });
+});

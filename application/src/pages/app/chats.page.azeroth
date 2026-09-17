@@ -33,7 +33,7 @@ export default component ChatsPage()
 
     derived all = chat.conversations();
 
-    derived loading = chat.listLoading();
+    derived loading = chat.listLoading() && all.length === 0;
 
     derived failed = chat.listError() !== null;
 

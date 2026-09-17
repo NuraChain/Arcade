@@ -159,7 +159,20 @@ export default component ChatPage()
         pending: seal.loading()
     });
 
-    derived loading = chat.threadLoading();
+    /**
+     * Loading means there is NOTHING to show yet - not that a fetch is in flight.
+     *
+     * `createResource` reports `loading` on a REVALIDATION too, and sending revalidates: post, then
+     * refetch. So an ungated loading branch swapped a conversation that was already on screen for a
+     * pulsing skeleton on every message sent, and again on every realtime nudge - which is to say
+     * whenever anybody else said anything in the room. `<Switch>` disposes the losing branch, so it
+     * was not a repaint: every bubble was destroyed and rebuilt, and every long-press recogniser with
+     * them, despite the `<For>` key being perfectly stable.
+     *
+     * The failure branch below was already gated this way, and `group.page` and `play.page` both put
+     * the same guard on the derived rather than on the branch. This is that convention.
+     */
+    derived loading = chat.threadLoading() && messages.length === 0;
 
     derived failed = chat.threadError() !== null;
 
