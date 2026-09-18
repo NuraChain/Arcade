@@ -1,8 +1,9 @@
 import type { DataSource, EntityManager } from 'typeorm';
 
-import { Achievement, PlayerStats, User, UserAchievement } from '../../entities/index.ts';
-import type { Leaderboard, PersonRecord } from '../../schemas.ts';
+import { Achievement, Match, MatchPlayer, PlayerStats, User, UserAchievement } from '../../entities/index.ts';
+import type { Leaderboard, LeaderboardWindow, PersonRecord } from '../../schemas.ts';
 import { earnedBy, type AchievementFacts } from './rules.ts';
+import { levelOf } from '../match/levels.ts';
 
 /**
  * Awarding, and the three facts a rule needs that a stats row cannot hold.
@@ -75,18 +76,31 @@ interface BoardRow
     rating: number;
     played: number;
     won: number;
+    xp: number;
 }
 
 /**
- * How many games somebody has to have played before their rating is worth ranking.
+ * How many games somebody has to have played before the ALL-TIME board will rank them.
  *
  * One win from one game puts a new account at 1216 and, on an empty board, at the top - which says
  * nothing about anybody and makes the leaderboard a measure of who played most recently. Five is
  * low enough to reach in an evening and high enough that the number means something.
+ *
+ * A windowed board has no such floor and needs none. It ranks by XP EARNED inside the window, which
+ * is a count of what somebody did rather than an estimate of how well they do it - one game earns
+ * one game's worth and cannot flatter anybody. A floor there would do the opposite of what this one
+ * does: it would keep new people off the very board they can climb.
  */
 const MIN_PLAYED = 5;
 
 const BOARD_SIZE = 20;
+
+/** What each window truncates to. `all` is not here, because it reads a different table entirely. */
+const SPANS: Record<Exclude<LeaderboardWindow, 'all'>, string> = {
+    today: 'day',
+    month: 'month',
+    year: 'year'
+};
 
 export function createAchieveService(db: DataSource)
 {
@@ -147,24 +161,70 @@ export function createAchieveService(db: DataSource)
             await grant(tx, userId, null, ['first-seat']);
         },
 
-        /** The best ratings at one game, among people with enough games behind them to rank. */
-        async leaderboardOf(game: string): Promise<Leaderboard>
+        /**
+         * Who is at the top of one game, over one window.
+         *
+         * Two queries rather than one with a branch in it, because they are asking two different
+         * things of two different tables. All time is a read of the running totals in
+         * `player_stats`, which is one row per person and already has the answer; a window has to be
+         * summed out of `match_players`, because a running total has no dates in it.
+         *
+         * Both rank by XP. Ranking the window by rating would have made it the all-time board with
+         * the inactive hidden, and ranking all time by rating makes the top of this product a place
+         * nobody new can reach - the number you climb should be the one that only goes up, and the
+         * rating is right beside it for anybody who wants to know how well.
+         */
+        async leaderboardOf(game: string, window: LeaderboardWindow): Promise<Leaderboard>
         {
-            const rows = await db.getRepository(PlayerStats)
-                .createQueryBuilder('s')
-                .innerJoin(User, 'u', 'u.id = s.user_id')
+            if (window === 'all')
+            {
+                const rows = await db.getRepository(PlayerStats)
+                    .createQueryBuilder('s')
+                    .innerJoin(User, 'u', 'u.id = s.user_id')
+                    .select('u.handle::text', 'handle')
+                    .addSelect('s.rating', 'rating')
+                    .addSelect('s.played', 'played')
+                    .addSelect('s.won', 'won')
+                    .addSelect('s.xp', 'xp')
+                    .where('s.game = :game and s.played >= :floor', { game, floor: MIN_PLAYED })
+                    .orderBy('s.xp', 'DESC')
+                    .addOrderBy('s.rating', 'DESC')
+                    .addOrderBy('u.handle', 'ASC')
+                    .limit(BOARD_SIZE)
+                    .getRawMany<BoardRow>();
+
+                return { game, window, standings: rows.map((row) => ({ ...row })) };
+            }
+
+            /**
+             * `date_trunc` over Postgres `now()`, never a date this process computed.
+             *
+             * `finished_at` was written by Postgres, so a boundary from the Node clock would be
+             * compared against it across whatever skew there is between the two - the same reason
+             * every session and expiry predicate in this server stays on the database's clock.
+             */
+            const rows = await db.getRepository(MatchPlayer)
+                .createQueryBuilder('p')
+                .innerJoin(Match, 'm', 'm.id = p.match_id')
+                .innerJoin(User, 'u', 'u.id = p.user_id')
+                .leftJoin(PlayerStats, 's', 's.user_id = p.user_id and s.game = m.game')
                 .select('u.handle::text', 'handle')
-                .addSelect('s.rating', 'rating')
-                .addSelect('s.played', 'played')
-                .addSelect('s.won', 'won')
-                .where('s.game = :game and s.played >= :floor', { game, floor: MIN_PLAYED })
-                .orderBy('s.rating', 'DESC')
-                .addOrderBy('s.won', 'DESC')
+                .addSelect('coalesce(max(s.rating), 1200)::int', 'rating')
+                .addSelect('count(*)::int', 'played')
+                .addSelect(`count(*) filter (where p.result = 'won')::int`, 'won')
+                .addSelect('sum(p.xp)::int', 'xp')
+                .where('m.game = :game', { game })
+                .andWhere('m.finished_at is not null')
+                .andWhere(`m.finished_at >= date_trunc(:span, now())`, { span: SPANS[window] })
+                .groupBy('u.handle')
+                .having('sum(p.xp) > 0')
+                .orderBy('sum(p.xp)', 'DESC')
+                .addOrderBy(`count(*) filter (where p.result = 'won')`, 'DESC')
                 .addOrderBy('u.handle', 'ASC')
                 .limit(BOARD_SIZE)
                 .getRawMany<BoardRow>();
 
-            return { game, standings: rows.map((row) => ({ ...row })) };
+            return { game, window, standings: rows.map((row) => ({ ...row })) };
         },
 
         /** A person's record at every game, and where they stand against every achievement. */
@@ -209,6 +269,14 @@ export function createAchieveService(db: DataSource)
 
             return {
                 handle: who.handle,
+
+                /*
+                 * Summed here rather than stored. Six rows on a profile read is not a cost worth a
+                 * second source of truth, and a stored account total is one more number that can
+                 * disagree with the rows it came from.
+                 */
+                progress: levelOf(games.reduce((total, row) => total + row.xp, 0)),
+
                 games: games.map((row) => ({
                     game: row.game,
                     rating: row.rating,
@@ -220,7 +288,8 @@ export function createAchieveService(db: DataSource)
                     bestStreak: row.bestStreak,
                     captures: row.captures,
                     rolls: row.rolls,
-                    tokensHome: row.tokensHome
+                    tokensHome: row.tokensHome,
+                    xp: row.xp
                 })),
                 achievements: standing.map((row) => ({
                     id: row.id,

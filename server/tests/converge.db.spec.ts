@@ -75,6 +75,7 @@ describe.skipIf(!active)('syncSchema settles', () =>
         expect(dropped).toEqual([
             'DROP INDEX "public"."groups_public"',
             'DROP INDEX "public"."match_actions_feed"',
+            'DROP INDEX "public"."matches_finished"',
             'DROP INDEX "public"."matches_history"',
             'DROP INDEX "public"."messages_keyset"',
             'DROP INDEX "public"."notifications_keyset"',

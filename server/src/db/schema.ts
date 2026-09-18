@@ -28,7 +28,16 @@ export const INDEXES_TYPEORM_CANNOT_EXPRESS = [
         on matches (table_id, started_at desc)`,
 
     `create index if not exists match_actions_feed
-        on match_actions (match_id, rev desc)`
+        on match_actions (match_id, rev desc)`,
+
+    /*
+     * The leaderboard's window, and the only thing that keeps it from reading every match ever
+     * played. Partial on finished, because a live match has no `finished_at` to be inside a window
+     * and is exactly the set the board must not count; DESC because every window is a recent one.
+     */
+    `create index if not exists matches_finished
+        on matches (game, finished_at desc)
+        where finished_at is not null`
 ] as const;
 
 export async function createExtensions(db: DataSource): Promise<void>

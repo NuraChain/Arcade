@@ -1,0 +1,73 @@
+import Panel from '../ui/panel.component.azeroth';
+import { useLocale } from '../../stores/locale.store.ts';
+import type { Progress } from '../../api.ts';
+
+/**
+ * How much somebody has played, and what that pile is called.
+ *
+ * A level was on this product's profile once and was DELETED, along with the skill band, the
+ * reliability score and the per-game record, because nothing produced any of them - the level was
+ * the square root of an invented count. `me.page`'s own docblock said they come back the day
+ * something produces them. The match domain is that day: every point here is countable from
+ * `match_actions`, which is an append-only record of what really happened.
+ *
+ * **It unlocks nothing and the copy says so.** There is no inventory, no balance and nothing that
+ * grants one, so a level that hinted at a reward would be a promise shipped ahead of its mechanism -
+ * the same judgement that deleted `game_rules.fairness`. What it says is small and true: this is how
+ * much you have played.
+ *
+ * The bar is a `progressbar` with its real numbers on it rather than a decorated div, because the
+ * one thing a bar has to survive is somebody who cannot see it - and `aria-valuetext` carries the
+ * sentence rather than a bare ratio, which a screen reader would otherwise read as a percentage of
+ * nothing in particular.
+ */
+export default component LevelBar(props: { progress: Progress; mine: boolean })
+{
+    const locale = useLocale();
+
+    /** Guarded, because a span of zero is a division a rounding change could one day produce. */
+    derived through = props.progress.span <= 0
+        ? 0
+        : Math.min(100, Math.round((props.progress.into / props.progress.span) * 100));
+
+    derived left = Math.max(0, props.progress.span - props.progress.into);
+
+    <Panel class="flex flex-col gap-3">
+        <div class="flex items-center gap-3">
+            <span
+                class="tally flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-panel bg-accent/15 text-accent"
+                aria-hidden="true"
+            >
+                <span class="text-ui-2xs font-semibold leading-none opacity-70">{ locale.t('level.short') }</span>
+                <span class="text-ui-md font-bold leading-tight">{ locale.n(props.progress.level) }</span>
+            </span>
+
+            <span class="flex min-w-0 flex-1 flex-col">
+                <span class="truncate text-ui-sm font-semibold text-text">
+                    { locale.t('level.title', { level: locale.n(props.progress.level) }) }
+                </span>
+                <span class="tally truncate text-ui-2xs text-muted">
+                    { locale.t('level.total', { xp: locale.n(props.progress.xp) }) }
+                </span>
+            </span>
+        </div>
+
+        <div
+            class="h-2 w-full overflow-hidden rounded-full bg-sunk"
+            role="progressbar"
+            aria-valuemin={ 0 }
+            aria-valuemax={ props.progress.span }
+            aria-valuenow={ props.progress.into }
+            aria-valuetext={ locale.t('level.toNext', {
+                xp: locale.n(left),
+                level: locale.n(props.progress.level + 1)
+            }) }
+        >
+            <span class="block h-full rounded-full bg-accent transition-[width] duration-500" style={ `width: ${ through }%` }></span>
+        </div>
+
+        <p class="text-ui-2xs text-faint">
+            { locale.t(props.mine ? 'level.honestMine' : 'level.honest') }
+        </p>
+    </Panel>
+}

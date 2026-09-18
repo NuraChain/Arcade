@@ -20,7 +20,7 @@ import { User } from './user.entity.ts';
 @Check('player_stats_range', `rating between 100 and 4000 and peak_rating between 100 and 4000`)
 @Check('player_stats_peak_reached', `peak_rating >= rating or played = 0`)
 @Check('player_stats_streaks', `streak >= 0 and best_streak >= streak`)
-@Check('player_stats_tallies', `captures >= 0 and rolls >= 0 and tokens_home >= 0`)
+@Check('player_stats_tallies', `captures >= 0 and rolls >= 0 and tokens_home >= 0 and xp >= 0`)
 @Entity('player_stats')
 export class PlayerStats
 {
@@ -39,6 +39,17 @@ export class PlayerStats
      */
     @Column({ name: 'peak_rating', type: 'integer', default: 1200 })
     peakRating!: number;
+
+    /**
+     * The running total, per game. An account's XP is the SUM of these and is never stored.
+     *
+     * Storing an account total beside them would be a second copy of a derivable fact, which is the
+     * mistake `tables.status` exists to avoid and the one the entities drifting from the schema made
+     * invisible for months. Six rows summed on a profile read is not a cost worth a second source of
+     * truth.
+     */
+    @Column({ type: 'integer', default: 0 })
+    xp!: number;
 
     @Column({ type: 'integer', default: 0 })
     played!: number;

@@ -140,7 +140,7 @@ export default component MePage()
                         <Button variant="outline" leading="share" onClick={ () => void share() }>{ locale.t('me.share') }</Button>
                     </div>
 
-                    <PersonRecord handle={ user!.handle } history />
+                    <PersonRecord handle={ user!.handle } history mine />
 
                     <section>
                         <SectionHeading title={ locale.t('person.friends') } />

@@ -3,6 +3,7 @@ import RecordStrip from './record-strip.component.azeroth';
 import Button from '../ui/button.component.azeroth';
 import EmptyState from '../ui/empty-state.component.azeroth';
 import Panel from '../ui/panel.component.azeroth';
+import LevelBar from './level-bar.component.azeroth';
 import SectionHeading from '../ui/section-heading.component.azeroth';
 import Skeleton from '../ui/skeleton.component.azeroth';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
@@ -24,7 +25,7 @@ import { useRecord } from '../../stores/record.store.ts';
  * route's value in hand - which is how the group page came to ask for a conversation that was not
  * there and put a 404 in the console on every navigation away.
  */
-export default component PersonRecord(props: { handle: string; history?: boolean })
+export default component PersonRecord(props: { handle: string; history?: boolean; mine?: boolean })
 {
     const locale = useLocale();
     const record = useRecord();
@@ -45,6 +46,8 @@ export default component PersonRecord(props: { handle: string; history?: boolean
 
     derived held = record.record();
 
+    derived progress = held?.progress ?? null;
+
     derived games = held?.games ?? [];
 
     derived achievements = held?.achievements ?? [];
@@ -62,6 +65,10 @@ export default component PersonRecord(props: { handle: string; history?: boolean
         players.filter((one) => one !== props.handle).map(nameOf).join(locale.t('list.separator'));
 
     <>
+        <Show when={ progress !== null }>
+            { () => <LevelBar progress={ progress! } mine={ props.mine === true } /> }
+        </Show>
+
         <section>
             <SectionHeading title={ locale.t('record.title') } />
 

@@ -5,6 +5,7 @@ import type { AchieveService } from '../achieve/service.ts';
 import { FINISHED } from './ludo/board.ts';
 import { placementsOf } from './ludo/standings.ts';
 import { rateField, type Standing } from './rating.ts';
+import { xpFor } from './levels.ts';
 import type { LudoState } from './ludo/state.ts';
 
 /**
@@ -118,6 +119,13 @@ export function createRecorder(achieve: AchieveService): Recorder
                 const walked = player.result === 'abandoned';
                 const streak = won ? (row?.streak ?? 0) + 1 : 0;
 
+                const earned = xpFor({
+                    walked,
+                    won,
+                    captures: tally?.captures ?? 0,
+                    home: tally?.home ?? 0
+                });
+
                 await stats.createQueryBuilder()
                     .insert()
                     .into(PlayerStats)
@@ -133,21 +141,27 @@ export function createRecorder(achieve: AchieveService): Recorder
                         bestStreak: Math.max(streak, row?.bestStreak ?? 0),
                         captures: (row?.captures ?? 0) + (tally?.captures ?? 0),
                         rolls: (row?.rolls ?? 0) + (tally?.rolls ?? 0),
-                        tokensHome: (row?.tokensHome ?? 0) + (tally?.home ?? 0)
+                        tokensHome: (row?.tokensHome ?? 0) + (tally?.home ?? 0),
+                        xp: (row?.xp ?? 0) + earned
                     })
                     .orUpdate(
-                        ['rating', 'peak_rating', 'played', 'won', 'abandoned', 'streak', 'best_streak', 'captures', 'rolls', 'tokens_home'],
+                        ['rating', 'peak_rating', 'played', 'won', 'abandoned', 'streak', 'best_streak', 'captures', 'rolls', 'tokens_home', 'xp'],
                         ['user_id', 'game']
                     )
                     .execute();
 
-                if (move !== undefined)
-                {
-                    await tx.getRepository(MatchPlayer).update(
-                        { matchId, seat: player.seat },
-                        { ratingBefore: move.before, ratingAfter: move.after }
-                    );
-                }
+                /**
+                 * The seat's own row carries what it earned, ALWAYS - a rating move only happens
+                 * when somebody really won, and the two must not share a branch. They did for one
+                 * commit and every abandoned match recorded nothing, which made a windowed
+                 * leaderboard quietly blind to a whole class of game.
+                 */
+                await tx.getRepository(MatchPlayer).update(
+                    { matchId, seat: player.seat },
+                    move === undefined
+                        ? { xp: earned }
+                        : { xp: earned, ratingBefore: move.before, ratingAfter: move.after }
+                );
 
                 await achieve.record(tx, player.userId, matchId, {
                     played: (row?.played ?? 0) + 1,

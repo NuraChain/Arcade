@@ -3,23 +3,42 @@ import { createResource } from 'azerothjs';
 import Panel from '../ui/panel.component.azeroth';
 import Avatar from '../ui/avatar.component.azeroth';
 import SectionHeading from '../ui/section-heading.component.azeroth';
+import Segmented from '../ui/segmented.component.azeroth';
 import Skeleton from '../ui/skeleton.component.azeroth';
 import { client } from '../../api.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { usePeople } from '../../stores/people.store.ts';
 import type { GameId } from '../../data/games.ts';
+import type { LeaderboardWindow } from '../../api.ts';
+
+/** The four windows, newest first, because the one somebody can still climb today is the near one. */
+const WINDOWS: { id: LeaderboardWindow; key: 'board.today' | 'board.month' | 'board.year' | 'board.all' }[] = [
+    { id: 'today', key: 'board.today' },
+    { id: 'month', key: 'board.month' },
+    { id: 'year', key: 'board.year' },
+    { id: 'all', key: 'board.all' }
+];
 
 /**
- * The best ratings at one game.
+ * Who is at the top of one game, over one window.
  *
  * A leaderboard used to be on this page and was deleted with the rest of the invented profile: it
- * ranked people by `stats`, which `buildPerson` produced from a seeded RNG. This one reads
- * `player_stats`, where a rating moves only when a match this server arbitrated was really won.
+ * ranked people by `stats`, which `buildPerson` produced from a seeded RNG. This one is counted from
+ * matches this server arbitrated.
  *
- * **An empty board is a sentence, not a blank.** A game nobody has finished five times yet has
- * nobody to rank, and saying so is the difference between "this is new" and "this is broken". The
- * floor is the server's - five games - and the copy names it rather than leaving somebody to
- * wonder why they are not on a list they are clearly good enough for.
+ * **Four windows, because one all-time board is a board nobody new can ever appear on.** Somebody
+ * who started this week is not going to out-total a year of somebody else's play, and a product
+ * whose only ranking says so is one they stop looking at. Today and this month are lists a good
+ * evening genuinely puts you on.
+ *
+ * It ranks by XP rather than by rating, and the rating rides along beside it. XP is a count of what
+ * somebody did - it only goes up, and it can be summed over a window, which is what makes the window
+ * mean anything at all. The rating is the estimate of how WELL they play, which is a different
+ * question and can go down.
+ *
+ * **An empty board is a sentence, not a blank**, and which sentence depends on the window: an
+ * all-time board with nobody on it means nobody has played the five games it takes to rank, while an
+ * empty "today" just means today is young. Saying "nobody yet" for both would read as broken.
  *
  * Fetched here rather than through a store: one page shows it, it is read-only, and it has no
  * relationship to anything else on screen. A store would be a singleton for a single reader.
@@ -29,13 +48,26 @@ export default component Leaderboard(props: { game: GameId })
     const locale = useLocale();
     const people = usePeople();
 
+    state window = 'month' as LeaderboardWindow;
+
     const board = createResource(
-        () => props.game,
-        (game) => client.catalogue.leaderboard({ params: { game } }),
+        () => ({ game: props.game, window }),
+        (asked) => client.catalogue.leaderboard({ params: { game: asked.game }, query: { window: asked.window } }),
         { name: 'catalogue.leaderboard' }
     );
 
     derived standings = board.data()?.standings ?? [];
+
+    /**
+     * Read off the ANSWER, not off the control.
+     *
+     * `board.data()` lags `window` by a round trip, so a list rendered against the window somebody
+     * just picked is a list labelled with a window it is not yet showing - and the empty sentence
+     * would name the wrong one.
+     */
+    derived showing = board.data()?.window ?? window;
+
+    derived empty = locale.t(showing === 'all' ? 'board.empty' : 'board.emptyWindow');
 
     const nameOf = (handle: string): string =>
     {
@@ -47,12 +79,22 @@ export default component Leaderboard(props: { game: GameId })
     <section aria-labelledby="game-board">
         <SectionHeading id="game-board" title={ locale.t('board.title') } />
 
+        <div class="mb-3">
+            <Segmented
+                block
+                label={ locale.t('board.window') }
+                value={ window }
+                items={ WINDOWS.map((one) => ({ id: one.id, label: locale.t(one.key) })) }
+                onChange={ (id) => window = id as LeaderboardWindow }
+            />
+        </div>
+
         <Show when={ board.loading() && standings.length === 0 }>
             { () => <Skeleton class="h-32 w-full rounded-panel" /> }
         </Show>
 
         <Show when={ !board.loading() && standings.length === 0 }>
-            { () => <Panel class="text-ui-sm text-muted">{ locale.t('board.empty') }</Panel> }
+            { () => <Panel class="text-ui-sm text-muted">{ empty }</Panel> }
         </Show>
 
         <Show when={ standings.length > 0 }>
@@ -65,11 +107,18 @@ export default component Leaderboard(props: { game: GameId })
                                     { locale.n(standings.indexOf(row) + 1) }
                                 </span>
                                 <Avatar person={ people.byHandle(row.handle) } size="xs" />
-                                <span class="min-w-0 flex-1 truncate text-ui-sm text-text">{ nameOf(row.handle) }</span>
-                                <span class="tally shrink-0 text-ui-2xs text-muted">
-                                    { locale.plural('board.played', row.played) }
+                                <span class="flex min-w-0 flex-1 flex-col">
+                                    <span class="truncate text-ui-sm text-text">{ nameOf(row.handle) }</span>
+                                    <span class="tally truncate text-ui-2xs text-faint">
+                                        { locale.t('board.line', {
+                                            played: locale.plural('board.played', row.played),
+                                            rating: locale.n(row.rating)
+                                        }) }
+                                    </span>
                                 </span>
-                                <span class="tally shrink-0 text-ui-sm font-bold text-text">{ locale.n(row.rating) }</span>
+                                <span class="tally shrink-0 text-ui-sm font-bold text-text">
+                                    { locale.t('board.xp', { xp: locale.n(row.xp) }) }
+                                </span>
                             </li>
                         </For>
                     </ol>

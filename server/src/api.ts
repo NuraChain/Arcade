@@ -6,6 +6,7 @@ import type { Ports } from './ports.ts';
 import {
     achievementList,
     leaderboard,
+    leaderboardQuery,
     liveCounts,
     matchHistory,
     personRecord,
@@ -134,8 +135,8 @@ export function buildApi(ports: Ports)
              * publishes, and a board nobody can see until they sign in is a board that cannot say
              * what the place is like.
              */
-            leaderboard: routes.get('/games/:game/leaderboard', { output: leaderboard }, (context) =>
-                ports.match.leaderboard(context.params.game))
+            leaderboard: routes.get('/games/:game/leaderboard', { output: leaderboard, query: leaderboardQuery }, (context) =>
+                ports.match.leaderboard(context.params.game, context.query.window ?? 'all'))
         })),
 
         /**

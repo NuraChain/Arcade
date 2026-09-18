@@ -19,6 +19,7 @@ export type MatchResult = 'won' | 'lost' | 'abandoned';
 @Check('match_players_rating_pairs', `(rating_before is null) = (rating_after is null)`)
 @Check('match_players_result_known', `result is null or result in ('won', 'lost', 'abandoned')`)
 @Check('match_players_timeouts_positive', `timeouts >= 0`)
+@Check('match_players_xp', `xp >= 0`)
 @Index('match_players_one_per_person', ['matchId', 'userId'], { unique: true })
 @Index('match_players_user', ['userId'])
 @Entity('match_players')
@@ -41,6 +42,20 @@ export class MatchPlayer
 
     @Column({ type: 'smallint', default: 0 })
     timeouts!: number;
+
+    /**
+     * What this seat earned here, and the only reason a leaderboard can have a WINDOW.
+     *
+     * `player_stats.xp` is the running total and would answer "who has the most" perfectly well;
+     * what it cannot answer is "who earned the most this month", because a running total has no
+     * dates in it. This column does, through `matches.finished_at`, and it costs one integer on a
+     * row that is written once and never updated again.
+     *
+     * A walkout earns zero here, which is `xpFor`'s rule and not this column's - stated because a
+     * zero in this column is a fact about the game rather than a row nobody got round to filling in.
+     */
+    @Column({ type: 'integer', default: 0 })
+    xp!: number;
 
     @Column({ name: 'rating_before', type: 'integer', nullable: true })
     ratingBefore!: number | null;

@@ -30,6 +30,7 @@ import type {
     NotificationPage,
     ServerInfo,
     SocialGraph,
+    LeaderboardWindow,
     TablePrivacy,
     TableSummary,
     MatchView
@@ -467,7 +468,7 @@ export interface MatchPort
     record(handle: string): Promise<PersonRecord | null>;
 
     /** The best ratings at one game, among people who have played enough games to have one. */
-    leaderboard(game: string): Promise<Leaderboard>;
+    leaderboard(game: string, window: LeaderboardWindow): Promise<Leaderboard>;
 
     /**
      * A game as a spectator may see it, which is a game as it stood two minutes ago.

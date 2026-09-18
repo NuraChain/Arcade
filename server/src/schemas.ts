@@ -120,13 +120,36 @@ export const playerRecord = object({
     bestStreak: number(),
     captures: number(),
     rolls: number(),
-    tokensHome: number()
+    tokensHome: number(),
+    xp: number()
 });
 
 export type PlayerRecord = Infer<typeof playerRecord>;
 
+/**
+ * How much somebody has played, and what that pile is called.
+ *
+ * `xp` is the sum of the per-game totals and is never stored as its own column - a second copy of a
+ * derivable fact is the mistake `tables.status` exists to avoid. `level`, `into` and `span` are
+ * computed from it by `domains/match/levels.ts` and travel together because a bar needs all three
+ * and no two of them can produce the third.
+ *
+ * A level unlocks NOTHING. There is no inventory, no balance and nothing that grants one, and a
+ * level that implied otherwise would be the same class of claim as the provably-fair badge - a
+ * promise shipped ahead of its mechanism. It says how much somebody has played, which is true.
+ */
+export const progress = object({
+    xp: number(),
+    level: number(),
+    into: number(),
+    span: number()
+});
+
+export type Progress = Infer<typeof progress>;
+
 export const personRecord = object({
     handle: string(),
+    progress,
     games: array(playerRecord),
     achievements: array(earnedAchievement)
 });
@@ -175,11 +198,39 @@ export const standing = object({
     handle: string(),
     rating: number(),
     played: number(),
-    won: number()
+    won: number(),
+
+    /**
+     * What this person earned, over the window being asked about.
+     *
+     * The board RANKS by this rather than by rating, and the two say different things on purpose.
+     * A rating is a running estimate of how well somebody plays and it can go down; XP is a count
+     * of what they did, so it only goes up and it can be summed over a month. Ranking a monthly
+     * board by rating would just be the all-time board with the inactive hidden.
+     */
+    xp: number()
 });
+
+/**
+ * How far back a board looks.
+ *
+ * Four windows rather than one, because "the best players" and "who has been at it this week" are
+ * different questions and a single all-time board only ever answers the first - which is the board
+ * nobody new can ever appear on.
+ *
+ * The boundaries are Postgres `date_trunc` over `now()`, so they are the SERVER's day and month.
+ * That is stated rather than hidden: somebody in Tehran sees a board that turns over at UTC
+ * midnight, which is a real limitation and a smaller one than storing everybody's timezone to fix.
+ */
+export const leaderboardWindow = enumOf(['today', 'month', 'year', 'all']);
+
+export type LeaderboardWindow = Infer<typeof leaderboardWindow>;
+
+export const leaderboardQuery = object({ window: leaderboardWindow.optional() });
 
 export const leaderboard = object({
     game: string(),
+    window: leaderboardWindow,
     standings: array(standing)
 });
 
