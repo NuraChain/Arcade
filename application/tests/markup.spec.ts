@@ -407,6 +407,51 @@ describe('what loading is allowed to mean', () =>
     });
 });
 
+describe('what a comment does in markup', () =>
+{
+    /**
+     * A `/** *\/` block inside the markup region is not a comment. It is TEXT.
+     *
+     * `.azeroth` markup is markup, not JavaScript, so a docblock written between two elements is
+     * rendered - and it renders as exactly what it looks like: the whole comment, asterisks and
+     * all, in the middle of the interface. Three of them shipped in one afternoon that way,
+     * including one in the seat list that read "You /** * A seat that has gone quiet says so..."
+     * right next to a player's name.
+     *
+     * Nothing could see it. `azeroth check` is clean, the build is clean, `npm run qa` reads
+     * overflow, hit targets, a landmark and the console - and a paragraph of source code rendered
+     * as a player's name is none of those. Reasoning about markup goes in the component's own
+     * docblock, which is in the script region, where it is a comment.
+     */
+    it('never leaves a block comment inside the markup', () =>
+    {
+        const guilty: string[] = [];
+
+        for (const file of FILES.filter((one) => one.path.endsWith('.azeroth')))
+        {
+            // The markup region begins at the first element indented into the component body.
+            const opens = /\n {4}<[A-Za-z>]/.exec(file.text);
+
+            if (opens === null)
+            {
+                continue;
+            }
+
+            const region = file.text.slice(opens.index);
+            const found = region.indexOf('/**');
+
+            if (found >= 0)
+            {
+                const line = file.text.slice(0, opens.index + found).split('\n').length;
+
+                guilty.push(`${ file.path }:${ line }`);
+            }
+        }
+
+        expect(guilty, 'a block comment in the markup region renders as text on the screen').toEqual([]);
+    });
+});
+
 const BLOCK_COMMENT = /\/\*[\s\S]*?\*\//g;
 
 describe('what red means', () =>
