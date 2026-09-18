@@ -141,6 +141,7 @@
         "match_actions.piece smallint YES -",
         "match_actions.rev integer NO -",
         "match_actions.seat smallint NO -",
+        "match_actions.state jsonb NO -",
         "match_actions.user_id uuid YES -",
         "match_players.colour smallint NO -",
         "match_players.match_id uuid NO -",

@@ -207,14 +207,14 @@ describe.skipIf(!active)('a record, against a real database', () =>
             const { matchId, players } = await finished(state, ['won', 'lost'], 'won');
 
             await db.query(
-                `insert into match_actions (match_id, rev, seat, kind, die, events)
-                 values ($1, 1, 0, 'roll', 6, $2::jsonb)`,
+                `insert into match_actions (match_id, rev, seat, kind, die, events, state)
+                 values ($1, 1, 0, 'roll', 6, $2::jsonb, $3::jsonb)`,
                 [matchId, JSON.stringify([
                     { e: 'roll', seat: 0, die: 6 },
                     { e: 'capture', seat: 0, piece: 1, victim: 1, victimPiece: 0 },
                     { e: 'home', seat: 0, piece: 2 },
                     { e: 'roll', seat: 1, die: 3 }
-                ])]
+                ]), JSON.stringify(state)]
             );
 
             await db.transaction((tx) => recorder().finish(tx, matchId, 'ludo', state));
