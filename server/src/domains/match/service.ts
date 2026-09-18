@@ -12,6 +12,8 @@ import { firstRow } from '../../lib/rows.ts';
 import { COLOURS } from './ludo/board.ts';
 import { apply, create, indexOfSeat, legalMoves } from './ludo/engine.ts';
 import { createRecorder, outcomeOf } from './record.ts';
+import { ludoEngine } from './engines/ludo.ts';
+import type { Engine } from './engine.ts';
 import type { MatchHistory } from '../../schemas.ts';
 import type { EngineAction, GameEvent, LudoState, RefusalReason } from './ludo/state.ts';
 
@@ -142,9 +144,21 @@ function stateOf(match: Match): LudoState
     return match.state as LudoState;
 }
 
-export function createMatchService(db: DataSource, achieve: AchieveService)
+/**
+ * The engines this server can run, injected rather than imported.
+ *
+ * Every other service in this codebase takes its collaborators as arguments and this one reached
+ * for ludo by name, which is why it refused three games with `if (table.game !== 'ludo')`. Passing
+ * them in means the set is decided at the composition root, a spec can build a service around a
+ * fixture engine, and adding a game touches `main.ts` rather than the middle of a 680-line file.
+ */
+export function createMatchService(db: DataSource, achieve: AchieveService, engines: readonly Engine[] = [ludoEngine])
 {
     const recorder = createRecorder(achieve);
+
+    const byGame = new Map(engines.map((engine) => [engine.id, engine]));
+
+    const engineFor = (game: string): Engine | null => byGame.get(game) ?? null;
 
     const seatsOf = async (runner: EntityManager | DataSource, matchId: string): Promise<MatchSeatRow[]> =>
         await runner.getRepository(MatchPlayer)
@@ -413,7 +427,15 @@ export function createMatchService(db: DataSource, achieve: AchieveService)
                 throw new ConflictError('That table has closed.');
             }
 
-            if (table.game !== 'ludo')
+            /**
+             * Whether anything here knows how to play it, rather than whether it is called ludo.
+             *
+             * `games.status` says `coming-soon` for a game with no engine and `table.create` refuses
+             * to open a table for one, so this is the second lock on the same door - and it is the
+             * one that holds if a status is ever wrong, because it asks the thing that would have to
+             * do the work.
+             */
+            if (engineFor(table.game) === null)
             {
                 throw new ValidationError({ game: 'No engine yet.' }, 'That game cannot be played here yet.');
             }

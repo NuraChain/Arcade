@@ -1,6 +1,16 @@
 # Phase 0 — the engine seam
 
-**Status:** planned, not started. A hard prerequisite for Hokm, Backgammon and Poker.
+**Status:** in progress. A hard prerequisite for Hokm, Backgammon and Poker.
+
+| step | state |
+|---|---|
+| 1. Schema widening + snapshot | **done** — `7e5dc59` |
+| 2. Extract `Engine`, Ludo behind it | **part done** — the interface, the registry and the generic refusal; the service still folds Ludo's state directly |
+| 3. Per-viewer `view()`, new wire | next — and it is what unblocks Hokm |
+| 4. Redact `watch` and `since`, add the leak test | |
+| 5. Engine-owned outcome, standings, tallies | |
+| 6. Teams, XP generalisation | |
+| 7. Client scene registry | |
 
 Nothing in the three game plans can begin until this exists. It is the only work shared by all
 three, and it is the only work that can break Ludo.
