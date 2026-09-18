@@ -169,6 +169,13 @@ export const play: Pick<Dictionary, keyof typeof reference> = {
     'match.resign.confirm': 'واگذاری',
     'match.missed': { one: 'یک نوبت را از دست داد', other: '{count} نوبت را از دست داد' },
     'match.missed.last': 'یکی دیگر بازی‌اش را تمام می‌کند',
+    'card.turn': 'نوبت اوست',
+    'card.waiting': 'منتظر',
+    'card.won': 'برد',
+    'card.out': 'بازی را ترک کرد',
+    'card.lastChance': 'یک غیبت دیگر تمامش می‌کند',
+    'match.deadline.minutes': 'حدود {minutes} دقیقه مانده',
+    'match.deadline.hours': 'حدود {hours} ساعت مانده',
     'match.deadline': 'حدود {seconds} ثانیه مانده',
     'match.refused': 'آن حرکت انجام نشد.',
     'match.reading': 'در حال به‌روزرسانی…'

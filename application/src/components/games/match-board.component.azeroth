@@ -1,5 +1,6 @@
 import BoardCanvas from './board-canvas.component.azeroth';
 import MatchResult from './match-result.component.azeroth';
+import PlayerCard from './player-card.component.azeroth';
 import Button from '../ui/button.component.azeroth';
 import Panel from '../ui/panel.component.azeroth';
 import { runtime } from '../../lib/runtime.ts';
@@ -8,7 +9,7 @@ import { useBoard } from '../../stores/match.store.ts';
 import { usePeople } from '../../stores/people.store.ts';
 import type { MatchView } from '../../api.ts';
 import type { BoardView } from '../../game/bridge.ts';
-import { INITIAL, seatsFor } from './seats.ts';
+import { seatsFor } from './seats.ts';
 
 /**
  * The board, and the controls that are the real interface to it.
@@ -20,6 +21,12 @@ import { INITIAL, seatsFor } from './seats.ts';
  *
  * Colour is never the only signal. Every seat carries its colour's initial beside the swatch, so a
  * player who cannot tell red from green still knows whose token is whose.
+ *
+ * **The board owns the column and the controls sit under it.** They used to share a row, which gave
+ * the board whatever was left after a 20rem panel and a chat rail - 320px of board at 1280. A game
+ * is the thing somebody is looking at, so it gets the width, and the roll button, the moves and the
+ * clock go beneath it where they are still a thumb's reach away on a phone and a glance away on a
+ * monitor.
  *
  * **The clock and the misses are both shown, and neither was before.** `matches.deadline_at` and
  * `match_players.timeouts` have been on the wire since the domain was written and no screen read
@@ -120,12 +127,81 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
     const URGENT_AT = 10;
 
     /**
-     * Three in a row ends a seat, which is `MAX_TIMEOUTS` in the match service. It is repeated here
-     * rather than imported because the server's copy is the rule and this one is only deciding when
-     * to raise its voice - importing it would pull a server module into the web typecheck program
-     * for a number the screen uses to pick a colour.
+     * The same deadline in a unit a person reads.
+     *
+     * A `turns` table gives a day, and the seconds formatter rendered that as "About 86,056s left" -
+     * a number nobody can parse, on the one screen where the clock exists to be understood at a
+     * glance. A live table is seconds, a correspondence table is hours, and the hour between them
+     * is minutes.
      */
-    const MISSES_ALLOWED = 3;
+    const MINUTE = 60;
+
+    const HOUR = 60 * MINUTE;
+
+    derived clockSays = ((): string | null =>
+    {
+        if (secondsLeft === null)
+        {
+            return null;
+        }
+
+        if (secondsLeft < 90)
+        {
+            return locale.t('match.deadline', { seconds: locale.n(secondsLeft) });
+        }
+
+        if (secondsLeft < 90 * MINUTE)
+        {
+            return locale.t('match.deadline.minutes', { minutes: locale.n(Math.round(secondsLeft / MINUTE)) });
+        }
+
+        return locale.t('match.deadline.hours', { hours: locale.n(Math.round(secondsLeft / HOUR)) });
+    })();
+
+    /**
+     * Which corner of the board each colour is printed in.
+     *
+     * Physical, and it has to be: the plate is a photograph of an object, red is printed top-left,
+     * and a Persian page does not move it. The cards read as belonging to a quadrant only if they
+     * are actually beside it.
+     */
+    const CORNER: Record<string, string> = {
+        red: 'top-left',
+        green: 'top-right',
+        blue: 'bottom-left',
+        yellow: 'bottom-right'
+    };
+
+    /**
+     * Two players sit opposite, which is where the engine seats them - twenty-six squares apart, so
+     * neither starts a walk behind the other. With no card in the other two corners the board looks
+     * lopsided, so a two-player table puts its cards on one diagonal and leaves the rest empty
+     * rather than inventing seats to fill them.
+     */
+    derived seatCards = game.players.map((player) => ({
+        player,
+        corner: CORNER[player.colour] ?? 'top-left'
+    }));
+
+    /**
+     * Split so the stacked layout puts the top two above the board and the bottom two below it,
+     * which is the same arrangement the floating one makes and is why moving between them does not
+     * move anybody's card to a different side of the table.
+     *
+     * Sorted left-before-right within each half, because seat order is not corner order: blue is
+     * seat three and sits bottom-LEFT, yellow is seat two and sits bottom-RIGHT, so the unsorted
+     * list put each of them over the other one's quadrant. The whole point of a corner card is that
+     * it is beside the colour it belongs to.
+     */
+    const leftFirst = (
+        a: { corner: string },
+        b: { corner: string }
+    ): number => (a.corner.endsWith('left') ? 0 : 1) - (b.corner.endsWith('left') ? 0 : 1);
+
+    derived topCards = seatCards.filter((entry) => entry.corner.startsWith('top')).sort(leftFirst);
+
+    derived bottomCards = seatCards.filter((entry) => entry.corner.startsWith('bottom')).sort(leftFirst);
+
 
     /**
      * What the renderer is given, as one value.
@@ -181,21 +257,38 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
             : locale.t('match.move.step', { token: label, die: locale.n(game.die) });
     };
 
-    /**
-     * The height constraint belongs to the SIDE-BY-SIDE layout and nowhere else.
-     *
-     * `flex-1 min-h-0` in a column whose height is bounded gives this element a basis of zero and
-     * lets its content run out of the bottom of its own box - so on a phone the seat list and the
-     * resign button were drawn straight over the "Show chat" button underneath, and a tap meant to
-     * give up opened the chat instead. Stacked, this is as tall as what is in it and the page
-     * scrolls; in a row, the board and the controls share a fixed height and each scrolls itself.
-     */
-    <div class="flex flex-col gap-4 @3xl:min-h-0 @3xl:flex-1 @3xl:flex-row">
-        <div class="board-stage">
-            <BoardCanvas view={ view } onPick={ (key) => void pick(key) } />
+    <div class="flex min-w-0 flex-col gap-4">
+        <div class="board-arena">
+            <For each={ topCards } key={ (entry) => entry.player.seat } let={ entry }>
+                <div class="board-seat" data-corner={ entry.corner }>
+                    <PlayerCard
+                        player={ entry.player }
+                        mine={ mine }
+                        active={ entry.player.seat === game.turn }
+                        die={ entry.player.seat === game.turn ? game.die : undefined }
+                        finished={ over }
+                    />
+                </div>
+            </For>
+
+            <div class="board-stage">
+                <BoardCanvas view={ view } onPick={ (key) => void pick(key) } />
+            </div>
+
+            <For each={ bottomCards } key={ (entry) => entry.player.seat } let={ entry }>
+                <div class="board-seat" data-corner={ entry.corner }>
+                    <PlayerCard
+                        player={ entry.player }
+                        mine={ mine }
+                        active={ entry.player.seat === game.turn }
+                        die={ entry.player.seat === game.turn ? game.die : undefined }
+                        finished={ over }
+                    />
+                </div>
+            </For>
         </div>
 
-        <div class="board-controls flex min-w-0 flex-col gap-3 @3xl:w-[20rem] @3xl:shrink-0">
+        <div class="board-controls mx-auto flex w-full min-w-0 max-w-[34rem] flex-col gap-3">
             <Show when={ over }>
                 { () =>
                     <MatchResult
@@ -212,27 +305,19 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
             <Panel pad="md" stack="sm">
                 <div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
                     <p class="min-w-0 flex-1 basis-[10rem] text-ui-lg font-semibold text-text" aria-live="polite">{ says }</p>
-                    <Show when={ secondsLeft !== null }>
+                    <Show when={ clockSays !== null }>
                         { () =>
                             <span
                                 class={ () => [
                                     'tally shrink-0 text-ui-sm font-bold',
-                                    secondsLeft! <= URGENT_AT ? 'text-danger' : 'text-muted'
+                                    secondsLeft !== null && secondsLeft <= URGENT_AT ? 'text-danger' : 'text-muted'
                                 ].join(' ') }
                             >
-                                { locale.t('match.deadline', { seconds: locale.n(secondsLeft!) }) }
+                                { clockSays }
                             </span>
                         }
                     </Show>
                 </div>
-
-                <Show when={ !over && game.die !== undefined }>
-                    { () =>
-                        <p class="text-ui-sm text-muted">
-                            <output class="tally text-ui-2xl font-bold text-text">{ locale.n(game.die!) }</output>
-                        </p>
-                    }
-                </Show>
 
                 <Show when={ board.canRoll() }>
                     { () =>
@@ -269,51 +354,6 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
                         </div>
                     }
                 </Show>
-            </Panel>
-                }
-            </Show>
-
-            <Show when={ !over }>
-                { () =>
-            <Panel pad="md" stack="sm">
-                <ul class="flex flex-col gap-2">
-                    <For each={ game.players } key={ (player) => player.seat } let={ player }>
-                        <li
-                            class={ () => [
-                                'flex items-center gap-2 rounded-tile px-2 py-1.5',
-                                player.seat === game.turn ? 'bg-raised' : ''
-                            ].filter(Boolean).join(' ') }
-                            aria-current={ player.seat === game.turn ? 'true' : undefined }
-                        >
-                            <span
-                                class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-ui-2xs font-bold text-white"
-                                style={ `background: var(--ludo-${ player.colour })` }
-                            >
-                                { INITIAL[player.colour] }
-                            </span>
-                            <span class="flex min-w-0 flex-1 flex-col">
-                                <span class="truncate text-ui-sm text-text">
-                                    { player.seat === mine ? locale.t('match.you') : (people.byHandle(player.who)?.displayName ?? player.who) }
-                                </span>
-
-                                <Show when={ player.timeouts > 0 }>
-                                    { () =>
-                                        <span class={ () => [
-                                            'truncate text-ui-2xs',
-                                            player.timeouts >= MISSES_ALLOWED - 1 ? 'text-danger' : 'text-muted'
-                                        ].join(' ') }>
-                                            { locale.plural('match.missed', player.timeouts) }
-                                            { player.timeouts >= MISSES_ALLOWED - 1 ? ` · ${ locale.t('match.missed.last') }` : '' }
-                                        </span>
-                                    }
-                                </Show>
-                            </span>
-                            <span class="tally shrink-0 text-ui-xs text-muted">
-                                { locale.plural('match.tokens', player.home) }
-                            </span>
-                        </li>
-                    </For>
-                </ul>
             </Panel>
                 }
             </Show>

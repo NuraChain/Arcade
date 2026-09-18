@@ -166,6 +166,13 @@ export const play = {
     'match.resign.confirm': 'Give up',
     'match.missed': { one: 'missed a turn', other: 'missed {count} turns' },
     'match.missed.last': 'one more ends their game',
+    'card.turn': 'Their go',
+    'card.waiting': 'Waiting',
+    'card.won': 'Won',
+    'card.out': 'Left the game',
+    'card.lastChance': 'One more miss ends it',
+    'match.deadline.minutes': 'About {minutes} min left',
+    'match.deadline.hours': 'About {hours}h left',
     'match.deadline': 'About {seconds}s left',
     'match.refused': 'That move would not go through.',
     'match.reading': 'Catching up…'

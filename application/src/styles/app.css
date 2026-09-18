@@ -579,6 +579,83 @@
  * a board taller than the screen it is on. `aspect-ratio` keeps it square with no JavaScript, so
  * nothing has to measure anything on resize.
  */
+/*
+ * The board with its four players around it.
+ *
+ * Each card belongs to the corner of the colour it is playing, which turns "whose turn is it" and
+ * "how far has red got" into a glance rather than a scan down a list of names.
+ *
+ * **Two cards above, two below, at every width** - and floating into the corners only once there is
+ * genuinely room beside the board. That order is deliberate: the stacked form is the one that always
+ * works, so it is the default rather than the fallback, and the floating form is an enhancement a
+ * wide screen earns. The threshold is a CONTAINER query because this column is narrower than the
+ * screen whenever the social panel or the chat rail is open - at 1280 with a rail the main column is
+ * about 660px, which is nothing like the 1280 a viewport query would have believed.
+ *
+ * The corners are PHYSICAL. Red is printed top-left on a board that does not mirror, exactly like
+ * the tokens, so the placement uses `left`/`right` while the text inside each card keeps the page's
+ * own direction. Declaring `direction: ltr` on the wrapper the way `.board-plate` does would have
+ * flipped the names too.
+ */
+.board-arena
+{
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+    container-type: inline-size;
+}
+
+.board-arena > .board-stage
+{
+    grid-column: 1 / -1;
+}
+
+.board-seat
+{
+    min-inline-size: 0;
+}
+
+@container (min-width: 60rem)
+{
+    .board-arena
+    {
+        display: block;
+    }
+
+    /*
+     * Capped, so the cards sit BESIDE the board rather than at the far edges of a wide column.
+     * The board is at most 34rem and a card 13rem, so the widest this ever needs to be is the two
+     * of them plus a gutter - and a 1920 monitor was otherwise putting three hundred pixels of
+     * nothing between a player's card and the quadrant it belongs to.
+     */
+    .board-arena
+    {
+        /*
+         * A DEFINITE size, not `max-inline-size` plus auto margins.
+         *
+         * An auto cross-axis margin on a flex item makes it shrink to fit, and with the cards
+         * absolutely positioned the only thing left in flow was the board - whose own width is a
+         * percentage OF THIS ELEMENT. The two sized each other to nothing and the board disappeared
+         * entirely. `min()` gives it a width to centre rather than a width to compute.
+         */
+        inline-size: min(100%, 62rem);
+        margin-inline: auto;
+    }
+
+    .board-seat
+    {
+        position: absolute;
+        z-index: 1;
+        inline-size: 13rem;
+    }
+
+    .board-seat[data-corner='top-left']     { top: 0;    left: 0; }
+    .board-seat[data-corner='top-right']    { top: 0;    right: 0; }
+    .board-seat[data-corner='bottom-left']  { bottom: 0; left: 0; }
+    .board-seat[data-corner='bottom-right'] { bottom: 0; right: 0; }
+}
+
 .board-stage
 {
     inline-size: min(100%, var(--board-max, 34rem), calc(100dvh - var(--board-chrome, 22rem)));
