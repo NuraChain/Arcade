@@ -473,6 +473,10 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         {
             summary.matchId = row.match_id;
         }
+        if (row.room_id !== null)
+        {
+            summary.roomId = row.room_id;
+        }
         return summary;
     };
 
@@ -1458,6 +1462,33 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
 
                 const made = await table.create(me, { ...input, invitees: known.map((person) => person.id) });
                 live?.socialChanged(me, ...known.map((person) => person.id));
+
+                /**
+                 * A table opened in a room is ANNOUNCED there, and that line is the only way anybody
+                 * learns of it.
+                 *
+                 * A room table is deliberately absent from the global open list - that is the whole
+                 * point of it - so without this the host would be sitting alone at a table nobody
+                 * else could discover, in the room they opened it for. `courtesy` because the table
+                 * is the fact and the announcement is the notice: a failed line must not undo an
+                 * opened table.
+                 */
+                if (made.room_id !== null)
+                {
+                    const host = await social.person(me);
+
+                    await courtesy('table line', async () =>
+                    {
+                        await chat.post(
+                            made.room_id!,
+                            'invite',
+                            { key: 'chat.line.table', params: { who: host?.handle ?? '', game: made.game, tableId: made.id } },
+                            me
+                        );
+                        live?.chatChanged(made.room_id!);
+                    });
+                }
+
                 return asTable(made);
             },
 

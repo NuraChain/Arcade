@@ -1,10 +1,14 @@
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@azerothjs/http';
 import { IsNull, Not, type DataSource } from 'typeorm';
 
+import { Conversation } from '../../entities/conversation.entity.ts';
+import { Game } from '../../entities/game.entity.ts';
+import { GameRule } from '../../entities/game-rule.entity.ts';
 import { Match } from '../../entities/match.entity.ts';
 import { Table } from '../../entities/table.entity.ts';
-import type { TableMode, TablePrivacy, TableStatus } from '../../entities/table.entity.ts';
-import { firstRow, rowsOf } from '../../lib/rows.ts';
+import type { TableMode } from '../../entities/table.entity.ts';
+import type { TablePrivacy, TableStatus } from '../../schemas.ts';
+import { firstRow } from '../../lib/rows.ts';
 import { ConversationMember } from '../../entities/conversation-member.entity.ts';
 import { TableSeat } from '../../entities/table-seat.entity.ts';
 import type { AchieveService } from '../achieve/service.ts';
@@ -77,6 +81,9 @@ export interface TableRow
     is_host: boolean;
     conversation_id: string | null;
 
+    /** The conversation this table was opened IN, or null for one opened from the games pages. */
+    room_id: string | null;
+
     /** The game running here, or null when nobody has started one. */
     match_id: string | null;
 }
@@ -105,57 +112,112 @@ function codeFrom(random: () => number): string
 }
 
 /**
- * Every table read, parameterised by the viewer.
+ * Every table read, as one query builder parameterised by the viewer.
  *
- * `$1` is always the viewer. The `::text` casts are not decoration: handle is `citext`, and an
- * aggregate over it hands node-pg an OID it has no parser for - the members of a conversation
- * arrived as the literal string `{alex,sara.k}` once already.
+ * The select list is correlated sub-queries rather than joins because each one answers a different
+ * question about the same row, and folding them into joins would multiply the row out and need a
+ * `group by` over every column to fold it back. A `QueryBuilder` says this perfectly well -
+ * `addSelect` takes the sub-query while the FROM, the WHERE and the parameters stay TypeORM's - so
+ * there is no reason for the raw `DataSource.query` this used to be.
+ *
+ * The `::text` casts are not decoration: handle is `citext`, and an aggregate over it hands node-pg
+ * an OID it has no parser for - the members of a conversation arrived as the literal string
+ * `{alex,sara.k}` once already.
  */
-const TABLE_COLUMNS = `
-    t.id, t.code::text as code, t.game, t.seats, t.mode, t.privacy,
-    t.target, t.cube, t.blinds, t.created_at,
+const tableQuery = (db: DataSource, me: string) => db.getRepository(Table)
+    .createQueryBuilder('t')
+    .select('t.id', 'id')
+    .addSelect('t.code::text', 'code')
+    .addSelect('t.game', 'game')
+    .addSelect('t.seats', 'seats')
+    .addSelect('t.mode', 'mode')
+    .addSelect('t.privacy', 'privacy')
+    .addSelect('t.target', 'target')
+    .addSelect('t.cube', 'cube')
+    .addSelect('t.blinds', 'blinds')
+    .addSelect('t.room_id', 'room_id')
+    .addSelect('t.created_at', 'created_at')
 
-    -- Derived, never stored. A closed table is a decision somebody made and lives in the column;
-    -- everything else is a fact about the world right now, and a stored copy of it is a copy that
-    -- goes stale the first time it moves down a path that forgot to update it. Playing has three
-    -- such paths already - a win, a timeout cascade and the host closing the table - so it is read
-    -- from whether a match is still running rather than written beside one.
-    case
-        when t.status = 'closed' then 'closed'
-        when exists (select 1 from matches m
-                      where m.table_id = t.id and m.finished_at is null) then 'playing'
-        when (select count(*) from table_seats s
-               where s.table_id = t.id and s.user_id is not null) >= t.seats then 'ready'
-        else 'open'
-    end                                                                        as status,
+    /**
+     * Derived, never stored. A closed table is a decision somebody made and lives in the column;
+     * everything else is a fact about the world right now, and a stored copy of one is a copy that
+     * goes stale the first time it moves down a path that forgot to update it. Playing has three
+     * such paths already - a win, a timeout cascade and the host closing the table.
+     */
+    .addSelect(
+        `case
+            when t.status = 'closed' then 'closed'
+            when exists (select 1 from matches m
+                          where m.table_id = t.id and m.finished_at is null) then 'playing'
+            when (select count(*) from table_seats s
+                   where s.table_id = t.id and s.user_id is not null) >= t.seats then 'ready'
+            else 'open'
+         end`,
+        'status'
+    )
+    .addSelect(
+        `(select m.id from matches m where m.table_id = t.id and m.finished_at is null)`,
+        'match_id'
+    )
+    .addSelect(`(select u.handle::text from users u where u.id = t.host_id)`, 'host')
+    .addSelect(
+        `(select s.seat from table_seats s where s.table_id = t.id and s.user_id = :me)`,
+        'mine'
+    )
+    .addSelect('(t.host_id = :me)', 'is_host')
+    .addSelect(
+        `(select count(*)::int from table_seats s where s.table_id = t.id and s.user_id is not null)`,
+        'taken'
+    )
+    .addSelect(
+        `(select c.id from conversations c where c.table_id = t.id and c.kind = 'game')`,
+        'conversation_id'
+    )
+    .addSelect(
+        `(select coalesce(
+                   jsonb_agg(jsonb_build_object(
+                       'seat',    s.seat,
+                       'who',     (select u.handle::text from users u where u.id = s.user_id),
+                       'invited', (select u.handle::text from users u where u.id = s.invited_id),
+                       'ready',   s.ready,
+                       'host',    s.user_id is not null and s.user_id = t.host_id
+                   ) order by s.seat),
+                   '[]'::jsonb)
+            from table_seats s where s.table_id = t.id)`,
+        'chairs'
+    )
+    .setParameter('me', me);
 
-    (select m.id from matches m
-      where m.table_id = t.id and m.finished_at is null)                       as match_id,
-
-    (select u.handle::text from users u where u.id = t.host_id)                as host,
-
-    (select s.seat from table_seats s
-      where s.table_id = t.id and s.user_id = $1)                              as mine,
-
-    (t.host_id = $1)                                                           as is_host,
-
-    (select count(*)::int from table_seats s
-      where s.table_id = t.id and s.user_id is not null)                       as taken,
-
-    (select c.id from conversations c
-      where c.table_id = t.id and c.kind = 'game')                             as conversation_id,
-
-    (select coalesce(
-              jsonb_agg(jsonb_build_object(
-                  'seat',    s.seat,
-                  'who',     (select u.handle::text from users u where u.id = s.user_id),
-                  'invited', (select u.handle::text from users u where u.id = s.invited_id),
-                  'ready',   s.ready,
-                  'host',    s.user_id is not null and s.user_id = t.host_id
-              ) order by s.seat),
-              '[]'::jsonb)
-       from table_seats s where s.table_id = t.id)                             as chairs
-`;
+/**
+ * Whether this viewer may see - and therefore sit at - this table.
+ *
+ * Parameterised by the SPELLING of the viewer rather than hard-coding `$1`, because the same
+ * predicate is shared by four reads and a string-replace at one of them is one that breaks the
+ * day somebody writes a `$10`.
+ *
+ * One predicate, shared by every read that takes a table id, for the reason `VISIBLE_TO` is shared
+ * by the group domain's two reads: a rule applied to one read and forgotten on the next is a rule
+ * that holds until somebody follows a link. It held for nothing at all here, because `byId` had no
+ * privacy check whatsoever - an "Invite only" table was joinable by anybody who was handed the
+ * code, which is the opposite of what the form promised the person who picked it.
+ *
+ * A table you are already sitting at is always visible. That is not generosity: a group can close,
+ * a friendship can end and an invitation can be withdrawn while somebody is in the chair, and the
+ * alternative is a player whose own game 404s underneath them mid-hand.
+ *
+ * A refusal is a 404 rather than a 403, the same as a private group, because a 403 confirms the
+ * table is there and the whole point is that a stranger cannot tell a closed door from a typo.
+ */
+const visibleTo = (viewer: string): string => `(
+        t.privacy = 'public'
+     or exists (select 1 from table_seats s where s.table_id = t.id and s.user_id = ${ viewer })
+     or (t.privacy = 'friends' and exists (select 1 from friendships f
+                                            where f.user_id = ${ viewer } and f.friend_id = t.host_id))
+     or (t.privacy = 'invite' and exists (select 1 from table_seats s
+                                           where s.table_id = t.id and s.invited_id = ${ viewer }))
+     or (t.privacy = 'room' and exists (select 1 from conversation_members cm
+                                         where cm.conversation_id = t.room_id and cm.user_id = ${ viewer }))
+)`;
 
 export function createTableService(db: DataSource, social: SocialService, achieve: AchieveService)
 {
@@ -165,8 +227,10 @@ export function createTableService(db: DataSource, social: SocialService, achiev
         {
             return null;
         }
-        const rows = await db.query(`select ${ TABLE_COLUMNS } from tables t where t.id = $2`, [me, tableId]);
-        return firstRow<TableRow>(rows);
+        return await tableQuery(db, me)
+            .where('t.id = :tableId', { tableId })
+            .andWhere(visibleTo(':me'))
+            .getRawOne<TableRow>() ?? null;
     };
 
     const byCode = async (me: string, code: string): Promise<TableRow | null> =>
@@ -175,8 +239,10 @@ export function createTableService(db: DataSource, social: SocialService, achiev
         {
             return null;
         }
-        const rows = await db.query(`select ${ TABLE_COLUMNS } from tables t where t.code = $2`, [me, code]);
-        return firstRow<TableRow>(rows);
+        return await tableQuery(db, me)
+            .where('t.code = :code', { code })
+            .andWhere(visibleTo(':me'))
+            .getRawOne<TableRow>() ?? null;
     };
 
     const mustSee = async (me: string, tableId: string): Promise<TableRow> =>
@@ -193,28 +259,41 @@ export function createTableService(db: DataSource, social: SocialService, achiev
         byId: one,
         byCode,
 
-        /** Every open table this viewer could sit at, newest first. */
+        /**
+         * Every open table this viewer could walk up to, newest first.
+         *
+         * `public` and `friends` and deliberately not the other two. This is the GLOBAL list -
+         * finding a table among strangers - and an invite and a room are the opposite of that:
+         * they are reached by the invitation and by the line written into the room, so putting
+         * them here would merge the two ways of starting a game back into one.
+         *
+         * `friends` is now a level that does something. It filtered on `public` strictly, so a
+         * table somebody opened for their friends was invisible to their friends as well as to
+         * everybody else - the setting did precisely nothing and told the person who picked it
+         * that their friends could find the table.
+         */
         async open(me: string, game: string | null, limit: number): Promise<TableRow[]>
         {
-            const rows = await db.query(
-                `select ${ TABLE_COLUMNS }
-                 from tables t
-                 where t.status = 'open'
-                   and t.privacy = 'public'
-                   and ($2::varchar is null or t.game = $2)
-                   and exists (select 1 from table_seats s
-                                where s.table_id = t.id and s.user_id is null
-                                  and (s.invited_id is null or s.invited_id = $1))
-                   and not exists (select 1 from table_seats s
-                                    where s.table_id = t.id and s.user_id = $1)
-                   and not exists (select 1 from blocks b
-                                    where (b.user_id = $1 and b.blocked_id = t.host_id)
-                                       or (b.user_id = t.host_id and b.blocked_id = $1))
-                 order by t.created_at desc
-                 limit $3`,
-                [me, game, limit]
-            );
-            return rowsOf<TableRow>(rows);
+            return await tableQuery(db, me)
+                .where(`t.status = 'open'`)
+                .andWhere(`(t.privacy = 'public'
+                            or (t.privacy = 'friends'
+                                and exists (select 1 from friendships f
+                                             where f.user_id = :me and f.friend_id = t.host_id)))`)
+                .andWhere('(cast(:game as varchar) is null or t.game = :game)', { game })
+                .andWhere(
+                    `exists (select 1 from table_seats s
+                              where s.table_id = t.id and s.user_id is null
+                                and (s.invited_id is null or s.invited_id = :me))`
+                )
+                .andWhere(`not exists (select 1 from table_seats s
+                                        where s.table_id = t.id and s.user_id = :me)`)
+                .andWhere(`not exists (select 1 from blocks b
+                                        where (b.user_id = :me and b.blocked_id = t.host_id)
+                                           or (b.user_id = t.host_id and b.blocked_id = :me))`)
+                .orderBy('t.created_at', 'DESC')
+                .limit(limit)
+                .getRawMany<TableRow>();
         },
 
         /**
@@ -280,16 +359,24 @@ export function createTableService(db: DataSource, social: SocialService, achiev
         /**
          * Whether this reader may watch what is happening at this table.
          *
-         * Public, not closed, and not either side of a block. The block half is the one worth
-         * stating: watching somebody's games is a way of following them around, which is precisely
-         * what a block is for - and the list already filters on it, so a direct link that did not
-         * would be the hole the list exists to close.
+         * Visible to them, not closed, and not either side of a block.
+         *
+         * The same `visibleTo` every other read by id uses, which is what lets the six people in a
+         * group watch the four of them playing: a room table is visible to the room, so the two
+         * who could not get a chair are not shut out of their own group's game. The list above
+         * stays public-only, exactly as `open` does, because that one is global discovery.
+         *
+         * The block half is worth stating: watching somebody's games is a way of following them
+         * around, which is precisely what a block is for - and the list already filters on it, so
+         * a direct link that did not would be the hole the list exists to close.
          */
         async watchableTable(me: string, tableId: string): Promise<boolean>
         {
             return await db.getRepository(Table)
                 .createQueryBuilder('t')
-                .where(`t.id = :tableId and t.privacy = 'public' and t.status <> 'closed'`, { tableId })
+                .where('t.id = :tableId', { tableId })
+                .andWhere(`t.status <> 'closed'`)
+                .andWhere(visibleTo(':me'), { me })
                 .andWhere(
                     `not exists (select 1 from blocks b
                                   where (b.user_id = :me and b.blocked_id = t.host_id)
@@ -302,15 +389,11 @@ export function createTableService(db: DataSource, social: SocialService, achiev
         /** The tables this account is sitting at right now. */
         async mine(me: string): Promise<TableRow[]>
         {
-            const rows = await db.query(
-                `select ${ TABLE_COLUMNS }
-                 from tables t
-                 join table_seats s on s.table_id = t.id and s.user_id = $1
-                 where t.status <> 'closed'
-                 order by t.created_at desc`,
-                [me]
-            );
-            return rowsOf<TableRow>(rows);
+            return await tableQuery(db, me)
+                .innerJoin(TableSeat, 'seat', 'seat.table_id = t.id and seat.user_id = :me')
+                .where(`t.status <> 'closed'`)
+                .orderBy('t.created_at', 'DESC')
+                .getRawMany<TableRow>();
         },
 
         /**
@@ -329,15 +412,19 @@ export function createTableService(db: DataSource, social: SocialService, achiev
             cube: boolean;
             blinds: string;
             invitees: string[];
+            roomId?: string | null;
         }): Promise<TableRow>
         {
-            const rules = firstRow<RulesRow>(await db.query(
-                `select r.seats, r.modes, r.targets, r.has_cube, r.has_blinds
-                   from game_rules r
-                   join games g on g.id = r.game_id
-                  where r.game_id = $1 and g.status = 'available'`,
-                [input.game]
-            ));
+            const rules = await db.getRepository(GameRule)
+                .createQueryBuilder('r')
+                .innerJoin(Game, 'g', `g.id = r.game_id and g.status = 'available'`)
+                .select('r.seats', 'seats')
+                .addSelect('r.modes', 'modes')
+                .addSelect('r.targets', 'targets')
+                .addSelect('r.hasCube', 'has_cube')
+                .addSelect('r.hasBlinds', 'has_blinds')
+                .where('r.game_id = :game', { game: input.game })
+                .getRawOne<RulesRow>() ?? null;
 
             if (rules === null)
             {
@@ -356,6 +443,36 @@ export function createTableService(db: DataSource, social: SocialService, achiev
                 throw new ValidationError({ target: 'Not a target this game plays to.' }, 'That is not a table this game makes.');
             }
 
+            /**
+             * A room decides the privacy rather than travelling beside it.
+             *
+             * The two are one fact - a table opened in a conversation is joinable by that
+             * conversation and by definition not by the world - so letting a caller send them
+             * separately is letting them send a `public` table with a room, or a `room` table with
+             * none. The second of those is a row `tables_room_is_private` refuses, which would
+             * surface as a 500 rather than as the refusal it is; the first is a table announced in
+             * a private group that the whole product can then join.
+             *
+             * Membership is checked HERE and nowhere else in the create path, because from that
+             * point on the room IS the guest list and `visibleTo` reads it directly. Refusing with
+             * a 404 rather than a 403, the same as every other read of a conversation somebody is
+             * not in: a 403 tells a stranger the conversation exists.
+             */
+            const roomId = input.roomId ?? null;
+
+            if (roomId !== null)
+            {
+                const seated = await db.getRepository(ConversationMember).existsBy({ conversationId: roomId, userId: me });
+                if (!seated)
+                {
+                    throw new NotFoundError('No such conversation.');
+                }
+            }
+
+            const privacy: TablePrivacy = roomId === null
+                ? (input.privacy === 'room' ? 'invite' : input.privacy)
+                : 'room';
+
             const cube = rules.has_cube && input.cube;
             const blinds = rules.has_blinds ? input.blinds : 'low';
 
@@ -370,24 +487,27 @@ export function createTableService(db: DataSource, social: SocialService, achiev
                 {
                     const tableId = await db.transaction(async (tx) =>
                     {
-                        const inserted = await tx.query(
-                            `insert into tables (code, game, seats, mode, privacy, target, cube, blinds, host_id)
-                             values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-                             returning id`,
-                            [
-                                codeFrom(Math.random),
-                                input.game,
-                                input.seats,
-                                input.mode,
-                                input.privacy,
-                                input.target,
-                                cube,
-                                blinds,
-                                me
-                            ]
-                        );
-                        const id = rowsOf<{ id: string }>(inserted)[0].id;
+                        const inserted = await tx.getRepository(Table).insert({
+                            code: codeFrom(Math.random),
+                            game: input.game,
+                            seats: input.seats,
+                            mode: input.mode,
+                            privacy,
+                            target: input.target,
+                            cube,
+                            blinds,
+                            hostId: me,
+                            roomId
+                        });
+                        const id = inserted.identifiers[0].id as string;
 
+                        /**
+                         * Raw, and one of the few that stays that way: it is an `INSERT ... SELECT`
+                         * over `generate_series` joined to `unnest`, which builds every chair and
+                         * deals the invitations out across them in one statement. A repository can
+                         * only insert rows a caller has already built, and building these in Node
+                         * would be the same statement with a round trip in the middle.
+                         */
                         await tx.query(
                             `insert into table_seats (table_id, seat, user_id, invited_id, joined_at)
                              select $1, gs.seat, case when gs.seat = 0 then $2::uuid else null end,
@@ -401,12 +521,13 @@ export function createTableService(db: DataSource, social: SocialService, achiev
                             [id, me, input.seats, input.invitees]
                         );
 
-                        const conversation = await tx.query(
-                            `insert into conversations (kind, table_id, game) values ('game', $1, $2) returning id`,
-                            [id, input.game]
-                        );
+                        const conversation = await tx.getRepository(Conversation).insert({
+                            kind: 'game',
+                            tableId: id,
+                            game: input.game
+                        });
                         await tx.getRepository(ConversationMember).insert({
-                            conversationId: rowsOf<{ id: string }>(conversation)[0].id,
+                            conversationId: conversation.identifiers[0].id as string,
                             userId: me
                         });
 
@@ -509,6 +630,13 @@ export function createTableService(db: DataSource, social: SocialService, achiev
                         return null;
                     }
 
+                    /**
+                     * `INSERT ... SELECT ... ON CONFLICT DO NOTHING`, which is one statement rather
+                     * than a read of the table's thread followed by a write into it. The read would
+                     * be a second round trip inside the advisory lock for a value the insert can
+                     * find itself, and `do nothing` is what makes a second claim from one person
+                     * land silently rather than as a primary key violation.
+                     */
                     await tx.query(
                         `insert into conversation_members (conversation_id, user_id)
                          select c.id, $2::uuid from conversations c
@@ -561,36 +689,32 @@ export function createTableService(db: DataSource, social: SocialService, achiev
 
             return db.transaction(async (tx) =>
             {
-                const freed = await tx.query(
-                    `update table_seats
-                        set user_id = null, joined_at = null, ready = false
-                      where table_id = $1 and user_id = $2
-                      returning seat`,
-                    [tableId, me]
-                );
+                const freed = await tx.getRepository(TableSeat)
+                    .update({ tableId, userId: me }, { userId: null, joinedAt: null, ready: false });
 
-                if (firstRow<{ seat: number }>(freed) === null)
+                if ((freed.affected ?? 0) === 0)
                 {
                     return { left: false, closed: false };
                 }
 
-                await tx.query(
-                    `delete from conversation_members
-                      where user_id = $2
-                        and conversation_id in (select id from conversations where table_id = $1 and kind = 'game')`,
-                    [tableId, me]
-                );
+                await tx.createQueryBuilder()
+                    .delete()
+                    .from(ConversationMember)
+                    .where('user_id = :me', { me })
+                    .andWhere(
+                        `conversation_id in (select c.id from conversations c
+                                              where c.table_id = :tableId and c.kind = 'game')`,
+                        { tableId }
+                    )
+                    .execute();
 
-                const remaining = await tx.query(
-                    'select count(*)::int as n from table_seats where table_id = $1 and user_id is not null',
-                    [tableId]
-                );
+                const remaining = await tx.getRepository(TableSeat).countBy({ tableId, userId: Not(IsNull()) });
 
-                if (rowsOf<{ n: number }>(remaining)[0].n === 0)
+                if (remaining === 0)
                 {
-                    await tx.query(
-                        `update tables set status = 'closed', closed_at = now() where id = $1 and status <> 'closed'`,
-                        [tableId]
+                    await tx.getRepository(Table).update(
+                        { id: tableId, status: Not('closed') },
+                        { status: 'closed', closedAt: () => 'now()' }
                     );
                     return { left: true, closed: true };
                 }
@@ -623,6 +747,12 @@ export function createTableService(db: DataSource, social: SocialService, achiev
                     : 'They are not taking invitations from people they have not added.');
             }
 
+            /**
+             * Raw, because the chair is chosen by a `for update skip locked` inside a scalar
+             * sub-query - the same shape as the seat claim and for the same reason. Two hosts
+             * inviting at once lock different chairs rather than one of them holding a chair the
+             * other has already given away.
+             */
             const held = await db.query(
                 `update table_seats
                     set invited_id = $2
@@ -647,10 +777,9 @@ export function createTableService(db: DataSource, social: SocialService, achiev
                 throw new ForbiddenError('Only the host can close a table.');
             }
 
-            await db.query(
-                `update tables set status = 'closed', closed_at = now()
-                  where id = $1 and status <> 'closed' and host_id = $2`,
-                [tableId, me]
+            await db.getRepository(Table).update(
+                { id: tableId, status: Not('closed'), hostId: me },
+                { status: 'closed', closedAt: () => 'now()' }
             );
         },
 

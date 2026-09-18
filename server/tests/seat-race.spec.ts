@@ -9,6 +9,7 @@ import { entities } from '../src/entities/index.ts';
 import { createSocialService } from '../src/domains/social/service.ts';
 import { createTableService } from '../src/domains/table/service.ts';
 import { rowsOf } from '../src/lib/rows.ts';
+import type { TablePrivacy } from '../src/schemas.ts';
 import { syncSchema } from '../src/db/schema.ts';
 
 /**
@@ -42,7 +43,11 @@ async function makeUser(): Promise<string>
     return rowsOf<{ id: string }>(rows)[0].id;
 }
 
-const openTable = async (host: string, seats: number, options: { privacy?: 'public' | 'private'; invitees?: string[] } = {}): Promise<string> =>
+const openTable = async (
+    host: string,
+    seats: number,
+    options: { privacy?: TablePrivacy; invitees?: string[]; roomId?: string } = {}
+): Promise<string> =>
     (await tables.create(host, {
         game: 'seat-fixture',
         seats,
@@ -51,7 +56,8 @@ const openTable = async (host: string, seats: number, options: { privacy?: 'publ
         target: 7,
         cube: false,
         blinds: 'low',
-        invitees: options.invitees ?? []
+        invitees: options.invitees ?? [],
+        ...(options.roomId === undefined ? {} : { roomId: options.roomId })
     })).id;
 
 describe.skipIf(!active)('claiming a seat, against a real database', () =>
@@ -246,7 +252,7 @@ describe.skipIf(!active)('claiming a seat, against a real database', () =>
         const host = await makeUser();
         const looker = await makeUser();
 
-        const priv = await openTable(host, 4, { privacy: 'private' });
+        const priv = await openTable(host, 4, { privacy: 'invite' });
         const pub = await openTable(host, 4);
 
         const listed = (await tables.open(looker, 'seat-fixture', 20)).map((table) => table.id);
@@ -300,7 +306,7 @@ describe.skipIf(!active)('claiming a seat, against a real database', () =>
     {
         const host = await makeUser();
         const table = await tables.create(host, {
-            game: 'seat-fixture', seats: 4, mode: 'live', privacy: 'private', target: 7, cube: false, blinds: 'low', invitees: []
+            game: 'seat-fixture', seats: 4, mode: 'live', privacy: 'invite', target: 7, cube: false, blinds: 'low', invitees: []
         });
 
         const found = await tables.byCode(host, table.code.toUpperCase());
@@ -370,4 +376,165 @@ describe.skipIf(!active)('claiming a seat, against a real database', () =>
             expect(rowsOf<{ cube: boolean; blinds: string }>(row)[0]).toEqual({ cube: false, blinds: 'low' });
         });
     });
+
+    /**
+     * Who can SEE a table, which is the same question as who can sit at it.
+     *
+     * Every one of these was silently wrong before the room work. `byId` had no privacy check at
+     * all, so an `invite` table - sold to the person who picked it as "Only people you invite can
+     * sit down" - was joinable by anybody handed the code; and `open()` filtered on `public`
+     * strictly, so a `friends` table was invisible to the friends it was opened for. Two settings
+     * that lied, one of them while promising the opposite of what it did, and no test anywhere
+     * looked at either.
+     */
+    describe('who can see a table', () =>
+    {
+        const befriend = async (a: string, b: string): Promise<void> =>
+        {
+            await db.query(
+                `insert into friendships (user_id, friend_id) values ($1, $2), ($2, $1)
+                 on conflict do nothing`,
+                [a, b]
+            );
+        };
+
+        const makeRoom = async (...members: string[]): Promise<string> =>
+        {
+            const made = await db.query(
+                `insert into conversations (kind, pair_key) values ('direct', $1) returning id`,
+                [[...members].sort().join(':')]
+            );
+            const id = rowsOf<{ id: string }>(made)[0].id;
+            for (const member of members)
+            {
+                await db.query(
+                    'insert into conversation_members (conversation_id, user_id) values ($1, $2)',
+                    [id, member]
+                );
+            }
+            return id;
+        };
+
+        it('hides an invite table from a stranger holding its id, and shows it to the invitee', async () =>
+        {
+            const host = await makeUser();
+            const guest = await makeUser();
+            const stranger = await makeUser();
+
+            const id = await openTable(host, 4, { privacy: 'invite', invitees: [guest] });
+
+            expect(await tables.byId(stranger, id)).toBeNull();
+            expect(await tables.byId(guest, id)).not.toBeNull();
+            expect(await tables.byId(host, id)).not.toBeNull();
+        });
+
+        it('shows a friends table to a friend and hides it from everybody else', async () =>
+        {
+            const host = await makeUser();
+            const friend = await makeUser();
+            const stranger = await makeUser();
+            await befriend(host, friend);
+
+            const id = await openTable(host, 4, { privacy: 'friends' });
+
+            expect(await tables.byId(friend, id)).not.toBeNull();
+            expect(await tables.byId(stranger, id)).toBeNull();
+        });
+
+        /**
+         * The half that did nothing at all. A friends table was absent from every open list,
+         * including its friends', so the setting was indistinguishable from a private one.
+         */
+        it('puts a friends table in a friend open list and not in a stranger one', async () =>
+        {
+            const host = await makeUser();
+            const friend = await makeUser();
+            const stranger = await makeUser();
+            await befriend(host, friend);
+
+            const id = await openTable(host, 4, { privacy: 'friends' });
+
+            expect((await tables.open(friend, 'seat-fixture', 20)).map((row) => row.id)).toContain(id);
+            expect((await tables.open(stranger, 'seat-fixture', 20)).map((row) => row.id)).not.toContain(id);
+        });
+
+        it('shows a room table to the room and to nobody outside it', async () =>
+        {
+            const host = await makeUser();
+            const member = await makeUser();
+            const stranger = await makeUser();
+            const room = await makeRoom(host, member);
+
+            const id = await openTable(host, 4, { roomId: room });
+
+            expect(await tables.byId(member, id)).not.toBeNull();
+            expect(await tables.byId(stranger, id)).toBeNull();
+        });
+
+        /**
+         * The separation the whole feature is for. A table opened in a room is reached through the
+         * line written into that room, never by quick play - so somebody who said "let us play" to
+         * four friends does not get a fifth stranger dropped into the chair.
+         */
+        it('keeps a room table out of the open list, even for the room', async () =>
+        {
+            const host = await makeUser();
+            const member = await makeUser();
+            const room = await makeRoom(host, member);
+
+            const id = await openTable(host, 4, { roomId: room });
+
+            expect((await tables.open(member, 'seat-fixture', 20)).map((row) => row.id)).not.toContain(id);
+        });
+
+        it('refuses to open a table in a conversation the caller is not in', async () =>
+        {
+            const host = await makeUser();
+            const outsider = await makeUser();
+            const room = await makeRoom(host);
+
+            await expect(openTable(outsider, 4, { roomId: room })).rejects.toThrow(/no such conversation/i);
+        });
+
+        /**
+         * `privacy` and `roomId` are one fact and the service resolves it. A `room` privacy with no
+         * room would be a row `tables_room_is_private` refuses - which reaches a caller as a 500
+         * rather than as the refusal it is - and a `public` privacy WITH a room would announce a
+         * table in a private group that the whole product could then join.
+         */
+        it('derives the privacy from the room rather than believing the caller', async () =>
+        {
+            const host = await makeUser();
+            const room = await makeRoom(host);
+
+            const roomless = await openTable(host, 4, { privacy: 'room' });
+            const roomed = await openTable(host, 4, { privacy: 'public', roomId: room });
+
+            const read = async (id: string): Promise<string> =>
+                rowsOf<{ privacy: string }>(await db.query('select privacy from tables where id = $1', [id]))[0].privacy;
+
+            expect(await read(roomless)).toBe('invite');
+            expect(await read(roomed)).toBe('room');
+        });
+
+        /**
+         * A table you are SITTING at is always yours to see. A group can close, a friendship can
+         * end and an invitation can be withdrawn while somebody is in the chair, and the
+         * alternative is a player whose own game 404s underneath them mid-hand.
+         */
+        it('keeps showing a table to somebody seated at it after they leave the room', async () =>
+        {
+            const host = await makeUser();
+            const member = await makeUser();
+            const room = await makeRoom(host, member);
+
+            const id = await openTable(host, 4, { roomId: room });
+            expect(await tables.claimSeat(member, id)).not.toBeNull();
+
+            await db.query('delete from conversation_members where conversation_id = $1 and user_id = $2', [room, member]);
+
+            expect(await tables.byId(member, id)).not.toBeNull();
+        });
+    });
 });
+

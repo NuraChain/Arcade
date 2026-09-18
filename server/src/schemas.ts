@@ -771,7 +771,22 @@ export const groupEditInput = object({
 
 export const tableMode = enumOf(['live', 'turns']);
 
-export const tablePrivacy = enumOf(['private', 'friends', 'public']);
+/**
+ * Who may sit down, and every level is read by a query.
+ *
+ * `invite` is what `private` was called while it did nothing at all - `byId` had no privacy check,
+ * so a table offered as "Only people you invite can sit down" was joinable by anybody holding the
+ * code. `friends` was equally empty, because the open list filtered on `public` strictly and a
+ * friends table was therefore invisible to friends too.
+ *
+ * `room` cannot be CHOSEN on this input. It is what a table gets by being opened from a
+ * conversation, and `create` derives it from whether a room came with the request - the two are one
+ * fact, and a caller able to send them separately is a caller able to send a `public` table with a
+ * private group's room attached to it.
+ */
+export const tablePrivacy = enumOf(['invite', 'room', 'friends', 'public']);
+
+export type TablePrivacy = Infer<typeof tablePrivacy>;
 
 /** The three levels a table with blinds can be played at. A closed set, so it is an enum. */
 export const tableBlinds = enumOf(['low', 'mid', 'high']);
@@ -828,6 +843,15 @@ export const tableSummary = object({
     /** The game being played here, absent until somebody starts one. */
     matchId: string().optional(),
 
+    /**
+     * The conversation this table was opened in, absent for a table opened from the games pages.
+     *
+     * Not the table's own `conversationId`, which every table has. This is the room whose members
+     * are its guest list, and it is on the wire so a client can say "in Friday Night Crew" rather
+     * than leaving a person to wonder why a table they can see is not in the public list.
+     */
+    roomId: string().optional(),
+
     createdAt: string()
 });
 
@@ -845,7 +869,17 @@ export const tableCreateInput = object({
     blinds: tableBlinds,
 
     /** Handles. Each one holds a chair until they take it or the host gives it away. */
-    invitees: array(string({ max: 32 }))
+    invitees: array(string({ max: 32 })),
+
+    /**
+     * The conversation to open this table IN, making its members the guest list.
+     *
+     * Absent for a table opened from the games pages, which is the global kind. Present for one
+     * opened from a chat thread or a group, which is the kind the other people in that room can
+     * join and nobody else can see - and it DECIDES the privacy rather than travelling beside it,
+     * so `privacy` is ignored when this is here.
+     */
+    roomId: string({ max: 64 }).optional()
 });
 
 export const readyInput = object({ ready: boolean() });

@@ -30,6 +30,7 @@ import type {
     NotificationPage,
     ServerInfo,
     SocialGraph,
+    TablePrivacy,
     TableSummary,
     MatchView
 } from './schemas.ts';
@@ -205,15 +206,23 @@ export interface TablePort
     view(me: string, tableId: string): Promise<TableSummary | null>;
     byCode(me: string, code: string): Promise<TableSummary | null>;
 
+    /**
+     * Opens a table.
+     *
+     * `privacy` and `roomId` are one decision and the service resolves it: a room makes the table
+     * that room's, whatever privacy came with the request, and a `room` privacy with no room is
+     * demoted to `invite` rather than written as a row `tables_room_is_private` refuses.
+     */
     create(me: string, input: {
         game: string;
         seats: number;
         mode: 'live' | 'turns';
-        privacy: 'private' | 'friends' | 'public';
+        privacy: TablePrivacy;
         target: number;
         cube: boolean;
         blinds: string;
         invitees: string[];
+        roomId?: string;
     }): Promise<TableSummary>;
 
     /**
