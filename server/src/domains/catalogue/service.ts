@@ -1,5 +1,7 @@
 import type { DataSource } from 'typeorm';
 
+import { Game, Table, TableSeat } from '../../entities/index.ts';
+
 import type { CataloguePort } from '../../ports.ts';
 import type { AchievementList, GameList, LiveCounts } from '../../schemas.ts';
 
@@ -74,19 +76,6 @@ const ACHIEVEMENTS_SQL = `
  * an absent row and a quiet game are the same thing on the wire, and a client cannot tell them
  * apart.
  */
-const LIVE_SQL = `
-    select g.id                                                            as game,
-           count(distinct t.id)::int                                       as tables,
-           count(s.user_id)::int                                           as playing
-      from games g
-      left join tables t
-        on t.game = g.id and t.status <> 'closed' and t.privacy = 'public'
-      left join table_seats s
-        on s.table_id = t.id and s.user_id is not null
-     group by g.id, g.sort_order
-     order by g.sort_order
-`;
-
 interface LiveRow
 {
     game: string;
@@ -140,7 +129,17 @@ export function createCatalogueService(db: DataSource): CataloguePort
 
         async live(): Promise<LiveCounts>
         {
-            const rows = await db.query(LIVE_SQL) as LiveRow[];
+            const rows = await db.getRepository(Game)
+                .createQueryBuilder('g')
+                .leftJoin(Table, 't', `t.game = g.id and t.status <> 'closed' and t.privacy = 'public'`)
+                .leftJoin(TableSeat, 's', 's.table_id = t.id and s.user_id is not null')
+                .select('g.id', 'game')
+                .addSelect('count(distinct t.id)::int', 'tables')
+                .addSelect('count(s.user_id)::int', 'playing')
+                .groupBy('g.id')
+                .addGroupBy('g.sort_order')
+                .orderBy('g.sort_order', 'ASC')
+                .getRawMany<LiveRow>();
 
             return { games: rows.map((row) => ({ game: row.game, playing: row.playing, tables: row.tables })) };
         }

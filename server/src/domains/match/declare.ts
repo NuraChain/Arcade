@@ -1,5 +1,7 @@
 import type { DataSource } from 'typeorm';
 
+import { Conversation, Match } from '../../entities/index.ts';
+
 /**
  * The line that tells the table how its game ended.
  *
@@ -29,28 +31,27 @@ interface Ending
  * Null covers three cases that are all "not now": the match is not finished, the row is gone, or
  * the table has no conversation - which a table can only be if it was made before its thread, and
  * is a state the read must survive rather than throw on.
+ *
+ * The winner's handle is a correlated sub-query rather than a join, because it names the ONE seat
+ * `winner_seat` points at; joining `match_players` would fan the row out to one per player and then
+ * need filtering back down to the same thing.
  */
-const ENDING_SQL = `
-    select c.id                                                   as conversation_id,
-           m.game                                                 as game,
-           m.outcome                                              as outcome,
-           (select u.handle::text
-              from match_players p
-              join users u on u.id = p.user_id
-             where p.match_id = m.id and p.seat = m.winner_seat)   as winner
-      from matches m
-      join conversations c on c.table_id = m.table_id and c.kind = 'game'
-     where m.id = $1 and m.finished_at is not null
-`;
-
 export async function endingOf(db: DataSource, matchId: string): Promise<Ending | null>
 {
-    const [row] = await db.query(ENDING_SQL, [matchId]) as {
-        conversation_id: string;
-        game: string;
-        outcome: string;
-        winner: string | null;
-    }[];
+    const row = await db.getRepository(Match)
+        .createQueryBuilder('m')
+        .innerJoin(Conversation, 'c', `c.table_id = m.table_id and c.kind = 'game'`)
+        .select('c.id', 'conversation_id')
+        .addSelect('m.game', 'game')
+        .addSelect('m.outcome', 'outcome')
+        .addSelect(
+            `(select u.handle::text from match_players p
+                join users u on u.id = p.user_id
+               where p.match_id = m.id and p.seat = m.winner_seat)`,
+            'winner'
+        )
+        .where('m.id = :matchId and m.finished_at is not null', { matchId })
+        .getRawOne<{ conversation_id: string; game: string; outcome: string; winner: string | null }>();
 
     if (row === undefined)
     {

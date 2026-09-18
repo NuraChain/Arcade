@@ -1,6 +1,6 @@
 import type { DataSource, EntityManager } from 'typeorm';
 
-import { UserAchievement } from '../../entities/index.ts';
+import { Achievement, PlayerStats, User, UserAchievement } from '../../entities/index.ts';
 import type { Leaderboard, PersonRecord } from '../../schemas.ts';
 import { earnedBy, type AchievementFacts } from './rules.ts';
 
@@ -57,28 +57,6 @@ export interface Tally
     streak: number;
 }
 
-/**
- * The whole definition list with this reader's standing against each one.
- *
- * A LEFT JOIN rather than a filtered read, because an achievement nobody can see is one nobody can
- * play towards - and sending only what has been earned makes a new account's empty profile
- * indistinguishable from a request that failed.
- */
-const STANDING_SQL = `
-    select a.id, a.name_en, a.name_fa, a.blurb_en, a.blurb_fa, a.icon, a.tier, ua.earned_at
-      from achievements a
-      left join user_achievements ua on ua.achievement_id = a.id and ua.user_id = $1
-     order by a.sort_order
-`;
-
-const RECORD_SQL = `
-    select game, rating, peak_rating, played, won, abandoned,
-           streak, best_streak, captures, rolls, tokens_home
-      from player_stats
-     where user_id = $1
-     order by played desc, game
-`;
-
 interface StandingRow
 {
     id: string;
@@ -91,19 +69,12 @@ interface StandingRow
     earned_at: Date | null;
 }
 
-interface RecordRow
+interface BoardRow
 {
-    game: string;
+    handle: string;
     rating: number;
-    peak_rating: number;
     played: number;
     won: number;
-    abandoned: number;
-    streak: number;
-    best_streak: number;
-    captures: number;
-    rolls: number;
-    tokens_home: number;
 }
 
 /**
@@ -116,15 +87,6 @@ interface RecordRow
 const MIN_PLAYED = 5;
 
 const BOARD_SIZE = 20;
-
-const LEADERBOARD_SQL = `
-    select u.handle::text as handle, s.rating, s.played, s.won
-      from player_stats s
-      join users u on u.id = s.user_id
-     where s.game = $1 and s.played >= $2
-     order by s.rating desc, s.won desc, u.handle asc
-     limit $3
-`;
 
 export function createAchieveService(db: DataSource)
 {
@@ -188,12 +150,19 @@ export function createAchieveService(db: DataSource)
         /** The best ratings at one game, among people with enough games behind them to rank. */
         async leaderboardOf(game: string): Promise<Leaderboard>
         {
-            const rows = await db.query(LEADERBOARD_SQL, [game, MIN_PLAYED, BOARD_SIZE]) as {
-                handle: string;
-                rating: number;
-                played: number;
-                won: number;
-            }[];
+            const rows = await db.getRepository(PlayerStats)
+                .createQueryBuilder('s')
+                .innerJoin(User, 'u', 'u.id = s.user_id')
+                .select('u.handle::text', 'handle')
+                .addSelect('s.rating', 'rating')
+                .addSelect('s.played', 'played')
+                .addSelect('s.won', 'won')
+                .where('s.game = :game and s.played >= :floor', { game, floor: MIN_PLAYED })
+                .orderBy('s.rating', 'DESC')
+                .addOrderBy('s.won', 'DESC')
+                .addOrderBy('u.handle', 'ASC')
+                .limit(BOARD_SIZE)
+                .getRawMany<BoardRow>();
 
             return { game, standings: rows.map((row) => ({ ...row })) };
         },
@@ -201,33 +170,57 @@ export function createAchieveService(db: DataSource)
         /** A person's record at every game, and where they stand against every achievement. */
         async recordOf(handle: string): Promise<PersonRecord | null>
         {
-            const [who] = await db.query(
-                `select id, handle::text as handle from users where handle = $1`,
-                [handle]
-            ) as { id: string; handle: string }[];
+            const who = await db.getRepository(User).findOne({
+                select: { id: true, handle: true },
+                where: { handle }
+            });
 
-            if (who === undefined)
+            if (who === null)
             {
                 return null;
             }
 
-            const games = await db.query(RECORD_SQL, [who.id]) as RecordRow[];
-            const standing = await db.query(STANDING_SQL, [who.id]) as StandingRow[];
+            const games = await db.getRepository(PlayerStats).find({
+                where: { userId: who.id },
+                order: { played: 'DESC', game: 'ASC' }
+            });
+
+            /**
+             * A LEFT JOIN rather than a filtered read, because an achievement nobody can see is one
+             * nobody can play towards - and sending only what has been earned makes a new account's
+             * empty profile indistinguishable from a request that failed. It is the one read here
+             * that a repository cannot say: `find` cannot left-join a table this entity has no
+             * relation to, and adding one would put an inverse side on the entity graph the whole
+             * schema is kept acyclic to avoid.
+             */
+            const standing = await db.getRepository(Achievement)
+                .createQueryBuilder('a')
+                .leftJoin(UserAchievement, 'ua', 'ua.achievement_id = a.id and ua.user_id = :who', { who: who.id })
+                .select('a.id', 'id')
+                .addSelect('a.name_en', 'name_en')
+                .addSelect('a.name_fa', 'name_fa')
+                .addSelect('a.blurb_en', 'blurb_en')
+                .addSelect('a.blurb_fa', 'blurb_fa')
+                .addSelect('a.icon', 'icon')
+                .addSelect('a.tier', 'tier')
+                .addSelect('ua.earned_at', 'earned_at')
+                .orderBy('a.sort_order', 'ASC')
+                .getRawMany<StandingRow>();
 
             return {
                 handle: who.handle,
                 games: games.map((row) => ({
                     game: row.game,
                     rating: row.rating,
-                    peak: row.peak_rating,
+                    peak: row.peakRating,
                     played: row.played,
                     won: row.won,
                     abandoned: row.abandoned,
                     streak: row.streak,
-                    bestStreak: row.best_streak,
+                    bestStreak: row.bestStreak,
                     captures: row.captures,
                     rolls: row.rolls,
-                    tokensHome: row.tokens_home
+                    tokensHome: row.tokensHome
                 })),
                 achievements: standing.map((row) => ({
                     id: row.id,
