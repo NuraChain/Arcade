@@ -187,54 +187,7 @@ export type MatchHistory = Infer<typeof matchHistory>;
  * opened, and the rule written beside them was that they go the moment the server answers with real
  * counts. This is that answer.
  */
-/**
- * One row of a game's leaderboard: a person, their rating and what it was earned on.
- *
- * `played` travels beside `rating` deliberately. A rating on its own invites the reading that a
- * number near the top was hard-won, and the honest qualifier is how many games are behind it -
- * which is also what the `MIN_PLAYED` floor on the query is for.
- */
-export const standing = object({
-    handle: string(),
-    rating: number(),
-    played: number(),
-    won: number(),
 
-    /**
-     * What this person earned, over the window being asked about.
-     *
-     * The board RANKS by this rather than by rating, and the two say different things on purpose.
-     * A rating is a running estimate of how well somebody plays and it can go down; XP is a count
-     * of what they did, so it only goes up and it can be summed over a month. Ranking a monthly
-     * board by rating would just be the all-time board with the inactive hidden.
-     */
-    xp: number()
-});
-
-/**
- * How far back a board looks.
- *
- * Four windows rather than one, because "the best players" and "who has been at it this week" are
- * different questions and a single all-time board only ever answers the first - which is the board
- * nobody new can ever appear on.
- *
- * The boundaries are Postgres `date_trunc` over `now()`, so they are the SERVER's day and month.
- * That is stated rather than hidden: somebody in Tehran sees a board that turns over at UTC
- * midnight, which is a real limitation and a smaller one than storing everybody's timezone to fix.
- */
-export const leaderboardWindow = enumOf(['today', 'month', 'year', 'all']);
-
-export type LeaderboardWindow = Infer<typeof leaderboardWindow>;
-
-export const leaderboardQuery = object({ window: leaderboardWindow.optional() });
-
-export const leaderboard = object({
-    game: string(),
-    window: leaderboardWindow,
-    standings: array(standing)
-});
-
-export type Leaderboard = Infer<typeof leaderboard>;
 
 export const gameLive = object({
     game: string(),
@@ -609,6 +562,69 @@ export const personSummary = object({
 });
 
 export type PersonSummary = Infer<typeof personSummary>;
+
+/**
+ * One row of a game's leaderboard: a person, their rating and what it was earned on.
+ *
+ * `played` travels beside `rating` deliberately. A rating on its own invites the reading that a
+ * number near the top was hard-won, and the honest qualifier is how many games are behind it -
+ * which is also what the `MIN_PLAYED` floor on the query is for.
+ */
+export const standing = object({
+    handle: string(),
+
+    /**
+     * Who that handle IS, travelling with the row rather than being fetched per name.
+     *
+     * The same shape `social.graph` sends its requests in, and for the reason recorded beside it: a
+     * payload that carries only handles makes the client ask about each one separately, and a
+     * leaderboard is the one list in this product where nearly every row is somebody the reader has
+     * never been told about. Twenty rows was twenty requests, which is the shape that took the rate
+     * limiter out during the responsive matrix.
+     */
+    person: personSummary,
+
+    rating: number(),
+    played: number(),
+    won: number(),
+
+    /**
+     * What this person earned, over the window being asked about.
+     *
+     * The board RANKS by this rather than by rating, and the two say different things on purpose.
+     * A rating is a running estimate of how well somebody plays and it can go down; XP is a count
+     * of what they did, so it only goes up and it can be summed over a month. Ranking a monthly
+     * board by rating would just be the all-time board with the inactive hidden.
+     */
+    xp: number()
+});
+
+/**
+ * How far back a board looks.
+ *
+ * Four windows rather than one, because "the best players" and "who has been at it this week" are
+ * different questions and a single all-time board only ever answers the first - which is the board
+ * nobody new can ever appear on.
+ *
+ * The boundaries are Postgres `date_trunc` over `now()`, so they are the SERVER's day and month.
+ * That is stated rather than hidden: somebody in Tehran sees a board that turns over at UTC
+ * midnight, which is a real limitation and a smaller one than storing everybody's timezone to fix.
+ */
+export type Standing = Infer<typeof standing>;
+
+export const leaderboardWindow = enumOf(['today', 'month', 'year', 'all']);
+
+export type LeaderboardWindow = Infer<typeof leaderboardWindow>;
+
+export const leaderboardQuery = object({ window: leaderboardWindow.optional() });
+
+export const leaderboard = object({
+    game: string(),
+    window: leaderboardWindow,
+    standings: array(standing)
+});
+
+export type Leaderboard = Infer<typeof leaderboard>;
 
 /**
  * A request, and the PERSON on the other end of it.

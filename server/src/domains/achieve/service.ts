@@ -1,7 +1,7 @@
 import type { DataSource, EntityManager } from 'typeorm';
 
 import { Achievement, Match, MatchPlayer, PlayerStats, User, UserAchievement } from '../../entities/index.ts';
-import type { Leaderboard, LeaderboardWindow, PersonRecord } from '../../schemas.ts';
+import type { Leaderboard, LeaderboardWindow, PersonRecord, Standing } from '../../schemas.ts';
 import { earnedBy, type AchievementFacts } from './rules.ts';
 import { levelOf } from '../match/levels.ts';
 
@@ -73,11 +73,38 @@ interface StandingRow
 interface BoardRow
 {
     handle: string;
+    display_name: string;
+    bio: string;
+    hue: number;
+    is_minor: boolean;
     rating: number;
     played: number;
     won: number;
     xp: number;
 }
+
+/**
+ * The row as the wire wants it, with the person built rather than left to be fetched.
+ *
+ * `lastSeenAt` is deliberately ABSENT rather than null, which is the privacy rule this product
+ * states in so many words: a client cannot render what it was never given, and a board is read by
+ * strangers who have no claim on when somebody was last online.
+ */
+const asStanding = (row: BoardRow): Standing => ({
+    handle: row.handle,
+    person: {
+        id: row.handle,
+        handle: row.handle,
+        displayName: row.display_name,
+        bio: row.bio,
+        hue: row.hue,
+        isMinor: row.is_minor
+    },
+    rating: row.rating,
+    played: row.played,
+    won: row.won,
+    xp: row.xp
+});
 
 /**
  * How many games somebody has to have played before the ALL-TIME board will rank them.
@@ -182,6 +209,10 @@ export function createAchieveService(db: DataSource)
                     .createQueryBuilder('s')
                     .innerJoin(User, 'u', 'u.id = s.user_id')
                     .select('u.handle::text', 'handle')
+                    .addSelect('u.display_name', 'display_name')
+                    .addSelect('u.bio', 'bio')
+                    .addSelect('u.hue', 'hue')
+                    .addSelect('u.is_minor', 'is_minor')
                     .addSelect('s.rating', 'rating')
                     .addSelect('s.played', 'played')
                     .addSelect('s.won', 'won')
@@ -193,7 +224,7 @@ export function createAchieveService(db: DataSource)
                     .limit(BOARD_SIZE)
                     .getRawMany<BoardRow>();
 
-                return { game, window, standings: rows.map((row) => ({ ...row })) };
+                return { game, window, standings: rows.map(asStanding) };
             }
 
             /**
@@ -209,6 +240,10 @@ export function createAchieveService(db: DataSource)
                 .innerJoin(User, 'u', 'u.id = p.user_id')
                 .leftJoin(PlayerStats, 's', 's.user_id = p.user_id and s.game = m.game')
                 .select('u.handle::text', 'handle')
+                .addSelect('max(u.display_name)', 'display_name')
+                .addSelect('max(u.bio)', 'bio')
+                .addSelect('max(u.hue)::int', 'hue')
+                .addSelect('bool_or(u.is_minor)', 'is_minor')
                 .addSelect('coalesce(max(s.rating), 1200)::int', 'rating')
                 .addSelect('count(*)::int', 'played')
                 .addSelect(`count(*) filter (where p.result = 'won')::int`, 'won')
@@ -224,7 +259,7 @@ export function createAchieveService(db: DataSource)
                 .limit(BOARD_SIZE)
                 .getRawMany<BoardRow>();
 
-            return { game, window, standings: rows.map((row) => ({ ...row })) };
+            return { game, window, standings: rows.map(asStanding) };
         },
 
         /** A person's record at every game, and where they stand against every achievement. */

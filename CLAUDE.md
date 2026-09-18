@@ -1766,10 +1766,14 @@ The windows are the SERVER's day and month, so somebody in Tehran sees a board t
 midnight. That is a real limitation, stated rather than hidden, and a smaller one than storing
 everybody's timezone to fix.
 
-**The board asks who its people are.** It is the one list in this product where most rows are
-strangers, so without a `people.want` over the handles it comes back with, every avatar on it is the
-unknown-person mark. That call sits in an `effect` reading the answer rather than beside the read of
-it, because `byHandle` is read inside a `derived` and a lookup that fetched would be a cycle.
+**The person travels ON the row.** A leaderboard is the one list in this product where nearly every
+row is somebody the reader has never been told about, so a payload of bare handles means the client
+asks about each one - twenty rows, twenty requests, for one screen. That is the shape that took the
+rate limiter out during the responsive matrix, and it is the defect `social.graph` already records
+having fixed the same way. The board `remember`s them into `people.store` in an `effect` rather than
+beside the read, because `remember` writes the signal `byHandle` reads and a `derived` that wrote it
+would be a cycle. `lastSeenAt` is absent rather than null, which is the privacy rule: a board is read
+by strangers who have no claim on when somebody was last online.
 
 **The window labels are one word each**, and that is a layout fact rather than a style: "This month"
 and "This year" in a four-way segmented control put the game page 335px wide at a 320px viewport, and
