@@ -2,7 +2,18 @@ import type { GameId } from './games.ts';
 
 export type TableMode = 'live' | 'turns';
 
-export type TablePrivacy = 'private' | 'friends' | 'public';
+/**
+ * Who may sit down, and every level does something.
+ *
+ * `invite` is what `private` was called while it did nothing: the server had no privacy check on a
+ * read by id, so a table offered as "Only people you invite can sit down" was joinable by anybody
+ * with the code. `friends` was equally empty - the open list filtered on `public` strictly, so a
+ * friends table was invisible to friends too.
+ *
+ * `room` is not offered in the create form and cannot be chosen there. A table gets it by being
+ * opened FROM a conversation, which is a different door.
+ */
+export type TablePrivacy = 'invite' | 'room' | 'friends' | 'public';
 
 export type Stakes = 'none' | 'play-money';
 
@@ -18,6 +29,16 @@ export interface TableConfig
     cube: boolean;
     blinds: Blinds;
     quick: boolean;
+
+    /**
+     * The conversation to open this table in, making its members the guest list.
+     *
+     * Absent for a table opened from the games pages. Present for one opened from a chat thread or
+     * a group, and it decides the privacy - the server ignores `privacy` when this is here, because
+     * the two are one fact and a caller able to send them apart is a caller able to announce a
+     * public table in a private group.
+     */
+    roomId?: string;
 }
 
 export interface TableRules
@@ -43,7 +64,7 @@ export function defaultTable(game: GameId): TableConfig
         game,
         seats: rules.seats[rules.seats.length - 1],
         mode: 'live',
-        privacy: 'private',
+        privacy: 'invite',
         target: rules.targets[0] ?? 0,
         cube: game === 'backgammon',
         blinds: 'low',

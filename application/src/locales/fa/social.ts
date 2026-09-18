@@ -129,6 +129,8 @@ export const social: Pick<Dictionary, keyof typeof reference> = {
     'chat.viewProfile': 'دیدن پروفایل',
     'chat.empty': 'هنوز پیامی نیست. چیزی بگو.',
     'chat.loadFailed': 'این گفتگو بارگذاری نشد.',
+    'record.moreFailed': 'بازی‌های بیشتر بارگذاری نشد. دوباره تلاش کن.',
+    'chat.line.table': 'فقط کسانی که در این گفت‌وگو هستند می‌توانند بنشینند',
     'chat.line.invite': '{who} دعوت شد',
     'chat.line.result': '{winner} برد',
     'chat.line.result.none': 'بازی بدون برنده تمام شد',

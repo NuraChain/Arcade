@@ -33,6 +33,9 @@ export interface RecordApi
     /** This reader's own finished games, newest first. Empty until `more()` has been called once. */
     history: Getter<MatchHistoryEntry[]>;
     historyLoading: Getter<boolean>;
+
+    /** The last page was refused. The button is still there, so it is also the retry. */
+    historyFailed: Getter<boolean>;
     hasMore: Getter<boolean>;
 
     open(handle: string): void;
@@ -52,6 +55,7 @@ export const useRecord = createStore((): RecordApi =>
     const [cursor, setCursor] = createSignal<string | null>(null);
     const [exhausted, setExhausted] = createSignal(false);
     const [reading, setReading] = createSignal(false);
+    const [failed, setFailed] = createSignal(false);
 
     const record = createResource(
         () => handle(),
@@ -66,6 +70,7 @@ export const useRecord = createStore((): RecordApi =>
 
         history,
         historyLoading: reading,
+        historyFailed: failed,
         hasMore: () => !exhausted(),
 
         open: (who) => setHandle(who),
@@ -92,6 +97,19 @@ export const useRecord = createStore((): RecordApi =>
 
             setReading(true);
 
+            /**
+             * `catch`, not just `finally`.
+             *
+             * Every caller writes `void record.more()`, because paging is fire-and-forget from a
+             * button - so a rejection here is an UNHANDLED one, which in a spec run lands on
+             * whichever file happened to be executing and made the whole suite non-deterministic.
+             * On a real page it is a console error that says nothing about the page it came from.
+             *
+             * A refused page leaves the cursor exactly where it was, so pressing the button again
+             * asks for the same page rather than skipping it - and `finally` has already stopped
+             * the spinner, so the button is the retry. `exhausted` is deliberately NOT set: a
+             * dropped connection is not the end of somebody's history.
+             */
             try
             {
                 const page = await client.matches.history({ query: { cursor: cursor() ?? undefined } });
@@ -99,6 +117,11 @@ export const useRecord = createStore((): RecordApi =>
                 setHistory((held) => [...held, ...page.matches]);
                 setCursor(page.cursor ?? null);
                 setExhausted(page.cursor === undefined);
+                setFailed(false);
+            }
+            catch
+            {
+                setFailed(true);
             }
             finally
             {
@@ -112,6 +135,7 @@ export const useRecord = createStore((): RecordApi =>
             setHistory([]);
             setCursor(null);
             setExhausted(false);
+            setFailed(false);
         },
 
         reset()

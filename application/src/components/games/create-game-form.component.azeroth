@@ -64,7 +64,9 @@ export default component CreateGameForm(props: { game: Game; onCreated: (tableId
             .sort((a, b) => rank(a) - rank(b));
     })();
 
-    derived privacyHint = locale.t(privacy === 'private' ? 'create.privacy.privateHint' : (privacy === 'friends' ? 'create.privacy.friendsHint' : 'create.privacy.publicHint'));
+    derived privacyHint = locale.t(privacy === 'friends'
+        ? 'create.privacy.friendsHint'
+        : (privacy === 'public' ? 'create.privacy.publicHint' : 'create.privacy.inviteHint'));
 
     const toggleInvite = (id: string): void =>
     {
@@ -134,7 +136,7 @@ export default component CreateGameForm(props: { game: Game; onCreated: (tableId
                 label={ locale.t('create.privacy') }
                 value={ privacy }
                 items={ [
-                    { id: 'private', label: locale.t('create.privacy.private'), icon: 'lock' },
+                    { id: 'invite', label: locale.t('create.privacy.invite'), icon: 'lock' },
                     { id: 'friends', label: locale.t('create.privacy.friends'), icon: 'people' },
                     { id: 'public', label: locale.t('create.privacy.public'), icon: 'discover' }
                 ] }

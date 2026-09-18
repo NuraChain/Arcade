@@ -126,6 +126,8 @@ export const social = {
     'chat.viewProfile': 'View profile',
     'chat.empty': 'No messages yet. Say something.',
     'chat.loadFailed': 'Could not load this conversation.',
+    'record.moreFailed': 'Could not load more games. Try again.',
+    'chat.line.table': 'Only people in this conversation can sit down',
     'chat.line.invite': '{who} was invited',
     'chat.line.result': '{winner} won',
     'chat.line.result.none': 'The game ended with nobody winning',

@@ -76,7 +76,7 @@ interface TableWire
     game: string;
     seats: number;
     mode: 'live' | 'turns';
-    privacy: 'private' | 'friends' | 'public';
+    privacy: 'invite' | 'room' | 'friends' | 'public';
     target: number;
     cube: boolean;
     blinds: string;
@@ -1253,7 +1253,7 @@ export const client =
             game: string;
             seats: number;
             mode: 'live' | 'turns';
-            privacy: 'private' | 'friends' | 'public';
+            privacy: 'invite' | 'room' | 'friends' | 'public';
             target: number;
             cube: boolean;
             blinds: string;
@@ -1369,6 +1369,22 @@ export const client =
         }
     },
 
+    /**
+     * Games that have finished, which is none of them here.
+     *
+     * The same reason `social.record` answers empty: the profile pages page this on mount, and a
+     * namespace the fake does not have at all is an unhandled rejection rather than a missing
+     * feature. `cursor` is absent, which is how the store learns there is no more.
+     */
+    matches:
+    {
+        async history()
+        {
+            server.calls.push('matches.history');
+            return { matches: [] };
+        }
+    },
+
     social:
     {
         async graph()
@@ -1388,6 +1404,21 @@ export const client =
                 blocked: server.blocks.map(personWire),
                 mutes: [...server.mutes]
             };
+        },
+
+        /**
+         * A person's record, which the profile pages read on mount.
+         *
+         * It answers EMPTY rather than being absent. A fake that simply has no route for something
+         * the product calls is a fake that rejects, and the rejection lands on whichever spec file
+         * happened to be running - which is how a suite with nothing wrong in it started failing a
+         * different file on every shuffled run. An account that has played nothing is also the
+         * honest fixture: no match has ever been played in `fake-api`.
+         */
+        async record({ params }: { params: { handle: string } })
+        {
+            server.calls.push('social.record');
+            return { handle: params.handle, games: [], achievements: [] };
         },
 
         async people()

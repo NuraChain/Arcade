@@ -1,0 +1,123 @@
+import { useNavigate } from 'azerothjs';
+
+import Button from '../ui/button.component.azeroth';
+import IconButton from '../ui/icon-button.component.azeroth';
+import Segmented from '../ui/segmented.component.azeroth';
+import { openTable } from '../../lib/open-table.ts';
+import { useCatalogue } from '../../stores/catalogue.store.ts';
+import { useLobby } from '../../stores/lobby.store.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import type { Game, GameId } from '../../data/games.ts';
+import type { OverlayProps } from '../../stores/overlay.store.ts';
+
+/**
+ * Opens a table IN this room, joinable by the people in it and by nobody else.
+ *
+ * The separation is the whole point and the copy says it in as many words: a table opened here is
+ * not in the open list, so quick play cannot drop a stranger into it. The conversation it was
+ * opened from IS the guest list - a direct thread means those two people, a group room means that
+ * group - which is one membership rather than a second one to keep in step with the first.
+ *
+ * There is no privacy control on this sheet, deliberately. A table with a room is a room table by
+ * construction, and offering the choice would be offering to announce a public table in a private
+ * group: the two facts are one, and the server derives the second from the first for exactly that
+ * reason.
+ *
+ * It does not mount until the catalogue has answered, because the seat counts a game plays are the
+ * server's word and a `derived` over a resource that has not landed reads an empty list - the
+ * create form is gated the same way and for the same reason.
+ */
+export default component OpenHereSheet(props: OverlayProps & { conversationId: string })
+{
+    const catalogue = useCatalogue();
+    const lobby = useLobby();
+    const locale = useLocale();
+    const { navigate } = useNavigate();
+
+    state game = 'ludo' as GameId;
+    state pending = false;
+
+    derived playable = catalogue.games.filter((entry) => catalogue.status(entry.id) === 'available');
+
+    derived rules = catalogue.rules(game);
+
+    state seats = 0;
+
+    derived choices = rules.seats.map((count) => ({ id: String(count), label: locale.n(count) }));
+
+    derived chosen = rules.seats.includes(seats) ? seats : (rules.seats[rules.seats.length - 1] ?? 2);
+
+    /**
+     * How many people play it, as a range or as one number.
+     *
+     * Built here rather than in the catalogue, because it is interpolation and punctuation and
+     * nothing else - `tests/data.spec.ts` fails on a key whose English and Persian are the same
+     * string, which is exactly what a `'{min}-{max}'` entry would be. It wears `tally` so the range
+     * does not reverse inside a Persian line.
+     */
+    const playersOf = (entry: Game): string => entry.minPlayers === entry.maxPlayers
+        ? locale.n(entry.minPlayers)
+        : `${ locale.n(entry.minPlayers) }-${ locale.n(entry.maxPlayers) }`;
+
+    const open = (): void =>
+    {
+        pending = true;
+        openTable(
+            lobby.host(game, { ...catalogue.defaults(game), seats: chosen, roomId: props.conversationId }, []),
+            (to) =>
+            {
+                props.close(true);
+                navigate(to);
+            }
+        );
+    };
+
+    <div class="flex flex-col gap-5 p-5">
+        <header class="flex items-start justify-between gap-3">
+            <div class="min-w-0">
+                <h2 class="title text-ui-xl text-text">{ locale.t('openHere.title') }</h2>
+                <p class="mt-2 text-ui-base text-muted">{ locale.t('openHere.lead') }</p>
+            </div>
+            <IconButton icon="close" label={ locale.t('common.close') } variant="ghost" onClick={ () => props.close(false) } />
+        </header>
+
+        <fieldset class="flex flex-col gap-2">
+            <legend class="label mb-2 text-ui-sm text-muted">{ locale.t('openHere.game') }</legend>
+            <ul class="grid grid-cols-2 gap-2">
+                <For each={ playable } key={ (entry) => entry.id } let={ entry }>
+                    <li>
+                        <button
+                            type="button"
+                            class={ () => [
+                                'flex w-full items-center gap-2 rounded-tile border px-3 py-3 text-start text-ui-base coarse:py-4',
+                                entry.id === game ? 'border-accent bg-accent/10 text-text' : 'border-line bg-field text-muted'
+                            ].join(' ') }
+                            aria-pressed={ entry.id === game }
+                            onClick={ () => game = entry.id }
+                        >
+                            <span class="min-w-0 truncate">{ locale.t(entry.nameKey) }</span>
+                            <span class="tally shrink-0 text-ui-2xs text-faint">{ playersOf(entry) }</span>
+                        </button>
+                    </li>
+                </For>
+            </ul>
+        </fieldset>
+
+        <Show when={ choices.length > 1 }>
+            <fieldset class="flex flex-col gap-2">
+                <legend class="label mb-2 text-ui-sm text-muted">{ locale.t('create.seats') }</legend>
+                <Segmented
+                    block
+                    label={ locale.t('create.seats') }
+                    value={ String(chosen) }
+                    items={ choices }
+                    onChange={ (id) => seats = Number(id) }
+                />
+            </fieldset>
+        </Show>
+
+        <Button variant="primary" size="lg" block loading={ pending } onClick={ () => open() }>
+            { locale.t('openHere.open') }
+        </Button>
+    </div>
+}

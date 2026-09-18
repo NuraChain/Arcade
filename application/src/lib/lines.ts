@@ -11,6 +11,11 @@ export const LINE_KEYS = [
     // `declareResult` when a game ends. Both were declared with nothing writing either for a long
     // time, which is the filler copy this list exists to refuse.
     'chat.line.invite',
+
+    // Written by the table half of `services.ts` when a table is opened FROM a conversation. It is
+    // the only way anybody in that room learns the table is there, because a room table is
+    // deliberately absent from the global open list.
+    'chat.line.table',
     'chat.line.result',
     'chat.line.result.none',
 

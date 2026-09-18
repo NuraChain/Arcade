@@ -86,18 +86,30 @@ export default component GroupPage()
 
     derived game = (group?.game ?? null) as GameId | null;
 
+    /**
+     * Opens a table in the GROUP's room, which is what makes it the group's table.
+     *
+     * It used to invite whoever happened to be online, capped at one fewer than the seats, and open
+     * an `invite` table around them - so a group of eight playing a four-seat game handed three
+     * chairs to the three people who were looking at the moment the button was pressed, and the
+     * other four could not sit down at all. Worse, the chairs were HELD: somebody who came back a
+     * minute later found a table that was not full and still had nowhere to sit.
+     *
+     * Pointing it at the group's conversation makes the guest list the group, first come first
+     * seated, and keeps it out of the open list so quick play cannot drop a stranger into it. The
+     * line the server writes into that room is how the other seven learn it is there.
+     */
     const playTogether = (): void =>
     {
-        if (group === null)
+        if (group === null || group.conversationId === undefined)
         {
             return;
         }
         const pick = game ?? catalogue.featured();
-        const config = catalogue.defaults(pick);
-        const invitees = online
-            .filter((handle) => handle !== account.user()?.id)
-            .slice(0, config.seats - 1);
-        openTable(lobby.host(pick, config, invitees), navigate);
+        openTable(
+            lobby.host(pick, { ...catalogue.defaults(pick), roomId: group.conversationId }, []),
+            navigate
+        );
     };
 
     const edit = (): void =>
@@ -249,7 +261,9 @@ export default component GroupPage()
                         >
                             { () =>
                                 <>
-                                    <Button variant="primary" size="lg" leading="zap" onClick={ playTogether }>{ locale.t('groups.playTogether') }</Button>
+                                    <Show when={ group!.conversationId !== undefined }>
+                                        { () => <Button variant="primary" size="lg" leading="zap" onClick={ playTogether }>{ locale.t('groups.playTogether') }</Button> }
+                                    </Show>
                                     <Show when={ group!.conversationId !== undefined }>
                                         { () => <Button variant="secondary" size="lg" leading="chats" to={ `/app/chats/${ group!.conversationId! }` }>{ locale.t('groups.chat') }</Button> }
                                     </Show>

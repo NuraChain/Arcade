@@ -123,16 +123,26 @@ export const useLobby = createStore((): LobbyApi =>
         invitees: string[];
     }
 
-    const asInput = (game: GameId, config: TableConfig, privacy: TableConfig['privacy'], invitees: readonly string[]): TableInput => ({
-        game,
-        seats: config.seats,
-        mode: config.mode,
-        privacy,
-        target: config.target,
-        cube: config.cube,
-        blinds: config.blinds,
-        invitees: [...invitees]
-    });
+    const asInput = (game: GameId, config: TableConfig, privacy: TableConfig['privacy'], invitees: readonly string[]): TableInput =>
+    {
+        /**
+         * The room is SPREAD rather than assigned afterwards, so it is absent from the object when
+         * there is none. The server reads "is there a room" and a key that is present holding
+         * undefined is one an over-eager serialiser turns into null - which is the same request
+         * with a different meaning, because that field decides the privacy.
+         */
+        return {
+            game,
+            seats: config.seats,
+            mode: config.mode,
+            privacy,
+            target: config.target,
+            cube: config.cube,
+            blinds: config.blinds,
+            invitees: [...invitees],
+            ...(config.roomId === undefined ? {} : { roomId: config.roomId })
+        };
+    };
 
     return {
         table: () => viewing.data() ?? null,
