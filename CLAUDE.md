@@ -582,10 +582,9 @@ read and forgotten on the next; `discover` filters on the constant half; `join` 
 because it already refuses what it cannot see. `mine` is deliberately untouched - it joins through
 `group_members`, so membership already is the WHERE clause.
 
-TWO levels, not three. `tables` carries `friends` as well and **no query has ever read it**: `open()`
-filters on `public` strictly, so a friends table is invisible to friends too. That is a setting that
-lies to whoever picks it, and `groups_privacy_known` is a CHECK so a third cannot be added here
-without a WHERE clause to go with it.
+TWO levels here, not three, and `groups_privacy_known` is a CHECK so a third cannot be added without
+a WHERE clause to go with it. `tables` had the opposite problem and *Who may sit at a table* says
+what happened to it.
 
 **The column has NO default, and that is the interesting line.** Postgres materialises a column
 default into every existing row at `add column` time, which is exactly the backfill this file forbids
@@ -733,6 +732,91 @@ And the Leave button carried `text-madder` in `props.class`, which lost to the g
 class attribute - so the class had never applied and the button had never been red. Leaving and
 closing are both `variant="destructive"` now, which is `danger`: the same red, from the shared
 variant, rather than a colour a caller appends and hopes about.
+
+### Who may sit at a table
+
+Four levels, and until this week only one of them was true.
+
+| level | who sees it | in the open list |
+|---|---|---|
+| `public` | anybody | yes |
+| `friends` | the host's friends | yes, to a friend |
+| `invite` | whoever holds an invited chair | no |
+| `room` | the members of the conversation it was opened in | no |
+
+`private` was renamed to `invite` because "private" says nothing about who, and it was the level
+that lied hardest: **`byId` had no privacy check at all**, so a table offered to the person opening
+it as *"Only people you invite can sit down"* was joinable by anybody handed the code. `friends` was
+empty in the other direction — `open()` filtered on `public` strictly, so a friends table was
+invisible to friends as well as to everyone else. Both had shipped, both were in the create form,
+and nothing anywhere looked at either.
+
+**One predicate, `visibleTo`, answers all of it**, and every read that takes a table id goes through
+it — the same argument the group domain's `VISIBLE_TO` makes: a rule applied to one read and
+forgotten on the next holds until somebody follows a link. It is parameterised by the SPELLING of
+the viewer (`$1` or `:me`) rather than hard-coded, because it serves a positional `db.query` and a
+named query-builder parameter, and a predicate string-replaced at one of its call sites is one that
+breaks the day somebody writes a `$10`. A refusal is 404 rather than 403, exactly as a private group
+is, because a 403 confirms the table is there.
+
+**A table you are SITTING at is always visible to you**, whatever the level says now. That is not
+generosity: a group can close, a friendship can end and an invitation can be withdrawn while
+somebody is in the chair, and the alternative is a player whose own game 404s underneath them
+mid-hand.
+
+**`tables.room_id` is the conversation a table was opened IN**, which is not the `kind: 'game'`
+thread every table OWNS. Pointing at the conversation rather than at the group is what lets one
+column serve a direct thread and a group room alike: a group's membership already moves in lockstep
+with its thread's, so "the members of the room" is the answer in both cases and there is no second
+guest list to keep in step with the first. It replaces a `group_id` that no query ever read.
+
+The foreign key is `CASCADE`, which is the opposite of its neighbours and is deliberate: `SET NULL`
+would leave a `privacy = 'room'` row with no room, which `tables_room_is_private` forbids — the same
+pair of rules that cannot both hold as wedged the expiry sweep through `reports_disclosure_whole`.
+
+**`privacy` and `roomId` are ONE fact and the service resolves it.** A caller able to send them
+apart is a caller able to send a `public` table carrying a private group's room, or a `room` table
+with no room — and the second of those reaches a person as a 500 rather than as the refusal it is.
+So `create` derives the privacy from whether a room came with the request, checks membership once
+there, and refuses a conversation the caller is not in with a 404.
+
+**A room table is deliberately absent from the global open list**, even for the room's own members.
+That is the whole point of it: the two ways of starting a game stay separate, and the line the
+server writes into the room is how the other people learn it is there. `chat.line.table` is that
+line, and it renders as the invite card the table domain already had.
+
+**The room's size is the table's ceiling.** Nobody outside the conversation can ever take a chair,
+so a four-seat game opened in a thread between two people is a table that can never be ready. The
+sheet does not offer it: seat counts above the head count are gone, and a game with no seat count
+that fits goes with them — which is what takes four-handed hokm off the list in a direct thread.
+
+**"Start a game" is not disabled with the rest of the composer.** That control's `disabled` means
+this conversation cannot be SEALED, which is a fact about messages; a table is not sealed, and the
+line announcing it is `{ key, params }` the server authored. A browser that cannot type in a thread
+can still open a game in it, which matters because the machine somebody sits down at is often not
+the one they enrolled.
+
+Three defects on this path that every gate was green for, each now with a rule:
+
+- **`openTable` in `chat.page` navigated to a url built from a PROMISE.** `lib/open-table.ts` exists
+  to make that unwritable, and the rule in `tests/markup.spec.ts` only looked for the call INSIDE
+  the template literal — so `const tableId = lobby.host(...)` followed by `` `/app/play/${ tableId }` ``
+  slipped past, and the "Start a game" button in every chat thread went to
+  `/app/play/[object Promise]`. The rule now refuses HOLDING the promise in a variable, which is the
+  step that makes the mistake possible. It also toasted "Invitation posted to the chat" before the
+  request resolved, so a refusal read as success.
+- **The chat page's thread effect fired on the way OUT with the next route's id.** `params()` is
+  shared router state and the page is still mounted while its leave transition plays, so pressing
+  that button asked the chat api for a conversation whose id was the table it had just navigated to.
+  The group page answered the same thing by opening once in `mount`; this page cannot, because a
+  notification moves from one thread straight to another and that is the same route with a different
+  parameter. The guard is the pathname instead.
+- **A literal 0x1F byte sat in `lib/random.ts`.** `chat/envelope.ts` and `lib/attestation.ts` both
+  build their control characters with `String.fromCharCode` and say why in prose; nothing enforced
+  it. `tests/markup.spec.ts` now refuses any invisible control character in `src/`, and that rule was
+  written with character codes rather than a regex escape because the same hazard hit the rule
+  itself — a `\b` in a pattern became a literal backspace, and the rule passed against the exact bug
+  it was written for until it was proved to fail first.
 
 **Matchmaking is a query.** `quick(game)` reads the open public tables for that game, claims a
 chair at the first one that still has one, and opens a table to wait in only when there is nothing
@@ -2397,6 +2481,13 @@ used to sit there for good waiting for a resume that was never coming.
 is" — and it was rendered `truncate`d, in full, with nothing to copy it with. A comparison nobody can
 perform is not a defence. It carries a tooltip with the whole value and a copy button now.
 
+**A tooltip belongs to a KEYBOARD focus, not to every focus.** `onFocusIn` fires for a programmatic
+`.focus()` too, and every sheet moves focus to its close button as it opens - so each one opened with
+the word "Close" floating over its own first paragraph, which on the table sheet covered the sentence
+saying who can sit down. It asks `:focus-visible`, which is the browser's own answer to "did a person
+tab here": a keyboard user gets the name, focus the page moved itself does not. Not checkable in the
+test environment, which matches any real focus - the browser pass is what proves it.
+
 **Every icon-only control in this product is an `IconButton`, and `IconButton` wraps `Tooltip`.**
 That is checkable rather than aspirational: a sweep for a bare `<button>` containing an `Icon` and no
 text finds none. Adding a tooltip to a control that already says what it is would be noise, so the
@@ -2692,8 +2783,19 @@ what Synpress exists to do; it is not something `--load-extension` can reach.
 
 What IS set up, outside this repository at `~/.claude/mcp-browser/`: the extension, a Chrome profile
 with the hardhat phrase imported, and a `playwright-metamask` MCP server registered against them.
-**All six wallet fixtures are the standard hardhat accounts in order** - `dana.w` is index 0 - so the
-one phrase `test test test test test test test test test test test junk` holds every one of them.
+**All six wallet fixtures are the standard hardhat accounts in order**, so the one phrase
+`test test test test test test test test test test test junk` holds every one of them. The order
+matters and guessing it wastes a pass - a check that signs in as four of them and reads a privacy
+boundary reported a correct result under three wrong names:
+
+| # | handle | address |
+|---|---|---|
+| 0 | `dana.w` | `0xf39Fd6e5…b92266` |
+| 1 | `omid.k` | `0x70997970…dc79c8` |
+| 2 | `sara.k` | `0x3C44CdDd…4293bc` |
+| 3 | `reza.t` | `0x90F79bf6…93b906` |
+| 4 | `mina` | `0x15d34AAf…2c6a65` |
+| 5 | `leila.a` | `0x9965507d…b0a4dc` |
 Two notes for anyone driving that profile by hand: the recovery phrase must be TYPED rather than
 filled, because `fill` sets the value without driving MetaMask's own handler and the box never
 expands into word fields; and the extension tab must stay OPEN, because closing it invalidates the
