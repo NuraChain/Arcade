@@ -45,7 +45,7 @@ code.
 carries `DATABASE_URL` and is the one place the name is written down; `tools/qa/db.mjs` reads it so
 the browser passes cannot drift from the server the way they once did. There are no migrations.
 `server/src/db/schema.ts` builds the schema with `syncSchema()`: the `citext` and `pgcrypto`
-extensions, then TypeORM's `synchronize()` from the entity metadata, then the six indexes no
+extensions, then TypeORM's `synchronize()` from the entity metadata, then the indexes no
 decorator can express. `main.ts` runs it on every boot IN DEVELOPMENT ONLY; production gets
 `npm run schema:sync --workspace server`, which is the same code as a deliberate act rather than a
 side effect of starting.
@@ -59,7 +59,7 @@ unique and every expressible index. Three tests hold it there, all in `npm run t
   deleted. Tables, columns with types/nullability/defaults, CHECK expressions, foreign keys with
   their delete rules, primary keys, uniques and index SHAPES. Names are deliberately not compared
   for primary keys and uniques, because TypeORM calls what it generates `PK_<hash>`/`UQ_<hash>`; the
-  six hand-built indexes keep their real names and are asserted by name.
+  hand-built indexes keep their real names and are asserted by name.
 - `converge.db.spec.ts` proves a second sync has nothing to do beyond two wrinkles it lists by
   name, so a THIRD one appearing fails. The two: TypeORM drops the five DESC indexes it cannot
   express (and `syncSchema` rebuilds them afterwards, which is why its order matters), and
@@ -77,13 +77,16 @@ other is `ReferenceError: Cannot access 'X' before initialization` at load, whic
 `Table.chairs` and `ConversationEpoch.keys` produced. Nothing read them, and the owning sides alone
 carry every foreign key.
 
-**Six indexes are built by hand and always will be.** `friend_requests_pending_pair` is UNIQUE over
+**Several indexes are built by hand and always will be.** `friend_requests_pending_pair` is UNIQUE over
 `LEAST(from_user, to_user)`/`GREATEST(...)` where the request is unanswered - a functional index,
 and the only thing stopping A asking B while B is asking A from becoming two rows for one
-intention. `messages_keyset`, `notifications_keyset`, `reports_against`, `groups_public` and
-`tables_open` each order a column DESC, which `@Index` cannot say. `synchronize()` therefore drops
-all five every time, and `syncSchema` recreating them afterwards is the whole reason it exists
-rather than a bare call.
+intention. `messages_keyset`, `notifications_keyset`, `reports_against`, `groups_public`,
+`tables_open`, `matches_history`, `match_actions_feed` and `matches_finished` each order a column
+DESC, which `@Index` cannot say - and `matches_finished` is partial on top of that, so the
+leaderboard's window never walks a live match. `synchronize()` therefore drops every one of them each
+time, and `syncSchema` recreating them afterwards is the whole reason it exists
+rather than a bare call. `converge.db.spec.ts` lists them by name, so adding one without telling it
+fails rather than passing quietly.
 
 **There is no `npm run preview` and no `tools/preview.mjs`.** The server serves the built client
 itself through `mountPages`, so the preview path and the production path are the same code:
@@ -1708,6 +1711,70 @@ dropped the id and the match view is still the one from before the final move. B
 table is true throughout. The rematch is offered from the result panel and is the table's ordinary
 Start, because a finished match leaves every seat exactly where it was.
 
+## Levels, and a board a new player can reach
+
+`domains/match/levels.ts` is pure and import-free, like `ludo/` and for the same reasons: it runs in
+the default `npm test` with no Postgres, the same numbers can later be shown in the browser without
+dragging a decorator into the web program, and a level is reproducible from a total rather than
+being a counter somebody incremented.
+
+**XP is for PLAYING and a level is a trophy.** It unlocks nothing, gates nothing and buys nothing,
+because this product has no inventory, no balance and nothing that grants one — a level that
+promised any of those would be the same class of claim as `game_rules.fairness` and the invented win
+rates, both deleted for being decoration with no mechanism behind them. The copy on the bar says so
+in as many words rather than leaving it to be inferred.
+
+Finishing is 10, winning is 25 more, a capture is 2 and a token home is 3, and every one of those is
+countable from `match_actions` — which is already an append-only record of what happened, so nothing
+new is written to produce them. **A walkout earns nothing at all**, not even the captures it made on
+the way: otherwise leaving a game you are losing banks the good half of it, which is the hole
+`outcomeOf` closes for the rating from the other side.
+
+A level costs `100 + 50 * (n - 1)`, so the total to reach level n is a quadratic in n and `levelOf`
+is its positive root floored rather than a loop — a very large total costs what a small one does.
+`levels.spec.ts` walks sixty thresholds and asserts each one lands exactly, because an off-by-one in
+a root shows only at the boundary.
+
+**`match_players.xp` is what makes a WINDOW possible.** `player_stats.xp` is the running total and
+answers "who has the most" perfectly well; what a running total cannot answer is "who earned the most
+this month", because it has no dates in it. The per-seat column does, through `matches.finished_at`,
+and it is written on every finish rather than only when a rating moved — the two shared a branch for
+one commit and every abandoned match recorded nothing, which made the windowed board quietly blind to
+a whole class of game.
+
+**An account's XP is the SUM of its per-game rows and is never stored.** A stored account total is a
+second copy of a derivable fact, which is the mistake `tables.status` exists to avoid; six rows
+summed on a profile read is not a cost worth a second source of truth.
+
+**Four windows — today, this month, this year, all time — because one all-time board is a board
+nobody new can ever appear on.** Somebody who started this week will not out-total a year of
+somebody else's play, and a product whose only ranking says so is one they stop looking at.
+
+All four rank by XP, and the rating rides along beside it. XP is a count of what somebody did: it
+only goes up, and it can be summed over a window, which is the whole reason a window means anything.
+The rating is the estimate of how WELL they play and it can go down — ranking a monthly board by it
+would have produced the all-time board with the inactive hidden.
+
+Two queries rather than one with a branch, because they ask different things of different tables: all
+time reads the running totals in `player_stats`, a window sums `match_players`. The all-time board
+keeps the `MIN_PLAYED` floor and a windowed one has none and needs none — a floor there would keep
+new people off the one board they can actually climb. The boundaries are `date_trunc` over Postgres
+`now()`, never a date this process computed, for the reason every other window predicate in this
+server is: `finished_at` was written by Postgres.
+
+The windows are the SERVER's day and month, so somebody in Tehran sees a board that turns over at UTC
+midnight. That is a real limitation, stated rather than hidden, and a smaller one than storing
+everybody's timezone to fix.
+
+**The board asks who its people are.** It is the one list in this product where most rows are
+strangers, so without a `people.want` over the handles it comes back with, every avatar on it is the
+unknown-person mark. That call sits in an `effect` reading the answer rather than beside the read of
+it, because `byHandle` is read inside a `derived` and a lookup that fetched would be a cycle.
+
+**The window labels are one word each**, and that is a layout fact rather than a style: "This month"
+and "This year" in a four-way segmented control put the game page 335px wide at a 320px viewport, and
+the matrix caught it. The legend above them carries the meaning.
+
 ## What was deleted because nothing produced it
 
 A person used to carry a level, a skill band, a reliability score, a favourite game, a region, a
@@ -1729,7 +1796,7 @@ teaches people that the product's assurances are decoration. So the fields are g
 | gone | it rendered |
 |---|---|
 | `stats` | the game leaderboard, the record strips on three pages, the per-game win rates |
-| `level` | the XP bar and the level chip on `me` and `person` |
+| `level` | the XP bar and the level chip on `me` and `person` — **back**, counted rather than invented; see *Levels, and a board a new player can reach* |
 | `achievements` | the achievements tab and its twelve tiles |
 | `skill` | "people at your skill" on `discover` |
 | `reliability` | a tooltipped chip on `person` |
