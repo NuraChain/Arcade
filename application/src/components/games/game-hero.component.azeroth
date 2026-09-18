@@ -13,6 +13,8 @@ export default component GameHero(props: { game: Game; onQuickPlay: () => void }
     const locale = useLocale();
     const catalogue = useCatalogue();
 
+    derived playable = catalogue.status(props.game.id) === 'available';
+
     derived rules = catalogue.rules(props.game.id);
 
     derived name = locale.t(props.game.nameKey);
@@ -36,10 +38,22 @@ export default component GameHero(props: { game: Game; onQuickPlay: () => void }
                 <p class="mt-2 max-w-[52ch] text-ui-md text-muted sm:text-ui-lg">{ locale.t(props.game.blurbKey) }</p>
             </div>
             <LiveStats game={ props.game.id } />
-            <div class="hidden gap-3 sm:flex">
-                <Button variant="primary" size="lg" leading="zap" onClick={ () => props.onQuickPlay() }>{ locale.t('app.nav.quickPlay') }</Button>
-                <Button variant="outline" size="lg" leading="add" to={ `/app/games/${ props.game.slug }/create` }>{ locale.t('games.create') }</Button>
-            </div>
+            <Show
+                when={ playable }
+                fallback={
+                    <p class="flex items-start gap-2 rounded-tile border border-line bg-field p-3 text-ui-sm text-muted">
+                        <Icon name="clock" size={ 16 } class="mt-0.5 shrink-0 text-muted" />
+                        <span>{ locale.t('games.soonLead') }</span>
+                    </p>
+                }
+            >
+                { () =>
+                    <div class="hidden gap-3 sm:flex">
+                        <Button variant="primary" size="lg" leading="zap" onClick={ () => props.onQuickPlay() }>{ locale.t('app.nav.quickPlay') }</Button>
+                        <Button variant="outline" size="lg" leading="add" to={ `/app/games/${ props.game.slug }/create` }>{ locale.t('games.create') }</Button>
+                    </div>
+                }
+            </Show>
             <ul class="flex flex-wrap gap-2" aria-label={ locale.t('game.modes') }>
                 <For each={ [...rules.modes] } key={ (mode) => mode } let={ mode }>
                     <li class="flex items-center gap-2 rounded-full border border-line bg-void/40 px-3 py-1.5 text-ui-xs text-muted">

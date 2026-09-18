@@ -138,7 +138,25 @@ export const useCatalogue = createStore((): CatalogueApi =>
             return { tablesOpen, playersOnline };
         },
 
-        featured: () => GAMES[Math.floor(runtime().clock.now() / (24 * 3600000)) % GAMES.length].id,
+        /**
+         * The game of the day, and only ever one somebody can actually play.
+         *
+         * It rotated over the whole catalogue, which was right while every game was available and
+         * became a trap the moment three of them were not: `featured()` is what the sidebar's Quick
+         * play and a group's "Play together" reach for when no game was named, so on three days in
+         * four the product's most prominent button opened a table the server refuses.
+         *
+         * Falls back to the whole list rather than to nothing, because a catalogue that has not
+         * loaded yet says every game is available - and a featured game that is briefly wrong is a
+         * smaller failure than a home page with no game at all.
+         */
+        featured: () =>
+        {
+            const open = GAMES.filter((game) => (published().get(game.id)?.status ?? 'available') === 'available');
+            const from = open.length > 0 ? open : GAMES;
+
+            return from[Math.floor(runtime().clock.now() / (24 * 3600000)) % from.length].id;
+        },
 
         refresh: () => live.refetch(),
 

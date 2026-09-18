@@ -27,6 +27,16 @@ export default component GameCard(props: {
 
     derived href = `/app/games/${ props.game.slug }`;
 
+    /**
+     * Whether this game can actually be opened, which until now no card asked.
+     *
+     * `games.status` has carried `coming-soon` since the catalogue was written and exactly one
+     * component in the client ever read it - so three games with no engine offered a Quick play
+     * button that the server answers 422 to. A button that cannot do what it says is the defect
+     * this product keeps deleting.
+     */
+    derived playable = catalogue.status(props.game.id) === 'available';
+
     <article class={ [
         `group relative flex flex-col overflow-hidden rounded-panel ${ PANEL_TONE.field }`,
         'transition duration-200 ease-[var(--ease-ui)] hover:border-line-strong hover:shadow-2',
@@ -34,10 +44,21 @@ export default component GameCard(props: {
     ].filter(Boolean).join(' ') }>
         <Link to={ href } class="relative block" aria-label={ name } prefetch="hover">
             <GameArt game={ props.game.id } ratio={ props.compact === true ? 'wide' : 'card' } />
-            <span class="absolute start-2.5 top-2.5 flex items-center gap-1.5 rounded-control border border-line/60 bg-void/85 px-2 py-1 text-ui-2xs font-bold text-live backdrop-blur-md">
-                <span class="live-dot" aria-hidden="true"></span>
-                <span class="tally">{ locale.plural('games.live.playing', stats.playersOnline) }</span>
-            </span>
+            <Show
+                when={ playable }
+                fallback={
+                    <span class="absolute start-2.5 top-2.5 rounded-control border border-line/60 bg-void/85 px-2 py-1 text-ui-2xs font-bold text-muted backdrop-blur-md">
+                        { locale.t('games.soon') }
+                    </span>
+                }
+            >
+                { () =>
+                    <span class="absolute start-2.5 top-2.5 flex items-center gap-1.5 rounded-control border border-line/60 bg-void/85 px-2 py-1 text-ui-2xs font-bold text-live backdrop-blur-md">
+                        <span class="live-dot" aria-hidden="true"></span>
+                        <span class="tally">{ locale.plural('games.live.playing', stats.playersOnline) }</span>
+                    </span>
+                }
+            </Show>
         </Link>
         <div class={ [ 'flex flex-1 flex-col gap-3', props.compact === true ? 'p-3' : 'p-4' ].join(' ') }>
             <div class="min-w-0">
@@ -50,9 +71,20 @@ export default component GameCard(props: {
                 <span class="tally min-w-0 flex-1 basis-[9rem] truncate text-ui-xs text-faint">
                     { seats } · { locale.plural('games.live.tables', stats.tablesOpen) }
                 </span>
-                <Button variant="primary" size="sm" leading="zap" class="shrink-0 whitespace-nowrap" onClick={ () => props.onQuickPlay(props.game.id) }>
-                    { locale.t('app.nav.quickPlay') }
-                </Button>
+                <Show
+                    when={ playable }
+                    fallback={
+                        <span class="shrink-0 whitespace-nowrap rounded-control border border-line bg-raised px-2.5 py-1 text-ui-2xs font-semibold text-muted">
+                            { locale.t('games.soon') }
+                        </span>
+                    }
+                >
+                    { () =>
+                        <Button variant="primary" size="sm" leading="zap" class="shrink-0 whitespace-nowrap" onClick={ () => props.onQuickPlay(props.game.id) }>
+                            { locale.t('app.nav.quickPlay') }
+                        </Button>
+                    }
+                </Show>
             </div>
         </div>
     </article>

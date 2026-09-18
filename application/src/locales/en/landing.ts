@@ -26,7 +26,7 @@ export const landing = {
     'people.stat.seatValue': 'Under a minute',
 
     'games.title': 'Games worth staying for.',
-    'games.lead': 'Four tables, always open. More are being built.',
+    'games.lead': 'Four tables in the market. The first is open for play and the rest are being built.',
     'games.players': 'players',
 
     'games.hokm.name': 'Hokm',

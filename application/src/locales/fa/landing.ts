@@ -29,7 +29,7 @@ export const landing: Pick<Dictionary, keyof typeof reference> = {
     'people.stat.seatValue': 'کمتر از یک دقیقه',
 
     'games.title': 'بازی‌هایی که می‌ارزد برایشان بمانی.',
-    'games.lead': 'چهار میز، همیشه باز. بیشترش در راه است.',
+    'games.lead': 'چهار میز در بازار. اولی برای بازی باز است و بقیه در حال ساخت‌اند.',
     'games.players': 'بازیکن',
 
     'games.hokm.name': 'حکم',

@@ -44,6 +44,17 @@ interface GameSeed
  * Marking them `coming-soon` would be the opposite lie from marking them playable: it would hide
  * a working lobby behind a disabled card. `coming-soon` is for a game whose row exists before its
  * table does.
+ *
+ * **Three of the four are `coming-soon` and that is the honest value.** Hokm, poker and backgammon
+ * have a catalogue entry, hero art, rules copy, a lobby and a leaderboard, and no engine:
+ * `match/service.ts` refuses every game but ludo, so a table could be opened, filled and readied and
+ * then Start answered 422. `available` is a claim about a mechanism, and this product deletes those
+ * rather than shipping them - it is the same judgement that removed `game_rules.fairness` and the
+ * invented win rates. Each one flips back to `available` in the commit that lands its engine.
+ *
+ * `status` is never overwritten on conflict (see below), so changing it here reaches a database
+ * built from nothing and not one that already holds the row. Nothing has shipped, so the answer is
+ * the one the house rules give: drop the database and let `syncSchema` build it.
  */
 export const GAME_SEEDS: GameSeed[] = [
     {
@@ -52,7 +63,7 @@ export const GAME_SEEDS: GameSeed[] = [
         category: 'cards',
         minPlayers: 4,
         maxPlayers: 4,
-        status: 'available',
+        status: 'coming-soon',
         seats: [4],
         modes: ['live', 'turns'],
         targets: [7, 13],
@@ -67,7 +78,7 @@ export const GAME_SEEDS: GameSeed[] = [
         category: 'cards',
         minPlayers: 2,
         maxPlayers: 8,
-        status: 'available',
+        status: 'coming-soon',
         seats: [2, 4, 6, 8],
         modes: ['live'],
         targets: [],
@@ -82,7 +93,7 @@ export const GAME_SEEDS: GameSeed[] = [
         category: 'board',
         minPlayers: 2,
         maxPlayers: 2,
-        status: 'available',
+        status: 'coming-soon',
         seats: [2],
         modes: ['live', 'turns'],
         targets: [1, 3, 5],

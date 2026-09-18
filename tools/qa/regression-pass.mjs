@@ -313,19 +313,51 @@ console.log('\n[6] the server decides what a table may be');
                 });
                 return { status: r.status, body: (await r.text()).slice(0, 120) };
             };
-            const legal = { game: 'hokm', seats: 4, mode: 'live', privacy: 'invite', target: 7, cube: false, blinds: 'low', invitees: [] };
+            /*
+             * Every config here names LUDO, because ludo is the only game with an engine and the
+             * only one `games.status` calls available - the others are `coming-soon`, and
+             * `table.create` joins `games` on that status, so a hokm table is refused for a reason
+             * that has nothing to do with the config being checked. Pointing the legal case at a
+             * game the server will not open is how this check came to assert 422 and pass.
+             */
+            const legal = { game: 'ludo', seats: 4, mode: 'live', privacy: 'invite', target: 0, cube: false, blinds: 'low', invitees: [] };
             return {
-                badSeats: await post({ ...legal, seats: 3 }),
-                badMode: await post({ ...legal, game: 'poker', seats: 4, mode: 'turns', target: 0 }),
-                legalBackgammon: await post({ game: 'backgammon', seats: 2, mode: 'turns', privacy: 'invite', target: 3, cube: true, blinds: 'low', invitees: [] }),
-                hugeHue: await post({ ...legal, seats: 99999 }),
+                badSeats: await post({ ...legal, seats: 5 }),
+                badMode: await post({ ...legal, mode: 'nonsense' }),
+                legalTable: await post({ ...legal, seats: 2 }),
+                hugeSeats: await post({ ...legal, seats: 99999 }),
                 noGame: await post({ ...legal, game: 'not-a-game' })
             };
         });
 
+        /*
+         * And the three games with no engine are refused at the door rather than at Start.
+         * `available` is a claim about a mechanism; a table that can be opened, filled and readied
+         * and then answers 422 to the one button that matters is the shape this check exists to
+         * keep out of the product.
+         */
+        const unplayable = await page.evaluate(async () =>
+        {
+            const post = async (game, seats) =>
+            {
+                const r = await fetch('/api/tables', {
+                    method: 'POST',
+                    headers: { 'content-type': 'application/json' },
+                    body: JSON.stringify({ game, seats, mode: 'live', privacy: 'invite', target: 0, cube: false, blinds: 'low', invitees: [] })
+                });
+                return r.status;
+            };
+            return { hokm: await post('hokm', 4), poker: await post('poker', 2), backgammon: await post('backgammon', 2) };
+        });
+
+        for (const [game, status] of Object.entries(unplayable))
+        {
+            record(`refuses a table for ${ game }, which has no engine yet`, status >= 400 && status < 500, `${ status }`);
+        }
+
         for (const [name, r] of Object.entries(attempts))
         {
-            if (name === 'legalBackgammon')
+            if (name === 'legalTable')
             {
                 record('still opens a table the game really plays', r.status === 200, `${ r.status }`);
                 continue;

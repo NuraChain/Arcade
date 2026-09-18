@@ -153,6 +153,29 @@ bugs" table so nobody re-investigates it.
 **No comments in code.** Names and structure carry the meaning. This file, and the tests, are
 where reasoning is written down.
 
+**Nothing here has shipped. Build the FINAL shape, every time.**
+
+There is no deployment, no live user and no row that predates the current entities. So there is
+nothing to be compatible with, and every construct whose only purpose is compatibility is dead code
+that will never once do its job: no migration path, no backfill, no compat shim, no deprecation
+window, no "keep the old value working", no dual-write, no feature flag guarding an old behaviour,
+no adapter from a shape this product never had.
+
+When the schema changes, the procedure is the one written down: **drop the database, boot, and let
+`syncSchema` build it from nothing.** Not an `ALTER`, not a repair script, not a note about what an
+existing deployment would need to run. A development database that refuses a change is telling you
+to rebuild it, and rebuilding costs a seed.
+
+The same applies to values. A row seeded wrong is fixed by fixing the seed and rebuilding, not by
+writing an update that corrects it on the way past. A column added with a default that would be
+materialised into existing rows is the forbidden backfill wearing a different hat - `groups.privacy`
+carries no default for exactly this reason.
+
+This does not license deleting a rule that will matter LATER - `seed-reference.ts` still refuses to
+overwrite `games.status` on conflict, because the day a real operator disables a game a deploy must
+not re-enable it. The rule is about not writing code for a PAST that never happened, not about
+ignoring a future that will.
+
 **Mobile first, then responsive.** The unprefixed utilities are the PHONE layout and every variant
 only adds to it for a bigger screen. Never write a wide layout and patch it down. See *Mobile first,
 and what a wide-first layout hides* for the four real defects that habit produced, all of which the
