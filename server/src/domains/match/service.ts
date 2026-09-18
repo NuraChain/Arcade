@@ -11,7 +11,7 @@ import type { AchieveService } from '../achieve/service.ts';
 import { firstRow } from '../../lib/rows.ts';
 import { COLOURS } from './ludo/board.ts';
 import { apply, create, legalMoves } from './ludo/engine.ts';
-import { createRecorder, outcomeOf } from './record.ts';
+import { createRecorder } from './record.ts';
 import { ludoEngine } from './engines/ludo.ts';
 import type { Engine } from './engine.ts';
 import type { MatchBoard, MatchLog } from '../../schemas.ts';
@@ -221,14 +221,16 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
     const commit = async (
         tx: EntityManager,
         match: Match,
+        engine: Engine,
         next: LudoState,
         events: GameEvent[],
         action: { seat: number; userId: string | null; kind: MatchAction['kind']; payload: Record<string, unknown>; key: string | null },
         mode: string
     ): Promise<void> =>
     {
-        const winnerSeat = next.winner === null ? null : next.players[next.winner].seat;
-        const over = winnerSeat !== null;
+        const ending = engine.finish(next);
+        const over = ending !== null;
+        const winnerSeat = ending?.winners[0] ?? null;
 
         const written = await tx.getRepository(Match).update(
             { id: match.id, rev: match.rev },
@@ -237,7 +239,7 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
                 rev: next.rev,
                 deadlineAt: over ? null : new Date(Date.now() + turnMs(mode)),
                 winnerSeat,
-                outcome: over ? outcomeOf(next) : null,
+                outcome: ending?.outcome ?? null,
                 finishedAt: over ? new Date() : null
             }
         );
@@ -291,7 +293,7 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
                 .where('match_id = :matchId and result is null', { matchId: match.id })
                 .execute();
 
-            await recorder.finish(tx, match.id, match.game, next);
+            await recorder.finish(tx, match.id, engine, next);
         }
     };
 
@@ -579,6 +581,13 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
                     throw new NotFoundError('No game there.');
                 }
 
+                const engine = engineFor(match.game);
+
+                if (engine === null)
+                {
+                    throw new ValidationError({ game: 'No engine yet.' }, 'That game cannot be played here yet.');
+                }
+
                 const done = await tx.getRepository(MatchAction).findOne({
                     select: { rev: true },
                     where: { matchId, userId: me, idempotencyKey: want.key }
@@ -614,7 +623,7 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
                     refuse(outcome.reason);
                 }
 
-                await commit(tx, match, outcome.state, outcome.events, {
+                await commit(tx, match, engine, outcome.state, outcome.events, {
                     seat: seat.seat,
                     userId: me,
                     kind: want.kind === 'resign' ? 'forfeit' : want.kind,
@@ -699,6 +708,13 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
                     return false;
                 }
 
+                const engine = engineFor(match.game);
+
+                if (engine === null)
+                {
+                    return false;
+                }
+
                 const state = stateOf(match);
                 const seat = state.players[state.turn].seat;
                 const mode = await modeOf(tx, match.tableId);
@@ -726,7 +742,7 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
                     return false;
                 }
 
-                await commit(tx, match, outcome.state, outcome.events, {
+                await commit(tx, match, engine, outcome.state, outcome.events, {
                     seat,
                     userId: null,
                     kind: action.kind === 'roll' ? 'roll' : action.kind === 'move' ? 'move' : 'forfeit',

@@ -1,4 +1,4 @@
-import { array, boolean, enumOf, literal, number, object, string, union, type Infer } from '@azerothjs/schema';
+import { array, boolean, enumOf, literal, number, object, record, string, union, type Infer } from '@azerothjs/schema';
 
 /**
  * The wire shape, declared once.
@@ -118,9 +118,18 @@ export const playerRecord = object({
     abandoned: number(),
     streak: number(),
     bestStreak: number(),
-    captures: number(),
-    rolls: number(),
-    tokensHome: number(),
+
+    /**
+     * What this person did at this game, named by the engine that ran it.
+     *
+     * `captures`, `rolls` and `tokensHome` were three required numbers here, which is ludo's
+     * vocabulary on a shape every game shares - a card game would have had to send three zeroes
+     * that mean nothing. An open record instead, because the reader is a profile that DISPLAYS
+     * them: nothing on either side decides anything by one, so a counter this client has no word
+     * for renders as nothing rather than as its own name, the rule `lib/lines.ts` already follows.
+     */
+    tallies: record(number()),
+
     xp: number()
 });
 

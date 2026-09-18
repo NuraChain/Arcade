@@ -323,9 +323,7 @@ export function createAchieveService(db: DataSource)
                     abandoned: row.abandoned,
                     streak: row.streak,
                     bestStreak: row.bestStreak,
-                    captures: row.captures,
-                    rolls: row.rolls,
-                    tokensHome: row.tokensHome,
+                    tallies: row.tallies,
                     xp: row.xp
                 })),
                 achievements: standing.map((row) => ({

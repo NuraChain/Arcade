@@ -9,7 +9,7 @@ import { seedReference } from '../src/db/seed-reference.ts';
 import { rowsOf } from '../src/lib/rows.ts';
 import { createAchieveService } from '../src/domains/achieve/service.ts';
 import { createMatchService } from '../src/domains/match/service.ts';
-import type { Ending, Engine, Placement } from '../src/domains/match/engine.ts';
+import type { Ending, Engine, Placement, Tally } from '../src/domains/match/engine.ts';
 import type { MatchBoard, MatchLog } from '../src/schemas.ts';
 
 /**
@@ -94,7 +94,11 @@ const secretEngine: Engine<SecretState, { seat: number }> = {
         moves: (events as { seat: number; die: number }[])
             .filter((event) => seat !== null && event.seat === seat)
             .map((event) => ({ e: 'roll' as const, seat: event.seat, die: event.die }))
-    })
+    }),
+
+    tally: (): Map<number, Tally> => new Map(),
+
+    points: (): number => 0
 };
 
 const makeUser = async (): Promise<string> =>

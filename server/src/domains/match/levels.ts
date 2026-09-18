@@ -23,26 +23,24 @@ export const XP_FINISH = 10;
 /** Winning it. On top of finishing, so a win is worth 35 and a loss 10. */
 export const XP_WIN = 25;
 
-/** Sending somebody home. Two, because it happens several times a game. */
-export const XP_CAPTURE = 2;
-
-/** Bringing a token all the way round. Four of these is a win. */
-export const XP_HOME = 3;
-
 /**
  * What one seat earned.
  *
- * A seat that WALKED OUT earns nothing at all - not the finish, not the captures it made on the way,
- * not the tokens it got home. Otherwise leaving a game you are losing is a way of banking the good
- * part of it, which is the same hole `outcomeOf` closes for the rating: quitting must never be the
+ * A seat that WALKED OUT earns nothing at all - not the finish, not the bonus it built up on the
+ * way. Otherwise leaving a game you are losing is a way of banking the good part of it, which is
+ * the same hole the engine's own `Ending` closes for the rating: quitting must never be the
  * profitable move. A seat that was TIMED OUT of the game is a different thing and keeps what it
  * earned, because missing three turns is usually a dropped connection rather than a decision.
+ *
+ * `bonus` is the ENGINE's figure for what this seat's own doings were worth. Finishing and winning
+ * stay here because they are facts about a match rather than about a game; a capture being worth
+ * two is ludo's opinion and lives with ludo, or this file ends up holding the scoring rules of four
+ * games at once and being edited every time a fifth is added.
  */
 export function xpFor(input: {
     walked: boolean;
     won: boolean;
-    captures: number;
-    home: number;
+    bonus: number;
 }): number
 {
     if (input.walked)
@@ -50,10 +48,7 @@ export function xpFor(input: {
         return 0;
     }
 
-    return XP_FINISH
-        + (input.won ? XP_WIN : 0)
-        + input.captures * XP_CAPTURE
-        + input.home * XP_HOME;
+    return XP_FINISH + (input.won ? XP_WIN : 0) + Math.max(0, Math.trunc(input.bonus));
 }
 
 /** What level 2 costs, and how much dearer each one after it is. */

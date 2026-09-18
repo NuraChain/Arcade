@@ -9,6 +9,7 @@ import { syncSchema } from '../src/db/schema.ts';
 import { rowsOf } from '../src/lib/rows.ts';
 import { createAchieveService } from '../src/domains/achieve/service.ts';
 import { createRecorder } from '../src/domains/match/record.ts';
+import { ludoEngine } from '../src/domains/match/engines/ludo.ts';
 import { FINISHED, YARD } from '../src/domains/match/ludo/board.ts';
 import type { LudoState } from '../src/domains/match/ludo/state.ts';
 
@@ -113,9 +114,21 @@ const finished = async (
     return { matchId, players };
 };
 
-const statsOf = async (userId: string): Promise<Record<string, number> | undefined> =>
-    rowsOf<Record<string, number>>(await db.query(
-        `select rating, peak_rating, played, won, abandoned, streak, best_streak, captures, rolls, tokens_home
+interface Stats
+{
+    rating: number;
+    peak_rating: number;
+    played: number;
+    won: number;
+    abandoned: number;
+    streak: number;
+    best_streak: number;
+    tallies: Record<string, number>;
+}
+
+const statsOf = async (userId: string): Promise<Stats | undefined> =>
+    rowsOf<Stats>(await db.query(
+        `select rating, peak_rating, played, won, abandoned, streak, best_streak, tallies
            from player_stats where user_id = $1 and game = 'ludo'`,
         [userId]
     ))[0];
@@ -159,7 +172,7 @@ describe.skipIf(!active)('a record, against a real database', () =>
             const state = board([HOME, [12, YARD, YARD, YARD]], 0);
             const { matchId, players } = await finished(state, ['won', 'lost'], 'won');
 
-            await db.transaction((tx) => recorder().finish(tx, matchId, 'ludo', state));
+            await db.transaction((tx) => recorder().finish(tx, matchId, ludoEngine, state));
 
             const winner = await statsOf(players[0]);
             const loser = await statsOf(players[1]);
@@ -189,7 +202,7 @@ describe.skipIf(!active)('a record, against a real database', () =>
             const state = board([HOME, [12, YARD, YARD, YARD]], 0);
             const { matchId, players } = await finished(state, ['won', 'lost'], 'won');
 
-            await db.transaction((tx) => recorder().finish(tx, matchId, 'ludo', state));
+            await db.transaction((tx) => recorder().finish(tx, matchId, ludoEngine, state));
 
             const rows = rowsOf<{ seat: number; rating_before: number; rating_after: number }>(await db.query(
                 `select seat, rating_before, rating_after from match_players where match_id = $1 order by seat`,
@@ -217,14 +230,12 @@ describe.skipIf(!active)('a record, against a real database', () =>
                 ]), JSON.stringify(state)]
             );
 
-            await db.transaction((tx) => recorder().finish(tx, matchId, 'ludo', state));
+            await db.transaction((tx) => recorder().finish(tx, matchId, ludoEngine, state));
 
             const winner = await statsOf(players[0]);
 
-            expect(winner?.rolls).toBe(1);
-            expect(winner?.captures).toBe(1);
-            expect(winner?.tokens_home).toBe(1);
-            expect((await statsOf(players[1]))?.rolls).toBe(1);
+            expect(winner?.tallies).toEqual({ rolls: 1, captures: 1, home: 1 });
+            expect((await statsOf(players[1]))?.tallies).toEqual({ rolls: 1 });
         });
 
         it('awards a first win, and the same award twice is one row', async () =>
@@ -232,8 +243,8 @@ describe.skipIf(!active)('a record, against a real database', () =>
             const state = board([HOME, [12, YARD, YARD, YARD]], 0);
             const { matchId, players } = await finished(state, ['won', 'lost'], 'won');
 
-            await db.transaction((tx) => recorder().finish(tx, matchId, 'ludo', state));
-            await db.transaction((tx) => recorder().finish(tx, matchId, 'ludo', state));
+            await db.transaction((tx) => recorder().finish(tx, matchId, ludoEngine, state));
+            await db.transaction((tx) => recorder().finish(tx, matchId, ludoEngine, state));
 
             expect(await heldBy(players[0])).toContain('first-win');
             expect(await heldBy(players[1])).not.toContain('first-win');
@@ -252,7 +263,7 @@ describe.skipIf(!active)('a record, against a real database', () =>
             const state = board([[3, YARD, YARD, YARD], [YARD, YARD, YARD, YARD]], 0, [false, true]);
             const { matchId, players } = await finished(state, ['won', 'abandoned'], 'abandoned');
 
-            await db.transaction((tx) => recorder().finish(tx, matchId, 'ludo', state));
+            await db.transaction((tx) => recorder().finish(tx, matchId, ludoEngine, state));
 
             expect((await statsOf(players[0]))?.rating).toBe(1200);
             expect((await statsOf(players[1]))?.rating).toBe(1200);
@@ -263,7 +274,7 @@ describe.skipIf(!active)('a record, against a real database', () =>
             const state = board([[3, YARD, YARD, YARD], [YARD, YARD, YARD, YARD]], 0, [false, true]);
             const { matchId, players } = await finished(state, ['won', 'abandoned'], 'abandoned');
 
-            await db.transaction((tx) => recorder().finish(tx, matchId, 'ludo', state));
+            await db.transaction((tx) => recorder().finish(tx, matchId, ludoEngine, state));
 
             expect((await statsOf(players[0]))?.played).toBe(1);
             expect((await statsOf(players[0]))?.won).toBe(0);
@@ -275,7 +286,7 @@ describe.skipIf(!active)('a record, against a real database', () =>
             const state = board([[3, YARD, YARD, YARD], [YARD, YARD, YARD, YARD]], 0, [false, true]);
             const { matchId, players } = await finished(state, ['won', 'abandoned'], 'abandoned');
 
-            await db.transaction((tx) => recorder().finish(tx, matchId, 'ludo', state));
+            await db.transaction((tx) => recorder().finish(tx, matchId, ludoEngine, state));
 
             expect(await heldBy(players[0])).not.toContain('first-win');
         });
@@ -288,7 +299,7 @@ describe.skipIf(!active)('a record, against a real database', () =>
             const winning = board([HOME, [12, YARD, YARD, YARD]], 0);
             const first = await finished(winning, ['won', 'lost'], 'won');
 
-            await db.transaction((tx) => recorder().finish(tx, first.matchId, 'ludo', winning));
+            await db.transaction((tx) => recorder().finish(tx, first.matchId, ludoEngine, winning));
 
             const after = await statsOf(first.players[0]);
 
@@ -303,7 +314,7 @@ describe.skipIf(!active)('a record, against a real database', () =>
             const second = await finished(losing, ['lost', 'won'], 'won');
 
             await db.query(`update match_players set user_id = $1 where match_id = $2 and seat = 0`, [first.players[0], second.matchId]);
-            await db.transaction((tx) => recorder().finish(tx, second.matchId, 'ludo', losing));
+            await db.transaction((tx) => recorder().finish(tx, second.matchId, ludoEngine, losing));
 
             const now = await statsOf(first.players[0]);
 
@@ -312,6 +323,51 @@ describe.skipIf(!active)('a record, against a real database', () =>
             expect(now?.rating).toBeLessThan(1400);
             expect(now?.peak_rating).toBe(1400);
             expect(now?.streak).toBe(0);
+        });
+
+        /**
+         * The property the three integer columns had for free and a jsonb object does NOT.
+         *
+         * Postgres has no operator that adds two jsonb objects of numbers: `||` replaces a key
+         * rather than summing it, so two games finishing for one person would record the second and
+         * forget the first - the same defect the read-modify-write had, reintroduced by the storage
+         * changing shape. Summing both key sets inside the one statement the unique index
+         * serialises is what keeps it addition.
+         *
+         * Each match writes an event ledger of its own, so the expected total is the sum across
+         * both rather than either one.
+         */
+        it('adds the tallies up rather than overwriting them', async () =>
+        {
+            const state = board([HOME, [12, YARD, YARD, YARD]], 0);
+
+            const rolls = async (matchId: string, count: number): Promise<void> =>
+            {
+                await db.query(
+                    `insert into match_actions (match_id, rev, seat, kind, payload, events, state)
+                     values ($1, 1, 0, 'roll', '{}'::jsonb, $2::jsonb, $3::jsonb)`,
+                    [
+                        matchId,
+                        JSON.stringify(Array.from({ length: count }, () => ({ e: 'roll', seat: 0, die: 4 }))),
+                        JSON.stringify(state)
+                    ]
+                );
+            };
+
+            const first = await finished(state, ['won', 'lost'], 'won');
+
+            await rolls(first.matchId, 3);
+            await db.transaction((tx) => recorder().finish(tx, first.matchId, ludoEngine, state));
+
+            expect((await statsOf(first.players[0]))?.tallies).toEqual({ rolls: 3 });
+
+            const second = await finished(state, ['won', 'lost'], 'won');
+
+            await db.query(`update match_players set user_id = $1 where match_id = $2 and seat = 0`, [first.players[0], second.matchId]);
+            await rolls(second.matchId, 2);
+            await db.transaction((tx) => recorder().finish(tx, second.matchId, ludoEngine, state));
+
+            expect((await statsOf(first.players[0]))?.tallies).toEqual({ rolls: 5 });
         });
     });
 });

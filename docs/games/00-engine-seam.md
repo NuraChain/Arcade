@@ -8,8 +8,8 @@
 | 2. Extract `Engine`, Ludo behind it | **part done** — the interface, injection and the generic refusal; the service still folds Ludo's state directly |
 | 3. Per-viewer `view()`, new wire | **done** — every gate green with Ludo identical |
 | 4. Redact `since`, add the leak test | **done** — `Engine.log` and `redaction.db.spec.ts` |
-| 5. Engine-owned outcome, standings, tallies | next |
-| 6. Teams, XP generalisation | |
+| 5. Engine-owned outcome, standings, tallies | **done** — `player_stats.tallies` is jsonb |
+| 6. Teams | next — `match_players.team`, and `rateField` over them |
 | 7. Client scene registry | |
 
 Nothing in the three game plans can begin until this exists. It is the only work shared by all
@@ -248,7 +248,43 @@ redacting for the actor, the board composed for a fixed seat, and a spectator tr
 
 ---
 
-**Three things are deliberately still Ludo's**, and they are step 5's, not oversights: the service
+## What step 5 changed
+
+`record.ts` carried `outcomeOf`, which read ludo's board to tell a played win from an emptied room -
+beside `ludoEngine.finish`, which read the same board and gave the same answer. Two copies of one
+rule, and the third game would have had to remember to add a third copy. It is gone; `finish` and
+`standings` come off the engine, so nothing in the file that records every game's result knows what
+was played. `commit` takes the engine too, rather than reading `next.winner` out of ludo's state.
+
+**The tallies were three integer columns on a table every game shares.** `captures`, `rolls` and
+`tokens_home`, counted by `count(*) filter (where e ->> 'e' = 'capture')` - ludo's event names, in
+SQL. Hokm would have wanted `tricks`, poker `showdowns`, and every game would have stored zero in
+the others' columns forever. `player_stats.tallies` is jsonb now and `Engine.tally(events)` folds
+the ledger, which also puts the fold inside the engine's own tests with no Postgres near it.
+
+**A jsonb counter cannot be incremented the way an integer one can**, and that is the sharp edge of
+the change. Postgres has no operator that adds two jsonb objects of numbers - `||` REPLACES a key -
+so two games finishing for one person would have recorded the second and forgotten the first, which
+is the read-modify-write defect the second audit closed, reintroduced by the storage changing shape.
+The upsert sums both key sets through `jsonb_each_text` and re-aggregates, inside the one statement
+the unique index serialises. `record.db.spec.ts` plays two matches and expects five rolls, and it was
+proved to fail against a `||` merge before it was trusted.
+
+Two smaller things fell out of it. **`both` is a reserved word in Postgres** (from `trim(both ...)`),
+so a subquery aliased that way is a syntax error - found by the database suite, which is the only
+thing that could have. And **XP split in two**: `levels.ts` keeps the finish and the win, which are
+facts about a match, and `Engine.points(tally)` is what a game's own doings are worth, because a
+capture being worth two is ludo's opinion and would otherwise have made `levels.ts` a file holding
+the scoring rules of four games.
+
+**The client shows the counters and decides nothing by them.** No achievement, rating or level reads
+one - which is what makes an open record safe on the wire. `record-strip` holds a label per counter
+it knows and renders an unknown one as NOTHING rather than as its own key, the rule `lib/lines.ts`
+already follows for a line key an old client has never heard of.
+
+---
+
+**Three things are deliberately still Ludo's**, and they are step 6's, not oversights: the service
 imports `apply`/`create`/`legalMoves` from `ludo/engine.ts` directly, the action vocabulary is
 `roll` and `move`, and `match.store.ts` exposes `canRoll`/`moves` (which now read through `ludoOf`,
 so a game with no die answers false without anybody writing a special case).

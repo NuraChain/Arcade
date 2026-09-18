@@ -15,9 +15,22 @@ import type { PlayerRecord } from '../../api.ts';
  * **A win rate is not shown until there is a game to divide by.** Nought out of nought is not zero
  * percent, it is a question nobody has answered, and printing 0% against a brand-new account is
  * the same untruth the seeded version told with more decimal places.
+ *
+ * **The tallies are the engine's words and this file holds the labels for the ones it knows.** It
+ * was one sentence, `{captures} captured · {home} home · {rolls} rolls`, which is ludo's record on a
+ * component every game's record uses. A counter with no label here renders as NOTHING rather than
+ * as its own key - an old client meeting a newer server is a designed state, not a reason to print
+ * an internal identifier onto somebody's profile, which is the rule `lib/lines.ts` already follows
+ * for a line key.
  */
 
 const WIN_RATE_NEEDS = 1;
+
+const TALLY_LABELS: Record<string, 'record.tally.rolls' | 'record.tally.captures' | 'record.tally.home'> = {
+    rolls: 'record.tally.rolls',
+    captures: 'record.tally.captures',
+    home: 'record.tally.home'
+};
 
 export default component RecordStrip(props: { record: PlayerRecord })
 {
@@ -29,6 +42,15 @@ export default component RecordStrip(props: { record: PlayerRecord })
     derived rate = props.record.played < WIN_RATE_NEEDS
         ? null
         : Math.round((props.record.won / props.record.played) * 100);
+
+    derived counted = Object.entries(props.record.tallies)
+        .flatMap(([name, count]) =>
+        {
+            const label = TALLY_LABELS[name];
+
+            return label === undefined || count <= 0 ? [] : [{ name, count, label }];
+        })
+        .sort((a, b) => a.name.localeCompare(b.name));
 
     <Panel pad="md" stack="sm">
         <div class="flex items-baseline justify-between gap-3">
@@ -70,12 +92,19 @@ export default component RecordStrip(props: { record: PlayerRecord })
             </div>
         </dl>
 
-        <p class="tally text-ui-2xs text-muted">
-            { locale.t('record.tallies', {
-                captures: locale.n(props.record.captures),
-                home: locale.n(props.record.tokensHome),
-                rolls: locale.n(props.record.rolls)
-            }) }
-        </p>
+        <Show when={ counted.length > 0 }>
+            { () =>
+                <p class="tally flex flex-wrap items-center gap-x-1.5 gap-y-1 text-ui-2xs text-muted">
+                    <For each={ counted } key={ (entry) => entry.name } let={ entry } index={ index }>
+                        <span class="flex items-center gap-1.5">
+                            <Show when={ index > 0 }>
+                                { () => <span class="h-1 w-1 shrink-0 rounded-full bg-line-strong" aria-hidden="true"></span> }
+                            </Show>
+                            <span>{ locale.n(entry.count) } { locale.t(entry.label) }</span>
+                        </span>
+                    </For>
+                </p>
+            }
+        </Show>
     </Panel>
 }

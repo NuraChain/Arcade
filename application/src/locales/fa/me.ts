@@ -15,7 +15,9 @@ export const me: Pick<Dictionary, keyof typeof reference> = {
     'record.percent': '٪{value}',
     'record.streak': 'برد پیاپی',
     'record.best': 'بهترین دوره',
-    'record.tallies': '{captures} زدن · {home} خانه · {rolls} تاس',
+    'record.tally.rolls': 'تاس',
+    'record.tally.captures': 'زدن',
+    'record.tally.home': 'خانه',
     'record.empty': 'هنوز بازی‌ای انجام نشده.',
     'record.emptyLead': 'سر یک میز بنشین تا اینجا پر شود.',
 

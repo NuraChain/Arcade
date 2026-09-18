@@ -1,18 +1,32 @@
 import { describe, it, expect } from 'vitest';
 
-import { levelOf, xpFor, xpToReach, XP_CAPTURE, XP_FINISH, XP_HOME, XP_WIN } from '../src/domains/match/levels.ts';
+import { levelOf, xpFor, xpToReach, XP_FINISH, XP_WIN } from '../src/domains/match/levels.ts';
+import { ludoEngine } from '../src/domains/match/engines/ludo.ts';
 
 describe('what a game is worth', () =>
 {
     it('pays for finishing, and more for winning', () =>
     {
-        expect(xpFor({ walked: false, won: false, captures: 0, home: 0 })).toBe(XP_FINISH);
-        expect(xpFor({ walked: false, won: true, captures: 0, home: 0 })).toBe(XP_FINISH + XP_WIN);
+        expect(xpFor({ walked: false, won: false, bonus: 0 })).toBe(XP_FINISH);
+        expect(xpFor({ walked: false, won: true, bonus: 0 })).toBe(XP_FINISH + XP_WIN);
     });
 
-    it('pays for what happened on the board', () =>
+    /**
+     * The bonus is the ENGINE's figure, which is why this asks ludo for it rather than restating
+     * two constants that no longer live here. A capture being worth two is ludo's opinion; that
+     * finishing is worth ten is the platform's.
+     */
+    it('pays for what happened on the board, at the engine own rate', () =>
     {
-        expect(xpFor({ walked: false, won: false, captures: 3, home: 2 })).toBe(XP_FINISH + 3 * XP_CAPTURE + 2 * XP_HOME);
+        const bonus = ludoEngine.points({ captures: 3, home: 2 });
+
+        expect(bonus).toBeGreaterThan(0);
+        expect(xpFor({ walked: false, won: false, bonus })).toBe(XP_FINISH + bonus);
+    });
+
+    it('never pays a negative bonus, whatever an engine says', () =>
+    {
+        expect(xpFor({ walked: false, won: false, bonus: -50 })).toBe(XP_FINISH);
     });
 
     /**
@@ -22,12 +36,12 @@ describe('what a game is worth', () =>
      */
     it('pays a walkout nothing at all, however well it was going', () =>
     {
-        expect(xpFor({ walked: true, won: false, captures: 9, home: 3 })).toBe(0);
+        expect(xpFor({ walked: true, won: false, bonus: ludoEngine.points({ captures: 9, home: 3 }) })).toBe(0);
     });
 
     it('cannot be won and walked at once, and the walkout wins that argument', () =>
     {
-        expect(xpFor({ walked: true, won: true, captures: 0, home: 4 })).toBe(0);
+        expect(xpFor({ walked: true, won: true, bonus: ludoEngine.points({ home: 4 }) })).toBe(0);
     });
 });
 

@@ -20,7 +20,7 @@ import { User } from './user.entity.ts';
 @Check('player_stats_range', `rating between 100 and 4000 and peak_rating between 100 and 4000`)
 @Check('player_stats_peak_reached', `peak_rating >= rating or played = 0`)
 @Check('player_stats_streaks', `streak >= 0 and best_streak >= streak`)
-@Check('player_stats_tallies', `captures >= 0 and rolls >= 0 and tokens_home >= 0 and xp >= 0`)
+@Check('player_stats_tallies', `jsonb_typeof(tallies) = 'object' and xp >= 0`)
 @Entity('player_stats')
 export class PlayerStats
 {
@@ -68,14 +68,19 @@ export class PlayerStats
     @Column({ name: 'best_streak', type: 'integer', default: 0 })
     bestStreak!: number;
 
-    @Column({ type: 'integer', default: 0 })
-    captures!: number;
-
-    @Column({ type: 'integer', default: 0 })
-    rolls!: number;
-
-    @Column({ name: 'tokens_home', type: 'integer', default: 0 })
-    tokensHome!: number;
+    /**
+     * What this person DID at this game, in the engine's own words.
+     *
+     * Three integer columns before - `captures`, `rolls`, `tokens_home` - which are ludo's
+     * vocabulary on a table every game shares: hokm would have wanted `tricks`, poker `showdowns`,
+     * and every game would have stored zero in the others' columns forever. The row is keyed
+     * `(user_id, game)`, so the names only ever have to make sense within one game.
+     *
+     * Nothing is DECIDED by these. No achievement, rating or level reads one; they are what a
+     * profile shows, which is why an engine names them and no shared code has an opinion.
+     */
+    @Column({ type: 'jsonb', default: () => `'{}'` })
+    tallies!: Record<string, number>;
 
     @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
     updatedAt!: Date;

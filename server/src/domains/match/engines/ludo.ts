@@ -2,7 +2,7 @@ import { FINISHED, cellAt } from '../ludo/board.ts';
 import { apply, create, indexOfSeat, legalMoves } from '../ludo/engine.ts';
 import { placementsOf } from '../ludo/standings.ts';
 import type { EngineAction, GameEvent, LudoState } from '../ludo/state.ts';
-import type { Draws, Ending, Engine, Placement } from '../engine.ts';
+import type { Draws, Ending, Engine, Placement, Tally } from '../engine.ts';
 import type { MatchBoard, MatchLog } from '../../../schemas.ts';
 
 /**
@@ -129,7 +129,58 @@ export const ludoEngine: Engine<LudoState, EngineAction> = {
     log: (events: readonly unknown[]): MatchLog => ({
         kind: 'ludo',
         moves: events as GameEvent[]
-    })
+    }),
+
+    /**
+     * Three things worth counting, and they are what the profile has always shown.
+     *
+     * An event with no seat is not one seat's doing - `finish` names a winner and `pass` ends a
+     * turn - so it is skipped rather than attributed to whoever happens to be named elsewhere in it.
+     */
+    tally: (events: readonly unknown[]): Map<number, Tally> =>
+    {
+        const bySeat = new Map<number, Tally>();
+
+        for (const event of events as GameEvent[])
+        {
+            const seat = (event as { seat?: number }).seat;
+            const name = NAMED[event.e];
+
+            if (seat === undefined || name === undefined)
+            {
+                continue;
+            }
+
+            const tally = bySeat.get(seat) ?? {};
+
+            tally[name] = (tally[name] ?? 0) + 1;
+            bySeat.set(seat, tally);
+        }
+
+        return bySeat;
+    },
+
+    points: (tally: Tally): number =>
+        (tally.captures ?? 0) * XP_CAPTURE + (tally.home ?? 0) * XP_HOME
+};
+
+/** Sending somebody home. Two, because it happens several times a game. */
+const XP_CAPTURE = 2;
+
+/** Bringing a token all the way round. Four of these is a win. */
+const XP_HOME = 3;
+
+/**
+ * The events a record counts, and the name each one is stored under.
+ *
+ * Only three of the eight: a `step` is every move ever made and an `enter` is the start of one, so
+ * counting them would be counting turns twice over. The names are the profile's, not the engine's,
+ * which is why the map exists rather than the event name being used directly.
+ */
+const NAMED: Partial<Record<GameEvent['e'], string>> = {
+    roll: 'rolls',
+    capture: 'captures',
+    home: 'home'
 };
 
 /** This seat's playable pieces, which is empty unless it is their turn and they have rolled. */

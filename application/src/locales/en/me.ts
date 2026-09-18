@@ -12,7 +12,9 @@ export const me = {
     'record.percent': '{value}%',
     'record.streak': 'Streak',
     'record.best': 'Best run',
-    'record.tallies': '{captures} captured · {home} home · {rolls} rolls',
+    'record.tally.rolls': 'rolls',
+    'record.tally.captures': 'captured',
+    'record.tally.home': 'home',
     'record.empty': 'No games played yet.',
     'record.emptyLead': 'Take a chair at a table and this fills itself in.',
 

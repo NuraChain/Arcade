@@ -1022,6 +1022,32 @@ is over the serialised payload rather than over named fields. Checking one field
 through the field somebody thought to check; searching the JSON for another seat's secret catches it
 through any field at all, including one added later by somebody who never read the test.
 
+**Nothing that records a result knows what was played.** `record.ts` carried `outcomeOf`, reading
+ludo's board to tell a played win from an emptied room, beside a `ludoEngine.finish` that read the
+same board and answered the same way - two copies of one rule, and the third game would have added a
+third. The outcome and the standings come off the engine now, and so does `commit`'s idea of whether
+a game is over.
+
+**`player_stats.tallies` is jsonb because `captures`, `rolls` and `tokens_home` were ludo's words on
+a table every game shares.** The row is keyed `(user_id, game)`, so a counter's name only has to
+make sense within one game; `Engine.tally(events)` folds the ledger, which also moves the fold into
+the engine's own tests with no Postgres near it. Nothing DECIDES anything by a tally - no
+achievement, rating or level reads one - which is what makes an open record safe on the wire and
+lets an engine name its counters whatever its game calls them.
+
+**A jsonb counter cannot be incremented the way an integer one can**, and this is the trap. Postgres
+has no operator that adds two jsonb objects of numbers: `||` REPLACES a key, so two games finishing
+for one person record the second and forget the first - the read-modify-write defect the second
+audit closed, reintroduced by the storage changing shape. The upsert sums both key sets through
+`jsonb_each_text` and re-aggregates inside the one statement the unique index serialises, and
+`record.db.spec.ts` plays two matches expecting five rolls. Also: **`both` is a reserved word**
+(`trim(both ...)`), so a subquery aliased that way is a syntax error only a real Postgres reports.
+
+**XP is split where the knowledge is.** `levels.ts` keeps the finish and the win, which are facts
+about a match; `Engine.points(tally)` is what a game's own doings are worth, because a capture being
+worth two is ludo's opinion and would otherwise have made that file hold the scoring rules of four
+games at once.
+
 **A client asks for two things and neither names a destination.** `POST /matches/:id/roll` carries no
 value at all, and `POST /matches/:id/move` names one of the caller's own tokens - the server computes
 where it lands from the die it drew itself. There is no field anywhere on the way in that carries a

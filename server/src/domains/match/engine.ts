@@ -49,6 +49,21 @@ export interface Placement
 }
 
 /**
+ * What one seat DID over a whole match, in the engine's own words.
+ *
+ * Named counters rather than columns, because `captures`, `rolls` and `tokens_home` were three
+ * ludo columns on a table every game shares - so hokm would have arrived wanting `tricks`, poker
+ * `showdowns`, and `player_stats` would have grown a column per game that every other game stores
+ * zero in. `player_stats` is keyed `(user_id, game)`, so the row already knows which game it is and
+ * the names only have to make sense within one.
+ *
+ * The counters are what the profile SHOWS. They are not what anything is decided by: no
+ * achievement, rating or level reads one, which is why an engine is free to name them whatever its
+ * own game calls them.
+ */
+export type Tally = Record<string, number>;
+
+/**
  * How a game ended, in the two words the platform already understands.
  *
  * `won` means somebody actually won by playing; `abandoned` means the room emptied and the engine
@@ -118,4 +133,27 @@ export interface Engine<S = unknown, A = unknown>
      * ever sees, and it is built per seat like the board is.
      */
     log(events: readonly unknown[], seat: number | null): MatchLog;
+
+    /**
+     * What each seat did, folded out of the whole match's events.
+     *
+     * This was a raw `count(*) filter (where e ->> 'e' = 'capture')` in `record.ts` - ludo's event
+     * names, in SQL, in the file that records every game's result. The ledger is already an
+     * append-only record of everything that happened, so the fold is the right shape; what was
+     * wrong was who knew the words.
+     *
+     * Keyed by SEAT. A seat with nothing to report is absent rather than a row of zeroes, because
+     * the counters are merged into a running total and an absent key adds nothing.
+     */
+    tally(events: readonly unknown[]): Map<number, Tally>;
+
+    /**
+     * What this seat's own doings are worth in XP, on top of the finish and the win.
+     *
+     * `levels.ts` keeps the two every game has - finishing is 10, winning is 25 more - because they
+     * are facts about a match rather than about a game. A capture being worth 2 is ludo's opinion
+     * and belongs with ludo, or `levels.ts` becomes a file that has to be edited every time a game
+     * is added and holds the scoring rules of four games at once.
+     */
+    points(tally: Tally): number;
 }

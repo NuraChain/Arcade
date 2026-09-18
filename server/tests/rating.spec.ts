@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { ACHIEVEMENT_SEEDS } from '../src/db/seed-reference.ts';
 import { ACHIEVEMENT_IDS, earnedBy, type AchievementFacts } from '../src/domains/achieve/rules.ts';
-import { outcomeOf } from '../src/domains/match/record.ts';
+import { ludoEngine } from '../src/domains/match/engines/ludo.ts';
 import { placementsOf } from '../src/domains/match/ludo/standings.ts';
 import { rateField, type Standing } from '../src/domains/match/rating.ts';
 import { FINISHED, YARD } from '../src/domains/match/ludo/board.ts';
@@ -137,9 +137,17 @@ describe('placing a field', () =>
     });
 });
 
+/**
+ * Asked of the ENGINE, because the engine is the only thing that can tell a played win from an
+ * emptied room. `record.ts` carried its own `outcomeOf` beside `ludoEngine.finish`, which read the
+ * same board and gave the same answer - two copies of one rule, and the second game would have had
+ * to remember to add a third.
+ */
 describe('what a win is', () =>
 {
     const HOME = [FINISHED, FINISHED, FINISHED, FINISHED];
+
+    const outcomeOf = (state: LudoState): string => ludoEngine.finish(state)?.outcome ?? 'abandoned';
 
     it('is four tokens home', () =>
     {
