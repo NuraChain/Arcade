@@ -576,4 +576,3 @@ describe('what a byte in the source may be', () =>
         expect(guilty, 'build a control character with String.fromCharCode, never type one').toEqual([]);
     });
 });
-

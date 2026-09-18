@@ -1,5 +1,5 @@
 import type { GameId } from '../../data/games.ts';
-import { Link, untrack, useHead, useParams } from 'azerothjs';
+import { Link, untrack, useHead, useParams, useRoute } from 'azerothjs';
 
 import Page from '../../components/app/page.component.azeroth';
 import { gameNameOf, groupNameOf, othersOf, sealSentenceOf, titleOf } from '../../components/chat/chat-title.ts';
@@ -33,6 +33,9 @@ import { useShell } from '../../stores/shell.store.ts';
 import { useSocial } from '../../stores/social.store.ts';
 import { useToasts } from '../../stores/toasts.store.ts';
 
+/** The prefix this page's own ids live under, so an id from the next route is refused. */
+const CHATS = '/app/chats';
+
 const WINDOW = 40;
 
 export default component ChatPage()
@@ -51,6 +54,7 @@ export default component ChatPage()
     const toasts = useToasts();
     const device = useDevice();
     const params = useParams();
+    const route = useRoute();
 
     state visible = WINDOW;
 
@@ -200,9 +204,32 @@ export default component ChatPage()
         visible = WINDOW;
     }
 
+    /**
+     * Opens the thread, and refuses an id this route does not own.
+     *
+     * `params()` is shared router state. It changes the moment a navigation commits, and this page
+     * is still mounted while its leave transition plays - so the effect fired again with the NEXT
+     * route's parameter in hand, and pressing "Start a game" here asked the chat api for a
+     * conversation whose id was the TABLE it had just navigated to. Two 404s in the console on the
+     * one path this feature exists for.
+     *
+     * The group page hit the same thing and answered it by opening once in `mount`, which it can
+     * afford because nothing navigates group-to-group. This page cannot: a notification or the
+     * social panel moves from one thread straight to another, and that is the same route with a
+     * different parameter, so the component is reused and never mounts again.
+     *
+     * So the guard is the pathname rather than the lifecycle. It reads the route, which is the same
+     * signal, and asks whether the id it is about to use still belongs to this page.
+     */
     effect
     {
-        chat.openThread(id);
+        const here = route().pathname;
+        const mine = id;
+
+        if (mine !== '' && here.startsWith(`${ CHATS }/`))
+        {
+            chat.openThread(mine);
+        }
     }
 
     const showEarlier = (): void =>
