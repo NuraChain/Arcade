@@ -7,8 +7,8 @@
 | 1. Schema widening + snapshot | **done** — `7e5dc59` |
 | 2. Extract `Engine`, Ludo behind it | **part done** — the interface, injection and the generic refusal; the service still folds Ludo's state directly |
 | 3. Per-viewer `view()`, new wire | **done** — every gate green with Ludo identical |
-| 4. Redact `since`, add the leak test | next — `watch` came along with step 3, `since` did not |
-| 5. Engine-owned outcome, standings, tallies | |
+| 4. Redact `since`, add the leak test | **done** — `Engine.log` and `redaction.db.spec.ts` |
+| 5. Engine-owned outcome, standings, tallies | next |
 | 6. Teams, XP generalisation | |
 | 7. Client scene registry | |
 
@@ -215,6 +215,38 @@ the union is narrowed (`ludoOf`) and the two halves are joined (`chairsOf`), and
 did not mention is DROPPED rather than filled in with a blank colour - an invented chair would read
 as a fact about the game instead of a fact about the viewer. `PlayerCard` takes both halves as two
 props for the same reason.
+
+## What step 4 changed
+
+`since` handed every action's raw `events` column to every player, and `match_actions` is
+append-only - so a game that wrote a deal into its own log would have published every hand to
+anybody who asked for revision zero, permanently, whatever the board said. A board composed
+carefully and a log left open is not a redacted game.
+
+`Engine.log(events, seat | null)` is the board's sibling: raw events in, wire shape out, per viewer.
+`matchEvent.events` became `matchEvent.log`, a `matchLog` union discriminated on the action rather
+than on each event - repeating the game's name beside every capture would be noise - and `ludoMove`
+is what `matchMove` was. Ludo's `log` returns everything to everybody and says so in as many words,
+because a roll is called out and a capture is watched; the comment is there so the next engine's
+author does not read an identity function as the pattern.
+
+One subtlety worth the sentence: the engine is handed the READER's seat, not `row.seat`. Redacting
+for whoever acted hides a secret from the one person who already knows it, and shows it to everyone
+else. That is one of the four defects `redaction.db.spec.ts` was proved to catch before it was
+trusted.
+
+**`redaction.db.spec.ts` is the test that could not be written before the seam.** Ludo hides
+nothing, so every assertion about hiding over a ludo match passes whether the code redacts or not.
+The engine here is a fixture with one secret per seat, INJECTED - which is the whole reason
+`createMatchService` takes its engines as an argument - and the assertion is over the SERIALISED
+payload rather than named fields: checking `view.seats[1].home` catches a leak through the field
+somebody thought to check, and searching the JSON for the other seat's secret catches it through any
+field at all, including one added later by somebody who never read the file.
+
+Proved against four defects before being trusted: `since` returning the raw column, `since`
+redacting for the actor, the board composed for a fixed seat, and a spectator treated as a player.
+
+---
 
 **Three things are deliberately still Ludo's**, and they are step 5's, not oversights: the service
 imports `apply`/`create`/`legalMoves` from `ludo/engine.ts` directly, the action vocabulary is

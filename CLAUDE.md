@@ -1008,6 +1008,20 @@ chair reads as a fact about the game rather than as a fact about the viewer, whi
 confusion a hidden hand would cause. `PlayerCard` takes both halves as two props for the same
 reason.
 
+**A log left open is not a redacted game.** `Engine.log(events, seat | null)` is `view`'s sibling and
+exists for the same reason: `since` handed back every action's raw `events` column, and
+`match_actions` is append-only - so a game writing a deal into its own log would have published every
+hand to anybody asking for revision zero, permanently, whatever the board said. The engine is handed
+the READER's seat rather than the seat that acted, because redacting for the actor hides a secret
+from the one person who already knows it and shows it to everybody else.
+
+**`redaction.db.spec.ts` is the test none of this could have without the seam.** Ludo hides nothing,
+so every assertion about hiding over a ludo match passes whether the code redacts or not - the engine
+there is a FIXTURE with one secret per seat, injected through `createMatchService`, and the assertion
+is over the serialised payload rather than over named fields. Checking one field catches a leak
+through the field somebody thought to check; searching the JSON for another seat's secret catches it
+through any field at all, including one added later by somebody who never read the test.
+
 **A client asks for two things and neither names a destination.** `POST /matches/:id/roll` carries no
 value at all, and `POST /matches/:id/move` names one of the caller's own tokens - the server computes
 where it lands from the die it drew itself. There is no field anywhere on the way in that carries a

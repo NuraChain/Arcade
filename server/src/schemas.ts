@@ -1088,7 +1088,15 @@ export type MatchView = Infer<typeof matchView>;
  * and `e` says which ones are filled. Declared rather than left open: this is what the board
  * animates from, and a payload nobody has described is one a renderer guesses at.
  */
-export const matchMove = object({
+/**
+ * One thing that happened in a ludo turn.
+ *
+ * Eight event names, a piece, a die and a victim: this is ludo's vocabulary and it sat on a route
+ * every game shares, which is the same defect the board had. A hokm trick and a poker raise have
+ * nowhere to put themselves in this shape, and a card game would have had to borrow `piece` to mean
+ * a card.
+ */
+export const ludoMove = object({
     e: enumOf(['roll', 'enter', 'step', 'capture', 'home', 'pass', 'forfeit', 'finish']),
     seat: number().optional(),
     piece: number().optional(),
@@ -1102,11 +1110,29 @@ export const matchMove = object({
     winner: number().optional()
 });
 
+export const ludoLog = object({
+    kind: literal('ludo'),
+    moves: array(ludoMove)
+});
+
+/**
+ * What happened in one action, composed by the ENGINE for one viewer.
+ *
+ * The discriminant is on the action rather than on each event, because an action belongs to exactly
+ * one game and repeating the game's name beside every capture would be noise. Same shape as
+ * `matchBoard`, and for the same reason: `since` handed every action's raw event array to every
+ * player, so a deal, a draw or anything else a game writes into its own log would have been
+ * readable by asking for revision zero.
+ */
+export const matchLog = union([ludoLog]);
+
+export type MatchLog = Infer<typeof matchLog>;
+
 export const matchEvent = object({
     rev: number(),
     seat: number(),
     at: string(),
-    events: array(matchMove)
+    log: matchLog
 });
 
 export const matchDelta = object({ match: matchView, events: array(matchEvent) });

@@ -14,7 +14,7 @@ import { apply, create, legalMoves } from './ludo/engine.ts';
 import { createRecorder, outcomeOf } from './record.ts';
 import { ludoEngine } from './engines/ludo.ts';
 import type { Engine } from './engine.ts';
-import type { MatchBoard } from '../../schemas.ts';
+import type { MatchBoard, MatchLog } from '../../schemas.ts';
 import type { MatchHistory } from '../../schemas.ts';
 import type { EngineAction, GameEvent, LudoState, RefusalReason } from './ludo/state.ts';
 
@@ -109,12 +109,21 @@ export interface MatchLoad
     mine: number;
 }
 
+/**
+ * One action, as a viewer may be told about it.
+ *
+ * `log` is already COMPOSED - the engine turned its own events into the wire shape for this
+ * viewer's seat before the entry was built. It used to be the raw `GameEvent[]` off the row, which
+ * left `services.ts` casting it into the wire type and therefore deciding what an event looks like
+ * on a route every game shares. Handing the projector a finished value is what stops it having an
+ * opinion, exactly as `asMatch` stopped having one about the board.
+ */
 export interface ActionLog
 {
     rev: number;
     seat: number;
     at: Date;
-    events: GameEvent[];
+    log: MatchLog;
 }
 
 const REFUSALS: Record<RefusalReason, 'forbidden' | 'conflict'> = {
@@ -360,11 +369,28 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
                 return null;
             }
 
+            const engine = engineFor(load.match.game);
+
+            if (engine === null)
+            {
+                return null;
+            }
+
             const rows = await db.getRepository(MatchAction).find({
                 select: { rev: true, seat: true, createdAt: true, events: true },
                 where: { matchId, rev: MoreThan(rev) },
                 order: { rev: 'ASC' }
             });
+
+            /**
+             * Composed for the READER, not for the seat that acted.
+             *
+             * `row.seat` says who took the action and `load.mine` says who is asking, and it is the
+             * second one the engine is handed - otherwise a log would be redacted for whoever
+             * happened to move, which is the one person it never needed hiding from. A watcher
+             * arrives with `mine: -1` and is handed `null`, like the board.
+             */
+            const reader = load.mine < 0 ? null : load.mine;
 
             return {
                 load,
@@ -372,7 +398,7 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
                     rev: row.rev,
                     seat: row.seat,
                     at: row.createdAt,
-                    events: row.events as GameEvent[]
+                    log: engine.log((row.events ?? []) as unknown[], reader)
                 }))
             };
         },

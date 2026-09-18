@@ -34,7 +34,6 @@ import type {
     MatchView,
     TableSummary
 } from './schemas.ts';
-import type { MatchEventLog } from './ports.ts';
 
 /**
  * Builds the real implementations behind `Ports`.
@@ -1605,7 +1604,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                         rev: entry.rev,
                         seat: entry.seat,
                         at: entry.at.toISOString(),
-                        events: entry.events as MatchEventLog['events']
+                        log: entry.log
                     }))
                 };
             },

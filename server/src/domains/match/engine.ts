@@ -28,7 +28,7 @@
  * whichever module happened to be imported first.
  */
 
-import type { MatchBoard } from '../../schemas.ts';
+import type { MatchBoard, MatchLog } from '../../schemas.ts';
 
 /** A source of whole numbers in `[1, sides]`, drawn by the server inside the transaction. */
 export interface Draws
@@ -104,4 +104,18 @@ export interface Engine<S = unknown, A = unknown>
      * unseated stranger, which for a game with hidden state is strictly less than any player sees.
      */
     view(state: S, seat: number | null): MatchBoard;
+
+    /**
+     * What ONE viewer may be told HAPPENED, which is a second question from what the board is now.
+     *
+     * `since` used to hand back every action's raw event array to every player, and `match_actions`
+     * is append-only - so a game that wrote a deal into its own log would have published every hand
+     * to anybody who asked for revision zero, permanently, whatever the board said. A board
+     * composed carefully and a log left open is not a redacted game.
+     *
+     * The events go in as the engine wrote them and come out as the wire shape, so an engine is
+     * free to keep whatever it likes in its own log - the projection is the only thing a client
+     * ever sees, and it is built per seat like the board is.
+     */
+    log(events: readonly unknown[], seat: number | null): MatchLog;
 }

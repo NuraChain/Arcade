@@ -240,6 +240,12 @@ const run = async () =>
         ok('the whole game can be read back', replay.status === 200 && replay.body.events.length === state.rev,
             `${ replay.body?.events?.length } events for ${ state.rev } revisions`);
 
+        const logged = (replay.body.events ?? []).reduce((total, entry) => total + (entry.log?.moves?.length ?? 0), 0);
+        const named = (replay.body.events ?? []).every((entry) => entry.log?.kind === 'ludo');
+
+        ok('and the log says which game it is, with the turns still in it', named && logged >= state.rev,
+            `${ logged } moves across ${ replay.body.events?.length } entries, named ${ named }`);
+
         const after = await players[0].post(`/matches/${ matchId }/roll`, { key: `late-${ Date.now() }` });
         ok('a finished game refuses another turn', after.status >= 400, `${ after.status }`);
 

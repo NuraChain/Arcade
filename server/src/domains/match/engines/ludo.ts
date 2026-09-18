@@ -1,9 +1,9 @@
 import { FINISHED, cellAt } from '../ludo/board.ts';
 import { apply, create, indexOfSeat, legalMoves } from '../ludo/engine.ts';
 import { placementsOf } from '../ludo/standings.ts';
-import type { EngineAction, LudoState } from '../ludo/state.ts';
+import type { EngineAction, GameEvent, LudoState } from '../ludo/state.ts';
 import type { Draws, Ending, Engine, Placement } from '../engine.ts';
-import type { MatchBoard } from '../../../schemas.ts';
+import type { MatchBoard, MatchLog } from '../../../schemas.ts';
 
 /**
  * Ludo, behind the seam every game sits behind.
@@ -116,7 +116,20 @@ export const ludoEngine: Engine<LudoState, EngineAction> = {
         };
 
         return state.die === null ? board : { ...board, die: state.die };
-    }
+    },
+
+    /**
+     * Every event, to everybody, because a ludo turn happens in the open.
+     *
+     * A roll is called out, a capture is watched, a token coming home is seen - there is nothing in
+     * this log that the board does not already show, so the seat changes nothing. Stated rather
+     * than left as an identity function somebody later reads as the pattern: the next engine's
+     * `log` filters, and one that does not is a hand published to the table.
+     */
+    log: (events: readonly unknown[]): MatchLog => ({
+        kind: 'ludo',
+        moves: events as GameEvent[]
+    })
 };
 
 /** This seat's playable pieces, which is empty unless it is their turn and they have rolled. */
