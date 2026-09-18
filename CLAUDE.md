@@ -1194,6 +1194,20 @@ enforces that by finding the library through the `Phaser v` literal it prints ra
 name: more than one chunk carrying it, or a chunk that is a route or a component, or no chunk at all
 while the renderer exists, all fail the build.
 
+**`game/scenes.ts` decides WHICH renderer draws which game, and it is the only place that does.**
+`board-canvas` named one module, one export and one image file, so a second game's board meant
+editing the component every board goes through - and the build gate asserted the lazy chunk by the
+literal filename `ludo-board-`, which would have gone on passing while a second scene rode into a
+route chunk unmeasured. The registry's loader is a FUNCTION returning a dynamic import, because a
+static one puts Phaser into the component's chunk and from there into every route that renders a
+board. The plate belongs to the scene rather than to the caller: it is the photograph of the object
+that game is played on, which is a fact about the game and not a prop a component should be trusted
+to pass. A game with no scene falls through to the DOM board a browser with no WebGL gets, which is
+the rule `lib/lines.ts` follows for a line key it has never heard of.
+
+`budgets.mjs` reads that registry - one dynamic import per registered scene, each module on disk -
+so the rule is about the property rather than about one file.
+
 Four of the config values are load-bearing and each costs something real if left out. `audio` off,
 because Phaser opens a WebAudio context and Chrome warns about it, and the matrix reads every
 warning. `keyboard` off, because Phaser's plugin preventDefaults space and the arrows, and the
