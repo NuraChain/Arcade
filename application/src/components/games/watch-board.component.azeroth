@@ -8,7 +8,7 @@ import { chairsOf, ludoOf, type MatchPlayer } from '../../data/match.ts';
 import type { MatchWatch } from '../../api.ts';
 
 /**
- * A game somebody else is playing, drawn two minutes behind.
+ * A game somebody else is playing, drawn deliberately behind.
  *
  * The same canvas a player looks at, given a board that is deliberately old - which is the whole
  * shape of the feature: the renderer has no idea it is late, because the delay is the server's and
@@ -22,6 +22,13 @@ import type { MatchWatch } from '../../api.ts';
  * There are no controls. Not disabled ones - none: a watcher has no seat, no legal moves and
  * nothing to press, and a greyed-out roll button would be a promise that sitting down is one click
  * away when it is a different thing entirely.
+ *
+ * **The delay is said in the unit it IS.** `WATCH_DELAY_MS` is thirty seconds, and the panel
+ * rounded it to minutes and announced "at least 1 minutes behind" - wrong about the plural, and
+ * wrong about the delay by double. A watcher reads this line to decide whether what they are
+ * looking at is worth reacting to, so a number that overstates the rule is worse than no number.
+ * Under ninety seconds it says seconds, above it says minutes, which is the same split
+ * `match-board`'s own clock makes and for the same reason.
  *
  * The DELAY and the AGE are two different sentences. The delay is the rule and never changes; the
  * age is how old this particular board is, which is the same thing until nobody moves for a while
@@ -53,6 +60,20 @@ export default component WatchBoard(props: { watch: MatchWatch })
         return person === null ? handle : locale.text(person.displayName);
     };
 
+    /**
+     * `plural` rather than `t`, because `{minutes}` in a sentence is a count and a count decides
+     * the word after it. It also formats the number through the locale, so a Persian page reads
+     * Persian digits without the caller passing a pre-formatted string - which would have defeated
+     * the plural rules anyway, a string having no number in it to count.
+     */
+    const MINUTE = 60;
+
+    derived behindSays = props.watch.delay < 90
+        ? locale.plural('watch.behind.seconds', props.watch.delay)
+        : locale.plural('watch.behind', Math.round(props.watch.delay / MINUTE));
+
+    derived quietSays = locale.plural('watch.quiet', Math.round(props.watch.behind / MINUTE));
+
     derived says = ((): string =>
     {
         if (!props.watch.live)
@@ -81,7 +102,7 @@ export default component WatchBoard(props: { watch: MatchWatch })
                 <Show when={ props.watch.live }>
                     { () =>
                         <p class="text-ui-xs text-muted">
-                            { locale.t('watch.behind', { minutes: locale.n(Math.max(1, Math.round(props.watch.delay / 60))) }) }
+                            { behindSays }
                         </p>
                     }
                 </Show>
@@ -89,7 +110,7 @@ export default component WatchBoard(props: { watch: MatchWatch })
                 <Show when={ props.watch.live && props.watch.behind > props.watch.delay * 2 }>
                     { () =>
                         <p class="text-ui-xs text-muted">
-                            { locale.t('watch.quiet', { minutes: locale.n(Math.round(props.watch.behind / 60)) }) }
+                            { quietSays }
                         </p>
                     }
                 </Show>

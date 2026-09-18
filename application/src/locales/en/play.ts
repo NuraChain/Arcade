@@ -119,8 +119,18 @@ export const play = {
     'watch.title': 'You are watching',
     'watch.finished': 'This game is over',
     'watch.over': 'The game ended.',
-    'watch.behind': 'The board you see is at least {minutes} minutes behind the one they are playing on.',
-    'watch.quiet': 'Nothing has happened at this table for {minutes} minutes.',
+    'watch.behind': {
+        one: 'The board you see is at least {count} minute behind the one they are playing on.',
+        other: 'The board you see is at least {count} minutes behind the one they are playing on.'
+    },
+    'watch.behind.seconds': {
+        one: 'The board you see is at least {count} second behind the one they are playing on.',
+        other: 'The board you see is at least {count} seconds behind the one they are playing on.'
+    },
+    'watch.quiet': {
+        one: 'Nothing has happened at this table for {count} minute.',
+        other: 'Nothing has happened at this table for {count} minutes.'
+    },
     'watch.why': 'Everyone watching is behind by the same amount, so nobody can be coached from the sidelines.',
     'watch.waiting': 'The game has just started. There is nothing old enough to show yet.',
     'watch.none': 'No games are being played right now.',
