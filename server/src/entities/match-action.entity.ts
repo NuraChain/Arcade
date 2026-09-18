@@ -7,14 +7,15 @@ export type MatchActionKind = 'roll' | 'move' | 'forfeit';
 /**
  * Every action that was accepted, in order.
  *
- * Three jobs, and it is worth naming what is NOT one of them: this is not a rebuild log.
+ * Four jobs, and it is worth naming what is NOT one of them: this is not a rebuild log.
  * `matches.state` is the authority and nothing replays these rows to reconstruct a board. A fixed
  * rule would change the fold, and a finished game would stop being a fact.
  *
  * What it is for: the dice history, so what came up is auditable after the game; the idempotency
  * ledger, so a retried request is answered rather than applied twice; and the catch-up feed a
  * client reads after missing a realtime frame, which is why the events are stored rather than
- * recomputed.
+ * recomputed; and the board a SPECTATOR is shown, which is `state` and is stored for the same
+ * reason - a delayed view is a board that was recorded, never one that was reconstructed.
  *
  * `user_id` is null when the SERVER acted - a turn that ran out of time and was played for
  * somebody. It is nullable rather than pointing at a service account because there is no such
@@ -57,6 +58,23 @@ export class MatchAction
 
     @Column({ type: 'jsonb', default: () => `'[]'` })
     events!: unknown[];
+
+    /**
+     * The board as it stood AFTER this action, which is what a spectator is shown.
+     *
+     * This is not a rebuild log and this column is what keeps it from becoming one. Serving a board
+     * as it was two minutes ago needs a state at a moment, and the alternative - folding the events
+     * of every action up to that moment - is exactly the replay the docblock above refuses, with
+     * exactly the consequence it names: a rule that changed later would make a finished game come
+     * back different. A stored state cannot be re-derived wrongly because it is not derived at all.
+     *
+     * NOT NULL with no default, deliberately. Postgres materialises a column default into every
+     * existing row at `add column` time, which is the backfill this codebase forbids - so a database
+     * that already holds actions refuses the column rather than quietly inventing a board for rows
+     * that never recorded one, and the answer is to rebuild from nothing.
+     */
+    @Column({ type: 'jsonb' })
+    state!: unknown;
 
     @Column({ name: 'idempotency_key', type: 'varchar', length: 64, nullable: true })
     idempotencyKey!: string | null;
