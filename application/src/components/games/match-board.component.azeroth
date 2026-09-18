@@ -2,11 +2,13 @@ import BoardCanvas from './board-canvas.component.azeroth';
 import MatchResult from './match-result.component.azeroth';
 import Button from '../ui/button.component.azeroth';
 import Panel from '../ui/panel.component.azeroth';
+import { runtime } from '../../lib/runtime.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useBoard } from '../../stores/match.store.ts';
 import { usePeople } from '../../stores/people.store.ts';
 import type { MatchView } from '../../api.ts';
-import type { BoardToken, BoardView } from '../../game/bridge.ts';
+import type { BoardView } from '../../game/bridge.ts';
+import { INITIAL, seatsFor } from './seats.ts';
 
 /**
  * The board, and the controls that are the real interface to it.
@@ -18,36 +20,14 @@ import type { BoardToken, BoardView } from '../../game/bridge.ts';
  *
  * Colour is never the only signal. Every seat carries its colour's initial beside the swatch, so a
  * player who cannot tell red from green still knows whose token is whose.
- */
-
-const YARDS: Record<string, readonly [number, number]> = {
-    red: [0, 0],
-    green: [9, 0],
-    yellow: [9, 9],
-    blue: [0, 9]
-};
-
-/**
- * The four wells printed inside each home yard.
  *
- * `atlas.py` draws them at `corner + 3 +/- 0.95` cells - a POSITION on the grid, not a cell index -
- * and `centreOf` adds the half cell that turns an index into a centre. Passing 2 and 4 therefore
- * landed every yard token half a cell down and to the right of the circle it belongs in, which read
- * as "nearly right" and is the hardest kind of wrong to notice.
+ * **The clock and the misses are both shown, and neither was before.** `matches.deadline_at` and
+ * `match_players.timeouts` have been on the wire since the domain was written and no screen read
+ * either - so a live turn ran out after thirty seconds with no warning, and a seat could be one
+ * miss from ending with nobody at the table aware of it. A clock a player cannot see only ever
+ * surprises them, and a rule that ends somebody's game silently is a rule they will believe was a
+ * bug.
  */
-const YARD_SPOTS: readonly (readonly [number, number])[] = [
-    [1.55, 1.55],
-    [3.45, 1.55],
-    [1.55, 3.45],
-    [3.45, 3.45]
-];
-
-const INITIAL: Record<string, string> = {
-    red: 'R',
-    green: 'G',
-    yellow: 'Y',
-    blue: 'B'
-};
 
 export default component MatchBoard(props: { match: MatchView; starting?: boolean; onAgain?: () => void })
 {
@@ -99,63 +79,53 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
         return locale.t('match.turn.theirs', { name: nameOf });
     })();
 
+    derived tokens = seatsFor(game, mine);
+
     /**
-     * Every token on the board, each with the grid square it stands on.
+     * The turn clock, which nothing rendered until now.
      *
-     * Rendered per TOKEN rather than per cell: a token then keeps its element across a move, so the
-     * CSS transition on its position animates it walking instead of one square blanking and another
-     * lighting up. It is also sixteen nodes instead of two hundred and twenty-five.
+     * `matches.deadline_at` has been on the wire since the domain was written and `match.deadline`
+     * has had copy in both languages, and no screen ever showed either - so a live turn ran out
+     * after thirty seconds and the first a player knew of it was the server having played for them.
+     * A clock nobody can see only ever surprises the person it is counting down, which is the worst
+     * way there is to lose a turn at a table playing for anything.
+     *
+     * It ticks off `runtime().clock` like every other timer in this product, so a spec can drive it
+     * rather than wait for it, and it is cleared on teardown.
      */
-    derived tokens = ((): BoardToken[] =>
+    state now = runtime().clock.now();
+
+    mount
     {
-        const placed: BoardToken[] = [];
+        return runtime().clock.every(1000, () => now = runtime().clock.now());
+    }
 
-        for (const player of game.players)
+    derived secondsLeft = ((): number | null =>
+    {
+        if (over || game.deadline === undefined)
         {
-            const corner = YARDS[player.colour];
-            let parked = 0;
-
-            for (const token of player.tokens)
-            {
-                const key = `${ player.seat }-${ token.piece }`;
-                const label = INITIAL[player.colour];
-
-                if (token.cell !== undefined)
-                {
-                    placed.push({
-                        key,
-                        colour: player.colour,
-                        label,
-                        at: token.at,
-                        col: token.cell.col,
-                        row: token.cell.row,
-                        playable: player.seat === mine && game.moves.includes(token.piece)
-                    });
-                    continue;
-                }
-
-                if (token.at >= 0)
-                {
-                    continue;
-                }
-
-                const spot = YARD_SPOTS[parked];
-                parked += 1;
-
-                placed.push({
-                    key,
-                    colour: player.colour,
-                    label,
-                    at: token.at,
-                    col: corner[0] + spot[0],
-                    row: corner[1] + spot[1],
-                    playable: player.seat === mine && game.moves.includes(token.piece)
-                });
-            }
+            return null;
         }
 
-        return placed;
+        return Math.max(0, Math.round((new Date(game.deadline).getTime() - now) / 1000));
     })();
+
+    /**
+     * The last few seconds read differently, because that is when it matters.
+     *
+     * `danger` rather than `madder`: running out of time is a thing going wrong, and `madder` means
+     * a table is playing for something - it is the one colour in this product that already carries
+     * a meaning, and borrowing it here would make it carry two.
+     */
+    const URGENT_AT = 10;
+
+    /**
+     * Three in a row ends a seat, which is `MAX_TIMEOUTS` in the match service. It is repeated here
+     * rather than imported because the server's copy is the rule and this one is only deciding when
+     * to raise its voice - importing it would pull a server module into the web typecheck program
+     * for a number the screen uses to pick a colour.
+     */
+    const MISSES_ALLOWED = 3;
 
     /**
      * What the renderer is given, as one value.
@@ -225,7 +195,7 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
             <BoardCanvas view={ view } onPick={ (key) => void pick(key) } />
         </div>
 
-        <div class="board-controls flex min-w-0 flex-col gap-3 @3xl:w-[20rem]">
+        <div class="board-controls flex min-w-0 flex-col gap-3 @3xl:w-[20rem] @3xl:shrink-0">
             <Show when={ over }>
                 { () =>
                     <MatchResult
@@ -240,7 +210,21 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
             <Show when={ !over }>
                 { () =>
             <Panel pad="md" stack="sm">
-                <p class="text-ui-lg font-semibold text-text" aria-live="polite">{ says }</p>
+                <div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                    <p class="min-w-0 flex-1 basis-[10rem] text-ui-lg font-semibold text-text" aria-live="polite">{ says }</p>
+                    <Show when={ secondsLeft !== null }>
+                        { () =>
+                            <span
+                                class={ () => [
+                                    'tally shrink-0 text-ui-sm font-bold',
+                                    secondsLeft! <= URGENT_AT ? 'text-danger' : 'text-muted'
+                                ].join(' ') }
+                            >
+                                { locale.t('match.deadline', { seconds: locale.n(secondsLeft!) }) }
+                            </span>
+                        }
+                    </Show>
+                </div>
 
                 <Show when={ !over && game.die !== undefined }>
                     { () =>
@@ -307,8 +291,22 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
                             >
                                 { INITIAL[player.colour] }
                             </span>
-                            <span class="min-w-0 flex-1 truncate text-ui-sm text-text">
-                                { player.seat === mine ? locale.t('match.you') : (people.byHandle(player.who)?.displayName ?? player.who) }
+                            <span class="flex min-w-0 flex-1 flex-col">
+                                <span class="truncate text-ui-sm text-text">
+                                    { player.seat === mine ? locale.t('match.you') : (people.byHandle(player.who)?.displayName ?? player.who) }
+                                </span>
+
+                                <Show when={ player.timeouts > 0 }>
+                                    { () =>
+                                        <span class={ () => [
+                                            'truncate text-ui-2xs',
+                                            player.timeouts >= MISSES_ALLOWED - 1 ? 'text-danger' : 'text-muted'
+                                        ].join(' ') }>
+                                            { locale.plural('match.missed', player.timeouts) }
+                                            { player.timeouts >= MISSES_ALLOWED - 1 ? ` · ${ locale.t('match.missed.last') }` : '' }
+                                        </span>
+                                    }
+                                </Show>
                             </span>
                             <span class="tally shrink-0 text-ui-xs text-muted">
                                 { locale.plural('match.tokens', player.home) }
