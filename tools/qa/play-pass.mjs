@@ -56,8 +56,25 @@ const BASE = process.env.QA_BASE ?? 'http://localhost:5300';
  */
 const SEATS = ['dana.w', 'mina'];
 
-/** How many turns are taken by CLICKING before the rest is played over the api. */
-const CLICKED_TURNS = 10;
+/**
+ * How many MOVES are made by clicking before the rest is played over the api.
+ *
+ * Moves rather than turns, which is the difference between a check and a coin flip. Nothing can
+ * move in Ludo until somebody rolls a six, so a budget of ten TURNS was ten rolls - and one run in
+ * six spent all ten on numbers that could not be played, found no move button, and reported "a move
+ * is takeable from the list beside the board" as a failure. Two consecutive runs did exactly that
+ * while the product was fine.
+ */
+const CLICKED_MOVES = 3;
+
+/**
+ * The most rolls those moves may take, so a run cannot go on for ever.
+ *
+ * Generous on purpose: at five in six per roll, going this far without a six is a one in a thousand
+ * run rather than a one in six one, and a gate that cries wolf once a week is a gate people learn to
+ * re-run rather than read.
+ */
+const ROLL_CAP = 40;
 
 /** How long a nudge, a refetch and a walk may take before the other browser is expected to agree. */
 const SETTLE_MS = 2500;
@@ -222,9 +239,18 @@ try
         let clicked = 0;
         let rolled = 0;
         let moved = 0;
-        let sawOther = false;
+        /**
+         * Every distinct sentence the WATCHER's live region showed while somebody else played.
+         *
+         * A set rather than a before/after pair around one move. The pair was what shipped and it is
+         * flaky by construction: a six keeps the turn, so two snapshots either side of a perfectly
+         * propagated move can read identically and the check calls that "did not follow". Over a
+         * whole game the watcher's live region must take more than one value, and that is the claim
+         * this is making.
+         */
+        const otherSaw = new Set();
 
-        for (let turn = 0; turn < CLICKED_TURNS * 4 && clicked < CLICKED_TURNS; turn += 1)
+        for (let turn = 0; turn < ROLL_CAP && moved < CLICKED_MOVES; turn += 1)
         {
             const state = await (await dana.request.get(`${ BASE }/api/matches/${ match }`)).json();
 
@@ -252,21 +278,16 @@ try
 
             if (move !== null)
             {
-                const before = await watcher.page.evaluate(() =>
-                    document.querySelector('[aria-live="polite"]')?.textContent?.trim() ?? '');
+                otherSaw.add(await watcher.page.evaluate(() =>
+                    document.querySelector('[aria-live="polite"]')?.textContent?.trim() ?? ''));
 
                 await move.click();
                 moved += 1;
                 clicked += 1;
                 await watcher.page.waitForTimeout(SETTLE_MS);
 
-                const after = await watcher.page.evaluate(() =>
-                    document.querySelector('[aria-live="polite"]')?.textContent?.trim() ?? '');
-
-                if (before !== after)
-                {
-                    sawOther = true;
-                }
+                otherSaw.add(await watcher.page.evaluate(() =>
+                    document.querySelector('[aria-live="polite"]')?.textContent?.trim() ?? ''));
             }
             else
             {
@@ -283,7 +304,7 @@ try
          * drew the position it was handed at mount, because `handle?.show(props.view)` short-circuits
          * while the renderer is still importing and the effect subscribed to nothing at all.
          */
-        record('the other browser follows the game as it is played', sawOther);
+        record('the other browser follows the game as it is played', otherSaw.size > 1, `${ otherSaw.size } distinct states seen`);
 
         const tokens = await dana.page.evaluate(() =>
         {
