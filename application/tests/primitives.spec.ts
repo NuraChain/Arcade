@@ -340,6 +340,36 @@ describe('Tooltip', () =>
     };
 
     /**
+     * Tabs to the trigger, by FOCUSING it rather than by dispatching a focus event at the wrapper.
+     *
+     * These used to dispatch `focusin` on the host span, which is not focusable and never became the
+     * active element - so the event said focus had arrived while nothing was focused. That was close
+     * enough while the tooltip showed for any focus at all, and stopped being close enough the day
+     * it started asking `:focus-visible`: the browser's own answer to "did a person tab here" is no
+     * when nothing is focused, and it is right.
+     *
+     * jsdom implements the selector and matches a genuinely focused element, so this is the shape
+     * that exercises what a browser does. What jsdom cannot tell apart is a tab from a programmatic
+     * `.focus()` - both match there - so the half of the rule that keeps a sheet's close tooltip off
+     * its own first paragraph is checked in a real browser and not here.
+     */
+    const tabTo = (host: HTMLElement): void =>
+    {
+        const button = host.querySelector('button')!;
+
+        // Blur first: `.focus()` on the element that already has focus fires nothing at all, so a
+        // reopen after a synthetic `focusout` would silently measure the tooltip that never closed.
+        button.blur();
+        button.focus();
+    };
+
+    /** Leaves for real, so the element stops being the active one and the next arrival counts. */
+    const tabAway = (host: HTMLElement): void =>
+    {
+        host.querySelector('button')!.blur();
+    };
+
+    /**
      * The scroll watch exists to hide a VISIBLE tooltip when the page moves under it, and it used to
      * be armed in `mount` for every instance whether shown or not. `IconButton` wraps every
      * icon-only control in a `Tooltip`, and the listener is registered with `capture: true` - so it
@@ -379,7 +409,7 @@ describe('Tooltip', () =>
             expect(live, 'a hidden tooltip was already listening to every scroll on the page').toBe(0);
 
             const host = container.querySelector('span')!;
-            host.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+            tabTo(host);
             await settle();
             expect(live, 'a shown tooltip must watch for the page moving under it').toBe(1);
 
@@ -401,7 +431,7 @@ describe('Tooltip', () =>
         expect(document.body.querySelector('[role="tooltip"]')).toBeNull();
 
         const host = container.querySelector('span')!;
-        host.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+        tabTo(host);
         await settle();
 
         const tip = document.body.querySelector('[role="tooltip"]');
@@ -416,7 +446,7 @@ describe('Tooltip', () =>
         await settle();
         const host = container.querySelector('span')!;
 
-        host.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+        tabTo(host);
         await settle();
         expect(document.body.querySelector('[role="tooltip"]')).not.toBeNull();
         expect(document.body.querySelector('[role="tooltip"]')?.closest('[tabindex]')).toBeNull();
@@ -425,9 +455,9 @@ describe('Tooltip', () =>
         await settle();
         expect(document.body.querySelector('[role="tooltip"]')).toBeNull();
 
-        host.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+        tabTo(host);
         await settle();
-        host.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+        tabAway(host);
         await settle();
         expect(document.body.querySelector('[role="tooltip"]')).toBeNull();
     });
@@ -438,13 +468,13 @@ describe('Tooltip', () =>
         await settle();
         const host = container.querySelector('span')!;
 
-        host.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+        tabTo(host);
         await settle();
         expect(document.body.querySelector('[role="tooltip"]')?.getAttribute('data-placed')).toBe('false');
 
-        host.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+        tabAway(host);
         await settle();
-        host.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+        tabTo(host);
         await settle();
         expect(document.body.querySelector('[role="tooltip"]')?.getAttribute('data-placed')).toBe('false');
     });
@@ -462,11 +492,11 @@ describe('Tooltip', () =>
         const second = renderTest(() => Tooltip({ label: 'Second', children: Probe(), id: 'tip-second' }) as Rendered);
         await settle();
 
-        first.container.querySelector('span')!.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+        tabTo(first.container.querySelector('span')!);
         await settle();
         expect(document.body.querySelector('#tip-first')).not.toBeNull();
 
-        second.container.querySelector('span')!.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+        tabTo(second.container.querySelector('span')!);
         await settle();
 
         expect(document.body.querySelector('#tip-second')).not.toBeNull();
@@ -485,7 +515,7 @@ describe('Tooltip', () =>
         await settle();
         const host = container.querySelector('span')!;
 
-        host.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+        tabTo(host);
         await settle();
         expect(document.body.querySelector('[role="tooltip"]')).not.toBeNull();
 

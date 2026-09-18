@@ -5,10 +5,14 @@ import IconButton from '../ui/icon-button.component.azeroth';
 import Segmented from '../ui/segmented.component.azeroth';
 import { openTable } from '../../lib/open-table.ts';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
+import { useChat } from '../../stores/chat.store.ts';
 import { useLobby } from '../../stores/lobby.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import type { Game, GameId } from '../../data/games.ts';
 import type { OverlayProps } from '../../stores/overlay.store.ts';
+
+/** The widest table any game in this product plays, used only while the room's size is unknown. */
+const MOST_SEATS = 8;
 
 /**
  * Opens a table IN this room, joinable by the people in it and by nobody else.
@@ -34,18 +38,39 @@ export default component OpenHereSheet(props: OverlayProps & { conversationId: s
     const locale = useLocale();
     const { navigate } = useNavigate();
 
+    const chat = useChat();
+
     state game = 'ludo' as GameId;
     state pending = false;
 
-    derived playable = catalogue.games.filter((entry) => catalogue.status(entry.id) === 'available');
+    /**
+     * The room is the guest list, so the room's size is the table's ceiling.
+     *
+     * Nobody outside this conversation can ever take a chair here - that is the whole point of a
+     * room table - so a four-seat game opened in a thread between two people is a table that can
+     * never be ready and a game that can never start. The sheet simply does not offer it: seat
+     * counts above the head count are gone, and a game with no seat count that fits is gone with
+     * them, which is what takes four-handed hokm off the list in a direct thread.
+     *
+     * Falling back to the largest seat count any game plays while the conversation is still loading
+     * rather than to some small number, because the fallback must not narrow the offer - a group of
+     * eight would otherwise see a two-seat choice for a moment and pick it.
+     */
+    derived capacity = chat.conversation(props.conversationId)?.participants.length ?? MOST_SEATS;
 
-    derived rules = catalogue.rules(game);
+    derived fits = (entry: Game): number[] => catalogue.rules(entry.id).seats.filter((count) => count <= capacity);
+
+    derived playable = catalogue.games
+        .filter((entry) => catalogue.status(entry.id) === 'available')
+        .filter((entry) => fits(entry).length > 0);
+
+    derived allowed = fits(catalogue.byId(game));
 
     state seats = 0;
 
-    derived choices = rules.seats.map((count) => ({ id: String(count), label: locale.n(count) }));
+    derived choices = allowed.map((count) => ({ id: String(count), label: locale.n(count) }));
 
-    derived chosen = rules.seats.includes(seats) ? seats : (rules.seats[rules.seats.length - 1] ?? 2);
+    derived chosen = allowed.includes(seats) ? seats : (allowed[allowed.length - 1] ?? 2);
 
     /**
      * How many people play it, as a range or as one number.
@@ -55,9 +80,14 @@ export default component OpenHereSheet(props: OverlayProps & { conversationId: s
      * string, which is exactly what a `'{min}-{max}'` entry would be. It wears `tally` so the range
      * does not reverse inside a Persian line.
      */
-    const playersOf = (entry: Game): string => entry.minPlayers === entry.maxPlayers
-        ? locale.n(entry.minPlayers)
-        : `${ locale.n(entry.minPlayers) }-${ locale.n(entry.maxPlayers) }`;
+    const playersOf = (entry: Game): string =>
+    {
+        const counts = fits(entry);
+        const low = counts[0] ?? entry.minPlayers;
+        const high = counts[counts.length - 1] ?? entry.maxPlayers;
+
+        return low === high ? locale.n(low) : `${ locale.n(low) }-${ locale.n(high) }`;
+    };
 
     const open = (): void =>
     {

@@ -121,6 +121,38 @@ export default component Tooltip(props: {
         });
     };
 
+    /**
+     * A tooltip belongs to a KEYBOARD focus, not to every focus.
+     *
+     * `onFocusIn` fires for a programmatic `.focus()` too, and every sheet in this product moves
+     * focus to its close button as it opens - so each one opened with the word "Close" floating over
+     * its own first paragraph, which on the table sheet covered the sentence saying who can sit
+     * down. Nothing failed: the matrix reads overflow, hit targets, a landmark and the console, and
+     * a tooltip in the wrong place is none of those.
+     *
+     * `:focus-visible` is the browser's own answer to "did a person tab here", so it shows for a
+     * keyboard user - who needs the name and cannot hover for it - and stays quiet for focus the
+     * page moved itself. Wrapped because `matches` throws on a selector an engine does not know,
+     * and a tooltip must not be the thing that breaks a render; an engine without it shows the
+     * tooltip as before.
+     */
+    const tabbedTo = (target: EventTarget | null): boolean =>
+    {
+        if (!(target instanceof Element))
+        {
+            return false;
+        }
+
+        try
+        {
+            return target.matches(':focus-visible');
+        }
+        catch
+        {
+            return true;
+        }
+    };
+
     mount
     {
         return () => hide();
@@ -133,7 +165,7 @@ export default component Tooltip(props: {
         onPointerEnter={ (event) => (event.pointerType === 'mouse' ? show(false) : undefined) }
         onPointerLeave={ () => hide() }
         onPointerDown={ () => (device.coarse() ? undefined : hide()) }
-        onFocusIn={ () => show(true) }
+        onFocusIn={ (event) => (tabbedTo(event.target) ? show(true) : undefined) }
         onFocusOut={ () => hide() }
         onKeyDown={ (event) => (event.key === 'Escape' ? hide() : undefined) }
         onContextMenu={ (event) =>
