@@ -199,7 +199,7 @@ export function createMatchService(db: DataSource, achieve: AchieveService)
         match: Match,
         next: LudoState,
         events: GameEvent[],
-        action: { seat: number; userId: string | null; kind: MatchAction['kind']; die: number | null; piece: number | null; key: string | null },
+        action: { seat: number; userId: string | null; kind: MatchAction['kind']; payload: Record<string, unknown>; key: string | null },
         mode: string
     ): Promise<void> =>
     {
@@ -229,8 +229,7 @@ export function createMatchService(db: DataSource, achieve: AchieveService)
             seat: action.seat,
             userId: action.userId,
             kind: action.kind,
-            die: action.die,
-            piece: action.piece,
+            payload: action.payload,
             events,
 
             /**
@@ -442,7 +441,7 @@ export function createMatchService(db: DataSource, achieve: AchieveService)
                  */
                 const inserted = firstRow<{ id: string }>(await tx.query(
                     `insert into matches (table_id, game, variant, seats, state, rev, deadline_at)
-                     select $1, $2, 'ludo', $3::smallint, $4::jsonb, 0, now() + ($5 || ' milliseconds')::interval
+                     select $1, $2, 'standard', $3::smallint, $4::jsonb, 0, now() + ($5 || ' milliseconds')::interval
                       where not exists (select 1 from matches where table_id = $1 and finished_at is null)
                         and (select count(*) from table_seats s where s.table_id = $1 and s.user_id is not null) = $6::bigint
                         and not exists (select 1 from table_seats s where s.table_id = $1 and s.ready = false)
@@ -570,8 +569,7 @@ export function createMatchService(db: DataSource, achieve: AchieveService)
                     seat: seat.seat,
                     userId: me,
                     kind: want.kind === 'resign' ? 'forfeit' : want.kind,
-                    die,
-                    piece: want.kind === 'move' ? (want.piece ?? null) : null,
+                    payload: want.kind === 'roll' ? { die } : (want.kind === 'move' ? { piece: want.piece ?? null } : {}),
                     key: want.key
                 }, await modeOf(tx, match.tableId));
 
@@ -667,8 +665,7 @@ export function createMatchService(db: DataSource, achieve: AchieveService)
                     seat,
                     userId: null,
                     kind: action.kind === 'roll' ? 'roll' : action.kind === 'move' ? 'move' : 'forfeit',
-                    die: action.kind === 'roll' ? action.die : null,
-                    piece: action.kind === 'move' ? action.piece : null,
+                    payload: action.kind === 'roll' ? { die: action.die } : (action.kind === 'move' ? { piece: action.piece } : {}),
                     key: null
                 }, mode);
 

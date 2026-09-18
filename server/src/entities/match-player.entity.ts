@@ -15,7 +15,7 @@ export type MatchResult = 'won' | 'lost' | 'abandoned';
  * It does not follow `table_seats`. Standing up from a chair frees the chair; it does not unplay
  * the game, so a finished match still names everyone who played it.
  */
-@Check('match_players_colour_range', `colour between 0 and 3`)
+@Check('match_players_colour_range', `colour is null or colour between 0 and 3`)
 @Check('match_players_rating_pairs', `(rating_before is null) = (rating_after is null)`)
 @Check('match_players_result_known', `result is null or result in ('won', 'lost', 'abandoned')`)
 @Check('match_players_timeouts_positive', `timeouts >= 0`)
@@ -34,8 +34,17 @@ export class MatchPlayer
     @Column({ name: 'user_id', type: 'uuid' })
     userId!: string;
 
-    @Column({ type: 'smallint' })
-    colour!: number;
+    /**
+     * Ludo's colour index, and null for a game that has no such thing.
+     *
+     * A seat's colour is not a fact about a match player, it is a fact about a ludo board - a hokm
+     * seat has a team, a poker seat has a stack, and neither has a colour. It was NOT NULL on a
+     * table every game shares, so a second engine would have had to invent one. It stays here
+     * rather than moving into state because the four ludo colours are what `match_players` is
+     * joined on to draw a board, and it is cheap; what changes is that it is now optional.
+     */
+    @Column({ type: 'smallint', nullable: true })
+    colour!: number | null;
 
     @Column({ type: 'varchar', length: 16, nullable: true })
     result!: MatchResult | null;

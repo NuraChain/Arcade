@@ -83,7 +83,7 @@ describe('rating a field', () =>
 
 const board = (pieces: number[][], winner: number | null, out: boolean[] = []): LudoState => ({
     v: 1,
-    variant: 'ludo',
+    game: 'ludo',
     players: pieces.map((set, index) => ({
         seat: index,
         colour: (['red', 'green', 'yellow', 'blue'] as const)[index],

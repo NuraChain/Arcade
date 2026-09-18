@@ -354,8 +354,14 @@ describe.skipIf(!active)('a match, against a real database', () =>
                 view = answer.load;
             }
 
-            const rows = rowsOf<{ rev: number; die: number | null; kind: string }>(await db.query(
-                `select rev, die, kind from match_actions where match_id = $1 order by rev`,
+            /*
+             * The die is read out of the action's PAYLOAD now. It was two smallint columns on a
+             * table every game shares, which is a ludo turn carved into shared furniture - a
+             * backgammon roll is a pair and a poker bet is an amount, and neither fits a `die`
+             * between 1 and 6.
+             */
+            const rows = rowsOf<{ rev: number; payload: { die?: number }; kind: string }>(await db.query(
+                `select rev, payload, kind from match_actions where match_id = $1 order by rev`,
                 [load.match.id]
             ));
 
@@ -363,8 +369,8 @@ describe.skipIf(!active)('a match, against a real database', () =>
 
             for (const row of rows.filter((candidate) => candidate.kind === 'roll'))
             {
-                expect(row.die).toBeGreaterThanOrEqual(1);
-                expect(row.die).toBeLessThanOrEqual(6);
+                expect(row.payload.die).toBeGreaterThanOrEqual(1);
+                expect(row.payload.die).toBeLessThanOrEqual(6);
             }
 
             expect(view.match.rev).toBe(rows.length);
@@ -480,7 +486,7 @@ describe.skipIf(!active)('a match, against a real database', () =>
 
             await expect(db.query(
                 `insert into matches (table_id, game, variant, seats, state, rev, deadline_at)
-                 values ($1, 'ludo', 'ludo', 2, '{"rev":0}'::jsonb, 0, now())`,
+                 values ($1, 'ludo', 'standard', 2, '{"rev":0}'::jsonb, 0, now())`,
                 [tableId]
             )).rejects.toThrow();
         });

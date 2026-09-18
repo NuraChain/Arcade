@@ -40,6 +40,22 @@ export const INDEXES_TYPEORM_CANNOT_EXPRESS = [
         where finished_at is not null`
 ] as const;
 
+/**
+ * The names of the indexes above, read off the statements rather than restated.
+ *
+ * Both the schema spec and the snapshot recorder need this list, and both used to carry their own
+ * copy of it. Two copies is one copy too many and it showed: `matches_finished` was added to the
+ * statements, then to the spec's copy, and the recorder's copy - which nobody thought to look at -
+ * quietly dropped it out of the snapshot on the next recording.
+ *
+ * Derived, so there is one list. What the spec asserts is therefore the real invariant: every index
+ * this module declares exists in the database under the name this module gave it.
+ */
+export const HAND_BUILT_INDEX_NAMES: readonly string[] = INDEXES_TYPEORM_CANNOT_EXPRESS
+    .map((statement) => /create\s+(?:unique\s+)?index if not exists\s+(\w+)/i.exec(statement)?.[1] ?? '')
+    .filter((name) => name !== '')
+    .sort();
+
 export async function createExtensions(db: DataSource): Promise<void>
 {
     for (const extension of REQUIRED_EXTENSIONS)

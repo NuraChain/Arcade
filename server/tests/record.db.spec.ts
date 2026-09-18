@@ -52,7 +52,7 @@ const makeUser = async (): Promise<string> =>
 
 const board = (pieces: number[][], winner: number | null, out: boolean[] = []): LudoState => ({
     v: 1,
-    variant: 'ludo',
+    game: 'ludo',
     players: pieces.map((set, index) => ({
         seat: index,
         colour: (['red', 'green', 'yellow', 'blue'] as const)[index],
@@ -89,7 +89,7 @@ const finished = async (
 
     const matchId = rowsOf<{ id: string }>(await db.query(
         `insert into matches (table_id, game, variant, seats, state, rev, winner_seat, outcome, finished_at)
-         values ($1, 'ludo', 'ludo', $2, $3::jsonb, $4, $5, $6, now())
+         values ($1, 'ludo', 'standard', $2, $3::jsonb, $4, $5, $6, now())
          returning id`,
         [
             tableId,
@@ -207,8 +207,8 @@ describe.skipIf(!active)('a record, against a real database', () =>
             const { matchId, players } = await finished(state, ['won', 'lost'], 'won');
 
             await db.query(
-                `insert into match_actions (match_id, rev, seat, kind, die, events, state)
-                 values ($1, 1, 0, 'roll', 6, $2::jsonb, $3::jsonb)`,
+                `insert into match_actions (match_id, rev, seat, kind, payload, events, state)
+                 values ($1, 1, 0, 'roll', '{"die": 6}'::jsonb, $2::jsonb, $3::jsonb)`,
                 [matchId, JSON.stringify([
                     { e: 'roll', seat: 0, die: 6 },
                     { e: 'capture', seat: 0, piece: 1, victim: 1, victimPiece: 0 },

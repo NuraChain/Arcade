@@ -4,7 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { DataSource } from 'typeorm';
 
 import { entities } from '../src/entities/index.ts';
-import { syncSchema } from '../src/db/schema.ts';
+import { HAND_BUILT_INDEX_NAMES, syncSchema } from '../src/db/schema.ts';
 import { rowsOf } from '../src/lib/rows.ts';
 import snapshot from './schema-snapshot.json' with { type: 'json' };
 
@@ -143,15 +143,20 @@ describe.skipIf(!active)('the schema the entities build', () =>
      * only thing stopping A asking B while B is asking A from becoming two rows for one intention.
      * These keep their real names, because nothing renames them - which is what this asserts and
      * what the SHAPE comparison elsewhere cannot: an index dropped and rebuilt under a different
-     * name has the same shape. The list is spelled out rather than read from the source, so adding
-     * one without adding it here fails; `matches_finished` was added and not listed for exactly one
-     * commit, leaving the by-name guarantee covering eight of nine.
+     * name has the same shape.
+     *
+     * The names are READ from the statements rather than restated here. They were spelled out on the
+     * reasoning that adding an index without listing it should fail - and what actually happened is
+     * that a third copy existed in the snapshot recorder, nobody looked at it, and it silently
+     * dropped `matches_finished` back out of the snapshot on the next recording. One list, derived,
+     * and what this asserts becomes the real invariant: every index `schema.ts` declares exists in
+     * the database under the name it gave it.
      */
     it('creates every index no decorator can declare, under its own name', async () =>
     {
-        expect(await pick(built, `select indexname as k from pg_indexes where schemaname='public' and indexname in
-            ('friend_requests_pending_pair','groups_public','match_actions_feed','matches_finished',
-             'matches_history','messages_keyset','notifications_keyset','reports_against','tables_open')`))
+        const names = HAND_BUILT_INDEX_NAMES.map((name) => `'${ name }'`).join(', ');
+
+        expect(await pick(built, `select indexname as k from pg_indexes where schemaname='public' and indexname in (${ names })`))
             .toEqual(snapshot.handBuiltIndexes);
     });
 

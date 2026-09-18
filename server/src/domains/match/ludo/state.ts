@@ -11,7 +11,15 @@ export interface LudoPlayer
 export interface LudoState
 {
     v: 1;
-    variant: 'ludo';
+    /**
+     * Which ENGINE wrote this state, so a row can be read back without guessing.
+     *
+     * Named `game` rather than `variant`, because `matches.variant` beside it means something
+     * different - the ruleset within a game, `standard` for every canonical implementation - and two
+     * fields one word apart meaning two things is how somebody reads the wrong one. This is the
+     * discriminant a registry dispatches on.
+     */
+    game: 'ludo';
     players: LudoPlayer[];
     turn: number;
     die: number | null;

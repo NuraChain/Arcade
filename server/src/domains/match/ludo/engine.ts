@@ -52,7 +52,7 @@ export function create(seats: readonly number[], first: number): LudoState
 
     return {
         v: 1,
-        variant: 'ludo',
+        game: 'ludo',
         players,
         turn: first % players.length,
         die: null,

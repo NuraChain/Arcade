@@ -8,7 +8,7 @@ import { afterAll, beforeAll, describe, it } from 'vitest';
 import { DataSource } from 'typeorm';
 
 import { entities } from '../src/entities/index.ts';
-import { syncSchema } from '../src/db/schema.ts';
+import { HAND_BUILT_INDEX_NAMES, syncSchema } from '../src/db/schema.ts';
 import { rowsOf } from '../src/lib/rows.ts';
 
 const url = process.env.TEST_DATABASE_URL;
@@ -72,7 +72,7 @@ describe.skipIf(!active)('recording', () =>
             indexShapes: await pick(built, `select tablename||' '||regexp_replace(indexdef, 'INDEX [^ ]+ ON', 'INDEX ON') as k
                 from pg_indexes where schemaname='public'`),
             handBuiltIndexes: await pick(built, `select indexname as k from pg_indexes where schemaname='public' and indexname in
-                ('friend_requests_pending_pair','groups_public','match_actions_feed','matches_history','messages_keyset','notifications_keyset','reports_against','tables_open')`)
+                (${ HAND_BUILT_INDEX_NAMES.map((name) => `'${ name }'`).join(', ') })`)
         };
 
         const target = join(dirname(fileURLToPath(import.meta.url)), 'schema-snapshot.json');
