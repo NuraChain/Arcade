@@ -59,6 +59,25 @@ export default component Leaderboard(props: { game: GameId })
     derived standings = board.data()?.standings ?? [];
 
     /**
+     * Asks who these people ARE, once the board has said who they are.
+     *
+     * A leaderboard is the one list in this product where most rows are strangers, so without this
+     * every avatar on it is the unknown-person mark and the board reads as a wall of question marks.
+     * `want` is a separate, explicit call rather than something `byHandle` does, because `byHandle`
+     * is read inside a `derived` and a lookup that fetched would be a cycle - which is why this sits
+     * in an `effect` reading the answer rather than beside the read of it.
+     */
+    effect
+    {
+        const handles = standings.map((row) => row.handle);
+
+        if (handles.length > 0)
+        {
+            people.want(handles);
+        }
+    }
+
+    /**
      * Read off the ANSWER, not off the control.
      *
      * `board.data()` lags `window` by a round trip, so a list rendered against the window somebody
