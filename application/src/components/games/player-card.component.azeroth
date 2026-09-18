@@ -52,10 +52,24 @@ export default component PlayerCard(props: {
 
     derived person = people.byHandle(props.player.who);
 
-    derived name = props.player.seat === props.mine
+    derived mine = props.player.seat === props.mine;
+
+    derived name = mine
         ? locale.t('match.you')
         : (person === null ? props.player.who : locale.text(person.displayName));
 
+    /**
+     * Two things this sentence used to be unable to say, both because it fell through to a generic
+     * word while holding the information to be specific.
+     *
+     * **Whose card it is.** `card.turn` is "Their go", and it was printed on YOUR card on YOUR
+     * turn - the card already knows, because the same comparison writes "You" in the name above it.
+     * Persian was worse: `نوبت اوست` says *his or hers* in as many words, about the reader.
+     *
+     * **That the game is over.** A seat whose `result` is `lost` fell past every branch to
+     * "Waiting", so a finished board left three cards saying they were waiting for a turn that is
+     * never coming - beside a result panel on the same screen calling them Lost.
+     */
     derived says = ((): string =>
     {
         if (props.player.result === 'won')
@@ -68,6 +82,11 @@ export default component PlayerCard(props: {
             return locale.t('card.out');
         }
 
+        if (props.player.result === 'lost')
+        {
+            return locale.t('card.lost');
+        }
+
         if (props.player.timeouts > 0)
         {
             return props.player.timeouts >= MISSES_ALLOWED - 1
@@ -75,7 +94,12 @@ export default component PlayerCard(props: {
                 : locale.plural('match.missed', props.player.timeouts);
         }
 
-        return props.active && !props.finished ? locale.t('card.turn') : locale.t('card.waiting');
+        if (!props.active || props.finished)
+        {
+            return locale.t('card.waiting');
+        }
+
+        return mine ? locale.t('card.yourTurn') : locale.t('card.turn');
     })();
 
     <div

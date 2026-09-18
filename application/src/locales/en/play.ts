@@ -96,6 +96,7 @@ export const play = {
     'play.lobby.readyTag': 'Ready',
     'play.lobby.notReady': 'Not ready',
     'play.lobby.allReady': 'Everyone is ready',
+    'play.lobby.youNotReady': 'Ready when you are',
 
     'play.table.watching': 'You are looking at this table, not sitting at it.',
     'play.table.sitDown': 'Take a seat',
@@ -200,6 +201,8 @@ export const play = {
     'match.missed': { one: 'missed a turn', other: 'missed {count} turns' },
     'match.missed.last': 'one more ends their game',
     'card.turn': 'Their go',
+    'card.yourTurn': 'Your go',
+    'card.lost': 'Lost',
     'card.waiting': 'Waiting',
     'card.won': 'Won',
     'card.out': 'Left the game',

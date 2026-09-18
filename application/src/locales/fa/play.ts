@@ -99,6 +99,7 @@ export const play: Pick<Dictionary, keyof typeof reference> = {
     'play.lobby.readyTag': 'آماده',
     'play.lobby.notReady': 'آماده نیست',
     'play.lobby.allReady': 'همه آماده‌اند',
+    'play.lobby.youNotReady': 'هر وقت آماده بودی',
 
     'play.table.watching': 'داری این میز را تماشا می‌کنی، سرش ننشسته‌ای.',
     'play.table.sitDown': 'یک صندلی بردار',
@@ -203,6 +204,8 @@ export const play: Pick<Dictionary, keyof typeof reference> = {
     'match.missed': { one: 'یک نوبت را از دست داد', other: '{count} نوبت را از دست داد' },
     'match.missed.last': 'یکی دیگر بازی‌اش را تمام می‌کند',
     'card.turn': 'نوبت اوست',
+    'card.yourTurn': 'نوبت توست',
+    'card.lost': 'باخت',
     'card.waiting': 'منتظر',
     'card.won': 'برد',
     'card.out': 'بازی را ترک کرد',

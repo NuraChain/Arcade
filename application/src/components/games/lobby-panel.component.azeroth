@@ -46,9 +46,26 @@ export default component LobbyPanel(props: {
         .map((person) => (person === null ? '' : person.displayName.split(' ')[0]))
         .filter(Boolean);
 
+    /**
+     * Whether the READER is the one holding it up, which is a different sentence from anybody else
+     * being.
+     *
+     * `waitingOn` names everybody but you - correctly, because "Waiting for Ludo Two" read back to
+     * Ludo Two is not a sentence anybody writes. What was missing is that the same exclusion made
+     * the line fall through to "Everyone is ready" when you were the only one not ready, while your
+     * own seat card two inches below said "Not ready". The status line is the thing a person reads
+     * to find out why the game has not started, so on the one occasion they can fix it themselves
+     * it has to say so.
+     */
+    derived meNotReady = mine !== null && mine.who !== undefined && !mine.ready;
+
     derived status = empty > 0
         ? locale.plural('play.lobby.emptySeats', empty)
-        : (waitingOn.length > 0 ? locale.t('play.lobby.waiting', { names: locale.list(waitingOn) }) : locale.t('play.lobby.allReady'));
+        : (meNotReady
+            ? locale.t('play.lobby.youNotReady')
+            : (waitingOn.length > 0
+                ? locale.t('play.lobby.waiting', { names: locale.list(waitingOn) })
+                : locale.t('play.lobby.allReady')));
 
     derived gameName = locale.t(catalogue.byId(props.table.game as GameId).nameKey);
 
