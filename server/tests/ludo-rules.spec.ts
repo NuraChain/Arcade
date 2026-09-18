@@ -207,6 +207,44 @@ describe('capturing', () =>
         expect(kinds(events)).toContain('capture');
     });
 
+    /**
+     * The whole sequence, as a player describes it: red is three squares behind yellow, rolls a
+     * three, lands exactly on it - and yellow is back in its yard needing a six to come out again.
+     *
+     * Each half is pinned above and below, and the reason to walk it as one story is that the
+     * halves meet in a place neither test looks: a captured token is only really sent home if what
+     * it is sent back to is a yard the ordinary six rule applies to. A capture that set the piece
+     * to something merely negative would pass the capture test and let the victim walk straight
+     * back out on a two.
+     */
+    it('sends the captured token back to the yard, where it needs a six like any other', () =>
+    {
+        const target = 12;
+        const square = ringIndex('red', target);
+        const victimAt = (square - ENTRY.yellow + 52) % 52;
+
+        expect(SAFE).not.toContain(square);
+
+        let state = place(table(2), 0, [target - 3, YARD, YARD, YARD]);
+        state = place(state, 1, [victimAt, YARD, YARD, YARD]);
+
+        const { state: hit } = ok(apply(withDie(state, 3), { kind: 'move', seat: 0, piece: 0 }));
+
+        expect(hit.players[1].pieces).toEqual([YARD, YARD, YARD, YARD]);
+
+        const yellow = { ...hit, turn: 1 };
+
+        for (const die of [1, 2, 3, 4, 5])
+        {
+            expect(legalMoves(withDie(yellow, die)), `a ${ die } must not free it`).toEqual([]);
+        }
+
+        const freed = ok(apply(withDie(yellow, 6), { kind: 'move', seat: 1, piece: 0 }));
+
+        expect(freed.state.players[1].pieces[0]).toBe(0);
+        expect(kinds(freed.events)).toContain('enter');
+    });
+
     it('leaves a token alone on a starred square', () =>
     {
         const square = SAFE[1];
@@ -220,6 +258,47 @@ describe('capturing', () =>
 
         expect(after.players[1].pieces[0]).toBe(victimAt);
         expect(kinds(events)).not.toContain('capture');
+    });
+
+    /**
+     * Two players on ONE star, which is what a safe square is for.
+     *
+     * The player's own words for it: I am on an empty star, somebody is two squares behind me, and
+     * they have to roll exactly a two to reach me - and even then I stay. Both halves matter and
+     * only one of them was pinned. That a star refuses a capture is the test above; that the mover
+     * still ARRIVES, and the two tokens share the square, is this one. A rule that refused the
+     * landing instead would be a blockade, which this variant does not have, and nothing in
+     * `legalMoves` distinguishes the two - so the difference lives here or nowhere.
+     */
+    it('lets an opponent land on the star and share it, rather than blocking the square', () =>
+    {
+        const square = SAFE[1];
+        const moverAt = (square - ENTRY.red + 52) % 52 - 2;
+        const victimAt = (square - ENTRY.yellow + 52) % 52;
+
+        let state = place(table(2), 0, [moverAt, YARD, YARD, YARD]);
+        state = place(state, 1, [victimAt, YARD, YARD, YARD]);
+
+        expect(legalMoves(withDie(state, 2)), 'the exact roll must be offered').toContain(0);
+
+        const { state: after, events } = ok(apply(withDie(state, 2), { kind: 'move', seat: 0, piece: 0 }));
+
+        expect(kinds(events)).not.toContain('capture');
+        expect(after.players[1].pieces[0], 'the token on the star stays put').toBe(victimAt);
+        expect(ringIndex('red', after.players[0].pieces[0]), 'the mover arrives').toBe(square);
+        expect(ringIndex('yellow', after.players[1].pieces[0]), 'both are on one square').toBe(square);
+    });
+
+    /**
+     * Every colour's own entry is one of the eight stars, so a token that has just come out of the
+     * yard is standing on a safe square rather than on the most dangerous one on the board.
+     */
+    it('starts every colour on a star', () =>
+    {
+        for (const colour of ['red', 'green', 'yellow', 'blue'] as const)
+        {
+            expect(SAFE, `${ colour } enters on an unprotected square`).toContain(ENTRY[colour]);
+        }
     });
 
     it('never captures its own, it stacks with them', () =>
