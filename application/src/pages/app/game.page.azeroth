@@ -3,6 +3,7 @@ import { useHead, useNavigate, useParams } from 'azerothjs';
 import Page from '../../components/app/page.component.azeroth';
 import GameHero from '../../components/games/game-hero.component.azeroth';
 import Leaderboard from '../../components/games/leaderboard.component.azeroth';
+import WatchableList from '../../components/games/watchable-list.component.azeroth';
 import PeopleStrip from '../../components/social/people-strip.component.azeroth';
 import Button from '../../components/ui/button.component.azeroth';
 import EmptyState from '../../components/ui/empty-state.component.azeroth';
@@ -21,6 +22,15 @@ import { usePresence } from '../../stores/presence.store.ts';
 import { useShell } from '../../stores/shell.store.ts';
 import { openTable } from '../../lib/open-table.ts';
 
+/**
+ * One game: what it is, who is playing it, and how it has gone for people.
+ *
+ * The two-column split is a CONTAINER query rather than a viewport one. `lg:` fires at 1024px of
+ * screen, and this column is nothing like the screen: with the social panel open at 1280 the grid
+ * has 660px to divide, the 22rem aside takes 352 of it, and everything on the left was laid out in
+ * 284px - three-word rule cards and a leaderboard whose names all ended in an ellipsis. The people
+ * and group grids already use container variants for exactly this reason.
+ */
 export default component GamePage()
 {
     const locale = useLocale();
@@ -79,15 +89,6 @@ export default component GamePage()
                 <div class="flex flex-col gap-6">
                     <GameHero game={ game! } onQuickPlay={ quickPlay } />
 
-                    /**
-                     * A CONTAINER query, not a viewport one.
-                     *
-                     * `lg:` fires at 1024px of screen, and this column is nothing like the screen:
-                     * with the social panel open at 1280 the grid has 660px to divide, the 22rem
-                     * aside takes 352 of it, and everything on the left was laid out in 284px -
-                     * three-word cards and a leaderboard whose names all ended in an ellipsis. The
-                     * people and group grids already use container variants for this exact reason.
-                     */
                     <div class="grid gap-6 @4xl:grid-cols-[minmax(0,1fr)_22rem]">
                         <div class="flex flex-col gap-6">
                             <section aria-labelledby="game-about">
@@ -117,6 +118,8 @@ export default component GamePage()
                                     { () => <PeopleStrip people={ friendsPlaying } label={ locale.t('game.friendsPlaying') } /> }
                                 </Show>
                             </section>
+
+                            <WatchableList game={ game!.id } />
 
                             <Leaderboard game={ game!.id } />
                         </div>

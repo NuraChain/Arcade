@@ -1,0 +1,122 @@
+import BoardCanvas from './board-canvas.component.azeroth';
+import Panel from '../ui/panel.component.azeroth';
+import Icon from '../../icons/icon.component.azeroth';
+import { useLocale } from '../../stores/locale.store.ts';
+import { usePeople } from '../../stores/people.store.ts';
+import { seatsFor, INITIAL } from './seats.ts';
+import type { MatchView, MatchWatch } from '../../api.ts';
+
+/**
+ * A game somebody else is playing, drawn two minutes behind.
+ *
+ * The same canvas a player looks at, given a board that is deliberately old - which is the whole
+ * shape of the feature: the renderer has no idea it is late, because the delay is the server's and
+ * arrives as an ordinary position.
+ *
+ * **It says how far behind it is, in as many words.** A delay nobody is told about is a product
+ * that looks broken: a watcher sees a move land three turns after the room reacted to it. Saying it
+ * is also the honest thing, because the reason is that a live board in a stranger's hands is a
+ * coaching channel, and somebody watching a friend deserves to know why they are behind.
+ *
+ * There are no controls. Not disabled ones - none: a watcher has no seat, no legal moves and
+ * nothing to press, and a greyed-out roll button would be a promise that sitting down is one click
+ * away when it is a different thing entirely.
+ *
+ * The DELAY and the AGE are two different sentences. The delay is the rule and never changes; the
+ * age is how old this particular board is, which is the same thing until nobody moves for a while
+ * and then says something else entirely - "nothing has happened here for twelve minutes" rather
+ * than "the delay is twelve minutes". The second line only appears once the board is much older
+ * than the rule, which is what keeps it information rather than noise.
+ */
+export default component WatchBoard(props: { watch: MatchWatch })
+{
+    const locale = useLocale();
+    const people = usePeople();
+
+    derived game = props.watch.match;
+
+    derived tokens = seatsFor(game);
+
+    derived view = { tokens, die: game.die ?? null, turn: null, yours: false, winner: null };
+
+    derived turnOf = game.players.find((player: MatchView['players'][number]) => player.seat === game.turn);
+
+    const nameOf = (handle: string): string =>
+    {
+        const person = people.byHandle(handle);
+
+        return person === null ? handle : locale.text(person.displayName);
+    };
+
+    derived says = ((): string =>
+    {
+        if (!props.watch.live)
+        {
+            const champion = game.players.find((player: MatchView['players'][number]) => player.result === 'won');
+
+            return champion === undefined || game.outcome !== 'won'
+                ? locale.t('watch.over')
+                : locale.t('match.won.them', { name: nameOf(champion.who) });
+        }
+
+        return turnOf === undefined ? '' : locale.t('match.turn.theirs', { name: nameOf(turnOf.who) });
+    })();
+
+    <div class="flex flex-col gap-4 @3xl:flex-row">
+        <div class="board-stage">
+            <BoardCanvas view={ view } />
+        </div>
+
+        <div class="flex min-w-0 flex-col gap-3 @3xl:w-[20rem] @3xl:shrink-0">
+            <Panel pad="md" stack="sm" tone={ props.watch.live ? 'accent' : 'field' }>
+                <p class="flex items-center gap-2 text-ui-sm font-semibold text-text">
+                    <Icon name={ props.watch.live ? 'activity' : 'trophy' } size={ 16 } class="shrink-0 text-accent" />
+                    { locale.t(props.watch.live ? 'watch.title' : 'watch.finished') }
+                </p>
+                <Show when={ props.watch.live }>
+                    { () =>
+                        <p class="text-ui-xs text-muted">
+                            { locale.t('watch.behind', { minutes: locale.n(Math.max(1, Math.round(props.watch.delay / 60))) }) }
+                        </p>
+                    }
+                </Show>
+
+                <Show when={ props.watch.live && props.watch.behind > props.watch.delay * 2 }>
+                    { () =>
+                        <p class="text-ui-xs text-muted">
+                            { locale.t('watch.quiet', { minutes: locale.n(Math.round(props.watch.behind / 60)) }) }
+                        </p>
+                    }
+                </Show>
+                <p class="text-ui-xs text-faint">{ locale.t('watch.why') }</p>
+            </Panel>
+
+            <Show when={ says !== '' }>
+                { () =>
+                    <Panel pad="md">
+                        <p class="text-ui-base font-semibold text-text" aria-live="polite">{ says }</p>
+                    </Panel>
+                }
+            </Show>
+
+            <Panel pad="md">
+                <ul class="flex flex-col gap-2">
+                    <For each={ game.players } key={ (player) => player.seat } let={ player }>
+                        <li class="flex items-center gap-2 rounded-tile px-2 py-1.5">
+                            <span
+                                class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-ui-2xs font-bold text-white"
+                                style={ `background: var(--ludo-${ player.colour })` }
+                            >
+                                { INITIAL[player.colour] }
+                            </span>
+                            <span class="min-w-0 flex-1 truncate text-ui-sm text-text">{ nameOf(player.who) }</span>
+                            <span class="tally shrink-0 text-ui-xs text-muted">
+                                { locale.plural('match.tokens', player.home) }
+                            </span>
+                        </li>
+                    </For>
+                </ul>
+            </Panel>
+        </div>
+    </div>
+}

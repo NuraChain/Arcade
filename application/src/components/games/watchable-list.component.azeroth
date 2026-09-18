@@ -1,0 +1,62 @@
+import { createResource } from 'azerothjs';
+
+import Button from '../ui/button.component.azeroth';
+import SectionHeading from '../ui/section-heading.component.azeroth';
+import AvatarGroup from '../ui/avatar-group.component.azeroth';
+import { client } from '../../api.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import { usePeople } from '../../stores/people.store.ts';
+import type { GameId } from '../../data/games.ts';
+
+/**
+ * Games being played right now, so there is somewhere to watch FROM.
+ *
+ * A watch route nobody can find is a watch route nobody uses, and the only other way to reach one
+ * was to already have the table's link - which means being invited to it, which means not needing
+ * to watch. The list is public tables only and it is the server that says so: a table somebody
+ * opened for their friends is not a thing a stranger gets to look at, and a block hides it in both
+ * directions like every other read.
+ *
+ * It says nothing about the DELAY, deliberately - that belongs on the board, where somebody is
+ * actually looking at a position. Here it would be a warning about a thing they have not done yet.
+ */
+export default component WatchableList(props: { game: GameId })
+{
+    const locale = useLocale();
+    const people = usePeople();
+
+    const tables = createResource(
+        () => props.game,
+        (game) => client.tables.watchable({ query: { game } }),
+        { name: 'tables.watchable' }
+    );
+
+    derived rows = tables.data()?.tables ?? [];
+
+    <Show when={ rows.length > 0 }>
+        { () =>
+            <section aria-labelledby="game-watch">
+                <SectionHeading id="game-watch" title={ locale.t('watch.live') } />
+                <ul class="flex flex-col gap-2">
+                    <For each={ rows } key={ (row) => row.id } let={ row }>
+                        <li class="flex items-center gap-3 rounded-tile border border-line bg-field px-3 py-2.5">
+                            <AvatarGroup
+                                people={ row.players.map((handle) => people.byHandle(handle)).filter((one) => one !== null) }
+                                size="xs"
+                                max={ 4 }
+                            />
+                            <span class="min-w-0 flex-1 truncate text-ui-sm text-text">
+                                { row.players.map((handle) => people.byHandle(handle)?.displayName ?? { en: handle, fa: handle })
+                                    .map((name) => locale.text(name))
+                                    .join(locale.t('list.separator')) }
+                            </span>
+                            <Button variant="outline" size="sm" leading="activity" to={ `/app/play/${ row.id }` }>
+                                { locale.t('watch.join') }
+                            </Button>
+                        </li>
+                    </For>
+                </ul>
+            </section>
+        }
+    </Show>
+}

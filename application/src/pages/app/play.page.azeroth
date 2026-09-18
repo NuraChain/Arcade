@@ -5,6 +5,7 @@ import Page from '../../components/app/page.component.azeroth';
 import InviteSheet from '../../components/games/invite-sheet.component.azeroth';
 import LobbyPanel from '../../components/games/lobby-panel.component.azeroth';
 import MatchBoard from '../../components/games/match-board.component.azeroth';
+import WatchBoard from '../../components/games/watch-board.component.azeroth';
 import TableChat from '../../components/games/table-chat.component.azeroth';
 import Button from '../../components/ui/button.component.azeroth';
 import EmptyState from '../../components/ui/empty-state.component.azeroth';
@@ -15,6 +16,7 @@ import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useDevice } from '../../stores/device.store.ts';
 import { useLobby } from '../../stores/lobby.store.ts';
 import { useBoard } from '../../stores/match.store.ts';
+import { useWatch } from '../../stores/watch.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useOverlay } from '../../stores/overlay.store.ts';
 import { useShell } from '../../stores/shell.store.ts';
@@ -37,6 +39,7 @@ export default component PlayPage()
     const board = useBoard();
     const catalogue = useCatalogue();
     const device = useDevice();
+    const watch = useWatch();
     const overlay = useOverlay();
     const shell = useShell();
     const toasts = useToasts();
@@ -132,7 +135,15 @@ export default component PlayPage()
     {
         const id = table?.matchId;
 
-        if (id !== undefined)
+        /**
+         * Only somebody SITTING here opens the player's board.
+         *
+         * `GET /matches/:id` resolves the caller's chair and answers 404 to anybody who has none -
+         * which is right, and which made a watcher's page fetch it anyway and put a 404 in the
+         * console on every visit. A spectator reads `watch` instead, and the two are kept apart
+         * here rather than by hoping the route is forgiving.
+         */
+        if (id !== undefined && seated)
         {
             if (board.openId() !== id)
             {
@@ -162,6 +173,46 @@ export default component PlayPage()
         {
             board.close();
         }
+    }
+
+    /**
+     * Watching, which is what a table with a game on it looks like to somebody with no chair.
+     *
+     * The board that arrives is two minutes old and the server is what holds it back - nothing here
+     * waits or buffers, because a delay a client implements is a delay the network tab undoes. It
+     * opens only when there is a match AND this reader is not in it: a player reads the live board
+     * through `board`, and offering them a stale one beside it would be two boards disagreeing.
+     */
+    effect
+    {
+        const id = table?.matchId;
+
+        if (id !== undefined && !seated)
+        {
+            watch.open(id);
+        }
+        else
+        {
+            watch.close();
+        }
+    }
+
+    /**
+     * And it stops when this page is left.
+     *
+     * The effect above closes the watch when the TABLE stops having a live match, which never
+     * happens by navigating away - so the store kept the last match id, went on polling it every
+     * ten seconds from whatever page came next, and eventually 404'd into the console once that
+     * game had finished. A store that keeps working after its only reader is gone is the same
+     * defect as a timer nobody clears.
+     */
+    mount
+    {
+        return () =>
+        {
+            watch.close();
+            board.close();
+        };
     }
 
     const begin = async (): Promise<void> =>
@@ -335,6 +386,23 @@ export default component PlayPage()
                                         { locale.t('match.start') }
                                     </Button>
                                 </Panel>
+                            }
+                        </Show>
+
+                        <Show when={ !seated && table!.matchId !== undefined }>
+                            { () =>
+                                <div class="flex flex-col gap-3">
+                                    <Show when={ watch.view() !== null }>
+                                        { () => <WatchBoard watch={ watch.view()! } /> }
+                                    </Show>
+                                    <Show when={ watch.view() === null && !watch.loading() }>
+                                        { () =>
+                                            <Panel pad="lg" class="items-center text-center">
+                                                <p class="text-ui-base text-muted">{ locale.t('watch.waiting') }</p>
+                                            </Panel>
+                                        }
+                                    </Show>
+                                </div>
                             }
                         </Show>
 

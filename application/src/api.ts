@@ -24,6 +24,8 @@ export type {
     MatchHistory,
     MatchHistoryEntry,
     MatchView,
+    MatchWatch,
+    WatchableTables,
     MuteSubject,
     Notification,
     NotificationKind,
