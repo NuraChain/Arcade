@@ -80,6 +80,32 @@ describe('what a url is built from', () =>
 
         expect(guilty, 'a promise reaches the address bar as [object Promise]').toEqual([]);
     });
+
+    /**
+     * And the shape that got past the rule above, which is the one that shipped.
+     *
+     *     const tableId = lobby.host(game, config, invitees);
+     *     navigate(`/app/play/${ tableId }`);
+     *
+     * The interpolation names a variable, so a scan of what is inside the braces finds nothing to
+     * object to - and the "Start a game" button in every chat thread sent people to
+     * `/app/play/[object Promise]` for as long as it existed. A rule written against the exact
+     * spelling of one bug catches that spelling and nothing else.
+     *
+     * Holding the promise in a variable is the step that makes the mistake POSSIBLE, so that is
+     * what this refuses. `openTable(lobby.host(...), navigate)` never names it, and a call that is
+     * immediately awaited or `.then`ed is not being held either.
+     */
+    it('never holds a lobby promise in a variable', () =>
+    {
+        const guilty = FILES
+            .filter((file) => file.path !== 'lib/open-table.ts')
+            .flatMap((file) => [...file.text.matchAll(
+                /\b(?:const|let|var)\s+\w+\s*(?::[^=]+)?=\s*(?:lobby|useLobby\(\))\s*\.\s*(?:quick|host)\s*\(/g
+            )].map((match) => `${ file.path }: ${ match[0].trim() }`));
+
+        expect(guilty, 'a held promise is one a template literal can reach').toEqual([]);
+    });
 });
 
 describe('what a Show builds eagerly', () =>
@@ -507,3 +533,47 @@ describe('what red means', () =>
         expect(guilty, 'madder means a table is playing for something; the destructive colour is danger').toEqual([]);
     });
 });
+
+describe('what a byte in the source may be', () =>
+{
+    /**
+     * No invisible control character is ever written into a file here.
+     *
+     * `chat/envelope.ts` and `lib/attestation.ts` both say why in prose - the unit separator is
+     * `String.fromCharCode(0x1f)` and EIP-191's prefix is `String.fromCharCode(0x19)`, because a
+     * control byte typed into a string is one an editor, a lint autofix or a careless copy
+     * eventually eats, and the failure is a signature that verifies against different bytes than it
+     * was made over. Nothing enforced it, and `lib/hashSeed` had a literal 0x1F in it the whole
+     * time: invisible in every editor, and every seed in the product derived from it.
+     *
+     * Written with character codes rather than a regex escape, because the same hazard applies to
+     * the rule itself - a `\\b` in a pattern here once became a literal backspace and the rule it
+     * belonged to passed against the exact bug it was written for.
+     *
+     * Tab, newline and carriage return are the three that are ordinary whitespace.
+     */
+    const ALLOWED = [9, 10, 13];
+
+    it('never holds an invisible control character', () =>
+    {
+        const guilty = FILES
+            .flatMap((file) =>
+            {
+                for (let at = 0; at < file.text.length; at += 1)
+                {
+                    const code = file.text.charCodeAt(at);
+                    const control = (code < 32 && !ALLOWED.includes(code)) || code === 127;
+
+                    if (control)
+                    {
+                        const line = file.text.slice(0, at).split('\n').length;
+                        return [`${ file.path }:${ line } holds character code ${ code }`];
+                    }
+                }
+                return [];
+            });
+
+        expect(guilty, 'build a control character with String.fromCharCode, never type one').toEqual([]);
+    });
+});
+

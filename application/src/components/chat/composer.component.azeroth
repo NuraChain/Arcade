@@ -1,46 +1,29 @@
-import Icon from '../../icons/icon.component.azeroth';
-import type { GameId } from '../../data/games.ts';
-import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import IconButton from '../ui/icon-button.component.azeroth';
 import TextArea from '../ui/text-area.component.azeroth';
-import Rail from '../ui/rail.component.azeroth';
 
+/**
+ * The composer ASKS for a table rather than picking one.
+ *
+ * It carried its own rail of games and handed back an id, which made it the second game picker in
+ * the product and the one with no seat count - so opening a ludo table from a chat always took the
+ * default four, and a thread between two people got a table that needed two more. It also listed
+ * every game in the catalogue, available or not.
+ *
+ * `onGame` now opens the sheet that already knows how to ask both questions, which is one picker
+ * rather than two that disagree.
+ */
 export default component Composer(props: {
     value: string;
     disabled?: boolean;
     onInput: (value: string) => void;
     onSend: () => void;
-    onGame: (game: GameId) => void;
+    onGame: () => void;
 })
 {
     const locale = useLocale();
-    const catalogue = useCatalogue();
-
-    state open = false;
 
     <div class="glass safe-b border-t border-line/60">
-        <Show when={ open && props.disabled !== true }>
-            { () =>
-                <Rail label={ locale.t('chat.pickGame') } class="border-b border-line/60 py-2" inner="items-center px-3 scroll-px-3">
-                    <span class="flex shrink-0 items-center pe-1 text-ui-xs font-semibold text-faint">{ locale.t('chat.pickGame') }</span>
-                    <For each={ catalogue.games } key={ (game) => game.id } let={ game }>
-                        <button
-                            type="button"
-                            class="flex h-9 shrink-0 cursor-pointer snap-start items-center gap-1.5 whitespace-nowrap rounded-control border border-line bg-field px-3 text-ui-sm font-semibold text-text transition-colors hover:border-accent/60"
-                            onClick={ () =>
-                            {
-                                open = false;
-                                props.onGame(game.id);
-                            } }
-                        >
-                            <Icon name="zap" size={ 14 } class="text-accent" />
-                            { locale.t(game.nameKey) }
-                        </button>
-                    </For>
-                </Rail>
-            }
-        </Show>
         <form
             class="flex items-end gap-1.5 px-2 py-2"
             onSubmit={ (event) =>
@@ -52,10 +35,9 @@ export default component Composer(props: {
             <IconButton
                 icon="add"
                 label={ locale.t('chat.gameMenu') }
-                variant={ open ? 'primary' : 'secondary' }
-                pressed={ open }
+                variant="secondary"
                 disabled={ props.disabled === true }
-                onClick={ () => open = !open }
+                onClick={ () => props.onGame() }
             />
             <TextArea
                 value={ props.value }

@@ -1,5 +1,5 @@
 import type { GameId } from '../../data/games.ts';
-import { Link, untrack, useHead, useNavigate, useParams } from 'azerothjs';
+import { Link, untrack, useHead, useParams } from 'azerothjs';
 
 import Page from '../../components/app/page.component.azeroth';
 import { gameNameOf, groupNameOf, othersOf, sealSentenceOf, titleOf } from '../../components/chat/chat-title.ts';
@@ -10,6 +10,7 @@ import Composer from '../../components/chat/composer.component.azeroth';
 import MessageBubble from '../../components/chat/message-bubble.component.azeroth';
 import SealNotice from '../../components/chat/seal-notice.component.azeroth';
 import GroupCrest from '../../components/social/group-crest.component.azeroth';
+import OpenHereSheet from '../../components/games/open-here-sheet.component.azeroth';
 import PersonActions from '../../components/social/person-actions.component.azeroth';
 import Avatar from '../../components/ui/avatar.component.azeroth';
 import AvatarGroup from '../../components/ui/avatar-group.component.azeroth';
@@ -24,7 +25,6 @@ import { useAccount } from '../../stores/account.store.ts';
 import { useDevice } from '../../stores/device.store.ts';
 import { useDevices } from '../../stores/devices.store.ts';
 import { useEnrolment } from '../../stores/enrolment.store.ts';
-import { useLobby } from '../../stores/lobby.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useOverlay } from '../../stores/overlay.store.ts';
 import { usePresence } from '../../stores/presence.store.ts';
@@ -46,13 +46,11 @@ export default component ChatPage()
     const catalogue = useCatalogue();
 
     const gameName = (game: GameId): string => locale.t(catalogue.byId(game).nameKey);
-    const lobby = useLobby();
     const overlay = useOverlay();
     const shell = useShell();
     const toasts = useToasts();
     const device = useDevice();
     const params = useParams();
-    const { navigate } = useNavigate();
 
     state visible = WINDOW;
 
@@ -248,16 +246,27 @@ export default component ChatPage()
             });
     };
 
-    const openTable = (game: Parameters<typeof lobby.host>[0]): void =>
+    /**
+     * Opens a table IN this conversation, joinable by the people in it and by nobody else.
+     *
+     * Three things were wrong with what this replaces and every gate was green for all of them.
+     * `lobby.host` answers with a PROMISE, which was assigned to a variable and then interpolated -
+     * so this button sent people to `/app/play/[object Promise]`, and the rule in
+     * `tests/markup.spec.ts` that exists for exactly this only looked for the call INSIDE the
+     * template literal. It also toasted "Invitation posted to the chat" before the request had
+     * resolved, so a refusal read as success. And the invitation it claimed to post did not exist:
+     * the table was an ordinary `invite` one with the other members' chairs held, which the server
+     * announced nowhere.
+     *
+     * The sheet owns the choice now, and the server writes the line.
+     */
+    const startGame = (): void =>
     {
-        const invitees = others.map((person) => person.id);
-        const config = catalogue.defaults(game);
-        // The invite CARD is a server-authored line, and the server cannot author one about a
-        // table it does not know about yet. Opening the table from here still works; the card
-        // comes back when tables are real.
-        const tableId = lobby.host(game, { ...config, seats: Math.max(config.seats, Math.min(invitees.length + 1, config.seats)) }, invitees);
-        toasts.show({ kind: 'success', text: locale.t('chat.inviteSent') });
-        navigate(`/app/play/${ tableId }`);
+        overlay.open(
+            OpenHereSheet,
+            { conversationId: id },
+            { label: locale.t('openHere.title') }
+        );
     };
 
     derived phone = device.posture() === 'phone';
@@ -443,7 +452,7 @@ export default component ChatPage()
                         disabled={ stop !== null }
                         onInput={ (value) => chat.setDraft(id, value) }
                         onSend={ send }
-                        onGame={ openTable }
+                        onGame={ startGame }
                     />
                 </div>
             }

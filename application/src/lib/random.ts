@@ -10,7 +10,15 @@ export interface Random
 export function hashSeed(...parts: Array<string | number>): number
 {
     let hash = 0x811C9DC5;
-    const text = parts.map((part) => String(part)).join('');
+    /**
+     * The separator is BUILT, never typed.
+     *
+     * It was a literal 0x1F byte sitting inside a string here, invisible in every editor - which is
+     * the thing `chat/envelope.ts` and `lib/attestation.ts` both write this way and say why: an
+     * invisible control character in a source file is one an editor, a lint autofix or a careless
+     * copy eventually eats, and here that would silently change every seed this function derives.
+     */
+    const text = parts.map((part) => String(part)).join(String.fromCharCode(0x1f));
     for (let index = 0; index < text.length; index += 1)
     {
         hash ^= text.charCodeAt(index);
