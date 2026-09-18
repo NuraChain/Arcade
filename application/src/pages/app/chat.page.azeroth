@@ -346,17 +346,13 @@ export default component ChatPage()
                             <span class="truncate text-ui-base font-semibold text-text">{ title }</span>
                             <span class={ () => [ 'truncate text-ui-xs', typing.length > 0 ? 'text-live' : 'text-muted' ].join(' ') }>{ subtitle }</span>
                         </span>
-                        <Show when={ !phone }>
-                            { () =>
-                                <IconButton
-                                    icon={ muted ? 'sound-off' : 'sound' }
-                                    label={ locale.t(muted ? 'chat.unmute' : 'chat.mute') }
-                                    variant="ghost"
-                                    pressed={ muted }
-                                    onClick={ () => void social.toggleMute('conversation', id) }
-                                />
-                            }
-                        </Show>
+                        <IconButton
+                            icon={ muted ? 'sound-off' : 'sound' }
+                            label={ locale.t(muted ? 'chat.unmute' : 'chat.mute') }
+                            variant="ghost"
+                            pressed={ muted }
+                            onClick={ () => void social.toggleMute('conversation', id) }
+                        />
                         <Show when={ others.length === 1 }>
                             { () =>
                                 <IconButton
@@ -369,7 +365,9 @@ export default component ChatPage()
                         </Show>
                     </header>
 
-                    <div ref={ (element) => list = element } class="flex min-h-0 flex-1 flex-col justify-end gap-3 overflow-y-auto px-4 py-4">
+                    <div ref={ (element) => list = element } class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-4">
+                        <div class="mt-auto"></div>
+
                         <Show when={ hidden > 0 }>
                             { () =>
                                 <div class="flex justify-center pb-2">

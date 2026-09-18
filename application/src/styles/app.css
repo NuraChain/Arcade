@@ -677,12 +677,26 @@
     --board-chrome: 14rem;
 }
 
+/*
+ * Held sideways there is no room for chrome, and the HEIGHT is the only thing that matters.
+ *
+ * `--board-max` was `none` here, which reads as "no cap" and is not a length: substituted into
+ * `min(100%, var(--board-max), calc(...))` it makes the whole function fail to parse, so the
+ * declaration is invalid at computed-value time and `inline-size` falls back to `auto` - losing the
+ * `calc(100dvh - chrome)` term that is the entire point of the rule. At 844x390 the stage then
+ * stretched to the full column and `aspect-ratio: 1` made it 724px tall inside a 390px-tall window:
+ * the top half of a board, with the cards, the turn line and the roll button a scroll away. The
+ * matrix tours landscape and passes it, because nothing overflows HORIZONTALLY.
+ *
+ * `100%` is the same intent written as a length, and it is already the first term of the `min()` -
+ * so the cap is simply the column, and the height term does the work.
+ */
 @media (orientation: landscape) and (max-height: 520px)
 {
     .board-stage
     {
         --board-chrome: 2rem;
-        --board-max: none;
+        --board-max: 100%;
     }
 }
 

@@ -74,7 +74,7 @@ export default component Input(props: {
             { () =>
                 <button
                     type="button"
-                    class="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full text-faint hover:bg-raised hover:text-text"
+                    class="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full text-faint hover:bg-raised hover:text-text coarse:h-11 coarse:w-11"
                     aria-label={ locale.t('common.clear') }
                     onClick={ () =>
                     {

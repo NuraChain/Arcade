@@ -153,6 +153,11 @@ bugs" table so nobody re-investigates it.
 **No comments in code.** Names and structure carry the meaning. This file, and the tests, are
 where reasoning is written down.
 
+**Mobile first, then responsive.** The unprefixed utilities are the PHONE layout and every variant
+only adds to it for a bigger screen. Never write a wide layout and patch it down. See *Mobile first,
+and what a wide-first layout hides* for the four real defects that habit produced, all of which the
+680-cell matrix passed.
+
 **Database access is TypeORM, not `DataSource.query()`.** This is a rule, not a preference, and it
 applies to every line written from here on: a repository call (`find`, `findOne`, `insert`,
 `update`, `delete`, `countBy`, `existsBy`) or a `QueryBuilder`. A wide select list of correlated
@@ -2805,6 +2810,73 @@ Three quality tiers picked from a capability probe, then policed by a frame-time
 only ever steps **down**. Most lamps are not lights: they are emissive geometry plus an additive
 sprite and a painted light pool, which is why a market of lit tables affords at most four real
 point lights.
+
+## Mobile first, and what a wide-first layout hides
+
+**The unprefixed utilities ARE the phone layout.** `sm:`/`md:`/`lg:`/`@3xl:` only ever ADD to it for
+bigger screens; a layout written wide and then patched down with overrides is the defect. The shape
+to copy is `.board-arena`, where two cards above and two below the board is the DEFAULT and the
+floating-into-corners arrangement is what a `@container (min-width: 60rem)` earns.
+
+Prefer a `@container` variant over a viewport one wherever the column is narrower than the screen,
+which in this shell is most places: a rail or sidebar takes up to 16rem on the left and the social
+panel takes `--social-w` on the right, so at a 1280 VIEWPORT the middle column is nearer 660px and
+an `lg:` firing at 1024 of screen is firing at about 400px of column.
+
+A 50-agent sweep audited the client against that rule, two refuters per finding. Nine survived and
+**the matrix passed every one of them**, which is the point: it fails on horizontal overflow, a
+sub-44px target, a missing landmark and a dirty console, and a layout can be wrong at 390 without
+being any of those.
+
+Four were real defects rather than merely wide-first, and each is worth keeping.
+
+**`justify-end` on a scrolling flex column destroys the scroll range.** The chat thread used it to
+sit a short conversation at the bottom of a tall desktop column - the wide case - and
+`justify-content: flex-end` puts the overflow in the unreachable START region: `scrollHeight`
+collapses to `clientHeight` and the maximum `scrollTop` is zero. Measured in Chrome, twelve 86px
+children in a 200px box give a scrollHeight of 1032 at `flex-start` and 200 at `flex-end`. The
+newest messages are the ones on screen so nothing LOOKS wrong, which is why it survived; what a
+person finds is that the conversation cannot be scrolled up at all, "Show 40 earlier" appears to do
+nothing, and `attachStick` never sees a scroll event. It bit hardest on a phone, where a 600px box
+holds about eight bubbles. `mt-auto` on the first in-flow child says the same thing and is
+scroll-safe at every height, which is what the table chat next door had always done.
+
+**A keyword in a `min()` invalidates the whole declaration.** The landscape rule set
+`--board-max: none`, which reads as "no cap" and is not a `<calc-sum>`: substituted into
+`min(100%, var(--board-max), calc(100dvh - var(--board-chrome)))` the function fails to parse, the
+declaration is invalid at computed-value time, and `inline-size` falls back to `auto` - losing the
+height term that is the entire point of the rule. Measured at 844x390: the stage came out 700px wide
+in a 700px parent, and `aspect-ratio: 1` made it 700px tall inside a 390px-tall window. With
+`--board-max: 100%` it is 358px, which is `100dvh - 2rem` exactly. Nothing overflows HORIZONTALLY in
+either case, so the matrix tours landscape and passes it.
+
+**Padding that reserves space for something already in flow.** `.page` carried `phone:pb-nav`, which
+is `calc(var(--nav-h) + env(safe-area-inset-bottom) + 1rem)` - a hold-over from a fixed tab bar.
+`BottomNav` is the last child of the shell's `flex h-dvh flex-col` column and `main` is `flex-1
+overflow-hidden` above it, so the page already ends exactly where the nav begins. Every scrollable
+page ended 76px early, 110px on a notched phone because the nav applies `safe-b` itself and the
+inset was counted twice - and worst on `/app/play/:id`, which is `immersive` and renders no nav at
+all, so the one screen that should be biggest gave up 92px to a bar that was not there.
+
+**A control the matrix structurally cannot see.** Every interactive primitive in `components/ui/`
+grows on a coarse pointer - `coarse:h-11` on Button, IconButton, Chip, Segmented, TextArea - except
+the clear button inside `Input`, which stayed at 32px. The matrix cannot catch it: the button is
+behind `<Show when={ clearable && value !== '' }>`, and the matrix tours routes by url and never
+types, so the element does not exist in any cell it hit-tests. That is the general shape to watch
+for - a control that only exists after an interaction is a control no gate here measures.
+
+The rest were the plain wide-first pattern, and the fix is the same each time: a phone must get a
+layout designed for it rather than a desktop with pieces hidden. **Muting was removed from the chat
+header on a phone**, which left a group thread with no actions at all, because the only other header
+control is the profile shortcut a group has no use for. **Decline was removed from a friend request
+in the notification list on a phone**, leaving Accept as the only answer, on a row whose button
+pair used half the width. **The tab strip has always scrolled** - `overflow-x-auto` with the
+scrollbar hidden - which is exactly why nothing said it did: five tabs at 390 put the last two past
+the edge with no scrollbar and no fade, so a page opened on its fifth tab showed a strip whose
+selected item was off screen. `Tabs` reveals the selected one now, with `nearest` so a tab already
+in view is left alone. And **`Slider`'s thumb mixed a logical inset with a physical translate**
+(`inset-inline-start` with `-translate-x-1/2`), so in Persian it sat a full thumb-width off the
+track; a logical `-ms-2.5` centres it in both directions.
 
 ## RTL
 

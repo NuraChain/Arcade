@@ -140,7 +140,7 @@ export default component Slider(props: {
                 }
             </Show>
             <span
-                class="absolute h-5 w-5 -translate-x-1/2 rounded-full border-2 border-accent bg-field shadow-1 transition-transform duration-100 active:scale-110"
+                class="absolute -ms-2.5 h-5 w-5 rounded-full border-2 border-accent bg-field shadow-1 transition-transform duration-100 active:scale-110"
                 style={ `inset-inline-start: ${ percent }%` }
                 aria-hidden="true"
             ></span>

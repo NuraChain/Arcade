@@ -83,11 +83,6 @@
     padding-block-end: env(safe-area-inset-bottom, 0px);
 }
 
-@utility pb-nav
-{
-    padding-block-end: calc(var(--nav-h) + env(safe-area-inset-bottom, 0px) + 1rem);
-}
-
 @utility glass
 {
     background: var(--glass);

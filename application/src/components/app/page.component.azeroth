@@ -150,7 +150,7 @@ export default component Page(props: { children?: Child; padded?: boolean; width
         class={ () => [
             'page bar bg-void',
             slide > 0 ? 'is-sliding' : '',
-            props.padded === false ? '' : 'page-pad pt-4 phone:pb-nav rail:pb-8 sidebar:pb-8',
+            props.padded === false ? '' : 'page-pad pb-8 pt-4',
             props.class ?? ''
         ].filter(Boolean).join(' ') }
         style={ slide > 0 ? `--slide:${ slide }px` : undefined }

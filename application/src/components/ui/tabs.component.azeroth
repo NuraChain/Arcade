@@ -19,17 +19,45 @@ export default component Tabs(props: {
 
     let list: HTMLElement | null = null;
 
+    /**
+     * The selected tab is never off screen, whatever the strip has room for.
+     *
+     * The strip has always scrolled - `overflow-x-auto` with the scrollbar hidden - and that is
+     * exactly why nothing said it did: five tabs at 390 put the last two past the edge with no
+     * scrollbar, no fade and no hint, so a page opened on its fifth tab showed a strip whose
+     * selected item was somewhere to the right. Nothing overflows the PAGE, so the matrix passes.
+     *
+     * `nearest` rather than `center`, so a tab already in view is left where it is: scrolling a
+     * strip that did not need scrolling is its own small confusion.
+     */
+    const reveal = (id: string): void =>
+    {
+        list?.querySelector<HTMLElement>(`[data-tab='${ id }']`)
+            ?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    };
+
+    effect
+    {
+        const selected = props.value;
+
+        if (selected !== '')
+        {
+            reveal(selected);
+        }
+    }
+
     const move = (from: string, step: number): void =>
     {
         const index = props.items.findIndex((item) => item.id === from);
         const next = props.items[(index + step + props.items.length) % props.items.length];
         props.onChange(next.id);
         list?.querySelector<HTMLElement>(`[data-tab='${ next.id }']`)?.focus();
+        reveal(next.id);
     };
 
     <div
         ref={ (element) => list = element }
-        class={ [ 'flex gap-1 overflow-x-auto border-b border-line [scrollbar-width:none]', props.class ?? '' ].filter(Boolean).join(' ') }
+        class={ () => [ 'flex gap-1 overflow-x-auto border-b border-line [scrollbar-width:none]', props.class ?? '' ].filter(Boolean).join(' ') }
         role="tablist"
         aria-label={ props.label }
     >

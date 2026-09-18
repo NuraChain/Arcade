@@ -3,7 +3,6 @@ import Icon from '../../icons/icon.component.azeroth';
 import type { IconName } from '../../icons/registry.ts';
 import type { MessageKey } from '../../locales/en.ts';
 import { usePeople } from '../../stores/people.store.ts';
-import { useDevice } from '../../stores/device.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useSocial } from '../../stores/social.store.ts';
 import Avatar from '../ui/avatar.component.azeroth';
@@ -43,7 +42,6 @@ export default component NotificationRow(props: {
 {
     const locale = useLocale();
     const social = useSocial();
-    const device = useDevice();
     const people = usePeople();
 
     derived person = props.item.actor === undefined ? null : (people.byHandle(props.item.actor) ?? null);
@@ -56,8 +54,6 @@ export default component NotificationRow(props: {
 
     derived answerable = props.item.kind === 'friend-request'
         && social.incoming().some((request) => request.from === props.item.actor);
-
-    derived roomy = device.posture() !== 'phone';
 
     <div class={ [
         'flex flex-col gap-2 rounded-tile px-2 py-2',
@@ -111,24 +107,20 @@ export default component NotificationRow(props: {
                     >
                         { locale.t('person.accept') }
                     </Button>
-                    <Show when={ roomy }>
-                        { () =>
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={ () =>
-                                {
-                                    const request = social.incoming().find((entry) => entry.from === props.item.actor);
-                                    if (request !== undefined)
-                                    {
-                                        void social.decline(request.id);
-                                    }
-                                } }
-                            >
-                                { locale.t('person.decline') }
-                            </Button>
-                        }
-                    </Show>
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={ () =>
+                        {
+                            const request = social.incoming().find((entry) => entry.from === props.item.actor);
+                            if (request !== undefined)
+                            {
+                                void social.decline(request.id);
+                            }
+                        } }
+                    >
+                        { locale.t('person.decline') }
+                    </Button>
                 </div>
             }
         </Show>
