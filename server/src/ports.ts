@@ -33,6 +33,7 @@ import type {
     LeaderboardWindow,
     TablePrivacy,
     TableSummary,
+    MatchPlay,
     MatchView
 } from './schemas.ts';
 import type { Infer } from '@azerothjs/schema';
@@ -424,7 +425,7 @@ export interface ChatPort
 /**
  * A game in progress.
  *
- * The two verbs a player has are `roll` and `move`, and neither names a destination: `move` names a
+ * The verbs a player has never name a destination: a move names a
  * token, the server computes where it lands from the die it drew itself, and there is no field
  * anywhere on the way in that carries a dice value. Everything else here is a read.
  *
@@ -446,9 +447,16 @@ export interface MatchPort
     /** Deals the board. Refuses a table with an empty chair or anybody not ready. */
     start(me: string, tableId: string): Promise<MatchView>;
 
-    roll(me: string, matchId: string, input: { key: string; rev?: number }): Promise<{ match: MatchView; applied: Applied }>;
-
-    move(me: string, matchId: string, input: { key: string; rev?: number; piece: number }): Promise<{ match: MatchView; applied: Applied }>;
+    /**
+     * One route for every game's verbs, because the authorisation, the idempotency key and the
+     * revision check are identical whatever is being asked for.
+     *
+     * `/roll` and `/move` were ludo's, and three more games would have been nine more routes over
+     * one body of shared work. The play is a per-game shape declared in `schemas.ts`, and the
+     * engine is what reads it - a play addressed to a game this server does not run, or one that
+     * does not add up, is refused the same way, because both mean the same to whoever sent it.
+     */
+    play(me: string, matchId: string, input: { key: string; rev?: number; play: MatchPlay }): Promise<{ match: MatchView; applied: Applied }>;
 
     /** Gives up. A decision, so a real loss. */
     resign(me: string, matchId: string, input: { key: string }): Promise<{ match: MatchView; applied: Applied }>;

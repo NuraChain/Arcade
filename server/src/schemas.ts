@@ -1171,10 +1171,36 @@ export const matchActionInput = object({
     rev: number({ int: true, min: 0 }).optional()
 });
 
-export const matchMoveInput = object({
+/**
+ * What a player asks a LUDO board to do, and the third shape discriminated by the game's name.
+ *
+ * There were two routes here - `/roll` and `/move` - which are ludo's verbs on a feature every game
+ * shares. Hokm plays a card and calls a trump, backgammon doubles and takes, poker raises; three
+ * more routes each, on a path whose authorisation, idempotency and revision check are identical
+ * every time. One route carrying a per-game action is the same answer `matchBoard` and `matchLog`
+ * already give for what comes back.
+ *
+ * **There is no `die` here and there cannot be one.** `roll` asks the SERVER to draw; the engine is
+ * handed a `Draws` and takes the number itself, so there is no field on the way in that could carry
+ * a result and no randomness inside an engine to subvert. `ludo-dice.spec.ts` reads this file as
+ * text and fails if one appears.
+ */
+export const ludoPlay = object({
+    kind: literal('ludo'),
+    verb: enumOf(['roll', 'move']),
+
+    /** Which of the caller's own four tokens to move. Absent on a roll, which names nothing. */
+    piece: number({ int: true, min: 0, max: 3 }).optional()
+});
+
+export const matchPlay = union([ludoPlay]);
+
+export type MatchPlay = Infer<typeof matchPlay>;
+
+export const matchPlayInput = object({
     key: string({ max: 64 }),
     rev: number({ int: true, min: 0 }).optional(),
-    piece: number({ int: true, min: 0, max: 3 })
+    play: matchPlay
 });
 
 /**

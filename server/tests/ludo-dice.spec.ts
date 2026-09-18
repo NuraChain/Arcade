@@ -60,9 +60,16 @@ describe('the wire', () =>
     it('gives a caller nowhere to put a dice result', () =>
     {
         const schemas = read('schemas.ts');
-        const inputs = [...schemas.matchAll(/export const (match\w*Input) = object\(\{([\s\S]*?)\n\}\);/g)];
+        /**
+         * Every shape a match action arrives in: the envelope, and the per-game play inside it.
+         * `/roll` and `/move` were two routes with two input schemas; one route carrying a per-game
+         * action is one envelope plus one shape per engine, so the sweep has to find both or it is
+         * checking the outside of a box and not what is in it.
+         */
+        const inputs = [...schemas.matchAll(/export const (match\w*Input|\w+Play) = object\(\{([\s\S]*?)\n\}\);/g)];
 
-        expect(inputs.length, 'no match input schemas found, so this checked nothing').toBeGreaterThanOrEqual(2);
+        expect(inputs.map(([, name]) => name)).toContain('matchPlayInput');
+        expect(inputs.map(([, name]) => name)).toContain('ludoPlay');
 
         for (const [, name, body] of inputs)
         {

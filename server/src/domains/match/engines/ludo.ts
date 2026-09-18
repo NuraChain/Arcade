@@ -2,8 +2,8 @@ import { FINISHED, cellAt } from '../ludo/board.ts';
 import { apply, create, indexOfSeat, legalMoves } from '../ludo/engine.ts';
 import { placementsOf } from '../ludo/standings.ts';
 import type { EngineAction, GameEvent, LudoState } from '../ludo/state.ts';
-import type { Draws, Ending, Engine, Placement, Tally } from '../engine.ts';
-import type { MatchBoard, MatchLog } from '../../../schemas.ts';
+import type { Draws, Ending, Engine, ForfeitReason, Placement, Tally } from '../engine.ts';
+import type { MatchBoard, MatchLog, MatchPlay } from '../../../schemas.ts';
 
 /**
  * Ludo, behind the seam every game sits behind.
@@ -30,7 +30,41 @@ export const ludoEngine: Engine<LudoState, EngineAction> = {
     create: (seats: readonly number[], draws: Draws): LudoState =>
         create(seats, draws.die(seats.length) - 1),
 
-    apply: (state: LudoState, action: EngineAction) => apply(state, action),
+    /**
+     * A play addressed to a different game, or one that does not add up, is NULL rather than a
+     * throw - the route answers both the same way and neither is exceptional.
+     *
+     * A `move` with no piece is the second case. The wire bounds the number to 0-3 so a token index
+     * can never be out of range, but `optional()` is what lets one shape carry both verbs, and a
+     * roll naming a token would be a caller asking for something this engine has no reading of.
+     */
+    parse: (play: MatchPlay, seat: number): EngineAction | null =>
+    {
+        if (play.kind !== 'ludo')
+        {
+            return null;
+        }
+
+        if (play.verb === 'roll')
+        {
+            return { kind: 'roll', seat, die: 0 };
+        }
+
+        return play.piece === undefined ? null : { kind: 'move', seat, piece: play.piece };
+    },
+
+    forfeit: (seat: number, reason: ForfeitReason): EngineAction => ({ kind: 'forfeit', seat, reason }),
+
+    /**
+     * The die is drawn HERE, from the `draws` handed in, and never carried through a caller.
+     *
+     * `parse` returns a roll with a placeholder because its job is to read what was asked, not to
+     * decide what happened; the number is taken at the moment the action is applied, inside the
+     * transaction that records it. That is what leaves no field on the way in and no layer between
+     * the draw and the ledger.
+     */
+    apply: (state: LudoState, action: EngineAction, draws: Draws) =>
+        apply(state, action.kind === 'roll' ? { ...action, die: draws.die(6) } : action),
 
     legal: (state: LudoState, seat: number): EngineAction[] =>
     {

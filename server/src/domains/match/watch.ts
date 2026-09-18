@@ -1,7 +1,6 @@
 import type { DataSource } from 'typeorm';
 
 import { Match, MatchAction } from '../../entities/index.ts';
-import type { LudoState } from './ludo/state.ts';
 import type { MatchLoad, MatchSeatRow } from './service.ts';
 
 /**
@@ -73,7 +72,7 @@ export function createWatchService(db: DataSource, seatsOf: (matchId: string) =>
             if (match.finishedAt !== null)
             {
                 return {
-                    load: { match, state: match.state as LudoState, players, mine: -1 },
+                    load: { match, state: match.state, players, mine: -1 },
                     behind: 0,
                     live: false
                 };
@@ -98,7 +97,7 @@ export function createWatchService(db: DataSource, seatsOf: (matchId: string) =>
                 .andWhere(`a.created_at <= now() - (:delay || ' milliseconds')::interval`, { delay: WATCH_DELAY_MS })
                 .orderBy('a.rev', 'DESC')
                 .limit(1)
-                .getRawOne<{ state: LudoState; rev: number; behind: string }>();
+                .getRawOne<{ state: unknown; rev: number; behind: string }>();
 
             if (row === undefined)
             {

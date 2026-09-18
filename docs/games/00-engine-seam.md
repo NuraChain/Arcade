@@ -5,12 +5,13 @@
 | step | state |
 |---|---|
 | 1. Schema widening + snapshot | **done** — `7e5dc59` |
-| 2. Extract `Engine`, Ludo behind it | **part done** — the interface, injection and the generic refusal; the service still folds Ludo's state directly |
+| 2. Extract `Engine`, Ludo behind it | **done** — finished as step 6; the shared path names no game |
 | 3. Per-viewer `view()`, new wire | **done** — every gate green with Ludo identical |
 | 4. Redact `since`, add the leak test | **done** — `Engine.log` and `redaction.db.spec.ts` |
 | 5. Engine-owned outcome, standings, tallies | **done** — `player_stats.tallies` is jsonb |
-| 6. Teams | next — `match_players.team`, and `rateField` over them |
-| 7. Client scene registry | |
+| 6. One action vocabulary | **done** — one `/play` route, the engine parses it |
+| 7. Client scene registry | next |
+| 8. Teams | with Hokm, which is the game that has them |
 
 Nothing in the three game plans can begin until this exists. It is the only work shared by all
 three, and it is the only work that can break Ludo.
@@ -284,10 +285,64 @@ already follows for a line key an old client has never heard of.
 
 ---
 
-**Three things are deliberately still Ludo's**, and they are step 6's, not oversights: the service
-imports `apply`/`create`/`legalMoves` from `ludo/engine.ts` directly, the action vocabulary is
-`roll` and `move`, and `match.store.ts` exposes `canRoll`/`moves` (which now read through `ludoOf`,
-so a game with no die answers false without anybody writing a special case).
+## What step 6 changed, and why it came before teams
+
+The plan put teams here. Teams block Hokm-at-four; the ACTION VOCABULARY blocked every second
+engine, so it went first - a reorder worth stating rather than doing quietly. Teams move to where
+Hokm needs them, because a team rating designed without the game that has teams is the abstraction
+this document already warns about.
+
+`/matches/:id/roll` and `/matches/:id/move` were ludo's verbs on a feature every game shares. Hokm
+plays a card and calls a trump, backgammon doubles and takes, poker raises - nine more routes over
+one body of shared work, where the authorisation, the idempotency key and the revision check are
+identical every time. There is one `/play` now, carrying a `matchPlay` discriminated by the game's
+name, exactly as `matchBoard` and `matchLog` already are for what comes back.
+
+**`Engine.parse(play, seat)` reads it, and the seat is supplied rather than read off the wire.**
+Null is a refusal covering two things a route cannot tell apart without knowing the game: a play
+addressed to another engine, and one addressed to this one that does not add up. Both answer the
+same, because both mean the same to whoever sent it.
+
+**The die moved INSIDE the engine.** `service.ts` used to call `rollDie()` and build the engine's
+action around the number, so the one value a player must not choose passed through a layer with no
+reason to touch it - and got written into `match_actions.payload`, the column a player's REQUEST
+writes. `apply` takes it from the `Draws` it is handed, at the moment it applies, and the payload is
+now what was asked for and nothing about what happened. What the die came up is in `events`, where
+the engine put it.
+
+**The sweep calls `autoplay`, which was written for it and never called.** It built a roll or the
+lowest legal token by hand out of ludo's vocabulary, beside an engine method that already said it -
+the same shape as every other entry in *Five things that were written and never called*.
+
+Two schema changes fell out, both re-recorded as part of this:
+
+- `match_actions_kind_known` was `roll | move | forfeit`. What the platform actually reads is
+  whether somebody STOPPED - `record.ts` tells a walkout from a timeout by asking whether a forfeit
+  names a person - and nothing branches on the others, so it is `play | forfeit` and the verb lives
+  in `payload` where the engine's own words belong.
+- **`match_players.colour` is gone.** Its own docblock said it was what `match_players` is joined on
+  to draw a board; that stopped being true at step 3, when the board became the engine's to compose,
+  and nothing had read it since. A column nothing writes and nothing reads is the dead weight this
+  file deletes everywhere else.
+
+**`asMatch` stopped reading the state at all.** The seats come from `match_players`, the turn from
+`engine.turnOf`, and the winner from `matches.winner_seat` - which `commit` already writes from the
+engine's own `Ending`. It was walking an engine's internal player array to find a handle.
+
+`engine-seam.spec.ts` now covers the whole shared path - `services.ts`, `watch.ts`, `record.ts` -
+and fails if any of them imports anything under `ludo/`. `service.ts` is deliberately absent: it
+names `ludoEngine` once, as the default engine list, which is composition rather than coupling.
+
+**What is left is the client.** `match.store.ts` still says `roll` and `move` - composed into the
+one `play` route, so a second game adds its verbs without the route being written twice - and
+`board-canvas` still hardcodes the ludo scene. That is step 7.
+
+---
+
+**Three things were deliberately still Ludo's after step 5**, and two of them are now gone: the
+service no longer imports `apply`/`create`/`legalMoves`, and the action vocabulary is per-game.
+`match.store.ts` still exposes `canRoll`/`moves`, which read through `ludoOf` so a game with no die
+answers false without anybody writing a special case.
 
 **Two source-text rules hold the seam**, both proved to fail against the defect they exist for
 before being trusted. `server/tests/engine-seam.spec.ts` fails if `services.ts` imports anything

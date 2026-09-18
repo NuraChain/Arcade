@@ -6,17 +6,15 @@ import { MatchPlayer } from '../../entities/match-player.entity.ts';
 import { Match } from '../../entities/match.entity.ts';
 import { Table } from '../../entities/table.entity.ts';
 import { TableSeat } from '../../entities/table-seat.entity.ts';
-import { pickBelow, rollDie } from '../../lib/crypto.ts';
+import { pickBelow } from '../../lib/crypto.ts';
 import type { AchieveService } from '../achieve/service.ts';
 import { firstRow } from '../../lib/rows.ts';
-import { COLOURS } from './ludo/board.ts';
-import { apply, create, legalMoves } from './ludo/engine.ts';
 import { createRecorder } from './record.ts';
 import { ludoEngine } from './engines/ludo.ts';
-import type { Engine } from './engine.ts';
 import type { MatchBoard, MatchLog } from '../../schemas.ts';
 import type { MatchHistory } from '../../schemas.ts';
-import type { EngineAction, GameEvent, LudoState, RefusalReason } from './ludo/state.ts';
+import type { Draws, Engine } from './engine.ts';
+import type { MatchPlay } from '../../schemas.ts';
 
 /** One page of somebody's history. Big enough to be worth a request, small enough to render. */
 const HISTORY_PAGE = 20;
@@ -104,7 +102,12 @@ export interface MatchSeatRow
 export interface MatchLoad
 {
     match: Match;
-    state: LudoState;
+
+    /**
+     * The engine's own state, opaque here on purpose: the only thing this layer may assume about it
+     * is the `rev` the schema's own CHECK reads, and everything else goes through the engine.
+     */
+    state: unknown;
     players: MatchSeatRow[];
     mine: number;
 }
@@ -126,7 +129,16 @@ export interface ActionLog
     log: MatchLog;
 }
 
-const REFUSALS: Record<RefusalReason, 'forbidden' | 'conflict'> = {
+/**
+ * What a refusal MEANS, over the reasons the engines here actually give.
+ *
+ * Keyed by plain string rather than by ludo's own `RefusalReason`, because the reasons are the
+ * game's: hokm refuses a card for not following suit and poker a raise for being too small, and a
+ * closed union declared in the shared path would have to name every game's vocabulary before the
+ * game existed. An unlisted reason falls through to `illegal-move`, which is the honest generic -
+ * a refusal nobody has written copy for is still a refusal, and it must not be a 500.
+ */
+const REFUSALS: Record<string, 'forbidden' | 'conflict'> = {
     'not-your-turn': 'forbidden',
     'not-playing': 'forbidden',
     'already-rolled': 'conflict',
@@ -135,7 +147,7 @@ const REFUSALS: Record<RefusalReason, 'forbidden' | 'conflict'> = {
     'game-over': 'conflict'
 };
 
-const SAYS: Record<RefusalReason, string> = {
+const SAYS: Record<string, string> = {
     'not-your-turn': 'It is not your turn.',
     'not-playing': 'You are not in this game.',
     'already-rolled': 'You have already rolled.',
@@ -144,14 +156,32 @@ const SAYS: Record<RefusalReason, string> = {
     'game-over': 'This game has finished.'
 };
 
-function refuse(reason: RefusalReason): never
+function refuse(reason: string): never
 {
+    if (!(reason in REFUSALS))
+    {
+        throw new ConflictError(SAYS['illegal-move']);
+    }
+
     throw REFUSALS[reason] === 'forbidden' ? new ForbiddenError(SAYS[reason]) : new ConflictError(SAYS[reason]);
 }
 
-function stateOf(match: Match): LudoState
+/**
+ * The one thing this layer may read out of an engine's state, and the schema already insists on it.
+ *
+ * `matches_rev_matches_state` is `CHECK ((state ->> 'rev')::int = rev)`, so a state without a
+ * top-level `rev` is a row Postgres refuses - which makes this assertion one the database enforces
+ * rather than one this file hopes about. It is stated in `engine.ts` as a contract for the same
+ * reason.
+ */
+function revOf(state: unknown): number
 {
-    return match.state as LudoState;
+    return (state as { rev: number }).rev;
+}
+
+function stateOf(match: Match): unknown
+{
+    return match.state;
 }
 
 /**
@@ -170,6 +200,16 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
 
     const engineFor = (game: string): Engine | null => byGame.get(game) ?? null;
 
+    /**
+     * The one source of randomness in this domain, handed to engines rather than taken by them.
+     *
+     * `pickBelow` is `randomInt` from `node:crypto` - never `randomBytes(1) % sides`, which quietly
+     * favours the low faces - and it is the same generator that used to be called `rollDie` here and
+     * `pickBelow` beside it. An engine imports nothing and cannot reach either, which is what makes
+     * "there is no randomness inside an engine to subvert" structural rather than a review comment.
+     */
+    const draws: Draws = { die: (sides: number) => pickBelow(sides) + 1 };
+
     const seatsOf = async (runner: EntityManager | DataSource, matchId: string): Promise<MatchSeatRow[]> =>
         await runner.getRepository(MatchPlayer)
             .createQueryBuilder('p')
@@ -177,7 +217,6 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
             .select('p.seat', 'seat')
             .addSelect('u.handle::text', 'who')
             .addSelect('p.user_id', 'user_id')
-            .addSelect('p.colour', 'colour')
             .addSelect('p.timeouts', 'timeouts')
             .addSelect('p.result', 'result')
             .addSelect('p.rating_before', 'rating_before')
@@ -222,8 +261,8 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
         tx: EntityManager,
         match: Match,
         engine: Engine,
-        next: LudoState,
-        events: GameEvent[],
+        next: unknown,
+        events: unknown[],
         action: { seat: number; userId: string | null; kind: MatchAction['kind']; payload: Record<string, unknown>; key: string | null },
         mode: string
     ): Promise<void> =>
@@ -235,8 +274,8 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
         const written = await tx.getRepository(Match).update(
             { id: match.id, rev: match.rev },
             {
-                state: next,
-                rev: next.rev,
+                state: next as Record<string, unknown>,
+                rev: revOf(next),
                 deadlineAt: over ? null : new Date(Date.now() + turnMs(mode)),
                 winnerSeat,
                 outcome: ending?.outcome ?? null,
@@ -251,12 +290,12 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
 
         await tx.getRepository(MatchAction).insert({
             matchId: match.id,
-            rev: next.rev,
+            rev: revOf(next),
             seat: action.seat,
             userId: action.userId,
             kind: action.kind,
             payload: action.payload,
-            events,
+            events: events as Record<string, unknown>[],
 
             /**
              * The board this action produced, recorded beside it.
@@ -264,7 +303,7 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
              * It is what a spectator is shown two minutes later, and storing it is what keeps the
              * delayed view a READ rather than a fold over the ledger.
              */
-            state: next,
+            state: next as Record<string, unknown>,
             idempotencyKey: action.key
         });
 
@@ -479,8 +518,15 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
                 throw new ConflictError('Everybody has to be ready first.');
             }
 
+            const engine = engineFor(table.game);
+
+            if (engine === null)
+            {
+                throw new ValidationError({ game: 'No engine yet.' }, 'That game cannot be played here yet.');
+            }
+
             const seats = chairs.map((chair) => chair.seat);
-            const state = create(seats, pickBelow(seats.length));
+            const state = engine.create(seats, draws);
 
             const matchId = await db.transaction(async (tx) =>
             {
@@ -505,11 +551,10 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
                     return null;
                 }
 
-                await tx.getRepository(MatchPlayer).insert(chairs.map((chair, index) => ({
+                await tx.getRepository(MatchPlayer).insert(chairs.map((chair) => ({
                     matchId: inserted.id,
                     seat: chair.seat,
-                    userId: chair.userId as string,
-                    colour: COLOURS.indexOf(state.players[index].colour)
+                    userId: chair.userId as string
                 })));
 
                 return inserted.id;
@@ -551,7 +596,7 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
         act: async (
             me: string,
             matchId: string,
-            want: { kind: 'roll' | 'move' | 'resign'; piece?: number; rev?: number; key: string }
+            want: { play: MatchPlay | null; rev?: number; key: string }
         ): Promise<{ load: MatchLoad; applied: Applied }> =>
         {
             if (!UUID.test(matchId))
@@ -608,26 +653,40 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
                     return 'stale';
                 }
 
-                const die = want.kind === 'roll' ? rollDie() : null;
+                /**
+                 * `null` is resigning, which is the platform's verb rather than a game's: every
+                 * engine has it and none of them spells it its own way, so it never crosses the
+                 * wire as a play.
+                 */
+                const action = want.play === null
+                    ? engine.forfeit(seat.seat, 'resign')
+                    : engine.parse(want.play, seat.seat);
 
-                const action: EngineAction = want.kind === 'roll'
-                    ? { kind: 'roll', seat: seat.seat, die: die as number }
-                    : want.kind === 'move'
-                        ? { kind: 'move', seat: seat.seat, piece: want.piece ?? -1 }
-                        : { kind: 'forfeit', seat: seat.seat, reason: 'resign' };
+                if (action === null)
+                {
+                    throw new ValidationError({ play: 'Not a play this game knows.' }, 'That is not a move in this game.');
+                }
 
-                const outcome = apply(stateOf(match), action);
+                const outcome = engine.apply(stateOf(match), action, draws);
 
                 if (!outcome.ok)
                 {
                     refuse(outcome.reason);
                 }
 
+                /**
+                 * The payload is WHAT WAS ASKED FOR, verbatim, and nothing about what happened.
+                 *
+                 * It used to be `{ die }` - the number the service had just drawn - which put the
+                 * one value a player must not choose into the column a player's request writes.
+                 * What the die came up is in `events`, where the engine put it, and the ledger reads
+                 * the same either way.
+                 */
                 await commit(tx, match, engine, outcome.state, outcome.events, {
                     seat: seat.seat,
                     userId: me,
-                    kind: want.kind === 'resign' ? 'forfeit' : want.kind,
-                    payload: want.kind === 'roll' ? { die } : (want.kind === 'move' ? { piece: want.piece ?? null } : {}),
+                    kind: want.play === null ? 'forfeit' : 'play',
+                    payload: want.play === null ? { verb: 'resign' } : { ...want.play },
                     key: want.key
                 }, await modeOf(tx, match.tableId));
 
@@ -652,6 +711,16 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
          * viewer-dependent thing a ludo board has. Every other game has more: a hand, a stack, two
          * cards. So the question the projector asks is the wider one, and the engine answers it.
          */
+        /**
+         * Whose turn it is, as a SEAT, for the two callers outside this file that need to know.
+         *
+         * `asMatch` used to read `state.players[state.turn].seat` and the turn notification the
+         * same - both reaching into an engine's state to turn its internal index into a chair. The
+         * engine is the only thing that knows which is which, and `turnOf` already said so.
+         */
+        turnOf: (game: string, state: unknown): number | null =>
+            engineFor(game)?.turnOf(state) ?? null,
+
         board: (game: string, state: unknown, seat: number | null): MatchBoard =>
         {
             const engine = engineFor(game);
@@ -716,7 +785,13 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
                 }
 
                 const state = stateOf(match);
-                const seat = state.players[state.turn].seat;
+                const seat = engine.turnOf(state);
+
+                if (seat === null)
+                {
+                    return false;
+                }
+
                 const mode = await modeOf(tx, match.tableId);
 
                 const bumped = await tx.getRepository(MatchPlayer)
@@ -729,13 +804,24 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
 
                 const misses = (bumped.raw as { timeouts: number }[])[0]?.timeouts ?? 0;
 
-                const action: EngineAction = misses >= MAX_TIMEOUTS
-                    ? { kind: 'forfeit', seat, reason: 'timeout' }
-                    : state.die === null
-                        ? { kind: 'roll', seat, die: rollDie() }
-                        : { kind: 'move', seat, piece: legalMoves(state)[0] ?? -1 };
+                /**
+                 * `autoplay` is the engine's own answer to "what would this seat do if it were
+                 * here", and it was written for exactly this and never called: the sweep built a
+                 * roll or the lowest legal token by hand, out of ludo's own vocabulary, beside an
+                 * engine method that already said it.
+                 */
+                const forfeiting = misses >= MAX_TIMEOUTS;
 
-                const outcome = apply(state, action);
+                const action = forfeiting
+                    ? engine.forfeit(seat, 'timeout')
+                    : engine.autoplay(state, seat, draws);
+
+                if (action === null)
+                {
+                    return false;
+                }
+
+                const outcome = engine.apply(state, action, draws);
 
                 if (!outcome.ok)
                 {
@@ -745,8 +831,8 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
                 await commit(tx, match, engine, outcome.state, outcome.events, {
                     seat,
                     userId: null,
-                    kind: action.kind === 'roll' ? 'roll' : action.kind === 'move' ? 'move' : 'forfeit',
-                    payload: action.kind === 'roll' ? { die: action.die } : (action.kind === 'move' ? { piece: action.piece } : {}),
+                    kind: forfeiting ? 'forfeit' : 'play',
+                    payload: { verb: forfeiting ? 'timeout' : 'auto' },
                     key: null
                 }, mode);
 

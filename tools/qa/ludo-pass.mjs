@@ -15,6 +15,8 @@
  *   node tools/qa/ludo-pass.mjs
  */
 
+const ROLL = { kind: 'ludo', verb: 'roll' };
+
 const BASE = process.env.QA_BASE ?? 'http://localhost:5300';
 
 let checks = 0;
@@ -175,7 +177,7 @@ const run = async () =>
 
         if (wrongTurn !== undefined)
         {
-            const refused = await wrongTurn.post(`/matches/${ matchId }/roll`, { key: `bad-${ Date.now() }` });
+            const refused = await wrongTurn.post(`/matches/${ matchId }/play`, { key: `bad-${ Date.now() }`, play: ROLL });
             ok('a player out of turn is refused', refused.status === 403, `${ refused.status }`);
         }
 
@@ -186,8 +188,11 @@ const run = async () =>
             const actor = byHandle.get(who);
 
             const answer = state.view.die === undefined
-                ? await actor.post(`/matches/${ matchId }/roll`, { key: `r-${ turns }`, rev: state.rev })
-                : await actor.post(`/matches/${ matchId }/move`, { key: `m-${ turns }`, rev: state.rev, piece: state.view.moves[0] });
+                ? await actor.post(`/matches/${ matchId }/play`, { key: `r-${ turns }`, rev: state.rev, play: ROLL })
+                : await actor.post(`/matches/${ matchId }/play`, {
+                    key: `m-${ turns }`, rev: state.rev,
+                    play: { kind: 'ludo', verb: 'move', piece: state.view.moves[0] }
+                });
 
             if (answer.status !== 200)
             {
@@ -246,7 +251,7 @@ const run = async () =>
         ok('and the log says which game it is, with the turns still in it', named && logged >= state.rev,
             `${ logged } moves across ${ replay.body.events?.length } entries, named ${ named }`);
 
-        const after = await players[0].post(`/matches/${ matchId }/roll`, { key: `late-${ Date.now() }` });
+        const after = await players[0].post(`/matches/${ matchId }/play`, { key: `late-${ Date.now() }`, play: ROLL });
         ok('a finished game refuses another turn', after.status >= 400, `${ after.status }`);
 
         const retry = await players[0].get(`/matches/${ matchId }`);

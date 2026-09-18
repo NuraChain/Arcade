@@ -339,8 +339,8 @@ try
 
             if (state.view.die === undefined)
             {
-                const answer = await actor.request.post(`${ BASE }/api/matches/${ match }/roll`, {
-                    data: { key: `play-pass-${ key++ }` }
+                const answer = await actor.request.post(`${ BASE }/api/matches/${ match }/play`, {
+                    data: { key: `play-pass-${ key++ }`, play: { kind: 'ludo', verb: 'roll' } }
                 });
 
                 if (!answer.ok())
@@ -358,8 +358,11 @@ try
                 continue;
             }
 
-            const answer = await actor.request.post(`${ BASE }/api/matches/${ match }/move`, {
-                data: { key: `play-pass-${ key++ }`, piece: moves[moves.length - 1] }
+            const answer = await actor.request.post(`${ BASE }/api/matches/${ match }/play`, {
+                data: {
+                    key: `play-pass-${ key++ }`,
+                    play: { kind: 'ludo', verb: 'move', piece: moves[moves.length - 1] }
+                }
             });
 
             if (!answer.ok())

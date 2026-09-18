@@ -2,7 +2,17 @@ import { Check, Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, 
 import { Match } from './match.entity.ts';
 import { User } from './user.entity.ts';
 
-export type MatchActionKind = 'roll' | 'move' | 'forfeit';
+/**
+ * What KIND of thing this row records, in the two words the platform reads.
+ *
+ * It was `roll | move | forfeit`, which is ludo's vocabulary on the ledger every game writes to -
+ * hokm plays a card and calls a trump, poker raises, and the column would have grown a verb per
+ * game with a CHECK naming all of them. What the platform actually reads is whether somebody
+ * STOPPED: `record.ts` tells a walkout from a timeout by asking whether a forfeit names a person,
+ * and nothing anywhere branches on the others. The verb itself is in `payload`, where the engine's
+ * own words belong.
+ */
+export type MatchActionKind = 'play' | 'forfeit';
 
 /**
  * Every action that was accepted, in order.
@@ -29,7 +39,7 @@ export type MatchActionKind = 'roll' | 'move' | 'forfeit';
  * rest are ludo's, and each game that lands widens this list in its own commit - a typo in a kind
  * is a row nothing can ever fold, which is the kind of state a CHECK exists to make impossible.
  */
-@Check('match_actions_kind_known', `kind in ('roll', 'move', 'forfeit')`)
+@Check('match_actions_kind_known', `kind in ('play', 'forfeit')`)
 @Check('match_actions_rev_positive', `rev > 0`)
 @Index('match_actions_rev', ['matchId', 'rev'], { unique: true })
 @Index('match_actions_idem', ['matchId', 'userId', 'idempotencyKey'], { unique: true, where: `idempotency_key is not null` })

@@ -31,6 +31,7 @@ import type {
     GroupSummary,
     Notification,
     PersonSummary,
+    MatchPlay,
     MatchView,
     TableSummary
 } from './schemas.ts';
@@ -542,21 +543,29 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
     const asMatch = (load: MatchLoad): MatchView =>
     {
         const state = load.state;
-        const seatOf = (index: number): number => state.players[index].seat;
 
+        /**
+         * The seats come from `match_players`, not from the engine's state.
+         *
+         * Who is in a chair, how many turns they have missed and what the match did to their rating
+         * are the DATABASE's facts - the same for every game - and reading them off the state meant
+         * walking an engine's own player array to find a handle. `turn` and `winner` went the same
+         * way: the engine answers the first and `matches.winner_seat` already holds the second,
+         * written by `commit` from the engine's own `Ending`.
+         */
         const view: MatchView = {
             id: load.match.id,
             tableId: load.match.tableId,
             game: load.match.game,
             rev: load.match.rev,
             seats: load.match.seats,
-            players: state.players.map((player) => ({
-                seat: player.seat,
-                who: load.players.find((row) => row.seat === player.seat)?.who ?? '',
-                timeouts: load.players.find((row) => row.seat === player.seat)?.timeouts ?? 0,
-                ...seatExtras(load, player.seat)
+            players: load.players.map((row) => ({
+                seat: row.seat,
+                who: row.who,
+                timeouts: row.timeouts,
+                ...seatExtras(load, row.seat)
             })),
-            turn: seatOf(state.turn),
+            turn: match.turnOf(load.match.game, state) ?? 0,
 
             /**
              * Composed by the ENGINE, for this viewer, rather than assembled here for everybody.
@@ -585,9 +594,9 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         {
             view.deadline = load.match.deadlineAt.toISOString();
         }
-        if (state.winner !== null)
+        if (load.match.winnerSeat !== null)
         {
-            view.winner = seatOf(state.winner);
+            view.winner = load.match.winnerSeat;
         }
         if (load.match.outcome !== null)
         {
@@ -683,7 +692,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             return;
         }
 
-        const seat = load.state.players[load.state.turn]?.seat;
+        const seat = match.turnOf(load.match.game, load.state);
         const next = load.players.find((one) => one.seat === seat);
 
         if (next === undefined)
@@ -703,7 +712,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
     const played = async (
         me: string,
         matchId: string,
-        want: { kind: 'roll' | 'move' | 'resign'; key: string; rev?: number; piece?: number }
+        want: { play: MatchPlay | null; key: string; rev?: number }
     ): Promise<{ match: MatchView; applied: 'now' | 'already' | 'stale' }> =>
     {
         const answer = await match.act(me, matchId, want);
@@ -1619,11 +1628,10 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 return asMatch(load);
             },
 
-            roll: async (me, matchId, input) => await played(me, matchId, { kind: 'roll', key: input.key, rev: input.rev }),
+            play: async (me, matchId, input) =>
+                await played(me, matchId, { play: input.play, key: input.key, rev: input.rev }),
 
-            move: async (me, matchId, input) => await played(me, matchId, { kind: 'move', key: input.key, rev: input.rev, piece: input.piece }),
-
-            resign: async (me, matchId, input) => await played(me, matchId, { kind: 'resign', key: input.key }),
+            resign: async (me, matchId, input) => await played(me, matchId, { play: null, key: input.key }),
 
             history: (me, cursor) => match.history(me, cursor),
 

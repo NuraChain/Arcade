@@ -11,7 +11,9 @@ import { useRealtime } from './realtime.store.ts';
  *
  * Nothing here decides anything about the game. The legal moves arrive from the server for this
  * viewer, the die arrives drawn, and the two verbs this store has - roll and move - name a token at
- * most. That is what keeps a second copy of the rules out of the browser: the client renders what it
+ * most. They are LUDO's verbs, composed into the one `play` route every game shares: a second game
+ * adds its own here without the route, the idempotency key or the revision check being written
+ * twice. That is what keeps a second copy of the rules out of the browser: the client renders what it
  * is told rather than working out what it is allowed to do, which is the same argument `policy.ts`
  * makes about who may write to whom.
  *
@@ -192,10 +194,10 @@ export const useBoard = createStore((): BoardApi =>
         busy,
 
         roll: async () => await act(async (id, key, rev) =>
-            await client.matches.roll({ params: { id }, input: { key, rev } })),
+            await client.matches.play({ params: { id }, input: { key, rev, play: { kind: 'ludo', verb: 'roll' } } })),
 
         move: async (piece) => await act(async (id, key, rev) =>
-            await client.matches.move({ params: { id }, input: { key, rev, piece } })),
+            await client.matches.play({ params: { id }, input: { key, rev, play: { kind: 'ludo', verb: 'move', piece } } })),
 
         resign: async () => await act(async (id, key) =>
             await client.matches.resign({ params: { id }, input: { key } })),

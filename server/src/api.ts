@@ -84,7 +84,7 @@ import {
     matchDelta,
     matchAck,
     matchActionInput,
-    matchMoveInput,
+    matchPlayInput,
     historyQuery,
     sinceQuery
 } from './schemas.ts';
@@ -617,11 +617,8 @@ export function buildApi(ports: Ports)
                 return found;
             }),
 
-            roll: routes.post('/:id/roll', { input: matchActionInput, output: matchAck },
-                (context) => ports.match.roll(context.principal.userId, context.params.id, context.input)),
-
-            move: routes.post('/:id/move', { input: matchMoveInput, output: matchAck },
-                (context) => ports.match.move(context.principal.userId, context.params.id, context.input)),
+            play: routes.post('/:id/play', { input: matchPlayInput, output: matchAck },
+                (context) => ports.match.play(context.principal.userId, context.params.id, context.input)),
 
             resign: routes.post('/:id/resign', { input: matchActionInput, output: matchAck },
                 (context) => ports.match.resign(context.principal.userId, context.params.id, context.input))

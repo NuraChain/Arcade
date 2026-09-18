@@ -28,7 +28,16 @@
  * whichever module happened to be imported first.
  */
 
-import type { MatchBoard, MatchLog } from '../../schemas.ts';
+import type { MatchBoard, MatchLog, MatchPlay } from '../../schemas.ts';
+
+/**
+ * Why a seat stopped playing, and the closed set is the platform's rather than a game's.
+ *
+ * `record.ts` tells a WALKOUT from a timeout by asking the ledger whether a forfeit names a person,
+ * so the distinction has to survive; these are the three ways it happens and no engine invents a
+ * fourth.
+ */
+export type ForfeitReason = 'resign' | 'timeout' | 'left';
 
 /** A source of whole numbers in `[1, sides]`, drawn by the server inside the transaction. */
 export interface Draws
@@ -83,6 +92,31 @@ export interface Engine<S = unknown, A = unknown>
 
     create(seats: readonly number[], draws: Draws): S;
 
+    /**
+     * What a caller asked for, turned into something this engine will act on - or null.
+     *
+     * Null is a REFUSAL rather than an error, and it covers two things a route cannot tell apart
+     * without knowing the game: a play addressed to a different engine, and one addressed to this
+     * one that does not add up. The service answers both the same way, because both mean the same
+     * to the person who sent it.
+     *
+     * **The seat is supplied, never read off the wire.** `match_players` is the only join between a
+     * chair and a person, so the caller's seat is looked up and handed in - which is what makes "you
+     * cannot move somebody else's token" a lookup rather than a rule somebody remembers to write.
+     */
+    parse(play: MatchPlay, seat: number): A | null;
+
+    /** Giving up, which every game has and none of them spells its own way. */
+    forfeit(seat: number, reason: ForfeitReason): A;
+
+    /**
+     * `draws` is handed IN, and a roll takes its number HERE rather than at the route.
+     *
+     * `service.ts` used to draw the die itself and build the engine's action around it, so the one
+     * thing that must not be choosable travelled through a layer that had no reason to touch it.
+     * The engine takes it from `draws` at the moment it applies, which is what makes "the client
+     * cannot choose a die" a property of the shape rather than of a review.
+     */
     apply(state: S, action: A, draws: Draws): Applied<S, unknown>;
 
     /**

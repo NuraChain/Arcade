@@ -1048,11 +1048,35 @@ about a match; `Engine.points(tally)` is what a game's own doings are worth, bec
 worth two is ludo's opinion and would otherwise have made that file hold the scoring rules of four
 games at once.
 
-**A client asks for two things and neither names a destination.** `POST /matches/:id/roll` carries no
-value at all, and `POST /matches/:id/move` names one of the caller's own tokens - the server computes
-where it lands from the die it drew itself. There is no field anywhere on the way in that carries a
-dice result, and `tests/ludo-dice.spec.ts` reads `schemas.ts` and `api.ts` as text to keep it that
-way.
+**One route carries every game's verbs.** `POST /matches/:id/play` takes a `matchPlay` discriminated
+by the game's name, the way `matchBoard` and `matchLog` already are for what comes back, and
+`Engine.parse(play, seat)` reads it - with the SEAT supplied rather than read off the wire, because
+`match_players` is the only join between a chair and a person. A play addressed to another engine and
+one that does not add up are both `null`, and both answer the same, because both mean the same to
+whoever sent it. `/roll` and `/move` were ludo's verbs on a feature every game shares; three more
+games would have been nine more routes over one body of identical authorisation, idempotency and
+revision work.
+
+**A play names no destination and cannot carry a die.** A move names one of the caller's own tokens
+and the server computes where it lands. The die is drawn INSIDE the engine, from the `Draws` it is
+handed, at the moment it applies - `service.ts` used to draw it and build the action around the
+number, which put the one value a player must not choose through a layer with no reason to touch it
+and into `match_actions.payload`, the column a player's REQUEST writes. The payload is what was asked
+for and nothing about what happened; what the die came up is in `events`. `tests/ludo-dice.spec.ts`
+reads `schemas.ts` and `api.ts` as text to keep it that way.
+
+**`match_actions.kind` is `play` or `forfeit`, and nothing else.** It was `roll | move | forfeit`,
+which is ludo's vocabulary on the ledger every game writes to. What the platform actually reads is
+whether somebody STOPPED - `record.ts` tells a walkout from a timeout by asking whether a forfeit
+names a person - and nothing branches on the others, so the verb lives in `payload` where an engine's
+own words belong.
+
+**`asMatch` reads no state at all.** The seats come from `match_players`, the turn from
+`engine.turnOf`, and the winner from `matches.winner_seat`, which `commit` writes from the engine's
+own `Ending`. `match_players.colour` went with it: its docblock said it was what the table is joined
+on to draw a board, which stopped being true the moment the board became the engine's to compose, and
+nothing had read it since. `tests/engine-seam.spec.ts` covers the whole shared path now -
+`services.ts`, `watch.ts`, `record.ts` - and fails if any of them imports anything under `ludo/`.
 
 **The die is `randomInt` from `node:crypto`, and the product says only that the server rolls it.**
 Not `randomBytes(1) % 6`, which quietly favours the low faces. What cannot be claimed is fairness: a

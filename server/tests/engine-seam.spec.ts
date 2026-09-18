@@ -27,20 +27,37 @@ const read = (name: string): string => readFileSync(join(HERE, '..', 'src', name
     .replace(/\/\*[\s\S]*?\*\//g, '')
     .replace(/\/\/.*$/gm, '');
 
+/**
+ * The three files a match passes through that must not know which game it is.
+ *
+ * `services.ts` composes the payload, `watch.ts` reads the delayed board, `record.ts` writes what
+ * the match did to everybody record. Each one used to name ludo - a grid cell, a cast to
+ * `LudoState`, an event name counted in SQL - and each is one place a second engine would have had
+ * to be added to rather than plugged in. `service.ts` is deliberately absent: it names
+ * `ludoEngine` once, as the default engine list, which is composition rather than coupling.
+ */
+const SHARED = ['services.ts', 'domains/match/watch.ts', 'domains/match/record.ts'];
+
+describe('the shared path', () =>
+{
+    for (const name of SHARED)
+    {
+        it(`${ name } reaches into no game of its own`, () =>
+        {
+            for (const [, specifier] of read(name).matchAll(/from '([^']+)'/g))
+            {
+                expect(
+                    specifier.includes('/ludo/'),
+                    `${ name } imports ${ specifier }, so the shared path knows a board again`
+                ).toBe(false);
+            }
+        });
+    }
+});
+
 describe('the projector', () =>
 {
     const source = read('services.ts');
-
-    it('reaches into no game of its own', () =>
-    {
-        for (const [, specifier] of source.matchAll(/from '([^']+)'/g))
-        {
-            expect(
-                specifier.includes('/ludo/'),
-                `services.ts imports ${ specifier }, so the projector knows a board again`
-            ).toBe(false);
-        }
-    });
 
     /**
      * The three words a ludo seat is made of. `asMatch` built all of them; a payload that names any

@@ -12,6 +12,7 @@ import { createTableService } from '../src/domains/table/service.ts';
 import { syncSchema } from '../src/db/schema.ts';
 import { rowsOf } from '../src/lib/rows.ts';
 import { legalMoves } from '../src/domains/match/ludo/engine.ts';
+import type { LudoState } from '../src/domains/match/ludo/state.ts';
 
 /**
  * A played game, against a real database.
@@ -86,6 +87,14 @@ const countActions = async (matchId: string): Promise<number> =>
         [matchId]
     ))[0].n);
 
+/**
+ * Ludo's two plays, written once. The wire carries a per-game action now, so a spec that drives the
+ * service has to name the game the same way a client does.
+ */
+const ROLL = { kind: 'ludo', verb: 'roll' } as const;
+
+const moveOf = (piece: number) => ({ kind: 'ludo', verb: 'move', piece } as const);
+
 describe.skipIf(!active)('a match, against a real database', () =>
 {
     beforeAll(async () =>
@@ -153,13 +162,20 @@ describe.skipIf(!active)('a match, against a real database', () =>
             expect(rows).toHaveLength(1);
         });
 
+        /**
+         * The colour is read off the BOARD the engine composes, because that is the only place it
+         * lives now. `match_players.colour` was a ludo column on a table every game shares and
+         * nothing had read it since the board became the engine's to draw.
+         */
         it('seats everybody, each in their own colour', async () =>
         {
             const { tableId, players } = await seatedTable(4);
-            const { match, players: seated } = await matches.start(players[0], tableId);
+            const { match, players: seated, state } = await matches.start(players[0], tableId);
+            const board = matches.board('ludo', state, null);
 
             expect(seated).toHaveLength(4);
-            expect(new Set(seated.map((row) => row.colour)).size).toBe(4);
+            expect(board.kind).toBe('ludo');
+            expect(new Set(board.seats.map((row) => row.colour)).size).toBe(4);
 
             const count = rowsOf<{ n: string }>(await db.query(
                 `select count(*) as n from match_players where match_id = $1`,
@@ -176,7 +192,7 @@ describe.skipIf(!active)('a match, against a real database', () =>
                 const { tableId, players } = await seatedTable(seats);
                 const load = await matches.start(players[0], tableId);
 
-                expect(load.state.players, `${ seats } players`).toHaveLength(seats);
+                expect((load.state as LudoState).players, `${ seats } players`).toHaveLength(seats);
                 expect(load.match.seats).toBe(seats);
             }
         });
@@ -251,11 +267,11 @@ describe.skipIf(!active)('a match, against a real database', () =>
         {
             const { tableId, players } = await seatedTable(2);
             const load = await matches.start(players[0], tableId);
-            const turn = load.state.players[load.state.turn].seat;
+            const turn = (load.state as LudoState).players[(load.state as LudoState).turn].seat;
             const actor = players[turn];
 
             const answers = await Promise.all(
-                Array.from({ length: 10 }, () => matches.act(actor, load.match.id, { kind: 'roll', key: 'one-intention' }))
+                Array.from({ length: 10 }, () => matches.act(actor, load.match.id, { play: ROLL, key: 'one-intention' }))
             );
 
             expect(answers.filter((answer) => answer.applied === 'now')).toHaveLength(1);
@@ -271,12 +287,12 @@ describe.skipIf(!active)('a match, against a real database', () =>
         {
             const { tableId, players } = await seatedTable(2);
             const load = await matches.start(players[0], tableId);
-            const turn = load.state.players[load.state.turn].seat;
+            const turn = (load.state as LudoState).players[(load.state as LudoState).turn].seat;
             const actor = players[turn];
 
-            await matches.act(actor, load.match.id, { kind: 'roll', rev: 0, key: 'first' });
+            await matches.act(actor, load.match.id, { play: ROLL, rev: 0, key: 'first' });
 
-            const stale = await matches.act(actor, load.match.id, { kind: 'roll', rev: 0, key: 'second' });
+            const stale = await matches.act(actor, load.match.id, { play: ROLL, rev: 0, key: 'second' });
 
             expect(stale.applied).toBe('stale');
             expect(await countActions(load.match.id)).toBe(1);
@@ -286,11 +302,11 @@ describe.skipIf(!active)('a match, against a real database', () =>
         {
             const { tableId, players } = await seatedTable(2);
             const load = await matches.start(players[0], tableId);
-            const turn = load.state.players[load.state.turn].seat;
+            const turn = (load.state as LudoState).players[(load.state as LudoState).turn].seat;
 
             await Promise.allSettled([
-                matches.act(players[turn], load.match.id, { kind: 'roll', key: 'mine' }),
-                matches.act(players[1 - turn], load.match.id, { kind: 'roll', key: 'theirs' })
+                matches.act(players[turn], load.match.id, { play: ROLL, key: 'mine' }),
+                matches.act(players[1 - turn], load.match.id, { play: ROLL, key: 'theirs' })
             ]);
 
             const revs = rowsOf<{ rev: number }>(await db.query(
@@ -309,9 +325,9 @@ describe.skipIf(!active)('a match, against a real database', () =>
         {
             const { tableId, players } = await seatedTable(2);
             const load = await matches.start(players[0], tableId);
-            const turn = load.state.players[load.state.turn].seat;
+            const turn = (load.state as LudoState).players[(load.state as LudoState).turn].seat;
 
-            await expect(matches.act(players[1 - turn], load.match.id, { kind: 'roll', key: 'nope' }))
+            await expect(matches.act(players[1 - turn], load.match.id, { play: ROLL, key: 'nope' }))
                 .rejects.toThrow(/not your turn/i);
         });
 
@@ -319,9 +335,9 @@ describe.skipIf(!active)('a match, against a real database', () =>
         {
             const { tableId, players } = await seatedTable(2);
             const load = await matches.start(players[0], tableId);
-            const turn = load.state.players[load.state.turn].seat;
+            const turn = (load.state as LudoState).players[(load.state as LudoState).turn].seat;
 
-            await expect(matches.act(players[turn], load.match.id, { kind: 'move', piece: 0, key: 'early' }))
+            await expect(matches.act(players[turn], load.match.id, { play: moveOf(0), key: 'early' }))
                 .rejects.toThrow(/roll/i);
         });
 
@@ -332,7 +348,7 @@ describe.skipIf(!active)('a match, against a real database', () =>
             const stranger = await makeUser();
 
             expect(await matches.view(stranger, load.match.id)).toBeNull();
-            await expect(matches.act(stranger, load.match.id, { kind: 'roll', key: 'x' })).rejects.toThrow(/no game/i);
+            await expect(matches.act(stranger, load.match.id, { play: ROLL, key: 'x' })).rejects.toThrow(/no game/i);
         });
 
         it('records the die it rolled, in order, with no gaps', async () =>
@@ -344,11 +360,12 @@ describe.skipIf(!active)('a match, against a real database', () =>
 
             for (let step = 0; step < 12; step += 1)
             {
-                const seat = view.state.players[view.state.turn].seat;
+                const board = view.state as LudoState;
+                const seat = board.players[board.turn].seat;
                 const actor = players[seat];
-                const want = view.state.die === null
-                    ? { kind: 'roll' as const, key: `r${ step }` }
-                    : { kind: 'move' as const, piece: legalMoves(view.state)[0], key: `m${ step }` };
+                const want = board.die === null
+                    ? { play: ROLL, key: `r${ step }` }
+                    : { play: moveOf(legalMoves(view.state as LudoState)[0]), key: `m${ step }` };
 
                 const answer = await matches.act(actor, view.match.id, want);
                 view = answer.load;
@@ -422,7 +439,7 @@ describe.skipIf(!active)('a match, against a real database', () =>
         {
             const { tableId, players } = await seatedTable(2);
             const load = await matches.start(players[0], tableId);
-            const seat = load.state.players[load.state.turn].seat;
+            const seat = (load.state as LudoState).players[(load.state as LudoState).turn].seat;
 
             await db.query(
                 `update match_players set timeouts = 2 where match_id = $1 and seat = $2`,

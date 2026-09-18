@@ -105,9 +105,9 @@ const finished = async (
     for (const [seat, userId] of players.entries())
     {
         await db.query(
-            `insert into match_players (match_id, seat, user_id, colour, result)
-             values ($1, $2, $3, $4, $5)`,
-            [matchId, seat, userId, seat, results[seat]]
+            `insert into match_players (match_id, seat, user_id, result)
+             values ($1, $2, $3, $4)`,
+            [matchId, seat, userId, results[seat]]
         );
     }
 
@@ -221,7 +221,7 @@ describe.skipIf(!active)('a record, against a real database', () =>
 
             await db.query(
                 `insert into match_actions (match_id, rev, seat, kind, payload, events, state)
-                 values ($1, 1, 0, 'roll', '{"die": 6}'::jsonb, $2::jsonb, $3::jsonb)`,
+                 values ($1, 1, 0, 'play', '{"die": 6}'::jsonb, $2::jsonb, $3::jsonb)`,
                 [matchId, JSON.stringify([
                     { e: 'roll', seat: 0, die: 6 },
                     { e: 'capture', seat: 0, piece: 1, victim: 1, victimPiece: 0 },
@@ -345,7 +345,7 @@ describe.skipIf(!active)('a record, against a real database', () =>
             {
                 await db.query(
                     `insert into match_actions (match_id, rev, seat, kind, payload, events, state)
-                     values ($1, 1, 0, 'roll', '{}'::jsonb, $2::jsonb, $3::jsonb)`,
+                     values ($1, 1, 0, 'play', '{}'::jsonb, $2::jsonb, $3::jsonb)`,
                     [
                         matchId,
                         JSON.stringify(Array.from({ length: count }, () => ({ e: 'roll', seat: 0, die: 4 }))),

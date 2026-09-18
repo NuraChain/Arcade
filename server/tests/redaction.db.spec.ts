@@ -65,6 +65,10 @@ const secretEngine: Engine<SecretState, { seat: number }> = {
 
     create: (): SecretState => stateFor(),
 
+    parse: (): { seat: number } => ({ seat: 0 }),
+
+    forfeit: (seat: number): { seat: number } => ({ seat }),
+
     apply: (state: SecretState) => ({ ok: true, state, events: [] }),
 
     legal: () => [],
@@ -136,7 +140,7 @@ const secretMatch = async (): Promise<{ matchId: string; players: string[] }> =>
     for (const [seat, userId] of players.entries())
     {
         await db.query(
-            `insert into match_players (match_id, seat, user_id, colour) values ($1, $2, $3, $2)`,
+            `insert into match_players (match_id, seat, user_id) values ($1, $2, $3)`,
             [matchId, seat, userId]
         );
     }
@@ -145,7 +149,7 @@ const secretMatch = async (): Promise<{ matchId: string; players: string[] }> =>
     {
         await db.query(
             `insert into match_actions (match_id, rev, seat, kind, payload, events, state)
-             values ($1, $2, $3, 'roll', '{}'::jsonb, $4::jsonb, $5::jsonb)`,
+             values ($1, $2, $3, 'play', '{}'::jsonb, $4::jsonb, $5::jsonb)`,
             [matchId, seat + 1, seat, JSON.stringify([{ seat, die: secret }]), JSON.stringify(state)]
         );
     }
