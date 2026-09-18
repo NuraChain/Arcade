@@ -55,8 +55,19 @@ interface HistoryRow
  * status: `now`, `already`, or `stale`.
  */
 
+/**
+ * How long a turn may be held before the sweep plays it.
+ *
+ * Thirty seconds at a live table: long enough to look at the board and decide, short enough that
+ * nobody waits on somebody who has walked away. It is also the number the countdown beside the
+ * board shows, because a clock a player cannot see is a clock that only ever surprises them - and
+ * for a table playing for anything, being surprised by a clock is the worst way to lose a turn.
+ *
+ * A `turns` table is a day, which is what makes it a correspondence game rather than a slow live
+ * one, and is why a turn there is worth a notification and a turn here is not.
+ */
 const TURN_MS: Record<string, number> = {
-    live: 45_000,
+    live: 30_000,
     turns: 24 * 60 * 60 * 1000
 };
 
@@ -81,6 +92,7 @@ export interface MatchSeatRow
     user_id: string;
 
     colour: number;
+    timeouts: number;
     result: string | null;
     rating_before: number | null;
     rating_after: number | null;
@@ -142,6 +154,7 @@ export function createMatchService(db: DataSource, achieve: AchieveService)
             .addSelect('u.handle::text', 'who')
             .addSelect('p.user_id', 'user_id')
             .addSelect('p.colour', 'colour')
+            .addSelect('p.timeouts', 'timeouts')
             .addSelect('p.result', 'result')
             .addSelect('p.rating_before', 'rating_before')
             .addSelect('p.rating_after', 'rating_after')
@@ -219,6 +232,14 @@ export function createMatchService(db: DataSource, achieve: AchieveService)
             die: action.die,
             piece: action.piece,
             events,
+
+            /**
+             * The board this action produced, recorded beside it.
+             *
+             * It is what a spectator is shown two minutes later, and storing it is what keeps the
+             * delayed view a READ rather than a fold over the ledger.
+             */
+            state: next,
             idempotencyKey: action.key
         });
 
@@ -579,6 +600,9 @@ export function createMatchService(db: DataSource, achieve: AchieveService)
                 ? null
                 : { match: found, state: stateOf(found), players: await seatsOf(db, matchId), mine: -1 };
         },
+
+        /** Who sat where, for callers outside this module that need it without a viewer. */
+        seatsOf: async (matchId: string): Promise<MatchSeatRow[]> => await seatsOf(db, matchId),
 
         due: async (limit: number): Promise<string[]> =>
             (await db.getRepository(Match)

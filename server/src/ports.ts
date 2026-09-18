@@ -2,9 +2,11 @@ import type { Principal } from './http/auth.ts';
 import type {
     AchievementList,
     Leaderboard,
+    MatchWatch,
     LiveCounts,
     MatchHistory,
     PersonRecord,
+    WatchableTables,
     Account,
     Challenge,
     GameList,
@@ -457,6 +459,18 @@ export interface MatchPort
 
     /** The best ratings at one game, among people who have played enough games to have one. */
     leaderboard(game: string): Promise<Leaderboard>;
+
+    /**
+     * A game as a spectator may see it, which is a game as it stood two minutes ago.
+     *
+     * Null for a match that does not exist, one at a table a stranger may not watch, and one too
+     * young to have a board old enough to show - three states the route tells apart, because "not
+     * yet" and "not for you" are different answers.
+     */
+    watch(me: string, matchId: string): Promise<MatchWatch | null>;
+
+    /** Public tables with a game running on them, for somebody looking for one to watch. */
+    watchable(me: string, game: string | null): Promise<WatchableTables>;
 }
 
 /** Every port the API declaration may reach. One member per domain. */

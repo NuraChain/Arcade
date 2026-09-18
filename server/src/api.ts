@@ -78,6 +78,8 @@ import {
     suggestionList,
     walletSignIn,
     matchView,
+    matchWatch,
+    watchableTables,
     matchDelta,
     matchAck,
     matchActionInput,
@@ -522,6 +524,13 @@ export function buildApi(ports: Ports)
             ready: routes.post('/:id/ready', { input: readyInput, output: tableSummary },
                 (context) => ports.table.setReady(context.principal.userId, context.params.id, context.input.ready)),
 
+            /**
+             * Tables with a game running on them, declared BEFORE `/:id` so the literal is not
+             * swallowed by the parameter pattern.
+             */
+            watchable: routes.get('/watching', { query: openQuery, output: watchableTables }, (context) =>
+                ports.match.watchable(context.principal.userId, context.query.game ?? null)),
+
             invite: routes.post('/:id/invite', { input: personRef, output: tableSummary },
                 (context) => ports.table.invite(context.principal.userId, context.params.id, context.input.id)),
 
@@ -583,6 +592,25 @@ export function buildApi(ports: Ports)
                 if (found === null)
                 {
                     throw new NotFoundError('No game there.');
+                }
+
+                return found;
+            }),
+
+            /**
+             * Watching, which is deliberately its own route rather than `view` with a flag.
+             *
+             * `view` answers a PLAYER: it resolves their chair, computes their legal moves and
+             * refuses anybody who has none. This answers a stranger, and the board it returns is
+             * two minutes old. One route serving both would be one place to get the delay wrong.
+             */
+            watch: routes.get('/:id/watch', { output: matchWatch }, async (context) =>
+            {
+                const found = await ports.match.watch(context.principal.userId, context.params.id);
+
+                if (found === null)
+                {
+                    throw new NotFoundError('No game to watch there.');
                 }
 
                 return found;

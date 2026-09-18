@@ -881,6 +881,17 @@ export const matchPlayer = object({
     tokens: array(matchToken),
     home: number(),
     out: boolean(),
+
+    /**
+     * Turns this seat has let run out IN A ROW, which is the number that decides a forfeit.
+     *
+     * It travels because the table has to be able to see it. The server plays a missed turn and
+     * ends the seat on the third in a row, and until this column reached a screen the whole rule
+     * happened silently: nobody knew somebody had gone quiet, nobody knew a seat was one miss from
+     * ending, and the first anyone saw was a player vanishing from a game they were in.
+     */
+    timeouts: number(),
+
     result: enumOf(['won', 'lost', 'abandoned']).optional(),
 
     /**
@@ -981,6 +992,55 @@ export const matchMoveInput = object({
     rev: number({ int: true, min: 0 }).optional(),
     piece: number({ int: true, min: 0, max: 3 })
 });
+
+/**
+ * A game as a spectator sees it: the board, and how far behind it is.
+ *
+ * `behind` travels, and the screen says it. A delay somebody is not told about is a product that
+ * looks broken - a watcher sees a move land three turns after the room reacted to it - and saying
+ * it plainly is also the honest thing, because the reason for it is that a live board in a
+ * stranger's hands is a coaching channel.
+ *
+ * The board inside is an ordinary `matchView` with no `mine` and no `moves`, so it draws through
+ * the same renderer a player uses. A watcher has no chair and no legal moves, and a view that
+ * cannot name one cannot offer one.
+ */
+export const matchWatch = object({
+    match: matchView,
+
+    /** Seconds behind the live game. Zero once it has finished, when there is nothing left to leak. */
+    behind: number(),
+
+    /**
+     * The RULE, in seconds, as distinct from the measurement above.
+     *
+     * They come apart the moment nobody moves: a table idle for twelve minutes serves a board
+     * twelve minutes old, and a screen that reported only `behind` said "twelve minutes behind" -
+     * which reads as the delay being twelve minutes rather than as nothing having happened. The
+     * policy is what a watcher needs to understand why they are behind; the measurement is what
+     * tells them the game has gone quiet.
+     */
+    delay: number(),
+
+    /** Whether the game is still being played. */
+    live: boolean()
+});
+
+export type MatchWatch = Infer<typeof matchWatch>;
+
+/** One table with a game running on it, as somebody looking for something to watch sees it. */
+export const watchableTable = object({
+    id: string(),
+    code: string(),
+    game: string(),
+    seats: number(),
+    players: array(string()),
+    startedAt: string()
+});
+
+export const watchableTables = object({ tables: array(watchableTable) });
+
+export type WatchableTables = Infer<typeof watchableTables>;
 
 export const sinceQuery = object({ rev: string().optional() });
 

@@ -14,6 +14,7 @@ import { sendPush, type VapidKeys } from './domains/notify/push.ts';
 import { createAchieveService } from './domains/achieve/service.ts';
 import { endingOf } from './domains/match/declare.ts';
 import { createMatchService, type MatchLoad } from './domains/match/service.ts';
+import { WATCH_DELAY_MS, createWatchService } from './domains/match/watch.ts';
 import { cellAt, FINISHED } from './domains/match/ludo/board.ts';
 import { createTableService, type TableRow } from './domains/table/service.ts';
 import { createIdentityService } from './domains/identity/service.ts';
@@ -502,6 +503,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
     };
 
     const match = createMatchService(db, achieve);
+    const watch = createWatchService(db, (matchId) => match.seatsOf(matchId));
 
     /**
      * The board as a client is allowed to see it.
@@ -558,11 +560,22 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 }),
                 home: player.pieces.filter((at) => at === FINISHED).length,
                 out: player.out,
+                timeouts: load.players.find((row) => row.seat === player.seat)?.timeouts ?? 0,
                 ...seatExtras(load, player.seat)
             })),
             turn: seatOf(state.turn),
             moves: match.legal(state, load.mine),
-            mine: load.mine,
+
+            /**
+             * Absent, not -1, for somebody with no chair.
+             *
+             * A watcher is loaded with `mine: -1` because the internal shape needs a number, and
+             * putting that on the wire would say "your seat is minus one" to a client that checks
+             * whether the field is there. Absence is the answer this product gives everywhere else
+             * something is not somebody's - `lastSeenAt` is missing rather than null for a viewer
+             * who may not have it - and a client cannot act on a seat it was never given.
+             */
+            ...(load.mine < 0 ? {} : { mine: load.mine }),
             startedAt: load.match.startedAt.toISOString()
         };
 
@@ -1591,7 +1604,49 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
 
             record: (handle) => achieve.recordOf(handle),
 
-            leaderboard: (game) => achieve.leaderboardOf(game)
+            leaderboard: (game) => achieve.leaderboardOf(game),
+
+            /**
+             * Two refusals that are deliberately the same answer.
+             *
+             * A table a stranger may not watch and a match that does not exist both come back null,
+             * which the route turns into 404 - the chat domain's rule, because a 403 confirms the
+             * table is there and the point is that a stranger cannot tell a closed door from a typo.
+             * A match too YOUNG to have a board old enough is the third null and reads the same from
+             * here; the client says "the game has just started" from `live` and an absent board.
+             */
+            async watch(me, matchId)
+            {
+                const found = await watch.delayed(matchId);
+
+                if (found === null)
+                {
+                    return null;
+                }
+
+                if (found.live && !await table.watchableTable(me, found.load.match.tableId))
+                {
+                    return null;
+                }
+
+                return { match: asMatch(found.load), behind: found.behind, delay: WATCH_DELAY_MS / 1000, live: found.live };
+            },
+
+            async watchable(me, game)
+            {
+                const rows = await table.watchable(me, game, 12);
+
+                return {
+                    tables: rows.map((row) => ({
+                        id: row.id,
+                        code: row.code,
+                        game: row.game,
+                        seats: row.seats,
+                        players: row.players ?? [],
+                        startedAt: row.started_at.toISOString()
+                    }))
+                };
+            }
         },
 
         notify: {

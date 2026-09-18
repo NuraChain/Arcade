@@ -1,6 +1,8 @@
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@azerothjs/http';
 import { IsNull, Not, type DataSource } from 'typeorm';
 
+import { Match } from '../../entities/match.entity.ts';
+import { Table } from '../../entities/table.entity.ts';
 import type { TableMode, TablePrivacy, TableStatus } from '../../entities/table.entity.ts';
 import { firstRow, rowsOf } from '../../lib/rows.ts';
 import { ConversationMember } from '../../entities/conversation-member.entity.ts';
@@ -213,6 +215,88 @@ export function createTableService(db: DataSource, social: SocialService, achiev
                 [me, game, limit]
             );
             return rowsOf<TableRow>(rows);
+        },
+
+        /**
+         * Public tables with a game running on them, for somebody looking for one to watch.
+         *
+         * PUBLIC strictly, which is the same rule `open` follows and the same one a private group
+         * follows: a table somebody opened for their friends is not a thing a stranger gets to look
+         * at, and a 404 rather than a 403 is what stops a stranger telling a closed door from a typo.
+         *
+         * A block hides it in both directions, like every other read - watching somebody who blocked
+         * you is a way of following them around, which is what a block is for.
+         */
+        async watchable(me: string, game: string | null, limit: number): Promise<{
+            id: string;
+            code: string;
+            game: string;
+            seats: number;
+            players: string[];
+            started_at: Date;
+        }[]>
+        {
+            return await db.getRepository(Table)
+                .createQueryBuilder('t')
+                .innerJoin(Match, 'm', 'm.table_id = t.id and m.finished_at is null')
+                .select('t.id', 'id')
+                .addSelect('t.code::text', 'code')
+                .addSelect('t.game', 'game')
+                .addSelect('t.seats', 'seats')
+                .addSelect('m.started_at', 'started_at')
+
+                /**
+                 * `array_agg` in seat order, so a watcher reads the table the way it is sat at. A
+                 * repository cannot say this: it is an aggregate over a second table folded into
+                 * one column of this one, which is the shape `LEFT JOIN LATERAL` handles elsewhere
+                 * in this server for the same reason.
+                 */
+                .addSelect(
+                    `(select array_agg(u.handle::text order by p.seat)
+                        from match_players p join users u on u.id = p.user_id
+                       where p.match_id = m.id)`,
+                    'players'
+                )
+                .where(`t.status <> 'closed' and t.privacy = 'public'`)
+                .andWhere('(cast(:game as varchar) is null or t.game = :game)', { game })
+                .andWhere(
+                    `not exists (select 1 from blocks b
+                                  where (b.user_id = :me and b.blocked_id = t.host_id)
+                                     or (b.user_id = t.host_id and b.blocked_id = :me))`,
+                    { me }
+                )
+                .orderBy('m.started_at', 'DESC')
+                .limit(limit)
+                .getRawMany<{
+                    id: string;
+                    code: string;
+                    game: string;
+                    seats: number;
+                    players: string[];
+                    started_at: Date;
+                }>();
+        },
+
+        /**
+         * Whether this reader may watch what is happening at this table.
+         *
+         * Public, not closed, and not either side of a block. The block half is the one worth
+         * stating: watching somebody's games is a way of following them around, which is precisely
+         * what a block is for - and the list already filters on it, so a direct link that did not
+         * would be the hole the list exists to close.
+         */
+        async watchableTable(me: string, tableId: string): Promise<boolean>
+        {
+            return await db.getRepository(Table)
+                .createQueryBuilder('t')
+                .where(`t.id = :tableId and t.privacy = 'public' and t.status <> 'closed'`, { tableId })
+                .andWhere(
+                    `not exists (select 1 from blocks b
+                                  where (b.user_id = :me and b.blocked_id = t.host_id)
+                                     or (b.user_id = t.host_id and b.blocked_id = :me))`,
+                    { me }
+                )
+                .getExists();
         },
 
         /** The tables this account is sitting at right now. */
@@ -581,13 +665,15 @@ export function createTableService(db: DataSource, social: SocialService, achiev
          */
         async roomOf(tableId: string): Promise<{ conversationId: string | null; mode: TableMode } | null>
         {
-            const [row] = await db.query(
-                `select t.mode,
-                        (select c.id from conversations c
-                          where c.table_id = t.id and c.kind = 'game') as conversation_id
-                   from tables t where t.id = $1`,
-                [tableId]
-            ) as { mode: TableMode; conversation_id: string | null }[];
+            const row = await db.getRepository(Table)
+                .createQueryBuilder('t')
+                .select('t.mode', 'mode')
+                .addSelect(
+                    `(select c.id from conversations c where c.table_id = t.id and c.kind = 'game')`,
+                    'conversation_id'
+                )
+                .where('t.id = :tableId', { tableId })
+                .getRawOne<{ mode: TableMode; conversation_id: string | null }>();
 
             return row === undefined ? null : { conversationId: row.conversation_id, mode: row.mode };
         },
