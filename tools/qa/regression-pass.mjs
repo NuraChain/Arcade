@@ -313,11 +313,11 @@ console.log('\n[6] the server decides what a table may be');
                 });
                 return { status: r.status, body: (await r.text()).slice(0, 120) };
             };
-            const legal = { game: 'hokm', seats: 4, mode: 'live', privacy: 'private', target: 7, cube: false, blinds: 'low', invitees: [] };
+            const legal = { game: 'hokm', seats: 4, mode: 'live', privacy: 'invite', target: 7, cube: false, blinds: 'low', invitees: [] };
             return {
                 badSeats: await post({ ...legal, seats: 3 }),
                 badMode: await post({ ...legal, game: 'poker', seats: 4, mode: 'turns', target: 0 }),
-                legalBackgammon: await post({ game: 'backgammon', seats: 2, mode: 'turns', privacy: 'private', target: 3, cube: true, blinds: 'low', invitees: [] }),
+                legalBackgammon: await post({ game: 'backgammon', seats: 2, mode: 'turns', privacy: 'invite', target: 3, cube: true, blinds: 'low', invitees: [] }),
                 hugeHue: await post({ ...legal, seats: 99999 }),
                 noGame: await post({ ...legal, game: 'not-a-game' })
             };
