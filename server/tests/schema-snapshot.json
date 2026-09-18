@@ -566,6 +566,7 @@
         "friend_requests_pending_pair",
         "groups_public",
         "match_actions_feed",
+        "matches_finished",
         "matches_history",
         "messages_keyset",
         "notifications_keyset",

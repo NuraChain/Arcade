@@ -110,7 +110,7 @@ describe.skipIf(!active)('the schema the entities build', () =>
     });
 
     /**
-     * The eight in `INDEXES_TYPEORM_CANNOT_EXPRESS` are the reason `syncSchema` exists rather than a
+     * The ones in `INDEXES_TYPEORM_CANNOT_EXPRESS` are the reason `syncSchema` exists rather than a
      * bare `synchronize()`. `friend_requests_pending_pair` is the sharpest: it is UNIQUE over
      * `LEAST(from_user, to_user)`/`GREATEST(...)` where the request is unanswered, and it is the
      * only thing stopping A asking B while B is asking A from becoming two rows for one intention.
@@ -137,16 +137,21 @@ describe.skipIf(!active)('the schema the entities build', () =>
     });
 
     /**
-     * The eight in `INDEXES_TYPEORM_CANNOT_EXPRESS` are the reason `syncSchema` exists rather than a
+     * The ones in `INDEXES_TYPEORM_CANNOT_EXPRESS` are the reason `syncSchema` exists rather than a
      * bare `synchronize()`. `friend_requests_pending_pair` is the sharpest: it is UNIQUE over
      * `LEAST(from_user, to_user)`/`GREATEST(...)` where the request is unanswered, and it is the
      * only thing stopping A asking B while B is asking A from becoming two rows for one intention.
-     * These keep their real names, because nothing renames them.
+     * These keep their real names, because nothing renames them - which is what this asserts and
+     * what the SHAPE comparison elsewhere cannot: an index dropped and rebuilt under a different
+     * name has the same shape. The list is spelled out rather than read from the source, so adding
+     * one without adding it here fails; `matches_finished` was added and not listed for exactly one
+     * commit, leaving the by-name guarantee covering eight of nine.
      */
-    it('creates the eight indexes no decorator can declare', async () =>
+    it('creates every index no decorator can declare, under its own name', async () =>
     {
         expect(await pick(built, `select indexname as k from pg_indexes where schemaname='public' and indexname in
-            ('friend_requests_pending_pair','groups_public','match_actions_feed','matches_history','messages_keyset','notifications_keyset','reports_against','tables_open')`))
+            ('friend_requests_pending_pair','groups_public','match_actions_feed','matches_finished',
+             'matches_history','messages_keyset','notifications_keyset','reports_against','tables_open')`))
             .toEqual(snapshot.handBuiltIndexes);
     });
 
