@@ -5,7 +5,7 @@ import { RouterProvider, createMemoryHistory, createRouter } from 'azerothjs';
 import MessageBubble from '../src/components/chat/message-bubble.component.azeroth';
 import type { Message } from '../src/data/chat.ts';
 import { manualClock } from '../src/lib/clock.ts';
-import { LINE_KEYS, isLineKey } from '../src/lib/lines.ts';
+import { LINE_KEYS, isLineKey, namedParams } from '../src/lib/lines.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import { routes } from '../src/routes.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
@@ -142,5 +142,44 @@ describe('a server-authored line', () =>
         expect(isLineKey('chat.line')).toBe(false);
         expect(isLineKey('chat.empty')).toBe(false);
         expect(isLineKey('')).toBe(false);
+    });
+});
+
+describe('a line that names somebody', () =>
+{
+    /**
+     * The wire speaks HANDLES wherever it names a person, so a line arrives as
+     * `{ who: 'bot63807d' }` and the catalogue interpolates whatever it is given. Nine of the eleven
+     * keys carry one, and a finished game read "Bot 63807d won." in the result panel beside
+     * "bot63807d won" in the chat - the same event, in two spellings, on one screen.
+     *
+     * Asserted over `namedParams` rather than through a rendered bubble because the defect is in the
+     * params, not in the markup: a test that rendered one component would have left the other one
+     * saying the handle.
+     */
+    it('resolves every handle it carries, and leaves everything else alone', () =>
+    {
+        const named = namedParams(
+            { who: 'bot63807d', winner: 'ludotwo', game: 'ludo', name: 'Friday Crew' },
+            (handle) => (handle === 'bot63807d' ? 'Bot 63807d' : 'Ludo Two')
+        );
+
+        expect(named).toEqual({
+            who: 'Bot 63807d',
+            winner: 'Ludo Two',
+            game: 'ludo',
+            name: 'Friday Crew'
+        });
+    });
+
+    /**
+     * A handle nobody has described stays a handle - always true and always readable, which is the
+     * answer `people.store.ts` gives everywhere else rather than rendering an empty space where a
+     * person's name should be.
+     */
+    it('leaves a handle it has never been told about exactly as it is', () =>
+    {
+        expect(namedParams({ who: 'stranger' }, (handle) => handle)).toEqual({ who: 'stranger' });
+        expect(namedParams(undefined, (handle) => handle)).toBeUndefined();
     });
 });

@@ -1,6 +1,6 @@
 import { untrack } from 'azerothjs';
 
-import { isLineKey } from '../../lib/lines.ts';
+import { isLineKey, namedParams } from '../../lib/lines.ts';
 import { attachStick } from '../../lib/stick.ts';
 import { sendBlockOf } from '../../lib/seal-state.ts';
 import { haptic } from '../../lib/haptics.ts';
@@ -120,6 +120,13 @@ export default component TableChat(props: { conversationId: string; onClose?: ()
         });
     };
 
+    const nameOf = (handle: string): string =>
+    {
+        const person = people.byHandle(handle);
+
+        return person === null ? handle : locale.text(person.displayName);
+    };
+
     const said = (message: { text: { en: string; fa: string } | string; line?: { key: string; params: Record<string, string> } }): string =>
     {
         const line = message.line;
@@ -127,7 +134,9 @@ export default component TableChat(props: { conversationId: string; onClose?: ()
         {
             return locale.text(message.text);
         }
-        return isLineKey(line.key) ? locale.t(line.key, line.params) : '';
+        return isLineKey(line.key)
+            ? locale.t(line.key, namedParams(line.params, nameOf))
+            : '';
     };
 
     <section class={ () => [ 'flex min-h-0 flex-col bg-field', props.class ?? '' ].filter(Boolean).join(' ') } aria-label={ locale.t('play.table.chat') }>

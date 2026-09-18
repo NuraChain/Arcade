@@ -2,7 +2,7 @@ import { Link, useNavigate } from 'azerothjs';
 
 import type { Message, MessageLock } from '../../data/chat.ts';
 import Icon from '../../icons/icon.component.azeroth';
-import { isLineKey } from '../../lib/lines.ts';
+import { isLineKey, namedParams } from '../../lib/lines.ts';
 import { usePeople } from '../../stores/people.store.ts';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
@@ -68,6 +68,13 @@ export default component MessageBubble(props: { message: Message; me: string; sh
      * renders as nothing rather than as its own name: an older client meeting a newer server is a
      * designed state, not a crash and not a leak of an internal identifier onto the screen.
      */
+    const nameOf = (handle: string): string =>
+    {
+        const person = people.byHandle(handle);
+
+        return person === null ? handle : locale.text(person.displayName);
+    };
+
     derived said = ((): string =>
     {
         const line = props.message.line;
@@ -75,7 +82,9 @@ export default component MessageBubble(props: { message: Message; me: string; sh
         {
             return locale.text(props.message.text);
         }
-        return isLineKey(line.key) ? locale.t(line.key, line.params) : '';
+        return isLineKey(line.key)
+            ? locale.t(line.key, namedParams(line.params, nameOf))
+            : '';
     })();
 
     derived locked = props.message.locked ?? null;
