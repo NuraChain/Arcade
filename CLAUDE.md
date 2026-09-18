@@ -792,9 +792,8 @@ column serve a direct thread and a group room alike: a group's membership alread
 with its thread's, so "the members of the room" is the answer in both cases and there is no second
 guest list to keep in step with the first. It replaces a `group_id` that no query ever read.
 
-The foreign key is `CASCADE`, which is the opposite of its neighbours and is deliberate: `SET NULL`
-would leave a `privacy = 'room'` row with no room, which `tables_room_is_private` forbids — the same
-pair of rules that cannot both hold as wedged the expiry sweep through `reports_disclosure_whole`.
+The foreign key is `SET NULL` and `tables_room_is_private` is written to survive that — see *The
+second audit* for why the obvious CASCADE destroyed every match ever played in a group that closed.
 
 **`privacy` and `roomId` are ONE fact and the service resolves it.** A caller able to send them
 apart is a caller able to send a `public` table carrying a private group's room, or a `room` table
@@ -839,6 +838,14 @@ Three defects on this path that every gate was green for, each now with a rule:
   written with character codes rather than a regex escape because the same hazard hit the rule
   itself — a `\b` in a pattern became a literal backspace, and the rule passed against the exact bug
   it was written for until it was proved to fail first.
+
+**The dock under the board is the small things somebody reaches for mid-game.** Sound, the screen,
+the room's code and the chat, and every one of them was reachable before only by LEAVING the game -
+the table's own cues are `settings.sound`, whose single toggle lives on the settings page under
+notifications. Nothing in it is a control with nothing behind it: no music button because there is
+no music, no settings gear because it would be a link out of the game wearing the clothes of a
+control in it, no overflow because there is nothing left to put in one. The code is there because it
+is how a table is reached when it is in no list, which is every table opened from a chat or a group.
 
 **Matchmaking is a query.** `quick(game)` reads the open public tables for that game, claims a
 chair at the first one that still has one, and opens a table to wait in only when there is nothing
@@ -2844,6 +2851,89 @@ none of them is a substitute for somebody adversarial reading the code with the 
 The findings that survived are recorded above in the sections they belong to, each beside the rule it
 produced. `tools/qa/seal-pass.mjs` and the `.db.spec` suites pin the fixes; where a fix was subtle,
 the test that would fail without it is named in a comment rather than left to be inferred.
+
+## The second audit, and the rules it produced
+
+An 80-agent workflow audited the room/privacy work and the XP/level work along five dimensions -
+authorisation, SQL, scoring, client reactivity and schema - with three independent refuters per
+finding, each told to default to refuted. Twenty-five findings were raised, eighteen survived, and
+four were dismissed outright.
+
+**Every gate was green when it ran**, exactly as they were for the epoch-commitment break: `check`,
+529 tests, 205 database tests, 680 QA cells, and three hand-run browser passes. That is the second
+time on this codebase; it is not a coincidence and it is not fixable by adding gates. What it says
+is that a gate asserts what the code does, and these were all things the code did not do.
+
+Six of them were serious enough to be worth stating as rules.
+
+**An invitation cannot reach past the level the table is at.** `invite` checked that the CALLER
+could see the table and that the messaging policy allowed the approach, and never asked whether the
+invitee could ever sit down. On a `room` table that wrote a chair nothing could free: `claimSeat`
+skips a chair held for somebody else, the invitee's own claim 404s before it reaches one, and no
+route anywhere clears `invited_id`. One misdirected invitation made a table permanently
+un-startable, and told a non-member a table existed that every read of it denies. `create` had the
+same hole through its `invitees` list. The rule: on every level but `invite`, the invitee must
+already pass `visibleTo` - and on `invite` there is nothing to check, because the invitation is what
+grants the visibility. `canSee` is `visibleTo` asked about a third party, which it could always
+answer and was never asked.
+
+**The room's head count is the table's ceiling, and the SERVER says so.** The sheet refuses to offer
+a seat count the room cannot fill; that was the only place it was enforced, so the group page's
+"Play together" - which composed its own config from the game's LARGEST seat count - opened a
+four-seat table for a group of three. Nobody outside the room can take the fourth chair, so `ready`
+never arrives and the table can never be started: a dead table from the primary button on the page.
+This is the same argument `create` already makes about seats, modes and targets. A courtesy in a
+form is not a rule.
+
+**A room table outlives its room, and the CHECK is written to allow that.** `tables.room_id`
+cascaded from `conversations` for one commit, which looked right - a `privacy = 'room'` row with no
+room is one `tables_room_is_private` refused. What that missed is downstream: `conversations.group_id`
+cascades from `groups` and `matches.table_id` cascades from `tables`, so the last member leaving a
+group destroyed every match ever played in it, taking the history, the ratings' evidence and every
+windowed leaderboard row. The constraint gave up the half it could afford - `room_id is null or
+privacy = 'room'` still makes a public table carrying a private group's room unrepresentable - and
+the delete rule became `SET NULL`. Such a table falls back to being visible only to the people
+already sitting at it, which `visibleTo` gives for nothing.
+
+**A refusal must not be an oracle.** `POST /tables/:id/start` read the table by id and never asked
+`visibleTo`, so the ORDER it refused things in told a stranger holding an id whether the table was
+open, closed, or of a game with no engine - and the 403 that finally stopped them confirmed it was
+there. Being seated is asked first now and a no is a 404, which needs no visibility check of its
+own: sitting at a table is the strongest form of being able to see one. `/matches/:id/watch` had the
+same shape written as an optimisation - `found.live && ...` - so a FINISHED match skipped the table
+check entirely and any signed-in caller holding a match id could read the final board of a game
+played at a private room table. A game being over does not make the room it was played in public.
+
+**A timeout is not a walkout, and a survivor of an abandoned match is not a winner.** `levels.ts`
+says a walkout earns nothing and a timed-out seat keeps what it earned, and `record.ts` implemented
+neither: `match_players.result` says `abandoned` for both, so a dropped connection was charged what
+a quitter is charged. The ledger already knew - the sweep writes its forfeits with `user_id = null`,
+because the server took that action rather than a person - so the question is asked of
+`match_actions` rather than of the result column. And the survivor of a room that emptied was being
+paid the finish and the tokens they happened to get home, which is the alt-account farm `outcomeOf`
+exists to close, reopened at a slower rate. A game only pays when a game was played.
+
+**Counters are added by the database, never by the process.** `player_stats` was a read-modify-write
+over rows read once before the loop, and nothing serialises two matches finishing for the same
+person: each holds `for update` on its OWN match row, and the timeout sweep can finish several due
+matches in one tick. Two games ending together recorded one. `on conflict do update set played =
+player_stats.played + 1` is arithmetic the row does to itself under the unique index. The three that
+are not counters stay absolute - a rating is a position, a peak is a maximum, a streak is a run.
+
+**A public route publishes everything on it.** The leaderboard is unguarded with the rest of the
+catalogue, which is right - a board nobody can see until they sign in cannot say what the place is
+like - and it shipped for one commit carrying a whole `personSummary` per row, which includes a bio
+and `isMinor`. Every other route that says who somebody is sits behind a session. It carries a
+handle, a display name and a hue now, which is what an avatar reads; `Avatar` was widened to ask for
+those two fields rather than a whole person, because a type demanding a child-safety flag to draw a
+coloured circle is the type asking for data the screen has no business holding.
+
+And two smaller ones worth keeping. **A window is truncated in UTC explicitly**, because bare
+`date_trunc` over a `timestamptz` uses the connection's `TimeZone` - a server setting rather than a
+decision, so the same deployment answers a different board on a different machine. **A refused fetch
+is not an empty list**: the leaderboard and the match history both rendered a dropped connection as
+"nobody has done this yet", which is a confident statement about the world made from having failed
+to ask it.
 
 ## The browser passes, and the wallet in them
 
