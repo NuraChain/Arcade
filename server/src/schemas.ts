@@ -574,15 +574,24 @@ export const standing = object({
     handle: string(),
 
     /**
-     * Who that handle IS, travelling with the row rather than being fetched per name.
+     * Enough to draw the row, and deliberately less than a person.
      *
-     * The same shape `social.graph` sends its requests in, and for the reason recorded beside it: a
-     * payload that carries only handles makes the client ask about each one separately, and a
-     * leaderboard is the one list in this product where nearly every row is somebody the reader has
-     * never been told about. Twenty rows was twenty requests, which is the shape that took the rate
-     * limiter out during the responsive matrix.
+     * It travels WITH the row rather than being fetched per name, because a leaderboard is the one
+     * list in this product where nearly every row is somebody the reader has never been told about:
+     * a payload of bare handles made twenty rows twenty requests, which is the shape that took the
+     * rate limiter out during the responsive matrix.
+     *
+     * But this route is UNGUARDED with the rest of the catalogue, so whatever is here is published
+     * to anybody at all - and it shipped for one commit as a whole `personSummary`, which carries a
+     * bio and `isMinor`. Every other route that says who somebody is sits behind a session. A
+     * child-safety flag broadcast to the open internet is not a thing to hand over so an avatar can
+     * be the right colour, and a name and a hue are all an avatar asks for.
      */
-    person: personSummary,
+    person: object({
+        handle: string(),
+        displayName: string(),
+        hue: number()
+    }),
 
     rating: number(),
     played: number(),

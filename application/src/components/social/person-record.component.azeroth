@@ -116,7 +116,18 @@ export default component PersonRecord(props: { handle: string; history?: boolean
                 <section>
                     <SectionHeading title={ locale.t('history.title') } />
 
-                    <Show when={ record.history().length === 0 && !record.historyLoading() }>
+                    <Show when={ record.history().length === 0 && !record.historyLoading() && record.historyFailed() }>
+                        { () =>
+                            <Panel class="flex flex-col items-start gap-2 text-ui-sm text-muted">
+                                { locale.t('record.moreFailed') }
+                                <Button variant="outline" size="sm" onClick={ () => void record.more() }>
+                                    { locale.t('common.retry') }
+                                </Button>
+                            </Panel>
+                        }
+                    </Show>
+
+                    <Show when={ record.history().length === 0 && !record.historyLoading() && !record.historyFailed() }>
                         { () => <Panel class="text-ui-sm text-muted">{ locale.t('history.empty') }</Panel> }
                     </Show>
 
@@ -160,7 +171,7 @@ export default component PersonRecord(props: { handle: string; history?: boolean
                         }
                     </Show>
 
-                    <Show when={ record.historyFailed() }>
+                    <Show when={ record.historyFailed() && record.history().length > 0 }>
                         { () => <p class="mt-3 text-center text-ui-xs text-danger">{ locale.t('record.moreFailed') }</p> }
                     </Show>
 

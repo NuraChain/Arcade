@@ -1,5 +1,6 @@
 import { createResource } from 'azerothjs';
 
+import Button from '../ui/button.component.azeroth';
 import Panel from '../ui/panel.component.azeroth';
 import Avatar from '../ui/avatar.component.azeroth';
 import SectionHeading from '../ui/section-heading.component.azeroth';
@@ -7,7 +8,6 @@ import Segmented from '../ui/segmented.component.azeroth';
 import Skeleton from '../ui/skeleton.component.azeroth';
 import { client } from '../../api.ts';
 import { useLocale } from '../../stores/locale.store.ts';
-import { usePeople } from '../../stores/people.store.ts';
 import type { GameId } from '../../data/games.ts';
 import type { LeaderboardWindow } from '../../api.ts';
 
@@ -46,7 +46,6 @@ const WINDOWS: { id: LeaderboardWindow; key: 'board.today' | 'board.month' | 'bo
 export default component Leaderboard(props: { game: GameId })
 {
     const locale = useLocale();
-    const people = usePeople();
 
     state window = 'month' as LeaderboardWindow;
 
@@ -59,28 +58,6 @@ export default component Leaderboard(props: { game: GameId })
     derived standings = board.data()?.standings ?? [];
 
     /**
-     * Files away who the server said these people are. It never asks.
-     *
-     * A leaderboard is the one list in this product where nearly every row is somebody the reader
-     * has never been told about, so a payload of bare handles would mean twenty `want` calls and
-     * twenty requests for one screen - which is the shape that took the rate limiter out during the
-     * responsive matrix. The person travels ON the row instead, exactly as `social.graph` sends its
-     * requests, and this puts them where every other component reads people from.
-     *
-     * In an `effect` rather than beside the read, because `remember` writes the signal `byHandle`
-     * reads and a `derived` that wrote it would be a cycle.
-     */
-    effect
-    {
-        const rows = standings;
-
-        if (rows.length > 0)
-        {
-            people.remember(rows.map((row) => row.person));
-        }
-    }
-
-    /**
      * Read off the ANSWER, not off the control.
      *
      * `board.data()` lags `window` by a round trip, so a list rendered against the window somebody
@@ -89,14 +66,29 @@ export default component Leaderboard(props: { game: GameId })
      */
     derived showing = board.data()?.window ?? window;
 
+    /**
+     * A refused fetch is not an empty board, and saying so is the whole of this.
+     *
+     * `standings` is `[]` both when the server answered with nobody and when it did not answer at
+     * all, so a dropped connection rendered as "nobody has finished a game here yet" - a confident
+     * statement about the world, made from having failed to ask it. That is the same defect the
+     * chat list's failure screen exists to avoid, and the same one `search.thisDevice` is careful
+     * about: "it is not there" and "I could not look" are different answers.
+     */
+    derived failed = board.error() !== undefined && standings.length === 0;
+
     derived empty = locale.t(showing === 'all' ? 'board.empty' : 'board.emptyWindow');
 
-    const nameOf = (handle: string): string =>
-    {
-        const person = people.byHandle(handle);
-
-        return person === null ? handle : locale.text(person.displayName);
-    };
+    /**
+     * Read off the ROW, never out of `people.store`.
+     *
+     * The row carries a name and a hue and nothing else, because this route is unguarded and
+     * everything on it is public - so there is no `PersonSummary` here to remember, and filing a
+     * partial one into a cache every other screen reads as complete would be worse than not having
+     * it. A board row draws itself.
+     */
+    const nameOf = (row: { handle: string; person: { displayName: string } }): string =>
+        row.person.displayName === '' ? row.handle : locale.text(row.person.displayName);
 
     <section aria-labelledby="game-board">
         <SectionHeading id="game-board" title={ locale.t('board.title') } />
@@ -115,7 +107,18 @@ export default component Leaderboard(props: { game: GameId })
             { () => <Skeleton class="h-32 w-full rounded-panel" /> }
         </Show>
 
-        <Show when={ !board.loading() && standings.length === 0 }>
+        <Show when={ !board.loading() && failed }>
+            { () =>
+                <Panel class="flex flex-col items-start gap-2 text-ui-sm text-muted">
+                    { locale.t('board.failed') }
+                    <Button variant="outline" size="sm" onClick={ () => board.refetch() }>
+                        { locale.t('common.retry') }
+                    </Button>
+                </Panel>
+            }
+        </Show>
+
+        <Show when={ !board.loading() && !failed && standings.length === 0 }>
             { () => <Panel class="text-ui-sm text-muted">{ empty }</Panel> }
         </Show>
 
@@ -128,9 +131,9 @@ export default component Leaderboard(props: { game: GameId })
                                 <span class="tally w-6 shrink-0 text-end text-ui-sm font-bold text-faint">
                                     { locale.n(standings.indexOf(row) + 1) }
                                 </span>
-                                <Avatar person={ people.byHandle(row.handle) } size="xs" />
+                                <Avatar person={ { displayName: row.person.displayName, hue: row.person.hue } } size="xs" />
                                 <span class="flex min-w-0 flex-1 flex-col">
-                                    <span class="truncate text-ui-sm text-text">{ nameOf(row.handle) }</span>
+                                    <span class="truncate text-ui-sm text-text">{ nameOf(row) }</span>
                                     <span class="tally truncate text-ui-2xs text-faint">
                                         { locale.t('board.line', {
                                             played: locale.plural('board.played', row.played),

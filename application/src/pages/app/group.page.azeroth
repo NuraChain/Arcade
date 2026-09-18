@@ -106,8 +106,26 @@ export default component GroupPage()
             return;
         }
         const pick = game ?? catalogue.featured();
+
+        /**
+         * The biggest seat count this game plays that this group can actually FILL.
+         *
+         * `catalogue.defaults` answers with the game's largest, which for a group of three and a
+         * game that seats four is a table nobody outside the room can complete and nobody inside it
+         * can start. The server refuses that now, so without this the primary button on a small
+         * group's page would simply fail; asking for what fits is what makes it work.
+         */
+        const fits = catalogue.rules(pick).seats.filter((count) => count <= group.memberCount);
+        const seats = fits[fits.length - 1];
+
+        if (seats === undefined)
+        {
+            toasts.show({ kind: 'info', text: locale.t('groups.tooFew'), dedupe: 'group-play' });
+            return;
+        }
+
         openTable(
-            lobby.host(pick, { ...catalogue.defaults(pick), roomId: group.conversationId }, []),
+            lobby.host(pick, { ...catalogue.defaults(pick), seats, roomId: group.conversationId }, []),
             navigate
         );
     };

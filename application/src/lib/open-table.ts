@@ -17,12 +17,17 @@ import { useToasts } from '../stores/toasts.store.ts';
  * Taking the promise as an argument is what makes the broken version impossible to write here: the
  * id cannot be interpolated before it exists, because the caller never holds the id at all.
  *
+ * `settled` runs whichever way it ended, and a caller with a spinner needs it. Without one the
+ * sheet that opens a table set `pending` and only ever cleared it by closing on success - so a
+ * refusal left the primary button spinning for ever, on a sheet that was still open, over a form
+ * that could simply have been corrected and sent again.
+ *
  * It also owns the refusal. Opening a table can fail - a rate limit, a dropped connection, a config
  * the game does not play - and eight `void`-less calls meant a rejection nobody caught. Saying so
  * once here beats nine copies of the same catch, five of which would have had to import a toast
  * store to write it.
  */
-export function openTable(made: Promise<string>, go: (to: string) => void): void
+export function openTable(made: Promise<string>, go: (to: string) => void, settled?: () => void): void
 {
     void made
         .then((id) => go(`/app/play/${ id }`))
@@ -33,5 +38,6 @@ export function openTable(made: Promise<string>, go: (to: string) => void): void
                 text: useLocale().t('play.openFailed'),
                 dedupe: 'open-table'
             });
-        });
+        })
+        .finally(() => settled?.());
 }

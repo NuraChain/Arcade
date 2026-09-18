@@ -74,9 +74,7 @@ interface BoardRow
 {
     handle: string;
     display_name: string;
-    bio: string;
     hue: number;
-    is_minor: boolean;
     rating: number;
     played: number;
     won: number;
@@ -84,21 +82,18 @@ interface BoardRow
 }
 
 /**
- * The row as the wire wants it, with the person built rather than left to be fetched.
+ * The row as the wire wants it, carrying only what drawing it needs.
  *
- * `lastSeenAt` is deliberately ABSENT rather than null, which is the privacy rule this product
- * states in so many words: a client cannot render what it was never given, and a board is read by
- * strangers who have no claim on when somebody was last online.
+ * A name and a hue - not a bio, not `lastSeenAt`, and above all not `isMinor`. This route is
+ * unguarded, so everything on it is public, and the privacy rule this product states is that a
+ * client cannot render what it was never given.
  */
 const asStanding = (row: BoardRow): Standing => ({
     handle: row.handle,
     person: {
-        id: row.handle,
         handle: row.handle,
         displayName: row.display_name,
-        bio: row.bio,
-        hue: row.hue,
-        isMinor: row.is_minor
+        hue: row.hue
     },
     rating: row.rating,
     played: row.played,
@@ -210,9 +205,7 @@ export function createAchieveService(db: DataSource)
                     .innerJoin(User, 'u', 'u.id = s.user_id')
                     .select('u.handle::text', 'handle')
                     .addSelect('u.display_name', 'display_name')
-                    .addSelect('u.bio', 'bio')
                     .addSelect('u.hue', 'hue')
-                    .addSelect('u.is_minor', 'is_minor')
                     .addSelect('s.rating', 'rating')
                     .addSelect('s.played', 'played')
                     .addSelect('s.won', 'won')
@@ -228,11 +221,19 @@ export function createAchieveService(db: DataSource)
             }
 
             /**
-             * `date_trunc` over Postgres `now()`, never a date this process computed.
+             * `date_trunc` over Postgres `now()`, never a date this process computed, and pinned to
+             * UTC rather than to whatever the connection's `TimeZone` happens to be.
              *
              * `finished_at` was written by Postgres, so a boundary from the Node clock would be
              * compared against it across whatever skew there is between the two - the same reason
              * every session and expiry predicate in this server stays on the database's clock.
+             *
+             * The `at time zone` pair is what makes "today" mean one thing. Bare `date_trunc` over
+             * a `timestamptz` truncates in the SESSION's timezone, which is a server setting rather
+             * than a decision: the same deployment moved between two machines answers a different
+             * board, and a pooled connection could in principle answer a different one from its
+             * neighbour. Stated in UTC it is a documented limitation - somebody in Tehran sees a
+             * board that turns over at UTC midnight - rather than an accident of configuration.
              */
             const rows = await db.getRepository(MatchPlayer)
                 .createQueryBuilder('p')
@@ -241,16 +242,17 @@ export function createAchieveService(db: DataSource)
                 .leftJoin(PlayerStats, 's', 's.user_id = p.user_id and s.game = m.game')
                 .select('u.handle::text', 'handle')
                 .addSelect('max(u.display_name)', 'display_name')
-                .addSelect('max(u.bio)', 'bio')
                 .addSelect('max(u.hue)::int', 'hue')
-                .addSelect('bool_or(u.is_minor)', 'is_minor')
                 .addSelect('coalesce(max(s.rating), 1200)::int', 'rating')
                 .addSelect('count(*)::int', 'played')
                 .addSelect(`count(*) filter (where p.result = 'won')::int`, 'won')
                 .addSelect('sum(p.xp)::int', 'xp')
                 .where('m.game = :game', { game })
                 .andWhere('m.finished_at is not null')
-                .andWhere(`m.finished_at >= date_trunc(:span, now())`, { span: SPANS[window] })
+                .andWhere(
+                    `m.finished_at >= (date_trunc(:span, (now() at time zone 'utc')) at time zone 'utc')`,
+                    { span: SPANS[window] }
+                )
                 .groupBy('u.handle')
                 .having('sum(p.xp) > 0')
                 .orderBy('sum(p.xp)', 'DESC')

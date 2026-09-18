@@ -465,7 +465,7 @@ describe.skipIf(!active)('claiming a seat, against a real database', () =>
             const stranger = await makeUser();
             const room = await makeRoom(host, member);
 
-            const id = await openTable(host, 4, { roomId: room });
+            const id = await openTable(host, 2, { roomId: room });
 
             expect(await tables.byId(member, id)).not.toBeNull();
             expect(await tables.byId(stranger, id)).toBeNull();
@@ -482,7 +482,7 @@ describe.skipIf(!active)('claiming a seat, against a real database', () =>
             const member = await makeUser();
             const room = await makeRoom(host, member);
 
-            const id = await openTable(host, 4, { roomId: room });
+            const id = await openTable(host, 2, { roomId: room });
 
             expect((await tables.open(member, 'seat-fixture', 20)).map((row) => row.id)).not.toContain(id);
         });
@@ -493,7 +493,7 @@ describe.skipIf(!active)('claiming a seat, against a real database', () =>
             const outsider = await makeUser();
             const room = await makeRoom(host);
 
-            await expect(openTable(outsider, 4, { roomId: room })).rejects.toThrow(/no such conversation/i);
+            await expect(openTable(outsider, 2, { roomId: room })).rejects.toThrow(/no such conversation/i);
         });
 
         /**
@@ -505,10 +505,11 @@ describe.skipIf(!active)('claiming a seat, against a real database', () =>
         it('derives the privacy from the room rather than believing the caller', async () =>
         {
             const host = await makeUser();
-            const room = await makeRoom(host);
+            const member = await makeUser();
+            const room = await makeRoom(host, member);
 
             const roomless = await openTable(host, 4, { privacy: 'room' });
-            const roomed = await openTable(host, 4, { privacy: 'public', roomId: room });
+            const roomed = await openTable(host, 1 + 1, { privacy: 'public', roomId: room });
 
             const read = async (id: string): Promise<string> =>
                 rowsOf<{ privacy: string }>(await db.query('select privacy from tables where id = $1', [id]))[0].privacy;
@@ -528,7 +529,7 @@ describe.skipIf(!active)('claiming a seat, against a real database', () =>
             const member = await makeUser();
             const room = await makeRoom(host, member);
 
-            const id = await openTable(host, 4, { roomId: room });
+            const id = await openTable(host, 2, { roomId: room });
             expect(await tables.claimSeat(member, id)).not.toBeNull();
 
             await db.query('delete from conversation_members where conversation_id = $1 and user_id = $2', [room, member]);
@@ -552,7 +553,7 @@ describe.skipIf(!active)('claiming a seat, against a real database', () =>
             const outsider = await makeUser();
             const room = await makeRoom(host, member);
 
-            const id = await openTable(host, 4, { roomId: room });
+            const id = await openTable(host, 2, { roomId: room });
 
             await expect(tables.invite(host, id, outsider)).rejects.toThrow(/cannot reach/i);
             expect(await tables.invite(host, id, member)).toBe(true);
@@ -576,10 +577,10 @@ describe.skipIf(!active)('claiming a seat, against a real database', () =>
             const outsider = await makeUser();
             const room = await makeRoom(host, member);
 
-            await expect(openTable(host, 4, { roomId: room, invitees: [outsider] }))
+            await expect(openTable(host, 2, { roomId: room, invitees: [outsider] }))
                 .rejects.toThrow(/in this conversation/i);
 
-            await expect(openTable(host, 4, { roomId: room, invitees: [member] })).resolves.toBeTypeOf('string');
+            await expect(openTable(host, 2, { roomId: room, invitees: [member] })).resolves.toBeTypeOf('string');
         });
 
         /**
@@ -591,7 +592,7 @@ describe.skipIf(!active)('claiming a seat, against a real database', () =>
         {
             const host = await makeUser();
 
-            await expect(openTable(host, 4, { roomId: 'not-a-uuid' })).rejects.toThrow(/no such conversation/i);
+            await expect(openTable(host, 2, { roomId: 'not-a-uuid' })).rejects.toThrow(/no such conversation/i);
         });
 
         /**
@@ -603,9 +604,10 @@ describe.skipIf(!active)('claiming a seat, against a real database', () =>
         it('keeps a table and its matches when the room is deleted', async () =>
         {
             const host = await makeUser();
-            const room = await makeRoom(host);
+            const member = await makeUser();
+            const room = await makeRoom(host, member);
 
-            const id = await openTable(host, 4, { roomId: room });
+            const id = await openTable(host, 2, { roomId: room });
 
             await db.query('delete from conversations where id = $1', [room]);
 
@@ -619,6 +621,24 @@ describe.skipIf(!active)('claiming a seat, against a real database', () =>
 
             // And it is still the host's to see, because they are sitting at it.
             expect(await tables.byId(host, id)).not.toBeNull();
+        });
+
+        /**
+         * The room's head count is the table's ceiling, and it is the SERVER that says so.
+         *
+         * The sheet refuses to offer a seat count the room cannot fill, and that was the only place
+         * it was enforced - so the group page's "Play together", which composed its own config from
+         * the game's largest seat count, opened a four-seat table for a group of three. Nobody
+         * outside the room can ever take the fourth chair, so it could never be started.
+         */
+        it('refuses a room table with more chairs than the room has people', async () =>
+        {
+            const host = await makeUser();
+            const member = await makeUser();
+            const room = await makeRoom(host, member);
+
+            await expect(openTable(host, 4, { roomId: room })).rejects.toThrow(/more chairs than/i);
+            await expect(openTable(host, 2, { roomId: room })).resolves.toBeTypeOf('string');
         });
     });
 });

@@ -1,4 +1,3 @@
-import type { Person } from '../../data/person.ts';
 import { AVATAR_DOT, AVATAR_SIZE, type AvatarSize } from './variants.ts';
 
 export type Presence = 'online' | 'away' | 'offline' | 'playing' | null;
@@ -22,8 +21,23 @@ export function initialsOf(name: string): string
     return (parts[0].slice(0, 1) + parts[parts.length - 1].slice(0, 1)).toUpperCase();
 }
 
+/**
+ * The two fields an avatar actually reads, rather than the whole person it used to demand.
+ *
+ * A `PersonSummary` still satisfies this - it is a structural subset - so nothing that passed one
+ * before has changed. What it unblocks is the caller that legitimately holds LESS than a person:
+ * the leaderboard is served unguarded, so its rows carry a name and a hue and nothing else, and
+ * requiring a bio and an `isMinor` flag to draw a coloured circle with two letters in it was the
+ * type asking for data the screen has no business being given.
+ */
+export interface Facade
+{
+    displayName: string;
+    hue: number;
+}
+
 export default component Avatar(props: {
-    person: Person | null;
+    person: Facade | null;
     size?: AvatarSize;
     presence?: Presence;
     ring?: boolean;

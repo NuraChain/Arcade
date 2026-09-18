@@ -70,7 +70,16 @@ export default component OpenHereSheet(props: OverlayProps & { conversationId: s
 
     derived choices = allowed.map((count) => ({ id: String(count), label: locale.n(count) }));
 
-    derived chosen = allowed.includes(seats) ? seats : (allowed[allowed.length - 1] ?? 2);
+    /**
+     * Null rather than a fallback, because there is no safe number to fall back TO.
+     *
+     * It was `?? 2`, which reads as a harmless default and defeats the whole cap: the only way
+     * `allowed` is empty is that no seat count this game plays fits in this room, and answering
+     * that with two opens exactly the unfillable table the cap exists to refuse. Nothing can reach
+     * it today - a game with no fitting count is filtered out of `playable` - but a default that is
+     * wrong whenever it is used is a trap set for whoever changes the filter.
+     */
+    derived chosen = allowed.includes(seats) ? seats : (allowed[allowed.length - 1] ?? null);
 
     /**
      * How many people play it, as a range or as one number.
@@ -91,6 +100,11 @@ export default component OpenHereSheet(props: OverlayProps & { conversationId: s
 
     const open = (): void =>
     {
+        if (chosen === null)
+        {
+            return;
+        }
+
         pending = true;
         openTable(
             lobby.host(game, { ...catalogue.defaults(game), seats: chosen, roomId: props.conversationId }, []),
@@ -98,7 +112,8 @@ export default component OpenHereSheet(props: OverlayProps & { conversationId: s
             {
                 props.close(true);
                 navigate(to);
-            }
+            },
+            () => { pending = false; }
         );
     };
 
@@ -139,7 +154,7 @@ export default component OpenHereSheet(props: OverlayProps & { conversationId: s
                 <Segmented
                     block
                     label={ locale.t('create.seats') }
-                    value={ String(chosen) }
+                    value={ String(chosen ?? '') }
                     items={ choices }
                     onChange={ (id) => seats = Number(id) }
                 />

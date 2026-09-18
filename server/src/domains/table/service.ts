@@ -502,6 +502,29 @@ export function createTableService(db: DataSource, social: SocialService, achiev
                  * Refused rather than silently dropped, because a caller who asked for four
                  * specific people and got a table seating one of them has been told nothing.
                  */
+                /**
+                 * The room's head count is the table's ceiling, and the SERVER says so.
+                 *
+                 * The sheet already refuses to offer a seat count the room cannot fill, and that
+                 * was the only place it was enforced - so the group page's "Play together", which
+                 * composes its own config from `catalogue.defaults` and takes the game's LARGEST
+                 * seat count, opened a four-seat ludo table for a group of three. Nobody outside
+                 * the room can ever take the fourth chair, so `ready` never arrives and the table
+                 * can never be started: a dead table, from the primary button on the page.
+                 *
+                 * This is the same argument `create` already makes about seats, modes and targets.
+                 * A courtesy in a form is not a rule; the rule lives where the row is written.
+                 */
+                const inRoom = await db.getRepository(ConversationMember).countBy({ conversationId: roomId });
+
+                if (input.seats > inRoom)
+                {
+                    throw new ValidationError(
+                        { seats: 'More chairs than people who can sit in them.' },
+                        'A table opened here cannot have more chairs than this conversation has people.'
+                    );
+                }
+
                 const guests = [...new Set(input.invitees)];
 
                 if (guests.length > 0)

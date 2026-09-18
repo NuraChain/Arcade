@@ -132,6 +132,7 @@ export const play = {
     'board.month': 'Month',
     'board.year': 'Year',
     'board.all': 'All time',
+    'board.failed': 'Could not load the leaderboard.',
     'board.emptyWindow': 'Nobody has finished a game here yet in this stretch.',
     'board.line': '{played} · {rating} rating',
     'board.xp': '{xp} XP',

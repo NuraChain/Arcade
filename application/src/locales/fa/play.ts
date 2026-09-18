@@ -135,6 +135,7 @@ export const play: Pick<Dictionary, keyof typeof reference> = {
     'board.month': 'ماه',
     'board.year': 'سال',
     'board.all': 'همیشه',
+    'board.failed': 'جدول برترین‌ها بارگذاری نشد.',
     'board.emptyWindow': 'در این بازه هنوز کسی بازی‌ای را تمام نکرده.',
     'board.line': '{played} · ریتینگ {rating}',
     'board.xp': '{xp} تجربه',
