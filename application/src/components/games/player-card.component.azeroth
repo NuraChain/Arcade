@@ -1,0 +1,125 @@
+import DieFace from './die-face.component.azeroth';
+import Avatar from '../ui/avatar.component.azeroth';
+import Panel from '../ui/panel.component.azeroth';
+import { INITIAL } from './seats.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import { usePeople } from '../../stores/people.store.ts';
+import type { MatchView } from '../../api.ts';
+
+/** Four tokens, so four pips. The board cannot hold a fifth and neither can this. */
+const PIPS = [0, 1, 2, 3];
+
+/** Three misses in a row ends a seat. The last one is the one that reads as a warning. */
+const MISSES_ALLOWED = 3;
+
+/**
+ * One player, beside their own corner of the board.
+ *
+ * This replaces a list of names in a panel, and the difference is that a list is something you read
+ * while this is something you GLANCE at. Whose turn it is, how far they have got and what they just
+ * rolled are the three things a player looks up twenty times a game, and putting them in the colour
+ * they are playing means the lookup is a glance at a corner rather than a scan down a column.
+ *
+ * **The die lives here, in whoever's turn it is.** The canvas tumbles one over the middle of the
+ * board when a roll lands and then fades it, which is a flourish; this is the one that stays until
+ * the move is made. A player who looked away for a second should not have to roll again to find out
+ * what they rolled.
+ *
+ * Colour is never the only signal. The initial is on the swatch, the name is written out, and the
+ * turn is an outline AND a word - so a player who cannot tell red from green loses nothing.
+ *
+ * The turn outline sits on a wrapper rather than on the `Panel`, because the colour is the player's
+ * and has to be set as a real CSS property - `Panel` takes no `style`, and giving it one so a card
+ * could tint itself would open the primitive up to every caller wanting a different surface. A
+ * wrapper carrying an `outline-color` leaves the surface exactly what the design system says it is.
+ */
+export default component PlayerCard(props: {
+    player: MatchView['players'][number];
+    mine?: number;
+    active: boolean;
+    die?: number;
+    finished: boolean;
+})
+{
+    const locale = useLocale();
+    const people = usePeople();
+
+    derived person = people.byHandle(props.player.who);
+
+    derived name = props.player.seat === props.mine
+        ? locale.t('match.you')
+        : (person === null ? props.player.who : locale.text(person.displayName));
+
+    derived says = ((): string =>
+    {
+        if (props.player.result === 'won')
+        {
+            return locale.t('card.won');
+        }
+
+        if (props.player.out || props.player.result === 'abandoned')
+        {
+            return locale.t('card.out');
+        }
+
+        if (props.player.timeouts > 0)
+        {
+            return props.player.timeouts >= MISSES_ALLOWED - 1
+                ? locale.t('card.lastChance')
+                : locale.plural('match.missed', props.player.timeouts);
+        }
+
+        return props.active && !props.finished ? locale.t('card.turn') : locale.t('card.waiting');
+    })();
+
+    <div
+        class={ () => [
+            'min-w-0 rounded-panel',
+            props.active && !props.finished ? 'outline outline-2 outline-offset-0' : '',
+            props.player.out ? 'opacity-60' : ''
+        ].filter(Boolean).join(' ') }
+        style={ `outline-color: var(--ludo-${ props.player.colour })` }
+        aria-current={ props.active && !props.finished ? 'true' : undefined }
+    >
+    <Panel pad="sm" class="flex min-w-0 items-center gap-2 shadow-2">
+        <span class="relative shrink-0">
+            <Avatar person={ person } size="sm" />
+            <span
+                class="absolute -bottom-1 -end-1 flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold text-white ring-2 ring-field"
+                style={ `background: var(--ludo-${ props.player.colour })` }
+                aria-hidden="true"
+            >
+                { INITIAL[props.player.colour] }
+            </span>
+        </span>
+
+        <span class="flex min-w-0 flex-1 flex-col">
+            <span class="truncate text-ui-sm font-semibold text-text">{ name }</span>
+            <span
+                class={ () => [
+                    'truncate text-ui-2xs',
+                    props.player.timeouts >= MISSES_ALLOWED - 1 && !props.finished ? 'text-danger' : 'text-muted'
+                ].join(' ') }
+            >
+                { says }
+            </span>
+
+            <span class="mt-1 flex items-center gap-1" role="img" aria-label={ locale.plural('match.tokens', props.player.home) }>
+                <For each={ PIPS } key={ (pip) => pip } let={ pip }>
+                    <span
+                        class="h-2 w-2 rounded-full"
+                        style={ pip < props.player.home
+                            ? `background: var(--ludo-${ props.player.colour })`
+                            : 'background: var(--line-strong)' }
+                        aria-hidden="true"
+                    ></span>
+                </For>
+            </span>
+        </span>
+
+        <Show when={ props.die !== undefined && props.active && !props.finished }>
+            { () => <DieFace value={ props.die! } size="sm" label={ locale.t('match.turn.rolled', { die: locale.n(props.die!) }) } /> }
+        </Show>
+    </Panel>
+    </div>
+}
