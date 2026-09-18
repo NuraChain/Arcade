@@ -153,6 +153,25 @@ bugs" table so nobody re-investigates it.
 **No comments in code.** Names and structure carry the meaning. This file, and the tests, are
 where reasoning is written down.
 
+**Database access is TypeORM, not `DataSource.query()`.** This is a rule, not a preference, and it
+applies to every line written from here on: a repository call (`find`, `findOne`, `insert`,
+`update`, `delete`, `countBy`, `existsBy`) or a `QueryBuilder`. A wide select list of correlated
+sub-queries is still a `QueryBuilder` - `.addSelect('(select ...)', 'alias')` takes the sub-query as
+a string while the FROM, the WHERE and the parameters stay TypeORM's, which is the shape to reach
+for before giving up on one.
+
+Raw SQL is allowed only where a repository genuinely cannot say the thing, and a sentence beside it
+has to say WHICH thing. The list is closed and short: `FOR UPDATE SKIP LOCKED` inside a scalar
+sub-query, `pg_advisory_xact_lock`, `INSERT ... SELECT` over `generate_series`/`unnest`,
+`ON CONFLICT (target) WHERE predicate` against a partial index, `ON CONFLICT DO UPDATE SET x = t.x + 1`,
+`UNION ALL`, `LEFT JOIN LATERAL` with an aggregate, keyset pagination by row-value comparison, and
+any predicate using `now()` - that last one because moving a security or expiry window onto the Node
+clock introduces skew against the Postgres-side predicates in the same feature.
+
+**Editing a file full of raw queries is not a licence to add another.** Matching the surrounding
+style is what kept re-breaking this: the table service was converted from fourteen raw queries to
+five, and the next feature written into it added two more. Convert what you touch.
+
 Allman braces, 4-space indent, single quotes, no trailing comma, LF endings. All of it is
 enforced by `eslint.config.ts` — `npm run check` will tell you.
 

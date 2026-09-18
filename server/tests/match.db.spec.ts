@@ -202,12 +202,12 @@ describe.skipIf(!active)('a match, against a real database', () =>
             await expect(matches.start(players[0], tableId)).rejects.toThrow(/ready/i);
         });
 
-        it('will not start for somebody who is not sitting there', async () =>
+        it('answers somebody who is not sitting there as if the table were not there', async () =>
         {
             const { tableId } = await seatedTable(2);
             const stranger = await makeUser();
 
-            await expect(matches.start(stranger, tableId)).rejects.toThrow(/sitting/i);
+            await expect(matches.start(stranger, tableId)).rejects.toThrow(/no table there/i);
         });
 
         it('will not start a game that has no engine', async () =>

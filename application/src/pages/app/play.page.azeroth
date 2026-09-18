@@ -7,6 +7,7 @@ import LobbyPanel from '../../components/games/lobby-panel.component.azeroth';
 import MatchBoard from '../../components/games/match-board.component.azeroth';
 import WatchBoard from '../../components/games/watch-board.component.azeroth';
 import TableChat from '../../components/games/table-chat.component.azeroth';
+import TableDock from '../../components/games/table-dock.component.azeroth';
 import Button from '../../components/ui/button.component.azeroth';
 import EmptyState from '../../components/ui/empty-state.component.azeroth';
 import ErrorState from '../../components/ui/error-state.component.azeroth';
@@ -47,6 +48,16 @@ export default component PlayPage()
     const { navigate } = useNavigate();
 
     state chatOpen = false;
+
+    /**
+     * The element the fullscreen button fills the screen with.
+     *
+     * The board and its controls rather than the document, so filling the screen leaves the game
+     * and loses the rail, the top bar and the key banner - which is the whole reason somebody
+     * presses it on a phone. Captured in a plain `let` because it is read by an event handler and
+     * never rendered from; a signal here would be reactivity nothing subscribes to.
+     */
+    let arena: HTMLElement | null = null;
 
     /**
      * On a phone the chat opens BELOW the board, the turn panel and the seat list - which on a
@@ -367,7 +378,10 @@ export default component PlayPage()
         <Show when={ table !== null && table!.status !== 'closed' }>
             { () =>
                 <div class="flex min-h-0 flex-1 gap-4">
-                    <div class="flex min-w-0 flex-1 flex-col gap-5 py-2">
+                    <div
+                        ref={ (element) => arena = element }
+                        class="flex min-w-0 flex-1 flex-col gap-5 bg-void py-2"
+                    >
                         <Show when={ showing }>
                             { () =>
                                 <MatchBoard
@@ -458,13 +472,13 @@ export default component PlayPage()
                             }
                         </Show>
 
-                        <Show when={ phone && table!.conversationId !== undefined && !chatOpen }>
+                        <Show when={ !chatOpen }>
                             { () =>
-                                <div class="flex justify-center">
-                                    <Button variant="outline" size="md" leading="chats" onClick={ () => chatOpen = true }>
-                                        { locale.t('play.table.chatShow') }
-                                    </Button>
-                                </div>
+                                <TableDock
+                                    code={ table!.code }
+                                    target={ arena }
+                                    onChat={ phone && table!.conversationId !== undefined ? () => chatOpen = true : undefined }
+                                />
                             }
                         </Show>
                     </div>

@@ -1655,7 +1655,16 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                     return null;
                 }
 
-                if (found.live && !await table.watchableTable(me, found.load.match.tableId))
+                /**
+                 * Checked whether or not the game is still going.
+                 *
+                 * It used to be `found.live && ...`, which read as an optimisation and was a hole:
+                 * a match that had FINISHED skipped the table check entirely, so any signed-in
+                 * caller holding a match id could read the final board of a game played at a
+                 * private room table they were never in - the players, the positions and who won.
+                 * A game being over does not make the room it was played in public.
+                 */
+                if (!await table.watchableTable(me, found.load.match.tableId))
                 {
                     return null;
                 }

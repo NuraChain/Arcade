@@ -245,6 +245,20 @@ export function createTableService(db: DataSource, social: SocialService, achiev
             .getRawOne<TableRow>() ?? null;
     };
 
+    /**
+     * Whether SOMEBODY ELSE can see this table. The same predicate, asked about a third party.
+     *
+     * `visibleTo` has always been able to answer this - it takes a viewer - and nothing ever asked
+     * it about anyone but the caller, which is how `invite` came to hold a chair for a person the
+     * table would answer 404 to.
+     */
+    const canSee = async (who: string, tableId: string): Promise<boolean> =>
+        db.getRepository(Table)
+            .createQueryBuilder('t')
+            .where('t.id = :tableId', { tableId })
+            .andWhere(visibleTo(':who'), { who })
+            .getExists();
+
     const mustSee = async (me: string, tableId: string): Promise<TableRow> =>
     {
         const table = await one(me, tableId);
@@ -462,10 +476,49 @@ export function createTableService(db: DataSource, social: SocialService, achiev
 
             if (roomId !== null)
             {
+                /**
+                 * The SHAPE first, because `conversation_members.conversation_id` is a uuid and
+                 * Postgres raises 22P02 when something that is not one is compared against it -
+                 * which reaches a caller as a 500. `membership()` in the chat domain checks the same
+                 * thing for the same reason, and this field arrives from a wire string bounded only
+                 * by its length. A typo in a request must not be a server error.
+                 */
+                if (!UUID.test(roomId))
+                {
+                    throw new NotFoundError('No such conversation.');
+                }
+
                 const seated = await db.getRepository(ConversationMember).existsBy({ conversationId: roomId, userId: me });
                 if (!seated)
                 {
                     throw new NotFoundError('No such conversation.');
+                }
+
+                /**
+                 * And every guest has to be in the room too.
+                 *
+                 * A chair held for somebody the finished table will answer 404 to is a chair
+                 * nothing can free - the same defect `invite` had, arriving through the other door.
+                 * Refused rather than silently dropped, because a caller who asked for four
+                 * specific people and got a table seating one of them has been told nothing.
+                 */
+                const guests = [...new Set(input.invitees)];
+
+                if (guests.length > 0)
+                {
+                    const inside = await db.getRepository(ConversationMember)
+                        .createQueryBuilder('cm')
+                        .where('cm.conversation_id = :roomId', { roomId })
+                        .andWhere('cm.user_id in (:...guests)', { guests })
+                        .getCount();
+
+                    if (inside !== guests.length)
+                    {
+                        throw new ValidationError(
+                            { invitees: 'Not everybody there is in this conversation.' },
+                            'A table opened here can only hold a chair for somebody in this conversation.'
+                        );
+                    }
                 }
             }
 
@@ -730,7 +783,20 @@ export function createTableService(db: DataSource, social: SocialService, achiev
             await db.getRepository(TableSeat).update({ tableId, userId: me }, { ready });
         },
 
-        /** Holds a chair for somebody. The host's call, and only while a chair is free. */
+        /**
+         * Holds a chair for somebody, and only for somebody who could actually sit in it.
+         *
+         * On an `invite` table the invitation is what GRANTS the visibility - that is the whole
+         * level - so there is nothing to check first. On every other level the table's visibility
+         * comes from somewhere else entirely, and an invitation cannot add to it: a room table is
+         * the room's, a friends table is the host's friends', a public table is everybody's.
+         *
+         * Without that distinction this wrote a chair that nothing could ever free. `claimSeat`
+         * passes over a chair held for somebody else, the invitee's own claim 404s before it gets
+         * near one, and no route anywhere clears `invited_id` - so a four-seat room table with one
+         * outside invitation could never reach `ready` and could never be started, by anybody,
+         * ever. It also told that person a table existed which every read of it denies.
+         */
         async invite(me: string, tableId: string, otherId: string): Promise<boolean>
         {
             const table = await mustSee(me, tableId);
@@ -745,6 +811,11 @@ export function createTableService(db: DataSource, social: SocialService, achiev
                 throw new ForbiddenError(refusal === 'blocked'
                     ? 'You cannot reach that account.'
                     : 'They are not taking invitations from people they have not added.');
+            }
+
+            if (table.privacy !== 'invite' && !await canSee(otherId, tableId))
+            {
+                throw new ForbiddenError('They cannot reach that table.');
             }
 
             /**

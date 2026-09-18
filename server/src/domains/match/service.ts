@@ -388,8 +388,23 @@ export function createMatchService(db: DataSource, achieve: AchieveService)
             }
 
             const table = await db.getRepository(Table).findOne({ where: { id: tableId } });
+            const chairs = await db.getRepository(TableSeat).find({ where: { tableId }, order: { seat: 'ASC' } });
 
-            if (table === null)
+            /**
+             * Being SEATED is the first question, and a no is a 404.
+             *
+             * This route reads the table by id and nothing else - it never asks `visibleTo` - so
+             * the order it refused things in was an oracle: a stranger holding an id could tell an
+             * open table from a closed one from one whose game has no engine, and the 403 that
+             * finally stopped them confirmed the table was there. That is exactly what a room
+             * table's 404 exists to prevent, undone by the one route that did not go through the
+             * predicate.
+             *
+             * Asking it first needs no visibility check of its own, because sitting at a table is
+             * the strongest form of being able to see one: `visibleTo`'s seated clause holds
+             * whatever the privacy says, and it is the clause that outlives a group closing.
+             */
+            if (table === null || !chairs.some((chair) => chair.userId === me))
             {
                 throw new NotFoundError('No table there.');
             }
@@ -402,13 +417,6 @@ export function createMatchService(db: DataSource, achieve: AchieveService)
             if (table.game !== 'ludo')
             {
                 throw new ValidationError({ game: 'No engine yet.' }, 'That game cannot be played here yet.');
-            }
-
-            const chairs = await db.getRepository(TableSeat).find({ where: { tableId }, order: { seat: 'ASC' } });
-
-            if (!chairs.some((chair) => chair.userId === me))
-            {
-                throw new ForbiddenError('You are not sitting at that table.');
             }
 
             if (chairs.some((chair) => chair.userId === null))

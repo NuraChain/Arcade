@@ -33,7 +33,7 @@ export type TableStatus = 'open' | 'closed';
 @Check('tables_closed_has_at', `(status = 'closed') = (closed_at is not null)`)
 @Check('tables_mode_known', `mode in ('live', 'turns')`)
 @Check('tables_privacy_known', `privacy in ('invite', 'room', 'friends', 'public')`)
-@Check('tables_room_is_private', `(privacy = 'room') = (room_id is not null)`)
+@Check('tables_room_is_private', `room_id is null or privacy = 'room'`)
 @Check('tables_seats_range', `seats between 2 and 8`)
 @Check('tables_status_known', `status in ('open', 'closed')`)
 @Index('tables_code', ['code'], { unique: true })
@@ -100,15 +100,24 @@ export class Table
     gameRef!: Game;
 
     /**
-     * `CASCADE`, which is the opposite of what the neighbouring relations do and is deliberate.
+     * `SET NULL`, and the CHECK beside it is written to survive that.
      *
-     * `SET NULL` would leave a `privacy = 'room'` row with no room, which `tables_room_is_private`
-     * forbids - the same pair of rules that cannot both hold as wedged the expiry sweep through
-     * `reports_disclosure_whole` for a whole deployment. So the room going away takes its tables
-     * with it, which is also the honest reading: a table nobody can enumerate the guest list of is
-     * a table nobody can join.
+     * It was CASCADE for one commit, on the reasoning that a `privacy = 'room'` row with no room is
+     * a row `tables_room_is_private` refuses - the `reports_disclosure_whole` trap, where a
+     * constraint and a delete rule cannot both hold. The reasoning was right and the resolution was
+     * backwards, because of what is DOWNSTREAM: `conversations.group_id` cascades from `groups`,
+     * this cascaded from `conversations`, and `matches.table_id` cascades from here. So the last
+     * member leaving a group - which deletes the group, and is an ordinary Tuesday - silently
+     * destroyed every match ever played in it, taking the history, the ratings' evidence and every
+     * windowed leaderboard row with it.
+     *
+     * So the constraint gave up the half it could afford. `room_id is null or privacy = 'room'`
+     * still makes the dangerous row unrepresentable - a public table carrying a private group's
+     * room - and lets a room table outlive its room. Such a table falls back to being visible only
+     * to the people already sitting at it, which `visibleTo` gives for nothing: the room clause
+     * matches no rows once `room_id` is null, and the seated clause still does.
      */
-    @ManyToOne(() => Conversation, { onDelete: 'CASCADE', nullable: true })
+    @ManyToOne(() => Conversation, { onDelete: 'SET NULL', nullable: true })
     @JoinColumn({ name: 'room_id', referencedColumnName: 'id' })
     room!: Conversation | null;
 

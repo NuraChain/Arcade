@@ -535,6 +535,92 @@ describe.skipIf(!active)('claiming a seat, against a real database', () =>
 
             expect(await tables.byId(member, id)).not.toBeNull();
         });
+
+        /**
+         * An invitation cannot reach past the level the table is at.
+         *
+         * `invite` checked that the CALLER could see the table and that the messaging policy
+         * allowed the approach, and never that the invitee could ever sit down. On a room table
+         * that wrote a chair nothing could free: the claim skips a chair held for somebody else,
+         * the invitee's own claim 404s before it reaches one, and no route anywhere clears
+         * `invited_id` - so one misdirected invitation made the table permanently un-startable.
+         */
+        it('refuses to hold a chair for somebody who cannot see a room table', async () =>
+        {
+            const host = await makeUser();
+            const member = await makeUser();
+            const outsider = await makeUser();
+            const room = await makeRoom(host, member);
+
+            const id = await openTable(host, 4, { roomId: room });
+
+            await expect(tables.invite(host, id, outsider)).rejects.toThrow(/cannot reach/i);
+            expect(await tables.invite(host, id, member)).toBe(true);
+        });
+
+        it('still lets an invite table be the thing that grants the visibility', async () =>
+        {
+            const host = await makeUser();
+            const guest = await makeUser();
+
+            const id = await openTable(host, 4, { privacy: 'invite' });
+
+            expect(await tables.invite(host, id, guest)).toBe(true);
+            expect(await tables.byId(guest, id)).not.toBeNull();
+        });
+
+        it('refuses to open a room table holding a chair for somebody outside the room', async () =>
+        {
+            const host = await makeUser();
+            const member = await makeUser();
+            const outsider = await makeUser();
+            const room = await makeRoom(host, member);
+
+            await expect(openTable(host, 4, { roomId: room, invitees: [outsider] }))
+                .rejects.toThrow(/in this conversation/i);
+
+            await expect(openTable(host, 4, { roomId: room, invitees: [member] })).resolves.toBeTypeOf('string');
+        });
+
+        /**
+         * A uuid column raises 22P02 when something that is not one is compared against it, which
+         * reaches a caller as a 500 - the same defect `membership()` fixes for a path parameter.
+         * This field arrives from a wire string bounded only by its length.
+         */
+        it('answers a malformed room id as a missing one rather than a server error', async () =>
+        {
+            const host = await makeUser();
+
+            await expect(openTable(host, 4, { roomId: 'not-a-uuid' })).rejects.toThrow(/no such conversation/i);
+        });
+
+        /**
+         * The room going away must not take the games played in it. `conversations.group_id`
+         * cascades from `groups`, so a group emptying deletes its conversation - and while
+         * `tables.room_id` cascaded from there, that reached `matches.table_id` and destroyed every
+         * match ever played in that group.
+         */
+        it('keeps a table and its matches when the room is deleted', async () =>
+        {
+            const host = await makeUser();
+            const room = await makeRoom(host);
+
+            const id = await openTable(host, 4, { roomId: room });
+
+            await db.query('delete from conversations where id = $1', [room]);
+
+            const left = rowsOf<{ room_id: string | null; privacy: string }>(
+                await db.query('select room_id, privacy from tables where id = $1', [id])
+            );
+
+            expect(left).toHaveLength(1);
+            expect(left[0].room_id).toBeNull();
+            expect(left[0].privacy).toBe('room');
+
+            // And it is still the host's to see, because they are sitting at it.
+            expect(await tables.byId(host, id)).not.toBeNull();
+        });
     });
 });
+
 
