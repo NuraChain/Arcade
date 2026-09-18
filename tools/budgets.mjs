@@ -55,7 +55,7 @@ const MUST_BE_LAZY = [
     { match: /^app-catalogue-/, why: 'the app message catalogue — only the shell and sign-in import it' },
     { match: /^session\.store-/, why: 'lib/guards.ts imports session.store.ts dynamically' },
     { match: /^connect-dialog\.component-/, why: 'public-shell imports connect-dialog dynamically' },
-    { match: /^ludo-board-/, why: 'Phaser — dynamic import inside mount, only once a match is running' }
+    { match: /-board-/, why: 'Phaser — dynamic import inside mount, only once a match is running' }
 ];
 
 /** What the board chunk may weigh. Phaser is most of it; the board code is a few KB. */
@@ -138,12 +138,41 @@ for (const name of all)
 }
 
 // ---------------------------------------------------------------- where Phaser ended up
-const BOARD_SOURCE = join(ROOT, 'application', 'src', 'game', 'board', 'ludo-board.ts');
+//
+// The scenes come from the registry rather than from a filename. This used to look for
+// `game/board/ludo-board.ts` and assert the chunk called `ludo-board-*`, so a second game's scene
+// would have ridden into a route chunk with the rule still passing - it was measuring one file, not
+// the property. `game/scenes.ts` is the list, and every game on it has to have a module on disk.
+const SCENES = join(ROOT, 'application', 'src', 'game', 'scenes.ts');
 
 let boardChunk = null;
 
-if (existsSync(BOARD_SOURCE))
+if (existsSync(SCENES))
 {
+    const registry = readFileSync(SCENES, 'utf8');
+    const games = [...registry.matchAll(/^\s{4}(\w[\w-]*):\s*async/gm)].map((one) => one[1]);
+    const modules = [...registry.matchAll(/await import\('([^']+)'\)/g)].map((one) => one[1]);
+
+    if (games.length === 0)
+    {
+        problems.push('game/scenes.ts registers no scene, so the board checks measured nothing');
+    }
+
+    if (modules.length !== games.length)
+    {
+        problems.push(`game/scenes.ts registers ${ games.length } scenes but ${ modules.length } dynamic imports — every scene must load its own`);
+    }
+
+    for (const specifier of modules)
+    {
+        const file = join(ROOT, 'application', 'src', 'game', specifier.replace(/^\.\//, ''));
+
+        if (!existsSync(file))
+        {
+            problems.push(`game/scenes.ts imports ${ specifier }, which is not on disk`);
+        }
+    }
+
     const carries = all.filter((name) => readFileSync(join(ASSETS, name), 'utf8').includes(PHASER_MARK));
 
     if (carries.length === 0)

@@ -1,6 +1,6 @@
 # Phase 0 — the engine seam
 
-**Status:** in progress. A hard prerequisite for Hokm, Backgammon and Poker.
+**Status:** DONE. Every Ludo gate passes with Ludo behind the seam, which was the stated gate.
 
 | step | state |
 |---|---|
@@ -10,7 +10,7 @@
 | 4. Redact `since`, add the leak test | **done** — `Engine.log` and `redaction.db.spec.ts` |
 | 5. Engine-owned outcome, standings, tallies | **done** — `player_stats.tallies` is jsonb |
 | 6. One action vocabulary | **done** — one `/play` route, the engine parses it |
-| 7. Client scene registry | next |
+| 7. Client scene registry | **done** — `game/scenes.ts`, and the build gate reads it |
 | 8. Teams | with Hokm, which is the game that has them |
 
 Nothing in the three game plans can begin until this exists. It is the only work shared by all
@@ -333,9 +333,43 @@ engine's own `Ending`. It was walking an engine's internal player array to find 
 and fails if any of them imports anything under `ludo/`. `service.ts` is deliberately absent: it
 names `ludoEngine` once, as the default engine list, which is composition rather than coupling.
 
-**What is left is the client.** `match.store.ts` still says `roll` and `move` - composed into the
-one `play` route, so a second game adds its verbs without the route being written twice - and
-`board-canvas` still hardcodes the ludo scene. That is step 7.
+## What step 7 changed
+
+`board-canvas` named one module, one export and one image file, so a second game's board meant
+editing the component every board goes through. `game/scenes.ts` is the registry and the only place
+that decides which renderer draws which game; the loader is a function returning a dynamic import,
+because a static one would put Phaser's 350 KB into the component's chunk and from there into every
+route that renders a board. The PLATE belongs to the scene rather than to the caller - it is the
+photograph of the object that game is played on, which is a fact about the game and not a prop a
+component should be trusted to pass correctly.
+
+**A game with no scene is a state, not a throw.** An old client meeting a newer server falls through
+to the same DOM board a browser with no WebGL gets, which is the rule `lib/lines.ts` follows for a
+line key it has never heard of.
+
+**`tools/budgets.mjs` reads the registry now rather than a filename.** It looked for
+`game/board/ludo-board.ts` and asserted a chunk called `ludo-board-*`, so a second scene would have
+ridden into a route chunk with the rule still passing - it was measuring one file rather than the
+property. It now derives the games from `scenes.ts`, requires one dynamic import per scene and checks
+each module is on disk. All three were proved to fail against their own defect: no scene registered,
+a module that is not there, and a scene loading two.
+
+**What is still ludo's on the client, and deliberately.** `BoardView` and `BoardToken` in
+`game/bridge.ts` describe tokens on a fifty-two square ring, and the DOM fallback draws them. That is
+the contract a second scene will bring its own shape to, and generalising it now - before the second
+renderer exists - is the abstraction this document opens by warning about. `match.store.ts`'s
+`canRoll`/`moves` are the same: ludo's questions, asked through `ludoOf` so a game with no die
+answers false without a special case.
+
+---
+
+## Teams, and where they went
+
+The plan listed teams as step 6. They block Hokm-at-four and nothing else, while the action
+vocabulary blocked every second engine - so the vocabulary went first and teams moved to Hokm, which
+is the game that has them. A team rating designed without the game it is for is the abstraction this
+document opens by warning about, and `match_players.team` is one column to add on the day something
+writes it.
 
 ---
 

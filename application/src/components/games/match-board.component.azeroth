@@ -288,7 +288,7 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
             </For>
 
             <div class="board-stage">
-                <BoardCanvas view={ view } onPick={ (key) => void pick(key) } />
+                <BoardCanvas game={ game.game } view={ view } onPick={ (key) => void pick(key) } />
             </div>
 
             <For each={ bottomCards } key={ (entry) => entry.player.seat } let={ entry }>

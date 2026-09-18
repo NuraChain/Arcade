@@ -4,6 +4,7 @@ import { useOverlay } from '../../stores/overlay.store.ts';
 import { useSettings } from '../../stores/settings.store.ts';
 import { CELL, MARGIN } from '../../game/layout.ts';
 import type { BoardHandle, BoardView } from '../../game/bridge.ts';
+import { sceneFor } from '../../game/scenes.ts';
 
 /**
  * The one component that touches Phaser.
@@ -32,7 +33,7 @@ import type { BoardHandle, BoardView } from '../../game/bridge.ts';
  * open waits for a gesture, because a context created without one makes Chrome log a warning that
  * fails a matrix cell.
  */
-export default component BoardCanvas(props: { view: BoardView; onPick?: (key: string) => void })
+export default component BoardCanvas(props: { game: string; view: BoardView; onPick?: (key: string) => void })
 {
     const device = useDevice();
     const locale = useLocale();
@@ -57,16 +58,29 @@ export default component BoardCanvas(props: { view: BoardView; onPick?: (key: st
 
             try
             {
-                const { createLudoBoard } = await import('../../game/board/ludo-board.ts');
+                /**
+                 * Which scene draws this game is `game/scenes.ts`'s decision, not this file's.
+                 * A game with no scene is a real state rather than a throw - an old client meeting
+                 * a newer server - and it falls through to the same DOM board a browser with no
+                 * WebGL gets.
+                 */
+                const scene = sceneFor(props.game);
+
+                if (scene === null)
+                {
+                    failed = true;
+                    return;
+                }
+
+                const loaded = await scene();
 
                 if (dropped || host === null)
                 {
                     return;
                 }
 
-                handle = await createLudoBoard({
+                handle = await loaded.open({
                     host,
-                    plate: '/board/ludo-plate-1024.webp',
                     view: props.view,
                     reducedMotion: device.reducedMotion(),
                     sound: settings.settings().sound,
