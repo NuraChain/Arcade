@@ -15,7 +15,6 @@ import { createAchieveService } from './domains/achieve/service.ts';
 import { endingOf } from './domains/match/declare.ts';
 import { createMatchService, type MatchLoad } from './domains/match/service.ts';
 import { WATCH_DELAY_MS, createWatchService } from './domains/match/watch.ts';
-import { cellAt, FINISHED } from './domains/match/ludo/board.ts';
 import { createTableService, type TableRow } from './domains/table/service.ts';
 import { createIdentityService } from './domains/identity/service.ts';
 import { maySeeOnline } from './domains/social/policy.ts';
@@ -555,20 +554,20 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             players: state.players.map((player) => ({
                 seat: player.seat,
                 who: load.players.find((row) => row.seat === player.seat)?.who ?? '',
-                colour: player.colour,
-                tokens: player.pieces.map((at, piece) =>
-                {
-                    const cell = cellAt(player.colour, at);
-
-                    return cell === null ? { piece, at } : { piece, at, cell };
-                }),
-                home: player.pieces.filter((at) => at === FINISHED).length,
-                out: player.out,
                 timeouts: load.players.find((row) => row.seat === player.seat)?.timeouts ?? 0,
                 ...seatExtras(load, player.seat)
             })),
             turn: seatOf(state.turn),
-            moves: match.legal(state, load.mine),
+
+            /**
+             * Composed by the ENGINE, for this viewer, rather than assembled here for everybody.
+             *
+             * This function used to walk `state.players` and emit every seat's contents to whoever
+             * asked - which is safe for ludo, where a board is face up, and is the single thing
+             * that would have leaked a hokm hand or a poker hole card the day a second engine
+             * landed. The seat goes in; what that seat may know comes out.
+             */
+            view: match.board(load.match.game, state, load.mine < 0 ? null : load.mine),
 
             /**
              * Absent, not -1, for somebody with no chair.
@@ -583,10 +582,6 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             startedAt: load.match.startedAt.toISOString()
         };
 
-        if (state.die !== null)
-        {
-            view.die = state.die;
-        }
         if (load.match.deadlineAt !== null)
         {
             view.deadline = load.match.deadlineAt.toISOString();

@@ -21,7 +21,14 @@
  * "the client cannot choose a dice result" structural rather than a review comment: there is no
  * randomness inside an engine to subvert. `ludo-purity.spec.ts` reads the directory as text and
  * fails on `node:`, `typeorm`, `Math.random` or `Date.now`, and every engine gets the same test.
+ *
+ * Engines are INJECTED into `createMatchService` rather than registered into a module-level map.
+ * Every other service here takes its collaborators as arguments, a spec can build a service around
+ * a fixture engine, and the set a deployment runs is decided at the composition root rather than by
+ * whichever module happened to be imported first.
  */
+
+import type { MatchBoard } from '../../schemas.ts';
 
 /** A source of whole numbers in `[1, sides]`, drawn by the server inside the transaction. */
 export interface Draws
@@ -82,29 +89,19 @@ export interface Engine<S = unknown, A = unknown>
     finish(state: S): Ending | null;
 
     standings(state: S): Placement[];
-}
 
-/**
- * Every engine this server can run, by game id.
- *
- * A registry rather than a switch, so adding a game changes this one line and nothing else in the
- * match domain. A game whose id is absent cannot be started, which is the check that replaced
- * `if (table.game !== 'ludo')` - and it is the same answer for a game with no engine yet and a game
- * id that was never real.
- */
-const ENGINES = new Map<string, Engine>();
-
-export function register(engine: Engine<never, never>): void
-{
-    ENGINES.set(engine.id, engine as unknown as Engine);
-}
-
-export function engineFor(game: string): Engine | null
-{
-    return ENGINES.get(game) ?? null;
-}
-
-export function playable(game: string): boolean
-{
-    return ENGINES.has(game);
+    /**
+     * What ONE viewer may see, composed rather than filtered.
+     *
+     * The seat is the whole point. Ludo hides nothing so it answers the same thing for everybody,
+     * and that is exactly why nothing in this domain took a viewer before: `asMatch` walked every
+     * seat's contents and handed them to whoever asked. A hokm hand or a poker hole card cannot be
+     * filtered out on the way past - something else would find it in the ledger, the delayed
+     * spectator snapshot or the event feed - so it is never built into a payload that seat may not
+     * have, which is the rule this product already states about `lastSeenAt`.
+     *
+     * `null` is somebody with no chair at all: a spectator. They are handed the same thing as an
+     * unseated stranger, which for a game with hidden state is strictly less than any player sees.
+     */
+    view(state: S, seat: number | null): MatchBoard;
 }

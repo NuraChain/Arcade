@@ -1,6 +1,7 @@
 import { createStore, createResource, createSignal, untrack, type Getter } from 'azerothjs';
 
 import { ApiError, client, type MatchView } from '../api.ts';
+import { ludoOf } from '../data/match.ts';
 import { useAccount } from './account.store.ts';
 import { runtime } from '../lib/runtime.ts';
 import { useRealtime } from './realtime.store.ts';
@@ -37,7 +38,14 @@ export interface BoardApi
     /** This viewer's seat, or null when they are only watching. */
     mine: Getter<number | null>;
 
-    /** True when it is this viewer's turn and they have not rolled yet. */
+    /**
+     * True when it is this viewer's turn and they have not rolled yet.
+     *
+     * Ludo's own question, asked of the board the engine composed for this viewer. It stays on the
+     * store because the store is what the roll button reads, and it reads a NARROWED board rather
+     * than the envelope - a game with no die answers false here because it has no ludo board at
+     * all, which is the right answer and not a special case anybody has to write.
+     */
     canRoll: Getter<boolean>;
 
     /** The tokens this viewer may move right now. Empty unless it is their turn and they rolled. */
@@ -161,14 +169,25 @@ export const useBoard = createStore((): BoardApi =>
         {
             const current = board();
 
-            return current !== null
-                && current.finishedAt === undefined
+            if (current === null || current.finishedAt !== undefined)
+            {
+                return false;
+            }
+
+            const ludo = ludoOf(current);
+
+            return ludo !== null
                 && current.mine !== undefined
                 && current.mine === current.turn
-                && current.die === undefined;
+                && ludo.die === undefined;
         },
 
-        moves: () => board()?.moves ?? [],
+        moves: () =>
+        {
+            const current = board();
+
+            return current === null ? [] : ludoOf(current)?.moves ?? [];
+        },
 
         busy,
 

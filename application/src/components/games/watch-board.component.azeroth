@@ -4,7 +4,8 @@ import Icon from '../../icons/icon.component.azeroth';
 import { useLocale } from '../../stores/locale.store.ts';
 import { usePeople } from '../../stores/people.store.ts';
 import { seatsFor, INITIAL } from './seats.ts';
-import type { MatchView, MatchWatch } from '../../api.ts';
+import { chairsOf, ludoOf, type MatchPlayer } from '../../data/match.ts';
+import type { MatchWatch } from '../../api.ts';
 
 /**
  * A game somebody else is playing, drawn two minutes behind.
@@ -35,11 +36,15 @@ export default component WatchBoard(props: { watch: MatchWatch })
 
     derived game = props.watch.match;
 
-    derived tokens = seatsFor(game);
+    derived ludo = ludoOf(game) ?? { kind: 'ludo' as const, die: undefined, moves: [], seats: [] };
 
-    derived view = { tokens, die: game.die ?? null, turn: null, yours: false, winner: null };
+    derived chairs = chairsOf(game);
 
-    derived turnOf = game.players.find((player: MatchView['players'][number]) => player.seat === game.turn);
+    derived tokens = seatsFor(ludo);
+
+    derived view = { tokens, die: ludo.die ?? null, turn: null, yours: false, winner: null };
+
+    derived turnOf = game.players.find((player: MatchPlayer) => player.seat === game.turn);
 
     const nameOf = (handle: string): string =>
     {
@@ -52,7 +57,7 @@ export default component WatchBoard(props: { watch: MatchWatch })
     {
         if (!props.watch.live)
         {
-            const champion = game.players.find((player: MatchView['players'][number]) => player.result === 'won');
+            const champion = game.players.find((player: MatchPlayer) => player.result === 'won');
 
             return champion === undefined || game.outcome !== 'won'
                 ? locale.t('watch.over')
@@ -101,17 +106,17 @@ export default component WatchBoard(props: { watch: MatchWatch })
 
             <Panel pad="md">
                 <ul class="flex flex-col gap-2">
-                    <For each={ game.players } key={ (player) => player.seat } let={ player }>
+                    <For each={ chairs } key={ (chair) => chair.player.seat } let={ chair }>
                         <li class="flex items-center gap-2 rounded-tile px-2 py-1.5">
                             <span
                                 class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-ui-2xs font-bold text-white"
-                                style={ `background: var(--ludo-${ player.colour })` }
+                                style={ `background: var(--ludo-${ chair.seat.colour })` }
                             >
-                                { INITIAL[player.colour] }
+                                { INITIAL[chair.seat.colour] }
                             </span>
-                            <span class="min-w-0 flex-1 truncate text-ui-sm text-text">{ nameOf(player.who) }</span>
+                            <span class="min-w-0 flex-1 truncate text-ui-sm text-text">{ nameOf(chair.player.who) }</span>
                             <span class="tally shrink-0 text-ui-xs text-muted">
-                                { locale.plural('match.tokens', player.home) }
+                                { locale.plural('match.tokens', chair.seat.home) }
                             </span>
                         </li>
                     </For>

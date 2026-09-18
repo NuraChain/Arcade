@@ -5,9 +5,9 @@
 | step | state |
 |---|---|
 | 1. Schema widening + snapshot | **done** — `7e5dc59` |
-| 2. Extract `Engine`, Ludo behind it | **part done** — the interface, the registry and the generic refusal; the service still folds Ludo's state directly |
-| 3. Per-viewer `view()`, new wire | next — and it is what unblocks Hokm |
-| 4. Redact `watch` and `since`, add the leak test | |
+| 2. Extract `Engine`, Ludo behind it | **part done** — the interface, injection and the generic refusal; the service still folds Ludo's state directly |
+| 3. Per-viewer `view()`, new wire | **done** — every gate green with Ludo identical |
+| 4. Redact `since`, add the leak test | next — `watch` came along with step 3, `since` did not |
 | 5. Engine-owned outcome, standings, tallies | |
 | 6. Teams, XP generalisation | |
 | 7. Client scene registry | |
@@ -191,6 +191,41 @@ event feed.
 6. Client scene registry; Ludo's scene registered. Gates green.
 
 Only then does a second engine begin.
+
+---
+
+## What step 3 actually changed, and what it did not
+
+The wire split in two. `matchPlayer` is who is in a chair - seat, handle, timeouts, result, rating -
+and carries nothing about what they hold; `matchView.view` is a discriminated union the ENGINE
+composes for one viewer, with `ludoBoard` its only member today. `Engine.view(state, seat | null)`
+is where a seat goes in and what that seat may know comes out, and `asMatch` - which used to walk
+`state.players` and turn ludo pieces into 15x15 grid cells for whoever asked - now calls it and
+opens the state for nothing else.
+
+**`watch` came along for free and that is worth stating**, because it was listed as step 4 work. It
+builds its payload through `asMatch` with `load.mine` at `-1`, which is exactly the `null` the
+engine reads as "a spectator", so the delayed board is already composed by the engine rather than
+filtered on the way past. What is left of step 4 is `since`, which still returns every action's
+`events` array to every player unredacted, and the leak test - which needs a fixture engine that
+actually hides something, because a leak test over ludo asserts nothing at all.
+
+**The client mirrors the split rather than flattening it back.** `data/match.ts` is the one place
+the union is narrowed (`ludoOf`) and the two halves are joined (`chairsOf`), and a player the board
+did not mention is DROPPED rather than filled in with a blank colour - an invented chair would read
+as a fact about the game instead of a fact about the viewer. `PlayerCard` takes both halves as two
+props for the same reason.
+
+**Three things are deliberately still Ludo's**, and they are step 5's, not oversights: the service
+imports `apply`/`create`/`legalMoves` from `ludo/engine.ts` directly, the action vocabulary is
+`roll` and `move`, and `match.store.ts` exposes `canRoll`/`moves` (which now read through `ludoOf`,
+so a game with no die answers false without anybody writing a special case).
+
+**Two source-text rules hold the seam**, both proved to fail against the defect they exist for
+before being trusted. `server/tests/engine-seam.spec.ts` fails if `services.ts` imports anything
+under `ludo/` or names a part of a board, and asserts by PARSING that the shared envelope drops a
+colour and that `matchView` has no `die`, `moves` or `tokens` - the wire being what the parser lets
+through rather than what the declaration says.
 
 ---
 

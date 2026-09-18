@@ -185,9 +185,9 @@ const run = async () =>
             const who = state.players.find((row) => row.seat === seat).who;
             const actor = byHandle.get(who);
 
-            const answer = state.die === undefined
+            const answer = state.view.die === undefined
                 ? await actor.post(`/matches/${ matchId }/roll`, { key: `r-${ turns }`, rev: state.rev })
-                : await actor.post(`/matches/${ matchId }/move`, { key: `m-${ turns }`, rev: state.rev, piece: state.moves[0] });
+                : await actor.post(`/matches/${ matchId }/move`, { key: `m-${ turns }`, rev: state.rev, piece: state.view.moves[0] });
 
             if (answer.status !== 200)
             {
@@ -195,7 +195,7 @@ const run = async () =>
                 break;
             }
 
-            if (state.die === undefined)
+            if (state.view.die === undefined)
             {
                 rolls += 1;
             }
@@ -215,8 +215,11 @@ const run = async () =>
                 break;
             }
 
-            const homeBefore = before.players.reduce((total, row) => total + row.tokens.filter((token) => token.at >= 0).length, 0);
-            const homeAfter = state.players.reduce((total, row) => total + row.tokens.filter((token) => token.at >= 0).length, 0);
+            const onBoard = (match) => match.view.seats.reduce(
+                (total, row) => total + row.tokens.filter((token) => token.at >= 0).length, 0);
+
+            const homeBefore = onBoard(before);
+            const homeAfter = onBoard(state);
 
             if (homeAfter < homeBefore)
             {

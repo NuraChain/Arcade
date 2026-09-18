@@ -1,5 +1,5 @@
 import type { BoardToken } from '../../game/bridge.ts';
-import type { MatchView } from '../../api.ts';
+import type { LudoBoard } from '../../data/match.ts';
 
 /**
  * Where every token on a board stands, from the match the server sent.
@@ -12,6 +12,10 @@ import type { MatchView } from '../../api.ts';
  * `playable` is the ONLY thing that differs between them, and it is a parameter rather than a
  * branch: a watcher passes no seat, so nothing is playable, so nothing on their board can be
  * pressed. A view that cannot name a seat cannot offer a move.
+ *
+ * It is handed the BOARD rather than the match, because the board is the half the engine composed
+ * for one viewer. The legal moves come with it for the same reason: `moves` is what THIS seat may
+ * do, and reading it off anything wider would be reading somebody else's turn.
  */
 
 const YARDS: Record<string, readonly [number, number]> = {
@@ -50,11 +54,11 @@ export const INITIAL: Record<string, string> = {
  * renderer walks the same piece rather than blanking one square and lighting another. It is also
  * sixteen entries instead of two hundred and twenty-five.
  */
-export function seatsFor(game: MatchView, mine?: number): BoardToken[]
+export function seatsFor(board: LudoBoard, mine?: number): BoardToken[]
 {
     const placed: BoardToken[] = [];
 
-    for (const player of game.players)
+    for (const player of board.seats)
     {
         const corner = YARDS[player.colour];
         let parked = 0;
@@ -63,7 +67,7 @@ export function seatsFor(game: MatchView, mine?: number): BoardToken[]
         {
             const key = `${ player.seat }-${ token.piece }`;
             const label = INITIAL[player.colour];
-            const playable = mine !== undefined && player.seat === mine && game.moves.includes(token.piece);
+            const playable = mine !== undefined && player.seat === mine && board.moves.includes(token.piece);
 
             if (token.cell !== undefined)
             {

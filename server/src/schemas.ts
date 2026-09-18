@@ -1,4 +1,4 @@
-import { array, boolean, enumOf, number, object, string, type Infer } from '@azerothjs/schema';
+import { array, boolean, enumOf, literal, number, object, string, union, type Infer } from '@azerothjs/schema';
 
 /**
  * The wire shape, declared once.
@@ -984,13 +984,17 @@ export const matchToken = object({
     cell: object({ col: number(), row: number() }).optional()
 });
 
+/**
+ * One seat, as the ENVELOPE knows it: who is in it and how their match went.
+ *
+ * Deliberately not where they stand on a board. This shape is shared by every game, and a colour, a
+ * set of tokens and a home count are ludo's idea of a seat - a hokm seat has a team and a hand, a
+ * poker seat has a stack and two cards nobody else may see. Those live in the board below, which
+ * the engine composes PER VIEWER.
+ */
 export const matchPlayer = object({
     seat: number(),
     who: string(),
-    colour: string(),
-    tokens: array(matchToken),
-    home: number(),
-    out: boolean(),
 
     /**
      * Turns this seat has let run out IN A ROW, which is the number that decides a forfeit.
@@ -1013,6 +1017,44 @@ export const matchPlayer = object({
     ratingAfter: number().optional()
 });
 
+/**
+ * The BOARD, composed by the engine for one viewer.
+ *
+ * `matchView` used to carry a required `tokens` array with 15x15 grid cells, a `die` and a
+ * `moves: number[]` - which is a ludo turn on a route every game shares. A hokm hand, a poker pot
+ * and a backgammon dice pair have nowhere to go in that shape, and a card game would have had to
+ * send an empty token array that means nothing.
+ *
+ * A discriminated union rather than an opaque blob, because `schemas.ts` is where a wire shape is
+ * decided exactly once and the browser infers its type from this declaration. A game joins by
+ * adding a member here and a `view` to its engine; nothing else in the shared path changes.
+ *
+ * **This is the shape that makes hidden information possible at all.** The engine is handed the
+ * viewer's seat and composes what that seat may know - so a hand a player must not see is not
+ * filtered out on the way past, it is never built.
+ */
+export const ludoBoard = object({
+    kind: literal('ludo'),
+
+    /** The roll waiting to be used, absent when the player still has to roll. Public in ludo. */
+    die: number().optional(),
+
+    /** THIS viewer's legal moves, empty unless it is their turn and they have rolled. */
+    moves: array(number()),
+
+    seats: array(object({
+        seat: number(),
+        colour: string(),
+        tokens: array(matchToken),
+        home: number(),
+        out: boolean()
+    }))
+});
+
+export const matchBoard = union([ludoBoard]);
+
+export type MatchBoard = Infer<typeof matchBoard>;
+
 export const matchView = object({
     id: string(),
     tableId: string(),
@@ -1024,14 +1066,11 @@ export const matchView = object({
     /** Whose turn it is, as a seat. The engine's own index never crosses the wire. */
     turn: number(),
 
-    /** The roll waiting to be used, absent when the player still has to roll. */
-    die: number().optional(),
-
     /** This viewer's chair, absent for somebody who is only watching. */
     mine: number().optional(),
 
-    /** This viewer's legal moves, empty unless it is their turn and they have rolled. */
-    moves: array(number()),
+    /** What this viewer may see of the board, and nothing they may not. */
+    view: matchBoard,
 
     deadline: string().optional(),
     winner: number().optional(),

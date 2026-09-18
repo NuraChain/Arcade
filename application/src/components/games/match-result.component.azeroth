@@ -3,6 +3,7 @@ import Panel from '../ui/panel.component.azeroth';
 import Icon from '../../icons/icon.component.azeroth';
 import { useLocale } from '../../stores/locale.store.ts';
 import { usePeople } from '../../stores/people.store.ts';
+import { chairsOf, type MatchPlayer } from '../../data/match.ts';
 import type { MatchView } from '../../api.ts';
 
 /**
@@ -24,8 +25,8 @@ export default component MatchResult(props: { match: MatchView; mine?: number; b
     const locale = useLocale();
     const people = usePeople();
 
-    derived players = [...props.match.players].sort((a, b) =>
-        (a.result === 'won' ? 0 : 1) - (b.result === 'won' ? 0 : 1) || a.seat - b.seat);
+    derived chairs = chairsOf(props.match).sort((a, b) =>
+        (a.player.result === 'won' ? 0 : 1) - (b.player.result === 'won' ? 0 : 1) || a.player.seat - b.player.seat);
 
     derived champion = props.match.players.find((player) => player.result === 'won');
 
@@ -60,7 +61,7 @@ export default component MatchResult(props: { match: MatchView; mine?: number; b
         return person === null ? handle : locale.text(person.displayName);
     };
 
-    const moved = (player: MatchView['players'][number]): number | null =>
+    const moved = (player: MatchPlayer): number | null =>
         player.ratingAfter === undefined || player.ratingBefore === undefined
             ? null
             : player.ratingAfter - player.ratingBefore;
@@ -89,34 +90,34 @@ export default component MatchResult(props: { match: MatchView; mine?: number; b
         </div>
 
         <ul class="flex flex-col gap-1.5">
-            <For each={ players } key={ (player) => player.seat } let={ player }>
+            <For each={ chairs } key={ (chair) => chair.player.seat } let={ chair }>
                 <li class="flex items-center gap-2 rounded-tile bg-raised/50 px-2.5 py-2">
                     <span
                         class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-ui-2xs font-bold text-white"
-                        style={ `background: var(--ludo-${ player.colour })` }
+                        style={ `background: var(--ludo-${ chair.seat.colour })` }
                         aria-hidden="true"
                     >
-                        { player.home }
+                        { chair.seat.home }
                     </span>
                     <span class="min-w-0 flex-1 truncate text-ui-sm text-text">
-                        { player.seat === props.mine ? locale.t('match.you') : nameOf(player.who) }
+                        { chair.player.seat === props.mine ? locale.t('match.you') : nameOf(chair.player.who) }
                     </span>
-                    <Show when={ player.result !== undefined }>
+                    <Show when={ chair.player.result !== undefined }>
                         { () =>
                             <span class="shrink-0 text-ui-2xs text-muted">
-                                { locale.t(`history.result.${ player.result! }`) }
+                                { locale.t(`history.result.${ chair.player.result! }`) }
                             </span>
                         }
                     </Show>
-                    <Show when={ moved(player) !== null }>
+                    <Show when={ moved(chair.player) !== null }>
                         { () =>
                             <span
                                 class={ () => [
                                     'tally shrink-0 text-ui-xs font-semibold',
-                                    moved(player)! >= 0 ? 'text-win' : 'text-muted'
+                                    moved(chair.player)! >= 0 ? 'text-win' : 'text-muted'
                                 ].join(' ') }
                             >
-                                { swing(moved(player)!, player.ratingAfter!) }
+                                { swing(moved(chair.player)!, chair.player.ratingAfter!) }
                             </span>
                         }
                     </Show>

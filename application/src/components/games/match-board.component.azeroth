@@ -9,6 +9,7 @@ import { useBoard } from '../../stores/match.store.ts';
 import { usePeople } from '../../stores/people.store.ts';
 import type { MatchView } from '../../api.ts';
 import type { BoardView } from '../../game/bridge.ts';
+import { chairsOf, ludoOf } from '../../data/match.ts';
 import { seatsFor } from './seats.ts';
 
 /**
@@ -44,11 +45,25 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
 
     derived game = props.match;
 
+    /**
+     * The board, as the engine composed it for whoever is reading.
+     *
+     * Asked once and carried, rather than narrowed again in each of the seven places below. The
+     * fallback is an empty ludo board rather than a branch: this component is what draws a ludo
+     * match and `play.page` is where a game nobody can draw is decided, so a second "we cannot
+     * render this" screen here would be a state that exists twice and is reachable from neither.
+     */
+    derived ludo = ludoOf(game) ?? { kind: 'ludo' as const, die: undefined, moves: [], seats: [] };
+
+    derived chairs = chairsOf(game);
+
     derived mine = game.mine;
 
     derived over = game.finishedAt !== undefined;
 
     derived turnOf = game.players.find((player) => player.seat === game.turn);
+
+    derived turnSeat = ludo.seats.find((seat) => seat.seat === game.turn);
 
     derived nameOf = ((): string =>
     {
@@ -78,15 +93,15 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
 
         if (mine !== undefined && mine === game.turn)
         {
-            return game.die === undefined
+            return ludo.die === undefined
                 ? locale.t('match.turn.yours')
-                : locale.t('match.turn.rolled', { die: locale.n(game.die) });
+                : locale.t('match.turn.rolled', { die: locale.n(ludo.die) });
         }
 
         return locale.t('match.turn.theirs', { name: nameOf });
     })();
 
-    derived tokens = seatsFor(game, mine);
+    derived tokens = seatsFor(ludo, mine);
 
     /**
      * The turn clock, which nothing rendered until now.
@@ -178,9 +193,10 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
      * lopsided, so a two-player table puts its cards on one diagonal and leaves the rest empty
      * rather than inventing seats to fill them.
      */
-    derived seatCards = game.players.map((player) => ({
-        player,
-        corner: CORNER[player.colour] ?? 'top-left'
+    derived seatCards = chairs.map((chair) => ({
+        player: chair.player,
+        seat: chair.seat,
+        corner: CORNER[chair.seat.colour] ?? 'top-left'
     }));
 
     /**
@@ -214,10 +230,10 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
      */
     derived view = ((): BoardView => ({
         tokens,
-        die: game.die ?? null,
-        turn: turnOf?.colour ?? null,
+        die: ludo.die ?? null,
+        turn: turnSeat?.colour ?? null,
         yours: !over && mine !== undefined && mine === game.turn,
-        winner: game.players.find((player) => player.seat === game.winner)?.colour ?? null
+        winner: ludo.seats.find((seat) => seat.seat === game.winner)?.colour ?? null
     }))();
 
     /**
@@ -238,13 +254,12 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
 
     const moveSays = (piece: number): string =>
     {
-        const seat = game.players.find((player) => player.seat === game.turn);
-        const token = seat?.tokens.find((candidate) => candidate.piece === piece);
+        const token = turnSeat?.tokens.find((candidate) => candidate.piece === piece);
         const label = locale.n(piece + 1);
 
-        if (token === undefined || game.die === undefined)
+        if (token === undefined || ludo.die === undefined)
         {
-            return locale.t('match.move.step', { token: label, die: locale.n(game.die ?? 0) });
+            return locale.t('match.move.step', { token: label, die: locale.n(ludo.die ?? 0) });
         }
 
         if (token.at < 0)
@@ -252,9 +267,9 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
             return locale.t('match.move.enter', { token: label });
         }
 
-        return token.at + game.die >= 56
+        return token.at + ludo.die >= 56
             ? locale.t('match.move.home', { token: label })
-            : locale.t('match.move.step', { token: label, die: locale.n(game.die) });
+            : locale.t('match.move.step', { token: label, die: locale.n(ludo.die) });
     };
 
     <div class="flex min-w-0 flex-col gap-4">
@@ -263,9 +278,10 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
                 <div class="board-seat" data-corner={ entry.corner }>
                     <PlayerCard
                         player={ entry.player }
+                        seat={ entry.seat }
                         mine={ mine }
                         active={ entry.player.seat === game.turn }
-                        die={ entry.player.seat === game.turn ? game.die : undefined }
+                        die={ entry.player.seat === game.turn ? ludo.die : undefined }
                         finished={ over }
                     />
                 </div>
@@ -279,9 +295,10 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
                 <div class="board-seat" data-corner={ entry.corner }>
                     <PlayerCard
                         player={ entry.player }
+                        seat={ entry.seat }
                         mine={ mine }
                         active={ entry.player.seat === game.turn }
-                        die={ entry.player.seat === game.turn ? game.die : undefined }
+                        die={ entry.player.seat === game.turn ? ludo.die : undefined }
                         finished={ over }
                     />
                 </div>
@@ -333,7 +350,7 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
                     }
                 </Show>
 
-                <Show when={ !over && mine !== undefined && mine === game.turn && game.die !== undefined }>
+                <Show when={ !over && mine !== undefined && mine === game.turn && ludo.die !== undefined }>
                     { () =>
                         <div class="flex flex-col gap-1.5">
                             <p class="label text-ui-xs text-faint">{ locale.t('match.moves') }</p>

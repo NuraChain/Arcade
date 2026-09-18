@@ -332,7 +332,12 @@ try
 
             const actor = state.turn === 0 ? dana : mina;
 
-            if (state.die === undefined)
+            if (actor !== dana)
+            {
+                state = await (await actor.request.get(`${ BASE }/api/matches/${ match }`)).json();
+            }
+
+            if (state.view.die === undefined)
             {
                 const answer = await actor.request.post(`${ BASE }/api/matches/${ match }/roll`, {
                     data: { key: `play-pass-${ key++ }` }
@@ -346,7 +351,7 @@ try
                 state = (await answer.json()).match;
             }
 
-            const moves = state.moves ?? [];
+            const moves = state.view.moves ?? [];
 
             if (moves.length === 0)
             {

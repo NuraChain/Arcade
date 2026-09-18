@@ -4,6 +4,9 @@ import { CELL, GRID, MARGIN, RIM, centreOf, tokenRadius } from '../src/game/layo
 import { FINISHED, YARD, pathBetween } from '../src/game/board/path.ts';
 import { createSound } from '../src/game/sound.ts';
 import { ENTRY, RING_CELLS, cellAt } from '../../server/src/domains/match/ludo/board.ts';
+import { chairsOf, ludoOf, type LudoSeat } from '../src/data/match.ts';
+import { seatsFor } from '../src/components/games/seats.ts';
+import type { MatchView } from '../src/api.ts';
 
 /**
  * The board, from the three angles a rendering test cannot reach.
@@ -280,5 +283,72 @@ describe('the sound layer', () =>
         expect(counts.made()).toBe(0);
 
         vi.unstubAllGlobals();
+    });
+});
+
+describe('the two halves of a chair', () =>
+{
+    /**
+     * `matchView` used to carry one flat player: who is sitting there AND where their tokens stand.
+     * The server split them so a hokm hand and a poker hole card have somewhere to live that the
+     * viewer's own seat decides, and these are the browser's side of that split.
+     *
+     * The interesting one is what happens to a seat the board did NOT mention. Ludo shows every
+     * chair to everybody so it never occurs here - and the day it does, an invented chair with a
+     * blank colour and no tokens would render as a fact about the game rather than as a fact about
+     * the viewer, which is precisely the confusion the split exists to prevent.
+     */
+    const match = (seats: LudoSeat[], players: number[]): MatchView => ({
+        id: 'm', tableId: 't', game: 'ludo', rev: 3, seats: players.length, turn: 0,
+        players: players.map((seat) => ({ seat, who: `p${ seat }`, timeouts: 0 })),
+        view: { kind: 'ludo', die: 6, moves: [1], seats },
+        startedAt: '2026-09-18T00:00:00.000Z'
+    }) as MatchView;
+
+    const seat = (index: number, colour: string): LudoSeat => ({
+        seat: index,
+        colour,
+        home: 0,
+        out: false,
+        tokens: [0, 1, 2, 3].map((piece) => ({ piece, at: -1 }))
+    });
+
+    it('reads the board off a view it recognises', () =>
+    {
+        expect(ludoOf(match([seat(0, 'red')], [0]))?.die).toBe(6);
+    });
+
+    it('joins each player to their own colour', () =>
+    {
+        const chairs = chairsOf(match([seat(0, 'red'), seat(1, 'green')], [0, 1]));
+
+        expect(chairs.map((chair) => [chair.player.who, chair.seat.colour]))
+            .toEqual([['p0', 'red'], ['p1', 'green']]);
+    });
+
+    it('drops a player the board did not mention, rather than inventing one', () =>
+    {
+        const chairs = chairsOf(match([seat(0, 'red')], [0, 1]));
+
+        expect(chairs).toHaveLength(1);
+        expect(chairs[0].player.who).toBe('p0');
+    });
+
+    /**
+     * A watcher passes no seat, so nothing on their board can be pressed. `moves` is what the seat
+     * this board was COMPOSED FOR may do, so a board offering a move to somebody with no chair
+     * would be offering one they cannot take - which is the whole shape of the watch route.
+     *
+     * Only the viewer's own seat is asked. A board composed for seat 0 carries seat 0's moves, so
+     * reading it as seat 1 is not a state that occurs: `mine` and `view` arrive in one payload.
+     */
+    it('offers a move only to the seat it was composed for, and none to a watcher', () =>
+    {
+        const board = ludoOf(match([seat(0, 'red'), seat(1, 'green')], [0, 1]))!;
+
+        expect(seatsFor(board, 0).filter((token) => token.playable).map((token) => token.key))
+            .toEqual(['0-1']);
+
+        expect(seatsFor(board).some((token) => token.playable)).toBe(false);
     });
 });

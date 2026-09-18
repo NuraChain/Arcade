@@ -10,10 +10,11 @@ import { pickBelow, rollDie } from '../../lib/crypto.ts';
 import type { AchieveService } from '../achieve/service.ts';
 import { firstRow } from '../../lib/rows.ts';
 import { COLOURS } from './ludo/board.ts';
-import { apply, create, indexOfSeat, legalMoves } from './ludo/engine.ts';
+import { apply, create, legalMoves } from './ludo/engine.ts';
 import { createRecorder, outcomeOf } from './record.ts';
 import { ludoEngine } from './engines/ludo.ts';
 import type { Engine } from './engine.ts';
+import type { MatchBoard } from '../../schemas.ts';
 import type { MatchHistory } from '../../schemas.ts';
 import type { EngineAction, GameEvent, LudoState, RefusalReason } from './ludo/state.ts';
 
@@ -609,8 +610,24 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
             return { load: (await read(me, matchId)) as MatchLoad, applied };
         },
 
-        legal: (state: LudoState, seat: number): number[] =>
-            indexOfSeat(state, seat) === state.turn ? legalMoves(state) : [],
+        /**
+         * The board as ONE viewer may see it, from whichever engine is playing this game.
+         *
+         * It was `legal(state, seat)` answering ludo piece indices, because that is the only
+         * viewer-dependent thing a ludo board has. Every other game has more: a hand, a stack, two
+         * cards. So the question the projector asks is the wider one, and the engine answers it.
+         */
+        board: (game: string, state: unknown, seat: number | null): MatchBoard =>
+        {
+            const engine = engineFor(game);
+
+            if (engine === null)
+            {
+                throw new ValidationError({ game: 'No engine yet.' }, 'That game cannot be played here yet.');
+            }
+
+            return engine.view(state, seat);
+        },
 
         /**
          * The board with nobody looking at it.

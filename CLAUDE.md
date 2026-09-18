@@ -975,6 +975,39 @@ or a finish on a six still earns the roll.
 positions, never pixels, and an animation may interpolate but the final logical state always wins.
 That is the same split `ludo/` already enforces by importing nothing at all.
 
+**A game is an `Engine` this server is GIVEN, and the payload is composed per viewer.**
+`domains/match/engine.ts` is the seam and `engines/ludo.ts` is the first thing behind it - injected
+into `createMatchService` rather than registered into a module-level map, because every other
+service here takes its collaborators as arguments and a spec can then build a service around a
+fixture engine. Three contracts are not negotiable and each was already true of ludo: `apply` never
+throws (the sweep folds actions over a state, and a function that throws for ordinary control flow
+is one nothing can fold), every state carries a top-level `rev` (`matches_rev_matches_state` reads
+`(state ->> 'rev')::int`), and randomness arrives as a VALUE - there is no randomness inside an
+engine to subvert, which is what makes "the client cannot choose a die" structural.
+
+**The wire is an envelope and a board, and the split is the whole redaction story.** `matchPlayer`
+is who is in a chair - seat, handle, timeouts, result, rating - and carries nothing about what they
+hold. `matchView.view` is a discriminated union the ENGINE composes, and `Engine.view(state, seat |
+null)` takes the viewer's seat: a hand a player must not see is never BUILT rather than filtered out
+on the way past, which is the rule this product already states about `lastSeenAt`. `null` is
+somebody with no chair, so `watch` - which loads a spectator with `mine: -1` - gets a board composed
+for nobody through the same function.
+
+That matters because `asMatch` used to walk `state.players` and turn ludo pieces into 15x15 grid
+cells for whoever asked. Safe for ludo, where a board is face up; the single thing that would have
+leaked a hokm hand the day a second engine landed. `tests/engine-seam.spec.ts` reads `services.ts`
+as text and fails if it imports anything under `ludo/` or names a part of a board, and asserts by
+PARSING that the envelope drops a colour - the wire being what the parser lets through rather than
+what the declaration says.
+
+**The browser mirrors the split rather than flattening it back.** `data/match.ts` is the one place
+the union is narrowed (`ludoOf`) and the halves are joined (`chairsOf`), so a screen asks the
+question in the same place every time - the argument `visibleTo` makes on the server. A player the
+board did not mention is DROPPED, never filled in with a blank colour and no tokens: an invented
+chair reads as a fact about the game rather than as a fact about the viewer, which is exactly the
+confusion a hidden hand would cause. `PlayerCard` takes both halves as two props for the same
+reason.
+
 **A client asks for two things and neither names a destination.** `POST /matches/:id/roll` carries no
 value at all, and `POST /matches/:id/move` names one of the caller's own tokens - the server computes
 where it lands from the die it drew itself. There is no field anywhere on the way in that carries a

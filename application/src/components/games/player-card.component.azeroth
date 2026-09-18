@@ -4,7 +4,7 @@ import Panel from '../ui/panel.component.azeroth';
 import { INITIAL } from './seats.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { usePeople } from '../../stores/people.store.ts';
-import type { MatchView } from '../../api.ts';
+import type { LudoSeat, MatchPlayer } from '../../data/match.ts';
 
 /** Four tokens, so four pips. The board cannot hold a fifth and neither can this. */
 const PIPS = [0, 1, 2, 3];
@@ -32,9 +32,15 @@ const MISSES_ALLOWED = 3;
  * and has to be set as a real CSS property - `Panel` takes no `style`, and giving it one so a card
  * could tint itself would open the primitive up to every caller wanting a different surface. A
  * wrapper carrying an `outline-color` leaves the surface exactly what the design system says it is.
+ *
+ * It takes BOTH halves of a chair, because that is what the wire now sends and what this card is:
+ * `player` is who is sitting there and how their match went, which is true of every game, and
+ * `seat` is their colour and their four tokens, which the ludo engine composed for this viewer. One
+ * prop carrying both would be the flat shape the server just stopped sending.
  */
 export default component PlayerCard(props: {
-    player: MatchView['players'][number];
+    player: MatchPlayer;
+    seat: LudoSeat;
     mine?: number;
     active: boolean;
     die?: number;
@@ -57,7 +63,7 @@ export default component PlayerCard(props: {
             return locale.t('card.won');
         }
 
-        if (props.player.out || props.player.result === 'abandoned')
+        if (props.seat.out || props.player.result === 'abandoned')
         {
             return locale.t('card.out');
         }
@@ -76,9 +82,9 @@ export default component PlayerCard(props: {
         class={ () => [
             'min-w-0 rounded-panel',
             props.active && !props.finished ? 'outline outline-2 outline-offset-0' : '',
-            props.player.out ? 'opacity-60' : ''
+            props.seat.out ? 'opacity-60' : ''
         ].filter(Boolean).join(' ') }
-        style={ `outline-color: var(--ludo-${ props.player.colour })` }
+        style={ `outline-color: var(--ludo-${ props.seat.colour })` }
         aria-current={ props.active && !props.finished ? 'true' : undefined }
     >
     <Panel pad="sm" class="flex min-w-0 items-center gap-2 shadow-2">
@@ -86,10 +92,10 @@ export default component PlayerCard(props: {
             <Avatar person={ person } size="sm" />
             <span
                 class="absolute -bottom-1 -end-1 flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold text-white ring-2 ring-field"
-                style={ `background: var(--ludo-${ props.player.colour })` }
+                style={ `background: var(--ludo-${ props.seat.colour })` }
                 aria-hidden="true"
             >
-                { INITIAL[props.player.colour] }
+                { INITIAL[props.seat.colour] }
             </span>
         </span>
 
@@ -104,12 +110,12 @@ export default component PlayerCard(props: {
                 { says }
             </span>
 
-            <span class="mt-1 flex items-center gap-1" role="img" aria-label={ locale.plural('match.tokens', props.player.home) }>
+            <span class="mt-1 flex items-center gap-1" role="img" aria-label={ locale.plural('match.tokens', props.seat.home) }>
                 <For each={ PIPS } key={ (pip) => pip } let={ pip }>
                     <span
                         class="h-2 w-2 rounded-full"
-                        style={ pip < props.player.home
-                            ? `background: var(--ludo-${ props.player.colour })`
+                        style={ pip < props.seat.home
+                            ? `background: var(--ludo-${ props.seat.colour })`
                             : 'background: var(--line-strong)' }
                         aria-hidden="true"
                     ></span>
