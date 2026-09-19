@@ -1,0 +1,53 @@
+import Icon from '../../icons/icon.component.azeroth';
+import { useLocale } from '../../stores/locale.store.ts';
+import { FACE_KEY, RANKS, SUITS, SUIT_ICON, type Suit } from '../../data/cards.ts';
+
+/**
+ * One playing card, drawn rather than photographed.
+ *
+ * The art plan called for fifty-two rendered faces on their own 2048 sheet. That is the right answer
+ * for the card lying on a 3D table and the wrong one for the thing a person actually presses: a hand
+ * of thirteen at 390px is thirteen controls, and what each has to do is say its rank and its suit at
+ * a glance, stay crisp at any device ratio, follow the theme and be a real button. A rank and an
+ * icon do all of that in no bytes and cannot 404 halfway through a hand.
+ *
+ * **The suit is an ICON, never a character.** `♠♥♦♣` as text is what this product forbids
+ * everywhere - the OS draws it, so it is a different shape and often a different colour on every
+ * machine, and on some it is an emoji. Lucide's four come through the registry like every other.
+ *
+ * **Red and black are `danger` and `text`, and the suit is never the only signal.** Somebody who
+ * cannot tell the two apart still reads the rank and sees the shape, which is the same rule the ludo
+ * tokens follow by carrying their colour's initial.
+ */
+
+export default component CardFace(props: { card: number; size?: 'sm' | 'md' })
+{
+    const locale = useLocale();
+
+    derived suit = SUITS[Math.floor(props.card / RANKS.length)] as Suit;
+
+    derived rank = RANKS[props.card % RANKS.length];
+
+    derived red = suit === 'hearts' || suit === 'diamonds';
+
+    derived small = props.size === 'sm';
+
+    /**
+     * A face card reads as a word rather than as a letter, because `J` is not a rank in Persian and
+     * a lone Latin initial on a Persian page is a glyph nobody can say out loud. Digits go through
+     * `locale.n`, which is what makes a ten `۱۰`.
+     */
+    derived says = FACE_KEY[rank] === undefined ? locale.n(Number(rank)) : locale.t(FACE_KEY[rank]);
+
+    <span
+        class={ () => [
+            'inline-flex shrink-0 select-none flex-col items-center justify-center rounded-control border border-line bg-field leading-none',
+            small ? 'h-9 w-7 gap-0.5' : 'h-14 w-11 gap-1',
+            red ? 'text-danger' : 'text-text'
+        ].join(' ') }
+        aria-hidden="true"
+    >
+        <span class={ () => [ 'tally font-bold', small ? 'text-ui-2xs' : 'text-ui-md' ].join(' ') }>{ says }</span>
+        <Icon name={ SUIT_ICON[suit] } size={ small ? 11 : 15 } />
+    </span>
+}

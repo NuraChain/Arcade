@@ -1,6 +1,6 @@
 import { createStore, createResource, createSignal, untrack, type Getter } from 'azerothjs';
 
-import { ApiError, client, type MatchView } from '../api.ts';
+import { ApiError, client, type MatchPlay, type MatchView } from '../api.ts';
 import { ludoOf } from '../data/match.ts';
 import { useAccount } from './account.store.ts';
 import { runtime } from '../lib/runtime.ts';
@@ -58,6 +58,16 @@ export interface BoardApi
 
     roll(): Promise<void>;
     move(piece: number): Promise<void>;
+
+    /**
+     * Any game's verb, composed by whoever knows the game.
+     *
+     * `roll` and `move` above are ludo's, spelled here because ludo's board is the one that calls
+     * them; a second game's board composes its own play and hands it over rather than growing two
+     * more methods on a store every game shares.
+     */
+    play(what: MatchPlay): Promise<void>;
+
     resign(): Promise<void>;
 
     refresh(): Promise<void>;
@@ -198,6 +208,9 @@ export const useBoard = createStore((): BoardApi =>
 
         move: async (piece) => await act(async (id, key, rev) =>
             await client.matches.play({ params: { id }, input: { key, rev, play: { kind: 'ludo', verb: 'move', piece } } })),
+
+        play: async (what) => await act(async (id, key, rev) =>
+            await client.matches.play({ params: { id }, input: { key, rev, play: what } })),
 
         resign: async () => await act(async (id, key) =>
             await client.matches.resign({ params: { id }, input: { key } })),

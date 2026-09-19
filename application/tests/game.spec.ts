@@ -7,6 +7,8 @@ import { ENTRY, RING_CELLS, cellAt } from '../../server/src/domains/match/ludo/b
 import { chairsOf, ludoOf, type LudoSeat } from '../src/data/match.ts';
 import { seatsFor } from '../src/components/games/seats.ts';
 import type { MatchView } from '../src/api.ts';
+import { RANKS as CLIENT_RANKS, SUITS as CLIENT_SUITS, SUIT_ICON, rankOf as clientRank, suitOf as clientSuit } from '../src/data/cards.ts';
+import { RANKS as SERVER_RANKS, SUITS as SERVER_SUITS, rankOf as serverRank, suitOf as serverSuit } from '../../server/src/domains/match/hokm/cards.ts';
 
 /**
  * The board, from the three angles a rendering test cannot reach.
@@ -350,5 +352,37 @@ describe('the two halves of a chair', () =>
             .toEqual(['0-1']);
 
         expect(seatsFor(board).some((token) => token.playable)).toBe(false);
+    });
+});
+
+describe('the browser reads a card the way the server wrote it', () =>
+{
+    /**
+     * `data/cards.ts` is a second copy of four lines from the server's own `hokm/cards.ts`, and it is
+     * a copy on purpose: nothing under `domains/` is client-safe, so importing it would drag a whole
+     * engine into the web typecheck program for two arrays. A copy needs a test, which is the same
+     * arrangement `handleFromName` has with the browser's fake api.
+     *
+     * A disagreement here would be silent and total: every card in every hand drawn as the wrong
+     * rank, or the wrong suit, with nothing anywhere failing.
+     */
+    it('decodes all fifty-two exactly as the engine encodes them', () =>
+    {
+        for (let card = 0; card < 52; card += 1)
+        {
+            expect(clientSuit(card), `card ${ card }`).toBe(serverSuit(card));
+            expect(clientRank(card), `card ${ card }`).toBe(SERVER_RANKS[serverRank(card)]);
+        }
+
+        expect(CLIENT_SUITS).toEqual([...SERVER_SUITS]);
+        expect(CLIENT_RANKS).toEqual([...SERVER_RANKS]);
+    });
+
+    it('has an icon for every suit and never a bare character', () =>
+    {
+        for (const suit of CLIENT_SUITS)
+        {
+            expect(SUIT_ICON[suit], suit).toMatch(/^suit-/);
+        }
     });
 });

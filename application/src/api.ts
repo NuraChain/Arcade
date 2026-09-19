@@ -24,6 +24,7 @@ export type {
     LeaderboardWindow,
     MatchHistory,
     MatchHistoryEntry,
+    MatchPlay,
     MatchView,
     MatchWatch,
     WatchableTables,

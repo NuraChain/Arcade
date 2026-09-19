@@ -1,0 +1,299 @@
+import CardFace from './card-face.component.azeroth';
+import MatchResult from './match-result.component.azeroth';
+import Avatar from '../ui/avatar.component.azeroth';
+import Button from '../ui/button.component.azeroth';
+import Panel from '../ui/panel.component.azeroth';
+import Icon from '../../icons/icon.component.azeroth';
+import { FACE_KEY, SUITS, SUIT_ICON, rankOf, suitOf, type Suit } from '../../data/cards.ts';
+import { hokmOf } from '../../data/match.ts';
+import { useBoard } from '../../stores/match.store.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import { usePeople } from '../../stores/people.store.ts';
+import type { MatchView } from '../../api.ts';
+
+/**
+ * Hokm, as a screen somebody can actually play on.
+ *
+ * **There is no canvas here and that is not a gap.** The house rule is that the canvas is the
+ * illustration and the DOM is the interface: every move takeable from a real control, the turn in an
+ * `aria-live` region, the drawing `aria-hidden` beside it. For ludo the drawing came first because a
+ * board with tokens on it is most of the game; for hokm the interface IS a list of thirteen cards
+ * you press, so the interface is what got built. A table with felt and a trick laid out on it is the
+ * illustration this grows, and until it exists the fallback is the default state - which is the rule
+ * this product already follows everywhere else.
+ *
+ * **An illegal card is disabled rather than absent.** The server sends `plays`, the cards this seat
+ * may legally play, and the rest of the hand stays on screen greyed out: a hand that silently lost
+ * nine of its thirteen cards the moment somebody led a suit would read as a bug, and "you must
+ * follow suit" is a rule a player learns by seeing which cards went quiet.
+ */
+
+const SIDE_TONE = ['text-accent', 'text-gold'];
+
+export default component HokmBoard(props: { match: MatchView; starting?: boolean; onAgain?: () => void })
+{
+    const locale = useLocale();
+    const board = useBoard();
+    const people = usePeople();
+
+    derived game = props.match;
+
+    derived view = hokmOf(game);
+
+    derived over = game.finishedAt !== undefined;
+
+    derived mine = game.mine;
+
+    derived nameOf = (seat: number): string =>
+    {
+        const player = game.players.find((one) => one.seat === seat);
+
+        if (player === undefined)
+        {
+            return '';
+        }
+
+        if (seat === mine)
+        {
+            return locale.t('match.you');
+        }
+
+        const person = people.byHandle(player.who);
+
+        return person === null ? player.who : locale.text(person.displayName);
+    };
+
+    derived says = ((): string =>
+    {
+        if (view === null)
+        {
+            return '';
+        }
+
+        if (over)
+        {
+            return game.winner === undefined
+                ? locale.t('match.abandoned')
+                : (game.winner === mine ? locale.t('match.won.you') : locale.t('match.won.them', { name: nameOf(game.winner) }));
+        }
+
+        if (view.phase === 'trump')
+        {
+            return view.hakem === mine
+                ? locale.t('hokm.trump.yours')
+                : locale.t('hokm.trump.theirs', { name: nameOf(view.hakem) });
+        }
+
+        return view.turn === mine
+            ? locale.t('match.turn.yours')
+            : locale.t('match.turn.theirs', { name: nameOf(view.turn) });
+    })();
+
+    /**
+     * The card each seat has played to the trick in progress, which is `lead` plus the offset - the
+     * wire sends the cards in play order and the seat that led, because a list of cards nobody owns
+     * is a pile rather than a trick.
+     */
+    derived onTable = view === null
+        ? []
+        : view.trick.map((card, offset) => ({ card, seat: (view.lead + offset) % game.seats }));
+
+    derived legal = new Set(view === null ? [] : view.plays);
+
+    /**
+     * What a screen reader is told a card is, and it has to be a WORD.
+     *
+     * `CardFace` is `aria-hidden` - it is a drawing of a card - so this label is the whole of what
+     * somebody not looking at the screen gets. A raw `10` is fine and an index into the rank array
+     * is not, which is what this said first: `Play the 8 of hearts` for the ten.
+     */
+    const rankSays = (card: number): string =>
+    {
+        const rank = rankOf(card);
+
+        return FACE_KEY[rank] === undefined ? locale.n(Number(rank)) : locale.t(FACE_KEY[rank]);
+    };
+
+    const playCard = async (card: number): Promise<void> =>
+    {
+        if (!legal.has(card))
+        {
+            return;
+        }
+
+        await board.play({ kind: 'hokm', verb: 'card', card });
+    };
+
+    const callTrump = async (suit: Suit): Promise<void> =>
+    {
+        await board.play({ kind: 'hokm', verb: 'trump', suit });
+    };
+
+    <div class="flex min-w-0 flex-col gap-4">
+        <Show when={ view !== null }>
+            { () =>
+        <Panel pad="md" stack="sm">
+            <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                <p class="flex min-w-0 items-center gap-2 text-ui-sm text-muted">
+                    <Icon name="crest-crown" size={ 15 } class="shrink-0 text-gold" />
+                    <span class="truncate">{ locale.t('hokm.hakem', { name: nameOf(view!.hakem) }) }</span>
+                </p>
+
+                <Show when={ view!.trump !== undefined }>
+                    { () =>
+                        <p class="flex shrink-0 items-center gap-1.5 text-ui-sm font-semibold text-text">
+                            <span class="text-ui-2xs text-faint">{ locale.t('hokm.trump') }</span>
+                            <Icon
+                                name={ SUIT_ICON[view!.trump!] }
+                                size={ 16 }
+                                class={ view!.trump === 'hearts' || view!.trump === 'diamonds' ? 'text-danger' : 'text-text' }
+                            />
+                            <span>{ locale.t(`hokm.suit.${ view!.trump! }` as never) }</span>
+                        </p>
+                    }
+                </Show>
+            </div>
+
+            <dl class="grid grid-cols-2 gap-x-4 gap-y-2">
+                <For each={ view!.points } key={ (_, index) => index } let={ total } index={ index }>
+                    <div class="min-w-0">
+                        <dt class={ () => [ 'truncate text-ui-2xs', SIDE_TONE[index % 2] ].join(' ') }>
+                            { locale.list(view!.seats.filter((row) => row.side === index).map((row) => nameOf(row.seat))) }
+                        </dt>
+                        <dd class="tally text-ui-lg font-bold text-text">
+                            { locale.t('hokm.points', { points: locale.n(total), target: locale.n(view!.target) }) }
+                        </dd>
+                    </div>
+                </For>
+            </dl>
+        </Panel>
+            }
+        </Show>
+
+        <Show when={ view !== null && !over }>
+            { () =>
+        <Panel pad="md" stack="sm" tone="field">
+            <p class="label text-ui-xs text-faint">{ locale.t('hokm.table') }</p>
+
+            <Show
+                when={ onTable.length > 0 }
+                fallback={ <p class="text-ui-sm text-muted">{ locale.t('hokm.table.empty') }</p> }
+            >
+                { () =>
+                    <ul class="flex flex-wrap items-end gap-3">
+                        <For each={ onTable } key={ (one) => one.card } let={ one }>
+                            <li class="flex min-w-0 flex-col items-center gap-1">
+                                <CardFace card={ one.card } />
+                                <span class="max-w-[5rem] truncate text-ui-2xs text-muted">{ nameOf(one.seat) }</span>
+                            </li>
+                        </For>
+                    </ul>
+                }
+            </Show>
+        </Panel>
+            }
+        </Show>
+
+        <Show when={ view !== null }>
+            { () =>
+        <ul class="grid grid-cols-2 gap-2 @xl:grid-cols-4">
+            <For each={ view!.seats } key={ (row) => row.seat } let={ row }>
+                <li class="flex min-w-0">
+                    <div
+                        class={ () => [
+                            'flex w-full min-w-0 rounded-panel',
+                            !over && row.seat === view!.turn ? 'outline outline-2 outline-offset-0 outline-accent' : ''
+                        ].join(' ') }
+                        aria-current={ !over && row.seat === view!.turn ? 'true' : undefined }
+                    >
+                    <Panel pad="sm" class="flex w-full min-w-0 items-center gap-2">
+                        <Avatar person={ people.byHandle(game.players.find((one) => one.seat === row.seat)?.who ?? '') } size="sm" />
+                        <span class="flex min-w-0 flex-1 flex-col">
+                            <span class="truncate text-ui-sm font-semibold text-text">{ nameOf(row.seat) }</span>
+                            <span class="tally truncate text-ui-2xs text-muted">
+                                { locale.plural('hokm.tricks', row.tricks) }
+                            </span>
+                        </span>
+                        <span class="tally shrink-0 text-ui-2xs text-faint">{ locale.n(row.held) }</span>
+                    </Panel>
+                    </div>
+                </li>
+            </For>
+        </ul>
+            }
+        </Show>
+
+        <Show when={ over }>
+            { () => <MatchResult match={ game } mine={ mine } busy={ props.starting === true } onAgain={ props.onAgain } /> }
+        </Show>
+
+        <Show when={ view !== null && !over }>
+            { () =>
+        <Panel pad="md" stack="sm">
+            <div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                <p class="min-w-0 flex-1 basis-[10rem] text-ui-lg font-semibold text-text" aria-live="polite">{ says }</p>
+            </div>
+
+            <Show when={ view!.phase === 'trump' && view!.hakem === mine }>
+                { () =>
+                    <div class="flex flex-col gap-1.5">
+                        <p class="label text-ui-xs text-faint">{ locale.t('hokm.trump.choose') }</p>
+                        <ul class="grid grid-cols-2 gap-1.5 @xs:grid-cols-4">
+                            <For each={ [...SUITS] } key={ (suit) => suit } let={ suit }>
+                                <li class="flex min-w-0">
+                                    <Button
+                                        variant="secondary"
+                                        class="w-full"
+                                        disabled={ board.busy() }
+                                        onClick={ () => void callTrump(suit) }
+                                    >
+                                        { locale.t(`hokm.suit.${ suit }` as never) }
+                                    </Button>
+                                </li>
+                            </For>
+                        </ul>
+                    </div>
+                }
+            </Show>
+
+            <Show when={ view!.hand.length > 0 }>
+                { () =>
+                    <div class="flex flex-col gap-1.5">
+                        <p class="label text-ui-xs text-faint">{ locale.t('hokm.hand') }</p>
+                        <ul class="flex flex-wrap gap-1.5" aria-label={ locale.t('hokm.hand') }>
+                            <For each={ view!.hand } key={ (card) => card } let={ card }>
+                                <li class="flex">
+                                    <button
+                                        type="button"
+                                        class="flex min-h-11 min-w-11 items-center justify-center rounded-control p-0.5 transition enabled:hover:bg-raised disabled:opacity-40 coarse:min-h-11"
+                                        disabled={ !legal.has(card) || board.busy() }
+                                        aria-label={ locale.t('hokm.play', {
+                                            rank: rankSays(card),
+                                            suit: locale.t(`hokm.suit.${ suitOf(card) }` as never)
+                                        }) }
+                                        onClick={ () => void playCard(card) }
+                                    >
+                                        <CardFace card={ card } />
+                                    </button>
+                                </li>
+                            </For>
+                        </ul>
+                        <Show when={ view!.phase === 'tricks' && view!.turn === mine && legal.size < view!.hand.length }>
+                            { () => <p class="text-ui-2xs text-muted">{ locale.t('hokm.follow') }</p> }
+                        </Show>
+                    </div>
+                }
+            </Show>
+        </Panel>
+            }
+        </Show>
+
+        <Show when={ !over && mine !== undefined }>
+            { () =>
+                <Button variant="ghost" size="md" onClick={ () => void board.resign() }>
+                    { locale.t('match.resign') }
+                </Button>
+            }
+        </Show>
+    </div>
+}

@@ -4,6 +4,7 @@ import ConfirmSheet from '../../components/app/confirm-sheet.component.azeroth';
 import Page from '../../components/app/page.component.azeroth';
 import InviteSheet from '../../components/games/invite-sheet.component.azeroth';
 import LobbyPanel from '../../components/games/lobby-panel.component.azeroth';
+import HokmBoard from '../../components/games/hokm-board.component.azeroth';
 import MatchBoard from '../../components/games/match-board.component.azeroth';
 import WatchBoard from '../../components/games/watch-board.component.azeroth';
 import TableChat from '../../components/games/table-chat.component.azeroth';
@@ -382,7 +383,17 @@ export default component PlayPage()
                         ref={ (element) => arena = element }
                         class="flex min-w-0 flex-1 flex-col gap-5 bg-void py-2"
                     >
-                        <Show when={ showing }>
+                        <Show when={ showing && board.match()!.game === 'hokm' }>
+                            { () =>
+                                <HokmBoard
+                                    match={ board.match()! }
+                                    starting={ starting }
+                                    onAgain={ seated ? () => void begin() : undefined }
+                                />
+                            }
+                        </Show>
+
+                        <Show when={ showing && board.match()!.game !== 'hokm' }>
                             { () =>
                                 <MatchBoard
                                     match={ board.match()! }

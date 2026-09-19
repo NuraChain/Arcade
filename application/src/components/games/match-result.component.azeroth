@@ -3,7 +3,7 @@ import Panel from '../ui/panel.component.azeroth';
 import Icon from '../../icons/icon.component.azeroth';
 import { useLocale } from '../../stores/locale.store.ts';
 import { usePeople } from '../../stores/people.store.ts';
-import { chairsOf, type MatchPlayer } from '../../data/match.ts';
+import { playersOf, scoreOf, type MatchPlayer } from '../../data/match.ts';
 import type { MatchView } from '../../api.ts';
 
 /**
@@ -25,8 +25,15 @@ export default component MatchResult(props: { match: MatchView; mine?: number; b
     const locale = useLocale();
     const people = usePeople();
 
-    derived chairs = chairsOf(props.match).sort((a, b) =>
-        (a.player.result === 'won' ? 0 : 1) - (b.player.result === 'won' ? 0 : 1) || a.player.seat - b.player.seat);
+    /**
+     * Every game's seats, not ludo's. The badge beside each name is `scoreOf`, which is the one
+     * number that game measures a result in - four tokens home, or a score out of seven - because a
+     * panel every game shares must not hold any game's vocabulary.
+     */
+    derived chairs = playersOf(props.match)
+        .map((player) => ({ player, score: scoreOf(props.match, player.seat) }))
+        .sort((a, b) =>
+            (a.player.result === 'won' ? 0 : 1) - (b.player.result === 'won' ? 0 : 1) || a.player.seat - b.player.seat);
 
     derived champion = props.match.players.find((player) => player.result === 'won');
 
@@ -93,11 +100,10 @@ export default component MatchResult(props: { match: MatchView; mine?: number; b
             <For each={ chairs } key={ (chair) => chair.player.seat } let={ chair }>
                 <li class="flex items-center gap-2 rounded-tile bg-raised/50 px-2.5 py-2">
                     <span
-                        class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-ui-2xs font-bold text-white"
-                        style={ `background: var(--ludo-${ chair.seat.colour })` }
+                        class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent text-ui-2xs font-bold text-accent-ink"
                         aria-hidden="true"
                     >
-                        { chair.seat.home }
+                        { locale.n(chair.score) }
                     </span>
                     <span class="min-w-0 flex-1 truncate text-ui-sm text-text">
                         { chair.player.seat === props.mine ? locale.t('match.you') : nameOf(chair.player.who) }

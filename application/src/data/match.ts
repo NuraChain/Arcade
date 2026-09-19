@@ -20,6 +20,8 @@ export type MatchPlayer = MatchView['players'][number];
 
 export type LudoBoard = Extract<MatchView['view'], { kind: 'ludo' }>;
 
+export type HokmBoard = Extract<MatchView['view'], { kind: 'hokm' }>;
+
 export type LudoSeat = LudoBoard['seats'][number];
 
 /** One chair, with both halves of it: who is sitting there and what their colour is doing. */
@@ -32,6 +34,30 @@ export interface LudoChair
 export function ludoOf(match: Pick<MatchView, 'view'>): LudoBoard | null
 {
     return match.view.kind === 'ludo' ? match.view : null;
+}
+
+export function hokmOf(match: Pick<MatchView, 'view'>): HokmBoard | null
+{
+    return match.view.kind === 'hokm' ? match.view : null;
+}
+
+/**
+ * The one number a result row puts beside a name, and what it MEANS is the game's business.
+ *
+ * Four tokens home says everything about a finished ludo game; a finished hokm match is a score out
+ * of seven and tokens are not a thing it has. Asked here rather than in `match-result`, so a screen
+ * every game shares holds no game's vocabulary - the same argument `asMatch` answers on the server.
+ */
+export function scoreOf(match: Pick<MatchView, 'view'>, seat: number): number
+{
+    if (match.view.kind === 'ludo')
+    {
+        return match.view.seats.find((row) => row.seat === seat)?.home ?? 0;
+    }
+
+    const side = match.view.seats.find((row) => row.seat === seat)?.side;
+
+    return side === undefined ? 0 : (match.view.points[side] ?? 0);
 }
 
 /**
@@ -57,4 +83,16 @@ export function chairsOf(match: Pick<MatchView, 'players' | 'view'>): LudoChair[
 
         return seat === undefined ? [] : [{ player, seat }];
     });
+}
+
+/**
+ * Every seat a result can name, whatever game it was. `chairsOf` above joins a LUDO board and is
+ * what draws ludo's coloured pips; this is the shared half, and a game the board does not mention
+ * is dropped for the same reason - an invented chair reads as a fact about the game.
+ */
+export function playersOf(match: Pick<MatchView, 'players' | 'view'>): MatchPlayer[]
+{
+    const seats = new Set(match.view.seats.map((row) => row.seat));
+
+    return match.players.filter((player) => seats.has(player.seat));
 }
