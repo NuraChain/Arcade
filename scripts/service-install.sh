@@ -64,12 +64,15 @@ else
     echo "warning: SESSION_SECRET is empty - sessions cannot be signed" >&2
 fi
 
-# The schema is built from the entities and production does it as a DELIBERATE act rather than as a
-# side effect of starting: `npm run schema:sync --workspace server`. A first deploy that skips it
-# boots against a database with no tables.
-if [ ! -f "$SERVICE_PATH/.schema-synced" ]; then
-  echo "note: run 'npm run schema:sync --workspace server' once before the first start" >&2
-fi
+# The schema is built from the entities, and production does it as a DELIBERATE act rather than as a
+# side effect of starting - `main.ts` runs the sync only under NODE_ENV=development. A first deploy
+# that skips it boots against a database with no tables, and an entity change deployed without it
+# runs against the old shape.
+#
+# Said unconditionally rather than behind a marker file. The first version of this checked for a
+# `.schema-synced` that nothing anywhere writes, so the note fired on every install - and a warning
+# that always fires is one people stop reading, which is worse than not printing it.
+echo "note: run 'npm run schema:sync --workspace server' before the first start, and after any entity change" >&2
 
 # systemd does not create the directory it is told to log into.
 mkdir -p "$SERVICE_PATH/logs"
