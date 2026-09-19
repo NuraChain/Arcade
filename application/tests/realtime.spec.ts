@@ -4,6 +4,7 @@ import { manualClock, type ManualClock } from '../src/lib/clock.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import {
     BACKOFF_MS,
+    IDLE_MS,
     NUDGE_WINDOW_MS,
     STEADY_MS,
     useRealtime
@@ -174,13 +175,49 @@ describe('the realtime store', () =>
         socket.drop();
         clock.advance(BACKOFF_MS[0] * 1.11);
 
-        // The retry fired into a hidden tab and declined to open anything.
+        /*
+         * The retry fired into a hidden tab and declined to open anything. There IS still a timer
+         * armed - hiding the tab starts the one that lets an idle socket go - and it is deliberately
+         * not asserted away here: what this test is about is that no RETRY is queued behind a hidden
+         * tab, and the socket count is what says so.
+         */
         expect(socket.opens).toBe(1);
-        expect(clock.pending()).toBe(0);
 
         show();
         expect(socket.opens).toBe(2);
         expect(live.status()).toBe('connecting');
+    });
+
+    /**
+     * A tab nobody is looking at eventually stops working.
+     *
+     * The store refused to OPEN while hidden from the beginning and never closed one that was
+     * already open, so a backgrounded tab kept taking every frame and every store subscribed to the
+     * doorbell kept refetching behind a window nobody could see.
+     *
+     * The delay is the part worth pinning. Alt-tabbing away and straight back is the common case,
+     * and a socket that closed on every one of those would cost a handshake, a full re-read and a
+     * visible reconnecting strip each time - so a glance has to cost nothing.
+     */
+    it('lets an idle socket go once the tab has been hidden a while, and not before', () =>
+    {
+        const live = useRealtime();
+        live.start();
+        socket.accept();
+
+        hide();
+
+        clock.advance(IDLE_MS - 1000);
+        expect(socket.closed.length, 'a glance away closed the socket').toBe(0);
+
+        clock.advance(2000);
+        expect(socket.closed.length, 'a tab left hidden kept its socket').toBe(1);
+
+        /* Idle, not down: nothing is wrong, so the connection banner must not say the network is. */
+        expect(live.status()).toBe('idle');
+
+        show();
+        expect(socket.opens, 'coming back did not reconnect').toBe(2);
     });
 
     it('treats two online events as one reconnection', () =>

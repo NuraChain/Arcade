@@ -23,6 +23,22 @@ export const BACKOFF_MS = [1000, 2000, 4000, 8000, 15000];
 export const STEADY_MS = 30_000;
 
 /**
+ * How long a tab may sit hidden before its socket is let go.
+ *
+ * The store already refused to OPEN while hidden, and never closed one that was already open - so a
+ * backgrounded tab kept taking every frame the server sent, and every store subscribed to the
+ * doorbell kept refetching behind a window nobody was looking at. On a machine with the app left
+ * open in a tab that is the whole day's traffic for nothing.
+ *
+ * Not immediate, and the delay is the whole design. Alt-tabbing to check something and coming
+ * straight back is the common case, and a socket that closed and reopened on every one of those
+ * would cost a handshake, a full re-read and a visible "reconnecting" each time - which is worse
+ * than the thing it fixes. A minute is long enough that a glance costs nothing and short enough
+ * that a tab left behind stops working within a minute of being abandoned.
+ */
+export const IDLE_MS = 60_000;
+
+/**
  * Close codes this client must not retry.
  *
  * 4401 means the session is gone - retrying would hammer the handshake for something only a
@@ -123,6 +139,9 @@ export const useRealtime = createStore((): RealtimeApi =>
     let attempt = 0;
     let connectedAt = 0;
     let suppressUntil = 0;
+
+    /** Cancels the pending "the tab has been hidden long enough" timer, if one is armed. */
+    let cancelSleep: (() => void) | null = null;
     let wanted = false;
     let watching: (() => void) | null = null;
 
@@ -318,12 +337,53 @@ export const useRealtime = createStore((): RealtimeApi =>
             open();
         };
 
-        document.addEventListener('visibilitychange', resume);
+        /**
+         * Lets an open socket go once the tab has been hidden for a while, and never before.
+         *
+         * `announce('idle')` rather than `'down'`: nothing is wrong and nobody is looking, so the
+         * connection banner must not claim the network is broken - `connection.store.ts` turns
+         * `down` into a reconnecting strip, which would be waiting on the screen when somebody
+         * comes back to a tab that was working perfectly.
+         */
+        const sleep = (): void =>
+        {
+            if (close === null || document.visibilityState !== 'hidden')
+            {
+                return;
+            }
+
+            clearRetry();
+            close();
+            close = null;
+            announce('idle');
+        };
+
+        const watchVisibility = (): void =>
+        {
+            cancelSleep?.();
+            cancelSleep = null;
+
+            if (document.visibilityState === 'hidden')
+            {
+                cancelSleep = runtime().clock.after(IDLE_MS, () =>
+                {
+                    cancelSleep = null;
+                    sleep();
+                });
+                return;
+            }
+
+            resume();
+        };
+
+        document.addEventListener('visibilitychange', watchVisibility);
         window.addEventListener('online', resume);
 
         watching = () =>
         {
-            document.removeEventListener('visibilitychange', resume);
+            cancelSleep?.();
+            cancelSleep = null;
+            document.removeEventListener('visibilitychange', watchVisibility);
             window.removeEventListener('online', resume);
             watching = null;
         };
@@ -333,6 +393,8 @@ export const useRealtime = createStore((): RealtimeApi =>
     {
         wanted = false;
         clearRetry();
+        cancelSleep?.();
+        cancelSleep = null;
         coalesce?.();
         coalesce = null;
         pending.clear();
