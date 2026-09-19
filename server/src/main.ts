@@ -109,8 +109,47 @@ const hub = createHub({
 // the manifest and once inside `buildApp`, and neither survived the expression it was created in.
 const ports = buildPorts(dataSource, config, hub);
 
-const ssr = servesPages(config)
-    ? await import(pathToFileURL(config.ssrEntry).href) as { routes: PageRoute[]; renderPage: PageRenderer }
+/**
+ * Whether this process serves the client, and - when it does not - WHY, at boot.
+ *
+ * Getting this wrong is silent and total: the api answers perfectly while every page is
+ * `{"error":{"code":"not-found","message":"Nothing is served at GET /."}}`. It has now been hit
+ * twice, once locally and once on a deploy, and both times the server started cleanly and said
+ * nothing, so the first guess was the browser rather than the configuration.
+ *
+ * `process.loadEnvFile()` puts `.env` into `process.env`, so a `SERVE_PAGES=false` left in a
+ * deployed `.env` from an older template still wins over the production default - which is correct
+ * (an explicit setting should win) and is exactly the case worth naming out loud.
+ */
+const serving = servesPages(config);
+
+if (!serving)
+{
+    log.warn('not serving pages - this process answers the api only', {
+        reason: process.env.SERVE_PAGES !== undefined
+            ? `SERVE_PAGES=${ process.env.SERVE_PAGES } is set explicitly`
+            : 'NODE_ENV is not production',
+        env: config.env,
+        fix: 'remove SERVE_PAGES from server/.env and set NODE_ENV=production, or run vite for the browser half'
+    });
+}
+
+const ssr = serving
+    ? await import(pathToFileURL(config.ssrEntry).href)
+        .catch((error: unknown) =>
+        {
+            /*
+             * The SSR bundle is built by `npm run build` and imported here at boot. Missing, this
+             * throw is the whole of what a deploy sees - so it says which file and which command,
+             * rather than leaving an ERR_MODULE_NOT_FOUND pointing into `dist-server`.
+             */
+            log.error('the SSR bundle is missing - run `npm run build` before starting', {
+                path: config.ssrEntry,
+                error
+            });
+
+            throw error;
+        }) as { routes: PageRoute[]; renderPage: PageRenderer }
     : undefined;
 
 const app = buildApp({
