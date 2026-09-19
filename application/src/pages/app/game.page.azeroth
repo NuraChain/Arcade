@@ -90,7 +90,7 @@ export default component GamePage()
                     <GameHero game={ game! } onQuickPlay={ quickPlay } />
 
                     <div class="grid gap-6 @4xl:grid-cols-[minmax(0,1fr)_22rem]">
-                        <div class="flex flex-col gap-6">
+                        <div class="flex min-w-0 flex-col gap-6">
                             <section aria-labelledby="game-about">
                                 <SectionHeading id="game-about" title={ locale.t('game.about') } />
                                 <ol class="flex flex-col gap-2">
