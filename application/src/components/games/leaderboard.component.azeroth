@@ -6,6 +6,7 @@ import Avatar from '../ui/avatar.component.azeroth';
 import SectionHeading from '../ui/section-heading.component.azeroth';
 import Segmented from '../ui/segmented.component.azeroth';
 import Skeleton from '../ui/skeleton.component.azeroth';
+import type { Standing } from '../../api.ts';
 import { client } from '../../api.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import type { GameId } from '../../data/games.ts';
@@ -55,7 +56,77 @@ export default component Leaderboard(props: { game: GameId })
         { name: 'catalogue.leaderboard' }
     );
 
-    derived standings = board.data()?.standings ?? [];
+    /**
+     * The pages after the first, kept beside the resource rather than inside it.
+     *
+     * The resource owns page ONE and refetches it whenever the game or the window changes, which is
+     * what makes switching windows instant and correct. Appending into its data would fight that:
+     * the next refetch would throw the appended rows away, and a refetch is exactly what a window
+     * switch is. So the extra pages live here and are cleared by the same change that refetches.
+     *
+     * `record.store.ts` does this for match history and this follows it, including the part that
+     * matters most: a failed page leaves the cursor alone, so the button is its own retry.
+     */
+    state extra = [] as Standing[];
+
+    state cursor = undefined as number | undefined;
+
+    state paging = false;
+
+    state pageFailed = false;
+
+    effect
+    {
+        /* Read both so a change to either resets the paging - the board underneath is a new board. */
+        void props.game;
+        void window;
+
+        extra = [];
+        cursor = undefined;
+        pageFailed = false;
+    }
+
+    derived standings = [...(board.data()?.standings ?? []), ...extra];
+
+    /**
+     * Whether there is another page, from the LAST thing that answered.
+     *
+     * Page one's cursor while nothing further has been asked for, then the cursor of the most
+     * recent page. Absent means the board ends here, exactly as it does for match history.
+     */
+    derived nextFrom = extra.length === 0 ? board.data()?.cursor : cursor;
+
+    const more = async (): Promise<void> =>
+    {
+        const from = nextFrom;
+
+        if (from === undefined || paging)
+        {
+            return;
+        }
+
+        paging = true;
+        pageFailed = false;
+
+        try
+        {
+            const page = await client.catalogue.leaderboard({
+                params: { game: props.game },
+                query: { window, after: from }
+            });
+
+            extra = [...extra, ...page.standings];
+            cursor = page.cursor;
+        }
+        catch
+        {
+            pageFailed = true;
+        }
+        finally
+        {
+            paging = false;
+        }
+    };
 
     /**
      * Read off the ANSWER, not off the control.
@@ -128,8 +199,8 @@ export default component Leaderboard(props: { game: GameId })
                     <ol class="flex flex-col">
                         <For each={ standings } key={ (row) => row.handle } let={ row }>
                             <li class="flex items-center gap-3 rounded-tile px-2 py-2 hover:bg-raised">
-                                <span class="tally w-6 shrink-0 text-end text-ui-sm font-bold text-faint">
-                                    { locale.n(standings.indexOf(row) + 1) }
+                                <span class="tally w-8 shrink-0 text-end text-ui-sm font-bold text-faint">
+                                    { locale.n(row.rank) }
                                 </span>
                                 <Avatar person={ { displayName: row.person.displayName, hue: row.person.hue } } size="xs" />
                                 <span class="flex min-w-0 flex-1 flex-col">
@@ -147,6 +218,20 @@ export default component Leaderboard(props: { game: GameId })
                             </li>
                         </For>
                     </ol>
+
+                    <Show when={ pageFailed }>
+                        { () => <p class="mt-2 text-center text-ui-xs text-danger">{ locale.t('board.moreFailed') }</p> }
+                    </Show>
+
+                    <Show when={ nextFrom !== undefined }>
+                        { () =>
+                            <div class="mt-2 flex justify-center">
+                                <Button variant="outline" size="sm" loading={ paging } onClick={ () => void more() }>
+                                    { locale.t('board.more') }
+                                </Button>
+                            </div>
+                        }
+                    </Show>
                 </Panel>
             }
         </Show>

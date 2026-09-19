@@ -147,6 +147,8 @@ export const play = {
     'board.failed': 'Could not load the leaderboard.',
     'board.emptyWindow': 'Nobody has finished a game here yet in this stretch.',
     'board.line': '{played} · {rating} rating',
+    'board.more': 'Show more',
+    'board.moreFailed': 'That page did not load. Try again.',
     'board.xp': '{xp} XP',
     'match.over.emptied': 'The table emptied.',
     'match.over.nobody': 'That game is over.',

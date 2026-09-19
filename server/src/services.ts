@@ -1637,7 +1637,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
 
             record: (handle) => achieve.recordOf(handle),
 
-            leaderboard: (game, window) => achieve.leaderboardOf(game, window),
+            leaderboard: (game, window, after) => achieve.leaderboardOf(game, window, after),
 
             /**
              * Two refusals that are deliberately the same answer.

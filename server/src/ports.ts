@@ -476,7 +476,8 @@ export interface MatchPort
     record(handle: string): Promise<PersonRecord | null>;
 
     /** The best ratings at one game, among people who have played enough games to have one. */
-    leaderboard(game: string, window: LeaderboardWindow): Promise<Leaderboard>;
+    /** `after` is the last rank already shown, so a page continues the numbering rather than restarting. */
+    leaderboard(game: string, window: LeaderboardWindow, after?: number): Promise<Leaderboard>;
 
     /**
      * A game as a spectator may see it, which is a game as it stood two minutes ago.

@@ -136,7 +136,7 @@ export function buildApi(ports: Ports)
              * what the place is like.
              */
             leaderboard: routes.get('/games/:game/leaderboard', { output: leaderboard, query: leaderboardQuery }, (context) =>
-                ports.match.leaderboard(context.params.game, context.query.window ?? 'all'))
+                ports.match.leaderboard(context.params.game, context.query.window ?? 'all', context.query.after))
         })),
 
         /**

@@ -292,6 +292,100 @@ describe.skipIf(!active)('a record, against a real database', () =>
         });
     });
 
+    /**
+     * The board's own numbers, which nothing but a real Postgres can settle.
+     *
+     * The rank comes from a window function over EVERY row, so it is the one thing here a repository
+     * cannot express - and it used to be the client's array index, which is right only while the
+     * board is one page starting at the top. Paging it is what made that wrong, and a pinned "you"
+     * row would have made it wrong again.
+     */
+    describe('the leaderboard', () =>
+    {
+        const stat = async (user: string, xp: number, rating: number, played: number): Promise<void> =>
+        {
+            await db.query(
+                `insert into player_stats (user_id, game, rating, peak_rating, played, won, xp)
+                 values ($1, 'ludo', $2, $2, $3, 0, $4)
+                 on conflict (user_id, game) do update
+                     set rating = $2, peak_rating = $2, played = $3, xp = $4`,
+                [user, rating, played, xp]
+            );
+        };
+
+        it('counts the rank itself, and gives every row its own number', async () =>
+        {
+            const achieve = createAchieveService(db);
+
+            const top = await makeUser();
+            const tiedA = await makeUser();
+            const tiedB = await makeUser();
+            const last = await makeUser();
+
+            await stat(top, 500, 1300, 9);
+            await stat(tiedA, 300, 1250, 9);
+            await stat(tiedB, 300, 1250, 9);
+            await stat(last, 100, 1200, 9);
+
+            const board = await achieve.leaderboardOf('ludo', 'all');
+            const ranks = new Map(board.standings.map((row) => [row.handle, row.rank]));
+            const handleOf = async (id: string): Promise<string> =>
+                rowsOf<{ handle: string }>(await db.query('select handle from users where id = $1', [id]))[0].handle;
+
+            expect(ranks.get(await handleOf(top))).toBe(1);
+
+            /*
+             * Level on XP and on rating, and still given two different numbers - because `handle` is
+             * inside the window's own ORDER BY. Sharing a number would read as fairer and would lose
+             * rows: the cursor is "everything after rank 20", so two rows both ranked 20 put the
+             * second on neither page.
+             */
+            const tied = [ranks.get(await handleOf(tiedA)), ranks.get(await handleOf(tiedB))].sort();
+
+            expect(tied, 'a tie shared a rank, which the cursor cannot page past').toEqual([2, 3]);
+            expect(ranks.get(await handleOf(last))).toBe(4);
+        });
+
+        it('pages without repeating a row, and the numbers carry across the join', async () =>
+        {
+            const achieve = createAchieveService(db);
+
+            for (let index = 0; index < 25; index += 1)
+            {
+                await stat(await makeUser(), 1000 - index, 1200, 9);
+            }
+
+            const first = await achieve.leaderboardOf('ludo', 'all');
+
+            expect(first.standings).toHaveLength(20);
+            expect(first.standings[0].rank).toBe(1);
+            expect(first.standings[19].rank).toBe(20);
+            expect(first.cursor, 'a full page did not offer the next one').toBe(20);
+
+            const second = await achieve.leaderboardOf('ludo', 'all', first.cursor);
+
+            expect(second.standings).toHaveLength(5);
+            expect(second.standings[0].rank, 'the second page restarted the numbering').toBe(21);
+            expect(second.cursor, 'the last page offered another').toBeUndefined();
+
+            const seen = [...first.standings, ...second.standings].map((row) => row.handle);
+
+            expect(new Set(seen).size, 'a row appeared on both pages').toBe(25);
+        });
+
+        it('says nothing more when there is nothing more', async () =>
+        {
+            const achieve = createAchieveService(db);
+
+            await stat(await makeUser(), 10, 1200, 9);
+
+            const only = await achieve.leaderboardOf('ludo', 'all');
+
+            expect(only.standings).toHaveLength(1);
+            expect(only.cursor).toBeUndefined();
+        });
+    });
+
     describe('a record that accumulates', () =>
     {
         it('adds to the row rather than replacing it, and remembers the peak', async () =>

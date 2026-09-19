@@ -22,6 +22,7 @@ export type {
     GroupRole,
     GroupSummary,
     LeaderboardWindow,
+    Standing,
     MatchHistory,
     MatchHistoryEntry,
     MatchPlay,

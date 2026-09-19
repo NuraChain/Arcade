@@ -79,6 +79,7 @@ interface BoardRow
     played: number;
     won: number;
     xp: number;
+    rank: number;
 }
 
 /**
@@ -98,7 +99,8 @@ const asStanding = (row: BoardRow): Standing => ({
     rating: row.rating,
     played: row.played,
     won: row.won,
-    xp: row.xp
+    xp: row.xp,
+    rank: Number(row.rank)
 });
 
 /**
@@ -116,6 +118,60 @@ const asStanding = (row: BoardRow): Standing => ({
 const MIN_PLAYED = 5;
 
 const BOARD_SIZE = 20;
+
+/**
+ * Where a row stands, as a window function inside a QueryBuilder.
+ *
+ * `rank() over (...)` is the one thing here a repository genuinely cannot say: the rank has to be
+ * computed over EVERY row before a page is cut out of it, and it then has to be filtered on - which
+ * is why each board is a sub-query with the rank selected inside and compared outside. That is the
+ * shape this project's rules already point at for exactly this case: the window expression is a
+ * string handed to `.addSelect`, while the FROM, the joins, the WHERE and every parameter stay
+ * TypeORM's. `getRawMany` rather than `db.query`, so nothing has to know what shape a mutation
+ * would have returned.
+ *
+ * Each board ranks by its OWN order, including its own tiebreak - the all-time board separates a
+ * tie by rating and the windowed one by wins - so the two expressions are written out rather than
+ * shared. A single "rank" helper would have had to take the order as a parameter, which is the same
+ * two strings with a layer over them.
+ *
+ * The position is STRICT - every row gets its own number - and that is forced by the paging rather
+ * than chosen. `handle` is inside the window's own ORDER BY, so two people level on XP and rating
+ * are still separated, and `rank()` therefore never repeats a number here.
+ *
+ * Sharing a number would read as fairer and would silently lose rows: the cursor is "everything
+ * after rank 20", so two rows both ranked 20 means the second one is on neither page. A board that
+ * drops a player between page one and page two is worse than one that breaks a tie alphabetically.
+ */
+const RANKED_BY_TOTAL = 'rank() over (order by s.xp desc, s.rating desc, u.handle asc)';
+
+const WON = `count(*) filter (where p.result = 'won')::int`;
+
+const RANKED_BY_WINDOW =
+    `rank() over (order by sum(p.xp) desc, count(*) filter (where p.result = 'won') desc, u.handle asc)`;
+
+/**
+ * One page of the board, and whether there is another.
+ *
+ * The query asks for one row more than a page so "is there more" needs no second count, which is
+ * the same trick `matches/history` uses. The cursor is the last rank ACTUALLY shown, so the next
+ * page continues the numbering rather than restarting it.
+ *
+ * Both boards go through here because both had the same bug available to them: a `limit` with no
+ * cursor and a rank the client invented from its array index, which is correct only on page one.
+ */
+function page(game: string, window: LeaderboardWindow, rows: BoardRow[]): Leaderboard
+{
+    const shown = rows.slice(0, BOARD_SIZE);
+    const more = rows.length > BOARD_SIZE;
+
+    return {
+        game,
+        window,
+        standings: shown.map(asStanding),
+        ...(more && shown.length > 0 ? { cursor: Number(shown[shown.length - 1].rank) } : {})
+    };
+}
 
 /** What each window truncates to. `all` is not here, because it reads a different table entirely. */
 const SPANS: Record<Exclude<LeaderboardWindow, 'all'>, string> = {
@@ -196,28 +252,31 @@ export function createAchieveService(db: DataSource)
          * nobody new can reach - the number you climb should be the one that only goes up, and the
          * rating is right beside it for anybody who wants to know how well.
          */
-        async leaderboardOf(game: string, window: LeaderboardWindow): Promise<Leaderboard>
+        async leaderboardOf(game: string, window: LeaderboardWindow, after?: number): Promise<Leaderboard>
         {
             if (window === 'all')
             {
-                const rows = await db.getRepository(PlayerStats)
-                    .createQueryBuilder('s')
-                    .innerJoin(User, 'u', 'u.id = s.user_id')
-                    .select('u.handle::text', 'handle')
-                    .addSelect('u.display_name', 'display_name')
-                    .addSelect('u.hue', 'hue')
-                    .addSelect('s.rating', 'rating')
-                    .addSelect('s.played', 'played')
-                    .addSelect('s.won', 'won')
-                    .addSelect('s.xp', 'xp')
-                    .where('s.game = :game and s.played >= :floor', { game, floor: MIN_PLAYED })
-                    .orderBy('s.xp', 'DESC')
-                    .addOrderBy('s.rating', 'DESC')
-                    .addOrderBy('u.handle', 'ASC')
-                    .limit(BOARD_SIZE)
+                const rows = await db.createQueryBuilder()
+                    .select('board.*')
+                    .from((inner) => inner
+                        .select('u.handle::text', 'handle')
+                        .addSelect('u.display_name', 'display_name')
+                        .addSelect('u.hue', 'hue')
+                        .addSelect('s.rating', 'rating')
+                        .addSelect('s.played', 'played')
+                        .addSelect('s.won', 'won')
+                        .addSelect('s.xp', 'xp')
+                        .addSelect(RANKED_BY_TOTAL, 'rank')
+                        .from(PlayerStats, 's')
+                        .innerJoin(User, 'u', 'u.id = s.user_id')
+                        .where('s.game = :game and s.played >= :floor', { game, floor: MIN_PLAYED }),
+                    'board')
+                    .where('CAST(:after AS int) is null or board.rank > CAST(:after AS int)', { after: after ?? null })
+                    .orderBy('board.rank')
+                    .limit(BOARD_SIZE + 1)
                     .getRawMany<BoardRow>();
 
-                return { game, window, standings: rows.map(asStanding) };
+                return page(game, window, rows);
             }
 
             /**
@@ -235,33 +294,36 @@ export function createAchieveService(db: DataSource)
              * neighbour. Stated in UTC it is a documented limitation - somebody in Tehran sees a
              * board that turns over at UTC midnight - rather than an accident of configuration.
              */
-            const rows = await db.getRepository(MatchPlayer)
-                .createQueryBuilder('p')
-                .innerJoin(Match, 'm', 'm.id = p.match_id')
-                .innerJoin(User, 'u', 'u.id = p.user_id')
-                .leftJoin(PlayerStats, 's', 's.user_id = p.user_id and s.game = m.game')
-                .select('u.handle::text', 'handle')
-                .addSelect('max(u.display_name)', 'display_name')
-                .addSelect('max(u.hue)::int', 'hue')
-                .addSelect('coalesce(max(s.rating), 1200)::int', 'rating')
-                .addSelect('count(*)::int', 'played')
-                .addSelect(`count(*) filter (where p.result = 'won')::int`, 'won')
-                .addSelect('sum(p.xp)::int', 'xp')
-                .where('m.game = :game', { game })
-                .andWhere('m.finished_at is not null')
-                .andWhere(
-                    `m.finished_at >= (date_trunc(:span, (now() at time zone 'utc')) at time zone 'utc')`,
-                    { span: SPANS[window] }
-                )
-                .groupBy('u.handle')
-                .having('sum(p.xp) > 0')
-                .orderBy('sum(p.xp)', 'DESC')
-                .addOrderBy(`count(*) filter (where p.result = 'won')`, 'DESC')
-                .addOrderBy('u.handle', 'ASC')
-                .limit(BOARD_SIZE)
+            const rows = await db.createQueryBuilder()
+                .select('board.*')
+                .from((inner) => inner
+                    .select('u.handle::text', 'handle')
+                    .addSelect('max(u.display_name)', 'display_name')
+                    .addSelect('max(u.hue)::int', 'hue')
+                    .addSelect('coalesce(max(s.rating), 1200)::int', 'rating')
+                    .addSelect('count(*)::int', 'played')
+                    .addSelect(WON, 'won')
+                    .addSelect('sum(p.xp)::int', 'xp')
+                    .addSelect(RANKED_BY_WINDOW, 'rank')
+                    .from(MatchPlayer, 'p')
+                    .innerJoin(Match, 'm', 'm.id = p.match_id')
+                    .innerJoin(User, 'u', 'u.id = p.user_id')
+                    .leftJoin(PlayerStats, 's', 's.user_id = p.user_id and s.game = m.game')
+                    .where('m.game = :game', { game })
+                    .andWhere('m.finished_at is not null')
+                    .andWhere(
+                        `m.finished_at >= (date_trunc(:span, (now() at time zone 'utc')) at time zone 'utc')`,
+                        { span: SPANS[window] }
+                    )
+                    .groupBy('u.handle')
+                    .having('sum(p.xp) > 0'),
+                'board')
+                .where('CAST(:after AS int) is null or board.rank > CAST(:after AS int)', { after: after ?? null })
+                .orderBy('board.rank')
+                .limit(BOARD_SIZE + 1)
                 .getRawMany<BoardRow>();
 
-            return { game, window, standings: rows.map(asStanding) };
+            return page(game, window, rows);
         },
 
         /** A person's record at every game, and where they stand against every achievement. */

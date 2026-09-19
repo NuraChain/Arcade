@@ -150,6 +150,8 @@ export const play: Pick<Dictionary, keyof typeof reference> = {
     'board.failed': 'جدول برترین‌ها بارگذاری نشد.',
     'board.emptyWindow': 'در این بازه هنوز کسی بازی‌ای را تمام نکرده.',
     'board.line': '{played} · ریتینگ {rating}',
+    'board.more': 'بیشتر',
+    'board.moreFailed': 'این صفحه نیامد. دوباره تلاش کن.',
     'board.xp': '{xp} تجربه',
     'match.over.emptied': 'میز خالی شد.',
     'match.over.nobody': 'این بازی تمام شد.',

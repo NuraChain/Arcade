@@ -607,6 +607,18 @@ export const standing = object({
     won: number(),
 
     /**
+     * Where this row stands, counted by the SERVER over the whole board.
+     *
+     * The client used to draw it as `standings.indexOf(row) + 1`, which is right only while the
+     * board is one page that starts at the top - and wrong the moment anything is paged, or a row
+     * is shown out of band. It is also O(n^2) over the array it is searching.
+     *
+     * Ties share a rank: two people on the same XP with the same rating are both 4th, because the
+     * order that separates them is `handle` and being earlier in the alphabet is not an achievement.
+     */
+    rank: number(),
+
+    /**
      * What this person earned, over the window being asked about.
      *
      * The board RANKS by this rather than by rating, and the two say different things on purpose.
@@ -634,12 +646,31 @@ export const leaderboardWindow = enumOf(['today', 'month', 'year', 'all']);
 
 export type LeaderboardWindow = Infer<typeof leaderboardWindow>;
 
-export const leaderboardQuery = object({ window: leaderboardWindow.optional() });
+export const leaderboardQuery = object({
+    window: leaderboardWindow.optional(),
+
+    /**
+     * Where the next page starts, as the last rank already shown.
+     *
+     * A rank rather than a row-value keyset, which is what `matches/history` uses and what this
+     * would normally copy. The board's order is already a total one, but the RANK has to be
+     * computed over every row whichever page is asked for - so the window function runs regardless,
+     * and once it has, "everything after rank 20" is both the cheapest predicate and the only one
+     * that keeps the numbers on the second page continuous with the first.
+     *
+     * Bounded, because it reaches a comparison against an integer and an unbounded number there is
+     * a 22003 - which is the class of 500 this server has now been bitten by three times.
+     */
+    after: number({ int: true, min: 0, max: 1000000 }).optional()
+});
 
 export const leaderboard = object({
     game: string(),
     window: leaderboardWindow,
-    standings: array(standing)
+    standings: array(standing),
+
+    /** Absent when this is the last page, exactly as the history cursor is. */
+    cursor: number().optional()
 });
 
 export type Leaderboard = Infer<typeof leaderboard>;
