@@ -24,7 +24,12 @@ import type { LudoState } from '../src/domains/match/ludo/state.ts';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
-const LUDO = join(HERE, '..', 'src', 'domains', 'match', 'ludo');
+/**
+ * Every pure engine, not just the first one. The rule is about what an ENGINE may reach for, so a
+ * second game listed here costs a line and a second copy of this file would have been a rule that
+ * holds for whichever directory somebody remembered.
+ */
+const PURE = ['ludo', 'hokm'];
 
 const FORBIDDEN = [
     'node:',
@@ -37,20 +42,22 @@ const FORBIDDEN = [
     'process.'
 ];
 
-describe('the engine is pure', () =>
+describe.each(PURE)('the %s engine is pure', (game) =>
 {
-    const files = readdirSync(LUDO).filter((name) => name.endsWith('.ts'));
+    const where = join(HERE, '..', 'src', 'domains', 'match', game);
+
+    const files = readdirSync(where).filter((name) => name.endsWith('.ts'));
 
     it('has files to read, so this cannot pass by finding nothing', () =>
     {
-        expect(files.length).toBeGreaterThanOrEqual(3);
+        expect(files.length).toBeGreaterThanOrEqual(2);
     });
 
     for (const name of files)
     {
         it(`${ name } reaches for nothing outside itself`, () =>
         {
-            const source = readFileSync(join(LUDO, name), 'utf8')
+            const source = readFileSync(join(where, name), 'utf8')
                 .replace(/\/\*[\s\S]*?\*\//g, '')
                 .replace(/\/\/.*$/gm, '');
 
