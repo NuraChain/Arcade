@@ -30,7 +30,7 @@ export const play: Pick<Dictionary, keyof typeof reference> = {
     'games.mode.turnsHint': 'هر وقت توانستی حرکت کن. یک بازی می‌تواند تمام هفته طول بکشد.',
     'games.stakes.playMoney': 'پول بازی',
     'games.stakes.playMoneyHint': 'ژتون‌هایی که بیرون از میز هیچ ارزشی ندارند. نه چیزی برای خرید، نه چیزی برای باخت.',
-    'games.partners': 'یاری',
+    'games.partners': 'چهارنفره دو به دو',
 
     'game.about': 'چطور بازی می‌شود',
     'game.rules.hokm.1': 'دو، سه یا چهار نفر. چهارنفره دو به دو است و یارت روبه‌رویت می‌نشیند.',

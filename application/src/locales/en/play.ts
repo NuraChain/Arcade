@@ -27,7 +27,7 @@ export const play = {
     'games.mode.turnsHint': 'Move when you can. A game can take all week.',
     'games.stakes.playMoney': 'Play money',
     'games.stakes.playMoneyHint': 'Chips that mean nothing outside the table. Nothing to buy, nothing to lose.',
-    'games.partners': 'Partners',
+    'games.partners': 'Partners at four',
 
     'game.about': 'How it plays',
     'game.rules.hokm.1': 'Two, three or four. At four you play in pairs, with your partner across the table.',
