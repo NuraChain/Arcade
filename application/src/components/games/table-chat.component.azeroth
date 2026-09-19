@@ -176,7 +176,7 @@ export default component TableChat(props: { conversationId: string; onClose?: ()
                                     message.from === lobby.me() ? 'bg-accent/15 text-text' : 'bg-raised text-text'
                                 ].join(' ') } dir="auto">
                                     <Show when={ message.from !== lobby.me() }>
-                                        { () => <span class="mb-0.5 block text-ui-2xs font-semibold text-muted">{ locale.text(people.byHandle(message.from)?.displayName ?? { en: message.from, fa: message.from }) }</span> }
+                                        { () => <span class="mb-0.5 block text-ui-2xs font-semibold text-muted" dir="auto">{ locale.text(people.byHandle(message.from)?.displayName ?? { en: message.from, fa: message.from }) }</span> }
                                     </Show>
                                     { said(message) }
                                 </span>

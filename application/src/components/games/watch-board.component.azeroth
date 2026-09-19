@@ -135,7 +135,7 @@ export default component WatchBoard(props: { watch: MatchWatch })
                             >
                                 { INITIAL[chair.seat.colour] }
                             </span>
-                            <span class="min-w-0 flex-1 truncate text-ui-sm text-text">{ nameOf(chair.player.who) }</span>
+                            <span class="min-w-0 flex-1 truncate text-ui-sm text-text" dir="auto">{ nameOf(chair.player.who) }</span>
                             <span class="tally shrink-0 text-ui-xs text-muted">
                                 { locale.plural('match.tokens', chair.seat.home) }
                             </span>

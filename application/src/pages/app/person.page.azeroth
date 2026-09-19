@@ -93,7 +93,7 @@ export default component PersonPage()
                     <header class="flex flex-col items-center gap-3 pt-2 text-center">
                         <Avatar person={ person } size="2xl" presence={ person === null ? null : presence.dot(person.id) } />
                         <div>
-                            <h1 class="title flex items-center justify-center gap-2 text-ui-3xl">
+                            <h1 class="title flex items-center justify-center gap-2 text-ui-3xl" dir="auto">
                                 { name }
                                 <Show when={ person!.isMinor }>
                                     { () => <Icon name="shield" size={ 18 } class="text-live" /> }

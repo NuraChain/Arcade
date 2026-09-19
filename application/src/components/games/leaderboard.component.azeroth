@@ -133,7 +133,7 @@ export default component Leaderboard(props: { game: GameId })
                                 </span>
                                 <Avatar person={ { displayName: row.person.displayName, hue: row.person.hue } } size="xs" />
                                 <span class="flex min-w-0 flex-1 flex-col">
-                                    <span class="truncate text-ui-sm text-text">{ nameOf(row) }</span>
+                                    <span class="truncate text-ui-sm text-text" dir="auto">{ nameOf(row) }</span>
                                     <span class="tally truncate text-ui-2xs text-faint">
                                         { locale.t('board.line', {
                                             played: locale.plural('board.played', row.played),

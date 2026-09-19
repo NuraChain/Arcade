@@ -73,7 +73,7 @@ export default component Sidebar()
             <Link to="/app/me" class="flex min-h-11 min-w-0 flex-1 items-center gap-2.5 rounded-tile px-2 transition-colors hover:bg-raised/70">
                 <Avatar person={ user } size="sm" presence="online" />
                 <span class="flex min-w-0 flex-1 flex-col">
-                    <span class="truncate text-ui-sm font-semibold text-text">{ user === null ? '' : user.displayName }</span>
+                    <span class="truncate text-ui-sm font-semibold text-text" dir="auto">{ user === null ? '' : user.displayName }</span>
                     <Show
                         when={ account.isWallet() }
                         fallback={

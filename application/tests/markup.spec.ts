@@ -576,3 +576,36 @@ describe('what a byte in the source may be', () =>
         expect(guilty, 'build a control character with String.fromCharCode, never type one').toEqual([]);
     });
 });
+
+describe('what direction a name is written in', () =>
+{
+    /**
+     * A display name is somebody's own content and has its OWN direction, which is the rule a chat
+     * message already follows through `dir="auto"`.
+     *
+     * Without it a Latin name inside a Persian tile is clipped at the line's end - and in an RTL
+     * line the end is the LEFT - so `Bot 63848b` truncates to `...t 63848b` rather than to
+     * `Bot 638...`. It is the same defect from the other side for a Persian name on an English page.
+     * Nothing overflows, nothing logs, the accessible name is perfect and the matrix tours both
+     * languages and passes: it reads overflow, hit targets, a landmark and the console, and a name
+     * clipped from the wrong end is none of them. It was found by looking at a Persian screen.
+     *
+     * The rule is deliberately narrow, because the WRONG place for `dir="auto"` is a sentence that
+     * merely mentions a name: taking a whole Persian line's direction from an interpolated Latin
+     * name would flip the sentence instead of isolating the name. So this asks only about an element
+     * whose entire content is the name - `>{ ...displayName... }<` on one line - which is every
+     * place the defect was actually seen.
+     */
+    it('gives an element that is nothing but a display name its own direction', () =>
+    {
+        const guilty = FILES
+            .filter((file) => file.path.endsWith('.azeroth'))
+            .flatMap((file) => file.text.split('\n')
+                .map((line, index) => ({ line, at: index + 1 }))
+                .filter((one) => /<[a-z]\w*[^<>]*>\{[^{}]*displayName[^{}]*\}<\//.test(one.line))
+                .filter((one) => !one.line.includes('dir="auto"'))
+                .map((one) => `${ file.path }:${ one.at }`));
+
+        expect(guilty, 'a name is written in the direction of the page around it').toEqual([]);
+    });
+});

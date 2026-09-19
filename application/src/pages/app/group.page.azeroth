@@ -250,7 +250,7 @@ export default component GroupPage()
                 <div class="flex flex-col gap-6">
                     <header class="flex flex-col items-center gap-3 pt-2 text-center">
                         <GroupCrest crest={ group!.crest } hue={ group!.hue } size="lg" />
-                        <h1 class="title text-ui-3xl">{ group!.name }</h1>
+                        <h1 class="title text-ui-3xl" dir="auto">{ group!.name }</h1>
                         <Show when={ group!.blurb !== '' }>
                             { () => <p class="max-w-[46ch] text-ui-base text-muted">{ group!.blurb }</p> }
                         </Show>

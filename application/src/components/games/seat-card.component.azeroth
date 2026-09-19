@@ -98,7 +98,7 @@ export default component SeatCard(props: {
                     presence={ pending || person === null ? null : presence.dot(person.id) }
                     class={ pending ? 'opacity-60' : '' }
                 />
-                <span class={ () => [ 'w-full truncate text-ui-base font-semibold', pending ? 'text-muted' : 'text-text' ].join(' ') }>{ name }</span>
+                <span class={ () => [ 'w-full truncate text-ui-base font-semibold', pending ? 'text-muted' : 'text-text' ].join(' ') } dir="auto">{ name }</span>
                 <Show when={ tag !== null }>
                     { () =>
                         <span class={ () => [ 'rounded-full px-2 py-0.5 text-ui-2xs font-semibold', tag!.tone, pending ? 'animate-pulse motion-reduce:animate-none' : '' ].filter(Boolean).join(' ') }>

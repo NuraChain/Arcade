@@ -104,7 +104,7 @@ export default component ChatListItem(props: { conversation: Conversation; me: s
 
             <span class="flex min-w-0 flex-1 flex-col gap-0.5">
                 <span class="flex items-center gap-1.5">
-                    <span class={ [ 'truncate text-ui-md', unread > 0 ? 'font-bold text-text' : 'font-semibold text-text' ].join(' ') }>
+                    <span class={ [ 'truncate text-ui-md', unread > 0 ? 'font-bold text-text' : 'font-semibold text-text' ].join(' ') } dir="auto">
                         { locale.text(titleOf(props.conversation, props.me, people.byHandle, { group: groupNameOf(props.conversation, groups.byId), game: gameNameOf(props.conversation, gameName) })) }
                     </span>
                     <Show when={ chat.pinned(props.conversation.id) }>

@@ -105,7 +105,7 @@ export default component MatchResult(props: { match: MatchView; mine?: number; b
                     >
                         { locale.n(chair.score) }
                     </span>
-                    <span class="min-w-0 flex-1 truncate text-ui-sm text-text">
+                    <span class="min-w-0 flex-1 truncate text-ui-sm text-text" dir="auto">
                         { chair.player.seat === props.mine ? locale.t('match.you') : nameOf(chair.player.who) }
                     </span>
                     <Show when={ chair.player.result !== undefined }>

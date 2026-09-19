@@ -124,7 +124,7 @@ export default component PlayerCard(props: {
         </span>
 
         <span class="flex min-w-0 flex-1 flex-col">
-            <span class="truncate text-ui-sm font-semibold text-text">{ name }</span>
+            <span class="truncate text-ui-sm font-semibold text-text" dir="auto">{ name }</span>
             <span
                 class={ () => [
                     'truncate text-ui-2xs',

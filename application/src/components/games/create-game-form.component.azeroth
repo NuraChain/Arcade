@@ -209,7 +209,7 @@ export default component CreateGameForm(props: { game: Game; onCreated: (tableId
                         >
                             <Avatar person={ person } size="sm" presence={ presence.dot(person.id) } />
                             <span class="flex min-w-0 flex-1 flex-col">
-                                <span class="truncate text-ui-base font-semibold text-text">{ person.displayName }</span>
+                                <span class="truncate text-ui-base font-semibold text-text" dir="auto">{ person.displayName }</span>
                                 <span class="truncate text-ui-xs text-muted">@{ person.handle }</span>
                             </span>
                             <span class={ [

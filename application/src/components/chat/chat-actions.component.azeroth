@@ -125,7 +125,7 @@ export default component ChatActions(props: OverlayProps & { conversationId: str
 
     <div class="flex flex-col gap-1 p-3">
         <header class="flex items-center gap-3 px-2 pb-2 pt-1">
-            <span class="min-w-0 flex-1 truncate text-ui-md font-semibold text-text">{ title }</span>
+            <span class="min-w-0 flex-1 truncate text-ui-md font-semibold text-text" dir="auto">{ title }</span>
             <IconButton icon="close" label={ locale.t('common.close') } variant="ghost" onClick={ () => props.close() } />
         </header>
         <ul class="flex flex-col gap-0.5">
