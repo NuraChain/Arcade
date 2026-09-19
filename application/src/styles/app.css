@@ -701,6 +701,126 @@
 }
 
 /*
+ * One card, cut from the fifty-two `tools/blender/deck.py` renders.
+ *
+ * The sheet is thirteen ranks across and four suits down at 153x216 a cell, and the maths below is
+ * exact rather than approximate: the background is scaled so one cell is exactly `--card-w`, and
+ * the offset is that many cells across and down. `--at-rank` and `--at-suit` are the card number
+ * itself, which is what makes the sprite's grid something no file has to agree about.
+ *
+ * The edge and the corner radius are CSS rather than drawn, because they are the two things that
+ * have to stay crisp: a hairline baked into a 153px cell is a grey smudge by the time the card is
+ * 44px wide on a phone, and a drawn corner cannot let the green felt through.
+ */
+.card-face
+{
+    --card-w: 3.25rem;
+    --card-h: calc(var(--card-w) * 288 / 204);
+
+    display: block;
+    flex: none;
+    inline-size: var(--card-w);
+    block-size: var(--card-h);
+
+    background-image: url('/board/deck-1989.webp');
+    background-repeat: no-repeat;
+    background-size: calc(var(--card-w) * 13) calc(var(--card-h) * 4);
+    background-position: calc(var(--at-rank) * var(--card-w) * -1) calc(var(--at-suit) * var(--card-h) * -1);
+
+    border-radius: calc(var(--card-w) * 0.09);
+
+    /*
+     * A card casts the same shadow in both themes, for the reason its paper is the same cream in
+     * both: it is a printed object on a table rather than a surface in this product's palette.
+     */
+    box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.20), 0 1px 2px rgb(0 0 0 / 0.28);
+}
+
+/*
+ * A card in the hand, which is a button with a picture of a card in it.
+ *
+ * An illegal card is DIMMED rather than taken away - a hand that silently lost nine of its thirteen
+ * the moment somebody led a suit would read as a bug, and "you must follow suit" is a rule a player
+ * learns by watching which cards went quiet. Dimming alone turned a cream card grey against a dark
+ * panel, which reads as a card BACK rather than as a card you may not play, so the desaturation does
+ * the talking and the opacity only takes the edge off.
+ *
+ * A playable card lifts on hover, which is what a hand of cards does when a finger goes under one.
+ */
+.card-hold:enabled:hover .card-face
+{
+    translate: 0 -0.25rem;
+}
+
+.card-hold:disabled .card-face
+{
+    filter: saturate(0.25) brightness(0.62);
+}
+
+/*
+ * The card table, which is a photograph of the object the market scene already stands on.
+ *
+ * `tools/blender/board.py` renders `table-card.glb` from an orthographic camera pointing straight
+ * down - walnut rim, brass inlay, green baize - so the felt a player lays a card on and the felt
+ * standing in the night market are one object photographed rather than two descriptions that agree
+ * until somebody edits one. The alpha is the octagon, so the page shows through the corners and the
+ * table reads as a table instead of a square picture of one.
+ *
+ * It is capped at 18rem rather than sized from the viewport the way `.board-stage` is, and that is
+ * the difference between the two games: a ludo board IS the interface, so it takes every pixel it
+ * can get, while a hokm hand is thirteen buttons underneath and the felt only ever has to hold four
+ * cards. A table that grew to fill a monitor would push the hand off the bottom of a phone.
+ *
+ * No `direction` declaration, unlike `.board-plate`. The cards are placed with `left` and `top`,
+ * which are physical and never mirror, so the object stays put while the names under them keep the
+ * page's own direction - which is what `.board-plate` had to override the hard way.
+ */
+.card-table
+{
+    position: relative;
+    inline-size: min(100%, 18rem);
+    margin-inline: auto;
+    aspect-ratio: 1;
+    background-image: url('/board/card-table-1024.webp');
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+}
+
+.card-played
+{
+    position: absolute;
+    left: calc(var(--at-x) * 100%);
+    top: calc(var(--at-y) * 100%);
+    translate: -50% -50%;
+    rotate: var(--at-tilt);
+
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+
+    /* A card laid on the table is a bigger object than one in a fan of thirteen in your hand. */
+    --card-w: 4rem;
+
+    /*
+     * A card lying on cloth has a contact shadow and the baize underneath is dark, so the drop is
+     * what separates the two. Without it the four cards read as printed ON the felt.
+     */
+    filter: drop-shadow(0 2px 3px rgb(0 0 0 / 0.45));
+}
+
+/*
+ * The trick is gathered by whoever took it, and until the next card is led their card is the one
+ * lying proud of the others - the same thing a hand reaching across the table says at a real one.
+ */
+.card-played[data-took='true']
+{
+    z-index: 1;
+    rotate: 0deg;
+    filter: drop-shadow(0 3px 6px rgb(0 0 0 / 0.55));
+}
+
+/*
  * The board is a photograph of the object in the market scene, with tokens drawn over it.
  *
  * `tools/blender/board.py` renders `set-ludo.glb` from an orthographic camera pointing straight

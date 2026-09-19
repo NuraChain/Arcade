@@ -1,54 +1,34 @@
-import Icon from '../../icons/icon.component.azeroth';
-import { useLocale } from '../../stores/locale.store.ts';
-import { FACE_KEY, RANKS, SUITS, SUIT_ICON, type Suit } from '../../data/cards.ts';
+import { RANKS } from '../../data/cards.ts';
 
 /**
- * One playing card, drawn rather than photographed.
+ * One playing card, cut from the deck this product already prints.
  *
- * The art plan called for fifty-two rendered faces on their own 2048 sheet. That is the right answer
- * for the card lying on a 3D table and the wrong one for the thing a person actually presses: a hand
- * of thirteen at 390px is thirteen controls, and what each has to do is say its rank and its suit at
- * a glance, stay crisp at any device ratio, follow the theme and be a real button. A rank and an
- * icon do all of that in no bytes and cannot 404 halfway through a hand.
+ * `tools/blender/deck.py` renders all fifty-two faces from `lib/atlas.py`'s own `draw_card_face` -
+ * the same function that prints the deck lying on the card table in the night market - so the card
+ * somebody presses here and the card standing in the 3D scene are one drawing rather than two that
+ * agree until somebody edits a pip. It is the argument the ludo plate and the felt table both make,
+ * and it is why this is a sprite and not a rank in a box: a hand-drawn CSS card would have been a
+ * third deck.
  *
- * **The suit is an ICON, never a character.** `♠♥♦♣` as text is what this product forbids
- * everywhere - the OS draws it, so it is a different shape and often a different colour on every
- * machine, and on some it is an emoji. Lucide's four come through the registry like every other.
+ * **The sheet's grid IS the card number.** A card is numbered suit-major with the ranks ascending,
+ * so the column is `card % 13` and the row is `card / 13` and there is no packing for this file to
+ * know. A sheet laid out to fit its pixels would be a second fact that has to agree with a constant
+ * in the renderer, which is the shape of mistake this repository keeps writing down.
  *
- * **Red and black are `danger` and `text`, and the suit is never the only signal.** Somebody who
- * cannot tell the two apart still reads the rank and sees the shape, which is the same rule the ludo
- * tokens follow by carrying their colour's initial.
+ * **It is `aria-hidden` and always has a sentence beside it.** This is a picture of a card; what a
+ * screen reader gets is the button's own label or the `sr-only` line under the trick, in words and
+ * in the reader's own language - `J` is not a rank in Persian and a lone Latin initial is a glyph
+ * nobody can say out loud.
  *
- * **One size, because a Persian rank is a WORD.** A smaller face was written and never asked for,
- * and its 28px box would have clipped `سرباز` and `بی‌بی` - which measure 32px where the
- * digits measure ten. A branch nothing renders is a branch nothing looks at.
+ * **The size comes from `--card-w`**, so the felt can lay a bigger card than the hand holds without
+ * this component growing a prop with two values and a branch nothing looks at.
  */
 
 export default component CardFace(props: { card: number })
 {
-    const locale = useLocale();
+    derived rank = props.card % RANKS.length;
 
-    derived suit = SUITS[Math.floor(props.card / RANKS.length)] as Suit;
+    derived suit = Math.floor(props.card / RANKS.length);
 
-    derived rank = RANKS[props.card % RANKS.length];
-
-    derived red = suit === 'hearts' || suit === 'diamonds';
-
-    /**
-     * A face card reads as a word rather than as a letter, because `J` is not a rank in Persian and
-     * a lone Latin initial on a Persian page is a glyph nobody can say out loud. Digits go through
-     * `locale.n`, which is what makes a ten `۱۰`.
-     */
-    derived says = FACE_KEY[rank] === undefined ? locale.n(Number(rank)) : locale.t(FACE_KEY[rank]);
-
-    <span
-        class={ () => [
-            'inline-flex h-14 w-11 shrink-0 select-none flex-col items-center justify-center gap-1 rounded-control border border-line bg-field leading-none',
-            red ? 'text-danger' : 'text-text'
-        ].join(' ') }
-        aria-hidden="true"
-    >
-        <span class="tally text-ui-md font-bold">{ says }</span>
-        <Icon name={ SUIT_ICON[suit] } size={ 15 } />
-    </span>
+    <span class="card-face" style={ `--at-rank: ${ rank }; --at-suit: ${ suit }` } aria-hidden="true" />
 }

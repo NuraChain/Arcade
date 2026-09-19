@@ -10,6 +10,14 @@ line the GLB kit draws: walnut and printed card are real materials and look like
 light.
 
   public/board/ludo-plate-1024.webp   the board seen from directly above
+  public/board/card-table-1024.webp  the octagonal card table, felt up, seen from directly above
+
+The card table is the surface every trick-taking game is played on, and it comes from
+`table-card.glb` for exactly the reason the ludo plate comes from `set-ludo.glb`: the felt a player
+lays a card on and the felt standing in the night market are then one object photographed twice
+rather than two descriptions that agree until somebody edits one. Its alpha is the octagon, so the
+page behind it shows through the corners and the table reads as a table rather than as a square
+picture of one.
 
 The TOKENS are deliberately not rendered here. Seen from straight above a ludo token is a coloured
 disc with a highlight and a contact shadow, and CSS draws that crisply at every size, in the exact
@@ -181,7 +189,7 @@ def vertex_colour(tree):
     return node.outputs['Color']
 
 
-def walnut(board):
+def walnut(board, remap=True):
     # The grain runs the length of each rail: the side rails are full-height strips and the top
     # and bottom rails are fitted between them, which is how `set-ludo.py` cuts them, and the grain
     # has to agree with the joint or the frame reads as one printed sheet. The walnut texture's
@@ -193,7 +201,11 @@ def walnut(board):
             return (co.y * GRAIN_SCALE, co.x * GRAIN_SCALE)
         return (co.x * GRAIN_SCALE, co.y * GRAIN_SCALE)
 
-    kit.uv_map(board, grain)
+    # The ludo frame is cut as four rails and carries no UVs of its own; the card table's rim is
+    # box-mapped by `table-card.py` before it is joined, and re-mapping an octagon with a rule
+    # written for rails would run the grain across two of its eight facets.
+    if remap:
+        kit.uv_map(board, grain)
 
     material, tree, bsdf = principled('walnut')
     colour = tree.nodes.new('ShaderNodeTexImage')
@@ -284,6 +296,124 @@ def paper(field):
     field.data.materials.append(material)
 
 
+def felt_top(top):
+    """
+    Baize, which is a knitted nap rather than a flat green.
+
+    Two noises at very different scales do the work a photograph would: a fine one for the fibre,
+    which breaks the sheen so the surface scatters instead of reflecting, and a broad one for the
+    unevenness of cloth stretched over a board. Both are bumps rather than geometry - a top-down
+    camera over a matte surface reads a normal perfectly well and the mesh stays two triangles per
+    ring. The vertex colour underneath carries the AO `table-card.py` baked with the rim in place,
+    which is the shadow the rim really casts on the cloth.
+    """
+    material, tree, bsdf = principled('felt')
+
+    coords = tree.nodes.new('ShaderNodeTexCoord')
+
+    fibre = tree.nodes.new('ShaderNodeTexNoise')
+    fibre.inputs['Scale'].default_value = 1500.0
+    fibre.inputs['Detail'].default_value = 6.0
+    fibre.inputs['Roughness'].default_value = 0.75
+    tree.links.new(coords.outputs['Object'], fibre.inputs['Vector'])
+
+    weave = tree.nodes.new('ShaderNodeTexNoise')
+    weave.inputs['Scale'].default_value = 130.0
+    weave.inputs['Detail'].default_value = 2.0
+    tree.links.new(coords.outputs['Object'], weave.inputs['Vector'])
+
+    shade = tree.nodes.new('ShaderNodeMapRange')
+    shade.inputs['From Min'].default_value = 0.35
+    shade.inputs['From Max'].default_value = 0.65
+    shade.inputs['To Min'].default_value = 0.94
+    shade.inputs['To Max'].default_value = 1.04
+    tree.links.new(weave.outputs['Fac'], shade.inputs['Value'])
+
+    tree.links.new(multiply(tree, vertex_colour(tree), shade.outputs['Result']), bsdf.inputs['Base Color'])
+
+    height = tree.nodes.new('ShaderNodeMath')
+    height.operation = 'MULTIPLY_ADD'
+    height.inputs[1].default_value = 0.65
+    tree.links.new(fibre.outputs['Fac'], height.inputs[0])
+    tree.links.new(weave.outputs['Fac'], height.inputs[2])
+
+    bump = tree.nodes.new('ShaderNodeBump')
+    bump.inputs['Strength'].default_value = 0.70
+    bump.inputs['Distance'].default_value = 0.0008
+    tree.links.new(height.outputs['Value'], bump.inputs['Height'])
+    tree.links.new(bump.outputs['Normal'], bsdf.inputs['Normal'])
+
+    # Baize is the matte end of the scale and the sheen it does have is a velvet one at grazing
+    # angles, which is what Sheen is for. The default 4% specular would put a wash of the lamp over
+    # the whole cloth and turn a deep green into a grey-green.
+    bsdf.inputs['Roughness'].default_value = 0.96
+    bsdf.inputs['Specular IOR Level'].default_value = 0.18
+    bsdf.inputs['Sheen Weight'].default_value = 0.22
+    bsdf.inputs['Sheen Roughness'].default_value = 0.40
+
+    top.data.materials.clear()
+    top.data.materials.append(material)
+
+
+def brass(trim):
+    material, tree, bsdf = principled('brass')
+
+    coords = tree.nodes.new('ShaderNodeTexCoord')
+    grain = tree.nodes.new('ShaderNodeTexNoise')
+    grain.inputs['Scale'].default_value = 420.0
+    grain.inputs['Detail'].default_value = 4.0
+    tree.links.new(coords.outputs['Object'], grain.inputs['Vector'])
+
+    wear = tree.nodes.new('ShaderNodeMapRange')
+    wear.inputs['From Min'].default_value = 0.30
+    wear.inputs['From Max'].default_value = 0.70
+    wear.inputs['To Min'].default_value = 0.22
+    wear.inputs['To Max'].default_value = 0.42
+    tree.links.new(grain.outputs['Fac'], wear.inputs['Value'])
+
+    tree.links.new(vertex_colour(tree), bsdf.inputs['Base Color'])
+    tree.links.new(wear.outputs['Result'], bsdf.inputs['Roughness'])
+    bsdf.inputs['Metallic'].default_value = 0.85
+
+    trim.data.materials.clear()
+    trim.data.materials.append(material)
+
+
+def table():
+    clear()
+    cycles(SAMPLES)
+
+    bpy.ops.import_scene.gltf(filepath=os.path.join(WORLD, 'table-card.glb'))
+
+    frame = bpy.data.objects.get('Frame')
+    top = bpy.data.objects.get('Felt')
+    trim = bpy.data.objects.get('Trim')
+
+    if any(one is None or one.type != 'MESH' for one in (frame, top, trim)):
+        raise SystemExit('board: table-card.glb no longer holds a Frame, a Felt and a Trim mesh')
+
+    for one in list(bpy.data.objects):
+        if one.type == 'MESH' and one not in (frame, top, trim):
+            bpy.data.objects.remove(one, do_unlink=True)
+
+    walnut(frame, remap=False)
+    felt_top(top)
+    brass(trim)
+
+    # The rim is what the camera frames, not the pedestal underneath it - from straight above the
+    # column is entirely behind the top, so the extent is the widest thing anybody can see.
+    extent = max(frame.dimensions.x, frame.dimensions.y)
+
+    # A pendant over a card table hangs off to one side of where people sit, so the rim throws a
+    # real shadow across one arc of the felt and the brass inlay catches the light on that side
+    # only. A ring of even lights would be the scanner look the ludo plate already refuses.
+    lamp((-0.55, 0.62, 1.30), 34.0, 0.85, '#FFF3E2')
+    lamp((0.78, -0.56, 1.25), 13.0, 2.40, '#E6ECF6')
+
+    overhead(extent, PLATE)
+    write('card-table-1024')
+
+
 def plate():
     clear()
     cycles(SAMPLES)
@@ -322,5 +452,11 @@ def plate():
 
 
 if __name__ == '__main__':
+    if 'table' in sys.argv:
+        table()
+        print('board: done')
+        raise SystemExit(0)
+
     plate()
+    table()
     print('board: done')

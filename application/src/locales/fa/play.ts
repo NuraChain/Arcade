@@ -224,6 +224,7 @@ export const play: Pick<Dictionary, keyof typeof reference> = {
     'hokm.held': { one: '{count} کارت', other: '{count} کارت' },
     'hokm.hand': 'کارت‌های تو',
     'hokm.card': '{rank} {suit}',
+    'hokm.played': '{name} کارت {card} را انداخت',
     'hokm.play': '{card} را بینداز',
     'hokm.follow': 'باید از خالی که رو شده بازی کنی.',
     'card.turn': 'نوبت اوست',

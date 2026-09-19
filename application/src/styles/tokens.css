@@ -176,8 +176,7 @@
     --board-plate: #E8DCC4;
     --board-line: #5C4C3D;
     --board-safe: #8C7A5E;
-    --board-hint: var(--accent);
-}
+    --board-hint: var(--accent);}
 
 :root[data-theme='light']
 {
@@ -224,8 +223,7 @@
     --board-plate: #F2E8D5;
     --board-line: #6B5B48;
     --board-safe: #A08A68;
-    --board-hint: var(--accent);
-}
+    --board-hint: var(--accent);}
 
 :root
 {

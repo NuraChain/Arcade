@@ -5,6 +5,7 @@ import Button from '../ui/button.component.azeroth';
 import Panel from '../ui/panel.component.azeroth';
 import Icon from '../../icons/icon.component.azeroth';
 import { FACE_KEY, SUITS, SUIT_ICON, rankOf, suitOf, type Suit } from '../../data/cards.ts';
+import { aroundTable, type Chair } from './table-seats.ts';
 import { hokmOf } from '../../data/match.ts';
 import { useBoard } from '../../stores/match.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
@@ -14,18 +15,29 @@ import type { MatchView } from '../../api.ts';
 /**
  * Hokm, as a screen somebody can actually play on.
  *
- * **There is no canvas here and that is not a gap.** The house rule is that the canvas is the
- * illustration and the DOM is the interface: every move takeable from a real control, the turn in an
- * `aria-live` region, the drawing `aria-hidden` beside it. For ludo the drawing came first because a
- * board with tokens on it is most of the game; for hokm the interface IS a list of thirteen cards
- * you press, so the interface is what got built. A table with felt and a trick laid out on it is the
- * illustration this grows, and until it exists the fallback is the default state - which is the rule
- * this product already follows everywhere else.
+ * **The felt is the illustration and the hand is the interface**, which is the split the ludo board
+ * already draws. `card-table-1024.webp` is the market's own octagonal card table photographed from
+ * straight above, `deck-1989.webp` is the deck printed on it, and the trick lies on the cloth where
+ * each player threw it - all of it `aria-hidden`, because every card on the table is also a
+ * sentence. Nothing up there is pressed: a card is played from the row of buttons underneath, which
+ * is what a screen reader reads and what the 44px matrix hit-tests.
  *
- * **An illegal card is disabled rather than absent.** The server sends `plays`, the cards this seat
- * may legally play, and the rest of the hand stays on screen greyed out: a hand that silently lost
- * nine of its thirteen cards the moment somebody led a suit would read as a bug, and "you must
- * follow suit" is a rule a player learns by seeing which cards went quiet.
+ * **The reader is always at the bottom of the table**, whichever chair the server gave them, which
+ * is the one thing that makes a trick readable - your card is nearest you and your partner's is
+ * across from you. `table-seats.ts` is that arithmetic and it is shared, because poker and
+ * backgammon want the same table and three copies of it would place the same four people three
+ * ways.
+ *
+ * **A name carries `dir="auto"`**, which is the rule a chat message already follows and for the same
+ * reason: a display name is somebody's own content and has its own direction. Without it a Latin
+ * name inside a Persian tile is clipped at the line's end, which in an RTL line is the LEFT - so
+ * `Bot 63848b` truncates to `...t 63848b` rather than to `Bot 638...`. Nothing overflows, nothing
+ * logs, and the accessible name is perfect.
+ *
+ * **An illegal card is dimmed rather than taken away.** The server sends `plays`, the cards this
+ * seat may legally play, and the rest of the hand stays exactly where it was: a hand that silently
+ * lost nine of its thirteen cards the moment somebody led a suit would read as a bug, and "you must
+ * follow suit" is a rule a player learns by watching which cards went quiet.
  */
 
 const SIDE_TONE = ['text-accent', 'text-gold'];
@@ -99,7 +111,9 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
      * the moment it filled would mean everybody who did not take the trick watched their own card
      * leave and never saw what beat it.
      */
-    derived laid = ((): { cards: { card: number; seat: number }[]; took: number | null } =>
+    derived chairs = aroundTable(game.seats, mine ?? null);
+
+    derived laid = ((): { cards: { card: number; seat: number; chair: Chair }[]; took: number | null } =>
     {
         const board = view;
 
@@ -108,8 +122,13 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
             return { cards: [], took: null };
         }
 
-        const spread = (lead: number, cards: readonly number[]): { card: number; seat: number }[] =>
-            cards.map((card, offset) => ({ card, seat: (lead + offset) % game.seats }));
+        const spread = (lead: number, cards: readonly number[]): { card: number; seat: number; chair: Chair }[] =>
+            cards.map((card, offset) =>
+            {
+                const seat = (lead + offset) % game.seats;
+
+                return { card, seat, chair: chairs[seat] };
+            });
 
         if (board.trick.length > 0)
         {
@@ -187,7 +206,7 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
             <dl class="grid grid-cols-2 gap-x-4 gap-y-2">
                 <For each={ view!.points } key={ (_, index) => index } let={ total } index={ index }>
                     <div class="min-w-0">
-                        <dt class={ () => [ 'truncate text-ui-2xs', SIDE_TONE[index % 2] ].join(' ') }>
+                        <dt class={ () => [ 'truncate text-ui-2xs', SIDE_TONE[index % 2] ].join(' ') } dir="auto">
                             { locale.list(view!.seats.filter((row) => row.side === index).map((row) => nameOf(row.seat))) }
                         </dt>
                         <dd class="tally text-ui-lg font-bold text-text">
@@ -202,33 +221,34 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
 
         <Show when={ view !== null && !over }>
             { () =>
-        <Panel pad="md" stack="sm" tone="field">
-            <p class="label text-ui-xs text-faint">
-                { laid.took === null ? locale.t('hokm.table') : locale.t('hokm.table.took', { name: nameOf(laid.took) }) }
+        <div class="flex flex-col gap-2">
+            <p class="text-center text-ui-sm text-muted" aria-live="polite">
+                { laid.took === null
+                    ? (laid.cards.length === 0 ? locale.t('hokm.table.empty') : locale.t('hokm.table'))
+                    : locale.t('hokm.table.took', { name: nameOf(laid.took) }) }
             </p>
 
-            <Show
-                when={ laid.cards.length > 0 }
-                fallback={ <p class="text-ui-sm text-muted">{ locale.t('hokm.table.empty') }</p> }
-            >
-                { () =>
-                    <ul class="flex flex-wrap items-end justify-center gap-3">
-                        <For each={ laid.cards } key={ (one) => one.card } let={ one }>
-                            <li
-                                class={ () => [
-                                    'flex min-w-0 flex-col items-center gap-1 rounded-tile p-1',
-                                    one.seat === laid.took ? 'bg-win/15' : ''
-                                ].join(' ') }
-                            >
-                                <CardFace card={ one.card } />
-                                <span class="sr-only">{ cardSays(one.card) }</span>
-                                <span class="max-w-[5rem] truncate text-ui-2xs text-muted">{ nameOf(one.seat) }</span>
-                            </li>
-                        </For>
-                    </ul>
-                }
-            </Show>
-        </Panel>
+            <div class="card-table" aria-hidden="true">
+                <For each={ laid.cards } key={ (one) => one.card } let={ one }>
+                    <div
+                        class="card-played"
+                        data-took={ one.seat === laid.took ? 'true' : 'false' }
+                        style={ `--at-x: ${ one.chair.x }; --at-y: ${ one.chair.y }; --at-tilt: ${ one.chair.tilt }deg` }
+                    >
+                        <CardFace card={ one.card } />
+                        <span class="max-w-[4.5rem] truncate rounded-full bg-void/70 px-1.5 text-ui-2xs text-text" dir="auto">
+                            { nameOf(one.seat) }
+                        </span>
+                    </div>
+                </For>
+            </div>
+
+            <ul class="sr-only">
+                <For each={ laid.cards } key={ (one) => one.card } let={ one }>
+                    <li>{ locale.t('hokm.played', { name: nameOf(one.seat), card: cardSays(one.card) }) }</li>
+                </For>
+            </ul>
+        </div>
             }
         </Show>
 
@@ -247,12 +267,16 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
                     <Panel pad="sm" class="flex w-full min-w-0 items-center gap-2">
                         <Avatar person={ people.byHandle(game.players.find((one) => one.seat === row.seat)?.who ?? '') } size="sm" />
                         <span class="flex min-w-0 flex-1 flex-col">
-                            <span class="truncate text-ui-sm font-semibold text-text">{ nameOf(row.seat) }</span>
+                            <span class="truncate text-ui-sm font-semibold text-text" dir="auto">{ nameOf(row.seat) }</span>
                             <span class="tally truncate text-ui-2xs text-muted">
                                 { locale.plural('hokm.tricks', row.tricks) }
                             </span>
                         </span>
-                        <span class="tally shrink-0 text-ui-2xs text-faint">{ locale.plural('hokm.held', row.held) }</span>
+                        <span class="flex shrink-0 items-center gap-1 text-ui-2xs text-faint">
+                            <Icon name="cards" size={ 12 } aria-hidden="true" />
+                            <span class="tally" aria-hidden="true">{ locale.n(row.held) }</span>
+                            <span class="sr-only">{ locale.plural('hokm.held', row.held) }</span>
+                        </span>
                     </Panel>
                     </div>
                 </li>
@@ -303,7 +327,7 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
                                 <li class="flex">
                                     <button
                                         type="button"
-                                        class="flex min-h-11 min-w-11 items-center justify-center rounded-control p-0.5 transition enabled:hover:bg-raised disabled:opacity-40 coarse:min-h-11"
+                                        class="card-hold flex min-h-11 min-w-11 items-center justify-center rounded-control transition coarse:min-h-11"
                                         disabled={ !legal.has(card) || board.busy() }
                                         aria-label={ locale.t('hokm.play', { card: cardSays(card) }) }
                                         onClick={ () => void playCard(card) }

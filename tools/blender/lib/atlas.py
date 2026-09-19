@@ -111,10 +111,18 @@ def _fonts():
 
 
 class Canvas:
-    def __init__(self, size):
+    # `height` and `scale` are what let the deck sheet share this drawing code.
+    #
+    # The atlas is one square texture whose coordinates are a virtual 2048 grid, so `k` is the ratio
+    # between the two and everything is written in atlas units. A sprite sheet is neither square nor
+    # a texture - it is thirteen cards across and four down at whatever pixel size a screen needs -
+    # so it states both directly and keeps drawing in the same units, rather than being a second
+    # copy of `draw_card_face` that agrees with this one until somebody edits a pip.
+    def __init__(self, size, height=None, scale=None):
         self.size = size
-        self.k = size / SIZE
-        self.img = np.zeros((size, size, 3), np.float32)
+        self.height = size if height is None else height
+        self.k = (size / SIZE) if scale is None else scale
+        self.img = np.zeros((self.height, size, 3), np.float32)
         self.fonts = None
 
     def _window(self, x0, y0, x1, y1):
@@ -122,7 +130,7 @@ class Canvas:
         X0 = max(int(math.floor(x0 * k)) - 2, 0)
         Y0 = max(int(math.floor(y0 * k)) - 2, 0)
         X1 = min(int(math.ceil(x1 * k)) + 2, self.size)
-        Y1 = min(int(math.ceil(y1 * k)) + 2, self.size)
+        Y1 = min(int(math.ceil(y1 * k)) + 2, self.height)
         if X1 <= X0 or Y1 <= Y0:
             return None, None, None
         ys, xs = np.mgrid[Y0:Y1, X0:X1]
@@ -272,7 +280,7 @@ class Canvas:
 
     def write(self, path, quality=85):
         import imbuf
-        ib = imbuf.new((self.size, self.size), planes=32)
+        ib = imbuf.new((self.size, self.height), planes=32)
         with ib.with_buffer(write=True) as buffer:
             target = np.asarray(buffer)
             target[..., :3] = np.clip(self.img[::-1] * 255.0 + 0.5, 0, 255).astype(np.uint8)
@@ -290,13 +298,19 @@ def _plate(canvas, name, colour):
     canvas.rect(x, y, w, h, colour)
 
 
-def draw_card_face(canvas, code):
-    name = 'card-' + code
+def draw_card_face(canvas, code, box=None):
     rank, suit = code[0], code[1]
-    x, y, w, h = active(name)
     glyph = SUIT_GLYPH[suit]
     ink = RED_INK if suit in RED_SUITS else INK
-    _plate(canvas, name, CARD_WHITE)
+
+    if box is None:
+        name = 'card-' + code
+        x, y, w, h = active(name)
+        _plate(canvas, name, CARD_WHITE)
+    else:
+        x, y, w, h = box
+        canvas.rect(x, y, w, h, CARD_WHITE)
+
     canvas.rounded_rect(x + w / 2, y + h / 2, w, h, 10, CARD_WHITE)
     label = '10' if rank == 'T' else rank
     for corner in (0, 1):

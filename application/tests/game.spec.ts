@@ -6,6 +6,7 @@ import { createSound } from '../src/game/sound.ts';
 import { ENTRY, RING_CELLS, cellAt } from '../../server/src/domains/match/ludo/board.ts';
 import { chairsOf, ludoOf, type LudoSeat } from '../src/data/match.ts';
 import { seatsFor } from '../src/components/games/seats.ts';
+import { aroundTable } from '../src/components/games/table-seats.ts';
 import type { MatchView } from '../src/api.ts';
 import { RANKS as CLIENT_RANKS, SUITS as CLIENT_SUITS, SUIT_ICON, rankOf as clientRank, suitOf as clientSuit } from '../src/data/cards.ts';
 import { RANKS as SERVER_RANKS, SUITS as SERVER_SUITS, rankOf as serverRank, suitOf as serverSuit } from '../../server/src/domains/match/hokm/cards.ts';
@@ -383,6 +384,72 @@ describe('the browser reads a card the way the server wrote it', () =>
         for (const suit of CLIENT_SUITS)
         {
             expect(SUIT_ICON[suit], suit).toMatch(/^suit-/);
+        }
+    });
+});
+
+describe('where a card lands on the felt', () =>
+{
+    /**
+     * The one thing that makes a table readable: your own card is nearest you and your partner's is
+     * across from you, whoever you are. Drawn from seat zero instead, a player in seat 2 would watch
+     * their own card land at the far edge and their opponent's land under their chin - which reads
+     * as a shuffled table rather than as a bug, and is therefore never reported.
+     */
+    it('seats the reader at the bottom whichever chair the server gave them', () =>
+    {
+        for (const seats of [2, 3, 4])
+        {
+            for (let mine = 0; mine < seats; mine += 1)
+            {
+                const chairs = aroundTable(seats, mine);
+                const own = chairs.find((chair) => chair.seat === mine)!;
+
+                expect(own.place, `seat ${ mine } of ${ seats }`).toBe(0);
+                expect(own.x).toBeCloseTo(0.5, 6);
+                expect(own.y, 'the reader is not at the bottom').toBeGreaterThan(0.5);
+            }
+        }
+    });
+
+    /**
+     * Play passes to the right, which is counter-clockwise at a table and clockwise looking down at
+     * one. Backwards, a four-handed game still works - partners are opposite either way - and
+     * everybody watches the turn travel the wrong way round the table all evening.
+     */
+    it('puts the next player on the reader right and the partner across', () =>
+    {
+        const chairs = aroundTable(4, 1);
+
+        expect(chairs[2].place).toBe(1);
+        expect(chairs[2].x, 'the next seat is not to the right').toBeGreaterThan(0.5);
+        expect(chairs[2].y).toBeCloseTo(0.5, 6);
+
+        const own = chairs[1];
+        const partner = chairs[3];
+
+        expect(partner.place).toBe(2);
+        expect(partner.x + own.x).toBeCloseTo(1, 6);
+        expect(partner.y + own.y).toBeCloseTo(1, 6);
+    });
+
+    it('keeps every card on the cloth and gives a watcher a full table', () =>
+    {
+        for (const seats of [2, 3, 4])
+        {
+            const chairs = aroundTable(seats, null);
+
+            expect(chairs).toHaveLength(seats);
+            expect(new Set(chairs.map((chair) => chair.place)).size).toBe(seats);
+
+            for (const chair of chairs)
+            {
+                expect(chair.x).toBeGreaterThan(0.2);
+                expect(chair.x).toBeLessThan(0.8);
+                expect(chair.y).toBeGreaterThan(0.2);
+                expect(chair.y).toBeLessThan(0.8);
+                expect(Math.abs(chair.tilt)).toBeLessThan(10);
+            }
         }
     });
 });

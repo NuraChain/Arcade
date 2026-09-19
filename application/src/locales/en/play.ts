@@ -221,6 +221,7 @@ export const play = {
     'hokm.held': { one: '{count} card', other: '{count} cards' },
     'hokm.hand': 'Your hand',
     'hokm.card': '{rank} of {suit}',
+    'hokm.played': '{name} played the {card}',
     'hokm.play': 'Play the {card}',
     'hokm.follow': 'You have to follow the suit that was led.',
     'card.turn': 'Their go',
