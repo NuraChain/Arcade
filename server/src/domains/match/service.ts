@@ -10,6 +10,7 @@ import { pickBelow } from '../../lib/crypto.ts';
 import type { AchieveService } from '../achieve/service.ts';
 import { firstRow } from '../../lib/rows.ts';
 import { createRecorder } from './record.ts';
+import { hokmEngine } from './engines/hokm.ts';
 import { ludoEngine } from './engines/ludo.ts';
 import type { MatchBoard, MatchLog } from '../../schemas.ts';
 import type { MatchHistory } from '../../schemas.ts';
@@ -192,7 +193,7 @@ function stateOf(match: Match): unknown
  * them in means the set is decided at the composition root, a spec can build a service around a
  * fixture engine, and adding a game touches `main.ts` rather than the middle of a 680-line file.
  */
-export function createMatchService(db: DataSource, achieve: AchieveService, engines: readonly Engine[] = [ludoEngine])
+export function createMatchService(db: DataSource, achieve: AchieveService, engines: readonly Engine[] = [ludoEngine, hokmEngine])
 {
     const recorder = createRecorder(achieve);
 
@@ -526,7 +527,7 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
             }
 
             const seats = chairs.map((chair) => chair.seat);
-            const state = engine.create(seats, draws);
+            const state = engine.create(seats, draws, table.target);
 
             const matchId = await db.transaction(async (tx) =>
             {

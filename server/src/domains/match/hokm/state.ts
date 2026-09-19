@@ -74,7 +74,12 @@ export type HokmEvent =
     | { e: 'trump'; seat: number; suit: Suit }
     | { e: 'card'; seat: number; card: number }
     | { e: 'trick'; seat: number }
-    | { e: 'hand'; side: number; points: number; kot: boolean }
+    /**
+     * `seats` rides along beside `side` because a TALLY is per seat and a side is not: a hand won by
+     * a team at four players was won by two people, and the ledger is the only place that knows
+     * which. Reading it back from the seat count would mean the fold had to know the game.
+     */
+    | { e: 'hand'; side: number; seats: number[]; points: number; kot: boolean }
     | { e: 'deal'; hakem: number }
     | { e: 'forfeit'; seat: number; reason: string }
     | { e: 'finish'; side: number };

@@ -1060,7 +1060,57 @@ export const ludoBoard = object({
     }))
 });
 
-export const matchBoard = union([ludoBoard]);
+/**
+ * A hokm board, composed for ONE viewer, and the reason the seam takes a seat.
+ *
+ * `hand` is this reader's cards and nobody else's ever appear - not as a field, not as a null, not
+ * as a flag. What the others hold is a COUNT, which is what you can see across a real table, and
+ * the trick in front of everybody is face up because it is face up.
+ *
+ * During `trump` every count but the Hâkem's is zero, because the deal has not happened: the
+ * privacy is in the state rather than in this projection, so a careless reader has nothing to leak.
+ */
+export const hokmBoard = object({
+    kind: literal('hokm'),
+
+    phase: enumOf(['trump', 'tricks']),
+
+    hakem: number(),
+
+    /** Derived from the Hâkem rather than stored, so the two can never disagree. */
+    dealer: number(),
+
+    trump: enumOf(['clubs', 'diamonds', 'hearts', 'spades']).optional(),
+
+    turn: number(),
+
+    /** The seat that led the trick in progress, so each card on the table has an owner. */
+    lead: number(),
+
+    /** THIS reader's cards, and empty for somebody watching. */
+    hand: array(number()),
+
+    /** What this reader may legally play right now, which is empty unless it is their turn. */
+    plays: array(number()),
+
+    trick: array(number()),
+
+    seats: array(object({
+        seat: number(),
+        side: number(),
+        held: number(),
+        tricks: number(),
+        out: boolean()
+    })),
+
+    points: array(number()),
+
+    /** Points that win the match, and tricks that win a hand - both from the deck and the table. */
+    target: number(),
+    needed: number()
+});
+
+export const matchBoard = union([ludoBoard, hokmBoard]);
 
 export type MatchBoard = Infer<typeof matchBoard>;
 
@@ -1133,7 +1183,32 @@ export const ludoLog = object({
  * player, so a deal, a draw or anything else a game writes into its own log would have been
  * readable by asking for revision zero.
  */
-export const matchLog = union([ludoLog]);
+export const hokmMove = object({
+    e: enumOf(['trump', 'card', 'trick', 'hand', 'deal', 'forfeit', 'finish']),
+    seat: number().optional(),
+    suit: string().optional(),
+    card: number().optional(),
+    side: number().optional(),
+    points: number().optional(),
+    kot: boolean().optional(),
+    hakem: number().optional(),
+    reason: string().optional()
+});
+
+/**
+ * Hokm's log needs no filtering and that is a property of what is LOGGED, not of the filter.
+ *
+ * A card is played face up, a trump is declared out loud, a trick is taken in front of everybody
+ * and a hand is scored on a sheet - every event here is public at a real table. The deal is not an
+ * event at all, which is what keeps the one private thing in the game out of an append-only ledger
+ * that `since` hands back from revision zero forever.
+ */
+export const hokmLog = object({
+    kind: literal('hokm'),
+    moves: array(hokmMove)
+});
+
+export const matchLog = union([ludoLog, hokmLog]);
 
 export type MatchLog = Infer<typeof matchLog>;
 
@@ -1193,7 +1268,21 @@ export const ludoPlay = object({
     piece: number({ int: true, min: 0, max: 3 }).optional()
 });
 
-export const matchPlay = union([ludoPlay]);
+/**
+ * What a player asks a hokm board to do: name the trump, or play one of their own cards.
+ *
+ * `card` is bounded to the deck here rather than trusted, for the reason every bounded column in
+ * this file states - an out-of-range number reaching Postgres comes back as a 500 that any signed-in
+ * caller could produce. Whether the card is in their HAND is the engine's question, not the wire's.
+ */
+export const hokmPlay = object({
+    kind: literal('hokm'),
+    verb: enumOf(['trump', 'card']),
+    suit: enumOf(['clubs', 'diamonds', 'hearts', 'spades']).optional(),
+    card: number({ int: true, min: 0, max: 51 }).optional()
+});
+
+export const matchPlay = union([ludoPlay, hokmPlay]);
 
 export type MatchPlay = Infer<typeof matchPlay>;
 

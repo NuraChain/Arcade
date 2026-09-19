@@ -175,6 +175,12 @@ describe.skipIf(!active)('a match, against a real database', () =>
 
             expect(seated).toHaveLength(4);
             expect(board.kind).toBe('ludo');
+
+            if (board.kind !== 'ludo')
+            {
+                return;
+            }
+
             expect(new Set(board.seats.map((row) => row.colour)).size).toBe(4);
 
             const count = rowsOf<{ n: string }>(await db.query(

@@ -1,6 +1,6 @@
 import { deckFor, legalCards, suitOf, trickWinner, SUITS, type Suit } from './cards.ts';
 import { dealerOf, duelResult, matchWinner, nextHakem, trickCount, tripleResult, winningTricks } from './scoring.ts';
-import { sideCount, sideOf, type HokmAction, type HokmEvent, type HokmRefusal, type HokmState } from './state.ts';
+import { sideCount, sideOf, seatsOfSide, type HokmAction, type HokmEvent, type HokmRefusal, type HokmState } from './state.ts';
 
 /**
  * The hokm state machine, pure and import-free beyond this directory.
@@ -334,7 +334,13 @@ export function apply(state: HokmState, action: HokmAction, deal: Deal): Outcome
     const points = [...next.points];
 
     points[result.side] += result.points;
-    events.push({ e: 'hand', side: result.side, points: result.points, kot: result.kot });
+    events.push({
+        e: 'hand',
+        side: result.side,
+        seats: seatsOfSide(result.side, next.seats),
+        points: result.points,
+        kot: result.kot
+    });
 
     const won = matchWinner(points, next.target);
 
