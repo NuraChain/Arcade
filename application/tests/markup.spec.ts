@@ -646,3 +646,90 @@ describe('what direction a name is written in', () =>
         expect(guilty, 'a name is written in the direction of the page around it').toEqual([]);
     });
 });
+
+describe('where an internal link goes', () =>
+{
+    /**
+     * Every `to="/..."` in this product has to name a route the router actually declares.
+     *
+     * A url that exists only in a component is a 404 wearing the clothes of a link, and it reads as
+     * something worse than a broken link: the router's fallback is "No table here. That link points
+     * at a room that was never built, or one that has since closed" - so a stale path tells somebody
+     * their DATA is gone rather than that the link is wrong.
+     *
+     * Two of these shipped. The keys banner offered "Confirm it" to `/app/devices` when the route is
+     * `/app/me/devices`, so the one control a person with a pending browser is given - the whole
+     * point of that banner - 404'd. And the site footer offered `/about`, `/contact`, `/privacy` and
+     * `/terms`, none of which is a route at all.
+     *
+     * Nothing could see either. `npm run qa` tours the routes the ROUTER declares, so a url that
+     * exists only in a component is the one thing it structurally never opens.
+     *
+     * Parameterised segments are matched by shape rather than by value: `/app/games/hokm` is legal
+     * because `games/:slug` is declared, and the rule is about the SHAPE of the path, not about
+     * whether a particular game exists.
+     */
+    it('never links to a path the router does not declare', () =>
+    {
+        const routes = FILES.find((file) => file.path === 'routes.ts');
+
+        expect(routes, 'routes.ts is not in the glob any more').toBeDefined();
+
+        /*
+         * Read as a flat list of `path:` literals in source order. The app's children are declared
+         * relative to `/app`, so anything that is not already absolute is joined onto it - which is
+         * exactly how the router itself composes them.
+         */
+        const declared = new Set(['/']);
+
+        for (const [, value] of (routes?.text ?? '').matchAll(/\bpath: '([^']*)'/g))
+        {
+            declared.add(value.startsWith('/') ? value : `/app/${ value }`.replace(/\/$/, ''));
+        }
+
+        const matches = (link: string): boolean =>
+        {
+            const want = link.replace(/\/$/, '') || '/';
+
+            for (const route of declared)
+            {
+                const a = route.split('/');
+                const b = want.split('/');
+
+                if (a.length === b.length && a.every((part, at) => part.startsWith(':') || part === b[at]))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        };
+
+        const guilty: string[] = [];
+
+        for (const file of FILES)
+        {
+            if (file.path === 'routes.ts')
+            {
+                continue;
+            }
+
+            for (const found of file.text.matchAll(/\b(?:to|href)=(?:"|\{ ?')(\/[A-Za-z0-9/_-]*)(?:"|')/g))
+            {
+                const link = found[1];
+
+                /* A hash link is an anchor on the page it is already on, not a route. */
+                if (link.includes('#') || matches(link))
+                {
+                    continue;
+                }
+
+                const line = file.text.slice(0, found.index).split('\n').length;
+
+                guilty.push(`${ file.path }:${ line } -> ${ link }`);
+            }
+        }
+
+        expect(guilty, 'a link points at a path the router never declared').toEqual([]);
+    });
+});
