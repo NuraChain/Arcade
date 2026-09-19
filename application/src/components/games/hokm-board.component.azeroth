@@ -90,13 +90,36 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
     })();
 
     /**
-     * The card each seat has played to the trick in progress, which is `lead` plus the offset - the
-     * wire sends the cards in play order and the seat that led, because a list of cards nobody owns
-     * is a pile rather than a trick.
+     * What is face up in the middle of the table, which is the trick in progress or - between one
+     * card being led and the next - the trick that was just gathered.
+     *
+     * A seat is `lead` plus the offset, because the wire sends the cards in play order and the seat
+     * that led rather than a list of cards nobody owns. Showing the gathered trick is not a
+     * flourish: the fourth card and the resolution arrive in one response, so a table that emptied
+     * the moment it filled would mean everybody who did not take the trick watched their own card
+     * leave and never saw what beat it.
      */
-    derived onTable = view === null
-        ? []
-        : view.trick.map((card, offset) => ({ card, seat: (view.lead + offset) % game.seats }));
+    derived laid = ((): { cards: { card: number; seat: number }[]; took: number | null } =>
+    {
+        const board = view;
+
+        if (board === null)
+        {
+            return { cards: [], took: null };
+        }
+
+        const spread = (lead: number, cards: readonly number[]): { card: number; seat: number }[] =>
+            cards.map((card, offset) => ({ card, seat: (lead + offset) % game.seats }));
+
+        if (board.trick.length > 0)
+        {
+            return { cards: spread(board.lead, board.trick), took: null };
+        }
+
+        return board.took === undefined
+            ? { cards: [], took: null }
+            : { cards: spread(board.took.lead, board.took.cards), took: board.took.seat };
+    })();
 
     derived legal = new Set(view === null ? [] : view.plays);
 
@@ -113,6 +136,9 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
 
         return FACE_KEY[rank] === undefined ? locale.n(Number(rank)) : locale.t(FACE_KEY[rank]);
     };
+
+    const cardSays = (card: number): string =>
+        locale.t('hokm.card', { rank: rankSays(card), suit: locale.t(`hokm.suit.${ suitOf(card) }` as never) });
 
     const playCard = async (card: number): Promise<void> =>
     {
@@ -136,7 +162,11 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
             <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
                 <p class="flex min-w-0 items-center gap-2 text-ui-sm text-muted">
                     <Icon name="crest-crown" size={ 15 } class="shrink-0 text-gold" />
-                    <span class="truncate">{ locale.t('hokm.hakem', { name: nameOf(view!.hakem) }) }</span>
+                    <span class="truncate">
+                        { view!.hakem === mine
+                            ? locale.t('hokm.hakem.you')
+                            : locale.t('hokm.hakem', { name: nameOf(view!.hakem) }) }
+                    </span>
                 </p>
 
                 <Show when={ view!.trump !== undefined }>
@@ -173,17 +203,25 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
         <Show when={ view !== null && !over }>
             { () =>
         <Panel pad="md" stack="sm" tone="field">
-            <p class="label text-ui-xs text-faint">{ locale.t('hokm.table') }</p>
+            <p class="label text-ui-xs text-faint">
+                { laid.took === null ? locale.t('hokm.table') : locale.t('hokm.table.took', { name: nameOf(laid.took) }) }
+            </p>
 
             <Show
-                when={ onTable.length > 0 }
+                when={ laid.cards.length > 0 }
                 fallback={ <p class="text-ui-sm text-muted">{ locale.t('hokm.table.empty') }</p> }
             >
                 { () =>
-                    <ul class="flex flex-wrap items-end gap-3">
-                        <For each={ onTable } key={ (one) => one.card } let={ one }>
-                            <li class="flex min-w-0 flex-col items-center gap-1">
+                    <ul class="flex flex-wrap items-end justify-center gap-3">
+                        <For each={ laid.cards } key={ (one) => one.card } let={ one }>
+                            <li
+                                class={ () => [
+                                    'flex min-w-0 flex-col items-center gap-1 rounded-tile p-1',
+                                    one.seat === laid.took ? 'bg-win/15' : ''
+                                ].join(' ') }
+                            >
                                 <CardFace card={ one.card } />
+                                <span class="sr-only">{ cardSays(one.card) }</span>
                                 <span class="max-w-[5rem] truncate text-ui-2xs text-muted">{ nameOf(one.seat) }</span>
                             </li>
                         </For>
@@ -214,7 +252,7 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
                                 { locale.plural('hokm.tricks', row.tricks) }
                             </span>
                         </span>
-                        <span class="tally shrink-0 text-ui-2xs text-faint">{ locale.n(row.held) }</span>
+                        <span class="tally shrink-0 text-ui-2xs text-faint">{ locale.plural('hokm.held', row.held) }</span>
                     </Panel>
                     </div>
                 </li>
@@ -267,10 +305,7 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
                                         type="button"
                                         class="flex min-h-11 min-w-11 items-center justify-center rounded-control p-0.5 transition enabled:hover:bg-raised disabled:opacity-40 coarse:min-h-11"
                                         disabled={ !legal.has(card) || board.busy() }
-                                        aria-label={ locale.t('hokm.play', {
-                                            rank: rankSays(card),
-                                            suit: locale.t(`hokm.suit.${ suitOf(card) }` as never)
-                                        }) }
+                                        aria-label={ locale.t('hokm.play', { card: cardSays(card) }) }
                                         onClick={ () => void playCard(card) }
                                     >
                                         <CardFace card={ card } />

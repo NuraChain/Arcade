@@ -101,12 +101,6 @@ export default component GamePage()
                                         </li>
                                     </For>
                                 </ol>
-                                <Show when={ game!.id === 'hokm' }>
-                                    <p class="mt-3 flex items-start gap-2 rounded-tile bg-accent/10 p-3 text-ui-sm text-text">
-                                        <Icon name="info" size={ 16 } class="mt-0.5 shrink-0 text-accent" />
-                                        <span>{ locale.t('game.needsFour') }</span>
-                                    </p>
-                                </Show>
                             </section>
 
                             <section aria-labelledby="game-friends">

@@ -30,7 +30,7 @@ export const landing = {
     'games.players': 'players',
 
     'games.hokm.name': 'Hokm',
-    'games.hokm.blurb': 'Persian trick-taking for four, played in pairs. Name the suit, then hold your nerve.',
+    'games.hokm.blurb': 'Persian trick-taking at two, three or four. Name the suit, then hold your nerve.',
     'games.poker.name': 'Poker',
     'games.poker.blurb': 'Texas hold’em at a real table: chips in front of you, and the pause before a call.',
     'games.backgammon.name': 'Backgammon',

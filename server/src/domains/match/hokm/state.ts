@@ -15,6 +15,27 @@ import type { Suit } from './cards.ts';
 
 export type HokmPhase = 'trump' | 'tricks';
 
+/**
+ * The trick that was just gathered, which is the only part of a hokm table that exists for a moment
+ * and then does not.
+ *
+ * A physical trick sits face up until the winner picks it up, and every player reads it in that
+ * window. Here the fourth card and the resolution land in one response, so without this the losing
+ * three see their own card leave the table and nothing else - the trick they lost is information
+ * they are entitled to and never get. Keeping it on the STATE rather than remembering it in a
+ * browser is what makes it survive a reload, a reconnect and a spectator arriving late.
+ */
+export interface HokmTrick
+{
+    /** The seat that led it, so the cards have an owner each the way `lead` gives the live trick one. */
+    lead: number;
+
+    cards: number[];
+
+    /** The seat that took it. */
+    seat: number;
+}
+
 export interface HokmState
 {
     v: 1;
@@ -52,6 +73,9 @@ export interface HokmState
     lead: number;
 
     trick: number[];
+
+    /** The trick before this one, face up until the next card is led. Null at the start of a hand. */
+    took: HokmTrick | null;
 
     /** Tricks taken in the CURRENT hand, per seat. Reset every deal. */
     tricks: number[];

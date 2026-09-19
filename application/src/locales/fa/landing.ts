@@ -33,7 +33,7 @@ export const landing: Pick<Dictionary, keyof typeof reference> = {
     'games.players': 'بازیکن',
 
     'games.hokm.name': 'حکم',
-    'games.hokm.blurb': 'بازی چهارنفرهٔ ایرانی، دو به دو. حکم را بگو و خونسرد بمان.',
+    'games.hokm.blurb': 'ورق‌بازی ایرانی با دو، سه یا چهار نفر. حکم را بگو و خونسرد بمان.',
     'games.poker.name': 'پوکر',
     'games.poker.blurb': 'تگزاس هولدم سر یک میز واقعی: ژتون‌ها جلویت، و آن مکث قبل از کال.',
     'games.backgammon.name': 'تخته‌نرد',

@@ -83,6 +83,7 @@ function dealHand(state: HokmState, deal: Deal): HokmState
         turn: state.hakem,
         lead: state.hakem,
         trick: [],
+        took: null,
         tricks: Array.from({ length: state.seats }, () => 0)
     };
 }
@@ -136,6 +137,7 @@ export function create(seats: number, target: number, deal: Deal): HokmState
         turn: hakem,
         lead: hakem,
         trick: [],
+        took: null,
         tricks: [],
         points: Array.from({ length: sideCount(seats) }, () => 0),
         out: Array.from({ length: seats }, () => false),
@@ -321,7 +323,7 @@ export function apply(state: HokmState, action: HokmAction, deal: Deal): Outcome
     tricks[took] += 1;
     events.push({ e: 'trick', seat: took });
 
-    next = { ...next, tricks, trick: [], lead: took, turn: took };
+    next = { ...next, tricks, trick: [], took: { lead: state.lead, cards: trick, seat: took }, lead: took, turn: took };
 
     const played = tricks.reduce((total, count) => total + count, 0);
     const result = handOver(next, played);

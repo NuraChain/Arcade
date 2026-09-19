@@ -282,6 +282,117 @@ describe('a trick is taken by the rules', () =>
         expect(state.tricks[seatsPlayed[best]]).toBe(1);
         expect(state.tricks.reduce((total, count) => total + count, 0)).toBe(1);
         expect(state.lead).toBe(seatsPlayed[best]);
+
+        expect(state.took).not.toBeNull();
+        expect(state.took!.cards).toEqual(cards);
+        expect(state.took!.lead).toBe(seatsPlayed[0]);
+        expect(state.took!.seat).toBe(seatsPlayed[best]);
+    });
+
+    /**
+     * The gathered trick is the one thing on this table that exists for a moment and then does not,
+     * and the fourth card resolves it in the same response - so without it everybody who did not
+     * take the trick watches their own card leave and never learns what beat it. It has to name the
+     * seat that LED as well as the seat that took, because a list of cards nobody owns is a pile.
+     */
+    it('leaves the gathered trick face up until the next card is led, then replaces it', () =>
+    {
+        const deal = seeded(64);
+
+        let state = create(4, 7, deal);
+
+        expect(state.took).toBeNull();
+
+        const called = apply(state, { kind: 'trump', seat: state.hakem, suit: 'hearts' }, deal);
+
+        expect(called.ok).toBe(true);
+
+        if (!called.ok)
+        {
+            return;
+        }
+
+        state = called.state;
+
+        const play = (): void =>
+        {
+            const outcome = apply(state, autoplay(state, state.turn, deal)!, deal);
+
+            expect(outcome.ok).toBe(true);
+
+            if (outcome.ok)
+            {
+                state = outcome.state;
+            }
+        };
+
+        for (let step = 0; step < 3; step += 1)
+        {
+            play();
+            expect(state.took, 'a trick was gathered before it was complete').toBeNull();
+        }
+
+        play();
+
+        const first = state.took;
+
+        expect(first).not.toBeNull();
+        expect(first!.cards).toHaveLength(4);
+
+        play();
+
+        expect(state.took, 'the gathered trick vanished the moment somebody led').toEqual(first);
+
+        for (let step = 0; step < 3; step += 1)
+        {
+            play();
+        }
+
+        expect(state.took).not.toEqual(first);
+        expect(state.took!.seat).toBe(state.lead);
+    });
+
+    /**
+     * A hand that ends deals the next one in the same action, and the trick that ended it belongs to
+     * the hand that is over. Carrying it into the new deal would put four cards on a table where
+     * nobody has played yet.
+     */
+    it('clears the gathered trick when the next hand is dealt', () =>
+    {
+        const deal = seeded(9);
+
+        let state = create(4, 7, deal);
+
+        for (let step = 0; step < 4000 && state.winner === null; step += 1)
+        {
+            const move = autoplay(state, state.phase === 'trump' ? state.hakem : state.turn, deal);
+
+            if (move === null)
+            {
+                break;
+            }
+
+            const outcome = apply(state, move, deal);
+
+            if (!outcome.ok)
+            {
+                break;
+            }
+
+            const dealt = outcome.events.some((event) => event.e === 'deal');
+
+            state = outcome.state;
+
+            if (dealt)
+            {
+                expect(state.phase, 'a deal left the table mid-hand').toBe('trump');
+                expect(state.took, 'the new hand opened with the old hand’s last trick on the table').toBeNull();
+
+                return;
+            }
+        }
+
+        throw new Error('no hand ever ended');
     });
 });
 

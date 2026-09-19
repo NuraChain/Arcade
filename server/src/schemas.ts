@@ -1095,6 +1095,17 @@ export const hokmBoard = object({
 
     trick: array(number()),
 
+    /**
+     * The trick just gathered, which is face up at a real table until the winner picks it up. The
+     * fourth card and the resolution land in one response here, so without this everybody who did
+     * not take it watches their own card leave and never sees what beat it.
+     */
+    took: object({
+        lead: number(),
+        cards: array(number()),
+        seat: number()
+    }).optional(),
+
     seats: array(object({
         seat: number(),
         side: number(),

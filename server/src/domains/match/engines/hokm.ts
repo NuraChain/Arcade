@@ -135,7 +135,11 @@ export const hokmEngine: Engine<HokmState, HokmAction> = {
             needed: state.seats === 3 ? trickCount(3) : winningTricks(state.seats)
         };
 
-        return state.trump === null ? board : { ...board, trump: state.trump };
+        const gathered = state.took === null
+            ? board
+            : { ...board, took: { lead: state.took.lead, cards: [...state.took.cards], seat: state.took.seat } };
+
+        return state.trump === null ? gathered : { ...gathered, trump: state.trump };
     },
 
     /**
