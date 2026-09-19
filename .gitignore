@@ -5,7 +5,11 @@ dist-server/
 coverage/
 logs/
 *.tsbuildinfo
-.env
+# Real values, at any depth and under any suffix - `.env`, `.env.local`, `.env.production`. The
+# committed templates are the two `.env.example` files and nothing else: this repository is public,
+# and a secret published once stays published whatever a later commit does.
+.env*
+!.env.example
 *.local
 .DS_Store
 Thumbs.db

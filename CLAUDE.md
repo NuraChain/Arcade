@@ -143,13 +143,33 @@ the first run of this matrix showed, as 808 console errors and 377 pages that ne
 
 **`framework-bugs.md` is not in this repository.** It is a register of defects in a DEPENDENCY,
 not part of this product - and now literally a published one, so a fix arrives by bumping the pin
-rather than by editing a sibling checkout. It lives on the desktop
-(`C:/Users/IntelligentQuantum/Desktop/framework-bugs.md`). `.gitignore` holds the name so it
-cannot come back by accident. Nothing goes in it without a minimal reproduction proving the
+rather than by editing a sibling checkout. It lives OUTSIDE the tree, on the maintainer's desktop;
+`.gitignore` holds the name so it cannot come back by accident. The path is deliberately not written
+down here, because this file is published with the repository and a machine path names a machine. Nothing goes in it without a minimal reproduction proving the
 framework is responsible, and a suspicion that turns out to be ours goes in its "NOT framework
 bugs" table so nobody re-investigates it.
 
 ## House rules
+
+**This repository is PUBLIC.** Everything committed is published, including the history, so nothing
+private goes in the tree - ever, not even briefly, because a later commit does not unpublish it.
+
+- **Real values live in `.env`**, which `.gitignore` refuses at every depth, and there is one per
+  half: `server/.env` for the api and `.env` at the root for the browser's `VITE_*`. Neither has
+  ever been committed, and `git log --diff-filter=A -- '*.env'` is how that was checked rather than
+  assumed.
+- **Dummy values live in `.env.example`**, which IS committed: `.env.example` at the root and
+  `server/.env.example` beside it. Every variable the code reads appears there with a placeholder or
+  an empty value and a sentence saying what it is for - `SESSION_SECRET` and the three VAPID keys
+  are empty on purpose, with the `node -e` line that mints one written above them.
+- **No absolute path naming a machine.** `application/vite.config.ts` carried
+  `C:/Users/<name>/Documents/Projects/AzerothJS` while the framework was a `file:` junction, and
+  this file carried the path to the framework register. Both are gone. A path under `~` is fine; a
+  path under `/c/Users/<somebody>` is a person's name in a public file.
+- **The `0x…` keys in the tests and in `seed-wallets.ts` are hardhat's published accounts**, which
+  are in that project's own README and in a million repositories. They are development fixtures and
+  the file says so; nothing else in this tree is key material, and `recovery.ts`'s constant that
+  looks like one is the P-256 curve order.
 
 **No comments in code.** Names and structure carry the meaning. This file, and the tests, are
 where reasoning is written down.
