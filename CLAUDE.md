@@ -1872,6 +1872,87 @@ wrong product.
 Two of its assertions are deliberately made in the OTHER browser, because a move only the mover can
 see is the failure it exists to catch.
 
+**`tools/qa/hokm-play-pass.mjs` is its sibling, and a separate file rather than a parameter.** The
+two games are different interfaces with different failure modes: ludo's is a canvas with a dice
+button beside it, and what goes wrong there is a board drawn twice or drawn once and never again;
+hokm's is a hand of buttons, and what goes wrong there is a legal card that cannot be pressed, an
+illegal one that can, a trump chooser offered to the wrong seat. It opens a TURN-BASED table, because
+a live one sweeps a turn nobody took and a pass that pauses to read the other browser between clicks
+would have its cards played for it halfway through and report a product defect.
+
+**It checks that the table cloth and the deck really loaded**, which is the one thing no other gate
+in this repository can see at all. `card-table-1024.webp` and `deck-1989.webp` can 404 leaving a
+table with no felt and a hand of blank rectangles, each carrying a perfect accessible name - the
+matrix reads overflow, hit targets, a landmark and the console, and a missing background image is
+none of them. The only way to know is to fetch the url again from inside the page and read what came
+back; the check answers 0 for a broken file and -1 for no such element, because a pass asking the
+wrong browser at the wrong moment is a different failure from a broken build. It was asked at the
+DEAL first, and at two players the deal pauses with cards in the Hâkem's hand and nowhere else - so
+it passed or failed on which fixture happened to be Hâkem. It is asked after trump is called now, of
+the browser that did not call it.
+
+## The table, and the cards on it
+
+Hokm is played on a **photograph of the card table the market scene already stands on**, dealt from
+a **deck printed by the code that prints the 3D one**. Both come from the same argument the ludo
+plate makes: drawing the felt again in CSS, or the fifty-two faces again in markup, would be a second
+description of one object, agreeing exactly until somebody edited one of them.
+
+`tools/blender/board.py` grew a second entry point for the first. It imports `table-card.glb`,
+rebuilds the three materials export stubbed out - walnut with its own grain, brass with a little
+wear, and baize as two noises at very different scales - and renders it with an orthographic camera
+pointing straight down into `application/public/board/card-table-1024.webp`. Run by hand, like the
+ludo plate: `blender -b -P tools/blender/board.py`, or `-- table` for just this one.
+
+Three things about that render are worth stating.
+
+**The alpha is the octagon**, so the page shows through the corners and the table reads as a table
+rather than as a square picture of one. **The rim's own AO is already in the vertex colours** -
+`table-card.py` bakes it with the rim in place - so the shadow the rim casts on the cloth is real
+rather than added here, which is the opposite of the ludo plate, where the baked pawn shadows had to
+be painted out. And **the lamps are off-axis and unequal**, because a pendant over a card table hangs
+to one side: the first version lit it evenly from both and produced a scanner's idea of a table.
+
+The felt took one tuning pass and the lesson generalises. Baize is a fine nap plus large soft
+lighting gradients, and the first render had that backwards - a broad noise at 5cm doing the work,
+which reads as marbled paper rather than cloth. Raising its scale until the texture is fibre-sized
+and letting the LIGHT make the large-scale variation is what made it look like a table.
+
+**`tools/blender/deck.py` renders all fifty-two faces from `lib/atlas.py`'s own `draw_card_face`** -
+the function that has printed the deck scattered across that table since long before any of this. It
+only ever needed fourteen, because a prop is whatever happens to be face up; the game needs the rest,
+so `Canvas` gained a height and a scale and `draw_card_face` gained an explicit box. A second
+drawing routine would have been a second deck, and a card in the hand and the same card on the table
+would have stopped being the same card.
+
+**The sheet's grid IS the card number.** A card is numbered suit-major with the ranks ascending, so
+the column is `card % 13` and the row is `card / 13` and there is no packing for the client to know.
+A sheet laid out to fit its pixels - eight across and seven down - would be a second fact that has to
+agree with a constant in `data/cards.ts`, which is the shape of mistake this file keeps recording.
+
+**The edge and the corner radius are CSS, not drawn.** They are the two things that have to stay
+crisp: a hairline baked into a 153px cell is a grey smudge by the time the card is 44px wide on a
+phone, and a drawn corner cannot let the green felt through.
+
+**The card face was `bg-field` for one commit**, which in the dark theme is near-black - a hole in
+the baize where a card should be, and in the hand a row of card BACKS. That is what the sprite
+settles: a playing card is a printed object and looks like itself in any light, which is the same
+line the GLB kit draws for walnut and felt.
+
+**`table-seats.ts` puts the reader at the bottom**, whichever chair the server gave them, and it is
+shared because poker and backgammon want the same table. Play passes to the RIGHT - counter-clockwise
+at a real table, clockwise on a screen looking down at one - so the next seat is drawn to the reader's
+right and the angle decreases. Backwards, a four-handed game still works perfectly, because partners
+are opposite either way, and everybody watches the turn travel the wrong way round the table all
+evening.
+
+**A name carries `dir="auto"`.** This is the rule a chat message already follows and for the same
+reason: a display name is somebody's own content and has its own direction. Without it a Latin name
+inside a Persian tile is clipped at the line's end, which in an RTL line is the LEFT - so
+`Bot 63848b` truncates to `...t 63848b` rather than to `Bot 638...`. Nothing overflows, nothing logs,
+and the accessible name is perfect. It is fixed on the hokm board; **every other place this product
+renders a display name still has it**, because nothing else passes `dir="auto"` to a name.
+
 ## The game page splits on its container
 
 `lg:grid-cols-[minmax(0,1fr)_22rem]` fires at 1024px of SCREEN, and that column is nothing like the
@@ -3271,7 +3352,8 @@ content script in every other tab at once.
 ## Verification
 
 `npm run check` · `npm test` · `npm run test:shuffle` · `npm run build` · `npm run qa` ·
-`node tools/qa/regression-pass.mjs` · `node tools/qa/ludo-pass.mjs` · `node tools/qa/play-pass.mjs`,
+`node tools/qa/regression-pass.mjs` · `node tools/qa/ludo-pass.mjs` · `node tools/qa/hokm-pass.mjs` ·
+`node tools/qa/play-pass.mjs` · `node tools/qa/hokm-play-pass.mjs`,
 then a browser pass: every route at
 390 and 1280 in both themes and both languages, console clean, and
 the disposal check — repeatedly create and dispose the world and confirm no "Too many active
