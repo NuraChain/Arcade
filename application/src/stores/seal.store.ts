@@ -49,7 +49,27 @@ export const useSeal = createStore((): SealApi =>
 
     return {
         sealability: () => answer.data() ?? null,
-        loading: () => answer.loading(),
+
+        /**
+         * Loading means NOTHING TO SHOW YET, not "a request is in flight".
+         *
+         * This was the raw `answer.loading()`, which is true during every refetch - and this store
+         * refetches on every chat nudge for the open thread. Two things read it and both blinked:
+         * `chat.page` hides the seal notice behind `<Show when={ !seal.loading() }>`, so each
+         * refetch tore that subtree down and rebuilt it, shifting the message list and the composer
+         * down the page; and `sendBlockOf` takes it as `pending`, which disables the composer - so
+         * a focused textarea was blurred mid-sentence and a phone keyboard dropped, several times a
+         * conversation.
+         *
+         * `seal-state.ts` documents `pending` as being for "the first moments of a cold load", and
+         * `seal-notice.component.azeroth` already noted in prose that it "now flips on every
+         * refetch" and worked around the consequence. This is the source of both.
+         *
+         * `chat.page` gates its own thread loading the same way (`threadLoading() && messages.length
+         * === 0`); `createResource` keeps the last resolved value across a refetch, so there is
+         * always something to keep showing.
+         */
+        loading: () => answer.loading() && answer.data() === undefined,
 
         async refresh()
         {

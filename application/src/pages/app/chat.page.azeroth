@@ -73,6 +73,26 @@ export default component ChatPage()
     derived conversation = chat.conversation(id) ?? null;
 
     /**
+     * The boolean the page body hangs on, hoisted into its own memo - and it is not tidiness.
+     *
+     * `<Show>`'s THUNK form re-runs its swap effect on any tracked change to `when` and rebuilds the
+     * branch every time, because a thunk has no accessor and a rebuild is how its content refreshes.
+     * That is the framework's documented contract, not a defect. Written inline as
+     * `when={ conversation !== null }` the effect therefore read `conversation` itself - a NEW row
+     * object out of the conversation list on every refetch - so every arriving message tore the
+     * entire page body down and built it again: the scroll container, the thread, and the composer
+     * with the caret in it.
+     *
+     * Nothing blinked, which is why it survived. The swap happens inside one frame, so a screenshot
+     * either side of it is identical and `npm run qa` sees nothing; what a person sees is the
+     * keyboard closing and the cursor gone in the middle of a sentence.
+     *
+     * A memo compares with `Object.is`, so this notifies only when the answer actually flips, and
+     * the branch is rebuilt only when the conversation really does appear or go away.
+     */
+    derived here = conversation !== null;
+
+    /**
      * Whether this conversation is genuinely not there, as opposed to not there YET.
      *
      * `chat.conversation(id)` reads the list, and on a cold load - somebody opening a link, or
@@ -300,7 +320,7 @@ export default component ChatPage()
 
     <Page padded={ false } fill label={ title } class="flex flex-col">
         <Show
-            when={ conversation !== null }
+            when={ here }
             fallback={
                 <Show
                     when={ missing }
