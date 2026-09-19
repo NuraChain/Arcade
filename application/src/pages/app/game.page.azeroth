@@ -128,7 +128,7 @@ export default component GamePage()
                         </aside>
                     </div>
 
-                    <Show when={ catalogue.status(game!.id) === 'available' }>
+                    <Show when={ game !== null && catalogue.status(game.id) === 'available' }>
                         { () =>
                             <div class="glass bleed-pad fixed inset-x-0 bottom-[calc(var(--nav-h)+env(safe-area-inset-bottom,0px))] z-nav flex gap-2 border-t border-line/60 py-3 sm:hidden">
                                 <Button variant="primary" size="lg" leading="zap" class="flex-1" onClick={ quickPlay }>{ locale.t('app.nav.quickPlay') }</Button>

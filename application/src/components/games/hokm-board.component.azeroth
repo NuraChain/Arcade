@@ -188,7 +188,7 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
                     </span>
                 </p>
 
-                <Show when={ view!.trump !== undefined }>
+                <Show when={ view?.trump !== undefined }>
                     { () =>
                         <p class="flex shrink-0 items-center gap-1.5 text-ui-sm font-semibold text-text">
                             <span class="text-ui-2xs text-faint">{ locale.t('hokm.trump') }</span>
@@ -296,7 +296,7 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
                 <p class="min-w-0 flex-1 basis-[10rem] text-ui-lg font-semibold text-text" aria-live="polite">{ says }</p>
             </div>
 
-            <Show when={ view!.phase === 'trump' && view!.hakem === mine }>
+            <Show when={ view?.phase === 'trump' && view.hakem === mine }>
                 { () =>
                     <div class="flex flex-col gap-1.5">
                         <p class="label text-ui-xs text-faint">{ locale.t('hokm.trump.choose') }</p>
@@ -318,7 +318,7 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
                 }
             </Show>
 
-            <Show when={ view!.hand.length > 0 }>
+            <Show when={ (view?.hand.length ?? 0) > 0 }>
                 { () =>
                     <div class="flex flex-col gap-1.5">
                         <p class="label text-ui-xs text-faint">{ locale.t('hokm.hand') }</p>
@@ -337,7 +337,7 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
                                 </li>
                             </For>
                         </ul>
-                        <Show when={ view!.phase === 'tricks' && view!.turn === mine && legal.size < view!.hand.length }>
+                        <Show when={ view?.phase === 'tricks' && view.turn === mine && legal.size < view.hand.length }>
                             { () => <p class="text-ui-2xs text-muted">{ locale.t('hokm.follow') }</p> }
                         </Show>
                     </div>

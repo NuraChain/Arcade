@@ -95,7 +95,7 @@ export default component PersonPage()
                         <div>
                             <h1 class="title flex items-center justify-center gap-2 text-ui-3xl" dir="auto">
                                 { name }
-                                <Show when={ person!.isMinor }>
+                                <Show when={ person?.isMinor === true }>
                                     { () => <Icon name="shield" size={ 18 } class="text-live" /> }
                                 </Show>
                             </h1>
@@ -107,7 +107,7 @@ export default component PersonPage()
                                 <li><Chip icon="people"><span class="tally">{ locale.plural('person.mutual', mutual) }</span></Chip></li>
                             </Show>
                         </ul>
-                        <Show when={ person!.isMinor }>
+                        <Show when={ person?.isMinor === true }>
                             { () =>
                                 <p class="flex items-center gap-2 rounded-full bg-live/10 px-3 py-1.5 text-ui-xs font-semibold text-live">
                                     <Icon name="shield" size={ 13 } />

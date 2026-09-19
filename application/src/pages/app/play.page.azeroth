@@ -363,7 +363,7 @@ export default component PlayPage()
             }
         </Show>
 
-        <Show when={ table !== null && table!.status === 'closed' }>
+        <Show when={ table?.status === 'closed' }>
             { () =>
                 <EmptyState
                     icon="clock"
@@ -376,14 +376,14 @@ export default component PlayPage()
             }
         </Show>
 
-        <Show when={ table !== null && table!.status !== 'closed' }>
+        <Show when={ table !== null && table.status !== 'closed' }>
             { () =>
                 <div class="flex min-h-0 flex-1 gap-4">
                     <div
                         ref={ (element) => arena = element }
                         class="flex min-w-0 flex-1 flex-col gap-5 bg-void py-2"
                     >
-                        <Show when={ showing && board.match()!.game === 'hokm' }>
+                        <Show when={ showing && board.match()?.game === 'hokm' }>
                             { () =>
                                 <HokmBoard
                                     match={ board.match()! }
@@ -393,7 +393,7 @@ export default component PlayPage()
                             }
                         </Show>
 
-                        <Show when={ showing && board.match()!.game !== 'hokm' }>
+                        <Show when={ showing && board.match() !== null && board.match()?.game !== 'hokm' }>
                             { () =>
                                 <MatchBoard
                                     match={ board.match()! }
@@ -414,7 +414,7 @@ export default component PlayPage()
                             }
                         </Show>
 
-                        <Show when={ !seated && table!.matchId !== undefined }>
+                        <Show when={ !seated && table?.matchId !== undefined }>
                             { () =>
                                 <div class="flex flex-col gap-3">
                                     <Show when={ watch.view() !== null }>
@@ -471,7 +471,7 @@ export default component PlayPage()
                             }
                         </Show>
 
-                        <Show when={ phone && table!.conversationId !== undefined && chatOpen }>
+                        <Show when={ phone && table?.conversationId !== undefined && chatOpen }>
                             { () =>
                                 <div ref={ (element) => showChat(element) }>
                                     <TableChat

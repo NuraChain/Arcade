@@ -251,7 +251,7 @@ export default component GroupPage()
                     <header class="flex flex-col items-center gap-3 pt-2 text-center">
                         <GroupCrest crest={ group!.crest } hue={ group!.hue } size="lg" />
                         <h1 class="title text-ui-3xl" dir="auto">{ group!.name }</h1>
-                        <Show when={ group!.blurb !== '' }>
+                        <Show when={ (group?.blurb ?? '') !== '' }>
                             { () => <p class="max-w-[46ch] text-ui-base text-muted">{ group!.blurb }</p> }
                         </Show>
                         <p class="tally flex flex-wrap items-center justify-center gap-2 text-ui-sm text-muted">
@@ -259,7 +259,7 @@ export default component GroupPage()
                             <Show when={ online.length > 0 }>
                                 { () => <span class="text-live">· { locale.plural('chat.online', online.length) }</span> }
                             </Show>
-                            <Show when={ group!.privacy === 'private' }>
+                            <Show when={ group?.privacy === 'private' }>
                                 { () =>
                                     <span class="flex items-center gap-1">
                                         · <Icon name="lock" size={ 13 } /> { locale.t('groups.private') }
@@ -279,10 +279,10 @@ export default component GroupPage()
                         >
                             { () =>
                                 <>
-                                    <Show when={ group!.conversationId !== undefined }>
+                                    <Show when={ group?.conversationId !== undefined }>
                                         { () => <Button variant="primary" size="lg" leading="zap" onClick={ playTogether }>{ locale.t('groups.playTogether') }</Button> }
                                     </Show>
-                                    <Show when={ group!.conversationId !== undefined }>
+                                    <Show when={ group?.conversationId !== undefined }>
                                         { () => <Button variant="secondary" size="lg" leading="chats" to={ `/app/chats/${ group!.conversationId! }` }>{ locale.t('groups.chat') }</Button> }
                                     </Show>
                                     <Show when={ game !== null }>

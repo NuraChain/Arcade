@@ -143,6 +143,43 @@ describe('what a Show builds eagerly', () =>
 
         expect(guilty, 'an eager fallback dereferences something that can be null').toEqual([]);
     });
+
+    /**
+     * A `when` is worse than a fallback, because it is re-evaluated on EVERY change it depends on.
+     *
+     * `<Show when={ !seated && table!.matchId !== undefined }>` sat inside an outer
+     * `<Show when={ table !== null }>`, which reads as safe and is not: closing a table sets `table`
+     * to null and `seated` to false in one tick, the inner condition depends on `seated`, so it
+     * re-runs - and it runs BEFORE the outer Show has torn its children down. `table` is already
+     * null by then. `TypeError: can't access property "matchId", table() is null`, reported from a
+     * real browser, with every gate green.
+     *
+     * The rule that caught the fallback version of this could not see it, because a `when` is not a
+     * `fallback` - the same hole the open-table rule had, where checking one spelling of a mistake
+     * left the other spelling free. An optional chain says the same thing and cannot throw.
+     */
+    it('never lets a Show condition assert non-null on something that can go away', () =>
+    {
+        const guilty: string[] = [];
+
+        for (const file of FILES)
+        {
+            for (const open of [...file.text.matchAll(/when=[{]/g)])
+            {
+                const brace = (open.index ?? 0) + open[0].length - 1;
+                const body = withoutLazy(file.text.slice(brace + 1, closes(file.text, brace)));
+                const asserted = [...new Set([...body.matchAll(/([A-Za-z_$][\w$]*)!\./g)].map((one) => one[1]))];
+
+                if (asserted.length > 0)
+                {
+                    const line = file.text.slice(0, open.index).split('\n').length;
+                    guilty.push(`${ file.path }:${ line } asserts ${ asserted.map((one) => `${ one }!`).join(', ') }`);
+                }
+            }
+        }
+
+        expect(guilty, 'a Show condition dereferences something that can be null').toEqual([]);
+    });
 });
 
 describe('what a composer must ask first', () =>

@@ -37,7 +37,7 @@ export default component ConnectionBanner()
                 role="status"
                 aria-live={ notice!.urgent ? 'assertive' : 'polite' }
             >
-                <Show when={ notice!.icon !== null } fallback={ <Spinner size={ 14 } /> }>
+                <Show when={ notice?.icon != null } fallback={ <Spinner size={ 14 } /> }>
                     { () => <Icon name={ notice!.icon! } size={ 16 } /> }
                 </Show>
                 <span>{ locale.t(notice!.text) }</span>

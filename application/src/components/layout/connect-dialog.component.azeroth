@@ -229,7 +229,7 @@ export default component ConnectDialog(props: { close: () => void; navigate: (to
                                             >
                                                 <span class="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-control bg-sunk text-accent">
                                                     <Show
-                                                        when={ found(choice)!.icon !== '' }
+                                                        when={ (found(choice)?.icon ?? '') !== '' }
                                                         fallback={ <Icon name={ choice.glyph } size={ 18 } /> }
                                                     >
                                                         { () => <img src={ found(choice)!.icon } alt="" class="h-9 w-9 object-cover" /> }
