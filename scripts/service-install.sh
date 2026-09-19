@@ -48,14 +48,17 @@ fi
 if [ ! -f "$SERVICE_PATH/.env" ]; then
   echo "warning: server/.env is missing - the service would boot against the defaults" >&2
 else
-  # Four values decide whether this process is a SERVER or half of a development pair, and every one
-  # of them is silent when wrong. `SERVE_PAGES=false` answers the api and 404s every page;
+  # Three values decide whether this process is a SERVER or half of a development pair, and every
+  # one of them is silent when wrong. `SERVE_PAGES=false` answers the api and 404s every page;
   # `PUBLIC_ORIGIN` pointing anywhere but the real origin makes the realtime gate refuse every
   # socket and makes every wallet signature a claim about somewhere else; `NODE_ENV` short of
   # production runs `syncSchema` on every boot; and a `SESSION_SECRET` that is empty is the only
   # thing standing between a cookie and a forged session.
-  grep -q '^SERVE_PAGES=true' "$SERVICE_PATH/.env" ||
-    echo "warning: SERVE_PAGES is not true - this process would serve the api and 404 every page" >&2
+  # Only an EXPLICIT false is worth saying anything about: absent means "serve them", because under
+  # NODE_ENV=production this process is the server. Warning on absent would fire for the correct
+  # configuration, which is the same noise the schema note above was fixed for.
+  ! grep -q '^SERVE_PAGES=false' "$SERVICE_PATH/.env" ||
+    echo "warning: SERVE_PAGES=false - this process answers the api and 404s every page unless something else serves the client" >&2
 
   grep -q '^PUBLIC_ORIGIN=https\?://' "$SERVICE_PATH/.env" ||
     echo "warning: PUBLIC_ORIGIN is unset - the realtime origin gate refuses every socket without it" >&2
