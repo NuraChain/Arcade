@@ -238,6 +238,44 @@ describe('settings', () =>
 
 describe('toasts', () =>
 {
+    /**
+     * The floor under every request nobody caught.
+     *
+     * About forty call sites are `void store.method()` - the promise rejects, nothing catches, and
+     * the control goes back to how it was with nothing on screen. Catching each one where it is
+     * thrown is the real fix; this is what makes sure that until then, and afterwards for anything
+     * missed, a failure is never SILENT.
+     */
+    it('shows a failure for a rejection nobody caught, and only one however many reject', () =>
+    {
+        const toasts = useToasts();
+        const stop = toasts.start();
+
+        const reject = (reason: string): void =>
+        {
+            window.dispatchEvent(Object.assign(new Event('unhandledrejection'), { reason, promise: null }));
+        };
+
+        reject('the first');
+
+        expect(toasts.items().length, 'a rejection nobody caught showed nothing').toBe(1);
+        expect(toasts.items()[0].kind).toBe('error');
+
+        /*
+         * A dropped connection rejects everything in flight at once, and a stack of identical
+         * toasts is a worse answer than one - which is what `dedupe` is for.
+         */
+        reject('the second');
+        reject('the third');
+
+        expect(toasts.items().length, 'every rejection stacked its own toast').toBe(1);
+
+        stop();
+        reject('after the teardown');
+
+        expect(toasts.items().length, 'the listener outlived the store that owns it').toBe(1);
+    });
+
     it('shows at most three and promotes the queue as they expire', () =>
     {
         const toasts = useToasts();

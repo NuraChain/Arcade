@@ -2,6 +2,7 @@ import { createStore, createSignal, untrack, type Getter } from 'azerothjs';
 
 import type { IconName } from '../icons/registry.ts';
 import { runtime } from '../lib/runtime.ts';
+import { useLocale } from './locale.store.ts';
 
 export type ToastKind = 'info' | 'success' | 'warning' | 'error' | 'live' | 'pending';
 
@@ -83,6 +84,26 @@ export interface ToastsApi
     pause(id: string): void;
     resume(id: string): void;
     progress(id: string, now: number): number;
+
+    /**
+     * The net under every request nobody caught.
+     *
+     * About forty call sites in this product are `onClick={ () =&gt; void store.method() }` - the
+     * promise rejects, nothing catches it, and the control simply goes back to how it was. No
+     * toast, no console line, nothing on screen. Somebody presses Revoke on a laptop they lost and
+     * is told neither that it worked nor that it did not.
+     *
+     * Catching each one where it is thrown is the real fix and it is what the rest of this sweep
+     * does. This is the floor underneath it: one listener means that from the first commit no
+     * failure in this app is SILENT, and every per-site catch after it is a better sentence rather
+     * than the difference between a message and nothing.
+     *
+     * It lives on the store that owns the screen it draws on, behind `start()` like every other
+     * subscription in this codebase, because `ToastHost` renders inside the app shell and a toast
+     * raised on the public half would have nowhere to go.
+     */
+    start(): () => void;
+
     reset(): void;
 }
 
@@ -150,7 +171,7 @@ export const useToasts = createStore((): ToastsApi =>
         promote();
     };
 
-    return {
+    const api: ToastsApi = {
         items,
         queued: () => queue().length,
         placement,
@@ -313,6 +334,35 @@ export const useToasts = createStore((): ToastsApi =>
             return Math.min(1, Math.max(0, spent / toast.duration));
         },
 
+        start()
+        {
+            const caught = (event: PromiseRejectionEvent): void =>
+            {
+                /*
+                 * Logged as well as shown, always. The toast is for the person in front of the
+                 * screen and says only that something did not go through; the console line is the
+                 * one that names what threw, and a browser pass reads every console line.
+                 */
+                console.error('[unhandled]', event.reason);
+
+                api.show({
+                    kind: 'error',
+                    text: useLocale().t('state.errorTitle'),
+                    detail: useLocale().t('state.errorLead'),
+
+                    /*
+                     * One row however many reject. A dropped connection rejects every request in
+                     * flight at once, and a stack of identical toasts is a worse answer than one.
+                     */
+                    dedupe: 'unhandled'
+                });
+            };
+
+            window.addEventListener('unhandledrejection', caught);
+
+            return () => window.removeEventListener('unhandledrejection', caught);
+        },
+
         reset()
         {
             for (const cancel of timers.values())
@@ -326,4 +376,6 @@ export const useToasts = createStore((): ToastsApi =>
             setPlacement('bottom');
         }
     };
+
+    return api;
 });

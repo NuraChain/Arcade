@@ -29,6 +29,7 @@ import OverlayHost from './overlay-host.component.azeroth';
 import Sidebar from './sidebar.component.azeroth';
 import SocialPanel from './social-panel.component.azeroth';
 import ToastHost from './toast-host.component.azeroth';
+import { useToasts } from '../../stores/toasts.store.ts';
 import TopBar from './top-bar.component.azeroth';
 
 export default component AppShell(props: { children?: MountNode })
@@ -76,6 +77,12 @@ export default component AppShell(props: { children?: MountNode })
         // holds an unsubscribe against it, and those have to be handed back while there is still
         // something to hand them back to.
         const stops = [
+            /*
+             * FIRST, so it stops last: the teardown runs in reverse, and a failure raised while
+             * every other store is shutting down is exactly the one nobody would otherwise see.
+             */
+            useToasts().start(),
+
             useRealtime().start(),
             useConnection().start(),
             useCatalogue().start(),
