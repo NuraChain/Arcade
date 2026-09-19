@@ -143,9 +143,17 @@ the first run of this matrix showed, as 808 console errors and 377 pages that ne
 
 **`framework-bugs.md` is not in this repository.** It is a register of defects in a DEPENDENCY,
 not part of this product - and now literally a published one, so a fix arrives by bumping the pin
-rather than by editing a sibling checkout. It lives OUTSIDE the tree, on the maintainer's desktop;
-`.gitignore` holds the name so it cannot come back by accident. The path is deliberately not written
-down here, because this file is published with the repository and a machine path names a machine. Nothing goes in it without a minimal reproduction proving the
+rather than by editing a sibling checkout. It lives in the **AzerothJS checkout**, beside the
+framework it describes, which is where somebody fixing one of these is already standing;
+`.gitignore` holds the name so it cannot come back here by accident. The absolute path is
+deliberately not written down, because this file is published with the repository and a machine path
+names a machine.
+
+It has three sections and the third earns its place: **Open**, **Resolved**, and **Not framework
+bugs** - suspicions that turned out to be ours. Nothing enters the first two without a minimal
+reproduction proving the framework is responsible; everything that fails that test goes in the third
+with what it actually was, so the same afternoon is not spent twice. `<Show>` rebuilding its branch
+while `when` stays truthy is the first entry there, and it is the one that produced the chat flicker. Nothing goes in it without a minimal reproduction proving the
 framework is responsible, and a suspicion that turns out to be ours goes in its "NOT framework
 bugs" table so nobody re-investigates it.
 

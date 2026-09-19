@@ -35,6 +35,20 @@ export const PAGE = 30;
  */
 const REF_FIELDS = new Set(['conversationId', 'tableId', 'groupId', 'requestId', 'personId']);
 
+/**
+ * The shape a uuid has, checked before one is compared against a uuid COLUMN.
+ *
+ * Postgres raises 22P02 for a malformed uuid rather than matching nothing, and that surfaces as a
+ * 500 - so `POST /notifications/abc/read` was a server error any signed-in caller could produce
+ * from the address bar. Six other services in this server already carry this guard with this
+ * reasoning; this one had none, and it is the only domain that takes a raw uuid from a path
+ * parameter straight into a query.
+ *
+ * A row that is not this reader's already answers by matching nothing, so a bad id answers the same
+ * way a wrong-but-well-formed one does: silently, with nothing changed.
+ */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export function createNotifyService(db: DataSource, social: SocialService)
 {
     const clean = (ref: Record<string, string>): Record<string, string> =>
@@ -162,6 +176,11 @@ export function createNotifyService(db: DataSource, social: SocialService)
         /** Marks one read. Mine only - the where clause is the authorisation. */
         async markRead(me: string, id: string): Promise<void>
         {
+            if (!UUID.test(id))
+            {
+                return;
+            }
+
             await db.query(
                 'update notifications set read_at = now() where user_id = $1 and id = $2 and read_at is null',
                 [me, id]
@@ -175,6 +194,11 @@ export function createNotifyService(db: DataSource, social: SocialService)
 
         async dismiss(me: string, id: string): Promise<void>
         {
+            if (!UUID.test(id))
+            {
+                return;
+            }
+
             await db.getRepository(Notification).delete({ userId: me, id });
         },
 

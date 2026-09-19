@@ -63,6 +63,38 @@ describe.skipIf(!active)('notifications, against a real database', () =>
         notify = createNotifyService(db, social);
     });
 
+    /**
+     * A path parameter is whatever somebody typed, and a uuid COLUMN raises 22P02 for anything that
+     * is not one - which reaches a person as a 500 rather than as the nothing-happened it should be.
+     * `POST /notifications/abc/read` was exactly that: a server error any signed-in caller could
+     * produce from the address bar, on two routes.
+     *
+     * Asserted against a real Postgres because that is the only thing that raises 22P02; a fake
+     * DataSource would accept the string and agree with the code about nothing.
+     */
+    describe('an id that is not a uuid', () =>
+    {
+        it('changes nothing instead of raising 22P02', async () =>
+        {
+            const me = await makeUser();
+
+            for (const bad of ['abc', '', 'not-a-uuid', '00000000-0000-0000-0000-00000000000'])
+            {
+                await expect(notify.markRead(me, bad), `markRead accepted ${ bad }`).resolves.toBeUndefined();
+                await expect(notify.dismiss(me, bad), `dismiss accepted ${ bad }`).resolves.toBeUndefined();
+            }
+        });
+
+        it('still answers a well-formed id that is simply not mine', async () =>
+        {
+            const me = await makeUser();
+            const absent = '11111111-2222-3333-4444-555555555555';
+
+            await expect(notify.markRead(me, absent)).resolves.toBeUndefined();
+            await expect(notify.dismiss(me, absent)).resolves.toBeUndefined();
+        });
+    });
+
     describe('the dedupe key', () =>
     {
         it('turns twelve of the same thing into one row that counts to twelve', async () =>
