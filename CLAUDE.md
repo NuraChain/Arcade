@@ -21,6 +21,51 @@ npm run schema:sync    # build the schema from the entities (dev does this on ev
 npm run assets         # rebuild the GLB kit from tools/blender (needs Blender 5.2)
 ```
 
+## Running it, both ways
+
+Two shapes, and the difference is how many processes answer the browser.
+
+**Development — two processes.** `npm run dev` is the conductor: `tsc -w` on the server, `node
+--watch` on `dist`, and vite on **3100**. The browser talks to vite, which proxies `/api`, `/ws` and
+`/_image` to the api on **3200**. Open `http://localhost:3100`. The api on 3200 answers no pages at
+all in this mode and is not meant to: vite owns the browser, and a second process answering `/`
+would be two copies of the client.
+
+**Production — one process.**
+
+```sh
+npm run build                       # server tsc, client bundle, SSR bundle, prerender, budgets
+npm run schema:sync --workspace server    # once, on a database that has no tables yet
+npm start                           # serves the api AND the built client on ONE origin
+```
+
+Open `http://localhost:3200`. Nothing has to be overridden for this to work, and that is recent:
+`SERVE_PAGES` used to default to false everywhere, so the documented deploy answered the api and
+**404'd every page**. It defaults to ON under `NODE_ENV=production` now, and an explicit
+`SERVE_PAGES=false` still wins for a deployment that puts a CDN in front of the client.
+
+That failure is worth knowing because of how it presents: a browser tab still holding the app from
+the dev server keeps working while a fresh one gets nothing, so whichever browser you open second
+looks broken. It was reported as "it does not work on Firefox" and had nothing to do with Firefox.
+
+**What production needs in `server/.env`**, beyond the database: `NODE_ENV=production`, a real
+`SESSION_SECRET`, and `PUBLIC_ORIGIN` set to the origin the browser actually uses. That last one is
+the SIWE `domain`, the WebSocket origin check and the cookie's site all at once - point it anywhere
+else and every wallet signature is a claim about somewhere else while the realtime gate refuses
+every socket.
+
+**On a VPS it runs under systemd.** `scripts/service-install.sh` writes the unit and enables it;
+`service-start|stop|restart|status|uninstall.sh` are the rest. The unit runs `dist/main.js` with
+`WorkingDirectory` set to `server/`, because `main.ts` reads `.env` from the working directory and
+`CLIENT_DIR`/`SSR_ENTRY` are relative to it. The install script refuses to be quiet about a missing
+build, a missing `dist/`, a missing SSR bundle, an unset `PUBLIC_ORIGIN` or an empty
+`SESSION_SECRET` - each of those is a restart loop or a silent misconfiguration otherwise.
+
+**The one thing that differs from the Explorer service**: this backend COMPILES. Explorer runs
+`src/main.ts` directly; here `typeorm` in `dependencies` flips the project to emitting `dist/`, and
+Node's TypeScript support is strip-only and rejects decorator syntax, so there is no way to run an
+`@Entity` file. `npm run build` before `npm start`, always.
+
 `npm run check`, `npm test`, `npm run test:shuffle` and `npm run qa` must all pass before a
 change is done.
 

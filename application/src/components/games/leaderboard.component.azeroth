@@ -112,7 +112,7 @@ export default component Leaderboard(props: { game: GameId })
         {
             const page = await client.catalogue.leaderboard({
                 params: { game: props.game },
-                query: { window, after: from }
+                query: { window, after: String(from) }
             });
 
             extra = [...extra, ...page.standings];

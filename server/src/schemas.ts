@@ -658,10 +658,16 @@ export const leaderboardQuery = object({
      * and once it has, "everything after rank 20" is both the cheapest predicate and the only one
      * that keeps the numbers on the second page continuous with the first.
      *
-     * Bounded, because it reaches a comparison against an integer and an unbounded number there is
-     * a 22003 - which is the class of 500 this server has now been bitten by three times.
+     * A STRING on the wire, like every other cursor in this api, because a query parameter always
+     * IS one - `?after=10` arrives as `"10"`, and a `number()` here refused it as "Expected a
+     * number" on every request that tried to page. `matches/history` and `notifications` both carry
+     * their cursor as a string for the same reason, so this is the shape rather than an exception.
+     *
+     * Bounded and parsed on the far side of the boundary: it reaches a comparison against an
+     * integer, and an unbounded value there is a 22003 - the class of 500 this server has now been
+     * bitten by three times.
      */
-    after: number({ int: true, min: 0, max: 1000000 }).optional()
+    after: string({ max: 12 }).optional()
 });
 
 export const leaderboard = object({

@@ -14,7 +14,7 @@ import { dataSource } from './data-source.ts';
 import { seedWalletFixtures } from './db/seed-wallets.ts';
 import { seedReference } from './db/seed-reference.ts';
 import { syncSchema } from './db/schema.ts';
-import { loadServerConfig } from './env.ts';
+import { loadServerConfig, servesPages } from './env.ts';
 import { apiRateLimit } from './http/rate-limit.ts';
 import { createServerLogger } from './logger.ts';
 import { createChatService } from './domains/chat/service.ts';
@@ -109,7 +109,7 @@ const hub = createHub({
 // the manifest and once inside `buildApp`, and neither survived the expression it was created in.
 const ports = buildPorts(dataSource, config, hub);
 
-const ssr = config.servePages
+const ssr = servesPages(config)
     ? await import(pathToFileURL(config.ssrEntry).href) as { routes: PageRoute[]; renderPage: PageRenderer }
     : undefined;
 

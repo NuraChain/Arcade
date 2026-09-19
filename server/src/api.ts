@@ -99,6 +99,26 @@ import {
  * therefore the browser's typed client - clear of the server's decorated entities. See
  * `./ports.ts` for why that matters.
  */
+/**
+ * The leaderboard's cursor, which arrives as text because every query parameter does.
+ *
+ * Anything that is not a non-negative whole number is treated as no cursor at all rather than as an
+ * error: a board asked for with a junk `after` is a board somebody should still get, from the top.
+ * The ceiling keeps it away from the integer comparison it ends up in, where an out-of-range value
+ * is a 22003 and reaches a person as a 500.
+ */
+function rankAfter(raw: string | undefined): number | undefined
+{
+    if (raw === undefined)
+    {
+        return undefined;
+    }
+
+    const after = Number(raw);
+
+    return Number.isSafeInteger(after) && after >= 0 && after <= 1_000_000 ? after : undefined;
+}
+
 export function buildApi(ports: Ports)
 {
     const session = requireSession((request) => ports.identity.principal(request));
@@ -136,7 +156,7 @@ export function buildApi(ports: Ports)
              * what the place is like.
              */
             leaderboard: routes.get('/games/:game/leaderboard', { output: leaderboard, query: leaderboardQuery }, (context) =>
-                ports.match.leaderboard(context.params.game, context.query.window ?? 'all', context.query.after))
+                ports.match.leaderboard(context.params.game, context.query.window ?? 'all', rankAfter(context.query.after)))
         })),
 
         /**

@@ -88,4 +88,24 @@ export function loadServerConfig()
     });
 }
 
+/**
+ * In production this process IS the server, so it serves the pages unless told otherwise.
+ *
+ * The flag defaults to false because that is right for DEVELOPMENT, where vite owns the browser on
+ * 3100 and proxies the api here - two processes, and this one must not also answer for `/`. Carried
+ * into production unchanged, that default is the thing that makes the documented deploy
+ * (`npm run build && npm start`) answer the api and **404 every page**, which is what it did.
+ *
+ * It reads as a browser problem, which is how it was reported: a tab still holding the app from the
+ * dev server keeps working while a fresh one gets nothing, so whichever browser was opened second
+ * looks broken.
+ *
+ * So production flips the default and an explicit `SERVE_PAGES=false` still wins - a deployment
+ * that really does put a CDN or another process in front of the client can still say so.
+ */
+export function servesPages(config: ServerConfig): boolean
+{
+    return config.servePages || (config.env === 'production' && process.env.SERVE_PAGES === undefined);
+}
+
 export type ServerConfig = ReturnType<typeof loadServerConfig>;
