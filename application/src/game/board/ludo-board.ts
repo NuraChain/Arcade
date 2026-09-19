@@ -749,7 +749,27 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
     catch (reason)
     {
         clearTimeout(timer);
+
+        /*
+         * The same three steps `dispose` takes, and for the same reason it states: Phaser's destroy
+         * is DEFERRED, so without draining it and losing the context by hand the context is left for
+         * the garbage collector rather than released.
+         *
+         * This path is the one a struggling device takes - a scene that never boots, or boots past
+         * its watchdog - and `board-canvas` catches the throw and draws the DOM fallback. So the
+         * device least able to afford an orphaned context was the one getting one, and getting
+         * another every time somebody opened a board.
+         */
+        const renderer = game.renderer as { getExtension?: (name: string) => unknown } | undefined;
+        const lose = renderer?.getExtension?.('WEBGL_lose_context') as { loseContext?: () => void } | undefined;
+
+        game.loop.wake();
         game.destroy(true, false);
+
+        (game as unknown as { runDestroy?: () => void }).runDestroy?.();
+
+        lose?.loseContext?.();
+
         throw reason;
     }
 

@@ -43,7 +43,45 @@ export interface WorldOptions
     callbacks: WorldCallbacks;
 }
 
+/**
+ * Builds the world, and releases the GL context if anything on the way out throws.
+ *
+ * The renderer exists from early in `buildWorld`, and only the asset load was ever guarded - so a
+ * throw from the environment, the market, the atmosphere, the rig or the first resize rejected
+ * AFTER the context had been created, with no handle returned. `world-canvas` catches that
+ * rejection, logs a warning and keeps the static page, so `dispose()` is never called on anything:
+ * the context is orphaned with nothing left holding a reference to release it. Repeat that a few
+ * times - a flaky asset host, a device that fails on one of these - and it is "Too many active
+ * WebGL contexts", which this codebase has already hit twice.
+ *
+ * Written as a wrapper rather than a `try` around the body, deliberately: the body is a hundred and
+ * fifty lines that declare everything the handle closes over, and wrapping it in a block would
+ * either re-indent all of it or hoist a dozen bindings out of their scope for a cleanup path.
+ * `report` hands the renderer out the moment it exists, which is the only thing the cleanup needs.
+ */
 export async function createWorld(options: WorldOptions): Promise<WorldHandle>
+{
+    let made: WebGLRenderer | null = null;
+
+    try
+    {
+        return await buildWorld(options, (renderer) =>
+        {
+            made = renderer;
+        });
+    }
+    catch (error)
+    {
+        const orphan = made as WebGLRenderer | null;
+
+        orphan?.dispose();
+        orphan?.forceContextLoss();
+
+        throw error;
+    }
+}
+
+async function buildWorld(options: WorldOptions, report: (renderer: WebGLRenderer) => void): Promise<WorldHandle>
 {
     const profile = readDeviceProfile();
 
@@ -125,6 +163,8 @@ export async function createWorld(options: WorldOptions): Promise<WorldHandle>
     const rim = new DirectionalLight(rimColour, 0.35);
     rim.position.set(-6, 4, -14);
     scene.add(rim);
+
+    report(renderer);
 
     const materials = createMaterials(settings);
     const abort = new AbortController();
