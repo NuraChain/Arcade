@@ -4,7 +4,9 @@ import { ApiError, client, type MatchPlay, type MatchView } from '../api.ts';
 import { ludoOf } from '../data/match.ts';
 import { useAccount } from './account.store.ts';
 import { runtime } from '../lib/runtime.ts';
+import { useLocale } from './locale.store.ts';
 import { useRealtime } from './realtime.store.ts';
+import { useToasts } from './toasts.store.ts';
 
 /**
  * The board, as the server says it stands.
@@ -150,7 +152,23 @@ export const useBoard = createStore((): BoardApi =>
         }
         catch
         {
+            /*
+             * A refusal here is a real failure, and it used to be invisible.
+             *
+             * The ordinary outcomes are not throws: a retried tap answers `already` and a tap that
+             * crossed a realtime frame answers `stale`, both 200, both meaning the board is simply
+             * further on than the finger was. What reaches this catch is a game that has ended
+             * under somebody, a turn that is not theirs, or a request that never arrived - and the
+             * board was re-read, looked unchanged, and said nothing. A refused move and a move that
+             * did nothing are indistinguishable, which on the one surface somebody is actively
+             * playing is the worst place for it.
+             *
+             * The re-read stays and comes FIRST: whatever else is true, the board on screen has to
+             * be the table as it really is before anybody is told anything about it.
+             */
             await revalidate().catch(() => undefined);
+
+            useToasts().show({ kind: 'error', text: useLocale().t('match.actionFailed'), dedupe: 'match-action' });
         }
         finally
         {

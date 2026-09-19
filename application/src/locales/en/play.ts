@@ -193,6 +193,7 @@ export const play = {
     'match.over': 'The game is over.',
     'match.abandoned': 'The game ended early.',
     'match.again': 'Back to the table',
+    'match.actionFailed': 'That did not go through. The board below is what the table really looks like.',
     'match.resign': 'Give up',
     'match.resign.title': 'Give up this game?',
     'match.resign.lead': 'It counts as a loss, and the others play on without you.',

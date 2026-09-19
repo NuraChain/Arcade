@@ -196,6 +196,7 @@ export const play: Pick<Dictionary, keyof typeof reference> = {
     'match.over': 'بازی تمام شد.',
     'match.abandoned': 'بازی زودتر تمام شد.',
     'match.again': 'بازگشت به میز',
+    'match.actionFailed': 'انجام نشد. تختهٔ پایین همان چیزی است که روی میز است.',
     'match.resign': 'تسلیم',
     'match.resign.title': 'این بازی را واگذار کنی؟',
     'match.resign.lead': 'باخت حساب می‌شود و بقیه بدون تو ادامه می‌دهند.',
