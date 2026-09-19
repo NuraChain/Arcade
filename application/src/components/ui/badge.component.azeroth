@@ -83,9 +83,9 @@ export default component Badge(props: {
 
     <Show when={ !hidden }>
         <Tooltip label={ props.tip ?? '' } class={ onHost }>
-        <Show
-            when={ props.dot === true }
-            fallback={
+            <Show
+                when={ props.dot === true }
+                fallback={
                 <span
                     class={ [
                         'tally inline-flex items-center justify-center rounded-full font-bold leading-none',
@@ -102,7 +102,7 @@ export default component Badge(props: {
                     { body }
                 </span>
             }
-        >
+            >
             { () =>
                 <span
                     class={ [
@@ -118,7 +118,7 @@ export default component Badge(props: {
                     role={ props.label === undefined ? undefined : 'status' }
                 ></span>
             }
-        </Show>
+            </Show>
         </Tooltip>
     </Show>
 }

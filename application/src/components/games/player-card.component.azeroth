@@ -111,45 +111,45 @@ export default component PlayerCard(props: {
         style={ `outline-color: var(--ludo-${ props.seat.colour })` }
         aria-current={ props.active && !props.finished ? 'true' : undefined }
     >
-    <Panel pad="sm" class="flex min-w-0 items-center gap-2 shadow-2">
-        <span class="relative shrink-0">
-            <Avatar person={ person } size="sm" />
-            <span
-                class="absolute -bottom-1 -end-1 flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold text-white ring-2 ring-field"
-                style={ `background: var(--ludo-${ props.seat.colour })` }
-                aria-hidden="true"
-            >
+        <Panel pad="sm" class="flex min-w-0 items-center gap-2 shadow-2">
+            <span class="relative shrink-0">
+                <Avatar person={ person } size="sm" />
+                <span
+                    class="absolute -bottom-1 -end-1 flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold text-white ring-2 ring-field"
+                    style={ `background: var(--ludo-${ props.seat.colour })` }
+                    aria-hidden="true"
+                >
                 { INITIAL[props.seat.colour] }
+                </span>
             </span>
-        </span>
 
-        <span class="flex min-w-0 flex-1 flex-col">
-            <span class="truncate text-ui-sm font-semibold text-text" dir="auto">{ name }</span>
-            <span
-                class={ () => [
+            <span class="flex min-w-0 flex-1 flex-col">
+                <span class="truncate text-ui-sm font-semibold text-text" dir="auto">{ name }</span>
+                <span
+                    class={ () => [
                     'truncate text-ui-2xs',
                     props.player.timeouts >= MISSES_ALLOWED - 1 && !props.finished ? 'text-danger' : 'text-muted'
                 ].join(' ') }
-            >
+                >
                 { says }
-            </span>
+                </span>
 
-            <span class="mt-1 flex items-center gap-1" role="img" aria-label={ locale.plural('match.tokens', props.seat.home) }>
-                <For each={ PIPS } key={ (pip) => pip } let={ pip }>
-                    <span
-                        class="h-2 w-2 rounded-full"
-                        style={ pip < props.seat.home
+                <span class="mt-1 flex items-center gap-1" role="img" aria-label={ locale.plural('match.tokens', props.seat.home) }>
+                    <For each={ PIPS } key={ (pip) => pip } let={ pip }>
+                        <span
+                            class="h-2 w-2 rounded-full"
+                            style={ pip < props.seat.home
                             ? `background: var(--ludo-${ props.seat.colour })`
                             : 'background: var(--line-strong)' }
-                        aria-hidden="true"
+                            aria-hidden="true"
                     ></span>
-                </For>
+                    </For>
+                </span>
             </span>
-        </span>
 
-        <Show when={ props.die !== undefined && props.active && !props.finished }>
+            <Show when={ props.die !== undefined && props.active && !props.finished }>
             { () => <DieFace value={ props.die! } size="sm" label={ locale.t('match.turn.rolled', { die: locale.n(props.die!) }) } /> }
-        </Show>
-    </Panel>
+            </Show>
+        </Panel>
     </div>
 }
