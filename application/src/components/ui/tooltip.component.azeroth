@@ -5,6 +5,18 @@ import { runtime } from '../../lib/runtime.ts';
 import { useDevice } from '../../stores/device.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 
+/**
+ * The bubble takes its direction from the LABEL, not from the page.
+ *
+ * It is portalled to `.anchor-root`, which sits under the document and inherits `rtl` on a Persian
+ * page - so a Latin label went into an RTL box. `dir="auto"` on the bubble is the rule a chat
+ * message and a display name already follow, and the case it exists for is the wallet address:
+ * *Whose device is that?* asks somebody to compare `0xf39F...` out of band, and an address whose
+ * `0x` renders at the far end is an address nobody can compare.
+ *
+ * The PLACEMENT was already both-ways - `place()` is handed `rtl` from the locale, so the bubble
+ * flips and shifts against the right edge on a Persian page. It is the text inside that was not.
+ */
 let openTooltip: (() => void) | null = null;
 
 export default component Tooltip(props: {
@@ -95,9 +107,17 @@ export default component Tooltip(props: {
         };
     };
 
+    /**
+     * Nothing to say is not a reason to open an empty box.
+     *
+     * A caller that wraps something whose tooltip is OPTIONAL - `Badge` does - passes the empty
+     * string when there is none, and without this guard the host still armed every handler and
+     * flashed a bubble with no text in it on hover. The alternative was making each such caller
+     * duplicate its markup in a `<Show>` and its `fallback`, which is two copies of one element.
+     */
     const show = (immediate: boolean): void =>
     {
-        if (shown)
+        if (shown || props.label === '')
         {
             return;
         }
@@ -186,6 +206,7 @@ export default component Tooltip(props: {
                             ref={ (element) => bubble = element }
                             id={ tipId }
                             role="tooltip"
+                            dir="auto"
                             class="tooltip"
                             data-side={ at.side }
                             data-placed={ placed ? 'true' : 'false' }

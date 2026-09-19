@@ -1,5 +1,6 @@
 import type { Attestation } from '../../api.ts';
 import Icon from '../../icons/icon.component.azeroth';
+import Tooltip from '../ui/tooltip.component.azeroth';
 import type { IconName } from '../../icons/registry.ts';
 import type { MessageKey } from '../../locales/en.ts';
 import { useLocale } from '../../stores/locale.store.ts';
@@ -35,20 +36,27 @@ const TONE: Record<Attestation, string> = {
  * asserts on the strength of a session alone must not be able to render as wallet-verified because
  * somebody forgot to pass the prop, and the way to guarantee that is to make forgetting it fail to
  * compile rather than fail quietly on a screen.
+ *
+ * **The hint is the product's own `Tooltip`, not `title`.** It was the browser's for a while, which
+ * on this badge is the worst place for it: the difference between a wallet-attested device and one
+ * this server merely asserts is the whole of the peer story, and a native `title` cannot be styled,
+ * cannot be reached by a finger at all, waits about a second, and renders in the OS's font at the
+ * OS's size - which on a Persian page is a Latin font drawing Persian text.
  */
 export default component TrustBadge(props: { attested: Attestation; class?: string })
 {
     const locale = useLocale();
 
-    <span
-        class={ [
-            'inline-flex items-center gap-1 text-ui-xs font-semibold',
-            TONE[props.attested],
-            props.class ?? ''
-        ].join(' ') }
-        title={ locale.t(HINT[props.attested]) }
-    >
-        <Icon name={ ICON[props.attested] } size={ 14 } />
-        { locale.t(SAYS[props.attested]) }
-    </span>
+    <Tooltip label={ locale.t(HINT[props.attested]) }>
+        <span
+            class={ [
+                'inline-flex items-center gap-1 text-ui-xs font-semibold',
+                TONE[props.attested],
+                props.class ?? ''
+            ].join(' ') }
+        >
+            <Icon name={ ICON[props.attested] } size={ 14 } />
+            { locale.t(SAYS[props.attested]) }
+        </span>
+    </Tooltip>
 }

@@ -1,3 +1,4 @@
+import Tooltip from './tooltip.component.azeroth';
 import { useLocale } from '../../stores/locale.store.ts';
 import {
     BADGE_DOT_SIZE,
@@ -23,6 +24,18 @@ export default component Badge(props: {
     pulse?: boolean;
     showZero?: boolean;
     label?: string;
+
+    /**
+     * What this badge MEANS, shown on hover and on a long press.
+     *
+     * A count on its own is a number with no noun - `99+` beside an icon, or a bare dot, says
+     * nothing to somebody who cannot already guess. `label` is the accessible name and answers it
+     * for a screen reader; this answers it for everybody else, through the product's own `Tooltip`
+     * rather than the browser's `title`, which cannot be styled, cannot be read by a finger, takes
+     * a second to appear and renders in the OS's own font at the OS's own size.
+     */
+    tip?: string;
+
     class?: string;
 })
 {
@@ -47,9 +60,29 @@ export default component Badge(props: {
         ? TONE_SOFT[tone]
         : (props.variant === 'outline' ? TONE_OUTLINE[tone] : TONE_FILL[tone]);
 
-    derived anchored = props.anchor === true ? 'absolute -end-1 -top-1' : '';
+    /**
+     * Where a count sits on the control it belongs to.
+     *
+     * `-top-1` hung it a full 4px clear of the button's top edge, which reads as a badge floating
+     * ABOVE the bell rather than pinned to it - and on the top bar, where the button already sits
+     * near the edge of its row, that put the number almost into the gap above. Half that offset
+     * overlaps the corner the way a notification count is drawn everywhere else.
+     */
+    derived anchored = props.anchor === true ? 'absolute -end-0.5 -top-0.5' : '';
+
+    /**
+     * An ANCHORED badge is absolutely positioned, so the outermost box is the one that has to carry
+     * the placement - and with a tooltip the outermost box is the tooltip's host. Left on the inner
+     * span it would be positioned against the host instead of against the control the badge sits on.
+     * With no tooltip the host is `display: contents` and has no box at all, so the inner span keeps
+     * it; that is the same trick `IconButton` uses to opt a control out of its own tooltip.
+     */
+    derived onHost = props.tip === undefined ? 'contents' : anchored;
+
+    derived onBadge = props.tip === undefined ? anchored : '';
 
     <Show when={ !hidden }>
+        <Tooltip label={ props.tip ?? '' } class={ onHost }>
         <Show
             when={ props.dot === true }
             fallback={
@@ -58,7 +91,7 @@ export default component Badge(props: {
                         'tally inline-flex items-center justify-center rounded-full font-bold leading-none',
                         BADGE_SIZE[size],
                         paint,
-                        anchored,
+                        onBadge,
                         props.anchor === true ? 'ring-2 ring-field' : '',
                         props.pulse === true ? 'animate-pulse-live motion-reduce:animate-none' : '',
                         props.class ?? ''
@@ -76,7 +109,7 @@ export default component Badge(props: {
                         'inline-block shrink-0 rounded-full',
                         BADGE_DOT_SIZE[size],
                         TONE_DOT[tone],
-                        anchored,
+                        onBadge,
                         props.anchor === true ? 'ring-2 ring-field' : '',
                         props.pulse === true ? 'animate-pulse-live motion-reduce:animate-none' : '',
                         props.class ?? ''
@@ -86,5 +119,6 @@ export default component Badge(props: {
                 ></span>
             }
         </Show>
+        </Tooltip>
     </Show>
 }

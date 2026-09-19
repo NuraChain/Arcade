@@ -229,9 +229,41 @@ describe('Badge', () =>
     it('draws a dot with no text but keeps its label', () =>
     {
         const { container } = renderTest(() => Badge({ dot: true, tone: 'live', label: 'unread' }) as Rendered);
-        const dot = container.querySelector('span')!;
+
+        /*
+         * By label rather than by `querySelector('span')`. Every badge is wrapped in a `Tooltip`
+         * host - `display: contents` and boxless when there is nothing to say - so the first span is
+         * the host and the one being asked about is the badge inside it.
+         */
+        const dot = container.querySelector('[aria-label="unread"]')!;
+
         expect(dot.textContent).toBe('');
-        expect(dot.getAttribute('aria-label')).toBe('unread');
+        expect(dot.getAttribute('role')).toBe('status');
+    });
+
+    /**
+     * A badge is a number with no noun. `label` answers that for a screen reader and `tip` answers
+     * it for everybody else, through the product's own tooltip rather than the browser's `title` -
+     * which cannot be styled, cannot be reached by a finger, and renders in the OS's font.
+     */
+    it('says what a count means through the product tooltip, never the browser one', () =>
+    {
+        const { container } = renderTest(() => Badge({ count: 3, tip: 'three unread', label: 'unread' }) as Rendered);
+
+        expect(container.querySelector('[title]'), 'a badge used the browser tooltip').toBeNull();
+        expect(container.textContent).toContain('3');
+
+        const host = container.querySelector('span')!;
+
+        expect(host.getAttribute('aria-describedby'), 'the tooltip is not open until it is asked for').toBeNull();
+    });
+
+    it('takes no box at all when there is nothing to say', () =>
+    {
+        const { container } = renderTest(() => Badge({ count: 3, label: 'unread' }) as Rendered);
+        const host = container.querySelector('span')!;
+
+        expect(host.className, 'an untipped badge still costs a box').toContain('contents');
     });
 });
 
