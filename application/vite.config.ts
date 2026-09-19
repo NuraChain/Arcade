@@ -34,6 +34,25 @@ export default defineConfig({
         noExternal: true
     },
 
+    build:
+    {
+        // Rolldown warns at 500 kB of MINIFIED source, and two chunks here are deliberately past
+        // it: `world-*` is three.js and `*-board-*` is Phaser. Both are dynamic imports inside
+        // `mount`, so neither is in the landing page's initial set and neither blocks first paint -
+        // which is precisely what the warning's own advice ("use dynamic import to code-split")
+        // asks for. It is measuring raw bytes and cannot tell a lazy chunk from an eager one.
+        //
+        // `tools/budgets.mjs` is the real gate and measures what a visitor pays: gzip, per chunk,
+        // with the landing page's initial set resolved from the prerendered HTML. It FAILS the
+        // build rather than warning - three.js and Phaser each have to be lazy, Phaser has to be
+        // in exactly one chunk, and the board chunk has a 380 KB gzip ceiling.
+        //
+        // So this raises the generic warning above the two chunks that are meant to be large,
+        // rather than switching it off: a THIRD library of that size appearing still says so, and
+        // a warning nobody can act on is one that hides the ones they can.
+        chunkSizeWarningLimit: 1500
+    },
+
     server:
     {
         // Declared rather than inherited: 3100 keeps this app clear of Explorer (3001) and its
