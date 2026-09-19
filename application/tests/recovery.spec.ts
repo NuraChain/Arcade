@@ -42,6 +42,16 @@ const ready = async (): Promise<void> =>
     keys ??= await deriveRecovery(phrase, salt);
 };
 
+/**
+ * Every test here that calls `deriveRecovery` pays 600,000 PBKDF2 iterations, twice in the worst
+ * case - which is the SECURITY parameter rather than an accident, and the reason `recovery.ts` can
+ * refuse a user-chosen phrase. Alone that is about 275ms; inside a full parallel run on a loaded
+ * machine it has passed vitest's 5s default once, which is the worst kind of gate - one that fails
+ * rarely enough to be re-run rather than read. Stated here so the number that decides the budget is
+ * the iteration count rather than a framework default.
+ */
+const DERIVES = 20_000;
+
 describe('the phrase', () =>
 {
     it('is minted in canonical form, and grouped only for the screen', () =>
@@ -67,7 +77,7 @@ describe('the phrase', () =>
 
         expect(back.signer.publicKey).toBe(there.signer.publicKey);
         expect(await phraseMatches(back, await checkValueOf(there))).toBe(true);
-    });
+    }, DERIVES);
 
     it('is different every time', () =>
     {
