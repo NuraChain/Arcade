@@ -21,20 +21,20 @@
     "schema:sync": "npm run build && node dist/db/sync-cli.js"
   },
   "dependencies": {
-    "@azerothjs/cron": "file:../../../AzerothJS/packages/cron",
-    "@azerothjs/http": "file:../../../AzerothJS/packages/http",
-    "@azerothjs/kit": "file:../../../AzerothJS/packages/kit",
-    "@azerothjs/logger": "file:../../../AzerothJS/packages/logger",
-    "@azerothjs/schema": "file:../../../AzerothJS/packages/schema",
-    "@azerothjs/ws": "file:../../../AzerothJS/packages/ws",
-    "azerothjs": "file:../../../AzerothJS/packages/azerothjs",
+    "@azerothjs/cron": "2.1.0",
+    "@azerothjs/http": "2.1.0",
+    "@azerothjs/kit": "2.1.0",
+    "@azerothjs/logger": "2.1.0",
+    "@azerothjs/schema": "2.1.0",
+    "@azerothjs/ws": "2.1.0",
+    "azerothjs": "2.1.0",
     "pg": "^8.16.3",
     "reflect-metadata": "^0.2.2",
     "typeorm": "^1.1.1",
     "viem": "^2.56.3"
   },
   "devDependencies": {
-    "@azerothjs/cli": "file:../../../AzerothJS/packages/cli",
+    "@azerothjs/cli": "2.1.0",
     "@types/node": "^24.10.1",
     "@types/pg": "^8.15.6",
     "typescript": "^6.0.3",

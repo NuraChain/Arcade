@@ -142,7 +142,8 @@ the first run of this matrix showed, as 808 console errors and 377 pages that ne
 ## The framework defect register
 
 **`framework-bugs.md` is not in this repository.** It is a register of defects in a DEPENDENCY,
-not part of this product, and it lives on the desktop
+not part of this product - and now literally a published one, so a fix arrives by bumping the pin
+rather than by editing a sibling checkout. It lives on the desktop
 (`C:/Users/IntelligentQuantum/Desktop/framework-bugs.md`). `.gitignore` holds the name so it
 cannot come back by accident. Nothing goes in it without a minimal reproduction proving the
 framework is responsible, and a suspicion that turns out to be ours goes in its "NOT framework
@@ -203,19 +204,39 @@ five, and the next feature written into it added two more. Convert what you touc
 Allman braces, 4-space indent, single quotes, no trailing comma, LF endings. All of it is
 enforced by `eslint.config.ts` — `npm run check` will tell you.
 
-## The framework is local
+## The framework is a dependency
 
-`azerothjs` and every `@azerothjs/*` package is consumed from `../../AzerothJS` through `file:`
-specs, which npm installs as Windows junctions.
+`azerothjs` and all thirteen `@azerothjs/*` packages come from the registry at an EXACT `2.1.0`,
+across all three manifests. They used to be consumed from a sibling `../../AzerothJS` checkout
+through `file:` specs, which npm installs as Windows junctions; that is gone and three things went
+with it.
 
-- **`AzerothJS` must be built** (`npm run build` there) before anything here resolves — every
-  package's `exports` points at `dist/`, and npm does not run `prepare` for a linked directory.
-  Rebuild it after any framework edit.
-- **`npm ls azerothjs` must show exactly one node.** Two copies of the runtime means two
-  independent signal graphs: effects stop firing, `onCleanup` never runs, and nothing throws.
-  `vite.config.ts` carries `resolve.dedupe` for this reason, and `preserveSymlinks` must stay off.
+**Nothing has to be built first.** A `file:` package's `exports` point at `dist/` and npm does not
+run `prepare` for a linked directory, so `AzerothJS` had to be built by hand before anything here
+would resolve — and re-built after every framework edit, which is a step that fails silently as a
+stale `dist/`.
+
+**`azeroth doctor` no longer warns `version skew`.** It compares raw dependency spec strings and
+every `file:` link was a different string, so the warning was permanent, meaningless and could not
+be fixed from this repository. The pins are one string now and it reports the family on one version.
+The note that used to say "do not spend an afternoon aligning it" is deleted with the warning.
+
+**A framework fix arrives by bumping the pin**, which is one visible edit in three manifests rather
+than a rebuild in a directory this repository does not contain. That is the same reason the pin is
+exact rather than `^`: an upgrade to the thing every component is written against is a decision, and
+`@noble/curves` 2.x is what happens when one rides in on a caret.
+
+What did NOT change:
+
+- **`npm ls azerothjs` must still show exactly one node.** Two copies of the runtime means two
+  independent signal graphs: effects stop firing, `onCleanup` never runs, and nothing throws. It is
+  nine references deduped to one installed copy now. `vite.config.ts` keeps `resolve.dedupe` for the
+  same reason.
 - TypeScript is pinned to `^6.0.3`. typescript@7 ships the native CLI without the JS compiler API
   that the language server needs.
+- The **editor extension** is versioned separately and `azeroth doctor` warns when it lags the
+  compiler, because a stale extension keeps its old compiler in memory. That one is the editor's, not
+  the repository's.
 
 ## The server
 
@@ -277,9 +298,6 @@ are not obvious, each of which costs an afternoon to rediscover:
   token` that names neither decorators nor the config that fixes them.
   `server/tests/decorator-metadata.spec.ts` pins all three properties — registration,
   `design:type`, and class fields staying off the instance — so none of it can regress quietly.
-- **`azeroth doctor` warns `version skew` permanently.** It compares raw dependency spec strings,
-  and every `file:` link is a different string. Exit code stays 0. Do not spend an afternoon
-  "aligning" it.
 
 **The entities had drifted from the schema, and nothing could see it.** Every query in this server
 is raw SQL through `DataSource.query()`, which never loads entity metadata - so an entity could be

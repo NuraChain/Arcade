@@ -2,10 +2,6 @@ import { azeroth } from '@azerothjs/compiler';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vitest/config';
 
-// The framework is consumed from the LOCAL monorepo through `file:` specs, which npm installs
-// as junctions. Everything unusual in this config exists to make that safe - see each note.
-const AZEROTH_MONOREPO = 'C:/Users/IntelligentQuantum/Documents/Projects/AzerothJS';
-
 export default defineConfig({
     plugins: [azeroth(), tailwindcss()],
 
@@ -16,16 +12,18 @@ export default defineConfig({
         // singletons; two copies in one bundle means two independent reactive graphs, so
         // effects never fire and onCleanup never runs - and nothing throws. dedupe pins one.
         //
-        // `preserveSymlinks` must stay at its default false: collapsing the junction to its
-        // realpath is exactly what makes one copy possible.
+        // It survives the framework moving from a `file:` junction to a registry pin: npm already
+        // installs one hoisted copy, and this is what keeps that true if a second ever appears.
         dedupe: ['azerothjs', '@azerothjs/schema']
     },
 
     optimizeDeps:
     {
-        // Vite does not pre-bundle a dependency whose realpath lies outside the project, so
-        // these would be excluded anyway. Stating it keeps the behaviour from depending on
-        // that detail, and means a framework edit is visible without clearing node_modules/.vite.
+        // This used to restate what vite did anyway, because a junction's realpath lay outside
+        // the project and was never pre-bundled. From the registry it is inside `node_modules` like
+        // anything else, so the exclusion is now a DECISION: the runtime's module-level signal
+        // graph is exactly what `dedupe` above exists to keep single, and a pre-bundle is another
+        // copy of a module for the two to disagree about.
         exclude: ['azerothjs', '@azerothjs/kit', '@azerothjs/devtools']
     },
 
@@ -54,10 +52,11 @@ export default defineConfig({
         },
         fs:
         {
-            // The junctions resolve to a realpath OUTSIDE this project and outside its
-            // workspace root - AzerothJS is a sibling of Nura, not an ancestor - so without
-            // this the dev server answers 403 for every framework module.
-            allow: ['..', AZEROTH_MONOREPO]
+            // `node_modules` is hoisted to the workspace ROOT, which is the parent of this
+            // package - so without this the dev server answers 403 for every hoisted dependency.
+            // It used to also name an absolute path to a sibling checkout, which is what a
+            // `file:` junction's realpath needed and what made this config machine-specific.
+            allow: ['..']
         }
     },
 
