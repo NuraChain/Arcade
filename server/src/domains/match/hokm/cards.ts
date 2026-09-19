@@ -112,14 +112,19 @@ export function trickWinner(played: readonly number[], trump: Suit): number
 }
 
 /**
- * The deck this many players are dealt from.
+ * The deck this many players are dealt from, which is 52 minus however many twos it takes to divide.
  *
- * Three players get 51 cards, because 52 does not divide by three and Pagat's answer is to remove
- * *"one of the 2's"* - it does not say which, so this picks one and stays picked. A deck that
- * dropped a different two each hand would be a rule nobody wrote, and the lowest club is the least
- * consequential card in the pack.
+ * Fifty-two does not divide by three, so the three-handed game drops one two - Pagat says *"one of
+ * the 2's"* without saying which, so this picks the lowest club and stays picked. The two-handed
+ * game drops two of them for the same reason: fifty cards, twenty-five each, everything dealt.
+ *
+ * A deck that dropped a DIFFERENT two each hand would be a rule nobody wrote, so the choice is the
+ * lowest suits in order and never anything else. Everything downstream is derived from the length
+ * of what comes back, which is why adding a player count here is the whole change.
  */
 export function deckFor(seats: number): number[]
 {
-    return seats === 3 ? DECK.filter((card) => card !== cardOf('clubs', '2')) : [...DECK];
+    const dropped = seats === 3 ? 1 : (seats === 2 ? 2 : 0);
+
+    return DECK.filter((card) => !(rankOf(card) === 0 && SUITS.indexOf(suitOf(card)) < dropped));
 }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { DECK, RANKS, SUITS, cardOf, deckFor, legalCards, nameOf, rankOf, suitOf, trickWinner } from '../src/domains/match/hokm/cards.ts';
-import { dealerOf, duelResult, matchWinner, nextHakem, teamOf, trickCount, tripleResult } from '../src/domains/match/hokm/scoring.ts';
+import { dealerOf, duelResult, matchWinner, nextHakem, teamOf, trickCount, tripleResult, winningTricks } from '../src/domains/match/hokm/scoring.ts';
 
 /**
  * Hokm's rule book, checked against the one this product says it implements.
@@ -46,25 +46,62 @@ describe('a card is a number', () =>
         expect(rankOf(cardOf('clubs', '10'))).toBeGreaterThan(rankOf(cardOf('clubs', '9')));
     });
 
-    it('removes exactly one two for three players, and nothing for two or four', () =>
+    /**
+     * Twos come off the bottom in a fixed order and only as many as the division needs - one for
+     * three players, two for the two-handed house rule, none for four. Dropping a different two each
+     * hand would be a rule nobody wrote, and a deck that did not divide would leave cards undealt.
+     */
+    it('strips only as many twos as the seat count needs', () =>
     {
-        expect(deckFor(3)).toHaveLength(51);
-        expect(deckFor(3).filter((card) => rankOf(card) === 0)).toHaveLength(3);
-        expect(deckFor(2)).toHaveLength(52);
         expect(deckFor(4)).toHaveLength(52);
+        expect(deckFor(3)).toHaveLength(51);
+        expect(deckFor(2)).toHaveLength(50);
+
+        expect(deckFor(4).filter((card) => rankOf(card) === 0)).toHaveLength(4);
+        expect(deckFor(3).filter((card) => rankOf(card) === 0)).toHaveLength(3);
+        expect(deckFor(2).filter((card) => rankOf(card) === 0)).toHaveLength(2);
+
+        expect(deckFor(2)).not.toContain(cardOf('clubs', '2'));
+        expect(deckFor(2)).not.toContain(cardOf('diamonds', '2'));
+        expect(deckFor(2)).toContain(cardOf('hearts', '2'));
     });
 
+    /**
+     * The deck is stripped until it divides, so every card is dealt and nothing is left over. That
+     * is what lets `trickCount` be a division rather than a table, and it is the only thing the
+     * two-handed house rule changes: drop two of the twos and deal all fifty.
+     */
     it('deals every card out, at every player count', () =>
     {
         for (const seats of [2, 3, 4])
         {
-            const dealt = seats === 2 ? 26 : seats * trickCount(seats);
-
-            expect(dealt, `${ seats } players`).toBeLessThanOrEqual(deckFor(seats).length);
+            expect(deckFor(seats).length % seats, `${ seats } players`).toBe(0);
+            expect(seats * trickCount(seats), `${ seats } players`).toBe(deckFor(seats).length);
         }
 
-        expect(3 * trickCount(3)).toBe(51);
-        expect(4 * trickCount(4)).toBe(52);
+        expect(trickCount(4)).toBe(13);
+        expect(trickCount(3)).toBe(17);
+        expect(trickCount(2)).toBe(25);
+        expect(deckFor(2)).toHaveLength(50);
+    });
+
+    /**
+     * A hand is taken by MORE THAN HALF the tricks, not by a constant seven. Seven of thirteen is
+     * where the number everybody knows comes from; at twenty-five cards each the same rule reads
+     * thirteen, and a literal 7 would have ended a two-handed hand with eighteen tricks unplayed.
+     */
+    it('needs a majority of the tricks to take a hand', () =>
+    {
+        expect(winningTricks(4)).toBe(7);
+        expect(winningTricks(2)).toBe(13);
+
+        for (const seats of [2, 4])
+        {
+            const needed = winningTricks(seats);
+
+            expect(needed * 2, `${ seats } players`).toBeGreaterThan(trickCount(seats));
+            expect((needed - 1) * 2, `${ seats } players`).toBeLessThanOrEqual(trickCount(seats));
+        }
     });
 });
 
@@ -137,25 +174,39 @@ describe('scoring a hand between two sides', () =>
 {
     it('is not over before somebody has seven tricks', () =>
     {
-        expect(duelResult([6, 5], 0)).toBeNull();
+        expect(duelResult([6, 5], 0, 7)).toBeNull();
     });
 
     it('pays one point for reaching seven', () =>
     {
-        expect(duelResult([7, 4], 0)).toEqual({ side: 0, points: 1 });
-        expect(duelResult([2, 7], 0)).toEqual({ side: 1, points: 1 });
+        expect(duelResult([7, 4], 0, 7)).toEqual({ side: 0, points: 1 });
+        expect(duelResult([2, 7], 0, 7)).toEqual({ side: 1, points: 1 });
     });
 
     /** *"If the Hâkem's team wins the hand by taking the first 7 tricks... they win 2 points."* */
     it('pays the Hâkem two for a kot', () =>
     {
-        expect(duelResult([7, 0], 0)).toEqual({ side: 0, points: 2 });
+        expect(duelResult([7, 0], 0, 7)).toEqual({ side: 0, points: 2 });
     });
 
     /** *"If the Hâkem's opponents win by taking the first 7 tricks, they win 3 points."* */
     it('pays the other side three for a hâkem koti', () =>
     {
-        expect(duelResult([0, 7], 0)).toEqual({ side: 1, points: 3 });
+        expect(duelResult([0, 7], 0, 7)).toEqual({ side: 1, points: 3 });
+    });
+
+    /**
+     * The same three rules at the two-handed threshold, because the number is the only thing that
+     * differs. Seven tricks out of twenty-five is not a hand - it is a third of one.
+     */
+    it('counts to thirteen in the two-handed game and not to seven', () =>
+    {
+        const needed = winningTricks(2);
+
+        expect(duelResult([7, 4], 0, needed)).toBeNull();
+        expect(duelResult([13, 9], 0, needed)).toEqual({ side: 0, points: 1 });
+        expect(duelResult([13, 0], 0, needed)).toEqual({ side: 0, points: 2 });
+        expect(duelResult([0, 13], 0, needed)).toEqual({ side: 1, points: 3 });
     });
 });
 

@@ -239,9 +239,14 @@ describe('table rules', () =>
         }
     });
 
-    it('keeps Hokm at exactly four seats and Backgammon at two', () =>
+    /**
+     * Hokm opens at two, three and four - the same game with a deck stripped until it divides, which
+     * is what the engine plays. It was four only while nothing could deal it. Backgammon is two
+     * because backgammon is two.
+     */
+    it('offers Hokm at two, three and four, and Backgammon at two', () =>
     {
-        expect(TABLE_RULES.hokm.seats).toEqual([4]);
+        expect(TABLE_RULES.hokm.seats).toEqual([2, 3, 4]);
         expect(TABLE_RULES.backgammon.seats).toEqual([2]);
     });
 
@@ -261,7 +266,8 @@ describe('table rules', () =>
 
     it('rejects a seat count the game does not offer', () =>
     {
-        expect(isValidTable({ ...defaultTable('hokm'), seats: 3 })).toBe(false);
+        expect(isValidTable({ ...defaultTable('hokm'), seats: 5 })).toBe(false);
+        expect(isValidTable({ ...defaultTable('backgammon'), seats: 4 })).toBe(false);
     });
 });
 

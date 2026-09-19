@@ -1,3 +1,5 @@
+import { deckFor } from './cards.ts';
+
 /**
  * Who won a hand, what it was worth, and who rules the next one.
  *
@@ -11,14 +13,38 @@
  * the rotation in those words and they come out as one line each.
  */
 
-/** Hands are to seven tricks, and taking the first seven of them is a kot. */
-export const KOT_TRICKS = 7;
-
-/** Every hand is thirteen tricks except the three-handed game, which removes a two and deals 17. */
+/**
+ * How many tricks a hand holds, which is simply everybody's cards.
+ *
+ * Derived rather than tabulated: the deck is sized so that it divides, so the hand length IS the
+ * division. 52/4 is 13, 51/3 is 17, 50/2 is 25 - and a fourth player count would need nothing here.
+ */
 export function trickCount(seats: number): number
 {
-    return seats === 3 ? 17 : 13;
+    return deckFor(seats).length / seats;
 }
+
+/**
+ * The tricks that take a hand between two sides: more than half of them, so it cannot be equalled.
+ *
+ * Seven of thirteen at four players is the number everybody knows the game by, and it is a majority
+ * rather than a magic seven - at two players, where a stripped deck deals twenty-five each, the same
+ * rule reads thirteen. Writing it as the constant 7 would have made the two-handed game end at the
+ * seventh of twenty-five tricks, with eighteen still to play.
+ */
+export function winningTricks(seats: number): number
+{
+    return Math.floor(trickCount(seats) / 2) + 1;
+}
+
+/**
+ * The three-handed sweep is a literal seven and is NOT a majority.
+ *
+ * *"If one player takes all the first 7 tricks, the hand is over"* - seven of seventeen, which
+ * nine-of-seventeen reasoning would get wrong in the direction of never firing. Pagat means seven,
+ * so this says seven.
+ */
+export const TRIPLE_SWEEP = 7;
 
 /**
  * Partners sit opposite, so the two teams are the two parities. At two and three players there are
@@ -68,11 +94,11 @@ export interface HandResult
  * Checked the moment a side reaches seven, so "the other side having taken none" and "took the
  * FIRST seven" are the same test - there is no later moment at which a zero could still be a zero.
  */
-export function duelResult(tricks: readonly number[], hakemSide: number): HandResult | null
+export function duelResult(tricks: readonly number[], hakemSide: number, needed: number): HandResult | null
 {
     for (let side = 0; side < tricks.length; side += 1)
     {
-        if (tricks[side] < KOT_TRICKS)
+        if (tricks[side] < needed)
         {
             continue;
         }
@@ -111,7 +137,7 @@ export function tripleResult(tricks: readonly number[], hakem: number, played: n
 
     for (let seat = 0; seat < tricks.length; seat += 1)
     {
-        if (tricks[seat] >= KOT_TRICKS && tricks.every((count, other) => other === seat || count === 0))
+        if (tricks[seat] >= TRIPLE_SWEEP && tricks.every((count, other) => other === seat || count === 0))
         {
             return { side: seat, points: seat === hakem ? 2 : 3 };
         }

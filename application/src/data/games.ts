@@ -107,7 +107,7 @@ export const GAMES: Game[] = [
         blurbKey: 'games.hokm.blurb',
         categoryKey: 'games.category.cards',
         category: 'cards',
-        minPlayers: 4,
+        minPlayers: 2,
         maxPlayers: 4,
         table: 'table-card',
         set: 'set-hokm',

@@ -96,12 +96,13 @@ describe('BrandMark', () =>
 describe('GameRow', () =>
 {
     const hokm = GAMES.find((game) => game.id === 'hokm')!;
+    const backgammon = GAMES.find((game) => game.id === 'backgammon')!;
     const ludo = GAMES.find((game) => game.id === 'ludo')!;
 
     it('states a single seat count without a range', () =>
     {
-        const { container } = renderTest(() => GameRow({ game: hokm }) as Rendered);
-        expect(container.querySelector('.tally')!.textContent).toBe('4');
+        const { container } = renderTest(() => GameRow({ game: backgammon }) as Rendered);
+        expect(container.querySelector('.tally')!.textContent).toBe('2');
     });
 
     it('states a range with an en dash, and isolates it so it cannot reverse', () =>
