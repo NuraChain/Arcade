@@ -74,6 +74,7 @@ export const me: Pick<Dictionary, keyof typeof reference> = {
     'settings.safety.strangers': 'پیام از کسانی که نمی‌شناسی',
     'settings.safety.strangersHint': 'خاموش یعنی فقط دوستان می‌توانند گفت‌وگو را شروع کنند.',
     'settings.safety.strangersLocked': 'برای حساب‌های زیر ۱۸ سال خاموش نگه داشته می‌شود. فقط دوستان می‌توانند گفت‌وگو را شروع کنند.',
+    'settings.safety.saveFailed': 'این تنظیم ذخیره نشد. همان‌طور که بود مانده.',
     'settings.safety.online': 'نشان بده که آنلاینم',
     'settings.safety.onlineHint': 'دوستان یک نقطهٔ سبز و بازی‌ای که می‌کنی را می‌بینند.',
     'settings.safety.reports': 'گزارش‌های من',
@@ -167,6 +168,9 @@ export const me: Pick<Dictionary, keyof typeof reference> = {
     'devices.state.tampered': 'این با هم نمی‌خواند',
     'devices.state.tamperedLead': 'شناسه‌اش با کلیدهایی که کنارش منتشر شده جور نیست، پس معلوم نیست چیست. بیرونش کن.',
 
+    'devices.confirmed': 'دستگاه تأیید شد. از این پس می‌تواند پیام‌هایت را بخواند.',
+    'devices.revoked': 'دستگاه خارج شد. دیگر چیز تازه‌ای را نمی‌خواند.',
+    'devices.actionFailed': 'انجام نشد. چیزی عوض نشد — دوباره تلاش کن.',
     'devices.attested.wallet': 'کیف پول',
     'devices.attested.walletHint': 'با امضای کیف پولِ همین حساب ثابت شده.',
     'devices.attested.contract': 'کیف پول قراردادی',

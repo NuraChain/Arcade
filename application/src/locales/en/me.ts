@@ -71,6 +71,7 @@ export const me = {
     'settings.safety.strangers': 'Messages from people you don’t know',
     'settings.safety.strangersHint': 'Off means only friends can start a conversation.',
     'settings.safety.strangersLocked': 'Held off for accounts under 18. Only friends can start a conversation.',
+    'settings.safety.saveFailed': 'That setting did not save. It is still set the way it was.',
     'settings.safety.online': 'Show when I’m online',
     'settings.safety.onlineHint': 'Friends see a green dot and what you’re playing.',
     'settings.safety.reports': 'My reports',
@@ -164,6 +165,9 @@ export const me = {
     'devices.state.tampered': 'This does not add up',
     'devices.state.tamperedLead': 'Its id does not match the keys published beside it, so there is no telling what it is. Sign it out.',
 
+    'devices.confirmed': 'Device confirmed. It can read your messages from now on.',
+    'devices.revoked': 'Device signed out. It cannot read anything new.',
+    'devices.actionFailed': 'That did not go through. Nothing changed — try again.',
     'devices.attested.wallet': 'Wallet',
     'devices.attested.walletHint': 'Proved by a signature from the wallet on this account.',
     'devices.attested.contract': 'Contract wallet',

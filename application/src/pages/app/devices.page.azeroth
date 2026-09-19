@@ -11,6 +11,7 @@ import { useDevice } from '../../stores/device.store.ts';
 import { useDevices } from '../../stores/devices.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useRecovery } from '../../stores/recovery.store.ts';
+import { useToasts } from '../../stores/toasts.store.ts';
 
 /**
  * The devices panel.
@@ -26,8 +27,35 @@ export default component DevicesPage()
     const devices = useDevices();
     const device = useDevice();
     const recovery = useRecovery();
+    const toasts = useToasts();
 
     useHead({ title: () => locale.t('devices.title') });
+
+    /**
+     * The two most consequential buttons in this product, and they used to say nothing at all.
+     *
+     * Confirming a device is what lets it be wrapped an epoch key - it can read the messages from
+     * then on; revoking one ends its sessions and takes it out of every future recipient set. Both
+     * were `void devices.confirm(id)`, and `write()` does not catch - so a refused request was an
+     * unhandled rejection: no toast, no console line, and a row that looked unchanged because the
+     * refetch afterwards never ran. A person pressed Revoke on a laptop they had lost and was told
+     * nothing either way.
+     *
+     * This is the rule the report sheet already states - a safety surface has to say what actually
+     * happened, because somebody who believes it worked stops looking for another way.
+     */
+    const act = async (work: Promise<void>, said: 'devices.confirmed' | 'devices.revoked'): Promise<void> =>
+    {
+        try
+        {
+            await work;
+            toasts.show({ kind: 'success', text: locale.t(said) });
+        }
+        catch
+        {
+            toasts.show({ kind: 'error', text: locale.t('devices.actionFailed') });
+        }
+    };
 
     derived rows = devices.devices();
 
@@ -116,8 +144,8 @@ export default component DevicesPage()
                                         state={ devices.stateOf(one) }
                                         current={ one.id === devices.current() }
                                         busy={ devices.busy() }
-                                        onConfirm={ (id) => void devices.confirm(id) }
-                                        onRevoke={ (id) => void devices.revoke(id) }
+                                        onConfirm={ (id) => void act(devices.confirm(id), 'devices.confirmed') }
+                                        onRevoke={ (id) => void act(devices.revoke(id), 'devices.revoked') }
                                     />
                                 </li>
                             </For>
@@ -139,8 +167,8 @@ export default component DevicesPage()
                                     state={ devices.stateOf(one) }
                                     current={ false }
                                     busy={ devices.busy() }
-                                    onConfirm={ (id) => void devices.confirm(id) }
-                                    onRevoke={ (id) => void devices.revoke(id) }
+                                    onConfirm={ (id) => void act(devices.confirm(id), 'devices.confirmed') }
+                                    onRevoke={ (id) => void act(devices.revoke(id), 'devices.revoked') }
                                 />
                             </li>
                         </For>

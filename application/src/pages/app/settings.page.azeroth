@@ -22,6 +22,7 @@ import { useLocale } from '../../stores/locale.store.ts';
 import { useSession } from '../../stores/session.store.ts';
 import { NOTIFICATION_CATEGORIES, useSettings } from '../../stores/settings.store.ts';
 import { useSocial } from '../../stores/social.store.ts';
+import { useToasts } from '../../stores/toasts.store.ts';
 import { useWallet } from '../../stores/wallet.store.ts';
 import type { MessageKey } from '../../locales/en.ts';
 
@@ -39,9 +40,33 @@ export default component SettingsPage()
     const settings = useSettings();
     const device = useDevice();
     const people = usePeople();
+    const toasts = useToasts();
     const { navigate } = useNavigate();
 
     useHead({ title: () => locale.t('settings.title') });
+
+    /**
+     * A toggle that snaps back has to say why.
+     *
+     * `setPrivacy` stores what the SERVER returned rather than what was asked, so the switch is
+     * never left showing a value the account does not hold - but a refused save made it flick back
+     * with no explanation, which reads as a broken control rather than as a failed request. The
+     * throw was swallowed by a bare `void`.
+     *
+     * There is deliberately no toast on SUCCESS: a switch that moved and stayed moved has already
+     * said it, and a confirmation for every flip of two toggles is noise.
+     */
+    const save = async (patch: Parameters<typeof social.setPrivacy>[0]): Promise<void> =>
+    {
+        try
+        {
+            await social.setPrivacy(patch);
+        }
+        catch
+        {
+            toasts.show({ kind: 'error', text: locale.t('settings.safety.saveFailed') });
+        }
+    };
 
 
     derived current = settings.settings();
@@ -135,13 +160,13 @@ export default component SettingsPage()
                         disabled={ privacy.isMinor }
                         label={ locale.t('settings.safety.strangers') }
                         description={ privacy.isMinor ? locale.t('settings.safety.strangersLocked') : locale.t('settings.safety.strangersHint') }
-                        onChange={ (checked) => void social.setPrivacy({ allowStrangerMessages: checked }) }
+                        onChange={ (checked) => void save({ allowStrangerMessages: checked }) }
                     />
                     <Toggle
                         checked={ privacy.showOnline }
                         label={ locale.t('settings.safety.online') }
                         description={ locale.t('settings.safety.onlineHint') }
-                        onChange={ (checked) => void social.setPrivacy({ showOnline: checked }) }
+                        onChange={ (checked) => void save({ showOnline: checked }) }
                     />
 
                     <div>
