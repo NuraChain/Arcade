@@ -26,6 +26,7 @@ tools/blender/scratch/
 tools/blender/out/
 tools/blender/preview.png
 *-browser.png
+/*.png
 
 __pycache__/
 *.pyc
