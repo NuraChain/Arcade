@@ -1,6 +1,8 @@
 # Hokm — حکم
 
-**Status:** planned, not started. Blocked on `00-engine-seam.md`.
+**Status:** the SERVER is done and live - rules, engine, seam, api, `hokm-pass.mjs` green at 2/3/4,
+`games.status` flipped to `available`. What is left is the client: assets, the Phaser table and the
+DOM hand list. See CLAUDE.md's *Hokm* section for what was built and what the plan below got wrong.
 
 Canonical ruleset: [Pagat — Hokm](https://www.pagat.com/whist/hokm.html), 2, 3 and 4 players.
 Free to play. No wagering of any kind.

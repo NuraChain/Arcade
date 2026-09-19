@@ -170,6 +170,10 @@ function refuse(reason: string): never
 /**
  * The one thing this layer may read out of an engine's state, and the schema already insists on it.
  *
+ * The opening insert used to write the literal `0` beside the state the engine had just built, which
+ * is this layer deciding a number the engine owns - and `matches_rev_matches_state` caught it the
+ * first time an engine opened at anything else, as a 500 on Start rather than as anything readable.
+ *
  * `matches_rev_matches_state` is `CHECK ((state ->> 'rev')::int = rev)`, so a state without a
  * top-level `rev` is a row Postgres refuses - which makes this assertion one the database enforces
  * rather than one this file hopes about. It is stated in `engine.ts` as a contract for the same
@@ -539,12 +543,12 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
                  */
                 const inserted = firstRow<{ id: string }>(await tx.query(
                     `insert into matches (table_id, game, variant, seats, state, rev, deadline_at)
-                     select $1, $2, 'standard', $3::smallint, $4::jsonb, 0, now() + ($5 || ' milliseconds')::interval
+                     select $1, $2, 'standard', $3::smallint, $4::jsonb, $7::int, now() + ($5 || ' milliseconds')::interval
                       where not exists (select 1 from matches where table_id = $1 and finished_at is null)
                         and (select count(*) from table_seats s where s.table_id = $1 and s.user_id is not null) = $6::bigint
                         and not exists (select 1 from table_seats s where s.table_id = $1 and s.ready = false)
                      returning id`,
-                    [tableId, table.game, table.seats, JSON.stringify(state), turnMs(table.mode), table.seats]
+                    [tableId, table.game, table.seats, JSON.stringify(state), turnMs(table.mode), table.seats, revOf(state)]
                 ));
 
                 if (inserted === null)

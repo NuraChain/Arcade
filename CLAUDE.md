@@ -1138,6 +1138,87 @@ through the routes a browser uses. It is API-level on purpose: it proves the rul
 the turn order, the authorisation and the wire agree end to end, over hundreds of turns, in seconds.
 What it cannot prove is that any of it is visible, which is the browser pass's job.
 
+## Hokm
+
+The second engine, and the one the seam was built for: ludo is face up, hokm has hands.
+
+**The rules come from `pagat.com/whist/hokm.html` and the tests quote it.** Deal and play are
+anticlockwise, which is the sentence the whole file rests on - seats are numbered in play order, so
+"to the right" is `+ 1` and "to the left" is `- 1`, and the dealer (`hakem - 1`) and the rotation
+(keep the rank if your side won, else `+ 1`) each come out as one line at every player count.
+`dealerOf(hakem + 1)` IS the old Hâkem, so *"the previous Hâkem deals"* is free and there is nothing
+stored that can disagree with itself.
+
+**A card is a NUMBER, 0 to 51.** Suit-major, rank ascending, so comparing two cards of one suit is
+`>` - which is the entire body of `trickWinner`. The object form would store about twenty times the
+bytes in `matches.state` AND in `match_actions.state` on every action, which is the hottest row in
+the domain; ludo made the same call for its pieces. `cardOf` and `nameOf` exist so the rules suite
+reads like a rule book instead of like integers.
+
+**The deck is stripped until it divides, and every other number is derived from that.** 52 at four,
+51 at three (Pagat drops *"one of the 2's"*), and 50 at two - the house rule the product implements,
+two twos out and twenty-five each, rather than Pagat's keep-or-reject draw over a stock.
+`trickCount` is the deck over the seats and `winningTricks` is more than half of that, so the famous
+seven is a MAJORITY rather than a constant: written as a literal 7 the two-handed hand would end on
+the seventh of twenty-five tricks with eighteen still in hand.
+
+**The three-handed game keeps its own rules and they are the counter-intuitive ones.** The sweep is
+a literal seven of seventeen, not a majority. A hand ends early the moment a lead cannot be EQUALLED
+- Pagat's own examples, and the tests are named after them: 7-4-3 plays on, 7-4-4 ends, 8-3-1 plays
+on, 8-2-2 ends. And *"if two of players take the same number of tricks then the third player wins"*,
+so **7-7-3 is won by the player holding three**. That branch is reachable only last, because a tie
+below the top is already settled by the unbeatable lead (9-4-4 pays the nine), and seventeen is not
+divisible by three so all three cannot tie.
+
+**The deal pauses and that pause is the hidden-information story.** Pagat asks that the Hâkem's
+partner receive nothing until trump is named, so they cannot signal. This deals to the Hâkem ALONE:
+during `trump` there is no other hand in the state at all, so no view, no snapshot and no event can
+leak one even if somebody later writes a careless projection. A pause that left three hands lying in
+the state would be a pause that depended on every reader being careful.
+
+**Two phases, not eight.** The plan sketched a seven-state enum walking the deal round by round; what
+a caller can DO is name trump or play a card, so those are the phases. Rounds of five and four are a
+dealing ritual with no decision in them, and a state nobody can act in only exists to be stepped
+past. There is no `deal.ts` and no `rotation.ts` for the same reason.
+
+**A forfeit ends the MATCH, not the hand.** Four-handed hokm cannot be played three-handed, so there
+is nothing to continue with; the side left standing is named so the board can stop and `finish`
+reports `abandoned`, which keeps it out of the rating. Ludo's rule, for ludo's reason.
+
+**The log needs no filtering and that is a fact about what is LOGGED.** A card is played face up, a
+trump is called aloud, a trick is taken in front of the table and a hand is written on a score sheet.
+The one private thing is the deal, and the deal is not an event - so nothing private ever enters an
+append-only ledger that `since` replays from revision zero forever.
+
+**`hokm-seam.spec.ts` tests information FLOW, not fields**, and the first version of it was wrong in
+a way worth keeping. It serialised a seat's view and searched the bytes for another seat's card
+numbers - which is worse than useless here, because a hokm payload is full of small integers (seats,
+sides, trick counts, points) and the two of clubs is the number `0`, colliding with a score of nil.
+It reported two leaks that did not exist. What replaced it: compute a reader's view, replace another
+seat's hand with different cards OF THE SAME LENGTH, compute it again, and require the two to be
+byte-identical. That proves the view cannot depend on that hand through any field, named or added
+later, however encoded - and the length is kept because how many cards somebody holds is public
+across a real table. Proved against four real leaks before it was trusted.
+
+**`Engine.create` takes the table's `target`**, because `tables.target` is on the row and only the
+engine knows what to do with it. A hokm engine that assumed seven would have ignored the thirteen
+the create form offers and the database already stores. Ludo ignores the argument.
+
+**The opening revision belongs to the engine.** `start` wrote the literal `0` beside the state the
+engine had just built - this layer deciding a number the engine owns - and
+`matches_rev_matches_state` caught it as a 500 on Start the first time an engine opened at anything
+else. It writes `revOf(state)` now.
+
+**`tools/qa/hokm-pass.mjs` plays whole matches at two, three and four over the real api**, and it
+checks one thing ludo's pass structurally cannot: every seat reads `GET /matches/:id` for ITSELF
+after every turn, and no answer ever carries a card that reader is not holding. `hokm-seam.spec.ts`
+proves the engine composes per seat; this proves it survives the route, the projector, the
+serialiser and the wire.
+
+**`games.status` for hokm is `available` now**, which is what `table.create` joins on - so the flip
+is the thing that opens the door, and it happened in the commit that made it true. `status` is never
+overwritten on conflict, so it reached a database built from nothing.
+
 ## Drawing the board
 
 The board a player moves tokens on is a **photograph of the object the market scene already stands

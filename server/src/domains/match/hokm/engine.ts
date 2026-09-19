@@ -126,7 +126,7 @@ export function create(seats: number, target: number, deal: Deal): HokmState
     return dealHand({
         v: 1,
         game: 'hokm',
-        rev: 1,
+        rev: 0,
         seats,
         target,
         hakem,

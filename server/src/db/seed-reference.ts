@@ -45,12 +45,14 @@ interface GameSeed
  * a working lobby behind a disabled card. `coming-soon` is for a game whose row exists before its
  * table does.
  *
- * **Three of the four are `coming-soon` and that is the honest value.** Hokm, poker and backgammon
- * have a catalogue entry, hero art, rules copy, a lobby and a leaderboard, and no engine:
- * `match/service.ts` refuses every game but ludo, so a table could be opened, filled and readied and
- * then Start answered 422. `available` is a claim about a mechanism, and this product deletes those
- * rather than shipping them - it is the same judgement that removed `game_rules.fairness` and the
- * invented win rates. Each one flips back to `available` in the commit that lands its engine.
+ * **Two of the four are `coming-soon` and that is the honest value.** Poker and backgammon have a
+ * catalogue entry, hero art, rules copy, a lobby and a leaderboard, and no engine: nothing behind
+ * the seam plays them, so a table could be opened, filled and readied and then Start answered 422.
+ * `available` is a claim about a mechanism, and this product deletes those rather than shipping
+ * them - the same judgement that removed `game_rules.fairness` and the invented win rates. Each one
+ * flips back in the commit that lands its engine, which is what hokm just did: `engines/hokm.ts`
+ * deals it, `hokm-pass.mjs` plays whole matches at two, three and four over the real api, and
+ * `table.create` joins `games` on this status, so the flip is the thing that opens the door.
  *
  * `status` is never overwritten on conflict (see below), so changing it here reaches a database
  * built from nothing and not one that already holds the row. Nothing has shipped, so the answer is
@@ -63,7 +65,7 @@ export const GAME_SEEDS: GameSeed[] = [
         category: 'cards',
         minPlayers: 2,
         maxPlayers: 4,
-        status: 'coming-soon',
+        status: 'available',
         seats: [2, 3, 4],
         modes: ['live', 'turns'],
         targets: [7, 13],

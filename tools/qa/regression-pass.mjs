@@ -347,7 +347,7 @@ console.log('\n[6] the server decides what a table may be');
                 });
                 return r.status;
             };
-            return { hokm: await post('hokm', 4), poker: await post('poker', 2), backgammon: await post('backgammon', 2) };
+            return { poker: await post('poker', 2), backgammon: await post('backgammon', 2) };
         });
 
         for (const [game, status] of Object.entries(unplayable))
