@@ -14,26 +14,26 @@ interface FooterColumn
     links: FooterLink[];
 }
 
+/**
+ * Every link here goes somewhere, which it did not.
+ *
+ * `/about`, `/contact`, `/privacy` and `/terms` were four entries in this list and none of them is
+ * a route in `routes.ts` - so the footer on every public page, including the landing page, offered
+ * four links that answered 404. Nothing could see it: `npm run qa` tours the routes the router
+ * DECLARES, so a url that exists only in this file was never once opened by any gate.
+ *
+ * They are gone rather than stubbed, which is the rule this product follows for anything with no
+ * producer behind it. A privacy page in particular is owed real content - the notes promise that
+ * the epoch-coarse forward secrecy, what the server still sees and the typing indicator are all
+ * stated in it - and a page of placeholder text under that heading would be worse than no heading,
+ * because it is a claim rather than an absence. It comes back when it is written.
+ */
 const COLUMNS: FooterColumn[] = [
     {
         headingKey: 'footer.product',
         links: [
             { href: '/#games', labelKey: 'nav.games' },
             { href: '/#crew', labelKey: 'nav.rooms' }
-        ]
-    },
-    {
-        headingKey: 'footer.company',
-        links: [
-            { href: '/about', labelKey: 'footer.about' },
-            { href: '/contact', labelKey: 'footer.contact' }
-        ]
-    },
-    {
-        headingKey: 'footer.legal',
-        links: [
-            { href: '/privacy', labelKey: 'footer.privacy' },
-            { href: '/terms', labelKey: 'footer.terms' }
         ]
     }
 ];

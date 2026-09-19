@@ -67,12 +67,6 @@ export const landing: Pick<Dictionary, keyof typeof reference> = {
 
     'footer.tagline': 'یک دنیای بازی اجتماعی از نورا.',
     'footer.product': 'محصول',
-    'footer.company': 'شرکت',
-    'footer.legal': 'حقوقی',
-    'footer.privacy': 'حریم خصوصی',
-    'footer.terms': 'شرایط',
-    'footer.about': 'دربارهٔ ما',
-    'footer.contact': 'تماس',
     'footer.rights': 'همهٔ حقوق محفوظ است.',
 
     'theme.label': 'نور',

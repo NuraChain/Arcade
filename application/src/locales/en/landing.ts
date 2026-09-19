@@ -64,12 +64,6 @@ export const landing = {
 
     'footer.tagline': 'A social gaming world by Nura.',
     'footer.product': 'Product',
-    'footer.company': 'Company',
-    'footer.legal': 'Legal',
-    'footer.privacy': 'Privacy',
-    'footer.terms': 'Terms',
-    'footer.about': 'About',
-    'footer.contact': 'Contact',
     'footer.rights': 'All rights reserved.',
 
     'theme.label': 'Lighting',
