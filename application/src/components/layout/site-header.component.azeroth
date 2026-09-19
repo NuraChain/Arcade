@@ -1,5 +1,6 @@
 import Button from '../ui/button.component.azeroth';
 import Icon from '../../icons/icon.component.azeroth';
+import { beenHere } from '../../lib/been-here.ts';
 import { useConnect } from '../../stores/connect.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useScroll } from '../../stores/scroll.store.ts';
@@ -13,6 +14,14 @@ import Panel from '../ui/panel.component.azeroth';
  *
  * `cta` exists for the sign-in page, which IS the connect surface - a header button that opened a
  * wallet chooser on top of a wallet chooser would be two doors to one room.
+ *
+ * **Somebody already signed in is offered the way IN, not the way to sign in again.** The header
+ * said "Connect wallet" to everybody, including the person who had been playing five minutes
+ * earlier and only wanted to get back. `beenHere()` reads a cookie the app leaves behind and imports
+ * nothing, because this page must hold neither `session.store.ts` nor `api.ts` - see that module for
+ * why, and for why a stale answer is safe. Read once at mount rather than as a signal: a cookie does
+ * not change while somebody is looking at the landing page, and a button that rewrote itself mid-
+ * scroll would be worse than one that is briefly generous.
  */
 export default component SiteHeader(props: { cta?: boolean })
 {
@@ -22,9 +31,19 @@ export default component SiteHeader(props: { cta?: boolean })
 
     state open = false;
 
+    /**
+     * Read in `mount` rather than at construction, because this component is PRERENDERED: the
+     * server has no cookie, and a value baked into the static HTML would be wrong for everybody.
+     * Reading after hydration means the first paint is the signed-out header and it corrects itself
+     * in the same frame - which is the same shape `ready` uses for the 3D canvas.
+     */
+    state returning = false;
+
     // The only reader of the scroll store, so the only place that needs to start it.
     mount
     {
+        returning = beenHere();
+
         return scroll.start();
     }
 
@@ -52,11 +71,13 @@ export default component SiteHeader(props: { cta?: boolean })
                 <ThemeSwitch />
                 <LanguageSwitch />
                 <Show when={ props.cta !== false }>
-                    { () =>
-                        <Button variant="primary" size="sm" leading="wallet" onClick={ () => connect.show() }>
-                            { locale.t('nav.connect') }
+                    { () => returning
+                        ? <Button variant="primary" size="sm" leading="games" to="/app">
+                            { locale.t('nav.enter') }
                         </Button>
-                    }
+                        : <Button variant="primary" size="sm" leading="wallet" onClick={ () => connect.show() }>
+                            { locale.t('nav.connect') }
+                        </Button> }
                 </Show>
             </nav>
 
@@ -79,8 +100,11 @@ export default component SiteHeader(props: { cta?: boolean })
                     <LanguageSwitch />
                 </Panel>
                 <Show when={ props.cta !== false }>
-                    { () =>
-                        <Button
+                    { () => returning
+                        ? <Button variant="primary" size="md" leading="games" block to="/app" onClick={ () => open = false }>
+                            { locale.t('nav.enter') }
+                        </Button>
+                        : <Button
                             variant="primary"
                             size="md"
                             leading="wallet"
@@ -92,8 +116,7 @@ export default component SiteHeader(props: { cta?: boolean })
                             } }
                         >
                             { locale.t('nav.connect') }
-                        </Button>
-                    }
+                        </Button> }
                 </Show>
             </div>
         </Show>

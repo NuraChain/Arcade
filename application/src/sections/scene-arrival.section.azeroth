@@ -1,5 +1,6 @@
 import Button from '../components/ui/button.component.azeroth';
 import Icon from '../icons/icon.component.azeroth';
+import { beenHere } from '../lib/been-here.ts';
 import { useConnect } from '../stores/connect.store.ts';
 import { useLocale } from '../stores/locale.store.ts';
 
@@ -7,6 +8,20 @@ export default component SceneArrival()
 {
     const locale = useLocale();
     const connect = useConnect();
+
+    /**
+     * Somebody already signed in is sent back to their tables, not asked to connect again.
+     *
+     * Read in `mount` because this section is PRERENDERED - the server has no cookie, so a value
+     * baked into the static HTML would be wrong for everybody. See `lib/been-here.ts` for why the
+     * landing page cannot simply ask, and why being briefly generous is the safe direction to fail.
+     */
+    state returning = false;
+
+    mount
+    {
+        returning = beenHere();
+    }
 
     <section class="relative flex min-h-dvh flex-col justify-end pb-20 pt-28 sm:pb-24" aria-labelledby="arrival-title">
         <div class="mx-auto w-full max-w-[80rem] px-5 sm:px-8">
@@ -23,7 +38,9 @@ export default component SceneArrival()
                 </p>
 
                 <div class="mt-2 flex flex-wrap items-center gap-3">
-                    <Button variant="primary" size="lg" leading="wallet" onClick={ () => connect.show() }>{ locale.t('hero.cta') }</Button>
+                    { returning
+                        ? <Button variant="primary" size="lg" leading="games" to="/app">{ locale.t('hero.enter') }</Button>
+                        : <Button variant="primary" size="lg" leading="wallet" onClick={ () => connect.show() }>{ locale.t('hero.cta') }</Button> }
                     <Button href="#games" variant="ghost" size="lg" icon="chevron-down">{ locale.t('nav.games') }</Button>
                 </div>
             </div>

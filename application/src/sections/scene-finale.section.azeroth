@@ -1,4 +1,5 @@
 import Button from '../components/ui/button.component.azeroth';
+import { beenHere } from '../lib/been-here.ts';
 import { useConnect } from '../stores/connect.store.ts';
 import { useLocale } from '../stores/locale.store.ts';
 
@@ -7,11 +8,27 @@ export default component SceneFinale()
     const locale = useLocale();
     const connect = useConnect();
 
+    /**
+     * Somebody already signed in is sent back to their tables, not asked to connect again.
+     *
+     * Read in `mount` because this section is PRERENDERED - the server has no cookie, so a value
+     * baked into the static HTML would be wrong for everybody. See `lib/been-here.ts` for why the
+     * landing page cannot simply ask, and why being briefly generous is the safe direction to fail.
+     */
+    state returning = false;
+
+    mount
+    {
+        returning = beenHere();
+    }
+
     <section id="join" class="relative flex min-h-dvh items-center justify-center py-24 text-center" aria-labelledby="finale-title">
         <div class="mx-auto flex w-full max-w-[46rem] flex-col items-center gap-5 px-5 sm:px-8">
             <h2 id="finale-title" class="text-display-xl text-text">{ locale.t('finale.title') }</h2>
             <p class="max-w-[42ch] text-ui-lg text-muted">{ locale.t('finale.lead') }</p>
-            <Button variant="primary" size="lg" leading="wallet" onClick={ () => connect.show() }>{ locale.t('finale.cta') }</Button>
+            { returning
+                        ? <Button variant="primary" size="lg" leading="games" to="/app">{ locale.t('hero.enter') }</Button>
+                        : <Button variant="primary" size="lg" leading="wallet" onClick={ () => connect.show() }>{ locale.t('finale.cta') }</Button> }
         </div>
     </section>
 }

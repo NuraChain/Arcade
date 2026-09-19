@@ -1,5 +1,6 @@
 import { createStore, createSignal, type Getter } from 'azerothjs';
 
+import { rememberBeenHere } from '../lib/been-here.ts';
 import { client, type Account } from '../api.ts';
 import { keyStore } from '../lib/device-keys.ts';
 import { forgetEpochKeys } from '../lib/epoch-keys.ts';
@@ -66,10 +67,17 @@ export const useSession = createStore((): SessionApi =>
         try
         {
             const state = await client.auth.me();
+
             setAccount(state.account ?? null);
+            rememberBeenHere(state.account != null);
         }
         catch
         {
+            /*
+             * A FAILED request is not a signed-out answer, so the note is left alone. Clearing it
+             * here would mean a dropped connection on the landing page demoted somebody to
+             * "Connect wallet" for the rest of the visit.
+             */
             setAccount(null);
         }
     };
@@ -88,6 +96,7 @@ export const useSession = createStore((): SessionApi =>
         establish(next)
         {
             setAccount(next);
+            rememberBeenHere(true);
             settled = Promise.resolve();
         },
 
@@ -95,6 +104,7 @@ export const useSession = createStore((): SessionApi =>
         {
             await client.auth.signOut().catch(() => undefined);
             await surrenderKeys();
+            rememberBeenHere(false);
             setAccount(null);
             settled = Promise.resolve();
         },
