@@ -273,7 +273,21 @@ describe('table rules', () =>
 
 describe('wall clock discipline', () =>
 {
-    const sources = import.meta.glob('../src/**/*.{ts,azeroth}', { query: '?raw', import: 'default', eager: true }) as Record<string, string>;
+    /*
+     * `main.azeroth` is excluded to work around a FRAMEWORK defect, not because the rule does not
+     * apply to it. The vite plugin runs its lint pass over a `?raw` import as well, where the module
+     * it sees is `export default "import { bootClient } ..."` - one string literal - so it reports
+     * `bootClient` as an unused import on every test run. It is used: `bootClient(App);` is the last
+     * line of the file. That is entry 5 in the framework register, still open on 2.1.0.
+     *
+     * The entry module is twenty-five lines, boots the client and reads no clock, so dropping it
+     * from this scan costs the rule nothing and takes a permanent false warning out of every run.
+     * Put it back when the plugin stops linting raw imports.
+     */
+    const sources = import.meta.glob(
+        ['../src/**/*.{ts,azeroth}', '!../src/main.azeroth'],
+        { query: '?raw', import: 'default', eager: true }
+    ) as Record<string, string>;
 
     it('reads the time only through the clock seam', () =>
     {
