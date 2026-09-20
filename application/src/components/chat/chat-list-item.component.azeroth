@@ -1,7 +1,7 @@
 import type { GameId } from '../../data/games.ts';
 import { Link } from 'azerothjs';
 
-import { isLineKey } from '../../lib/lines.ts';
+import { isLineKey, namedParams } from '../../lib/lines.ts';
 import type { Conversation } from '../../data/chat.ts';
 import { attachHold } from '../../lib/hold.ts';
 import Icon from '../../icons/icon.component.azeroth';
@@ -41,6 +41,13 @@ export default component ChatListItem(props: { conversation: Conversation; me: s
         return attachHold(row, () => props.onHold?.());
     }
 
+    const nameOf = (handle: string): string =>
+    {
+        const person = people.byHandle(handle);
+
+        return person === null ? handle : locale.text(person.displayName);
+    };
+
     derived others = othersOf(props.conversation, props.me, people.byHandle);
 
     derived group = props.conversation.groupId === null ? undefined : groups.byId(props.conversation.groupId);
@@ -67,12 +74,17 @@ export default component ChatListItem(props: { conversation: Conversation; me: s
         // A server-authored line says what it says, here as well as in the bubble: "alex joined"
         // is a better row than "Table update", and it follows a language switch for free. The
         // generic strings stay as the fallback for a key this client has never heard of.
+        //
+        // Through `namedParams`, because a line's `who` is a HANDLE. The bubble and the table chat
+        // both resolved it and this row did not, so a thread reading "Mina Sadeghi left" was
+        // previewed on the list beside it as "mina left" - which is the exact split the helper's
+        // own docblock says it exists to prevent, with a third renderer nobody counted.
         if (last.kind !== 'text')
         {
             const line = last.line;
             if (line !== undefined && isLineKey(line.key))
             {
-                return locale.t(line.key, line.params);
+                return locale.t(line.key, namedParams(line.params, nameOf));
             }
             return locale.t(last.kind === 'invite'
                 ? 'chats.invitePreview'
