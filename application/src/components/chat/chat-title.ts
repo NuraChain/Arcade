@@ -59,6 +59,14 @@ export function gameNameOf(conversation: Conversation, name: (game: GameId) => s
  * to tell which was which - the timestamp is the only other thing on the row, and a table nobody
  * has spoken in yet has no timestamp either. The generic name survives as the last resort, for a
  * table whose game this client has not heard of.
+ *
+ * The game is asked BEFORE the single other member, and that order is the whole of it. Asked after,
+ * the game branch was unreachable for every TWO-SEAT table - one other person in the room, so the
+ * row took their name - which is every backgammon table and every hokm or ludo table at two. The
+ * defect that paragraph describes had simply moved: a table with Mina and the direct thread with
+ * Mina were two rows reading "Mina Sadeghi", one above the other, and opening one to find out which
+ * was the only way to tell. Reordering cannot touch a direct or group thread, because `gameNameOf`
+ * answers `undefined` for a conversation with no game and only a `kind: 'game'` row has one.
  */
 export function titleOf(
     conversation: Conversation,
@@ -75,14 +83,14 @@ export function titleOf(
     {
         return names.group;
     }
+    if (names.game !== undefined && names.game !== '')
+    {
+        return names.game;
+    }
     const others = othersOf(conversation, me, find);
     if (others.length === 1)
     {
         return others[0].displayName;
-    }
-    if (names.game !== undefined && names.game !== '')
-    {
-        return names.game;
     }
     return { en: 'Table chat', fa: 'گفت‌وگوی میز' };
 }
