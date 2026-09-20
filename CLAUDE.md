@@ -861,8 +861,8 @@ table id, and a template literal will happily call `toString` on one - so
 Quick-play button in the product outside the home page. `npm run qa` tours routes by url and never
 presses a button, so no gate could see it. `lib/open-table.ts` takes the promise as an argument -
 the caller never holds the id, so the broken form cannot be written - and owns the refusal, which
-eight `void`-less calls had nowhere to put. `tests/markup.spec.ts` reads the source and fails if one
-comes back.
+eight `void`-less calls had nowhere to put. Nothing enforces that now - see *The rules no test holds
+any more*.
 
 **Every control on the table page is a `Button` with words on it.** Three of them were not, and each
 failed differently. "Take a seat" - the whole point of the watching panel - was an `IconButton`,
@@ -939,7 +939,7 @@ the one they enrolled.
 Three defects on this path that every gate was green for, each now with a rule:
 
 - **`openTable` in `chat.page` navigated to a url built from a PROMISE.** `lib/open-table.ts` exists
-  to make that unwritable, and the rule in `tests/markup.spec.ts` only looked for the call INSIDE
+  to make that unwritable, and the rule that guarded it only looked for the call INSIDE
   the template literal — so `const tableId = lobby.host(...)` followed by `` `/app/play/${ tableId }` ``
   slipped past, and the "Start a game" button in every chat thread went to
   `/app/play/[object Promise]`. The rule now refuses HOLDING the promise in a variable, which is the
@@ -953,10 +953,10 @@ Three defects on this path that every gate was green for, each now with a rule:
   parameter. The guard is the pathname instead.
 - **A literal 0x1F byte sat in `lib/random.ts`.** `chat/envelope.ts` and `lib/attestation.ts` both
   build their control characters with `String.fromCharCode` and say why in prose; nothing enforced
-  it. `tests/markup.spec.ts` now refuses any invisible control character in `src/`, and that rule was
-  written with character codes rather than a regex escape because the same hazard hit the rule
-  itself — a `\b` in a pattern became a literal backspace, and the rule passed against the exact bug
-  it was written for until it was proved to fail first.
+  it, and nothing does now. The rule that briefly existed was written with character codes rather
+  than a regex escape because the same hazard hit the rule itself — a `\b` in a pattern became a
+  literal backspace, and it passed against the exact bug it was written for until it was proved to
+  fail first. Worth knowing before writing another one.
 
 **The dock under the board is the small things somebody reaches for mid-game.** Sound, the screen,
 the room's code and the chat, and every one of them was reachable before only by LEAVING the game -
@@ -1463,8 +1463,8 @@ sits inside the plate, agreeing exactly until somebody edited one. The component
 pass reads nothing, registers no dependency, and the effect never runs again - and the board draws the
 position it was given at mount for the rest of the match while the panel beside it updates every turn.
 Nothing throws and nothing logs. `world-canvas` has always had the right shape and this is what it is
-for: read the signal into a local, THEN reach through the handle. `tests/markup.spec.ts` fails on any
-`effect` that does it the other way round, which is the only place the difference exists.
+for: read the signal into a local, THEN reach through the handle. Nothing checks it now, and the
+difference exists nowhere else, so it is on the reader.
 
 ## Chat is the server's
 
@@ -2259,8 +2259,7 @@ deleted is the same dead weight as a key that never had one.
 `progress-ring` was the last survivor of that family and is gone too. It drew its value from `level`
 and `stats`, both deleted here, so nothing could ever produce one again — and it sat in
 `components/ui/` with zero importers while every gate stayed green, because nothing renders what
-nothing calls. `tests/markup.spec.ts` now fails on any primitive in that directory with no caller,
-which is the rule that would have said something.
+nothing calls. Nothing says so now - see *The rules no test holds any more*.
 
 ## The wallet fixtures, and why a happy path has to be reachable
 
@@ -2913,15 +2912,19 @@ that never goes away. Dismissal is held for the session and never written down -
 preference, and a flag in `localStorage` would silence it for good on the one machine where the
 answer matters.
 
-**A `<Show>`'s children are lazy and its `fallback` is NOT.** The children are written
-`{ () => ... }` and only run when `when` is true; the fallback is a plain value, built eagerly, at
-the moment `when` flips. So a fallback that dereferences something the surrounding guard is
-responsible for throws the instant that thing goes away - and closing a table did exactly that:
-`table` went null, `seated` flipped false in the same tick, the inner Show reached for its fallback,
-and `table!.taken` sent the entire route tree to "The lights went out." The outer
-`<Show when={ table !== null }>` was no help, because a fallback is not a child. Build the element
-inside a ternary that checks first. `tests/markup.spec.ts` fails on any fallback that asserts
-non-null, brace-matching past nested lazy children so a nested Show's own child can still assert.
+**A `<Show>`'s `fallback` is built exactly when the guard is FALSE**, which is precisely the moment
+the thing the guard protects may be gone. Closing a table did it: `table` went null, `seated` flipped
+false in the same tick, the inner Show reached for its fallback, and `table!.taken` sent the entire
+route tree to "The lights went out." The outer `<Show when={ table !== null }>` was no help, because
+a fallback is not a child. Use an optional chain, which says the same thing and cannot throw.
+
+This paragraph used to say the fallback is built EAGERLY, whether or not it is shown, and on 2.1.0
+that is not true - checked rather than remembered. `fallback` is a lazy render factory on every
+builtin (`FACTORY_ATTRS` in `azerothjs/semantics`, applied by `isFactoryProp`), so `codegen.js` emits
+a bare markup value as `fallback: () => (...)` - every one of the forty-odd in this project's own
+bundle is that shape - and `show.js` resolves it under `untrack` only on the branch that shows it.
+The rule survives the correction and the reason for it does not: laziness never helped here, because
+the fallback is shown at exactly the moment the guard is false.
 
 **And a branch is BUILT UNTRACKED, so a ternary inside one never moves.** `renderer/show.js` builds
 the active branch under `untrack` on purpose - "a signal read INSIDE the branch does not rebuild it",
@@ -3461,6 +3464,39 @@ Two notes for anyone driving that profile by hand: the recovery phrase must be T
 filled, because `fill` sets the value without driving MetaMask's own handler and the box never
 expands into word fields; and the extension tab must stay OPEN, because closing it invalidates the
 content script in every other tab at once.
+
+## The rules no test holds any more
+
+`application/tests/markup.spec.ts` was deleted on 2026-09-20. It read every file under `src/` as
+TEXT and refused sixteen shapes that no type can hold - the technique `lines.spec.ts` still uses
+against `services.ts`. Every one of them was written because the real thing shipped with all gates
+green, so the shapes are worth keeping here even though nothing checks them now.
+
+What it refused, and each is still house style:
+
+- a `lobby.quick`/`lobby.host` call inside a play url, and HOLDING one of those promises in a
+  variable - the step that makes `/app/play/[object Promise]` possible
+- a `fallback` or a `when` that asserts non-null on something the surrounding guard owns
+- a send path that does not ask what stands in the way
+- a store mutator that writes a signal from a value it read out of that same signal
+- an `effect` whose only signal read hides behind an optional call, which subscribes to nothing
+- a hand-written panel surface instead of `Panel`
+- a primitive in `components/ui/` with no caller anywhere
+- one element asked to both grow and be visually hidden
+- a loading flag derived straight from a resource rather than gated on having nothing to show
+- a block comment inside the markup region
+- `madder` used for something merely wrong rather than for a table playing for something
+- an invisible control character anywhere in `src/`
+- an element that is nothing but a display name and does not carry `dir="auto"`
+- a `to`/`href` naming a path `routes.ts` never declares
+
+A seventeenth was added the same day and went with it: a ternary choosing between two ELEMENTS
+inside a control-flow branch, which is chosen once because a branch is built under `untrack`. That
+one is written up in full under *The product shell*, because it is the only one whose mechanism is
+not obvious from the rule.
+
+The two hand-run browser passes are what is left looking at this class of defect, and they only
+cover what they walk through.
 
 ## Verification
 
