@@ -443,6 +443,86 @@ console.log('\n[8] sign-in offers more than one wallet');
     await context.close();
 }
 
+// ------------------------------------------------------------------ 9. the landing CTA
+console.log('\n[9] the landing offers the way BACK to somebody already signed in');
+{
+    /*
+     * The matrix tours `/` six hundred times and never sees this, because every context it builds
+     * is signed in and it only ever reads overflow, hit targets, a landmark and the console - and
+     * "Connect wallet" in front of somebody who is already connected is none of those. It is the
+     * same blind spot the guest settings check exists for, from the other end.
+     *
+     * The structural half matters more than the copy: signed out the control is a BUTTON that
+     * opens the chooser, and returning it is a LINK to /app. A check on the words alone would pass
+     * against a button that says Play and does nothing.
+     *
+     * `exact` is not decoration. Playwright matches an accessible name by SUBSTRING unless told
+     * otherwise, and the Persian brand mark is `بازی‌های نورا` - which contains `بازی`, the word
+     * this check looks for. Without it the brand link answered for the CTA, so the signed-out cell
+     * reported a link to the app that was not there and the returning cell passed on an href of
+     * `/`. English said nothing, because `Play` is not a substring of `Nura Games`.
+     */
+    for (const locale of ['en', 'fa'])
+    {
+        const connect = locale === 'fa' ? 'اتصال کیف پول' : 'Connect wallet';
+        const enter = locale === 'fa' ? 'بازی' : 'Play';
+
+        const fresh = await open({ locale });
+        try
+        {
+            await fresh.page.goto(`${ BASE }/`, { waitUntil: 'networkidle' });
+            await fresh.page.waitForTimeout(1200);
+
+            const header = fresh.page.locator('header').first();
+            record(`[${ locale }] signed out, the header offers the wallet chooser`,
+                await header.getByRole('button', { name: connect, exact: true }).count() > 0, '');
+            record(`[${ locale }] signed out, the header does not link to /app`,
+                await header.getByRole('link', { name: enter, exact: true }).count() === 0, '');
+        }
+        catch (e)
+        {
+            record(`[${ locale }] signed-out landing CTA`, false, String(e.message).slice(0, 140));
+        }
+        await fresh.context.close();
+
+        const back = await open({ locale });
+        try
+        {
+            await signInWithWallet(back.page);
+
+            await back.page.goto(`${ BASE }/`, { waitUntil: 'networkidle' });
+            await back.page.waitForTimeout(1200);
+
+            const header = back.page.locator('header').first();
+            const way = header.getByRole('link', { name: enter, exact: true }).first();
+
+            record(`[${ locale }] returning, the header offers the way in`, await way.count() > 0, '');
+            record(`[${ locale }] returning, it is a link to /app`,
+                (await way.count() > 0) && (await way.getAttribute('href')) === '/app',
+                await way.count() > 0 ? String(await way.getAttribute('href')) : 'absent');
+            record(`[${ locale }] returning, no wallet chooser in the header`,
+                await header.getByRole('button', { name: connect, exact: true }).count() === 0, '');
+
+            /*
+             * Pressed rather than merely read: a link whose href is right and whose click is
+             * swallowed is the shape `lib/open-table.ts` exists to stop, and nothing else here
+             * would notice it.
+             */
+            await way.click();
+            await back.page.waitForURL(/\/app/, { timeout: 15000 });
+            record(`[${ locale }] pressing it lands in the app`, back.page.url().includes('/app'),
+                back.page.url().replace(BASE, ''));
+            record(`[${ locale }] console clean across the round trip`, back.errors.length === 0,
+                back.errors.slice(0, 3).join(' ; '));
+        }
+        catch (e)
+        {
+            record(`[${ locale }] returning landing CTA`, false, String(e.message).slice(0, 140));
+        }
+        await back.context.close();
+    }
+}
+
 await browser.close();
 
 const failed = results.filter((r) => !r.ok);
