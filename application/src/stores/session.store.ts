@@ -88,6 +88,30 @@ export const useSession = createStore((): SessionApi =>
         return settled;
     };
 
+    /**
+     * Signed out HERE, before the network is asked and before the keyring is dropped.
+     *
+     * Both callers navigate to `/sign-in` on the line after `signOut()`, without awaiting it - and
+     * that is the right shape, because a person who pressed the button should not wait for a round
+     * trip to leave. It only works if `signedIn()` is false by the time the router asks: `/sign-in`
+     * is guarded by `requireAnonymous`, so a still-signed-in visitor is redirected to `safeNext()`,
+     * which is `/app`. Clearing the account LAST meant the guard always saw the old answer, bounced
+     * the navigation back, and then the account went null with nothing left to move anybody: the
+     * shell stayed up, signed out, still showing the previous person's unread count and an avatar
+     * with no name, over a banner claiming the network was down.
+     *
+     * The network call and the keyring still happen, and still must - they are just no longer
+     * between a person and the door. `client.auth.signOut()` already swallows its own failure,
+     * because a cookie this browser cannot reach is one the server will refuse on the next read
+     * anyway, and `requireSession` re-asks `/auth/me` on the way back in.
+     */
+    const forget = (): void =>
+    {
+        setAccount(null);
+        rememberBeenHere(false);
+        settled = Promise.resolve();
+    };
+
     return {
         account,
         signedIn: () => account() !== null,
@@ -102,19 +126,16 @@ export const useSession = createStore((): SessionApi =>
 
         async signOut()
         {
+            forget();
             await client.auth.signOut().catch(() => undefined);
             await surrenderKeys();
-            rememberBeenHere(false);
-            setAccount(null);
-            settled = Promise.resolve();
         },
 
         async signOutEverywhere()
         {
+            forget();
             const result = await client.auth.signOutEverywhere().catch(() => ({ ended: 0 }));
             await surrenderKeys();
-            setAccount(null);
-            settled = Promise.resolve();
             return result.ended;
         },
 
