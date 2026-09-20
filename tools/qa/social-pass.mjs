@@ -86,8 +86,14 @@ function reset()
         // Two strangers again.
         `delete from friendships where user_id in (select id from users where handle in ${ both })
            and friend_id in (select id from users where handle in ${ both })`,
+        // EITHER side, not both. The Requests tab carries a count of everything waiting for that
+        // account, so a request left behind by another pass - `hokmtester -> mina`, from a hokm
+        // run - makes the tab read 2 while the row this pass just wrote is the only one it knows
+        // about. The SQL check above it still said one, so the pair disagreed and the browser half
+        // was the one accused. A reset that says "two strangers" has to mean strangers to
+        // everybody who came before, not just to each other.
         `delete from friend_requests where from_user in (select id from users where handle in ${ both })
-           and to_user in (select id from users where handle in ${ both })`,
+            or to_user in (select id from users where handle in ${ both })`,
 
         // Any direct thread between them, so "Message" has to create one.
         `delete from messages where conversation_id in (
