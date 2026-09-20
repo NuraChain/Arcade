@@ -26,9 +26,12 @@ export default component SceneFinale()
         <div class="mx-auto flex w-full max-w-[46rem] flex-col items-center gap-5 px-5 sm:px-8">
             <h2 id="finale-title" class="text-display-xl text-text">{ locale.t('finale.title') }</h2>
             <p class="max-w-[42ch] text-ui-lg text-muted">{ locale.t('finale.lead') }</p>
-            { returning
-                        ? <Button variant="primary" size="lg" leading="games" to="/app">{ locale.t('hero.enter') }</Button>
-                        : <Button variant="primary" size="lg" leading="wallet" onClick={ () => connect.show() }>{ locale.t('finale.cta') }</Button> }
+            <Show
+                when={ returning }
+                fallback={ <Button variant="primary" size="lg" leading="wallet" onClick={ () => connect.show() }>{ locale.t('finale.cta') }</Button> }
+            >
+                { () => <Button variant="primary" size="lg" leading="games" to="/app">{ locale.t('hero.enter') }</Button> }
+            </Show>
         </div>
     </section>
 }

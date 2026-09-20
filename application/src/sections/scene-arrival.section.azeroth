@@ -38,9 +38,12 @@ export default component SceneArrival()
                 </p>
 
                 <div class="mt-2 flex flex-wrap items-center gap-3">
-                    { returning
-                        ? <Button variant="primary" size="lg" leading="games" to="/app">{ locale.t('hero.enter') }</Button>
-                        : <Button variant="primary" size="lg" leading="wallet" onClick={ () => connect.show() }>{ locale.t('hero.cta') }</Button> }
+                    <Show
+                        when={ returning }
+                        fallback={ <Button variant="primary" size="lg" leading="wallet" onClick={ () => connect.show() }>{ locale.t('hero.cta') }</Button> }
+                    >
+                        { () => <Button variant="primary" size="lg" leading="games" to="/app">{ locale.t('hero.enter') }</Button> }
+                    </Show>
                     <Button href="#games" variant="ghost" size="lg" icon="chevron-down">{ locale.t('nav.games') }</Button>
                 </div>
             </div>

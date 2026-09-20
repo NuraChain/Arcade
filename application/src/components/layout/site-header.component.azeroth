@@ -36,6 +36,17 @@ export default component SiteHeader(props: { cta?: boolean })
      * server has no cookie, and a value baked into the static HTML would be wrong for everybody.
      * Reading after hydration means the first paint is the signed-out header and it corrects itself
      * in the same frame - which is the same shape `ready` uses for the 3D canvas.
+     *
+     * Which is why the branch below is a `<Show>` rather than the ternary it was written as. A
+     * ternary picking between two whole elements is a STRUCTURAL choice, and structure is only
+     * rebuilt when the enclosing thunk re-runs - which for a `<Show>` child is when its own `when`
+     * changes, and `props.cta !== false` never changes. So `returning` flipped in `mount`, the
+     * signal really was true, and the signed-out button stayed on screen for the rest of the visit.
+     * `when` is tracked by contract, so the read has to be there rather than inside the branch.
+     *
+     * Nothing could see it. The cookie was written, readable and correct - the browser pass proves
+     * that separately - and the matrix builds every context signed IN, so the one page where this
+     * renders is the one page it never reads this way.
      */
     state returning = false;
 
@@ -71,13 +82,18 @@ export default component SiteHeader(props: { cta?: boolean })
                 <ThemeSwitch />
                 <LanguageSwitch />
                 <Show when={ props.cta !== false }>
-                    { () => returning
-                        ? <Button variant="primary" size="sm" leading="games" to="/app">
-                            { locale.t('nav.enter') }
-                        </Button>
-                        : <Button variant="primary" size="sm" leading="wallet" onClick={ () => connect.show() }>
-                            { locale.t('nav.connect') }
-                        </Button> }
+                    { () =>
+                        <Show
+                            when={ returning }
+                            fallback={ <Button variant="primary" size="sm" leading="wallet" onClick={ () => connect.show() }>{ locale.t('nav.connect') }</Button> }
+                        >
+                            { () =>
+                                <Button variant="primary" size="sm" leading="games" to="/app">
+                                    { locale.t('nav.enter') }
+                                </Button>
+                            }
+                        </Show>
+                    }
                 </Show>
             </nav>
 
@@ -100,23 +116,30 @@ export default component SiteHeader(props: { cta?: boolean })
                     <LanguageSwitch />
                 </Panel>
                 <Show when={ props.cta !== false }>
-                    { () => returning
-                        ? <Button variant="primary" size="md" leading="games" block to="/app" onClick={ () => open = false }>
-                            { locale.t('nav.enter') }
-                        </Button>
-                        : <Button
-                            variant="primary"
-                            size="md"
-                            leading="wallet"
-                            block
-                            onClick={ () =>
-                            {
-                                open = false;
-                                connect.show();
-                            } }
+                    { () =>
+                        <Show
+                            when={ returning }
+                            fallback={ <Button
+                                variant="primary"
+                                size="md"
+                                leading="wallet"
+                                block
+                                onClick={ () =>
+                                {
+                                    open = false;
+                                    connect.show();
+                                } }
+                            >
+                                { locale.t('nav.connect') }
+                            </Button> }
                         >
-                            { locale.t('nav.connect') }
-                        </Button> }
+                            { () =>
+                                <Button variant="primary" size="md" leading="games" block to="/app" onClick={ () => open = false }>
+                                    { locale.t('nav.enter') }
+                                </Button>
+                            }
+                        </Show>
+                    }
                 </Show>
             </div>
         </Show>
