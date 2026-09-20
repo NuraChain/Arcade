@@ -2923,6 +2923,28 @@ and `table!.taken` sent the entire route tree to "The lights went out." The oute
 inside a ternary that checks first. `tests/markup.spec.ts` fails on any fallback that asserts
 non-null, brace-matching past nested lazy children so a nested Show's own child can still assert.
 
+**And a branch is BUILT UNTRACKED, so a ternary inside one never moves.** `renderer/show.js` builds
+the active branch under `untrack` on purpose - "a signal read INSIDE the branch does not rebuild it",
+which is what preserves focus, scroll position and uncontrolled input state across unrelated updates.
+What re-runs the swap is `when`: for a thunk child the effect reads it every run, and for a value
+callback a truthiness memo. So `{ () => signal ? <A/> : <B/> }` picks a branch once and keeps it
+forever, silently - the signal really is true, and the wrong element is still on screen.
+
+That is exactly how the landing page told somebody already signed in to connect a wallet. `returning`
+was read in `mount` (it has to be: the page is prerendered and the server has no cookie), the cookie
+was written, readable and correct, and the ternary sat inside `<Show when={ props.cta !== false }>`,
+whose `when` never changes. A structural choice on a signal is a `<Show when={ thatSignal }>` with
+the other branch as `fallback` - `when` is tracked by contract, and props reach a component as
+GETTERS (`codegen.js` emits `get when() { return (returning()); }`), so the read lands inside the
+swap effect rather than being snapshotted at construction.
+
+No gate could see it. `npm run qa` builds every context signed IN, so the one page where this renders
+is the one page it never reads this way, and the four things it checks - overflow, hit targets, a
+landmark, a clean console - are none of them. `tools/qa/regression-pass.mjs` asserts it now, in both
+languages, and presses the control rather than reading its href: with `exact: true`, because
+Playwright matches an accessible name by SUBSTRING and the Persian brand mark `بازی‌های نورا`
+contains `بازی`, so the brand link answered for the CTA and the check passed against an href of `/`.
+
 **An error that reaches a person has already failed; throwing it away makes it fail twice.** The
 boundary in `App.azeroth` named its first argument `_error` and dropped it, so a crash anywhere
 under `<Routes>` produced that screen and nothing else - no console line, no stack, no clue which
