@@ -414,3 +414,27 @@ point):
   already applies to the dock
 - the Ludo plate keeps `game/layout.ts`'s fractions; pawns become sprites the Phaser scene loads
   instead of flat discs; the card faces keep the sheet's grid (column `card % 13`, row `card / 13`)
+
+### Task 17: play at several tables at once
+
+Asked for on 2026-09-22: "user can play multi tables". A person can already hold chairs at several
+tables (`GET /tables/mine` answers all of them; the home page lists them). What is missing is
+PLAYING them together:
+
+- a table switcher on the play screen: every table the reader sits at, each with its game, code and
+  a "your turn" mark, one tap to move between them without leaving the game screen
+- "your turn" computed per table from the server's own match state, arriving as one field on the
+  seated-tables answer rather than one request per table (the rate-limit shape CLAUDE.md records)
+- the realtime `game` doorbell already rings per match, so a move at another table updates its mark
+- a spec and plan first: it changes a wire shape (`tableSummary`) and the play screen's model
+
+### Task 18 (last): the component kit, finished
+
+Asked for on 2026-09-22: "tooltip toast badge best powerful pagination mobile design first then for
+all devices ... search filters and etc.. reusable complete component". After every page and asset:
+
+- Tooltip, Toast, Badge, Pagination (numbered, load-more, and keyset "show more" with a count), a
+  SearchInput with debounce, clear and recent terms, and a Filters bar (chips + a sheet on a phone)
+- mobile first, then every width; 44px targets on coarse pointers; RTL; keyboard; reduced motion
+- one component per job with a spec for each, and every page moved onto them so no page spells its
+  own version
