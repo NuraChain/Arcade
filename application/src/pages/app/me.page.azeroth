@@ -1,12 +1,13 @@
 import { useHead } from 'azerothjs';
 
 import Page from '../../components/app/page.component.azeroth';
-import PersonRecord from '../../components/social/person-record.component.azeroth';
+import PersonRecord, { type RecordPart } from '../../components/social/person-record.component.azeroth';
+import ProfileHeader from '../../components/social/profile-header.component.azeroth';
+import Badge from '../../components/ui/badge.component.azeroth';
+import Tabs from '../../components/ui/tabs.component.azeroth';
 import ProfileSheet from '../../components/app/profile-sheet.component.azeroth';
 import Panel from '../../components/ui/panel.component.azeroth';
-import Avatar from '../../components/ui/avatar.component.azeroth';
 import Button from '../../components/ui/button.component.azeroth';
-import Chip from '../../components/ui/chip.component.azeroth';
 import EmptyState from '../../components/ui/empty-state.component.azeroth';
 import IconButton from '../../components/ui/icon-button.component.azeroth';
 import SectionHeading from '../../components/ui/section-heading.component.azeroth';
@@ -20,9 +21,10 @@ import { useAccount } from '../../stores/account.store.ts';
 import { useChain, type PublishOutcome } from '../../stores/chain.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useOverlay } from '../../stores/overlay.store.ts';
+import { useRealtime } from '../../stores/realtime.store.ts';
+import { useRecord } from '../../stores/record.store.ts';
 import { useSocial } from '../../stores/social.store.ts';
 import { useToasts } from '../../stores/toasts.store.ts';
-
 
 const OUTCOME: Record<PublishOutcome, MessageKey> = {
     published: 'chain.published',
@@ -33,24 +35,6 @@ const OUTCOME: Record<PublishOutcome, MessageKey> = {
     'wrong-chain': 'chain.wrongChain'
 };
 
-/**
- * Your own profile, and only what is true about it.
- *
- * This page used to carry a level, an XP bar, a career record across four games, a favourite game
- * and twelve achievements. Not one of those had a source: `buildPerson` invented the played counts
- * from a seeded RNG, the level was the square root of that invention, and every real account got
- * `level: 1, skill: 'new', reliability: 100` from `blank()` - numbers about a person that nobody
- * measured and nothing could measure, because no game has ever been played here.
- *
- * What is left is what the server actually knows: who you are, what you wrote about yourself,
- * whether a wallet is behind the account, and how many friends you have.
- *
- * **The record is back, and this is the day it was waiting for.** `player_stats` moves only when a
- * match this server arbitrated ended, so a rating, a win rate and a streak here are the sum of
- * games that really happened - and the achievements beside them are awarded by `domains/achieve`
- * against that same record. What is still absent is still absent: there is no level, no skill band
- * and no reliability score, because nothing measures any of those either.
- */
 export default component MePage()
 {
     const locale = useLocale();
@@ -59,14 +43,23 @@ export default component MePage()
     const social = useSocial();
     const toasts = useToasts();
     const chain = useChain();
+    const live = useRealtime();
+    const record = useRecord();
 
-    /**
-     * Puts the whole address on the clipboard.
-     *
-     * The address is the ONE value the peer-verification story asks a person to compare out of band -
-     * "the way a safety number is" - and it was rendered truncated with no way to read the rest of
-     * it and nothing to copy it with. A comparison nobody can perform is not a defence.
-     */
+    state tab = 'overview';
+
+    const PARTS: Record<string, RecordPart[]> = {
+        overview: ['level', 'achievements', 'history'],
+        games: ['record', 'history'],
+        achievements: ['achievements'],
+        about: []
+    };
+
+    const editProfile = (): void =>
+    {
+        void overlay.open(ProfileSheet, {}, { label: locale.t('profile.title') }).closed;
+    };
+
     const copyAddress = async (): Promise<void> =>
     {
         const address = account.address();
@@ -81,8 +74,6 @@ export default component MePage()
         }
         catch
         {
-            // A browser that refuses the clipboard is a state, not a crash: the tooltip still shows
-            // the whole thing and it can be read out.
             toasts.show({ kind: 'warning', text: locale.t('state.errorLead'), dedupe: 'wallet.address' });
         }
     };
@@ -92,6 +83,16 @@ export default component MePage()
     derived user = account.user();
 
     derived bio = user === null ? '' : user.bio;
+
+    derived held = record.record();
+
+    derived stats = [
+        { label: locale.t('profile.stat.friends'), value: social.friends().length },
+        { label: locale.t('profile.stat.games'), value: (held?.games ?? []).reduce((sum, one) => sum + one.played, 0) },
+        { label: locale.t('profile.stat.achievements'), value: (held?.achievements ?? []).filter((one) => one.earnedAt !== undefined).length }
+    ];
+
+    derived connected = live.status() === 'connected';
 
     const share = async (): Promise<void> =>
     {
@@ -107,14 +108,6 @@ export default component MePage()
         }
     };
 
-    /**
-     * What the registry says about this account, and whether it agrees with this page.
-     *
-     * Hidden outright for a guest and for a deployment pointed at no registry - a panel
-     * explaining an absence is furniture. A read that FAILED is shown, because "the registry
-     * says nothing" and "I could not ask it" are different answers and only one of them is
-     * about the person.
-     */
     derived showChain = account.isWallet() && (chain.sync() !== 'off' || chain.failed());
 
     derived chainNote = chain.failed()
@@ -129,14 +122,6 @@ export default component MePage()
         ? locale.t('chain.noUsername')
         : chain.profile()!.username;
 
-    /**
-     * Sends what the server composed and says what actually happened.
-     *
-     * Every outcome gets its own sentence because they are not the same event: declining in a
-     * wallet is not a failure, a revert is the contract refusing, and a transaction that has not
-     * been mined yet is neither. One "it did not work" for all five would be the shape this
-     * product has already recorded twice - a sheet that reports success before the answer lands.
-     */
     const publish = async (): Promise<void> =>
     {
         const outcome = await chain.publish();
@@ -149,32 +134,40 @@ export default component MePage()
         toasts.show({ kind: taken ? 'success' : 'warning', text: locale.t(taken ? 'chain.adopted' : 'profile.failed') });
     };
 
-    <Page width="narrow" label={ locale.t('app.nav.profile') }>
+    <Page label={ locale.t('app.nav.profile') }>
         <Show
             when={ user !== null }
             fallback={ <EmptyState icon="me" title={ locale.t('person.notFound') } action={ locale.t('app.nav.home') } to="/app" class="py-12" /> }
         >
             { () =>
                 <div class="flex flex-col gap-6">
-                    <header class="flex flex-col items-center gap-3 pt-2 text-center">
-                        <Avatar person={ user } size="2xl" presence="online" ring />
-                        <div class="min-w-0">
-                            <h1 class="title text-ui-3xl" dir="auto">{ locale.text(user!.displayName) }</h1>
-                            <p class="mt-1 text-ui-base text-muted">@{ user!.handle }</p>
-                        </div>
-
-                        <Show when={ bio !== '' }>
-                            { () => <p class="max-w-prose text-ui-base text-muted" dir="auto">{ bio }</p> }
-                        </Show>
-
-                        <Show when={ account.isWallet() }>
-                            { () =>
-                                <Chip icon="key" tone="live">
-                                    <span class="tally">{ shortAddress(account.address() ?? '') }</span>
-                                </Chip>
-                            }
-                        </Show>
-                    </header>
+                    <ProfileHeader
+                        person={ { displayName: locale.text(user!.displayName), hue: user!.hue, handle: user!.handle } }
+                        presence={ connected ? 'online' : null }
+                        bio={ bio }
+                        stats={ stats }
+                        onEditBio={ editProfile }
+                        badges={
+                            <span class="contents">
+                                <Show when={ connected }>
+                                    <Badge dot text={ locale.t('common.online') } tone="live" />
+                                </Show>
+                                <Show when={ account.isWallet() }>
+                                    <span class="inline-flex h-6 items-center gap-1.5 rounded-full border border-line bg-raised px-2.5 text-ui-xs font-semibold text-muted">
+                                        <Icon name="key" size={ 12 } class="text-live" />
+                                        <span class="tally">{ shortAddress(account.address() ?? '') }</span>
+                                    </span>
+                                </Show>
+                            </span>
+                        }
+                        actions={
+                            <span class="contents">
+                                <Button variant="primary" leading="edit" block class="col-span-2" onClick={ editProfile }>{ locale.t('me.edit') }</Button>
+                                <Button variant="secondary" leading="settings" block to="/app/me/settings">{ locale.t('me.settings') }</Button>
+                                <Button variant="secondary" leading="share" block onClick={ () => void share() }>{ locale.t('me.share') }</Button>
+                            </span>
+                        }
+                    />
 
                     <Show when={ !account.isWallet() }>
                         { () =>
@@ -188,16 +181,21 @@ export default component MePage()
                         }
                     </Show>
 
-                    <div class="flex flex-wrap items-center justify-center gap-2">
-                        <Button variant="primary" leading="edit" onClick={ () => void overlay.open(ProfileSheet, {}, { label: locale.t('profile.title') }).closed }>
-                            { locale.t('me.edit') }
-                        </Button>
-                        <Button variant="secondary" leading="settings" to="/app/me/settings">{ locale.t('me.settings') }</Button>
-                        <Button variant="outline" leading="share" onClick={ () => void share() }>{ locale.t('me.share') }</Button>
-                    </div>
+                    <Tabs
+                        label={ locale.t('me.tabs') }
+                        value={ tab }
+                        onChange={ (id) => tab = id }
+                        items={ [
+                            { id: 'overview', label: locale.t('me.tab.overview') },
+                            { id: 'games', label: locale.t('me.tab.games') },
+                            { id: 'achievements', label: locale.t('me.tab.achievements') },
+                            { id: 'about', label: locale.t('me.tab.about') }
+                        ] }
+                    />
 
-                    <PersonRecord handle={ user!.handle } history mine />
+                    <PersonRecord handle={ user!.handle } history mine show={ PARTS[tab] } />
 
+                    <Show when={ tab === 'about' }>
                     <section>
                         <SectionHeading title={ locale.t('person.friends') } />
                         <Panel class="tally text-ui-md text-text">
@@ -273,6 +271,7 @@ export default component MePage()
                                 <p class="mt-2 text-ui-xs text-faint">{ locale.t('wallet.address.compare') }</p>
                             </section>
                         }
+                    </Show>
                     </Show>
                 </div>
             }

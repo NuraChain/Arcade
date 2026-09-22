@@ -11,21 +11,9 @@ import { useLocale } from '../../stores/locale.store.ts';
 import { usePeople } from '../../stores/people.store.ts';
 import { useRecord } from '../../stores/record.store.ts';
 
-/**
- * What a person has played and what they have earned, on their profile.
- *
- * One component for both profiles, because they show the same thing about two different people and
- * two copies would be two chances to show it differently. The only asymmetry is `history`, and it
- * is a rule rather than a layout choice: an aggregate record is what a profile has always shown,
- * while a list of the games somebody sat at - with who else was there, and when - is a description
- * of their week. That is this reader's own and the route that serves it takes no handle.
- *
- * It opens in `mount` and closes in the teardown rather than from an `effect` over the handle. A
- * route parameter is shared router state, so an effect fires again on the way OUT with the next
- * route's value in hand - which is how the group page came to ask for a conversation that was not
- * there and put a 404 in the console on every navigation away.
- */
-export default component PersonRecord(props: { handle: string; history?: boolean; mine?: boolean })
+export type RecordPart = 'level' | 'record' | 'achievements' | 'history';
+
+export default component PersonRecord(props: { handle: string; history?: boolean; mine?: boolean; show?: RecordPart[] })
 {
     const locale = useLocale();
     const record = useRecord();
@@ -43,6 +31,8 @@ export default component PersonRecord(props: { handle: string; history?: boolean
 
         return () => record.close();
     }
+
+    derived parts = props.show ?? (props.history === true ? ['level', 'record', 'achievements', 'history'] : ['level', 'record', 'achievements']);
 
     derived held = record.record();
 
@@ -65,26 +55,27 @@ export default component PersonRecord(props: { handle: string; history?: boolean
         players.filter((one) => one !== props.handle).map(nameOf).join(locale.t('list.separator'));
 
     <>
-        <Show when={ progress !== null }>
+        <Show when={ progress !== null && parts.includes('level') }>
             { () => <LevelBar progress={ progress! } mine={ props.mine === true } /> }
         </Show>
 
-        <section>
-            <SectionHeading title={ locale.t('record.title') } />
+        <Show when={ parts.includes('record') }>
+            <section>
+                <SectionHeading title={ locale.t('record.title') } />
 
-            <Show when={ record.loading() && held === null }>
+                <Show when={ record.loading() && held === null }>
                 { () => <Skeleton class="h-28 w-full rounded-panel" /> }
-            </Show>
+                </Show>
 
-            <Show when={ !record.loading() && games.length === 0 }>
+                <Show when={ !record.loading() && games.length === 0 }>
                 { () =>
                     <Panel>
                         <EmptyState icon="dice" title={ locale.t('record.empty') } lead={ locale.t('record.emptyLead') } class="py-6" />
                     </Panel>
                 }
-            </Show>
+                </Show>
 
-            <Show when={ games.length > 0 }>
+                <Show when={ games.length > 0 }>
                 { () =>
                     <ul class="grid gap-3 @2xl:grid-cols-2">
                         <For each={ games } key={ (row) => row.game } let={ row }>
@@ -92,10 +83,11 @@ export default component PersonRecord(props: { handle: string; history?: boolean
                         </For>
                     </ul>
                 }
-            </Show>
-        </section>
+                </Show>
+            </section>
+        </Show>
 
-        <Show when={ achievements.length > 0 }>
+        <Show when={ achievements.length > 0 && parts.includes('achievements') }>
             { () =>
                 <section>
                     <SectionHeading
@@ -111,7 +103,7 @@ export default component PersonRecord(props: { handle: string; history?: boolean
             }
         </Show>
 
-        <Show when={ props.history === true }>
+        <Show when={ props.history === true && parts.includes('history') }>
             { () =>
                 <section>
                     <SectionHeading title={ locale.t('history.title') } />

@@ -27,7 +27,7 @@ export default component NotificationRow(props: {
         && social.incoming().some((request) => request.from === props.item.actor);
 
     <div class={ () => [
-        'flex flex-col gap-2 rounded-tile px-2 py-2',
+        'flex flex-col gap-2 px-3 py-2.5',
         props.item.read ? '' : 'bg-accent/5'
     ].filter(Boolean).join(' ') }>
         <div class="flex items-center gap-3">

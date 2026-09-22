@@ -13,14 +13,6 @@ import { useLocale } from '../../stores/locale.store.ts';
 import { useRecovery } from '../../stores/recovery.store.ts';
 import { useToasts } from '../../stores/toasts.store.ts';
 
-/**
- * The devices panel.
- *
- * Nothing is sealed yet, and the copy on this page is careful not to pretend otherwise: it says
- * what a device is FOR and what revoking one does today, and it does not claim that a message
- * anywhere is unreadable. The states are the point - `pending`, `waiting`, `locked` and
- * `tampered` are built and reachable before the feature that will lean on them.
- */
 export default component DevicesPage()
 {
     const locale = useLocale();
@@ -31,19 +23,6 @@ export default component DevicesPage()
 
     useHead({ title: () => locale.t('devices.title') });
 
-    /**
-     * The two most consequential buttons in this product, and they used to say nothing at all.
-     *
-     * Confirming a device is what lets it be wrapped an epoch key - it can read the messages from
-     * then on; revoking one ends its sessions and takes it out of every future recipient set. Both
-     * were `void devices.confirm(id)`, and `write()` does not catch - so a refused request was an
-     * unhandled rejection: no toast, no console line, and a row that looked unchanged because the
-     * refetch afterwards never ran. A person pressed Revoke on a laptop they had lost and was told
-     * nothing either way.
-     *
-     * This is the rule the report sheet already states - a safety surface has to say what actually
-     * happened, because somebody who believes it worked stops looking for another way.
-     */
     const act = async (work: Promise<void>, said: 'devices.confirmed' | 'devices.revoked'): Promise<void> =>
     {
         try
@@ -63,20 +42,8 @@ export default component DevicesPage()
 
     derived retired = rows.filter((one) => one.revoked);
 
-    /**
-     * This browser, when it is the one waiting to be confirmed.
-     *
-     * That is the state recovery exists for: the device that would have confirmed it is the one
-     * that was lost, so the phrase has to be able to vouch instead.
-     */
     derived waiting = devices.readiness() === 'waiting' ? devices.current() ?? undefined : undefined;
 
-    /**
-     * The label this browser suggests for itself.
-     *
-     * A posture, not a user-agent string. "Chrome 141 on Windows NT 10.0" is a fingerprint printed
-     * on a screen; "This phone" is what somebody actually recognises, and they can rename it.
-     */
     derived suggestion = locale.t(device.posture() === 'phone' ? 'devices.namePhone' : 'devices.nameDesktop');
 
     mount

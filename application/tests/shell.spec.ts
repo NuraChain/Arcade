@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { cleanup, fire, renderTest } from '@azerothjs/testing';
-import { RouterProvider, Routes, createMemoryHistory, createRouter, type Route } from 'azerothjs';
+import { RouterProvider, Routes, createMemoryHistory, createRouter, createSignal, type Route } from 'azerothjs';
 
 import BottomNav from '../src/components/app/bottom-nav.component.azeroth';
 import { RAIL } from '../src/components/app/nav-items.ts';
@@ -113,6 +113,30 @@ describe('Tabs', () =>
         fire(tabs[1] as HTMLElement, 'click');
         expect(onChange).toHaveBeenCalledWith('online');
         expect(tabs[1].querySelector('.tally')?.textContent).toBe('3');
+    });
+
+    it('moves its highlight with the selection, not only its aria', async () =>
+    {
+        const [current, setCurrent] = createSignal('all');
+        const items = [{ id: 'all', label: 'All' }, { id: 'online', label: 'Online' }];
+        const { container } = renderTest(() => Tabs({
+            items,
+            get value()
+            {
+                return current();
+            },
+            label: 'Friends',
+            onChange: setCurrent
+        }) as Rendered);
+        const tabs = container.querySelectorAll<HTMLElement>('[role="tab"]');
+
+        fire(tabs[1], 'click');
+        await settle();
+
+        expect(tabs[1].getAttribute('aria-selected')).toBe('true');
+        expect(tabs[1].className, 'the painted state has to follow the selection, not only the aria').toContain('text-text');
+        expect(tabs[1].querySelector('span[aria-hidden]')!.className).toContain('bg-accent');
+        expect(tabs[0].querySelector('span[aria-hidden]')!.className).not.toContain('bg-accent');
     });
 });
 
