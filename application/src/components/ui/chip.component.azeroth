@@ -17,7 +17,8 @@ export default component Chip(props: {
     derived interactive = props.onClick !== undefined;
 
     derived shell = [
-        'inline-flex h-8 shrink-0 coarse:h-11 items-center gap-1.5 whitespace-nowrap rounded-control border px-3 text-ui-sm font-semibold',
+        'inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-control border px-3 text-ui-sm font-semibold',
+        interactive ? 'coarse:h-11' : '',
         'transition duration-150 ease-[var(--ease-ui)]',
         props.selected === true
             ? 'border-accent/60 bg-accent/15 text-accent'

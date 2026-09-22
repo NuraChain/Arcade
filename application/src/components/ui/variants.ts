@@ -90,6 +90,16 @@ export const TONE_DOT: Record<Tone, string> = {
     madder: 'bg-madder'
 };
 
+export const TONE_PILL: Record<Tone, string> = {
+    neutral: 'border-line bg-raised text-muted',
+    accent: 'border-accent/30 bg-accent/12 text-muted',
+    live: 'border-live/30 bg-live/12 text-text',
+    gold: 'border-gold/30 bg-gold/12 text-muted',
+    win: 'border-win/30 bg-win/12 text-text',
+    danger: 'border-danger/30 bg-danger/12 text-text',
+    madder: 'border-madder/30 bg-madder/12 text-text'
+};
+
 export const BADGE_SIZE: Record<BadgeSize, string> = {
     sm: 'h-4 min-w-4 px-1 text-ui-2xs',
     md: 'h-5 min-w-5 px-1.5 text-ui-xs'

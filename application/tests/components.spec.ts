@@ -36,6 +36,19 @@ describe('SectionHeading', () =>
     });
 });
 
+describe('SectionHeading type', () =>
+{
+    it('titles a section in sentence case at reading size', () =>
+    {
+        const { container } = renderTest(() => SectionHeading({ title: 'Featured games' }) as Rendered);
+        const heading = container.querySelector('h2')!;
+
+        expect(heading.className).toContain('text-ui-lg');
+        expect(heading.className).toContain('text-text');
+        expect(heading.className).not.toContain('uppercase');
+    });
+});
+
 describe('Button', () =>
 {
     it('renders a <button> that defaults to type=button', () =>

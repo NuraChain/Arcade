@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { cleanup, fire, renderTest } from '@azerothjs/testing';
 
+import Avatar from '../src/components/ui/avatar.component.azeroth';
 import Badge from '../src/components/ui/badge.component.azeroth';
 import Pagination from '../src/components/ui/pagination.component.azeroth';
 import Slider from '../src/components/ui/slider.component.azeroth';
@@ -258,12 +259,42 @@ describe('Badge', () =>
         expect(host.getAttribute('aria-describedby'), 'the tooltip is not open until it is asked for').toBeNull();
     });
 
+    it('draws a status pill when a dot and a label come together', () =>
+    {
+        const { container } = renderTest(() => Badge({ dot: true, text: 'Live', tone: 'live' }) as Rendered);
+        const pill = container.querySelector('span.rounded-full.h-6')!;
+
+        expect(pill, 'the design strip draws Live, Online and In a game as one pill').not.toBeNull();
+        expect(pill.textContent).toBe('Live');
+        expect(pill.querySelector('.bg-live'), 'the dot carries the colour').not.toBeNull();
+        expect(pill.className, 'a word in a pill must not be forced left-to-right').not.toContain('tally');
+    });
+
     it('takes no box at all when there is nothing to say', () =>
     {
         const { container } = renderTest(() => Badge({ count: 3, label: 'unread' }) as Rendered);
         const host = container.querySelector('span')!;
 
         expect(host.className, 'an untipped badge still costs a box').toContain('contents');
+    });
+});
+
+describe('Avatar', () =>
+{
+    it('gives away its own colour rather than borrowing the accent', () =>
+    {
+        const { container } = renderTest(() => Avatar({ person: { displayName: 'Ana Ray', hue: 10 }, presence: 'away' }) as Rendered);
+
+        expect(container.querySelector('.bg-gold')).not.toBeNull();
+        expect(container.querySelector('.bg-accent'), 'blue means in a game in the design, and away is not that').toBeNull();
+    });
+
+    it('rings its dot in the colour of the surface it sits on', () =>
+    {
+        const { container } = renderTest(() => Avatar({ person: { displayName: 'Ana Ray', hue: 10 }, presence: 'online', ringOn: 'void' }) as Rendered);
+
+        expect(container.querySelector('.ring-void')).not.toBeNull();
+        expect(container.querySelector('.ring-field')).toBeNull();
     });
 });
 

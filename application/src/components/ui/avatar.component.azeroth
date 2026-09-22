@@ -21,15 +21,6 @@ export function initialsOf(name: string): string
     return (parts[0].slice(0, 1) + parts[parts.length - 1].slice(0, 1)).toUpperCase();
 }
 
-/**
- * The two fields an avatar actually reads, rather than the whole person it used to demand.
- *
- * A `PersonSummary` still satisfies this - it is a structural subset - so nothing that passed one
- * before has changed. What it unblocks is the caller that legitimately holds LESS than a person:
- * the leaderboard is served unguarded, so its rows carry a name and a hue and nothing else, and
- * requiring a bio and an `isMinor` flag to draw a coloured circle with two letters in it was the
- * type asking for data the screen has no business being given.
- */
 export interface Facade
 {
     displayName: string;
@@ -41,10 +32,10 @@ export default component Avatar(props: {
     size?: AvatarSize;
     presence?: Presence;
     ring?: boolean;
+    ringOn?: 'field' | 'void';
     class?: string;
 })
 {
-    
     derived size = props.size ?? 'md';
 
     derived name = props.person === null ? '' : props.person.displayName;
@@ -53,7 +44,9 @@ export default component Avatar(props: {
 
     derived dotClass = props.presence === 'online' || props.presence === 'playing'
         ? 'bg-live'
-        : (props.presence === 'away' ? 'bg-accent' : 'bg-faint');
+        : (props.presence === 'away' ? 'bg-gold' : 'bg-faint');
+
+    derived ringClass = props.ringOn === 'void' ? 'ring-void' : 'ring-field';
 
     <span
         class={ [
@@ -76,11 +69,11 @@ export default component Avatar(props: {
             { () =>
                 <span
                     class={ [
-                        'absolute -bottom-0.5 -end-0.5 rounded-full ring-field',
+                        'absolute -bottom-0.5 -end-0.5 rounded-full',
+                        ringClass,
                         AVATAR_DOT[size],
-                        dotClass,
-                        props.presence === 'playing' ? 'animate-pulse-live motion-reduce:animate-none' : ''
-                    ].filter(Boolean).join(' ') }
+                        dotClass
+                    ].join(' ') }
                     aria-hidden="true"
                 ></span>
             }
