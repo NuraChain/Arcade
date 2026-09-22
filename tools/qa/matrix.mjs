@@ -50,6 +50,7 @@ const ROUTES = [
     { id: 'chat', path: '/app/chats/:conversation' },
     { id: 'group', path: '/app/groups/balcony-backgammon' },
     { id: 'play', path: '/app/play/:table' },
+    { id: 'leaderboard', path: '/app/leaderboard' },
     { id: 'discover', path: '/app/discover' },
     { id: 'search', path: '/app/search' },
     { id: 'notifications', path: '/app/notifications' },

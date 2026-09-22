@@ -470,6 +470,6 @@ describe('routes', () =>
     {
         expect(routes.find((route) => route.path === '/')?.render).toBe('static');
         expect(routes.find((route) => route.path === '/app')?.render).toBe('client');
-        expect(routes.find((route) => route.path === '/app')?.children?.length).toBe(16);
+        expect(routes.find((route) => route.path === '/app')?.children?.length).toBe(17);
     });
 });

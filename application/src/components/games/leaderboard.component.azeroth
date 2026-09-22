@@ -12,7 +12,6 @@ import { useLocale } from '../../stores/locale.store.ts';
 import type { GameId } from '../../data/games.ts';
 import type { LeaderboardWindow } from '../../api.ts';
 
-/** The four windows, newest first, because the one somebody can still climb today is the near one. */
 const WINDOWS: { id: LeaderboardWindow; key: 'board.today' | 'board.month' | 'board.year' | 'board.all' }[] = [
     { id: 'today', key: 'board.today' },
     { id: 'month', key: 'board.month' },
@@ -20,31 +19,7 @@ const WINDOWS: { id: LeaderboardWindow; key: 'board.today' | 'board.month' | 'bo
     { id: 'all', key: 'board.all' }
 ];
 
-/**
- * Who is at the top of one game, over one window.
- *
- * A leaderboard used to be on this page and was deleted with the rest of the invented profile: it
- * ranked people by `stats`, which `buildPerson` produced from a seeded RNG. This one is counted from
- * matches this server arbitrated.
- *
- * **Four windows, because one all-time board is a board nobody new can ever appear on.** Somebody
- * who started this week is not going to out-total a year of somebody else's play, and a product
- * whose only ranking says so is one they stop looking at. Today and this month are lists a good
- * evening genuinely puts you on.
- *
- * It ranks by XP rather than by rating, and the rating rides along beside it. XP is a count of what
- * somebody did - it only goes up, and it can be summed over a window, which is what makes the window
- * mean anything at all. The rating is the estimate of how WELL they play, which is a different
- * question and can go down.
- *
- * **An empty board is a sentence, not a blank**, and which sentence depends on the window: an
- * all-time board with nobody on it means nobody has played the five games it takes to rank, while an
- * empty "today" just means today is young. Saying "nobody yet" for both would read as broken.
- *
- * Fetched here rather than through a store: one page shows it, it is read-only, and it has no
- * relationship to anything else on screen. A store would be a singleton for a single reader.
- */
-export default component Leaderboard(props: { game: GameId })
+export default component Leaderboard(props: { game: GameId; titled?: boolean })
 {
     const locale = useLocale();
 
@@ -56,17 +31,6 @@ export default component Leaderboard(props: { game: GameId })
         { name: 'catalogue.leaderboard' }
     );
 
-    /**
-     * The pages after the first, kept beside the resource rather than inside it.
-     *
-     * The resource owns page ONE and refetches it whenever the game or the window changes, which is
-     * what makes switching windows instant and correct. Appending into its data would fight that:
-     * the next refetch would throw the appended rows away, and a refetch is exactly what a window
-     * switch is. So the extra pages live here and are cleared by the same change that refetches.
-     *
-     * `record.store.ts` does this for match history and this follows it, including the part that
-     * matters most: a failed page leaves the cursor alone, so the button is its own retry.
-     */
     state extra = [] as Standing[];
 
     state cursor = undefined as number | undefined;
@@ -77,7 +41,6 @@ export default component Leaderboard(props: { game: GameId })
 
     effect
     {
-        /* Read both so a change to either resets the paging - the board underneath is a new board. */
         void props.game;
         void window;
 
@@ -88,12 +51,6 @@ export default component Leaderboard(props: { game: GameId })
 
     derived standings = [...(board.data()?.standings ?? []), ...extra];
 
-    /**
-     * Whether there is another page, from the LAST thing that answered.
-     *
-     * Page one's cursor while nothing further has been asked for, then the cursor of the most
-     * recent page. Absent means the board ends here, exactly as it does for match history.
-     */
     derived nextFrom = extra.length === 0 ? board.data()?.cursor : cursor;
 
     const more = async (): Promise<void> =>
@@ -128,41 +85,19 @@ export default component Leaderboard(props: { game: GameId })
         }
     };
 
-    /**
-     * Read off the ANSWER, not off the control.
-     *
-     * `board.data()` lags `window` by a round trip, so a list rendered against the window somebody
-     * just picked is a list labelled with a window it is not yet showing - and the empty sentence
-     * would name the wrong one.
-     */
     derived showing = board.data()?.window ?? window;
 
-    /**
-     * A refused fetch is not an empty board, and saying so is the whole of this.
-     *
-     * `standings` is `[]` both when the server answered with nobody and when it did not answer at
-     * all, so a dropped connection rendered as "nobody has finished a game here yet" - a confident
-     * statement about the world, made from having failed to ask it. That is the same defect the
-     * chat list's failure screen exists to avoid, and the same one `search.thisDevice` is careful
-     * about: "it is not there" and "I could not look" are different answers.
-     */
     derived failed = board.error() !== undefined && standings.length === 0;
 
     derived empty = locale.t(showing === 'all' ? 'board.empty' : 'board.emptyWindow');
 
-    /**
-     * Read off the ROW, never out of `people.store`.
-     *
-     * The row carries a name and a hue and nothing else, because this route is unguarded and
-     * everything on it is public - so there is no `PersonSummary` here to remember, and filing a
-     * partial one into a cache every other screen reads as complete would be worse than not having
-     * it. A board row draws itself.
-     */
     const nameOf = (row: { handle: string; person: { displayName: string } }): string =>
         row.person.displayName === '' ? row.handle : locale.text(row.person.displayName);
 
     <section aria-labelledby="game-board">
-        <SectionHeading id="game-board" title={ locale.t('board.title') } />
+        <Show when={ props.titled !== false }>
+            <SectionHeading id="game-board" title={ locale.t('board.title') } />
+        </Show>
 
         <div class="mb-3">
             <Segmented
@@ -195,24 +130,27 @@ export default component Leaderboard(props: { game: GameId })
 
         <Show when={ standings.length > 0 }>
             { () =>
-                <Panel pad="sm">
+                <Panel pad="none" class="px-2 py-1">
                     <ol class="flex flex-col">
                         <For each={ standings } key={ (row) => row.handle } let={ row }>
-                            <li class="flex items-center gap-3 rounded-tile px-2 py-2 hover:bg-raised">
-                                <span class="tally w-8 shrink-0 text-end text-ui-sm font-bold text-faint">
+                            <li class="flex min-h-14 items-center gap-3 border-b border-line px-2 py-2 last:border-b-0">
+                                <span class={ () => [
+                                    'tally flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-ui-sm font-bold',
+                                    row.rank === 1 ? 'bg-gold/15 text-gold' : (row.rank <= 3 ? 'bg-raised text-text' : 'text-faint')
+                                ].join(' ') }>
                                     { locale.n(row.rank) }
                                 </span>
-                                <Avatar person={ { displayName: row.person.displayName, hue: row.person.hue } } size="xs" />
-                                <span class="flex min-w-0 flex-1 flex-col">
-                                    <span class="truncate text-ui-sm text-text" dir="auto">{ nameOf(row) }</span>
-                                    <span class="tally truncate text-ui-2xs text-faint">
+                                <Avatar person={ { displayName: row.person.displayName, hue: row.person.hue } } size="sm" />
+                                <span class="flex min-w-0 flex-1 flex-col gap-0.5">
+                                    <span class="truncate text-ui-sm font-semibold text-text" dir="auto">{ nameOf(row) }</span>
+                                    <span class="truncate text-ui-xs text-muted">
                                         { locale.t('board.line', {
                                             played: locale.plural('board.played', row.played),
                                             rating: locale.n(row.rating)
                                         }) }
                                     </span>
                                 </span>
-                                <span class="tally shrink-0 text-ui-sm font-bold text-text">
+                                <span class="shrink-0 text-ui-sm font-bold text-text">
                                     { locale.t('board.xp', { xp: locale.n(row.xp) }) }
                                 </span>
                             </li>

@@ -143,6 +143,8 @@ export const play = {
     'watch.live': 'Games in progress',
     'watch.join': 'Watch',
     'board.title': 'Leaderboard',
+    'leaderboard.lead': 'Ranked by the experience people earn at the table. Pick a game and a stretch of time.',
+    'leaderboard.pick': 'Choose a game',
     'board.empty': 'Nobody has played five games here yet. The board fills in as people do.',
     'board.played': { one: '1 game', other: '{count} games' },
     'board.window': 'Ranked over',

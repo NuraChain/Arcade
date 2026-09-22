@@ -36,6 +36,7 @@ export const routes: PageRoute[] = [
             { path: 'chats', lazy: () => import('./pages/app/chats.page.azeroth'), meta: defineMeta({ title: 'app.nav.chats', tab: 'chats' }) },
             { path: 'chats/:id', lazy: () => import('./pages/app/chat.page.azeroth'), meta: defineMeta({ tab: 'chats', parent: '/app/chats', immersive: true }) },
             { path: 'groups/:id', lazy: () => import('./pages/app/group.page.azeroth'), meta: defineMeta({ tab: 'friends', parent: '/app/friends' }) },
+            { path: 'leaderboard', lazy: () => import('./pages/app/leaderboard.page.azeroth'), meta: defineMeta({ title: 'app.nav.leaderboard', tab: 'leaderboard' }) },
             { path: 'discover', lazy: () => import('./pages/app/discover.page.azeroth'), meta: defineMeta({ title: 'app.nav.discover', tab: 'discover' }) },
             { path: 'search', lazy: () => import('./pages/app/search.page.azeroth'), meta: defineMeta({ title: 'app.nav.search', tab: 'search' }) },
             { path: 'notifications', lazy: () => import('./pages/app/notifications.page.azeroth'), meta: defineMeta({ title: 'app.nav.notifications', parent: '/app' }) },

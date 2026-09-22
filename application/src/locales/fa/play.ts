@@ -145,6 +145,8 @@ export const play: Pick<Dictionary, keyof typeof reference> = {
     'watch.none': 'الان هیچ بازی‌ای در جریان نیست.',
     'watch.live': 'بازی‌های در جریان',
     'watch.join': 'تماشا',
+    'leaderboard.lead': 'بر اساس تجربه‌ای که آدم‌ها سر میز به دست می‌آورند. یک بازی و یک بازهٔ زمانی انتخاب کن.',
+    'leaderboard.pick': 'یک بازی انتخاب کن',
     'board.title': 'جدول برترین‌ها',
     'board.empty': 'هنوز کسی پنج بازی اینجا انجام نداده. جدول کم‌کم پر می‌شود.',
     'board.played': { one: '۱ بازی', other: '{count} بازی' },
