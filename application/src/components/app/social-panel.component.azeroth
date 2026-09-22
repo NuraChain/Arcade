@@ -86,9 +86,7 @@ export default component SocialPanel()
                                 <span class="flex min-w-0 flex-1 flex-col">
                                     <span class="truncate text-ui-sm font-semibold text-text" dir="auto">{ person.displayName }</span>
                                     <span class="truncate text-ui-2xs text-muted">
-                                        { presence.of(person.id).state === 'playing' && presence.of(person.id).game !== null
-                                            ? locale.t('common.playing', { game: locale.t(catalogue.byId(presence.of(person.id).game!).nameKey) })
-                                            : locale.t('common.online') }
+                                        { presence.of(person.id).state === 'away' ? locale.t('common.away') : locale.t('common.online') }
                                     </span>
                                 </span>
                                 <Button variant="secondary" size="sm" class="shrink-0 whitespace-nowrap" onClick={ () => playWith(person) }>{ locale.t('person.play') }</Button>

@@ -33,7 +33,6 @@ import { useShell } from '../../stores/shell.store.ts';
 import { useSocial } from '../../stores/social.store.ts';
 import { useToasts } from '../../stores/toasts.store.ts';
 
-/** The prefix this page's own ids live under, so an id from the next route is refused. */
 const CHATS = '/app/chats';
 
 const WINDOW = 40;
@@ -60,50 +59,14 @@ export default component ChatPage()
 
     let list: HTMLElement | null = null;
 
-    /**
-     * Whether the reader was at the bottom BEFORE whatever just arrived.
-     *
-     * Read through `untrack` in the effect below, deliberately: it must decide the answer without
-     * making itself run again when the answer changes.
-     */
     state near = true;
 
     derived id = params().id ?? '';
 
     derived conversation = chat.conversation(id) ?? null;
 
-    /**
-     * The boolean the page body hangs on, hoisted into its own memo - and it is not tidiness.
-     *
-     * `<Show>`'s THUNK form re-runs its swap effect on any tracked change to `when` and rebuilds the
-     * branch every time, because a thunk has no accessor and a rebuild is how its content refreshes.
-     * That is the framework's documented contract, not a defect. Written inline as
-     * `when={ conversation !== null }` the effect therefore read `conversation` itself - a NEW row
-     * object out of the conversation list on every refetch - so every arriving message tore the
-     * entire page body down and built it again: the scroll container, the thread, and the composer
-     * with the caret in it.
-     *
-     * Nothing blinked, which is why it survived. The swap happens inside one frame, so a screenshot
-     * either side of it is identical and `npm run qa` sees nothing; what a person sees is the
-     * keyboard closing and the cursor gone in the middle of a sentence.
-     *
-     * A memo compares with `Object.is`, so this notifies only when the answer actually flips, and
-     * the branch is rebuilt only when the conversation really does appear or go away.
-     */
     derived here = conversation !== null;
 
-    /**
-     * Whether this conversation is genuinely not there, as opposed to not there YET.
-     *
-     * `chat.conversation(id)` reads the list, and on a cold load - somebody opening a link, or
-     * reloading on this page - the list has not arrived. Rendering the fallback on "no row" alone
-     * meant every cold load flashed "No such conversation" with a button back to the chats list,
-     * for a thread that exists and is about to appear. A person who followed a link to a
-     * conversation was told it did not exist.
-     *
-     * `npm run qa` cannot catch this: the matrix checks overflow, hit targets, a `main` landmark
-     * and a dirty console, and a page confidently rendering the wrong answer passes all four.
-     */
     derived missing = conversation === null && !chat.listLoading() && chat.conversations().length > 0;
 
     derived me = chat.me();
@@ -123,14 +86,6 @@ export default component ChatPage()
 
     derived messages = chat.messages();
 
-    /**
-     * What stands in the way of sending, which is BOTH questions at once.
-     *
-     * The room's answer and this browser's answer come from different places and used to be read
-     * separately: the composer was disabled on the room alone, while `post` refuses on this
-     * browser's own keyring. `sendBlockOf` decides between them in one place, and being a pure
-     * function it is pinned by a spec rather than by a rendered page.
-     */
     derived stop = sendBlockOf({
         sealability: seal.sealability(),
         readiness: devices.readiness(),
@@ -139,19 +94,6 @@ export default component ChatPage()
         pending: seal.loading()
     });
 
-    /**
-     * Loading means there is NOTHING to show yet - not that a fetch is in flight.
-     *
-     * `createResource` reports `loading` on a REVALIDATION too, and sending revalidates: post, then
-     * refetch. So an ungated loading branch swapped a conversation that was already on screen for a
-     * pulsing skeleton on every message sent, and again on every realtime nudge - which is to say
-     * whenever anybody else said anything in the room. `<Switch>` disposes the losing branch, so it
-     * was not a repaint: every bubble was destroyed and rebuilt, and every long-press recogniser with
-     * them, despite the `<For>` key being perfectly stable.
-     *
-     * The failure branch below was already gated this way, and `group.page` and `play.page` both put
-     * the same guard on the derived rather than on the branch. This is that convention.
-     */
     derived loading = chat.threadLoading() && messages.length === 0;
 
     derived failed = chat.threadError() !== null;
@@ -185,10 +127,6 @@ export default component ChatPage()
         if (!state.known)
         {
             return `@${ only.handle }`;
-        }
-        if (state.state === 'playing' && state.game !== null)
-        {
-            return locale.t('common.playing', { game: locale.t(catalogue.byId(state.game).nameKey) });
         }
         return locale.t(state.state === 'away' ? 'common.away' : 'common.online');
     })();
@@ -224,23 +162,6 @@ export default component ChatPage()
         visible = WINDOW;
     }
 
-    /**
-     * Opens the thread, and refuses an id this route does not own.
-     *
-     * `params()` is shared router state. It changes the moment a navigation commits, and this page
-     * is still mounted while its leave transition plays - so the effect fired again with the NEXT
-     * route's parameter in hand, and pressing "Start a game" here asked the chat api for a
-     * conversation whose id was the TABLE it had just navigated to. Two 404s in the console on the
-     * one path this feature exists for.
-     *
-     * The group page hit the same thing and answered it by opening once in `mount`, which it can
-     * afford because nothing navigates group-to-group. This page cannot: a notification or the
-     * social panel moves from one thread straight to another, and that is the same route with a
-     * different parameter, so the component is reused and never mounts again.
-     *
-     * So the guard is the pathname rather than the lifecycle. It reads the route, which is the same
-     * signal, and asks whether the id it is about to use still belongs to this page.
-     */
     effect
     {
         const here = route().pathname;
@@ -275,14 +196,6 @@ export default component ChatPage()
         }
     }
 
-    /**
-     * Sends, or says why it could not.
-     *
-     * There is no unsealed message any more, so a thread nobody can be sealed to is a thread
-     * nothing can be said in. The composer is disabled for exactly that reason and the notice above
-     * it names the person in the way - but the keyboard can still reach a disabled control's form,
-     * and a failure that reached the console instead of the screen is what the browser pass found.
-     */
     const send = (): void =>
     {
         void chat.send(id, chat.draft(id))
@@ -293,20 +206,6 @@ export default component ChatPage()
             });
     };
 
-    /**
-     * Opens a table IN this conversation, joinable by the people in it and by nobody else.
-     *
-     * Three things were wrong with what this replaces and every gate was green for all of them.
-     * `lobby.host` answers with a PROMISE, which was assigned to a variable and then interpolated -
-     * so this button sent people to `/app/play/[object Promise]`, and the rule in
-     * `tests/markup.spec.ts` that exists for exactly this only looked for the call INSIDE the
-     * template literal. It also toasted "Invitation posted to the chat" before the request had
-     * resolved, so a refusal read as success. And the invitation it claimed to post did not exist:
-     * the table was an ordinary `invite` one with the other members' chairs held, which the server
-     * announced nowhere.
-     *
-     * The sheet owns the choice now, and the server writes the line.
-     */
     const startGame = (): void =>
     {
         overlay.open(
@@ -410,10 +309,6 @@ export default component ChatPage()
                                                 {
                                                     personId: held.from,
 
-                                                    // Only a message this browser actually opened
-                                                    // can be disclosed: the franking key comes out
-                                                    // of the ciphertext, so a locked message has
-                                                    // none and there is nothing to prove.
                                                     ...(held.frankingKey === undefined ? {} : {
                                                         disclose: {
                                                             conversationId: held.conversationId,

@@ -68,7 +68,6 @@ export const social: Pick<Dictionary, keyof typeof reference> = {
 
     'discover.lead': 'میزهای تازه، آدم‌های تازه، همان چهار بازی.',
     'discover.people': 'شاید بشناسی',
-    'discover.popular': 'الان شلوغ',
     'discover.rooms': 'گروه‌هایی که می‌ارزد',
     'discover.trending': 'داغ این هفته',
 

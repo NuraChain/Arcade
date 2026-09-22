@@ -35,7 +35,6 @@ export const app = {
     'common.you': 'You',
     'common.online': 'Online',
     'common.away': 'Away',
-    'common.playing': 'Playing {game}',
     'common.players': { one: '{count} player', other: '{count} players' },
     'common.friendsOnline': { one: '{count} friend online', other: '{count} friends online' },
     'common.unread': { one: '{count} unread', other: '{count} unread' },

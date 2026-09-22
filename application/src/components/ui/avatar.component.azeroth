@@ -1,6 +1,6 @@
 import { AVATAR_DOT, AVATAR_SIZE, type AvatarSize } from './variants.ts';
 
-export type Presence = 'online' | 'away' | 'offline' | 'playing' | null;
+export type Presence = 'online' | 'away' | 'offline' | null;
 
 export function initialsOf(name: string): string
 {
@@ -42,7 +42,7 @@ export default component Avatar(props: {
 
     derived hue = props.person === null ? 200 : props.person.hue;
 
-    derived dotClass = props.presence === 'online' || props.presence === 'playing'
+    derived dotClass = props.presence === 'online'
         ? 'bg-live'
         : (props.presence === 'away' ? 'bg-gold' : 'bg-faint');
 

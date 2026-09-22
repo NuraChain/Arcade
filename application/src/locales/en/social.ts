@@ -65,7 +65,6 @@ export const social = {
 
     'discover.lead': 'New tables, new people, same four games.',
     'discover.people': 'People you may know',
-    'discover.popular': 'Busy right now',
     'discover.rooms': 'Groups worth joining',
     'discover.trending': 'Trending this week',
 

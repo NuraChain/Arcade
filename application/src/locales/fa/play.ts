@@ -46,8 +46,6 @@ export const play: Pick<Dictionary, keyof typeof reference> = {
     'game.rules.ludo.2': 'دو تا چهار رنگ؛ هر رنگ یک بازیکن.',
     'game.rules.ludo.3': 'اولین کسی که هر چهار مهره را به خانه برساند، برنده است.',
     'game.modes': 'ریتم',
-    'game.friendsPlaying': 'دوستان سر میز',
-    'game.friendsPlayingEmpty': 'الان هیچ‌کدام از دوستانت {game} بازی نمی‌کند.',
     'game.notFound': 'چنین بازی‌ای نداریم.',
 
     'create.lead': 'به‌طور پیش‌فرض خصوصی. هر که را می‌خواهی دعوت کن؛ کس دیگری آن را نمی‌بیند.',

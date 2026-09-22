@@ -38,7 +38,6 @@ export const app: Pick<Dictionary, keyof typeof reference> = {
     'common.you': 'تو',
     'common.online': 'آنلاین',
     'common.away': 'دور از دسترس',
-    'common.playing': 'در حال بازی {game}',
     'common.players': { one: '{count} بازیکن', other: '{count} بازیکن' },
     'common.friendsOnline': { one: '{count} دوست آنلاین', other: '{count} دوست آنلاین' },
     'common.unread': { one: '{count} خوانده‌نشده', other: '{count} خوانده‌نشده' },

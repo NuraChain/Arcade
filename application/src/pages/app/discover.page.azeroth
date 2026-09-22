@@ -3,12 +3,10 @@ import { useHead, useNavigate } from 'azerothjs';
 import Page from '../../components/app/page.component.azeroth';
 import GameGrid from '../../components/games/game-grid.component.azeroth';
 import GroupCard from '../../components/social/group-card.component.azeroth';
-import PeopleStrip from '../../components/social/people-strip.component.azeroth';
 import UserCard from '../../components/social/user-card.component.azeroth';
 import SectionHeading from '../../components/ui/section-heading.component.azeroth';
 import type { GameId } from '../../data/games.ts';
 
-import { useAccount } from '../../stores/account.store.ts';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useGroups } from '../../stores/groups.store.ts';
 import { useLobby } from '../../stores/lobby.store.ts';
@@ -25,14 +23,11 @@ export default component DiscoverPage()
     const presence = usePresence();
     const groups_ = useGroups();
     const catalogue = useCatalogue();
-    const account = useAccount();
     const lobby = useLobby();
     const toasts = useToasts();
     const { navigate } = useNavigate();
 
     useHead({ title: () => locale.t('app.nav.discover') });
-
-    derived user = account.user();
 
     mount
     {
@@ -42,10 +37,6 @@ export default component DiscoverPage()
     }
 
     derived suggestions = social.suggestions().slice(0, 8);
-
-    derived playing = social.people()
-        .filter((person) => presence.of(person.id).state === 'playing' && person.id !== user?.id)
-        .slice(0, 12);
 
     derived groups = groups_.elsewhere().slice(0, 12);
 
@@ -89,13 +80,6 @@ export default component DiscoverPage()
                     </For>
                 </ul>
             </section>
-
-            <Show when={ playing.length > 0 }>
-                <section>
-                    <SectionHeading title={ locale.t('discover.popular') } />
-                    <PeopleStrip people={ playing } label={ locale.t('discover.popular') } />
-                </section>
-            </Show>
 
             <section>
                 <SectionHeading title={ locale.t('discover.rooms') } />

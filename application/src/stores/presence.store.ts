@@ -1,26 +1,23 @@
 import { createStore } from 'azerothjs';
 
 import type { PresenceEntry } from '../api.ts';
-import type { GameId } from '../data/games.ts';
 import { useRealtime } from './realtime.store.ts';
 
-export type PresenceState = 'online' | 'away' | 'offline' | 'playing';
+export type PresenceState = 'online' | 'away' | 'offline';
 
 export interface Presence
 {
     state: PresenceState;
-    game: GameId | null;
     since: number;
     known: boolean;
 }
 
-const UNKNOWN: Presence = { state: 'offline', game: null, since: 0, known: false };
+const UNKNOWN: Presence = { state: 'offline', since: 0, known: false };
 
 export interface PresenceApi
 {
     of(id: string): Presence;
 
-    /** The dot's state, or null when there is nothing to draw. */
     dot(id: string): PresenceState | null;
 
     isOnline(id: string): boolean;
@@ -49,18 +46,14 @@ export const usePresence = createStore((): PresenceApi =>
         {
             from = people;
             index = new Map(people.map((entry) =>
-                [entry.who, { state: entry.state, game: null, since: entry.since, known: true }]));
+                [entry.who, { state: entry.state, since: entry.since, known: true }]));
         }
         return index;
     };
 
     const of = (id: string): Presence => current()?.get(id) ?? UNKNOWN;
 
-    const up = (id: string): boolean =>
-    {
-        const state = of(id).state;
-        return state === 'online' || state === 'playing';
-    };
+    const up = (id: string): boolean => of(id).state === 'online';
 
     return {
         of,

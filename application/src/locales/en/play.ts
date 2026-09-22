@@ -43,8 +43,6 @@ export const play = {
     'game.rules.ludo.2': 'Two to four colours; every colour is a player.',
     'game.rules.ludo.3': 'First to bring all four tokens home wins.',
     'game.modes': 'Pace',
-    'game.friendsPlaying': 'Friends at the table',
-    'game.friendsPlayingEmpty': 'None of your friends are playing {game} right now.',
     'game.notFound': 'No such game.',
 
     'create.lead': 'Private by default. Invite who you want; nobody else sees it.',

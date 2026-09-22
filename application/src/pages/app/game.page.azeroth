@@ -4,44 +4,25 @@ import Page from '../../components/app/page.component.azeroth';
 import GameHero from '../../components/games/game-hero.component.azeroth';
 import Leaderboard from '../../components/games/leaderboard.component.azeroth';
 import WatchableList from '../../components/games/watchable-list.component.azeroth';
-import PeopleStrip from '../../components/social/people-strip.component.azeroth';
 import Button from '../../components/ui/button.component.azeroth';
 import EmptyState from '../../components/ui/empty-state.component.azeroth';
 import IconButton from '../../components/ui/icon-button.component.azeroth';
 import SectionHeading from '../../components/ui/section-heading.component.azeroth';
-import type { Person } from '../../data/person.ts';
 import Icon from '../../icons/icon.component.azeroth';
 import type { MessageKey } from '../../locales/en.ts';
-import { useSocial } from '../../stores/social.store.ts';
-import { usePeople } from '../../stores/people.store.ts';
-import { useAccount } from '../../stores/account.store.ts';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useLobby } from '../../stores/lobby.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
-import { usePresence } from '../../stores/presence.store.ts';
 import { useShell } from '../../stores/shell.store.ts';
 import { openTable } from '../../lib/open-table.ts';
 
-/**
- * One game: what it is, who is playing it, and how it has gone for people.
- *
- * The two-column split is a CONTAINER query rather than a viewport one. `lg:` fires at 1024px of
- * screen, and this column is nothing like the screen: with the social panel open at 1280 the grid
- * has 660px to divide, the 22rem aside takes 352 of it, and everything on the left was laid out in
- * 284px - three-word rule cards and a leaderboard whose names all ended in an ellipsis. The people
- * and group grids already use container variants for exactly this reason.
- */
 export default component GamePage()
 {
     const locale = useLocale();
     const catalogue = useCatalogue();
     const lobby = useLobby();
-    const account = useAccount();
-    const presence = usePresence();
     const shell = useShell();
     const params = useParams();
-    const people = usePeople();
-    const social = useSocial();
     const { navigate } = useNavigate();
 
     derived game = catalogue.bySlug(params().slug ?? '') ?? null;
@@ -56,19 +37,6 @@ export default component GamePage()
     }
 
     derived rules = game === null ? null : catalogue.rules(game.id);
-
-    derived friendsPlaying = ((): Person[] =>
-    {
-        const user = account.user();
-        if (user === null || game === null)
-        {
-            return [];
-        }
-        return social.friends()
-            .map((id) => people.byHandle(id))
-            .filter((person): person is Person => person !== null)
-            .filter((person) => presence.of(person.id).state === 'playing' && presence.of(person.id).game === game!.id);
-    })();
 
     derived ruleKeys = game === null ? [] : [1, 2, 3].map((index) => `game.rules.${ game!.id }.${ index }` as MessageKey);
 
@@ -101,16 +69,6 @@ export default component GamePage()
                                         </li>
                                     </For>
                                 </ol>
-                            </section>
-
-                            <section aria-labelledby="game-friends">
-                                <SectionHeading id="game-friends" title={ locale.t('game.friendsPlaying') } more={ locale.t('common.seeAll') } to="/app/friends" />
-                                <Show
-                                    when={ friendsPlaying.length > 0 }
-                                    fallback={ <p class="rounded-tile border border-dashed border-line p-4 text-ui-sm text-muted">{ locale.t('game.friendsPlayingEmpty', { game: name }) }</p> }
-                                >
-                                    { () => <PeopleStrip people={ friendsPlaying } label={ locale.t('game.friendsPlaying') } /> }
-                                </Show>
                             </section>
 
                             <WatchableList game={ game!.id } />

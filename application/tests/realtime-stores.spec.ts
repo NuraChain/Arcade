@@ -93,6 +93,15 @@ describe('presence over the socket', () =>
         expect(presence.dot('mina')).toBeNull();
     });
 
+    it('holds only the two states the server sends, and no game it never names', () =>
+    {
+        const presence = usePresence();
+        room([{ who: 'sara.k', state: 'online' }]);
+
+        expect(Object.keys(presence.of('sara.k')).sort()).toEqual(['known', 'since', 'state']);
+        expect(Object.keys(presence.of('nobody')).sort()).toEqual(['known', 'since', 'state']);
+    });
+
     /**
      * The departure the wire could not express.
      *

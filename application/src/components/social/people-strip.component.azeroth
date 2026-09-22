@@ -1,7 +1,6 @@
 import { Link } from 'azerothjs';
 
 import type { Person } from '../../data/person.ts';
-import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { usePresence } from '../../stores/presence.store.ts';
 import Avatar from '../ui/avatar.component.azeroth';
@@ -11,7 +10,6 @@ export default component PeopleStrip(props: { people: Person[]; label: string; c
 {
     const locale = useLocale();
     const presence = usePresence();
-    const catalogue = useCatalogue();
 
     const status = (person: Person): string =>
     {
@@ -19,10 +17,6 @@ export default component PeopleStrip(props: { people: Person[]; label: string; c
         if (!current.known)
         {
             return `@${ person.handle }`;
-        }
-        if (current.state === 'playing' && current.game !== null)
-        {
-            return locale.t(catalogue.byId(current.game).nameKey);
         }
         return current.state === 'away' ? locale.t('common.away') : locale.t('common.online');
     };
