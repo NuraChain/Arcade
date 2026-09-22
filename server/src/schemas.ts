@@ -96,8 +96,12 @@ export const earnedAchievement = object({
     icon: string(),
     tier: enumOf(['bronze', 'silver', 'gold']),
 
+    game: string().optional(),
+
     /** When it was earned, absent while it has not been. */
-    earnedAt: string().optional()
+    earnedAt: string().optional(),
+
+    progress: object({ have: number(), need: number() }).optional()
 });
 
 export type EarnedAchievement = Infer<typeof earnedAchievement>;

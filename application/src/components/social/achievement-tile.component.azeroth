@@ -47,6 +47,23 @@ export default component AchievementTile(props: { achievement: EarnedAchievement
                 { locale.text(props.achievement.name) }
             </p>
             <p class="text-ui-2xs text-muted">{ locale.text(props.achievement.blurb) }</p>
+            <Show when={ !earned && props.achievement.progress !== undefined }>
+                { () =>
+                    <div class="mt-2 flex items-center gap-2">
+                        <span
+                            class="h-1.5 flex-1 overflow-hidden rounded-full bg-sunk"
+                            role="progressbar"
+                            aria-valuemin={ 0 }
+                            aria-valuemax={ props.achievement.progress!.need }
+                            aria-valuenow={ props.achievement.progress!.have }
+                            aria-label={ locale.text(props.achievement.name) }
+                        >
+                            <span class="block h-full rounded-full bg-accent" style={ `width: ${ (props.achievement.progress!.have / props.achievement.progress!.need) * 100 }%` }></span>
+                        </span>
+                        <span class="tally shrink-0 text-ui-2xs font-semibold text-muted">{ locale.n(props.achievement.progress!.have) }/{ locale.n(props.achievement.progress!.need) }</span>
+                    </div>
+                }
+            </Show>
         </div>
 
         <Show

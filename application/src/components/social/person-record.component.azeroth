@@ -1,4 +1,7 @@
 import AchievementTile from './achievement-tile.component.azeroth';
+import GameIcon from '../games/game-icon.component.azeroth';
+import Icon from '../../icons/icon.component.azeroth';
+import type { GameId } from '../../data/games.ts';
 import RecordStrip from './record-strip.component.azeroth';
 import Button from '../ui/button.component.azeroth';
 import EmptyState from '../ui/empty-state.component.azeroth';
@@ -13,7 +16,7 @@ import { useRecord } from '../../stores/record.store.ts';
 
 export type RecordPart = 'level' | 'record' | 'achievements' | 'history';
 
-export default component PersonRecord(props: { handle: string; history?: boolean; mine?: boolean; show?: RecordPart[] })
+export default component PersonRecord(props: { handle: string; history?: boolean; mine?: boolean; show?: RecordPart[]; game?: string })
 {
     const locale = useLocale();
     const record = useRecord();
@@ -38,9 +41,18 @@ export default component PersonRecord(props: { handle: string; history?: boolean
 
     derived progress = held?.progress ?? null;
 
-    derived games = held?.games ?? [];
+    derived games = (held?.games ?? []).filter((row) => props.game === undefined || row.game === props.game);
 
-    derived achievements = held?.achievements ?? [];
+    derived achievements = (held?.achievements ?? []).filter((one) => props.game === undefined || one.game === props.game);
+
+    derived groups = ((): { game: string; items: typeof achievements }[] =>
+    {
+        const order = ['', ...new Set(achievements.flatMap((one) => one.game === undefined ? [] : [one.game]))];
+
+        return order
+            .map((game) => ({ game, items: achievements.filter((one) => (one.game ?? '') === game) }))
+            .filter((group) => group.items.length > 0);
+    })();
 
     derived earned = achievements.filter((one) => one.earnedAt !== undefined).length;
 
@@ -92,13 +104,29 @@ export default component PersonRecord(props: { handle: string; history?: boolean
                 <section>
                     <SectionHeading
                         title={ locale.t('achievements.title') }
-                        actions={ <span class="tally text-ui-xs text-muted">{ locale.plural('achievements.earned', earned) }</span> }
+                        actions={ <span class="text-ui-xs text-muted"><span class="tally font-semibold text-text">{ locale.n(earned) }</span> { locale.plural('achievements.earned', earned) }</span> }
                     />
-                    <ul class="grid gap-2 @xl:grid-cols-2 @4xl:grid-cols-3">
-                        <For each={ achievements } key={ (one) => one.id } let={ one }>
-                            <li class="min-w-0"><AchievementTile achievement={ one } /></li>
+                    <div class="flex flex-col gap-4">
+                        <For each={ groups } key={ (group) => group.game } let={ group }>
+                            <div class="flex flex-col gap-2">
+                                <Show when={ props.game === undefined }>
+                                    { () =>
+                                        <p class="flex items-center gap-2 text-ui-xs font-semibold text-muted">
+                                            <Show when={ group.game !== '' } fallback={ <Icon name="sparkles" size={ 14 } class="text-accent" /> }>
+                                                { () => <GameIcon game={ group.game as GameId } class="h-5 w-5" /> }
+                                            </Show>
+                                            <span>{ group.game === '' ? locale.t('achievements.everywhere') : locale.t(catalogue.byId(group.game as GameId).nameKey) }</span>
+                                        </p>
+                                    }
+                                </Show>
+                                <ul class={ props.game === undefined ? 'grid gap-2 @xl:grid-cols-2 @4xl:grid-cols-3' : 'grid gap-2' }>
+                                    <For each={ group.items } key={ (one) => one.id } let={ one }>
+                                        <li class="min-w-0"><AchievementTile achievement={ one } /></li>
+                                    </For>
+                                </ul>
+                            </div>
                         </For>
-                    </ul>
+                    </div>
                 </section>
             }
         </Show>

@@ -2,7 +2,7 @@ import type { DataSource, EntityManager } from 'typeorm';
 
 import { Achievement, Match, MatchPlayer, PlayerStats, User, UserAchievement } from '../../entities/index.ts';
 import type { Leaderboard, LeaderboardWindow, PersonRecord, Standing } from '../../schemas.ts';
-import { earnedBy, type AchievementFacts } from './rules.ts';
+import { ACHIEVEMENT_GAME, earnedBy, progressOf, type AchievementFacts } from './rules.ts';
 import { levelOf } from '../match/levels.ts';
 
 /**
@@ -50,13 +50,6 @@ const HISTORY = `
                having count(*) >= 10)                                               as crew
 `;
 
-export interface Tally
-{
-    played: number;
-    won: number;
-    abandoned: number;
-    streak: number;
-}
 
 interface StandingRow
 {
@@ -194,6 +187,29 @@ export function createAchieveService(db: DataSource)
      * from scratch at the end of every match. `earnedBy` answers what the record deserves, not what
      * has changed, so a retried action and a reconnect write the same rows twice and mean it once.
      */
+    const factsFor = async (tx: EntityManager, userId: string, streak: number | null, seated: boolean): Promise<AchievementFacts> =>
+    {
+        const rows = await tx.getRepository(PlayerStats).find({ where: { userId } });
+        const found = await history(tx, userId);
+        const total = (pick: (row: PlayerStats) => number): number => rows.reduce((sum, row) => sum + pick(row), 0);
+
+        return {
+            played: total((row) => row.played),
+            won: total((row) => row.won),
+            abandoned: total((row) => row.abandoned),
+            streak: streak ?? Math.max(0, ...rows.map((row) => row.streak)),
+            distinctDays: found.days,
+            seated,
+            hostedFull: found.hosted,
+            crewTen: found.crew,
+            games: Object.fromEntries(rows.map((row) => [row.game, {
+                played: row.played,
+                won: row.won,
+                tallies: Object.fromEntries(Object.entries(row.tallies ?? {}).map(([name, value]) => [name, Number(value)]))
+            }]))
+        };
+    };
+
     const grant = async (tx: EntityManager, userId: string, matchId: string | null, ids: readonly string[]): Promise<void> =>
     {
         if (ids.length === 0)
@@ -211,22 +227,9 @@ export function createAchieveService(db: DataSource)
 
     return {
         /** Everything a finished match has to say about one player's achievements. */
-        async record(tx: EntityManager, userId: string, matchId: string, tally: Tally): Promise<void>
+        async record(tx: EntityManager, userId: string, matchId: string, streak: number): Promise<void>
         {
-            const found = await history(tx, userId);
-
-            const facts: AchievementFacts = {
-                played: tally.played,
-                won: tally.won,
-                abandoned: tally.abandoned,
-                streak: tally.streak,
-                distinctDays: found.days,
-                seated: true,
-                hostedFull: found.hosted,
-                crewTen: found.crew
-            };
-
-            await grant(tx, userId, matchId, earnedBy(facts));
+            await grant(tx, userId, matchId, earnedBy(await factsFor(tx, userId, streak, true)));
         },
 
         /**
@@ -366,6 +369,9 @@ export function createAchieveService(db: DataSource)
                 .orderBy('a.sort_order', 'ASC')
                 .getRawMany<StandingRow>();
 
+            const seated = standing.some((row) => row.id === 'first-seat' && row.earned_at !== null);
+            const progress = progressOf(await factsFor(db.manager, who.id, null, seated));
+
             return {
                 handle: who.handle,
 
@@ -394,7 +400,9 @@ export function createAchieveService(db: DataSource)
                     blurb: { en: row.blurb_en, fa: row.blurb_fa },
                     icon: row.icon,
                     tier: row.tier,
-                    ...(row.earned_at === null ? {} : { earnedAt: new Date(row.earned_at).toISOString() })
+                    ...(ACHIEVEMENT_GAME[row.id] === undefined ? {} : { game: ACHIEVEMENT_GAME[row.id] }),
+                    ...(row.earned_at === null ? {} : { earnedAt: new Date(row.earned_at).toISOString() }),
+                    ...(row.earned_at === null && (progress.get(row.id)?.need ?? 1) > 1 ? { progress: progress.get(row.id)! } : {})
                 }))
             };
         }

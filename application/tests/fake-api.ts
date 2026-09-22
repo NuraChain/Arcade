@@ -168,6 +168,7 @@ export const server =
      */
     live: [] as { game: string; playing: number; tables: number }[],
     games: [] as unknown[],
+    achievements: [] as unknown[],
 
     /** A game's leaderboard. Empty by default, which is what a game nobody has played looks like. */
     standings: [] as { handle: string; rating: number; played: number; won: number }[],
@@ -331,6 +332,7 @@ export const server =
     reset(): void
     {
         server.games = [];
+        server.achievements = [];
         server.groups = GROUP_FIXTURES.map((group) => ({
             id: group.slug,
             slug: group.slug,
@@ -1422,7 +1424,7 @@ export const client =
         async record({ params }: { params: { handle: string } })
         {
             server.calls.push('social.record');
-            return { handle: params.handle, games: [], achievements: [] };
+            return { handle: params.handle, games: [], achievements: server.achievements };
         },
 
         async people()

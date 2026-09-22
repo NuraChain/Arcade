@@ -3,6 +3,7 @@ import { useHead, useNavigate, useParams } from 'azerothjs';
 import Page from '../../components/app/page.component.azeroth';
 import GameHero from '../../components/games/game-hero.component.azeroth';
 import Leaderboard from '../../components/games/leaderboard.component.azeroth';
+import PersonRecord from '../../components/social/person-record.component.azeroth';
 import WatchableList from '../../components/games/watchable-list.component.azeroth';
 import Button from '../../components/ui/button.component.azeroth';
 import EmptyState from '../../components/ui/empty-state.component.azeroth';
@@ -10,6 +11,7 @@ import IconButton from '../../components/ui/icon-button.component.azeroth';
 import SectionHeading from '../../components/ui/section-heading.component.azeroth';
 import Icon from '../../icons/icon.component.azeroth';
 import type { MessageKey } from '../../locales/en.ts';
+import { useAccount } from '../../stores/account.store.ts';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useLobby } from '../../stores/lobby.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
@@ -20,12 +22,15 @@ export default component GamePage()
 {
     const locale = useLocale();
     const catalogue = useCatalogue();
+    const account = useAccount();
     const lobby = useLobby();
     const shell = useShell();
     const params = useParams();
     const { navigate } = useNavigate();
 
     derived game = catalogue.bySlug(params().slug ?? '') ?? null;
+
+    derived me = account.user()?.handle ?? '';
 
     derived name = game === null ? locale.t('game.notFound') : locale.t(game.nameKey);
 
@@ -77,6 +82,9 @@ export default component GamePage()
                         </div>
 
                         <aside class="flex flex-col gap-6">
+                            <Show when={ me !== '' }>
+                                { () => <PersonRecord handle={ me } mine show={ ['record', 'achievements'] } game={ game!.id } /> }
+                            </Show>
                             <Show when={ rules !== null && rules.stakes === 'play-money' }>
                                 <p class="flex items-start gap-2 rounded-tile border border-line bg-field p-3 text-ui-sm text-muted">
                                     <Icon name="coins" size={ 16 } class="mt-0.5 shrink-0 text-accent" />

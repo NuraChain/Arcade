@@ -1,74 +1,98 @@
-/**
- * Which achievements a record has earned, as arithmetic over facts and nothing else.
- *
- * Pure, for the reason the rules engine is pure: it runs in the default `npm test` with no
- * Postgres, and every clause is a claim somebody can read against the blurb printed on the tile.
- * The service gathers the facts; this decides. Nothing here knows what a match is.
- *
- * **Every rule listed here has a producer, and the ones that did not were deleted.** The seed used
- * to carry twelve definitions and three of them - `hokm-trump`, `gammon`, `cube-taker` - describe
- * mechanics of games this product does not have: naming trump, bearing off, taking a double. They
- * were unearnable by construction, which is the same defect as a message key with no producer and
- * the same judgement that removed `game_rules.fairness`. They come back with their games.
- */
-
-export interface AchievementFacts
+export interface GameFacts
 {
-    /** Finished matches this person played, counting the one that just ended. */
     played: number;
 
     won: number;
 
-    /** Games this person walked out of or was forfeited from. Never somebody else's walkout. */
+    tallies: Readonly<Record<string, number>>;
+}
+
+export interface AchievementFacts
+{
+    played: number;
+
+    won: number;
+
     abandoned: number;
 
-    /** Wins in a row, as it now stands. */
     streak: number;
 
-    /** Calendar days, in UTC, on which this person finished a game. */
     distinctDays: number;
 
-    /** Whether this person has ever claimed a chair, which is not the same as having played. */
     seated: boolean;
 
-    /** Whether a match ever started at a non-public table this person opened. */
     hostedFull: boolean;
 
-    /** Whether some set of three other people has been at ten of this person's four-player games. */
     crewTen: boolean;
+
+    games: Readonly<Record<string, GameFacts>>;
+}
+
+export interface Progress
+{
+    have: number;
+
+    need: number;
 }
 
 interface Rule
 {
     id: string;
 
-    earned(facts: AchievementFacts): boolean;
+    game?: string;
+
+    progress(facts: AchievementFacts): Progress;
 }
 
+const flag = (on: boolean): Progress => ({ have: on ? 1 : 0, need: 1 });
+
+const count = (have: number, need: number): Progress => ({ have: Math.max(0, Math.min(have, need)), need });
+
+const NONE: GameFacts = { played: 0, won: 0, tallies: {} };
+
+const inGame = (facts: AchievementFacts, game: string): GameFacts => facts.games[game] ?? NONE;
+
+const tally = (facts: AchievementFacts, game: string, name: string): number => inGame(facts, game).tallies[name] ?? 0;
+
 const RULES: readonly Rule[] = [
-    { id: 'first-seat', earned: (f) => f.seated },
-    { id: 'first-win', earned: (f) => f.won >= 1 },
-    { id: 'regular', earned: (f) => f.distinctDays >= 7 },
-    { id: 'host', earned: (f) => f.hostedFull },
-    { id: 'streak-3', earned: (f) => f.streak >= 3 },
-    { id: 'crew', earned: (f) => f.crewTen },
-    { id: 'streak-7', earned: (f) => f.streak >= 7 },
-    { id: 'centurion', earned: (f) => f.played >= 100 },
-    { id: 'fair', earned: (f) => f.played >= 50 && f.abandoned === 0 }
+    { id: 'first-seat', progress: (f) => flag(f.seated) },
+    { id: 'first-win', progress: (f) => count(f.won, 1) },
+    { id: 'regular', progress: (f) => count(f.distinctDays, 7) },
+    { id: 'host', progress: (f) => flag(f.hostedFull) },
+    { id: 'streak-3', progress: (f) => count(f.streak, 3) },
+    { id: 'crew', progress: (f) => flag(f.crewTen) },
+    { id: 'streak-7', progress: (f) => count(f.streak, 7) },
+    { id: 'centurion', progress: (f) => count(f.played, 100) },
+    { id: 'fair', progress: (f) => count(f.abandoned === 0 ? f.played : 0, 50) },
+
+    { id: 'ludo-first-win', game: 'ludo', progress: (f) => count(inGame(f, 'ludo').won, 1) },
+    { id: 'ludo-hunter', game: 'ludo', progress: (f) => count(tally(f, 'ludo', 'captures'), 25) },
+    { id: 'ludo-homecoming', game: 'ludo', progress: (f) => count(tally(f, 'ludo', 'home'), 40) },
+    { id: 'ludo-master', game: 'ludo', progress: (f) => count(inGame(f, 'ludo').won, 25) },
+
+    { id: 'hokm-first-hand', game: 'hokm', progress: (f) => count(tally(f, 'hokm', 'hands'), 1) },
+    { id: 'hokm-kot', game: 'hokm', progress: (f) => count(tally(f, 'hokm', 'kots'), 1) },
+    { id: 'hokm-tricks', game: 'hokm', progress: (f) => count(tally(f, 'hokm', 'tricks'), 100) },
+    { id: 'hokm-master', game: 'hokm', progress: (f) => count(inGame(f, 'hokm').won, 25) }
 ];
 
-/** Every id this file can award, so a seed and a rule set cannot drift apart unnoticed. */
 export const ACHIEVEMENT_IDS: readonly string[] = RULES.map((rule) => rule.id);
 
-/**
- * Re-evaluated in full at the end of every match rather than diffed against what is already held.
- *
- * That is deliberate and it is what makes awarding idempotent: the answer is a function of the
- * record as it now stands, `user_achievements` takes it with `on conflict do nothing`, and a
- * retried action, a replayed idempotency key and a reconnect all converge on the same rows. A
- * "what is new since last time" version would need to be right about last time.
- */
+export const ACHIEVEMENT_GAME: Readonly<Record<string, string>> = Object.fromEntries(
+    RULES.flatMap((rule) => rule.game === undefined ? [] : [[rule.id, rule.game]])
+);
+
+export function progressOf(facts: AchievementFacts): Map<string, Progress>
+{
+    return new Map(RULES.map((rule) => [rule.id, rule.progress(facts)]));
+}
+
 export function earnedBy(facts: AchievementFacts): string[]
 {
-    return RULES.filter((rule) => rule.earned(facts)).map((rule) => rule.id);
+    return RULES.filter((rule) =>
+    {
+        const { have, need } = rule.progress(facts);
+
+        return have >= need;
+    }).map((rule) => rule.id);
 }

@@ -2212,6 +2212,22 @@ fails if the seed and the rule set ever name different things; `seed-reference.t
 definition it no longer carries, because reference content that can only be added to is how a
 database ends up holding a tile nobody remembers writing.
 
+**Every game has achievements of its own, and a rule says which game rather than a column.**
+Seventeen now: the nine every game shares, and four each for Ludo (a first win, twenty-five captures,
+forty tokens home, twenty-five wins) and Hokm (a first hand, a kot, a hundred tricks, twenty-five
+wins). Hokm's kot is the sweep `hokm-trump` described, back now that there is a hokm engine whose
+tally counts it. Which game an achievement belongs to is the RULE's knowledge - it is the thing that
+reads that game's tallies - so `ACHIEVEMENT_GAME` is derived from the rules and travels on the wire
+as `game`; a column beside it would be a second copy free to disagree with the rule that awards it.
+
+**A rule answers progress, and earned is progress reaching its need.** `progressOf` feeds the bar
+on an unearned tile ("12/25") and `earnedBy` is the same arithmetic asked a yes-or-no question, so
+the bar cannot say full while the tile says locked. A flag - seated, hosted, crew - is a need of one
+and draws no bar. The facts are read back from `player_stats` inside the transaction that finished
+the match, after the counters were added, and `played`, `won` and `abandoned` are totals across
+every game: "a hundred games played" meant a hundred of one game for as long as the facts were the
+row of the game that just ended.
+
 **Awarding re-evaluates everything and lets the primary key dedupe.** `earnedBy` answers what the
 record deserves rather than what has changed, so a retried action, a replayed idempotency key and a
 reconnect all converge on the same `on conflict do nothing` rows. A "what is new since last time"

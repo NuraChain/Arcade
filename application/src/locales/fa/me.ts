@@ -32,7 +32,8 @@ export const me: Pick<Dictionary, keyof typeof reference> = {
     'record.emptyLead': 'سر یک میز بنشین تا اینجا پر شود.',
 
     'achievements.title': 'دستاوردها',
-    'achievements.earned': { one: '۱ گرفته', other: '{count} گرفته' },
+    'achievements.earned': { one: 'به دست آمده', other: 'به دست آمده' },
+    'achievements.everywhere': 'در همهٔ بازی‌ها',
     'achievements.locked': 'هنوز گرفته نشده',
     'achievements.earnedOne': 'به دست آمده',
 

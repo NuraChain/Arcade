@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { ACHIEVEMENT_SEEDS } from '../src/db/seed-reference.ts';
-import { ACHIEVEMENT_IDS, earnedBy, type AchievementFacts } from '../src/domains/achieve/rules.ts';
+import { ACHIEVEMENT_GAME, ACHIEVEMENT_IDS, earnedBy, progressOf, type AchievementFacts } from '../src/domains/achieve/rules.ts';
 import { ludoEngine } from '../src/domains/match/engines/ludo.ts';
 import { placementsOf } from '../src/domains/match/ludo/standings.ts';
 import { rateField, type Standing } from '../src/domains/match/rating.ts';
@@ -179,6 +179,7 @@ const facts = (over: Partial<AchievementFacts> = {}): AchievementFacts => ({
     seated: false,
     hostedFull: false,
     crewTen: false,
+    games: {},
     ...over
 });
 
@@ -238,5 +239,44 @@ describe('earning an achievement', () =>
         expect(held).toContain('streak-7');
         expect(held).toContain('centurion');
         expect(held).toContain('regular');
+    });
+});
+
+describe('achievements a game of its own awards', () =>
+{
+    const inLudo = (won: number, tallies: Record<string, number>): AchievementFacts =>
+        facts({ played: won, won, games: { ludo: { played: won, won, tallies } } });
+
+    it('belongs every per-game achievement to a game the catalogue plays', () =>
+    {
+        expect(new Set(Object.values(ACHIEVEMENT_GAME))).toEqual(new Set(['ludo', 'hokm']));
+    });
+
+    it('awards a game only for what was done in that game', () =>
+    {
+        const held = earnedBy(inLudo(1, { captures: 30, home: 4 }));
+
+        expect(held).toContain('ludo-first-win');
+        expect(held).toContain('ludo-hunter');
+        expect(held).not.toContain('ludo-homecoming');
+        expect(held).not.toContain('hokm-first-hand');
+    });
+
+    it('reads a kot off the hokm tally and nothing else', () =>
+    {
+        const held = earnedBy(facts({ games: { hokm: { played: 1, won: 0, tallies: { hands: 2, kots: 1, tricks: 20 } } } }));
+
+        expect(held).toEqual(expect.arrayContaining(['hokm-first-hand', 'hokm-kot']));
+        expect(held).not.toContain('hokm-tricks');
+        expect(held).not.toContain('hokm-master');
+    });
+
+    it('reports progress as far as the need and never past it', () =>
+    {
+        const progress = progressOf(inLudo(3, { captures: 12, home: 80 }));
+
+        expect(progress.get('ludo-hunter')).toEqual({ have: 12, need: 25 });
+        expect(progress.get('ludo-homecoming')).toEqual({ have: 40, need: 40 });
+        expect(progress.get('ludo-master')).toEqual({ have: 3, need: 25 });
     });
 });
