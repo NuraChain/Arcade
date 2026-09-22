@@ -7,6 +7,7 @@ const SEATED = ['alex', 'sara.k', 'reza.t', 'mina', 'nima.f', 'leila.a'];
 
 import GameCard from '../src/components/games/game-card.component.azeroth';
 import PlayHeader from '../src/components/games/play-header.component.azeroth';
+import TurnClock from '../src/components/games/turn-clock.component.azeroth';
 import { gameArt, gameIcon } from '../src/components/games/art.ts';
 import { GAMES } from '../src/data/games.ts';
 import { manualClock, type ManualClock } from '../src/lib/clock.ts';
@@ -194,5 +195,27 @@ describe('PlayHeader', () =>
         expect(links[0].textContent).toContain('Your go');
         expect(links[1].textContent).not.toContain('Your go');
         expect(container.querySelector('nav p')?.textContent).toContain('waiting on you');
+    });
+});
+
+describe('TurnClock', () =>
+{
+    it('says its sentence in the reader’s own direction rather than forcing it left to right', () =>
+    {
+        useLocale().setLocale('fa');
+        const deadline = new Date(Date.now() + 23 * 3600 * 1000).toISOString();
+        const { container } = renderTest(() => TurnClock({ deadline, over: false }) as Rendered);
+        const said = container.querySelector('span > span:last-child');
+
+        expect(said?.textContent).toContain('ساعت');
+        expect(container.querySelector('.tally')).toBeNull();
+        useLocale().setLocale('en');
+    });
+
+    it('draws nothing once the game is over', () =>
+    {
+        const { container } = renderTest(() => TurnClock({ deadline: new Date().toISOString(), over: true }) as Rendered);
+
+        expect(container.textContent?.trim()).toBe('');
     });
 });

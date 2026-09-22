@@ -154,7 +154,7 @@ export default component SearchPage()
                 >
                     { () =>
                         <div class="flex flex-col gap-7">
-                            <p class="tally text-ui-sm text-faint">{ locale.plural('search.results', results.total) }</p>
+                            <p class="text-ui-sm text-faint">{ locale.plural('search.results', results.total) }</p>
 
                             <Show when={ results.people.length > 0 }>
                                 <section>

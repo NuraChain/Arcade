@@ -24,7 +24,7 @@ export default component PlayHeader(props: { table: TableSummary; others: TableS
             <div class="min-w-0 flex-1">
                 <h1 class="truncate text-ui-xl font-bold text-text">{ nameOf(props.table.game) }</h1>
                 <p class="flex min-w-0 items-center gap-2 text-ui-xs text-muted">
-                    <span class="tally shrink-0">{ locale.plural('common.players', props.table.seats) }</span>
+                    <span class="shrink-0">{ locale.plural('common.players', props.table.seats) }</span>
                     <span class="h-1 w-1 shrink-0 rounded-full bg-faint" aria-hidden="true"></span>
                     <span class="truncate">{ locale.t(props.table.mode === 'turns' ? 'games.mode.turns' : 'games.mode.live') }</span>
                 </p>

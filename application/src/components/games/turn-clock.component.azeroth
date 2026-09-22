@@ -53,7 +53,7 @@ export default component TurnClock(props: { deadline?: string; over: boolean; cl
                 ].filter(Boolean).join(' ') }
             >
                 <Icon name="timer" size={ 13 } />
-                <span class="tally">{ says }</span>
+                <span>{ says }</span>
             </span>
         }
     </Show>

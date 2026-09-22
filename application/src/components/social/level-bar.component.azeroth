@@ -46,7 +46,7 @@ export default component LevelBar(props: { progress: Progress; mine: boolean })
                 <span class="truncate text-ui-sm font-semibold text-text">
                     { locale.t('level.title', { level: locale.n(props.progress.level) }) }
                 </span>
-                <span class="tally truncate text-ui-2xs text-muted">
+                <span class="truncate text-ui-2xs text-muted">
                     { locale.t('level.total', { xp: locale.n(props.progress.xp) }) }
                 </span>
             </span>

@@ -74,7 +74,7 @@ export default component RecordStrip(props: { record: PlayerRecord })
                 { () =>
                     <div class="min-w-0">
                         <dt class="text-ui-2xs text-faint">{ locale.t('record.winRate') }</dt>
-                        <dd class="tally text-ui-md font-semibold text-text">{ locale.t('record.percent', { value: locale.n(rate!) }) }</dd>
+                        <dd class="text-ui-md font-semibold text-text">{ locale.t('record.percent', { value: locale.n(rate!) }) }</dd>
                     </div>
                 }
             </Show>

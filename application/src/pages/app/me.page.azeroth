@@ -198,7 +198,7 @@ export default component MePage()
                     <Show when={ tab === 'about' }>
                     <section>
                         <SectionHeading title={ locale.t('person.friends') } />
-                        <Panel class="tally text-ui-md text-text">
+                        <Panel class="text-ui-md text-text">
                             { locale.plural('friends.count', social.friends().length) }
                         </Panel>
                     </section>
@@ -218,7 +218,7 @@ export default component MePage()
                                                     <dt class="text-muted">{ locale.t('chain.username') }</dt>
                                                     <dd class="min-w-0 text-text" dir="auto">{ registryName }</dd>
                                                 </div>
-                                                <div class="tally text-ui-xs text-faint">
+                                                <div class="text-ui-xs text-faint">
                                                     { locale.t('chain.number', { id: chain.profile()?.id ?? '' }) }
                                                 </div>
                                             </dl>

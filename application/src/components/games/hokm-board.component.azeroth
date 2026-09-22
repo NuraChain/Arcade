@@ -390,8 +390,8 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
                             <div class="flex min-w-0 items-baseline justify-between gap-2">
                                 <dt class={ () => [ 'min-w-0 truncate text-ui-xs', SIDE_TONE[side.index % SIDE_TONE.length] ].join(' ') } dir="auto">{ side.names }</dt>
                                 <dd class="flex shrink-0 flex-col items-end">
-                                    <span class="tally text-ui-sm font-bold text-text">{ locale.t('hokm.points', { points: locale.n(side.points), target: locale.n(view!.target) }) }</span>
-                                    <span class="tally text-ui-2xs text-muted">{ locale.plural('hokm.tricks', side.tricks) }</span>
+                                    <span class="text-ui-sm font-bold text-text">{ locale.t('hokm.points', { points: locale.n(side.points), target: locale.n(view!.target) }) }</span>
+                                    <span class="text-ui-2xs text-muted">{ locale.plural('hokm.tricks', side.tricks) }</span>
                                 </dd>
                             </div>
                         </For>

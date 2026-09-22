@@ -338,7 +338,7 @@ export default component SettingsPage()
                         { locale.t('settings.premium.title') }
                     </h3>
                     <p class="mt-1 text-ui-base text-muted">{ locale.t('settings.premium.lead') }</p>
-                    <p class="tally mt-3 title text-ui-2xl text-text">
+                    <p class="mt-3 title text-ui-2xl text-text">
                         { locale.t('settings.premium.price', { price: locale.n(4, { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }) }) }
                     </p>
                     <p class="mt-1 text-ui-xs text-muted">{ locale.t('settings.premium.currency') }</p>
