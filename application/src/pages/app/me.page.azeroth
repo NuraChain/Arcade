@@ -14,11 +14,23 @@ import Tooltip from '../../components/ui/tooltip.component.azeroth';
 import { NURA_CHAIN } from '../../data/chain.ts';
 import Icon from '../../icons/icon.component.azeroth';
 import { shortAddress } from '../../lib/wallet.ts';
+import type { MessageKey } from '../../locales/en/index.ts';
+
 import { useAccount } from '../../stores/account.store.ts';
+import { useChain, type PublishOutcome } from '../../stores/chain.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useOverlay } from '../../stores/overlay.store.ts';
 import { useSocial } from '../../stores/social.store.ts';
 import { useToasts } from '../../stores/toasts.store.ts';
+
+
+const OUTCOME: Record<PublishOutcome, MessageKey> = {
+    published: 'chain.published',
+    rejected: 'chain.rejected',
+    reverted: 'chain.reverted',
+    pending: 'chain.pending',
+    unavailable: 'chain.unavailable'
+};
 
 /**
  * Your own profile, and only what is true about it.
@@ -45,6 +57,7 @@ export default component MePage()
     const account = useAccount();
     const social = useSocial();
     const toasts = useToasts();
+    const chain = useChain();
 
     /**
      * Puts the whole address on the clipboard.
@@ -91,6 +104,48 @@ export default component MePage()
         {
             toasts.show({ kind: 'info', text: link });
         }
+    };
+
+    /**
+     * What the registry says about this account, and whether it agrees with this page.
+     *
+     * Hidden outright for a guest and for a deployment pointed at no registry - a panel
+     * explaining an absence is furniture. A read that FAILED is shown, because "the registry
+     * says nothing" and "I could not ask it" are different answers and only one of them is
+     * about the person.
+     */
+    derived showChain = account.isWallet() && (chain.sync() !== 'off' || chain.failed());
+
+    derived chainNote = chain.failed()
+        ? 'chain.failed'
+        : chain.sync() === 'absent'
+            ? 'chain.absent'
+            : chain.sync() === 'synced' ? 'chain.synced' : 'chain.drifted';
+
+    derived publishLabel = chain.sync() === 'absent' ? 'chain.create' : 'chain.publish';
+
+    derived registryName = (chain.profile()?.username ?? '') === ''
+        ? locale.t('chain.noUsername')
+        : chain.profile()!.username;
+
+    /**
+     * Sends what the server composed and says what actually happened.
+     *
+     * Every outcome gets its own sentence because they are not the same event: declining in a
+     * wallet is not a failure, a revert is the contract refusing, and a transaction that has not
+     * been mined yet is neither. One "it did not work" for all five would be the shape this
+     * product has already recorded twice - a sheet that reports success before the answer lands.
+     */
+    const publish = async (): Promise<void> =>
+    {
+        const outcome = await chain.publish();
+        toasts.show({ kind: outcome === 'published' ? 'success' : 'warning', text: locale.t(OUTCOME[outcome]) });
+    };
+
+    const adopt = async (): Promise<void> =>
+    {
+        const taken = await chain.adopt();
+        toasts.show({ kind: taken ? 'success' : 'warning', text: locale.t(taken ? 'chain.adopted' : 'profile.failed') });
     };
 
     <Page width="narrow" label={ locale.t('app.nav.me') }>
@@ -148,6 +203,50 @@ export default component MePage()
                             { locale.plural('friends.count', social.friends().length) }
                         </Panel>
                     </section>
+
+                    <Show when={ showChain }>
+                        { () =>
+                            <section>
+                                <SectionHeading title={ locale.t('chain.title') } />
+                                <Panel class="flex flex-col gap-3">
+                                    <p class="text-ui-sm text-muted">{ locale.t('chain.lead', { chain: NURA_CHAIN.name }) }</p>
+                                    <p class="text-ui-base text-text">{ locale.t(chainNote) }</p>
+
+                                    <Show when={ chain.profile() !== null }>
+                                        { () =>
+                                            <dl class="flex flex-col gap-1 border-t border-line pt-3 text-ui-sm">
+                                                <div class="flex flex-wrap items-baseline gap-x-2">
+                                                    <dt class="text-muted">{ locale.t('chain.username') }</dt>
+                                                    <dd class="min-w-0 text-text" dir="auto">{ registryName }</dd>
+                                                </div>
+                                                <div class="tally text-ui-xs text-faint">
+                                                    { locale.t('chain.number', { id: chain.profile()?.id ?? '' }) }
+                                                </div>
+                                            </dl>
+                                        }
+                                    </Show>
+
+                                    <div class="flex flex-wrap gap-2">
+                                        <Show when={ chain.sync() === 'absent' || chain.sync() === 'drifted' }>
+                                            { () =>
+                                                <Button variant="primary" leading="send" loading={ chain.busy() } onClick={ () => void publish() }>
+                                                    { locale.t(publishLabel) }
+                                                </Button>
+                                            }
+                                        </Show>
+
+                                        <Show when={ chain.sync() === 'drifted' }>
+                                            { () =>
+                                                <Button variant="outline" leading="refresh" loading={ chain.busy() } onClick={ () => void adopt() }>
+                                                    { locale.t('chain.adopt') }
+                                                </Button>
+                                            }
+                                        </Show>
+                                    </div>
+                                </Panel>
+                            </section>
+                        }
+                    </Show>
 
                     <Show when={ account.isWallet() }>
                         { () =>

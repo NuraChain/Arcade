@@ -173,5 +173,24 @@ export const me = {
     'devices.attested.contract': 'Contract wallet',
     'devices.attested.contractHint': 'Proved on-chain by the wallet contract on this account.',
     'devices.attested.server': 'This server',
-    'devices.attested.serverHint': 'Nobody signed for this one. It is here because it was signed in — a guest account has no wallet to prove it with.'
+    'devices.attested.serverHint': 'Nobody signed for this one. It is here because it was signed in — a guest account has no wallet to prove it with.',
+
+    'chain.title': 'Nura Profile',
+    'chain.lead': 'Your identity across every Nura application. The registry on {chain} holds it, not this product.',
+    'chain.absent': 'You have no profile in the registry yet.',
+    'chain.synced': 'The registry says exactly what this page does.',
+    'chain.drifted': 'The registry still says something else.',
+    'chain.failed': 'The registry could not be read, so there is nothing to compare against.',
+    'chain.username': 'Registry name',
+    'chain.noUsername': 'Not claimed. Nura Wallet is where a registry name is taken.',
+    'chain.number': 'Profile {id}',
+    'chain.create': 'Create my Nura Profile',
+    'chain.publish': 'Publish this to the chain',
+    'chain.adopt': 'Use what the registry says',
+    'chain.published': 'Published. The registry now says what this page does.',
+    'chain.rejected': 'Nothing was sent. You declined it in your wallet.',
+    'chain.reverted': 'The chain refused it, so nothing changed.',
+    'chain.pending': 'Sent, but not mined yet. It shows here once it lands.',
+    'chain.unavailable': 'The registry could not be reached, so nothing was sent.',
+    'chain.adopted': 'Your profile now says what the registry does.'
 };
