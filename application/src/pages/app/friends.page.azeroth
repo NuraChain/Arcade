@@ -122,7 +122,7 @@ export default component FriendsPage()
         } }
     >
         <header class="pb-4">
-            <h1 class="title text-ui-4xl">{ locale.t('app.nav.friends') }</h1>
+            <h1 class="title text-ui-3xl">{ locale.t('app.nav.friends') }</h1>
             <p class="mt-2 text-ui-md text-muted">{ locale.t('friends.lead') }</p>
         </header>
 
@@ -155,7 +155,7 @@ export default component FriendsPage()
                     }
                 >
                     { () =>
-                        <ul class="flex flex-col gap-0.5" aria-label={ locale.t('friends.tab.all') }>
+                        <ul class="flex flex-col divide-y divide-line rounded-panel border border-line bg-field px-2" aria-label={ locale.t('friends.tab.all') }>
                             <For each={ listed } key={ (person) => person.id } let={ person }>
                                 <li>
                                     <FriendRow
@@ -210,7 +210,7 @@ export default component FriendsPage()
                     { () =>
                         <div class="flex flex-col gap-6">
                             <Show when={ incoming.length > 0 }>
-                                <ul class="flex flex-col gap-0.5" aria-label={ locale.t('friends.requests.incoming') }>
+                                <ul class="flex flex-col divide-y divide-line rounded-panel border border-line bg-field px-2" aria-label={ locale.t('friends.requests.incoming') }>
                                     <For each={ incoming } key={ (request) => request.id } let={ request }>
                                         <li>
                                             <Show when={ people.byHandle(request.from) !== null }>
@@ -237,7 +237,7 @@ export default component FriendsPage()
                             </Show>
 
                             <Show when={ outgoing.length > 0 }>
-                                <ul class="flex flex-col gap-0.5" aria-label={ locale.t('friends.requests.outgoing') }>
+                                <ul class="flex flex-col divide-y divide-line rounded-panel border border-line bg-field px-2" aria-label={ locale.t('friends.requests.outgoing') }>
                                     <For each={ outgoing } key={ (request) => request.id } let={ request }>
                                         <li>
                                             <Show when={ people.byHandle(request.to) !== null }>

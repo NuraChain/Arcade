@@ -87,7 +87,7 @@ export default component ChatsPage()
         } }
     >
         <header class="pb-4">
-            <h1 class="title text-ui-4xl">{ locale.t('app.nav.chats') }</h1>
+            <h1 class="title text-ui-3xl">{ locale.t('app.nav.chats') }</h1>
             <p class="mt-2 text-ui-md text-muted">{ locale.t('chats.lead') }</p>
         </header>
 

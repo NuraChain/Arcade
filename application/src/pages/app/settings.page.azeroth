@@ -95,7 +95,7 @@ export default component SettingsPage()
 
     <Page width="narrow" label={ locale.t('settings.title') }>
         <header class="pb-5">
-            <h1 class="title text-ui-4xl">{ locale.t('settings.title') }</h1>
+            <h1 class="title text-ui-3xl">{ locale.t('settings.title') }</h1>
         </header>
 
         <div class="flex flex-col gap-8">

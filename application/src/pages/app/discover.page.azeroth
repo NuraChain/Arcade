@@ -3,6 +3,7 @@ import { useHead, useNavigate } from 'azerothjs';
 import Page from '../../components/app/page.component.azeroth';
 import GameGrid from '../../components/games/game-grid.component.azeroth';
 import GroupCard from '../../components/social/group-card.component.azeroth';
+import EmptyState from '../../components/ui/empty-state.component.azeroth';
 import UserCard from '../../components/social/user-card.component.azeroth';
 import SectionHeading from '../../components/ui/section-heading.component.azeroth';
 import type { GameId } from '../../data/games.ts';
@@ -56,7 +57,7 @@ export default component DiscoverPage()
         } }
     >
         <header class="pb-5">
-            <h1 class="title text-ui-4xl">{ locale.t('app.nav.discover') }</h1>
+            <h1 class="title text-ui-3xl">{ locale.t('app.nav.discover') }</h1>
             <p class="mt-2 text-ui-md text-muted">{ locale.t('discover.lead') }</p>
         </header>
 
@@ -83,13 +84,20 @@ export default component DiscoverPage()
 
             <section>
                 <SectionHeading title={ locale.t('discover.rooms') } />
-                <ul class="grid gap-2 @2xl:grid-cols-2 @6xl:grid-cols-3" aria-label={ locale.t('discover.rooms') }>
-                    <For each={ groups } key={ (group) => group.id } let={ group }>
-                        <li class="flex min-w-0">
-                            <GroupCard group={ group } class="flex-1" />
-                        </li>
-                    </For>
-                </ul>
+                <Show
+                    when={ groups.length > 0 }
+                    fallback={ <EmptyState icon="people" title={ locale.t('discover.roomsEmpty') } lead={ locale.t('discover.roomsEmptyLead') } class="rounded-panel border border-dashed border-line py-8" /> }
+                >
+                    { () =>
+                        <ul class="grid gap-2 @2xl:grid-cols-2 @6xl:grid-cols-3" aria-label={ locale.t('discover.rooms') }>
+                            <For each={ groups } key={ (group) => group.id } let={ group }>
+                                <li class="flex min-w-0">
+                                    <GroupCard group={ group } class="flex-1" />
+                                </li>
+                            </For>
+                        </ul>
+                    }
+                </Show>
             </section>
 
             <section>

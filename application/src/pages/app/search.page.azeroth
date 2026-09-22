@@ -115,7 +115,7 @@ export default component SearchPage()
                     <Show when={ recents.length > 0 }>
                         <section>
                             <SectionHeading title={ locale.t('search.recent') } />
-                            <ul class="flex flex-col gap-0.5" aria-label={ locale.t('search.recent') }>
+                            <ul class="flex flex-col divide-y divide-line rounded-panel border border-line bg-field px-2" aria-label={ locale.t('search.recent') }>
                                 <For each={ recents } key={ (term) => term } let={ term }>
                                     <li class="flex items-center gap-2 rounded-tile px-2 hover:bg-raised/60">
                                         <button
@@ -153,7 +153,7 @@ export default component SearchPage()
                             <Show when={ results.people.length > 0 }>
                                 <section>
                                     <SectionHeading title={ locale.t('search.scope.people') } />
-                                    <ul class="flex flex-col gap-0.5" aria-label={ locale.t('search.scope.people') }>
+                                    <ul class="flex flex-col divide-y divide-line rounded-panel border border-line bg-field px-2" aria-label={ locale.t('search.scope.people') }>
                                         <For each={ results.people.slice(0, peoplePage * PEOPLE_PAGE) } key={ (person) => person.id } let={ person }>
                                             <li>
                                                 <FriendRow person={ person } subtitle={ `@${ person.handle }` } />
@@ -218,7 +218,7 @@ export default component SearchPage()
                             <Show when={ results.messages.length > 0 }>
                                 <section>
                                     <SectionHeading title={ locale.t('search.scope.chats') } />
-                                    <ul class="flex flex-col gap-0.5" aria-label={ locale.t('search.scope.chats') }>
+                                    <ul class="flex flex-col divide-y divide-line rounded-panel border border-line bg-field px-2" aria-label={ locale.t('search.scope.chats') }>
                                         <For each={ results.messages.slice(0, messagePage * MESSAGE_PAGE) } key={ (message) => message.id } let={ message }>
                                             <li>
                                                 <button

@@ -4,11 +4,10 @@ import { createResource, useHead, useNavigate, useParams } from 'azerothjs';
 import { client } from '../../api.ts';
 import Page from '../../components/app/page.component.azeroth';
 import PersonActions from '../../components/social/person-actions.component.azeroth';
-import Avatar from '../../components/ui/avatar.component.azeroth';
+import ProfileHeader from '../../components/social/profile-header.component.azeroth';
+import Badge from '../../components/ui/badge.component.azeroth';
 import Button from '../../components/ui/button.component.azeroth';
-import Chip from '../../components/ui/chip.component.azeroth';
 import EmptyState from '../../components/ui/empty-state.component.azeroth';
-import IconButton from '../../components/ui/icon-button.component.azeroth';
 import Icon from '../../icons/icon.component.azeroth';
 import { usePeople } from '../../stores/people.store.ts';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
@@ -17,6 +16,7 @@ import { useLobby } from '../../stores/lobby.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useOverlay } from '../../stores/overlay.store.ts';
 import { usePresence } from '../../stores/presence.store.ts';
+import { useRecord } from '../../stores/record.store.ts';
 import { useShell } from '../../stores/shell.store.ts';
 import { useSocial } from '../../stores/social.store.ts';
 import { useToasts } from '../../stores/toasts.store.ts';
@@ -36,6 +36,7 @@ export default component PersonPage()
     const toasts = useToasts();
     const params = useParams();
     const people = usePeople();
+    const record = useRecord();
     const { navigate } = useNavigate();
 
     const view = createResource(
@@ -58,6 +59,16 @@ export default component PersonPage()
     derived relation = person === null ? 'none' : social.relation(person.id);
 
     derived mutual = view.data()?.mutual ?? 0;
+
+    derived dot = person === null ? null : presence.dot(person.id);
+
+    derived held = record.record();
+
+    derived stats = [
+        { label: locale.t('profile.stat.games'), value: (held?.games ?? []).reduce((sum, one) => sum + one.played, 0) },
+        { label: locale.t('profile.stat.wins'), value: (held?.games ?? []).reduce((sum, one) => sum + one.won, 0) },
+        { label: locale.t('profile.stat.achievements'), value: (held?.achievements ?? []).filter((one) => one.earnedAt !== undefined).length }
+    ];
 
     const play = (): void =>
     {
@@ -83,32 +94,62 @@ export default component PersonPage()
         >
             { () =>
                 <div class="flex flex-col gap-6">
-                    <header class="flex flex-col items-center gap-3 pt-2 text-center">
-                        <Avatar person={ person } size="2xl" presence={ person === null ? null : presence.dot(person.id) } />
-                        <div>
-                            <h1 class="title flex items-center justify-center gap-2 text-ui-3xl" dir="auto">
-                                { name }
-                                <Show when={ person?.isMinor === true }>
-                                    { () => <Icon name="shield" size={ 18 } class="text-live" /> }
+                    <ProfileHeader
+                        person={ person! }
+                        presence={ dot }
+                        bio={ locale.text(person!.bio) }
+                        stats={ stats }
+                        badges={
+                            <span class="contents">
+                                <Show when={ dot === 'online' || dot === 'away' }>
+                                    <Badge dot text={ dot === 'away' ? locale.t('common.away') : locale.t('common.online') } tone={ dot === 'away' ? 'gold' : 'live' } />
                                 </Show>
-                            </h1>
-                            <p class="mt-1 text-ui-base text-muted">@{ person!.handle }</p>
-                        </div>
-                        <p class="max-w-[46ch] text-ui-base text-text">{ locale.text(person!.bio) }</p>
-                        <ul class="flex flex-wrap justify-center gap-2" aria-label={ locale.t('person.tab.overview') }>
-                            <Show when={ mutual > 0 }>
-                                <li><Chip icon="people"><span class="tally">{ locale.plural('person.mutual', mutual) }</span></Chip></li>
-                            </Show>
-                        </ul>
-                        <Show when={ person?.isMinor === true }>
-                            { () =>
-                                <p class="flex items-center gap-2 rounded-full bg-live/10 px-3 py-1.5 text-ui-xs font-semibold text-live">
-                                    <Icon name="shield" size={ 13 } />
-                                    { locale.t('person.minor') }
-                                </p>
-                            }
-                        </Show>
-                    </header>
+                                <Show when={ mutual > 0 }>
+                                    <Badge dot text={ locale.plural('person.mutual', mutual) } tone="accent" />
+                                </Show>
+                                <Show when={ person?.isMinor === true }>
+                                    <span class="inline-flex h-6 items-center gap-1.5 rounded-full border border-live/30 bg-live/12 px-2.5 text-ui-xs font-semibold text-live">
+                                        <Icon name="shield" size={ 12 } />
+                                        { locale.t('person.minor') }
+                                    </span>
+                                </Show>
+                            </span>
+                        }
+                        actions={
+                            <span class="contents">
+                                <Show when={ relation !== 'blocked' }>
+                                    <span class="contents">
+                                        <Button variant="primary" leading="play" block class="col-span-2" onClick={ play }>{ locale.t('person.play') }</Button>
+                                        <Button variant="secondary" leading="chats" block onClick={ message }>{ locale.t('person.message') }</Button>
+                                        <Show when={ relation === 'none' }>
+                                            <Button
+                                                variant="outline"
+                                                leading="friend-add"
+                                                block
+                                                onClick={ () =>
+                                                {
+                                                    social.add(person!.id);
+                                                    toasts.show({ kind: 'success', text: locale.t('person.added') });
+                                                } }
+                                            >
+                                                { locale.t('person.add') }
+                                            </Button>
+                                        </Show>
+                                        <Show when={ relation === 'outgoing' }>
+                                            <Button variant="outline" leading="clock" block onClick={ () => social.withdraw(person!.id) }>{ locale.t('person.withdraw') }</Button>
+                                        </Show>
+                                        <Show when={ relation === 'incoming' }>
+                                            <Button variant="outline" leading="friend-check" block onClick={ () => social.accept(social.incoming().find((request) => request.from === person!.id)?.id ?? '') }>{ locale.t('person.accept') }</Button>
+                                        </Show>
+                                        <Show when={ relation === 'friend' }>
+                                            <Button variant="outline" leading="friend-check" block disabled>{ locale.t('person.friends') }</Button>
+                                        </Show>
+                                    </span>
+                                </Show>
+                                <Button variant="ghost" leading="more" block class="col-span-2" onClick={ () => overlay.open(PersonActions, { personId: person!.id }, { label: locale.t('actions.title') }) }>{ locale.t('actions.title') }</Button>
+                            </span>
+                        }
+                    />
 
                     <Show when={ relation === 'blocked' }>
                         { () =>
@@ -128,48 +169,6 @@ export default component PersonPage()
                                     { locale.t('actions.unblock', { name: locale.text(person!.displayName).split(' ')[0] }) }
                                 </Button>
                             </Panel>
-                        }
-                    </Show>
-
-                    <Show when={ relation !== 'blocked' }>
-                        { () =>
-                            <div class="flex flex-wrap items-center justify-center gap-2">
-                                <Button variant="primary" leading="play" onClick={ play }>{ locale.t('person.play') }</Button>
-                                <Button variant="secondary" leading="chats" onClick={ message }>{ locale.t('person.message') }</Button>
-                                <Show when={ relation === 'none' }>
-                                    { () =>
-                                        <Button
-                                            variant="outline"
-                                            leading="friend-add"
-                                            onClick={ () =>
-                                            {
-                                                social.add(person!.id);
-                                                toasts.show({ kind: 'success', text: locale.t('person.added') });
-                                            } }
-                                        >
-                                            { locale.t('person.add') }
-                                        </Button>
-                                    }
-                                </Show>
-                                <Show when={ relation === 'outgoing' }>
-                                    { () => <Button variant="outline" leading="clock" onClick={ () => social.withdraw(person!.id) }>{ locale.t('person.withdraw') }</Button> }
-                                </Show>
-                                <Show when={ relation === 'incoming' }>
-                                    { () =>
-                                        <Button
-                                            variant="outline"
-                                            leading="friend-check"
-                                            onClick={ () => social.accept(social.incoming().find((request) => request.from === person!.id)?.id ?? '') }
-                                        >
-                                            { locale.t('person.accept') }
-                                        </Button>
-                                    }
-                                </Show>
-                                <Show when={ relation === 'friend' }>
-                                    { () => <Button variant="outline" leading="friend-check" disabled>{ locale.t('person.friends') }</Button> }
-                                </Show>
-                                <IconButton icon="more" label={ locale.t('actions.title') } variant="ghost" onClick={ () => overlay.open(PersonActions, { personId: person!.id }, { label: locale.t('actions.title') }) } />
-                            </div>
                         }
                     </Show>
 

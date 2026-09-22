@@ -1,0 +1,71 @@
+import type { Child } from 'azerothjs';
+
+import Icon from '../../icons/icon.component.azeroth';
+import { useLocale } from '../../stores/locale.store.ts';
+import Avatar, { type Facade, type Presence } from '../ui/avatar.component.azeroth';
+
+export interface ProfileStat
+{
+    label: string;
+    value: number;
+}
+
+export default component ProfileHeader(props: {
+    person: Facade & { handle: string };
+    presence: Presence;
+    stats: ProfileStat[];
+    bio?: string;
+    badges?: Child;
+    actions?: Child;
+    onEditBio?: () => void;
+})
+{
+    const locale = useLocale();
+
+    <section class="hero-surface relative overflow-hidden rounded-hero p-5 @xl:p-7" aria-labelledby="profile-name">
+        <Icon name="games" size={ 300 } class="pointer-events-none absolute -end-16 -top-20 text-accent opacity-[0.07] icon-flip" />
+        <div class="relative grid gap-6 @2xl:grid-cols-[minmax(0,1fr)_auto] @2xl:items-center">
+            <div class="flex min-w-0 flex-col gap-4">
+                <div class="flex min-w-0 items-center gap-4">
+                    <span class="shrink-0 rounded-full bg-gradient-to-br from-accent to-accent-fill p-[3px] shadow-[0_0_28px_-6px_var(--accent)]">
+                        <Avatar person={ props.person } size="xl" presence={ props.presence } class="ring-4 ring-void" />
+                    </span>
+                    <div class="flex min-w-0 flex-col gap-1">
+                        <h1 id="profile-name" class="title truncate text-ui-2xl @xl:text-ui-3xl" dir="auto">{ props.person.displayName }</h1>
+                        <p class="truncate text-ui-sm text-muted" dir="ltr">@{ props.person.handle }</p>
+                        <div class="mt-1 flex flex-wrap items-center gap-2">{ props.badges }</div>
+                    </div>
+                </div>
+
+                <Show when={ (props.bio ?? '') !== '' || props.onEditBio !== undefined }>
+                    <p class="flex max-w-[56ch] items-start gap-2 text-ui-md text-text">
+                        <span class="min-w-0" dir="auto">{ props.bio ?? '' }</span>
+                        <Show when={ props.onEditBio !== undefined }>
+                            <button
+                                type="button"
+                                class="-my-2 flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-control text-accent transition-colors hover:bg-accent/10 coarse:h-11 coarse:w-11"
+                                aria-label={ locale.t('profile.editBio') }
+                                onClick={ () => props.onEditBio?.() }
+                            >
+                                <Icon name="edit" size={ 15 } />
+                            </button>
+                        </Show>
+                    </p>
+                </Show>
+
+                <dl class="flex flex-wrap items-stretch gap-y-3">
+                    <For each={ props.stats } key={ (stat) => stat.label } let={ stat }>
+                        <div class="flex min-w-[5.5rem] flex-col gap-0.5 border-line pe-6 [&:not(:first-child)]:border-s [&:not(:first-child)]:ps-6">
+                            <dt class="order-2 text-ui-xs text-muted">{ stat.label }</dt>
+                            <dd class="tally order-1 text-ui-2xl font-bold text-text">{ locale.n(stat.value) }</dd>
+                        </div>
+                    </For>
+                </dl>
+            </div>
+
+            <Show when={ props.actions !== undefined }>
+                <div class="grid grid-cols-2 gap-2 @2xl:flex @2xl:w-56 @2xl:flex-col">{ props.actions }</div>
+            </Show>
+        </div>
+    </section>
+}
