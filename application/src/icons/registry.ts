@@ -1,5 +1,6 @@
 import {
     Activity,
+    ArrowDownWideNarrow,
     ArrowLeft,
     ArrowRight,
     Armchair,
@@ -141,6 +142,7 @@ export const ICONS = {
     'fullscreen-exit': Shrink,
     'sound': Volume2,
     'sound-off': VolumeX,
+    'sort': ArrowDownWideNarrow,
     'sparkles': Sparkles,
     'star': Star,
     'target': Target,

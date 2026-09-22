@@ -1,9 +1,9 @@
 import BoardCanvas from './board-canvas.component.azeroth';
 import MatchResult from './match-result.component.azeroth';
 import PlayerCard from './player-card.component.azeroth';
+import TurnClock from './turn-clock.component.azeroth';
 import Button from '../ui/button.component.azeroth';
 import Panel from '../ui/panel.component.azeroth';
-import { runtime } from '../../lib/runtime.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useBoard } from '../../stores/match.store.ts';
 import { usePeople } from '../../stores/people.store.ts';
@@ -103,83 +103,6 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
 
     derived tokens = seatsFor(ludo, mine);
 
-    /**
-     * The turn clock, which nothing rendered until now.
-     *
-     * `matches.deadline_at` has been on the wire since the domain was written and `match.deadline`
-     * has had copy in both languages, and no screen ever showed either - so a live turn ran out
-     * after thirty seconds and the first a player knew of it was the server having played for them.
-     * A clock nobody can see only ever surprises the person it is counting down, which is the worst
-     * way there is to lose a turn at a table playing for anything.
-     *
-     * It ticks off `runtime().clock` like every other timer in this product, so a spec can drive it
-     * rather than wait for it, and it is cleared on teardown.
-     */
-    state now = runtime().clock.now();
-
-    mount
-    {
-        return runtime().clock.every(1000, () => now = runtime().clock.now());
-    }
-
-    derived secondsLeft = ((): number | null =>
-    {
-        if (over || game.deadline === undefined)
-        {
-            return null;
-        }
-
-        return Math.max(0, Math.round((new Date(game.deadline).getTime() - now) / 1000));
-    })();
-
-    /**
-     * The last few seconds read differently, because that is when it matters.
-     *
-     * `danger` rather than `madder`: running out of time is a thing going wrong, and `madder` means
-     * a table is playing for something - it is the one colour in this product that already carries
-     * a meaning, and borrowing it here would make it carry two.
-     */
-    const URGENT_AT = 10;
-
-    /**
-     * The same deadline in a unit a person reads.
-     *
-     * A `turns` table gives a day, and the seconds formatter rendered that as "About 86,056s left" -
-     * a number nobody can parse, on the one screen where the clock exists to be understood at a
-     * glance. A live table is seconds, a correspondence table is hours, and the hour between them
-     * is minutes.
-     */
-    const MINUTE = 60;
-
-    const HOUR = 60 * MINUTE;
-
-    derived clockSays = ((): string | null =>
-    {
-        if (secondsLeft === null)
-        {
-            return null;
-        }
-
-        if (secondsLeft < 90)
-        {
-            return locale.t('match.deadline', { seconds: locale.n(secondsLeft) });
-        }
-
-        if (secondsLeft < 90 * MINUTE)
-        {
-            return locale.t('match.deadline.minutes', { minutes: locale.n(Math.round(secondsLeft / MINUTE)) });
-        }
-
-        return locale.t('match.deadline.hours', { hours: locale.n(Math.round(secondsLeft / HOUR)) });
-    })();
-
-    /**
-     * Which corner of the board each colour is printed in.
-     *
-     * Physical, and it has to be: the plate is a photograph of an object, red is printed top-left,
-     * and a Persian page does not move it. The cards read as belonging to a quadrant only if they
-     * are actually beside it.
-     */
     const CORNER: Record<string, string> = {
         red: 'top-left',
         green: 'top-right',
@@ -272,7 +195,7 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
             : locale.t('match.move.step', { token: label, die: locale.n(ludo.die) });
     };
 
-    <div class="flex min-w-0 flex-col gap-4">
+    <div class="@container flex min-w-0 flex-col gap-4">
         <div class="board-arena">
             <For each={ topCards } key={ (entry) => entry.player.seat } let={ entry }>
                 <div class="board-seat" data-corner={ entry.corner }>
@@ -322,31 +245,23 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
             <Panel pad="md" stack="sm">
                 <div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
                     <p class="min-w-0 flex-1 basis-[10rem] text-ui-lg font-semibold text-text" aria-live="polite">{ says }</p>
-                    <Show when={ clockSays !== null }>
-                        { () =>
-                            <span
-                                class={ () => [
-                                    'tally shrink-0 text-ui-sm font-bold',
-                                    secondsLeft !== null && secondsLeft <= URGENT_AT ? 'text-danger' : 'text-muted'
-                                ].join(' ') }
-                            >
-                                { clockSays }
-                            </span>
-                        }
-                    </Show>
+                    <TurnClock deadline={ game.deadline } over={ over } />
                 </div>
 
                 <Show when={ board.canRoll() }>
                     { () =>
-                        <Button
-                            variant="primary"
-                            size="lg"
-                            leading="dice"
-                            loading={ board.busy() }
-                            onClick={ () => void board.roll() }
-                        >
-                            { locale.t('match.roll') }
-                        </Button>
+                        <span class="glow-cta flex rounded-control">
+                            <Button
+                                variant="primary"
+                                size="lg"
+                                leading="dice"
+                                block
+                                loading={ board.busy() }
+                                onClick={ () => void board.roll() }
+                            >
+                                { locale.t('match.roll') }
+                            </Button>
+                        </span>
                     }
                 </Show>
 

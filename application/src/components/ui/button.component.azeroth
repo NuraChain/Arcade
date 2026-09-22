@@ -16,6 +16,7 @@ export default component Button(props: {
     block?: boolean;
     disabled?: boolean;
     loading?: boolean;
+    pressed?: boolean;
     submit?: boolean;
     label?: string;
     class?: string;
@@ -31,6 +32,7 @@ export default component Button(props: {
         BUTTON_VARIANT[props.variant ?? 'outline'],
         BUTTON_SIZE[props.size ?? 'md'],
         props.block === true ? 'w-full' : '',
+        props.pressed === true ? 'border-accent/60 bg-accent/15 text-accent' : '',
         inert ? '' : 'cursor-pointer',
         props.class ?? ''
     ].filter(Boolean).join(' ');
@@ -51,6 +53,7 @@ export default component Button(props: {
                         class={ shell }
                         disabled={ inert }
                         aria-busy={ props.loading === true }
+                        aria-pressed={ props.pressed }
                         aria-label={ props.label }
                         onClick={ () => (inert ? undefined : props.onClick?.()) }
                     >

@@ -8,7 +8,7 @@ import { chairsOf, ludoOf, type LudoSeat } from '../src/data/match.ts';
 import { seatsFor } from '../src/components/games/seats.ts';
 import { aroundTable } from '../src/components/games/table-seats.ts';
 import type { MatchView } from '../src/api.ts';
-import { RANKS as CLIENT_RANKS, SUITS as CLIENT_SUITS, SUIT_ICON, rankOf as clientRank, suitOf as clientSuit } from '../src/data/cards.ts';
+import { RANKS as CLIENT_RANKS, SUITS as CLIENT_SUITS, SUIT_ICON, arrangeHand, rankOf as clientRank, suitOf as clientSuit } from '../src/data/cards.ts';
 import { RANKS as SERVER_RANKS, SUITS as SERVER_SUITS, rankOf as serverRank, suitOf as serverSuit } from '../../server/src/domains/match/hokm/cards.ts';
 
 /**
@@ -451,5 +451,31 @@ describe('where a card lands on the felt', () =>
                 expect(Math.abs(chair.tilt)).toBeLessThan(10);
             }
         }
+    });
+});
+
+describe('a hand arranged the way a person holds it', () =>
+{
+    const card = (suit: number, rank: number): number => suit * 13 + rank;
+
+    it('puts trump first, alternates the colours after it, and holds each suit high to low', () =>
+    {
+        const hand = [card(0, 3), card(1, 12), card(2, 0), card(3, 9), card(3, 11), card(0, 10)];
+
+        expect(arrangeHand(hand, 'hearts')).toEqual([card(2, 0), card(0, 10), card(0, 3), card(1, 12), card(3, 11), card(3, 9)]);
+    });
+
+    it('alternates from the first suit present when there is no trump yet', () =>
+    {
+        const hand = [card(1, 2), card(2, 5), card(3, 1)];
+
+        expect(arrangeHand(hand)).toEqual([card(1, 2), card(3, 1), card(2, 5)]);
+    });
+
+    it('keeps every card and invents none', () =>
+    {
+        const hand = [card(2, 4), card(2, 9), card(0, 0)];
+
+        expect([...arrangeHand(hand, 'spades')].sort((a, b) => a - b)).toEqual([...hand].sort((a, b) => a - b));
     });
 });

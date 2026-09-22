@@ -51,8 +51,21 @@ export const FACE_KEY: Record<string, 'card.rank.jack' | 'card.rank.queen' | 'ca
     A: 'card.rank.ace'
 };
 
-/** Sorted the way a person holds a hand: by suit, and by rank within it. */
-export function sortHand(cards: readonly number[]): number[]
+const RED: ReadonlySet<Suit> = new Set<Suit>(['diamonds', 'hearts']);
+
+export function arrangeHand(cards: readonly number[], trump?: Suit): number[]
 {
-    return [...cards].sort((a, b) => a - b);
+    const present = SUITS.filter((suit) => cards.some((card) => suitOf(card) === suit));
+    const rest = present.filter((suit) => suit !== trump);
+    const order: Suit[] = trump !== undefined && present.includes(trump) ? [trump] : [];
+
+    while (rest.length > 0)
+    {
+        const last = order.at(-1);
+        const next = rest.findIndex((suit) => last === undefined || RED.has(suit) !== RED.has(last));
+
+        order.push(...rest.splice(Math.max(0, next), 1));
+    }
+
+    return [...cards].sort((a, b) => order.indexOf(suitOf(a)) - order.indexOf(suitOf(b)) || b - a);
 }

@@ -1,6 +1,5 @@
 import DieFace from './die-face.component.azeroth';
 import Avatar from '../ui/avatar.component.azeroth';
-import Panel from '../ui/panel.component.azeroth';
 import { INITIAL } from './seats.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { usePeople } from '../../stores/people.store.ts';
@@ -27,11 +26,6 @@ const MISSES_ALLOWED = 3;
  *
  * Colour is never the only signal. The initial is on the swatch, the name is written out, and the
  * turn is an outline AND a word - so a player who cannot tell red from green loses nothing.
- *
- * The turn outline sits on a wrapper rather than on the `Panel`, because the colour is the player's
- * and has to be set as a real CSS property - `Panel` takes no `style`, and giving it one so a card
- * could tint itself would open the primitive up to every caller wanting a different surface. A
- * wrapper carrying an `outline-color` leaves the surface exactly what the design system says it is.
  *
  * It takes BOTH halves of a chair, because that is what the wire now sends and what this card is:
  * `player` is who is sitting there and how their match went, which is true of every game, and
@@ -104,52 +98,50 @@ export default component PlayerCard(props: {
 
     <div
         class={ () => [
-            'min-w-0 rounded-panel',
-            props.active && !props.finished ? 'outline outline-2 outline-offset-0' : '',
+            'ludo-seat',
+            props.active && !props.finished ? 'is-turn' : '',
             props.seat.out ? 'opacity-60' : ''
         ].filter(Boolean).join(' ') }
-        style={ `outline-color: var(--ludo-${ props.seat.colour })` }
+        style={ `--ink: var(--ludo-${ props.seat.colour })` }
         aria-current={ props.active && !props.finished ? 'true' : undefined }
     >
-        <Panel pad="sm" class="flex min-w-0 items-center gap-2 shadow-2">
-            <span class="relative shrink-0">
-                <Avatar person={ person } size="sm" />
-                <span
-                    class="absolute -bottom-1 -end-1 flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold text-white ring-2 ring-field"
-                    style={ `background: var(--ludo-${ props.seat.colour })` }
-                    aria-hidden="true"
-                >
+        <span class="relative shrink-0">
+            <Avatar person={ person } size="md" ringOn="void" />
+            <span
+                class="absolute -bottom-1 -end-1 flex h-4 w-4 items-center justify-center rounded-full text-ui-2xs font-bold leading-none text-white ring-2 ring-void"
+                style={ `background: var(--ludo-${ props.seat.colour })` }
+                aria-hidden="true"
+            >
                 { INITIAL[props.seat.colour] }
-                </span>
             </span>
+        </span>
 
-            <span class="flex min-w-0 flex-1 flex-col">
+        <span class="flex min-w-0 flex-1 flex-col gap-1">
+            <span class="flex min-w-0 flex-col leading-tight">
                 <span class="truncate text-ui-sm font-semibold text-text" dir="auto">{ name }</span>
                 <span
                     class={ () => [
-                    'truncate text-ui-2xs',
-                    props.player.timeouts >= MISSES_ALLOWED - 1 && !props.finished ? 'text-danger' : 'text-muted'
-                ].join(' ') }
+                        'truncate text-ui-2xs',
+                        props.player.timeouts >= MISSES_ALLOWED - 1 && !props.finished ? 'text-danger' : 'text-muted'
+                    ].join(' ') }
                 >
-                { says }
-                </span>
-
-                <span class="mt-1 flex items-center gap-1" role="img" aria-label={ locale.plural('match.tokens', props.seat.home) }>
-                    <For each={ PIPS } key={ (pip) => pip } let={ pip }>
-                        <span
-                            class="h-2 w-2 rounded-full"
-                            style={ pip < props.seat.home
-                            ? `background: var(--ludo-${ props.seat.colour })`
-                            : 'background: var(--line-strong)' }
-                            aria-hidden="true"
-                    ></span>
-                    </For>
+                    { says }
                 </span>
             </span>
 
-            <Show when={ props.die !== undefined && props.active && !props.finished }>
-            { () => <DieFace value={ props.die! } size="sm" label={ locale.t('match.turn.rolled', { die: locale.n(props.die!) }) } /> }
-            </Show>
-        </Panel>
+            <span class="flex items-center gap-1.5" role="img" aria-label={ locale.plural('match.tokens', props.seat.home) }>
+                <For each={ PIPS } key={ (pip) => pip } let={ pip }>
+                    <span
+                        class="ludo-pip"
+                        data-home={ pip < props.seat.home ? 'true' : 'false' }
+                        aria-hidden="true"
+                    ></span>
+                </For>
+            </span>
+        </span>
+
+        <Show when={ props.die !== undefined && props.active && !props.finished }>
+            { () => <DieFace value={ props.die! } size="md" label={ locale.t('match.turn.rolled', { die: locale.n(props.die!) }) } /> }
+        </Show>
     </div>
 }

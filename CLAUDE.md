@@ -1406,51 +1406,45 @@ overwritten on conflict, so it reached a database built from nothing.
 
 ## Drawing the board
 
-The board a player moves tokens on is a **photograph of the object the market scene already stands
-on**. `tools/blender/board.py` imports `application/public/world/set-ludo.glb`, keeps the walnut body
-and the printed face, drops the loose tokens and dice, and renders it with an orthographic camera
-pointing straight down into `application/public/board/ludo-plate-1024.webp`. Run by hand, because
-it needs Blender: `blender -b -P tools/blender/board.py`.
+The Ludo board is **vector art drawn from the rules' own geometry**. `tools/art/boards.mjs` imports
+`application/src/game/layout.ts` for where the grid sits and `server/src/domains/match/ludo/board.ts`
+for the ring, the home runs, the starts and the safe squares, and writes
+`application/public/board/ludo-board.svg` plus one `pawn-<colour>.svg` per colour. `npm run art`
+regenerates them; nothing needs Blender.
 
-That is not a flourish. Drawing the field a second time in CSS or in canvas would be a second
-description of one object, agreeing until somebody edited one of them. Photographing it means the
-2D board and the 3D board cannot disagree, and the orthographic camera means the image maps
-cell-for-cell onto the 15x15 grid the rules already use.
+It used to be a Blender photograph of `set-ludo.glb`, and the user judged it not good enough to ship.
+The argument for a photograph was that a second drawing of the field would drift from the first. The
+generator answers that better: it READS the walk, so a start square, a star or an arrow cannot sit
+anywhere the rules do not put one, and it throws if the ring stops being 52 cells.
 
-**Three things about that render cost an afternoon each and are worth stating.**
+**What is drawn, and where it comes from.** A starred START square in the owner's colour on
+`ENTRY`; a star in the arm's colour on every other `SAFE` index; an arrow in the owner's colour on
+the last ring cell before each home run, pointing into it; the home runs as coloured tiles; the
+centre as four pyramids. Colours are `LUDO_INK` in the generator and `--ludo-*` in `tokens.css`,
+and `PALETTE` in `ludo-board.ts` - three copies of four colours, kept equal by hand.
 
-Export swaps every image for an 8x8 stub, because three.js loads the atlas separately at run time -
-so rendering straight from the GLB gives a blank field. The script re-points the image node at the
-real `atlas-2048.webp`, and refuses to render if it finds no node to re-point.
+**The pawns are sprites standing on the square, not discs lying on it.** The image's foot is at 82%
+of its height, so `setOrigin(0.5, PAWN_FOOT)` puts the base on the cell centre and the head over the
+cell behind it, and a pawn's depth is its y - a token nearer the reader overlaps the one behind, the
+way standing pieces do. The initial stays, drawn on the head: colour is never the only signal.
 
-`AgX` is the view transform the hero art uses, and it desaturates hard: the first plate turned the
-four strong palette colours into pastels. This render uses `Standard` with the exposure pulled down,
-because a flat top-down board has no bright highlights to roll off and its colours are the product's
-own. The default 4% specular was doing the same thing more quietly - lifting red's green channel -
-and is turned down for the same reason.
-
-`set-ludo.py` runs `kit.bake_ao` with the tokens standing on the field, so **the pawns' contact
-shadows are baked into the field's vertex colours**. They showed on the plate as dark smudges inside
-all four home squares, and they are exactly the pieces the client draws itself. The script repaints
-the face's colour attribute to the flat white it had before the bake.
-
-**The grid does not fill the paper, and assuming it does is a bug you look straight at.** `atlas.py`
-draws the field with a 32px margin inside its 1024px region and `set-ludo.py` insets the face's UVs
-by the 16px `GUTTER`, so the cells start further in than the walnut rim and are slightly smaller
-than a fifteenth of the paper. `application/src/game/layout.ts` derives both fractions from those
-two constants:
+**The grid does not fill the board, and assuming it does is a bug you look straight at.** The
+fractions come from the old atlas and the generator keeps them exactly, because the canvas, the DOM
+fallback and the art all place things through them:
 
 ```
-RIM    = 0.016 / 0.380              the walnut, from the mesh
+RIM    = 0.016 / 0.380              the wooden frame
 MARGIN = RIM + FIELD * 16 / 992     where the first cell actually starts
 CELL   = FIELD * 960 / 992 / 15     one square
 ```
 
 With the paper's own numbers instead, every token near an edge sits about a quarter of a cell too
 far out, exact in the middle and worst in the corners. The yard wells have the same trap from the
-other end: `atlas.py` draws them at `corner + 3 +/- 0.95`, which is a POSITION, and `centreOf` adds
-the half cell that turns an index into a centre - so passing 2 and 4 puts every parked token half a
-cell off the circle it belongs in.
+other end: they are drawn at `corner + 3 +/- 0.95`, which is a POSITION, and `centreOf` adds the
+half cell that turns an index into a centre - so `YARD_SPOTS` passes 1.55 and 3.45, not 2 and 4.
+
+Phaser loads the SVG with `load.svg` at 1536 pixels, because it rasterises once at the size it is
+told and a canvas on a 2x phone is up to 1400 device pixels wide.
 
 **Phaser draws it**, and `application/src/game/` is framework-free exactly as `world/` is: no
 AzerothJS import anywhere under it, one bridge interface, and one `.azeroth` component that reaches
@@ -2066,7 +2060,7 @@ a live one sweeps a turn nobody took and a pass that pauses to read the other br
 would have its cards played for it halfway through and report a product defect.
 
 **It checks that the table cloth and the deck really loaded**, which is the one thing no other gate
-in this repository can see at all. `card-table-1024.webp` and `deck-1989.webp` can 404 leaving a
+in this repository can see at all. `hokm-table-*.svg` and `deck.svg` can 404 leaving a
 table with no felt and a hand of blank rectangles, each carrying a perfect accessible name - the
 matrix reads overflow, hit targets, a landmark and the console, and a missing background image is
 none of them. The only way to know is to fetch the url again from inside the page and read what came
@@ -2078,51 +2072,50 @@ the browser that did not call it.
 
 ## The table, and the cards on it
 
-Hokm is played on a **photograph of the card table the market scene already stands on**, dealt from
-a **deck printed by the code that prints the 3D one**. Both come from the same argument the ludo
-plate makes: drawing the felt again in CSS, or the fifty-two faces again in markup, would be a second
-description of one object, agreeing exactly until somebody edited one of them.
+Hokm is played on `hokm-table-wide.svg` (16:10) or `hokm-table-tall.svg` (5:6), chosen by the
+board's container width, and dealt from `deck.svg` with `card-back.svg` for everybody else's hand.
+All four are generated - the tables by `tools/art/boards.mjs`, the deck by `tools/art/deck.mjs` - and
+the suits come from `tools/art/suits.mjs`, which the game illustrations use too, so a spade on a card
+and a spade in the hero art are one path.
 
-`tools/blender/board.py` grew a second entry point for the first. It imports `table-card.glb`,
-rebuilds the three materials export stubbed out - walnut with its own grain, brass with a little
-wear, and baize as two noises at very different scales - and renders it with an orthographic camera
-pointing straight down into `application/public/board/card-table-1024.webp`. Run by hand, like the
-ludo plate: `blender -b -P tools/blender/board.py`, or `-- table` for just this one.
-
-Three things about that render are worth stating.
-
-**The alpha is the octagon**, so the page shows through the corners and the table reads as a table
-rather than as a square picture of one. **The rim's own AO is already in the vertex colours** -
-`table-card.py` bakes it with the rim in place - so the shadow the rim casts on the cloth is real
-rather than added here, which is the opposite of the ludo plate, where the baked pawn shadows had to
-be painted out. And **the lamps are off-axis and unequal**, because a pendant over a card table hangs
-to one side: the first version lit it evenly from both and produced a scanner's idea of a table.
-
-The felt took one tuning pass and the lesson generalises. Baize is a fine nap plus large soft
-lighting gradients, and the first render had that backwards - a broad noise at 5cm doing the work,
-which reads as marbled paper rather than cloth. Raising its scale until the texture is fibre-sized
-and letting the LIGHT make the large-scale variation is what made it look like a table.
-
-**`tools/blender/deck.py` renders all fifty-two faces from `lib/atlas.py`'s own `draw_card_face`** -
-the function that has printed the deck scattered across that table since long before any of this. It
-only ever needed fourteen, because a prop is whatever happens to be face up; the game needs the rest,
-so `Canvas` gained a height and a scale and `draw_card_face` gained an explicit box. A second
-drawing routine would have been a second deck, and a card in the hand and the same card on the table
-would have stopped being the same card.
+**Two tables, not one stretched.** A phone column is taller than it is wide and a desktop one is the
+other way round; a single image at `100% 100%` would squash the corner flourishes and the medallion
+into ovals on one of them. Everything on the felt is placed in percent and `cqmin`, so the seats and
+the trick follow whichever table is showing.
 
 **The sheet's grid IS the card number.** A card is numbered suit-major with the ranks ascending, so
 the column is `card % 13` and the row is `card / 13` and there is no packing for the client to know.
-A sheet laid out to fit its pixels - eight across and seven down - would be a second fact that has to
-agree with a constant in `data/cards.ts`, which is the shape of mistake this file keeps recording.
+A sheet laid out to fit its pixels would be a second fact that has to agree with a constant in
+`data/cards.ts`, which is the shape of mistake this file keeps recording.
 
 **The edge and the corner radius are CSS, not drawn.** They are the two things that have to stay
-crisp: a hairline baked into a 153px cell is a grey smudge by the time the card is 44px wide on a
-phone, and a drawn corner cannot let the green felt through.
+crisp: a hairline baked into the sheet is a grey smudge by the time a card is 44px wide on a phone,
+and a drawn corner cannot let the felt through. `.card-face` reads `--card-w` from its parent, so the
+hand, the trick and the last-trick tile each size their cards by setting one variable.
 
-**The card face was `bg-field` for one commit**, which in the dark theme is near-black - a hole in
-the baize where a card should be, and in the hand a row of card BACKS. That is what the sprite
-settles: a playing card is a printed object and looks like itself in any light, which is the same
-line the GLB kit draws for walnut and felt.
+**The fonts in the deck are system serifs.** An SVG used as a background image cannot load a web
+font, so the indices ask for Georgia and fall back through Times to any serif. That is also why the
+indices are large: they are what shows of a card overlapped in a hand.
+
+**A playing card is a printed object and looks like itself in any light** - the face was once
+`bg-field`, which made every card on the felt a hole.
+
+**The layout follows the reference and the rules, not a generic card table.** Seats are placed by
+their place round the table - bottom, then right, top and left at four; top-right and top-left at
+three; top at two - and the trick lies between each seat and the centre. On a phone the order is
+table, hand, then the tiles, so the cards you are holding are never below the fold; on a wide
+container the tiles (trump, score, last trick) are a column beside the table. The hand fans with a
+step that shrinks to fit, and breaks into two rows past thirteen, because twenty-five cards in one
+row on a phone is a strip twelve pixels wide per card.
+
+**Sort is the reader's, and it moves nothing on the server.** `arrangeHand` puts trump first,
+alternates the colours after it and holds each suit high to low, which is how people hold cards; the
+server's order is suit-major ascending and stays what `view.hand` is.
+
+**Each board is its own chunk.** The play page loads `hokm-board` or `match-board` through a dynamic
+import once it knows which game the match is, and renders it through `<Dynamic>` with a props THUNK,
+so match updates flow into the loaded board the way direct markup props would. The route chunk fell
+from 17.8 KB to 9.1 KB, and a Hokm player never downloads the Ludo UI.
 
 **`table-seats.ts` puts the reader at the bottom**, whichever chair the server gave them, and it is
 shared because poker and backgammon want the same table. Play passes to the RIGHT - counter-clockwise

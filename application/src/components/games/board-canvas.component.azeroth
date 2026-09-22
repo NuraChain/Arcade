@@ -180,9 +180,9 @@ export default component BoardCanvas(props: { game: string; view: BoardView; onP
                     <span
                         class="board-token"
                         aria-hidden="true"
-                        style={ `--at-col:${ token.col }; --at-row:${ token.row }; --ink: var(--ludo-${ token.colour })` }
+                        style={ `--at-col:${ token.col }; --at-row:${ token.row }; --pawn: url('/board/pawn-${ token.colour }.svg')` }
                     >
-                        { token.label }
+                        <span>{ token.label }</span>
                     </span>
                 </For>
             }

@@ -1,0 +1,60 @@
+import Icon from '../../icons/icon.component.azeroth';
+import { runtime } from '../../lib/runtime.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+
+const URGENT_AT = 10;
+
+const MINUTE = 60;
+
+const HOUR = 60 * MINUTE;
+
+export default component TurnClock(props: { deadline?: string; over: boolean; class?: string })
+{
+    const locale = useLocale();
+
+    state now = runtime().clock.now();
+
+    mount
+    {
+        return runtime().clock.every(1000, () => now = runtime().clock.now());
+    }
+
+    derived secondsLeft = props.over || props.deadline === undefined
+        ? null
+        : Math.max(0, Math.round((new Date(props.deadline).getTime() - now) / 1000));
+
+    derived says = ((): string | null =>
+    {
+        if (secondsLeft === null)
+        {
+            return null;
+        }
+
+        if (secondsLeft < 90)
+        {
+            return locale.t('match.deadline', { seconds: locale.n(secondsLeft) });
+        }
+
+        if (secondsLeft < 90 * MINUTE)
+        {
+            return locale.t('match.deadline.minutes', { minutes: locale.n(Math.round(secondsLeft / MINUTE)) });
+        }
+
+        return locale.t('match.deadline.hours', { hours: locale.n(Math.round(secondsLeft / HOUR)) });
+    })();
+
+    <Show when={ says !== null }>
+        { () =>
+            <span
+                class={ () => [
+                    'inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full border px-2.5 text-ui-xs font-semibold',
+                    secondsLeft !== null && secondsLeft <= URGENT_AT ? 'border-danger/40 bg-danger/10 text-danger' : 'border-line bg-raised text-muted',
+                    props.class ?? ''
+                ].filter(Boolean).join(' ') }
+            >
+                <Icon name="timer" size={ 13 } />
+                <span class="tally">{ says }</span>
+            </span>
+        }
+    </Show>
+}

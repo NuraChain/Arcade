@@ -2,6 +2,8 @@ import { writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { SUIT_DEFS } from './suits.mjs';
+
 const OUT = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'application', 'public', 'art', 'games');
 const W = 480;
 const H = 320;
@@ -52,10 +54,7 @@ const shared = `
         <stop offset="0" stop-color="#FFFFFF"/>
         <stop offset="1" stop-color="#D5DDE8"/>
     </radialGradient>
-    <path id="heart" d="M0 7.5C-1.2 6.4-12 -1.1-12 -7.6C-12 -12-8.6-15-5-15C-2.6-15-0.8-13.7 0-12C0.8-13.7 2.6-15 5-15C8.6-15 12-12 12-7.6C12-1.1 1.2 6.4 0 7.5Z"/>
-    <path id="spade" d="M0 -15C-1.2 -12.6-12 -5.8-12 1.6C-12 6-8.8 8.6-5.4 8.6C-3.4 8.6-1.8 7.7-0.9 6.4C-1.1 9.6-2.4 12.2-4.6 14H4.6C2.4 12.2 1.1 9.6 0.9 6.4C1.8 7.7 3.4 8.6 5.4 8.6C8.8 8.6 12 6 12 1.6C12 -5.8 1.2 -12.6 0 -15Z"/>
-    <path id="diamond" d="M0 -15L10.5 0L0 15L-10.5 0Z"/>
-    <path id="club" d="M0 -15A6.2 6.2 0 0 1 5.4 -5.8A6.2 6.2 0 1 1 1.6 5.2C1.9 8.6 3.1 11.6 5 14H-5C-3.1 11.6-1.9 8.6-1.6 5.2A6.2 6.2 0 1 1-5.4 -5.8A6.2 6.2 0 0 1 0 -15Z"/>`;
+    ${ SUIT_DEFS }`;
 
 function svg(defs, body)
 {

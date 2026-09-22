@@ -1,11 +1,9 @@
-import { useHead, useNavigate, useParams } from 'azerothjs';
+import { Dynamic, type MountNode, useHead, useNavigate, useParams } from 'azerothjs';
 
 import ConfirmSheet from '../../components/app/confirm-sheet.component.azeroth';
 import Page from '../../components/app/page.component.azeroth';
 import InviteSheet from '../../components/games/invite-sheet.component.azeroth';
 import LobbyPanel from '../../components/games/lobby-panel.component.azeroth';
-import HokmBoard from '../../components/games/hokm-board.component.azeroth';
-import MatchBoard from '../../components/games/match-board.component.azeroth';
 import WatchBoard from '../../components/games/watch-board.component.azeroth';
 import TableChat from '../../components/games/table-chat.component.azeroth';
 import TableDock from '../../components/games/table-dock.component.azeroth';
@@ -25,6 +23,7 @@ import { useShell } from '../../stores/shell.store.ts';
 import { useToasts } from '../../stores/toasts.store.ts';
 import Panel from '../../components/ui/panel.component.azeroth';
 import { PANEL_TONE } from '../../components/ui/variants.ts';
+import type { MatchView } from '../../api.ts';
 
 export default component PlayPage()
 {
@@ -57,6 +56,10 @@ export default component PlayPage()
     };
 
     state starting = false;
+
+    let Board: ((props: { match: MatchView; starting?: boolean; onAgain?: () => void }) => MountNode) | null = null;
+
+    state drawn = '';
 
     mount
     {
@@ -95,6 +98,39 @@ export default component PlayPage()
     derived phone = device.posture() === 'phone';
 
     derived railVisible = !phone && seated && table?.conversationId !== undefined;
+
+    derived playing = showing ? (board.match()?.game ?? '') : '';
+
+    effect
+    {
+        const want = playing;
+
+        if (want === '' || want === drawn)
+        {
+            return;
+        }
+
+        const load = want === 'hokm'
+            ? import('../../components/games/hokm-board.component.azeroth')
+            : import('../../components/games/match-board.component.azeroth');
+
+        void load.then((module) =>
+        {
+            if (playing !== want)
+            {
+                return;
+            }
+
+            Board = module.default;
+            drawn = want;
+        });
+    }
+
+    const boardProps = (): { match: MatchView; starting: boolean; onAgain?: () => void } => ({
+        match: board.match()!,
+        starting,
+        onAgain: seated ? () => void begin() : undefined
+    });
 
     effect
     {
@@ -295,23 +331,16 @@ export default component PlayPage()
                         ref={ (element) => arena = element }
                         class="flex min-w-0 flex-1 flex-col gap-5 bg-void py-2"
                     >
-                        <Show when={ showing && board.match()?.game === 'hokm' }>
-                            { () =>
-                                <HokmBoard
-                                    match={ board.match()! }
-                                    starting={ starting }
-                                    onAgain={ seated ? () => void begin() : undefined }
-                                />
-                            }
+                        <Show when={ playing !== '' && drawn === playing }>
+                            { () => <Dynamic component={ Board! } props={ boardProps } /> }
                         </Show>
 
-                        <Show when={ showing && board.match() !== null && board.match()?.game !== 'hokm' }>
+                        <Show when={ playing !== '' && drawn !== playing }>
                             { () =>
-                                <MatchBoard
-                                    match={ board.match()! }
-                                    starting={ starting }
-                                    onAgain={ seated ? () => void begin() : undefined }
-                                />
+                                <div class="flex flex-col gap-3" aria-busy="true">
+                                    <Skeleton class="aspect-[16/10] w-full rounded-hero" />
+                                    <Skeleton class="h-24 w-full rounded-panel" />
+                                </div>
                             }
                         </Show>
 

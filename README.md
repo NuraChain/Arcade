@@ -164,13 +164,11 @@ with a wallet, enrols a device, loses the keyring and recovers it; `chat-pass.mj
 
 ## Rebuilding the art
 
-Only if you are changing it, and only with Blender 5.2 installed:
+Only if you are changing it:
 
 ```sh
-npm run assets                                   # the whole GLB kit
-npm run art                                      # game card and hero art
-blender -b -P tools/blender/board.py             # the ludo plate and the card table
-blender -b -P tools/blender/deck.py              # the 52-card sheet
+npm run art                                      # game art, the ludo board and pawns, the hokm table, the deck
+npm run assets                                   # the whole GLB kit, and only this one needs Blender 5.2
 ```
 
 The scripts in `tools/blender/` are the source of truth and the GLBs they emit are committed, so

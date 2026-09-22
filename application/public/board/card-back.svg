@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 204 288" width="204" height="288">
+<defs>
+    <linearGradient id="field" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2F5FD0"/><stop offset="0.55" stop-color="#1E3A8A"/><stop offset="1" stop-color="#15286A"/></linearGradient>
+    <pattern id="weave" width="14" height="14" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><path d="M0 0H14M0 0V14" stroke="#9CC2FF" stroke-opacity="0.28" stroke-width="1.4"/><circle cx="7" cy="7" r="1.4" fill="#9CC2FF" fill-opacity="0.3"/></pattern>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#60A5FA" stop-opacity="0.45"/><stop offset="1" stop-color="#60A5FA" stop-opacity="0"/></radialGradient>
+</defs>
+<rect width="204" height="288" fill="#F8F6F0"/>
+<rect x="9" y="9" width="186" height="270" rx="10" fill="url(#field)"/>
+<rect x="9" y="9" width="186" height="270" rx="10" fill="url(#weave)"/>
+<rect x="17" y="17" width="170" height="254" rx="6" fill="none" stroke="#E3C170" stroke-opacity="0.85" stroke-width="2"/>
+<rect x="22" y="22" width="160" height="244" rx="4" fill="none" stroke="#E3C170" stroke-opacity="0.35" stroke-width="1"/>
+<circle cx="102" cy="144" r="70" fill="url(#glow)"/>
+<circle cx="102" cy="144" r="48" fill="#172554" stroke="#E3C170" stroke-width="3"/>
+<circle cx="102" cy="144" r="41" fill="none" stroke="#E3C170" stroke-opacity="0.5" stroke-width="1.2"/>
+<polygon points="102 110 105.44 135.69 118.97 127.03 110.31 140.56 136 144 110.31 147.44 118.97 160.97 105.44 152.31 102 178 98.56 152.31 85.03 160.97 93.69 147.44 68 144 93.69 140.56 85.03 127.03 98.56 135.69" fill="#E3C170" stroke="#8C6A1C" stroke-width="1"/>
+<circle cx="102" cy="144" r="6" fill="#172554" stroke="#E3C170" stroke-width="2"/>
+<path d="M40 32L48 40L40 48L32 40Z" fill="#E3C170" fill-opacity="0.8"/><path d="M164 32L172 40L164 48L156 40Z" fill="#E3C170" fill-opacity="0.8"/><path d="M40 240L48 248L40 256L32 248Z" fill="#E3C170" fill-opacity="0.8"/><path d="M164 240L172 248L164 256L156 248Z" fill="#E3C170" fill-opacity="0.8"/>
+</svg>

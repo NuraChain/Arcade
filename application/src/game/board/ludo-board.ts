@@ -39,11 +39,21 @@ import type { BoardHandle, BoardOptions, BoardToken, BoardView } from '../bridge
  */
 
 const PALETTE: Record<string, number> = {
-    red: 0xcc332e,
-    green: 0x2e854d,
-    yellow: 0xedbd2e,
-    blue: 0x2e66b8
+    red: 0xe5392f,
+    green: 0x1fa24c,
+    yellow: 0xf7b814,
+    blue: 0x2270e6
 };
+
+const PAWN_WIDE = 2.6;
+
+const PAWN_TALL = PAWN_WIDE * 1.2;
+
+const PAWN_FOOT = 0.82;
+
+const PAWN_HEAD = (33 / 120 - PAWN_FOOT) * PAWN_TALL;
+
+const PLATE_PIXELS = 1536;
 
 const INK = 0x2b1d12;
 
@@ -76,9 +86,7 @@ interface Held
     body: Phaser.GameObjects.Container;
     halo: Phaser.GameObjects.Arc;
     haloEdge: Phaser.GameObjects.Arc;
-    ring: Phaser.GameObjects.Arc;
-    disc: Phaser.GameObjects.Arc;
-    gloss: Phaser.GameObjects.Arc;
+    pawn: Phaser.GameObjects.Image;
     mark: Phaser.GameObjects.Text;
     pulse: Phaser.Tweens.Tween | null;
     walk: number;
@@ -119,7 +127,12 @@ class TableScene extends Phaser.Scene
 
     public preload(): void
     {
-        this.load.image('plate', this.#options.plate);
+        this.load.svg('plate', this.#options.plate, { width: PLATE_PIXELS, height: PLATE_PIXELS });
+
+        for (const colour of Object.keys(PALETTE))
+        {
+            this.load.svg(`pawn-${ colour }`, `/board/pawn-${ colour }.svg`, { width: 200, height: 240 });
+        }
     }
 
     public create(): void
@@ -285,29 +298,31 @@ class TableScene extends Phaser.Scene
     #mint(token: BoardToken): Held
     {
         const radius = tokenRadius(this.#size);
-        const ink = PALETTE[token.colour] ?? 0x888888;
         const spot = centreOf(token.col, token.row, this.#size);
 
         const haloEdge = this.add.circle(0, 0, radius * 1.46, INK, 0).setStrokeStyle(Math.max(1, radius * 0.34), INK, 0.55);
         const halo = this.add.circle(0, 0, radius * 1.46, INK, 0).setStrokeStyle(Math.max(1, radius * 0.2), 0xffffff, 0.95);
-        const ring = this.add.circle(0, 0, radius, INK, 0.35);
-        const disc = this.add.circle(0, 0, radius * 0.92, ink);
-        const gloss = this.add.circle(-radius * 0.26, -radius * 0.3, radius * 0.34, 0xffffff, 0.45);
+        const pawn = this.add.image(0, 0, `pawn-${ token.colour }`)
+            .setOrigin(0.5, PAWN_FOOT)
+            .setDisplaySize(radius * PAWN_WIDE, radius * PAWN_TALL);
 
-        const mark = this.add.text(0, 0, token.label, {
-            fontFamily: 'system-ui, sans-serif',
-            fontSize: `${ Math.round(radius * 0.95) }px`,
-            color: '#ffffff'
-        }).setOrigin(0.5, 0.5);
+        const mark = this.add.text(0, radius * PAWN_HEAD, token.label, {
+            fontFamily: 'Inter, system-ui, sans-serif',
+            fontSize: `${ Math.round(radius * 0.62) }px`,
+            fontStyle: '800',
+            color: '#ffffff',
+            stroke: '#0b1220',
+            strokeThickness: Math.max(1, radius * 0.1)
+        }).setOrigin(0.5, 0.5).setAlpha(0.92);
 
-        const body = this.add.container(spot.x, spot.y, [haloEdge, halo, ring, disc, gloss, mark]).setDepth(10);
+        const body = this.add.container(spot.x, spot.y, [haloEdge, halo, pawn, mark]).setDepth(this.#depthAt(spot.y));
 
-        disc.setInteractive({ useHandCursor: true });
-        disc.on('pointerup', () => this.#options.onPick?.(token.key));
-        disc.on('pointerover', () => body.setScale(this.#motion ? 1.1 : 1));
-        disc.on('pointerout', () => body.setScale(1));
+        pawn.setInteractive({ useHandCursor: true });
+        pawn.on('pointerup', () => this.#options.onPick?.(token.key));
+        pawn.on('pointerover', () => body.setScale(this.#motion ? 1.08 : 1));
+        pawn.on('pointerout', () => body.setScale(1));
 
-        const held: Held = { token, body, halo, haloEdge, ring, disc, gloss, mark, pulse: null, walk: 0 };
+        const held: Held = { token, body, halo, haloEdge, pawn, mark, pulse: null, walk: 0 };
 
         this.#affordance(held);
 
@@ -322,11 +337,15 @@ class TableScene extends Phaser.Scene
         held.halo.setStrokeStyle(Math.max(1, radius * 0.2), 0xffffff, 0.95);
         held.haloEdge.setRadius(radius * 1.46);
         held.haloEdge.setStrokeStyle(Math.max(1, radius * 0.34), INK, 0.55);
-        held.ring.setRadius(radius);
-        held.disc.setRadius(radius * 0.92);
-        held.gloss.setRadius(radius * 0.34);
-        held.gloss.setPosition(-radius * 0.26, -radius * 0.3);
-        held.mark.setFontSize(Math.round(radius * 0.95));
+        held.pawn.setDisplaySize(radius * PAWN_WIDE, radius * PAWN_TALL);
+        held.mark.setPosition(0, radius * PAWN_HEAD);
+        held.mark.setFontSize(Math.round(radius * 0.62));
+        held.mark.setStroke('#0b1220', Math.max(1, radius * 0.1));
+    }
+
+    #depthAt(y: number): number
+    {
+        return 10 + y / Math.max(1, this.#size);
     }
 
     /**
@@ -373,6 +392,7 @@ class TableScene extends Phaser.Scene
         const spot = centreOf(held.token.col, held.token.row, this.#size);
 
         held.body.setPosition(spot.x, spot.y);
+        held.body.setDepth(this.#depthAt(spot.y));
         held.body.setScale(1);
         held.body.setAngle(0);
     }
@@ -403,6 +423,8 @@ class TableScene extends Phaser.Scene
             }
 
             const spot = centreOf(cells[index].col, cells[index].row, this.#size);
+
+            held.body.setDepth(this.#depthAt(Math.max(spot.y, held.body.y)) + 1);
 
             this.tweens.add({
                 targets: held.body,
@@ -466,6 +488,7 @@ class TableScene extends Phaser.Scene
                 }
 
                 held.body.setAngle(0);
+                held.body.setDepth(this.#depthAt(spot.y));
 
                 this.tweens.add({
                     targets: held.body,

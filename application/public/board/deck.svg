@@ -1,0 +1,833 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2652 1152" width="2652" height="1152">
+<defs>
+    <path id="heart" d="M0 7.5C-1.2 6.4-12 -1.1-12 -7.6C-12 -12-8.6-15-5-15C-2.6-15-0.8-13.7 0-12C0.8-13.7 2.6-15 5-15C8.6-15 12-12 12-7.6C12-1.1 1.2 6.4 0 7.5Z"/>
+    <path id="spade" d="M0 -15C-1.2 -12.6-12 -5.8-12 1.6C-12 6-8.8 8.6-5.4 8.6C-3.4 8.6-1.8 7.7-0.9 6.4C-1.1 9.6-2.4 12.2-4.6 14H4.6C2.4 12.2 1.1 9.6 0.9 6.4C1.8 7.7 3.4 8.6 5.4 8.6C8.8 8.6 12 6 12 1.6C12 -5.8 1.2 -12.6 0 -15Z"/>
+    <path id="diamond" d="M0 -15L10.5 0L0 15L-10.5 0Z"/>
+    <path id="club" d="M0 -15A6.2 6.2 0 0 1 5.4 -5.8A6.2 6.2 0 1 1 1.6 5.2C1.9 8.6 3.1 11.6 5 14H-5C-3.1 11.6-1.9 8.6-1.6 5.2A6.2 6.2 0 1 1-5.4 -5.8A6.2 6.2 0 0 1 0 -15Z"/>
+    <linearGradient id="paper" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#F6F2EA"/></linearGradient>
+    <pattern id="lattice-club" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><path d="M0 0H10M0 0V10" stroke="#23304F" stroke-opacity="0.12" stroke-width="1.2"/></pattern>
+    <linearGradient id="court-club" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#EEF1F7"/><stop offset="0.5" stop-color="#FFFFFF"/><stop offset="1" stop-color="#EEF1F7"/></linearGradient>
+    <pattern id="lattice-diamond" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><path d="M0 0H10M0 0V10" stroke="#A3162B" stroke-opacity="0.12" stroke-width="1.2"/></pattern>
+    <linearGradient id="court-diamond" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FDEEEF"/><stop offset="0.5" stop-color="#FFFFFF"/><stop offset="1" stop-color="#FDEEEF"/></linearGradient>
+    <pattern id="lattice-heart" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><path d="M0 0H10M0 0V10" stroke="#A3162B" stroke-opacity="0.12" stroke-width="1.2"/></pattern>
+    <linearGradient id="court-heart" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FDEEEF"/><stop offset="0.5" stop-color="#FFFFFF"/><stop offset="1" stop-color="#FDEEEF"/></linearGradient>
+    <pattern id="lattice-spade" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><path d="M0 0H10M0 0V10" stroke="#23304F" stroke-opacity="0.12" stroke-width="1.2"/></pattern>
+    <linearGradient id="court-spade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#EEF1F7"/><stop offset="0.5" stop-color="#FFFFFF"/><stop offset="1" stop-color="#EEF1F7"/></linearGradient>
+</defs>
+<g transform="translate(0 0)">
+    <rect width="204" height="288" fill="url(#paper)"/>
+    <g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#1B2233">2</text>
+    <use href="#club" transform="translate(25 72) scale(0.95)" fill="#1B2233"/>
+</g>
+    <g transform="rotate(180 102 144)"><g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#1B2233">2</text>
+    <use href="#club" transform="translate(25 72) scale(0.95)" fill="#1B2233"/>
+</g></g>
+    <use href="#club" transform="translate(102 62) scale(1.42)" fill="#1B2233"/><use href="#club" transform="translate(102 226) rotate(180) scale(1.42)" fill="#1B2233"/>
+</g>
+<g transform="translate(204 0)">
+    <rect width="204" height="288" fill="url(#paper)"/>
+    <g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#1B2233">3</text>
+    <use href="#club" transform="translate(25 72) scale(0.95)" fill="#1B2233"/>
+</g>
+    <g transform="rotate(180 102 144)"><g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#1B2233">3</text>
+    <use href="#club" transform="translate(25 72) scale(0.95)" fill="#1B2233"/>
+</g></g>
+    <use href="#club" transform="translate(102 62) scale(1.42)" fill="#1B2233"/><use href="#club" transform="translate(102 144) scale(1.42)" fill="#1B2233"/><use href="#club" transform="translate(102 226) rotate(180) scale(1.42)" fill="#1B2233"/>
+</g>
+<g transform="translate(408 0)">
+    <rect width="204" height="288" fill="url(#paper)"/>
+    <g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#1B2233">4</text>
+    <use href="#club" transform="translate(25 72) scale(0.95)" fill="#1B2233"/>
+</g>
+    <g transform="rotate(180 102 144)"><g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#1B2233">4</text>
+    <use href="#club" transform="translate(25 72) scale(0.95)" fill="#1B2233"/>
+</g></g>
+    <use href="#club" transform="translate(64 62) scale(1.42)" fill="#1B2233"/><use href="#club" transform="translate(140 62) scale(1.42)" fill="#1B2233"/><use href="#club" transform="translate(64 226) rotate(180) scale(1.42)" fill="#1B2233"/><use href="#club" transform="translate(140 226) rotate(180) scale(1.42)" fill="#1B2233"/>
+</g>
+<g transform="translate(612 0)">
+    <rect width="204" height="288" fill="url(#paper)"/>
+    <g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#1B2233">5</text>
+    <use href="#club" transform="translate(25 72) scale(0.95)" fill="#1B2233"/>
+</g>
+    <g transform="rotate(180 102 144)"><g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#1B2233">5</text>
+    <use href="#club" transform="translate(25 72) scale(0.95)" fill="#1B2233"/>
+</g></g>
+    <use href="#club" transform="translate(64 62) scale(1.42)" fill="#1B2233"/><use href="#club" transform="translate(140 62) scale(1.42)" fill="#1B2233"/><use href="#club" transform="translate(102 144) scale(1.42)" fill="#1B2233"/><use href="#club" transform="translate(64 226) rotate(180) scale(1.42)" fill="#1B2233"/><use href="#club" transform="translate(140 226) rotate(180) scale(1.42)" fill="#1B2233"/>
+</g>
+<g transform="translate(816 0)">
+    <rect width="204" height="288" fill="url(#paper)"/>
+    <g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#1B2233">6</text>
+    <use href="#club" transform="translate(25 72) scale(0.95)" fill="#1B2233"/>
+</g>
+    <g transform="rotate(180 102 144)"><g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#1B2233">6</text>
+    <use href="#club" transform="translate(25 72) scale(0.95)" fill="#1B2233"/>
+</g></g>
+    <use href="#club" transform="translate(64 62) scale(1.42)" fill="#1B2233"/><use href="#club" transform="translate(140 62) scale(1.42)" fill="#1B2233"/><use href="#club" transform="translate(64 144) scale(1.42)" fill="#1B2233"/><use href="#club" transform="translate(140 144) scale(1.42)" fill="#1B2233"/><use href="#club" transform="translate(64 226) rotate(180) scale(1.42)" fill="#1B2233"/><use href="#club" transform="translate(140 226) rotate(180) scale(1.42)" fill="#1B2233"/>
+</g>
+<g transform="translate(1020 0)">
+    <rect width="204" height="288" fill="url(#paper)"/>
+    <g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#1B2233">7</text>
+    <use href="#club" transform="translate(25 72) scale(0.95)" fill="#1B2233"/>
+</g>
+    <g transform="rotate(180 102 144)"><g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#1B2233">7</text>
+    <use href="#club" transform="translate(25 72) scale(0.95)" fill="#1B2233"/>
+</g></g>
+    <use href="#club" transform="translate(64 62) scale(1.42)" fill="#1B2233"/><use href="#club" transform="translate(140 62) scale(1.42)" fill="#1B2233"/><use href="#club" transform="translate(102 103) scale(1.42)" fill="#1B2233"/><use href="#club" transform="translate(64 144) scale(1.42)" fill="#1B2233"/><use href="#club" transform="translate(140 144) scale(1.42)" fill="#1B2233"/><use href="#club" transform="translate(64 226) rotate(180) scale(1.42)" fill="#1B2233"/><use href="#club" transform="translate(140 226) rotate(180) scale(1.42)" fill="#1B2233"/>
+</g>
+<g transform="translate(1224 0)">
+    <rect width="204" height="288" fill="url(#paper)"/>
+    <g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#1B2233">8</text>
+    <use href="#club" transform="translate(25 72) scale(0.95)" fill="#1B2233"/>
+</g>
+    <g transform="rotate(180 102 144)"><g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#1B2233">8</text>
+    <use href="#club" transform="translate(25 72) scale(0.95)" fill="#1B2233"/>
+</g></g>
+    <use href="#club" transform="translate(64 62) scale(1.42)" fill="#1B2233"/><use href="#club" transform="translate(140 62) scale(1.42)" fill="#1B2233"/><use href="#club" transform="translate(102 103) scale(1.42)" fill="#1B2233"/><use href="#club" transform="translate(64 144) scale(1.42)" fill="#1B2233"/><use href="#club" transform="translate(140 144) scale(1.42)" fill="#1B2233"/><use href="#club" transform="translate(102 185) rotate(180) scale(1.42)" fill="#1B2233"/><use href="#club" transform="translate(64 226) rotate(180) scale(1.42)" fill="#1B2233"/><use href="#club" transform="translate(140 226) rotate(180) scale(1.42)" fill="#1B2233"/>
+</g>
+<g transform="translate(1428 0)">
+    <rect width="204" height="288" fill="url(#paper)"/>
+    <g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#1B2233">9</text>
+    <use href="#club" transform="translate(25 72) scale(0.95)" fill="#1B2233"/>
+</g>
+    <g transform="rotate(180 102 144)"><g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#1B2233">9</text>
+    <use href="#club" transform="translate(25 72) scale(0.95)" fill="#1B2233"/>
+</g></g>
+    <use href="#club" transform="translate(64 62) scale(1.42)" fill="#1B2233"/><use href="#club" transform="translate(140 62) scale(1.42)" fill="#1B2233"/><use href="#club" transform="translate(64 116.67) scale(1.42)" fill="#1B2233"/><use href="#club" transform="translate(140 116.67) scale(1.42)" fill="#1B2233"/><use href="#club" transform="translate(102 144) scale(1.42)" fill="#1B2233"/><use href="#club" transform="translate(64 171.33) rotate(180) scale(1.42)" fill="#1B2233"/><use href="#club" transform="translate(140 171.33) rotate(180) scale(1.42)" fill="#1B2233"/><use href="#club" transform="translate(64 226) rotate(180) scale(1.42)" fill="#1B2233"/><use href="#club" transform="translate(140 226) rotate(180) scale(1.42)" fill="#1B2233"/>
+</g>
+<g transform="translate(1632 0)">
+    <rect width="204" height="288" fill="url(#paper)"/>
+    <g>
+    <text x="26" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="36" font-weight="700" text-anchor="middle" fill="#1B2233" letter-spacing="-2">10</text>
+    <use href="#club" transform="translate(25 72) scale(0.95)" fill="#1B2233"/>
+</g>
+    <g transform="rotate(180 102 144)"><g>
+    <text x="26" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="36" font-weight="700" text-anchor="middle" fill="#1B2233" letter-spacing="-2">10</text>
+    <use href="#club" transform="translate(25 72) scale(0.95)" fill="#1B2233"/>
+</g></g>
+    <use href="#club" transform="translate(64 62) scale(1.42)" fill="#1B2233"/><use href="#club" transform="translate(140 62) scale(1.42)" fill="#1B2233"/><use href="#club" transform="translate(102 89.33) scale(1.42)" fill="#1B2233"/><use href="#club" transform="translate(64 116.67) scale(1.42)" fill="#1B2233"/><use href="#club" transform="translate(140 116.67) scale(1.42)" fill="#1B2233"/><use href="#club" transform="translate(64 171.33) rotate(180) scale(1.42)" fill="#1B2233"/><use href="#club" transform="translate(140 171.33) rotate(180) scale(1.42)" fill="#1B2233"/><use href="#club" transform="translate(102 198.67) rotate(180) scale(1.42)" fill="#1B2233"/><use href="#club" transform="translate(64 226) rotate(180) scale(1.42)" fill="#1B2233"/><use href="#club" transform="translate(140 226) rotate(180) scale(1.42)" fill="#1B2233"/>
+</g>
+<g transform="translate(1836 0)">
+    <rect width="204" height="288" fill="url(#paper)"/>
+    <g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#1B2233">J</text>
+    <use href="#club" transform="translate(25 72) scale(0.95)" fill="#1B2233"/>
+</g>
+    <g transform="rotate(180 102 144)"><g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#1B2233">J</text>
+    <use href="#club" transform="translate(25 72) scale(0.95)" fill="#1B2233"/>
+</g></g>
+    <g>
+    <rect x="40" y="32" width="124" height="224" rx="8" fill="#EEF1F7" stroke="#C9A24A" stroke-width="3"/>
+    <rect x="46" y="38" width="112" height="212" rx="5" fill="url(#court-club)" stroke="#23304F" stroke-opacity="0.35" stroke-width="1.5"/>
+    <path d="M46 144H158" stroke="#C9A24A" stroke-width="2"/>
+    <g transform="translate(102 74)">
+        <path d="M-24 14C-24 -6-8 -16 8 -13C18 -11 24 -3 24 14Z" fill="#23304F" stroke="#8C6A1C" stroke-width="2" stroke-linejoin="round"/>
+        <rect x="-31" y="13" width="62" height="9" rx="2" fill="#D4A73A" stroke="#8C6A1C" stroke-width="1.5"/>
+        <path d="M8 -13C20 -30 36 -30 40 -22C30 -22 22 -16 14 -9Z" fill="#23304F" stroke="#8C6A1C" stroke-width="1.5"/>
+        <use href="#club" transform="translate(0 44) scale(1.05)" fill="#1B2233"/>
+    </g>
+    <g transform="rotate(180 102 144)"><g transform="translate(102 74)">
+        <path d="M-24 14C-24 -6-8 -16 8 -13C18 -11 24 -3 24 14Z" fill="#23304F" stroke="#8C6A1C" stroke-width="2" stroke-linejoin="round"/>
+        <rect x="-31" y="13" width="62" height="9" rx="2" fill="#D4A73A" stroke="#8C6A1C" stroke-width="1.5"/>
+        <path d="M8 -13C20 -30 36 -30 40 -22C30 -22 22 -16 14 -9Z" fill="#23304F" stroke="#8C6A1C" stroke-width="1.5"/>
+        <use href="#club" transform="translate(0 44) scale(1.05)" fill="#1B2233"/>
+    </g></g>
+</g>
+</g>
+<g transform="translate(2040 0)">
+    <rect width="204" height="288" fill="url(#paper)"/>
+    <g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#1B2233">Q</text>
+    <use href="#club" transform="translate(25 72) scale(0.95)" fill="#1B2233"/>
+</g>
+    <g transform="rotate(180 102 144)"><g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#1B2233">Q</text>
+    <use href="#club" transform="translate(25 72) scale(0.95)" fill="#1B2233"/>
+</g></g>
+    <g>
+    <rect x="40" y="32" width="124" height="224" rx="8" fill="#EEF1F7" stroke="#C9A24A" stroke-width="3"/>
+    <rect x="46" y="38" width="112" height="212" rx="5" fill="url(#court-club)" stroke="#23304F" stroke-opacity="0.35" stroke-width="1.5"/>
+    <path d="M46 144H158" stroke="#C9A24A" stroke-width="2"/>
+    <g transform="translate(102 74)">
+        <path d="M-27 14C-27 -2-15 -13 0 -16C15 -13 27 -2 27 14Z" fill="#E3B64B" stroke="#8C6A1C" stroke-width="2" stroke-linejoin="round"/>
+        <rect x="-31" y="13" width="62" height="9" rx="2" fill="#D4A73A" stroke="#8C6A1C" stroke-width="1.5"/>
+        <circle cx="0" cy="-17" r="5" fill="#23304F" stroke="#8C6A1C" stroke-width="1.5"/><path d="M-18 6Q0 -8 18 6" fill="none" stroke="#FFFFFF" stroke-opacity="0.8" stroke-width="2"/>
+        <use href="#club" transform="translate(0 44) scale(1.05)" fill="#1B2233"/>
+    </g>
+    <g transform="rotate(180 102 144)"><g transform="translate(102 74)">
+        <path d="M-27 14C-27 -2-15 -13 0 -16C15 -13 27 -2 27 14Z" fill="#E3B64B" stroke="#8C6A1C" stroke-width="2" stroke-linejoin="round"/>
+        <rect x="-31" y="13" width="62" height="9" rx="2" fill="#D4A73A" stroke="#8C6A1C" stroke-width="1.5"/>
+        <circle cx="0" cy="-17" r="5" fill="#23304F" stroke="#8C6A1C" stroke-width="1.5"/><path d="M-18 6Q0 -8 18 6" fill="none" stroke="#FFFFFF" stroke-opacity="0.8" stroke-width="2"/>
+        <use href="#club" transform="translate(0 44) scale(1.05)" fill="#1B2233"/>
+    </g></g>
+</g>
+</g>
+<g transform="translate(2244 0)">
+    <rect width="204" height="288" fill="url(#paper)"/>
+    <g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#1B2233">K</text>
+    <use href="#club" transform="translate(25 72) scale(0.95)" fill="#1B2233"/>
+</g>
+    <g transform="rotate(180 102 144)"><g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#1B2233">K</text>
+    <use href="#club" transform="translate(25 72) scale(0.95)" fill="#1B2233"/>
+</g></g>
+    <g>
+    <rect x="40" y="32" width="124" height="224" rx="8" fill="#EEF1F7" stroke="#C9A24A" stroke-width="3"/>
+    <rect x="46" y="38" width="112" height="212" rx="5" fill="url(#court-club)" stroke="#23304F" stroke-opacity="0.35" stroke-width="1.5"/>
+    <path d="M46 144H158" stroke="#C9A24A" stroke-width="2"/>
+    <g transform="translate(102 74)">
+        <path d="M-30 14L-30 -8L-17 4L-8 -18L0 0L8 -18L17 4L30 -8L30 14Z" fill="#E3B64B" stroke="#8C6A1C" stroke-width="2" stroke-linejoin="round"/>
+        <rect x="-31" y="13" width="62" height="9" rx="2" fill="#D4A73A" stroke="#8C6A1C" stroke-width="1.5"/>
+        <circle cx="-17" cy="4" r="3" fill="#FFFFFF"/><circle cx="0" cy="0" r="3.4" fill="#23304F"/><circle cx="17" cy="4" r="3" fill="#FFFFFF"/><circle cx="-30" cy="-8" r="3" fill="#D4A73A"/><circle cx="-8" cy="-18" r="3" fill="#D4A73A"/><circle cx="8" cy="-18" r="3" fill="#D4A73A"/><circle cx="30" cy="-8" r="3" fill="#D4A73A"/>
+        <use href="#club" transform="translate(0 44) scale(1.05)" fill="#1B2233"/>
+    </g>
+    <g transform="rotate(180 102 144)"><g transform="translate(102 74)">
+        <path d="M-30 14L-30 -8L-17 4L-8 -18L0 0L8 -18L17 4L30 -8L30 14Z" fill="#E3B64B" stroke="#8C6A1C" stroke-width="2" stroke-linejoin="round"/>
+        <rect x="-31" y="13" width="62" height="9" rx="2" fill="#D4A73A" stroke="#8C6A1C" stroke-width="1.5"/>
+        <circle cx="-17" cy="4" r="3" fill="#FFFFFF"/><circle cx="0" cy="0" r="3.4" fill="#23304F"/><circle cx="17" cy="4" r="3" fill="#FFFFFF"/><circle cx="-30" cy="-8" r="3" fill="#D4A73A"/><circle cx="-8" cy="-18" r="3" fill="#D4A73A"/><circle cx="8" cy="-18" r="3" fill="#D4A73A"/><circle cx="30" cy="-8" r="3" fill="#D4A73A"/>
+        <use href="#club" transform="translate(0 44) scale(1.05)" fill="#1B2233"/>
+    </g></g>
+</g>
+</g>
+<g transform="translate(2448 0)">
+    <rect width="204" height="288" fill="url(#paper)"/>
+    <g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#1B2233">A</text>
+    <use href="#club" transform="translate(25 72) scale(0.95)" fill="#1B2233"/>
+</g>
+    <g transform="rotate(180 102 144)"><g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#1B2233">A</text>
+    <use href="#club" transform="translate(25 72) scale(0.95)" fill="#1B2233"/>
+</g></g>
+    <use href="#club" transform="translate(102 148) scale(3.1)" fill="#1B2233"/>
+</g>
+<g transform="translate(0 288)">
+    <rect width="204" height="288" fill="url(#paper)"/>
+    <g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#D0213A">2</text>
+    <use href="#diamond" transform="translate(25 72) scale(0.95)" fill="#D0213A"/>
+</g>
+    <g transform="rotate(180 102 144)"><g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#D0213A">2</text>
+    <use href="#diamond" transform="translate(25 72) scale(0.95)" fill="#D0213A"/>
+</g></g>
+    <use href="#diamond" transform="translate(102 62) scale(1.42)" fill="#D0213A"/><use href="#diamond" transform="translate(102 226) rotate(180) scale(1.42)" fill="#D0213A"/>
+</g>
+<g transform="translate(204 288)">
+    <rect width="204" height="288" fill="url(#paper)"/>
+    <g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#D0213A">3</text>
+    <use href="#diamond" transform="translate(25 72) scale(0.95)" fill="#D0213A"/>
+</g>
+    <g transform="rotate(180 102 144)"><g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#D0213A">3</text>
+    <use href="#diamond" transform="translate(25 72) scale(0.95)" fill="#D0213A"/>
+</g></g>
+    <use href="#diamond" transform="translate(102 62) scale(1.42)" fill="#D0213A"/><use href="#diamond" transform="translate(102 144) scale(1.42)" fill="#D0213A"/><use href="#diamond" transform="translate(102 226) rotate(180) scale(1.42)" fill="#D0213A"/>
+</g>
+<g transform="translate(408 288)">
+    <rect width="204" height="288" fill="url(#paper)"/>
+    <g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#D0213A">4</text>
+    <use href="#diamond" transform="translate(25 72) scale(0.95)" fill="#D0213A"/>
+</g>
+    <g transform="rotate(180 102 144)"><g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#D0213A">4</text>
+    <use href="#diamond" transform="translate(25 72) scale(0.95)" fill="#D0213A"/>
+</g></g>
+    <use href="#diamond" transform="translate(64 62) scale(1.42)" fill="#D0213A"/><use href="#diamond" transform="translate(140 62) scale(1.42)" fill="#D0213A"/><use href="#diamond" transform="translate(64 226) rotate(180) scale(1.42)" fill="#D0213A"/><use href="#diamond" transform="translate(140 226) rotate(180) scale(1.42)" fill="#D0213A"/>
+</g>
+<g transform="translate(612 288)">
+    <rect width="204" height="288" fill="url(#paper)"/>
+    <g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#D0213A">5</text>
+    <use href="#diamond" transform="translate(25 72) scale(0.95)" fill="#D0213A"/>
+</g>
+    <g transform="rotate(180 102 144)"><g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#D0213A">5</text>
+    <use href="#diamond" transform="translate(25 72) scale(0.95)" fill="#D0213A"/>
+</g></g>
+    <use href="#diamond" transform="translate(64 62) scale(1.42)" fill="#D0213A"/><use href="#diamond" transform="translate(140 62) scale(1.42)" fill="#D0213A"/><use href="#diamond" transform="translate(102 144) scale(1.42)" fill="#D0213A"/><use href="#diamond" transform="translate(64 226) rotate(180) scale(1.42)" fill="#D0213A"/><use href="#diamond" transform="translate(140 226) rotate(180) scale(1.42)" fill="#D0213A"/>
+</g>
+<g transform="translate(816 288)">
+    <rect width="204" height="288" fill="url(#paper)"/>
+    <g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#D0213A">6</text>
+    <use href="#diamond" transform="translate(25 72) scale(0.95)" fill="#D0213A"/>
+</g>
+    <g transform="rotate(180 102 144)"><g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#D0213A">6</text>
+    <use href="#diamond" transform="translate(25 72) scale(0.95)" fill="#D0213A"/>
+</g></g>
+    <use href="#diamond" transform="translate(64 62) scale(1.42)" fill="#D0213A"/><use href="#diamond" transform="translate(140 62) scale(1.42)" fill="#D0213A"/><use href="#diamond" transform="translate(64 144) scale(1.42)" fill="#D0213A"/><use href="#diamond" transform="translate(140 144) scale(1.42)" fill="#D0213A"/><use href="#diamond" transform="translate(64 226) rotate(180) scale(1.42)" fill="#D0213A"/><use href="#diamond" transform="translate(140 226) rotate(180) scale(1.42)" fill="#D0213A"/>
+</g>
+<g transform="translate(1020 288)">
+    <rect width="204" height="288" fill="url(#paper)"/>
+    <g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#D0213A">7</text>
+    <use href="#diamond" transform="translate(25 72) scale(0.95)" fill="#D0213A"/>
+</g>
+    <g transform="rotate(180 102 144)"><g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#D0213A">7</text>
+    <use href="#diamond" transform="translate(25 72) scale(0.95)" fill="#D0213A"/>
+</g></g>
+    <use href="#diamond" transform="translate(64 62) scale(1.42)" fill="#D0213A"/><use href="#diamond" transform="translate(140 62) scale(1.42)" fill="#D0213A"/><use href="#diamond" transform="translate(102 103) scale(1.42)" fill="#D0213A"/><use href="#diamond" transform="translate(64 144) scale(1.42)" fill="#D0213A"/><use href="#diamond" transform="translate(140 144) scale(1.42)" fill="#D0213A"/><use href="#diamond" transform="translate(64 226) rotate(180) scale(1.42)" fill="#D0213A"/><use href="#diamond" transform="translate(140 226) rotate(180) scale(1.42)" fill="#D0213A"/>
+</g>
+<g transform="translate(1224 288)">
+    <rect width="204" height="288" fill="url(#paper)"/>
+    <g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#D0213A">8</text>
+    <use href="#diamond" transform="translate(25 72) scale(0.95)" fill="#D0213A"/>
+</g>
+    <g transform="rotate(180 102 144)"><g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#D0213A">8</text>
+    <use href="#diamond" transform="translate(25 72) scale(0.95)" fill="#D0213A"/>
+</g></g>
+    <use href="#diamond" transform="translate(64 62) scale(1.42)" fill="#D0213A"/><use href="#diamond" transform="translate(140 62) scale(1.42)" fill="#D0213A"/><use href="#diamond" transform="translate(102 103) scale(1.42)" fill="#D0213A"/><use href="#diamond" transform="translate(64 144) scale(1.42)" fill="#D0213A"/><use href="#diamond" transform="translate(140 144) scale(1.42)" fill="#D0213A"/><use href="#diamond" transform="translate(102 185) rotate(180) scale(1.42)" fill="#D0213A"/><use href="#diamond" transform="translate(64 226) rotate(180) scale(1.42)" fill="#D0213A"/><use href="#diamond" transform="translate(140 226) rotate(180) scale(1.42)" fill="#D0213A"/>
+</g>
+<g transform="translate(1428 288)">
+    <rect width="204" height="288" fill="url(#paper)"/>
+    <g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#D0213A">9</text>
+    <use href="#diamond" transform="translate(25 72) scale(0.95)" fill="#D0213A"/>
+</g>
+    <g transform="rotate(180 102 144)"><g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#D0213A">9</text>
+    <use href="#diamond" transform="translate(25 72) scale(0.95)" fill="#D0213A"/>
+</g></g>
+    <use href="#diamond" transform="translate(64 62) scale(1.42)" fill="#D0213A"/><use href="#diamond" transform="translate(140 62) scale(1.42)" fill="#D0213A"/><use href="#diamond" transform="translate(64 116.67) scale(1.42)" fill="#D0213A"/><use href="#diamond" transform="translate(140 116.67) scale(1.42)" fill="#D0213A"/><use href="#diamond" transform="translate(102 144) scale(1.42)" fill="#D0213A"/><use href="#diamond" transform="translate(64 171.33) rotate(180) scale(1.42)" fill="#D0213A"/><use href="#diamond" transform="translate(140 171.33) rotate(180) scale(1.42)" fill="#D0213A"/><use href="#diamond" transform="translate(64 226) rotate(180) scale(1.42)" fill="#D0213A"/><use href="#diamond" transform="translate(140 226) rotate(180) scale(1.42)" fill="#D0213A"/>
+</g>
+<g transform="translate(1632 288)">
+    <rect width="204" height="288" fill="url(#paper)"/>
+    <g>
+    <text x="26" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="36" font-weight="700" text-anchor="middle" fill="#D0213A" letter-spacing="-2">10</text>
+    <use href="#diamond" transform="translate(25 72) scale(0.95)" fill="#D0213A"/>
+</g>
+    <g transform="rotate(180 102 144)"><g>
+    <text x="26" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="36" font-weight="700" text-anchor="middle" fill="#D0213A" letter-spacing="-2">10</text>
+    <use href="#diamond" transform="translate(25 72) scale(0.95)" fill="#D0213A"/>
+</g></g>
+    <use href="#diamond" transform="translate(64 62) scale(1.42)" fill="#D0213A"/><use href="#diamond" transform="translate(140 62) scale(1.42)" fill="#D0213A"/><use href="#diamond" transform="translate(102 89.33) scale(1.42)" fill="#D0213A"/><use href="#diamond" transform="translate(64 116.67) scale(1.42)" fill="#D0213A"/><use href="#diamond" transform="translate(140 116.67) scale(1.42)" fill="#D0213A"/><use href="#diamond" transform="translate(64 171.33) rotate(180) scale(1.42)" fill="#D0213A"/><use href="#diamond" transform="translate(140 171.33) rotate(180) scale(1.42)" fill="#D0213A"/><use href="#diamond" transform="translate(102 198.67) rotate(180) scale(1.42)" fill="#D0213A"/><use href="#diamond" transform="translate(64 226) rotate(180) scale(1.42)" fill="#D0213A"/><use href="#diamond" transform="translate(140 226) rotate(180) scale(1.42)" fill="#D0213A"/>
+</g>
+<g transform="translate(1836 288)">
+    <rect width="204" height="288" fill="url(#paper)"/>
+    <g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#D0213A">J</text>
+    <use href="#diamond" transform="translate(25 72) scale(0.95)" fill="#D0213A"/>
+</g>
+    <g transform="rotate(180 102 144)"><g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#D0213A">J</text>
+    <use href="#diamond" transform="translate(25 72) scale(0.95)" fill="#D0213A"/>
+</g></g>
+    <g>
+    <rect x="40" y="32" width="124" height="224" rx="8" fill="#FDEEEF" stroke="#C9A24A" stroke-width="3"/>
+    <rect x="46" y="38" width="112" height="212" rx="5" fill="url(#court-diamond)" stroke="#A3162B" stroke-opacity="0.35" stroke-width="1.5"/>
+    <path d="M46 144H158" stroke="#C9A24A" stroke-width="2"/>
+    <g transform="translate(102 74)">
+        <path d="M-24 14C-24 -6-8 -16 8 -13C18 -11 24 -3 24 14Z" fill="#A3162B" stroke="#8C6A1C" stroke-width="2" stroke-linejoin="round"/>
+        <rect x="-31" y="13" width="62" height="9" rx="2" fill="#D4A73A" stroke="#8C6A1C" stroke-width="1.5"/>
+        <path d="M8 -13C20 -30 36 -30 40 -22C30 -22 22 -16 14 -9Z" fill="#A3162B" stroke="#8C6A1C" stroke-width="1.5"/>
+        <use href="#diamond" transform="translate(0 44) scale(1.05)" fill="#D0213A"/>
+    </g>
+    <g transform="rotate(180 102 144)"><g transform="translate(102 74)">
+        <path d="M-24 14C-24 -6-8 -16 8 -13C18 -11 24 -3 24 14Z" fill="#A3162B" stroke="#8C6A1C" stroke-width="2" stroke-linejoin="round"/>
+        <rect x="-31" y="13" width="62" height="9" rx="2" fill="#D4A73A" stroke="#8C6A1C" stroke-width="1.5"/>
+        <path d="M8 -13C20 -30 36 -30 40 -22C30 -22 22 -16 14 -9Z" fill="#A3162B" stroke="#8C6A1C" stroke-width="1.5"/>
+        <use href="#diamond" transform="translate(0 44) scale(1.05)" fill="#D0213A"/>
+    </g></g>
+</g>
+</g>
+<g transform="translate(2040 288)">
+    <rect width="204" height="288" fill="url(#paper)"/>
+    <g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#D0213A">Q</text>
+    <use href="#diamond" transform="translate(25 72) scale(0.95)" fill="#D0213A"/>
+</g>
+    <g transform="rotate(180 102 144)"><g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#D0213A">Q</text>
+    <use href="#diamond" transform="translate(25 72) scale(0.95)" fill="#D0213A"/>
+</g></g>
+    <g>
+    <rect x="40" y="32" width="124" height="224" rx="8" fill="#FDEEEF" stroke="#C9A24A" stroke-width="3"/>
+    <rect x="46" y="38" width="112" height="212" rx="5" fill="url(#court-diamond)" stroke="#A3162B" stroke-opacity="0.35" stroke-width="1.5"/>
+    <path d="M46 144H158" stroke="#C9A24A" stroke-width="2"/>
+    <g transform="translate(102 74)">
+        <path d="M-27 14C-27 -2-15 -13 0 -16C15 -13 27 -2 27 14Z" fill="#E3B64B" stroke="#8C6A1C" stroke-width="2" stroke-linejoin="round"/>
+        <rect x="-31" y="13" width="62" height="9" rx="2" fill="#D4A73A" stroke="#8C6A1C" stroke-width="1.5"/>
+        <circle cx="0" cy="-17" r="5" fill="#A3162B" stroke="#8C6A1C" stroke-width="1.5"/><path d="M-18 6Q0 -8 18 6" fill="none" stroke="#FFFFFF" stroke-opacity="0.8" stroke-width="2"/>
+        <use href="#diamond" transform="translate(0 44) scale(1.05)" fill="#D0213A"/>
+    </g>
+    <g transform="rotate(180 102 144)"><g transform="translate(102 74)">
+        <path d="M-27 14C-27 -2-15 -13 0 -16C15 -13 27 -2 27 14Z" fill="#E3B64B" stroke="#8C6A1C" stroke-width="2" stroke-linejoin="round"/>
+        <rect x="-31" y="13" width="62" height="9" rx="2" fill="#D4A73A" stroke="#8C6A1C" stroke-width="1.5"/>
+        <circle cx="0" cy="-17" r="5" fill="#A3162B" stroke="#8C6A1C" stroke-width="1.5"/><path d="M-18 6Q0 -8 18 6" fill="none" stroke="#FFFFFF" stroke-opacity="0.8" stroke-width="2"/>
+        <use href="#diamond" transform="translate(0 44) scale(1.05)" fill="#D0213A"/>
+    </g></g>
+</g>
+</g>
+<g transform="translate(2244 288)">
+    <rect width="204" height="288" fill="url(#paper)"/>
+    <g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#D0213A">K</text>
+    <use href="#diamond" transform="translate(25 72) scale(0.95)" fill="#D0213A"/>
+</g>
+    <g transform="rotate(180 102 144)"><g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#D0213A">K</text>
+    <use href="#diamond" transform="translate(25 72) scale(0.95)" fill="#D0213A"/>
+</g></g>
+    <g>
+    <rect x="40" y="32" width="124" height="224" rx="8" fill="#FDEEEF" stroke="#C9A24A" stroke-width="3"/>
+    <rect x="46" y="38" width="112" height="212" rx="5" fill="url(#court-diamond)" stroke="#A3162B" stroke-opacity="0.35" stroke-width="1.5"/>
+    <path d="M46 144H158" stroke="#C9A24A" stroke-width="2"/>
+    <g transform="translate(102 74)">
+        <path d="M-30 14L-30 -8L-17 4L-8 -18L0 0L8 -18L17 4L30 -8L30 14Z" fill="#E3B64B" stroke="#8C6A1C" stroke-width="2" stroke-linejoin="round"/>
+        <rect x="-31" y="13" width="62" height="9" rx="2" fill="#D4A73A" stroke="#8C6A1C" stroke-width="1.5"/>
+        <circle cx="-17" cy="4" r="3" fill="#FFFFFF"/><circle cx="0" cy="0" r="3.4" fill="#A3162B"/><circle cx="17" cy="4" r="3" fill="#FFFFFF"/><circle cx="-30" cy="-8" r="3" fill="#D4A73A"/><circle cx="-8" cy="-18" r="3" fill="#D4A73A"/><circle cx="8" cy="-18" r="3" fill="#D4A73A"/><circle cx="30" cy="-8" r="3" fill="#D4A73A"/>
+        <use href="#diamond" transform="translate(0 44) scale(1.05)" fill="#D0213A"/>
+    </g>
+    <g transform="rotate(180 102 144)"><g transform="translate(102 74)">
+        <path d="M-30 14L-30 -8L-17 4L-8 -18L0 0L8 -18L17 4L30 -8L30 14Z" fill="#E3B64B" stroke="#8C6A1C" stroke-width="2" stroke-linejoin="round"/>
+        <rect x="-31" y="13" width="62" height="9" rx="2" fill="#D4A73A" stroke="#8C6A1C" stroke-width="1.5"/>
+        <circle cx="-17" cy="4" r="3" fill="#FFFFFF"/><circle cx="0" cy="0" r="3.4" fill="#A3162B"/><circle cx="17" cy="4" r="3" fill="#FFFFFF"/><circle cx="-30" cy="-8" r="3" fill="#D4A73A"/><circle cx="-8" cy="-18" r="3" fill="#D4A73A"/><circle cx="8" cy="-18" r="3" fill="#D4A73A"/><circle cx="30" cy="-8" r="3" fill="#D4A73A"/>
+        <use href="#diamond" transform="translate(0 44) scale(1.05)" fill="#D0213A"/>
+    </g></g>
+</g>
+</g>
+<g transform="translate(2448 288)">
+    <rect width="204" height="288" fill="url(#paper)"/>
+    <g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#D0213A">A</text>
+    <use href="#diamond" transform="translate(25 72) scale(0.95)" fill="#D0213A"/>
+</g>
+    <g transform="rotate(180 102 144)"><g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#D0213A">A</text>
+    <use href="#diamond" transform="translate(25 72) scale(0.95)" fill="#D0213A"/>
+</g></g>
+    <use href="#diamond" transform="translate(102 148) scale(3.1)" fill="#D0213A"/>
+</g>
+<g transform="translate(0 576)">
+    <rect width="204" height="288" fill="url(#paper)"/>
+    <g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#D0213A">2</text>
+    <use href="#heart" transform="translate(25 72) scale(0.95)" fill="#D0213A"/>
+</g>
+    <g transform="rotate(180 102 144)"><g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#D0213A">2</text>
+    <use href="#heart" transform="translate(25 72) scale(0.95)" fill="#D0213A"/>
+</g></g>
+    <use href="#heart" transform="translate(102 62) scale(1.42)" fill="#D0213A"/><use href="#heart" transform="translate(102 226) rotate(180) scale(1.42)" fill="#D0213A"/>
+</g>
+<g transform="translate(204 576)">
+    <rect width="204" height="288" fill="url(#paper)"/>
+    <g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#D0213A">3</text>
+    <use href="#heart" transform="translate(25 72) scale(0.95)" fill="#D0213A"/>
+</g>
+    <g transform="rotate(180 102 144)"><g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#D0213A">3</text>
+    <use href="#heart" transform="translate(25 72) scale(0.95)" fill="#D0213A"/>
+</g></g>
+    <use href="#heart" transform="translate(102 62) scale(1.42)" fill="#D0213A"/><use href="#heart" transform="translate(102 144) scale(1.42)" fill="#D0213A"/><use href="#heart" transform="translate(102 226) rotate(180) scale(1.42)" fill="#D0213A"/>
+</g>
+<g transform="translate(408 576)">
+    <rect width="204" height="288" fill="url(#paper)"/>
+    <g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#D0213A">4</text>
+    <use href="#heart" transform="translate(25 72) scale(0.95)" fill="#D0213A"/>
+</g>
+    <g transform="rotate(180 102 144)"><g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#D0213A">4</text>
+    <use href="#heart" transform="translate(25 72) scale(0.95)" fill="#D0213A"/>
+</g></g>
+    <use href="#heart" transform="translate(64 62) scale(1.42)" fill="#D0213A"/><use href="#heart" transform="translate(140 62) scale(1.42)" fill="#D0213A"/><use href="#heart" transform="translate(64 226) rotate(180) scale(1.42)" fill="#D0213A"/><use href="#heart" transform="translate(140 226) rotate(180) scale(1.42)" fill="#D0213A"/>
+</g>
+<g transform="translate(612 576)">
+    <rect width="204" height="288" fill="url(#paper)"/>
+    <g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#D0213A">5</text>
+    <use href="#heart" transform="translate(25 72) scale(0.95)" fill="#D0213A"/>
+</g>
+    <g transform="rotate(180 102 144)"><g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#D0213A">5</text>
+    <use href="#heart" transform="translate(25 72) scale(0.95)" fill="#D0213A"/>
+</g></g>
+    <use href="#heart" transform="translate(64 62) scale(1.42)" fill="#D0213A"/><use href="#heart" transform="translate(140 62) scale(1.42)" fill="#D0213A"/><use href="#heart" transform="translate(102 144) scale(1.42)" fill="#D0213A"/><use href="#heart" transform="translate(64 226) rotate(180) scale(1.42)" fill="#D0213A"/><use href="#heart" transform="translate(140 226) rotate(180) scale(1.42)" fill="#D0213A"/>
+</g>
+<g transform="translate(816 576)">
+    <rect width="204" height="288" fill="url(#paper)"/>
+    <g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#D0213A">6</text>
+    <use href="#heart" transform="translate(25 72) scale(0.95)" fill="#D0213A"/>
+</g>
+    <g transform="rotate(180 102 144)"><g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#D0213A">6</text>
+    <use href="#heart" transform="translate(25 72) scale(0.95)" fill="#D0213A"/>
+</g></g>
+    <use href="#heart" transform="translate(64 62) scale(1.42)" fill="#D0213A"/><use href="#heart" transform="translate(140 62) scale(1.42)" fill="#D0213A"/><use href="#heart" transform="translate(64 144) scale(1.42)" fill="#D0213A"/><use href="#heart" transform="translate(140 144) scale(1.42)" fill="#D0213A"/><use href="#heart" transform="translate(64 226) rotate(180) scale(1.42)" fill="#D0213A"/><use href="#heart" transform="translate(140 226) rotate(180) scale(1.42)" fill="#D0213A"/>
+</g>
+<g transform="translate(1020 576)">
+    <rect width="204" height="288" fill="url(#paper)"/>
+    <g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#D0213A">7</text>
+    <use href="#heart" transform="translate(25 72) scale(0.95)" fill="#D0213A"/>
+</g>
+    <g transform="rotate(180 102 144)"><g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#D0213A">7</text>
+    <use href="#heart" transform="translate(25 72) scale(0.95)" fill="#D0213A"/>
+</g></g>
+    <use href="#heart" transform="translate(64 62) scale(1.42)" fill="#D0213A"/><use href="#heart" transform="translate(140 62) scale(1.42)" fill="#D0213A"/><use href="#heart" transform="translate(102 103) scale(1.42)" fill="#D0213A"/><use href="#heart" transform="translate(64 144) scale(1.42)" fill="#D0213A"/><use href="#heart" transform="translate(140 144) scale(1.42)" fill="#D0213A"/><use href="#heart" transform="translate(64 226) rotate(180) scale(1.42)" fill="#D0213A"/><use href="#heart" transform="translate(140 226) rotate(180) scale(1.42)" fill="#D0213A"/>
+</g>
+<g transform="translate(1224 576)">
+    <rect width="204" height="288" fill="url(#paper)"/>
+    <g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#D0213A">8</text>
+    <use href="#heart" transform="translate(25 72) scale(0.95)" fill="#D0213A"/>
+</g>
+    <g transform="rotate(180 102 144)"><g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#D0213A">8</text>
+    <use href="#heart" transform="translate(25 72) scale(0.95)" fill="#D0213A"/>
+</g></g>
+    <use href="#heart" transform="translate(64 62) scale(1.42)" fill="#D0213A"/><use href="#heart" transform="translate(140 62) scale(1.42)" fill="#D0213A"/><use href="#heart" transform="translate(102 103) scale(1.42)" fill="#D0213A"/><use href="#heart" transform="translate(64 144) scale(1.42)" fill="#D0213A"/><use href="#heart" transform="translate(140 144) scale(1.42)" fill="#D0213A"/><use href="#heart" transform="translate(102 185) rotate(180) scale(1.42)" fill="#D0213A"/><use href="#heart" transform="translate(64 226) rotate(180) scale(1.42)" fill="#D0213A"/><use href="#heart" transform="translate(140 226) rotate(180) scale(1.42)" fill="#D0213A"/>
+</g>
+<g transform="translate(1428 576)">
+    <rect width="204" height="288" fill="url(#paper)"/>
+    <g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#D0213A">9</text>
+    <use href="#heart" transform="translate(25 72) scale(0.95)" fill="#D0213A"/>
+</g>
+    <g transform="rotate(180 102 144)"><g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#D0213A">9</text>
+    <use href="#heart" transform="translate(25 72) scale(0.95)" fill="#D0213A"/>
+</g></g>
+    <use href="#heart" transform="translate(64 62) scale(1.42)" fill="#D0213A"/><use href="#heart" transform="translate(140 62) scale(1.42)" fill="#D0213A"/><use href="#heart" transform="translate(64 116.67) scale(1.42)" fill="#D0213A"/><use href="#heart" transform="translate(140 116.67) scale(1.42)" fill="#D0213A"/><use href="#heart" transform="translate(102 144) scale(1.42)" fill="#D0213A"/><use href="#heart" transform="translate(64 171.33) rotate(180) scale(1.42)" fill="#D0213A"/><use href="#heart" transform="translate(140 171.33) rotate(180) scale(1.42)" fill="#D0213A"/><use href="#heart" transform="translate(64 226) rotate(180) scale(1.42)" fill="#D0213A"/><use href="#heart" transform="translate(140 226) rotate(180) scale(1.42)" fill="#D0213A"/>
+</g>
+<g transform="translate(1632 576)">
+    <rect width="204" height="288" fill="url(#paper)"/>
+    <g>
+    <text x="26" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="36" font-weight="700" text-anchor="middle" fill="#D0213A" letter-spacing="-2">10</text>
+    <use href="#heart" transform="translate(25 72) scale(0.95)" fill="#D0213A"/>
+</g>
+    <g transform="rotate(180 102 144)"><g>
+    <text x="26" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="36" font-weight="700" text-anchor="middle" fill="#D0213A" letter-spacing="-2">10</text>
+    <use href="#heart" transform="translate(25 72) scale(0.95)" fill="#D0213A"/>
+</g></g>
+    <use href="#heart" transform="translate(64 62) scale(1.42)" fill="#D0213A"/><use href="#heart" transform="translate(140 62) scale(1.42)" fill="#D0213A"/><use href="#heart" transform="translate(102 89.33) scale(1.42)" fill="#D0213A"/><use href="#heart" transform="translate(64 116.67) scale(1.42)" fill="#D0213A"/><use href="#heart" transform="translate(140 116.67) scale(1.42)" fill="#D0213A"/><use href="#heart" transform="translate(64 171.33) rotate(180) scale(1.42)" fill="#D0213A"/><use href="#heart" transform="translate(140 171.33) rotate(180) scale(1.42)" fill="#D0213A"/><use href="#heart" transform="translate(102 198.67) rotate(180) scale(1.42)" fill="#D0213A"/><use href="#heart" transform="translate(64 226) rotate(180) scale(1.42)" fill="#D0213A"/><use href="#heart" transform="translate(140 226) rotate(180) scale(1.42)" fill="#D0213A"/>
+</g>
+<g transform="translate(1836 576)">
+    <rect width="204" height="288" fill="url(#paper)"/>
+    <g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#D0213A">J</text>
+    <use href="#heart" transform="translate(25 72) scale(0.95)" fill="#D0213A"/>
+</g>
+    <g transform="rotate(180 102 144)"><g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#D0213A">J</text>
+    <use href="#heart" transform="translate(25 72) scale(0.95)" fill="#D0213A"/>
+</g></g>
+    <g>
+    <rect x="40" y="32" width="124" height="224" rx="8" fill="#FDEEEF" stroke="#C9A24A" stroke-width="3"/>
+    <rect x="46" y="38" width="112" height="212" rx="5" fill="url(#court-heart)" stroke="#A3162B" stroke-opacity="0.35" stroke-width="1.5"/>
+    <path d="M46 144H158" stroke="#C9A24A" stroke-width="2"/>
+    <g transform="translate(102 74)">
+        <path d="M-24 14C-24 -6-8 -16 8 -13C18 -11 24 -3 24 14Z" fill="#A3162B" stroke="#8C6A1C" stroke-width="2" stroke-linejoin="round"/>
+        <rect x="-31" y="13" width="62" height="9" rx="2" fill="#D4A73A" stroke="#8C6A1C" stroke-width="1.5"/>
+        <path d="M8 -13C20 -30 36 -30 40 -22C30 -22 22 -16 14 -9Z" fill="#A3162B" stroke="#8C6A1C" stroke-width="1.5"/>
+        <use href="#heart" transform="translate(0 44) scale(1.05)" fill="#D0213A"/>
+    </g>
+    <g transform="rotate(180 102 144)"><g transform="translate(102 74)">
+        <path d="M-24 14C-24 -6-8 -16 8 -13C18 -11 24 -3 24 14Z" fill="#A3162B" stroke="#8C6A1C" stroke-width="2" stroke-linejoin="round"/>
+        <rect x="-31" y="13" width="62" height="9" rx="2" fill="#D4A73A" stroke="#8C6A1C" stroke-width="1.5"/>
+        <path d="M8 -13C20 -30 36 -30 40 -22C30 -22 22 -16 14 -9Z" fill="#A3162B" stroke="#8C6A1C" stroke-width="1.5"/>
+        <use href="#heart" transform="translate(0 44) scale(1.05)" fill="#D0213A"/>
+    </g></g>
+</g>
+</g>
+<g transform="translate(2040 576)">
+    <rect width="204" height="288" fill="url(#paper)"/>
+    <g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#D0213A">Q</text>
+    <use href="#heart" transform="translate(25 72) scale(0.95)" fill="#D0213A"/>
+</g>
+    <g transform="rotate(180 102 144)"><g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#D0213A">Q</text>
+    <use href="#heart" transform="translate(25 72) scale(0.95)" fill="#D0213A"/>
+</g></g>
+    <g>
+    <rect x="40" y="32" width="124" height="224" rx="8" fill="#FDEEEF" stroke="#C9A24A" stroke-width="3"/>
+    <rect x="46" y="38" width="112" height="212" rx="5" fill="url(#court-heart)" stroke="#A3162B" stroke-opacity="0.35" stroke-width="1.5"/>
+    <path d="M46 144H158" stroke="#C9A24A" stroke-width="2"/>
+    <g transform="translate(102 74)">
+        <path d="M-27 14C-27 -2-15 -13 0 -16C15 -13 27 -2 27 14Z" fill="#E3B64B" stroke="#8C6A1C" stroke-width="2" stroke-linejoin="round"/>
+        <rect x="-31" y="13" width="62" height="9" rx="2" fill="#D4A73A" stroke="#8C6A1C" stroke-width="1.5"/>
+        <circle cx="0" cy="-17" r="5" fill="#A3162B" stroke="#8C6A1C" stroke-width="1.5"/><path d="M-18 6Q0 -8 18 6" fill="none" stroke="#FFFFFF" stroke-opacity="0.8" stroke-width="2"/>
+        <use href="#heart" transform="translate(0 44) scale(1.05)" fill="#D0213A"/>
+    </g>
+    <g transform="rotate(180 102 144)"><g transform="translate(102 74)">
+        <path d="M-27 14C-27 -2-15 -13 0 -16C15 -13 27 -2 27 14Z" fill="#E3B64B" stroke="#8C6A1C" stroke-width="2" stroke-linejoin="round"/>
+        <rect x="-31" y="13" width="62" height="9" rx="2" fill="#D4A73A" stroke="#8C6A1C" stroke-width="1.5"/>
+        <circle cx="0" cy="-17" r="5" fill="#A3162B" stroke="#8C6A1C" stroke-width="1.5"/><path d="M-18 6Q0 -8 18 6" fill="none" stroke="#FFFFFF" stroke-opacity="0.8" stroke-width="2"/>
+        <use href="#heart" transform="translate(0 44) scale(1.05)" fill="#D0213A"/>
+    </g></g>
+</g>
+</g>
+<g transform="translate(2244 576)">
+    <rect width="204" height="288" fill="url(#paper)"/>
+    <g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#D0213A">K</text>
+    <use href="#heart" transform="translate(25 72) scale(0.95)" fill="#D0213A"/>
+</g>
+    <g transform="rotate(180 102 144)"><g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#D0213A">K</text>
+    <use href="#heart" transform="translate(25 72) scale(0.95)" fill="#D0213A"/>
+</g></g>
+    <g>
+    <rect x="40" y="32" width="124" height="224" rx="8" fill="#FDEEEF" stroke="#C9A24A" stroke-width="3"/>
+    <rect x="46" y="38" width="112" height="212" rx="5" fill="url(#court-heart)" stroke="#A3162B" stroke-opacity="0.35" stroke-width="1.5"/>
+    <path d="M46 144H158" stroke="#C9A24A" stroke-width="2"/>
+    <g transform="translate(102 74)">
+        <path d="M-30 14L-30 -8L-17 4L-8 -18L0 0L8 -18L17 4L30 -8L30 14Z" fill="#E3B64B" stroke="#8C6A1C" stroke-width="2" stroke-linejoin="round"/>
+        <rect x="-31" y="13" width="62" height="9" rx="2" fill="#D4A73A" stroke="#8C6A1C" stroke-width="1.5"/>
+        <circle cx="-17" cy="4" r="3" fill="#FFFFFF"/><circle cx="0" cy="0" r="3.4" fill="#A3162B"/><circle cx="17" cy="4" r="3" fill="#FFFFFF"/><circle cx="-30" cy="-8" r="3" fill="#D4A73A"/><circle cx="-8" cy="-18" r="3" fill="#D4A73A"/><circle cx="8" cy="-18" r="3" fill="#D4A73A"/><circle cx="30" cy="-8" r="3" fill="#D4A73A"/>
+        <use href="#heart" transform="translate(0 44) scale(1.05)" fill="#D0213A"/>
+    </g>
+    <g transform="rotate(180 102 144)"><g transform="translate(102 74)">
+        <path d="M-30 14L-30 -8L-17 4L-8 -18L0 0L8 -18L17 4L30 -8L30 14Z" fill="#E3B64B" stroke="#8C6A1C" stroke-width="2" stroke-linejoin="round"/>
+        <rect x="-31" y="13" width="62" height="9" rx="2" fill="#D4A73A" stroke="#8C6A1C" stroke-width="1.5"/>
+        <circle cx="-17" cy="4" r="3" fill="#FFFFFF"/><circle cx="0" cy="0" r="3.4" fill="#A3162B"/><circle cx="17" cy="4" r="3" fill="#FFFFFF"/><circle cx="-30" cy="-8" r="3" fill="#D4A73A"/><circle cx="-8" cy="-18" r="3" fill="#D4A73A"/><circle cx="8" cy="-18" r="3" fill="#D4A73A"/><circle cx="30" cy="-8" r="3" fill="#D4A73A"/>
+        <use href="#heart" transform="translate(0 44) scale(1.05)" fill="#D0213A"/>
+    </g></g>
+</g>
+</g>
+<g transform="translate(2448 576)">
+    <rect width="204" height="288" fill="url(#paper)"/>
+    <g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#D0213A">A</text>
+    <use href="#heart" transform="translate(25 72) scale(0.95)" fill="#D0213A"/>
+</g>
+    <g transform="rotate(180 102 144)"><g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#D0213A">A</text>
+    <use href="#heart" transform="translate(25 72) scale(0.95)" fill="#D0213A"/>
+</g></g>
+    <use href="#heart" transform="translate(102 148) scale(3.1)" fill="#D0213A"/>
+</g>
+<g transform="translate(0 864)">
+    <rect width="204" height="288" fill="url(#paper)"/>
+    <g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#1B2233">2</text>
+    <use href="#spade" transform="translate(25 72) scale(0.95)" fill="#1B2233"/>
+</g>
+    <g transform="rotate(180 102 144)"><g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#1B2233">2</text>
+    <use href="#spade" transform="translate(25 72) scale(0.95)" fill="#1B2233"/>
+</g></g>
+    <use href="#spade" transform="translate(102 62) scale(1.42)" fill="#1B2233"/><use href="#spade" transform="translate(102 226) rotate(180) scale(1.42)" fill="#1B2233"/>
+</g>
+<g transform="translate(204 864)">
+    <rect width="204" height="288" fill="url(#paper)"/>
+    <g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#1B2233">3</text>
+    <use href="#spade" transform="translate(25 72) scale(0.95)" fill="#1B2233"/>
+</g>
+    <g transform="rotate(180 102 144)"><g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#1B2233">3</text>
+    <use href="#spade" transform="translate(25 72) scale(0.95)" fill="#1B2233"/>
+</g></g>
+    <use href="#spade" transform="translate(102 62) scale(1.42)" fill="#1B2233"/><use href="#spade" transform="translate(102 144) scale(1.42)" fill="#1B2233"/><use href="#spade" transform="translate(102 226) rotate(180) scale(1.42)" fill="#1B2233"/>
+</g>
+<g transform="translate(408 864)">
+    <rect width="204" height="288" fill="url(#paper)"/>
+    <g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#1B2233">4</text>
+    <use href="#spade" transform="translate(25 72) scale(0.95)" fill="#1B2233"/>
+</g>
+    <g transform="rotate(180 102 144)"><g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#1B2233">4</text>
+    <use href="#spade" transform="translate(25 72) scale(0.95)" fill="#1B2233"/>
+</g></g>
+    <use href="#spade" transform="translate(64 62) scale(1.42)" fill="#1B2233"/><use href="#spade" transform="translate(140 62) scale(1.42)" fill="#1B2233"/><use href="#spade" transform="translate(64 226) rotate(180) scale(1.42)" fill="#1B2233"/><use href="#spade" transform="translate(140 226) rotate(180) scale(1.42)" fill="#1B2233"/>
+</g>
+<g transform="translate(612 864)">
+    <rect width="204" height="288" fill="url(#paper)"/>
+    <g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#1B2233">5</text>
+    <use href="#spade" transform="translate(25 72) scale(0.95)" fill="#1B2233"/>
+</g>
+    <g transform="rotate(180 102 144)"><g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#1B2233">5</text>
+    <use href="#spade" transform="translate(25 72) scale(0.95)" fill="#1B2233"/>
+</g></g>
+    <use href="#spade" transform="translate(64 62) scale(1.42)" fill="#1B2233"/><use href="#spade" transform="translate(140 62) scale(1.42)" fill="#1B2233"/><use href="#spade" transform="translate(102 144) scale(1.42)" fill="#1B2233"/><use href="#spade" transform="translate(64 226) rotate(180) scale(1.42)" fill="#1B2233"/><use href="#spade" transform="translate(140 226) rotate(180) scale(1.42)" fill="#1B2233"/>
+</g>
+<g transform="translate(816 864)">
+    <rect width="204" height="288" fill="url(#paper)"/>
+    <g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#1B2233">6</text>
+    <use href="#spade" transform="translate(25 72) scale(0.95)" fill="#1B2233"/>
+</g>
+    <g transform="rotate(180 102 144)"><g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#1B2233">6</text>
+    <use href="#spade" transform="translate(25 72) scale(0.95)" fill="#1B2233"/>
+</g></g>
+    <use href="#spade" transform="translate(64 62) scale(1.42)" fill="#1B2233"/><use href="#spade" transform="translate(140 62) scale(1.42)" fill="#1B2233"/><use href="#spade" transform="translate(64 144) scale(1.42)" fill="#1B2233"/><use href="#spade" transform="translate(140 144) scale(1.42)" fill="#1B2233"/><use href="#spade" transform="translate(64 226) rotate(180) scale(1.42)" fill="#1B2233"/><use href="#spade" transform="translate(140 226) rotate(180) scale(1.42)" fill="#1B2233"/>
+</g>
+<g transform="translate(1020 864)">
+    <rect width="204" height="288" fill="url(#paper)"/>
+    <g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#1B2233">7</text>
+    <use href="#spade" transform="translate(25 72) scale(0.95)" fill="#1B2233"/>
+</g>
+    <g transform="rotate(180 102 144)"><g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#1B2233">7</text>
+    <use href="#spade" transform="translate(25 72) scale(0.95)" fill="#1B2233"/>
+</g></g>
+    <use href="#spade" transform="translate(64 62) scale(1.42)" fill="#1B2233"/><use href="#spade" transform="translate(140 62) scale(1.42)" fill="#1B2233"/><use href="#spade" transform="translate(102 103) scale(1.42)" fill="#1B2233"/><use href="#spade" transform="translate(64 144) scale(1.42)" fill="#1B2233"/><use href="#spade" transform="translate(140 144) scale(1.42)" fill="#1B2233"/><use href="#spade" transform="translate(64 226) rotate(180) scale(1.42)" fill="#1B2233"/><use href="#spade" transform="translate(140 226) rotate(180) scale(1.42)" fill="#1B2233"/>
+</g>
+<g transform="translate(1224 864)">
+    <rect width="204" height="288" fill="url(#paper)"/>
+    <g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#1B2233">8</text>
+    <use href="#spade" transform="translate(25 72) scale(0.95)" fill="#1B2233"/>
+</g>
+    <g transform="rotate(180 102 144)"><g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#1B2233">8</text>
+    <use href="#spade" transform="translate(25 72) scale(0.95)" fill="#1B2233"/>
+</g></g>
+    <use href="#spade" transform="translate(64 62) scale(1.42)" fill="#1B2233"/><use href="#spade" transform="translate(140 62) scale(1.42)" fill="#1B2233"/><use href="#spade" transform="translate(102 103) scale(1.42)" fill="#1B2233"/><use href="#spade" transform="translate(64 144) scale(1.42)" fill="#1B2233"/><use href="#spade" transform="translate(140 144) scale(1.42)" fill="#1B2233"/><use href="#spade" transform="translate(102 185) rotate(180) scale(1.42)" fill="#1B2233"/><use href="#spade" transform="translate(64 226) rotate(180) scale(1.42)" fill="#1B2233"/><use href="#spade" transform="translate(140 226) rotate(180) scale(1.42)" fill="#1B2233"/>
+</g>
+<g transform="translate(1428 864)">
+    <rect width="204" height="288" fill="url(#paper)"/>
+    <g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#1B2233">9</text>
+    <use href="#spade" transform="translate(25 72) scale(0.95)" fill="#1B2233"/>
+</g>
+    <g transform="rotate(180 102 144)"><g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#1B2233">9</text>
+    <use href="#spade" transform="translate(25 72) scale(0.95)" fill="#1B2233"/>
+</g></g>
+    <use href="#spade" transform="translate(64 62) scale(1.42)" fill="#1B2233"/><use href="#spade" transform="translate(140 62) scale(1.42)" fill="#1B2233"/><use href="#spade" transform="translate(64 116.67) scale(1.42)" fill="#1B2233"/><use href="#spade" transform="translate(140 116.67) scale(1.42)" fill="#1B2233"/><use href="#spade" transform="translate(102 144) scale(1.42)" fill="#1B2233"/><use href="#spade" transform="translate(64 171.33) rotate(180) scale(1.42)" fill="#1B2233"/><use href="#spade" transform="translate(140 171.33) rotate(180) scale(1.42)" fill="#1B2233"/><use href="#spade" transform="translate(64 226) rotate(180) scale(1.42)" fill="#1B2233"/><use href="#spade" transform="translate(140 226) rotate(180) scale(1.42)" fill="#1B2233"/>
+</g>
+<g transform="translate(1632 864)">
+    <rect width="204" height="288" fill="url(#paper)"/>
+    <g>
+    <text x="26" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="36" font-weight="700" text-anchor="middle" fill="#1B2233" letter-spacing="-2">10</text>
+    <use href="#spade" transform="translate(25 72) scale(0.95)" fill="#1B2233"/>
+</g>
+    <g transform="rotate(180 102 144)"><g>
+    <text x="26" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="36" font-weight="700" text-anchor="middle" fill="#1B2233" letter-spacing="-2">10</text>
+    <use href="#spade" transform="translate(25 72) scale(0.95)" fill="#1B2233"/>
+</g></g>
+    <use href="#spade" transform="translate(64 62) scale(1.42)" fill="#1B2233"/><use href="#spade" transform="translate(140 62) scale(1.42)" fill="#1B2233"/><use href="#spade" transform="translate(102 89.33) scale(1.42)" fill="#1B2233"/><use href="#spade" transform="translate(64 116.67) scale(1.42)" fill="#1B2233"/><use href="#spade" transform="translate(140 116.67) scale(1.42)" fill="#1B2233"/><use href="#spade" transform="translate(64 171.33) rotate(180) scale(1.42)" fill="#1B2233"/><use href="#spade" transform="translate(140 171.33) rotate(180) scale(1.42)" fill="#1B2233"/><use href="#spade" transform="translate(102 198.67) rotate(180) scale(1.42)" fill="#1B2233"/><use href="#spade" transform="translate(64 226) rotate(180) scale(1.42)" fill="#1B2233"/><use href="#spade" transform="translate(140 226) rotate(180) scale(1.42)" fill="#1B2233"/>
+</g>
+<g transform="translate(1836 864)">
+    <rect width="204" height="288" fill="url(#paper)"/>
+    <g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#1B2233">J</text>
+    <use href="#spade" transform="translate(25 72) scale(0.95)" fill="#1B2233"/>
+</g>
+    <g transform="rotate(180 102 144)"><g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#1B2233">J</text>
+    <use href="#spade" transform="translate(25 72) scale(0.95)" fill="#1B2233"/>
+</g></g>
+    <g>
+    <rect x="40" y="32" width="124" height="224" rx="8" fill="#EEF1F7" stroke="#C9A24A" stroke-width="3"/>
+    <rect x="46" y="38" width="112" height="212" rx="5" fill="url(#court-spade)" stroke="#23304F" stroke-opacity="0.35" stroke-width="1.5"/>
+    <path d="M46 144H158" stroke="#C9A24A" stroke-width="2"/>
+    <g transform="translate(102 74)">
+        <path d="M-24 14C-24 -6-8 -16 8 -13C18 -11 24 -3 24 14Z" fill="#23304F" stroke="#8C6A1C" stroke-width="2" stroke-linejoin="round"/>
+        <rect x="-31" y="13" width="62" height="9" rx="2" fill="#D4A73A" stroke="#8C6A1C" stroke-width="1.5"/>
+        <path d="M8 -13C20 -30 36 -30 40 -22C30 -22 22 -16 14 -9Z" fill="#23304F" stroke="#8C6A1C" stroke-width="1.5"/>
+        <use href="#spade" transform="translate(0 44) scale(1.05)" fill="#1B2233"/>
+    </g>
+    <g transform="rotate(180 102 144)"><g transform="translate(102 74)">
+        <path d="M-24 14C-24 -6-8 -16 8 -13C18 -11 24 -3 24 14Z" fill="#23304F" stroke="#8C6A1C" stroke-width="2" stroke-linejoin="round"/>
+        <rect x="-31" y="13" width="62" height="9" rx="2" fill="#D4A73A" stroke="#8C6A1C" stroke-width="1.5"/>
+        <path d="M8 -13C20 -30 36 -30 40 -22C30 -22 22 -16 14 -9Z" fill="#23304F" stroke="#8C6A1C" stroke-width="1.5"/>
+        <use href="#spade" transform="translate(0 44) scale(1.05)" fill="#1B2233"/>
+    </g></g>
+</g>
+</g>
+<g transform="translate(2040 864)">
+    <rect width="204" height="288" fill="url(#paper)"/>
+    <g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#1B2233">Q</text>
+    <use href="#spade" transform="translate(25 72) scale(0.95)" fill="#1B2233"/>
+</g>
+    <g transform="rotate(180 102 144)"><g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#1B2233">Q</text>
+    <use href="#spade" transform="translate(25 72) scale(0.95)" fill="#1B2233"/>
+</g></g>
+    <g>
+    <rect x="40" y="32" width="124" height="224" rx="8" fill="#EEF1F7" stroke="#C9A24A" stroke-width="3"/>
+    <rect x="46" y="38" width="112" height="212" rx="5" fill="url(#court-spade)" stroke="#23304F" stroke-opacity="0.35" stroke-width="1.5"/>
+    <path d="M46 144H158" stroke="#C9A24A" stroke-width="2"/>
+    <g transform="translate(102 74)">
+        <path d="M-27 14C-27 -2-15 -13 0 -16C15 -13 27 -2 27 14Z" fill="#E3B64B" stroke="#8C6A1C" stroke-width="2" stroke-linejoin="round"/>
+        <rect x="-31" y="13" width="62" height="9" rx="2" fill="#D4A73A" stroke="#8C6A1C" stroke-width="1.5"/>
+        <circle cx="0" cy="-17" r="5" fill="#23304F" stroke="#8C6A1C" stroke-width="1.5"/><path d="M-18 6Q0 -8 18 6" fill="none" stroke="#FFFFFF" stroke-opacity="0.8" stroke-width="2"/>
+        <use href="#spade" transform="translate(0 44) scale(1.05)" fill="#1B2233"/>
+    </g>
+    <g transform="rotate(180 102 144)"><g transform="translate(102 74)">
+        <path d="M-27 14C-27 -2-15 -13 0 -16C15 -13 27 -2 27 14Z" fill="#E3B64B" stroke="#8C6A1C" stroke-width="2" stroke-linejoin="round"/>
+        <rect x="-31" y="13" width="62" height="9" rx="2" fill="#D4A73A" stroke="#8C6A1C" stroke-width="1.5"/>
+        <circle cx="0" cy="-17" r="5" fill="#23304F" stroke="#8C6A1C" stroke-width="1.5"/><path d="M-18 6Q0 -8 18 6" fill="none" stroke="#FFFFFF" stroke-opacity="0.8" stroke-width="2"/>
+        <use href="#spade" transform="translate(0 44) scale(1.05)" fill="#1B2233"/>
+    </g></g>
+</g>
+</g>
+<g transform="translate(2244 864)">
+    <rect width="204" height="288" fill="url(#paper)"/>
+    <g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#1B2233">K</text>
+    <use href="#spade" transform="translate(25 72) scale(0.95)" fill="#1B2233"/>
+</g>
+    <g transform="rotate(180 102 144)"><g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#1B2233">K</text>
+    <use href="#spade" transform="translate(25 72) scale(0.95)" fill="#1B2233"/>
+</g></g>
+    <g>
+    <rect x="40" y="32" width="124" height="224" rx="8" fill="#EEF1F7" stroke="#C9A24A" stroke-width="3"/>
+    <rect x="46" y="38" width="112" height="212" rx="5" fill="url(#court-spade)" stroke="#23304F" stroke-opacity="0.35" stroke-width="1.5"/>
+    <path d="M46 144H158" stroke="#C9A24A" stroke-width="2"/>
+    <g transform="translate(102 74)">
+        <path d="M-30 14L-30 -8L-17 4L-8 -18L0 0L8 -18L17 4L30 -8L30 14Z" fill="#E3B64B" stroke="#8C6A1C" stroke-width="2" stroke-linejoin="round"/>
+        <rect x="-31" y="13" width="62" height="9" rx="2" fill="#D4A73A" stroke="#8C6A1C" stroke-width="1.5"/>
+        <circle cx="-17" cy="4" r="3" fill="#FFFFFF"/><circle cx="0" cy="0" r="3.4" fill="#23304F"/><circle cx="17" cy="4" r="3" fill="#FFFFFF"/><circle cx="-30" cy="-8" r="3" fill="#D4A73A"/><circle cx="-8" cy="-18" r="3" fill="#D4A73A"/><circle cx="8" cy="-18" r="3" fill="#D4A73A"/><circle cx="30" cy="-8" r="3" fill="#D4A73A"/>
+        <use href="#spade" transform="translate(0 44) scale(1.05)" fill="#1B2233"/>
+    </g>
+    <g transform="rotate(180 102 144)"><g transform="translate(102 74)">
+        <path d="M-30 14L-30 -8L-17 4L-8 -18L0 0L8 -18L17 4L30 -8L30 14Z" fill="#E3B64B" stroke="#8C6A1C" stroke-width="2" stroke-linejoin="round"/>
+        <rect x="-31" y="13" width="62" height="9" rx="2" fill="#D4A73A" stroke="#8C6A1C" stroke-width="1.5"/>
+        <circle cx="-17" cy="4" r="3" fill="#FFFFFF"/><circle cx="0" cy="0" r="3.4" fill="#23304F"/><circle cx="17" cy="4" r="3" fill="#FFFFFF"/><circle cx="-30" cy="-8" r="3" fill="#D4A73A"/><circle cx="-8" cy="-18" r="3" fill="#D4A73A"/><circle cx="8" cy="-18" r="3" fill="#D4A73A"/><circle cx="30" cy="-8" r="3" fill="#D4A73A"/>
+        <use href="#spade" transform="translate(0 44) scale(1.05)" fill="#1B2233"/>
+    </g></g>
+</g>
+</g>
+<g transform="translate(2448 864)">
+    <rect width="204" height="288" fill="url(#paper)"/>
+    <g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#1B2233">A</text>
+    <use href="#spade" transform="translate(25 72) scale(0.95)" fill="#1B2233"/>
+</g>
+    <g transform="rotate(180 102 144)"><g>
+    <text x="25" y="46" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="44" font-weight="700" text-anchor="middle" fill="#1B2233">A</text>
+    <use href="#spade" transform="translate(25 72) scale(0.95)" fill="#1B2233"/>
+</g></g>
+    <circle cx="102" cy="144" r="68" fill="none" stroke="#C9A24A" stroke-width="2.5"/><circle cx="102" cy="144" r="62" fill="none" stroke="#C9A24A" stroke-opacity="0.45" stroke-width="1.5"/><use href="#spade" transform="translate(102 148) scale(3.7)" fill="#1B2233"/>
+</g>
+</svg>

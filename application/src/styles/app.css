@@ -567,16 +567,89 @@
     }
 }
 
+.ludo-seat
+{
+    display: flex;
+    min-inline-size: 0;
+    align-items: center;
+    gap: 0.65rem;
+    padding: 0.6rem 0.7rem;
+    border: 2px solid color-mix(in oklab, var(--ink) 70%, transparent);
+    border-radius: var(--radius-panel);
+    background: linear-gradient(160deg, color-mix(in oklab, var(--ink) 16%, var(--field)), var(--field) 60%);
+    box-shadow: 0 8px 20px -10px rgb(0 0 0 / 0.7);
+    transition: box-shadow 200ms ease, border-color 200ms ease;
+}
+
+.ludo-seat.is-turn
+{
+    border-color: var(--ink);
+    box-shadow: 0 0 0 1px var(--ink), 0 0 22px -4px var(--ink), 0 8px 20px -10px rgb(0 0 0 / 0.7);
+}
+
+.ludo-pip
+{
+    inline-size: 0.7rem;
+    block-size: 0.7rem;
+    border-radius: 999px;
+    border: 2px solid color-mix(in oklab, var(--ink) 75%, transparent);
+}
+
+.ludo-pip[data-home='true']
+{
+    border-color: var(--ink);
+    background: var(--ink);
+    box-shadow: 0 0 6px -1px var(--ink);
+}
+
 .board-arena
 {
-    position: relative;
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-areas: 'top-left top-right' 'stage stage' 'bottom-left bottom-right';
     gap: 0.75rem;
-    container-type: inline-size;
 }
 
 .board-arena > .board-stage
+{
+    grid-area: stage;
+}
+
+.board-seat
+{
+    min-inline-size: 0;
+}
+
+.board-seat[data-corner='top-left']     { grid-area: top-left; }
+.board-seat[data-corner='top-right']    { grid-area: top-right; }
+.board-seat[data-corner='bottom-left']  { grid-area: bottom-left; }
+.board-seat[data-corner='bottom-right'] { grid-area: bottom-right; }
+
+@container (min-width: 46rem)
+{
+    .board-arena
+    {
+        grid-template-columns: minmax(8rem, 10.5rem) minmax(0, 1fr) minmax(8rem, 10.5rem);
+        grid-template-rows: auto 1fr auto;
+        grid-template-areas:
+            'top-left stage top-right'
+            '. stage .'
+            'bottom-left stage bottom-right';
+        align-items: start;
+    }
+
+    .board-seat[data-corner^='bottom']
+    {
+        align-self: end;
+    }
+
+    .board-seat .ludo-seat
+    {
+        flex-wrap: wrap;
+    }
+}
+
+.board-stage
 {
     grid-column: 1 / -1;
 }
@@ -639,68 +712,356 @@
 
 .card-face
 {
-    --card-w: 3.25rem;
-    --card-h: calc(var(--card-w) * 288 / 204);
+    --card-h: calc(var(--card-w, 3.25rem) * 288 / 204);
 
     display: block;
     flex: none;
-    inline-size: var(--card-w);
+    inline-size: var(--card-w, 3.25rem);
     block-size: var(--card-h);
 
-    background-image: url('/board/deck-1989.webp');
+    background-image: url('/board/deck.svg');
     background-repeat: no-repeat;
-    background-size: calc(var(--card-w) * 13) calc(var(--card-h) * 4);
-    background-position: calc(var(--at-rank) * var(--card-w) * -1) calc(var(--at-suit) * var(--card-h) * -1);
+    background-size: calc(var(--card-w, 3.25rem) * 13) calc(var(--card-h) * 4);
+    background-position: calc(var(--at-rank) * var(--card-w, 3.25rem) * -1) calc(var(--at-suit) * var(--card-h) * -1);
 
-    border-radius: calc(var(--card-w) * 0.09);
+    border-radius: calc(var(--card-w, 3.25rem) * 0.08);
 
-    box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.20), 0 1px 2px rgb(0 0 0 / 0.28);
+    box-shadow: inset 0 0 0 1px rgb(15 23 42 / 0.18), 0 1px 2px rgb(0 0 0 / 0.3), 0 4px 10px -4px rgb(0 0 0 / 0.45);
 }
 
-.card-hold:enabled:hover .card-face
+.card-back
 {
-    translate: 0 -0.25rem;
+    display: block;
+    inline-size: var(--back-w);
+    block-size: calc(var(--back-w) * 288 / 204);
+    background: url('/board/card-back.svg') center / 100% 100% no-repeat;
+    border-radius: calc(var(--back-w) * 0.08);
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.45);
 }
 
-.card-hold:disabled .card-face
+.hokm-arena
 {
-    filter: saturate(0.25) brightness(0.62);
+    display: grid;
+    gap: 0.75rem;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: 'table' 'play' 'side';
 }
 
-.card-table
+.hokm-arena > .hokm-table
 {
+    grid-area: table;
+}
+
+.hokm-arena > .hokm-play
+{
+    grid-area: play;
+}
+
+.hokm-arena > .hokm-side
+{
+    grid-area: side;
+}
+
+.hokm-table
+{
+    direction: ltr;
+
     position: relative;
-    inline-size: min(100%, 18rem);
-    margin-inline: auto;
-    aspect-ratio: 1;
-    background-image: url('/board/card-table-1024.webp');
-    background-size: 100% 100%;
-    background-repeat: no-repeat;
+    container-type: size;
+    inline-size: 100%;
+    aspect-ratio: 1000 / 1200;
+    background: url('/board/hokm-table-tall.svg') center / 100% 100% no-repeat;
 }
 
-.card-played
+.hokm-side
+{
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem;
+}
+
+.hokm-side > :last-child
+{
+    grid-column: 1 / -1;
+}
+
+@container (min-width: 36rem)
+{
+    .hokm-table
+    {
+        aspect-ratio: 1600 / 1000;
+        background-image: url('/board/hokm-table-wide.svg');
+    }
+
+    .hokm-side
+    {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .hokm-side > :last-child
+    {
+        grid-column: auto;
+    }
+
+    .hokm-seat[data-side='left'],
+    .hokm-seat[data-side='right']
+    {
+        top: 50%;
+    }
+}
+
+@container (min-width: 44rem)
+{
+    .hokm-arena
+    {
+        grid-template-columns: minmax(0, 1fr) 12.5rem;
+        grid-template-areas: 'table side' 'play side';
+        align-items: start;
+    }
+
+    .hokm-side
+    {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .hokm-side > :last-child
+    {
+        grid-column: auto;
+    }
+}
+
+.hokm-tile
+{
+    display: flex;
+    min-inline-size: 0;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.75rem;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-panel);
+    background: var(--field);
+}
+
+.hokm-seat
 {
     position: absolute;
-    left: calc(var(--at-x) * 100%);
-    top: calc(var(--at-y) * 100%);
-    translate: -50% -50%;
-    rotate: var(--at-tilt);
-
+    z-index: 2;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 0.25rem;
+    gap: 0.35rem;
+    max-inline-size: 44%;
 
-    --card-w: 4rem;
-
-    filter: drop-shadow(0 2px 3px rgb(0 0 0 / 0.45));
+    --back-w: clamp(0.85rem, 4.6cqmin, 1.9rem);
 }
 
-.card-played[data-took='true']
+.hokm-seat[data-side='top']
 {
+    left: 50%;
+    top: 4%;
+    translate: -50% 0;
+}
+
+.hokm-seat[data-side='bottom']
+{
+    left: 50%;
+    bottom: 4%;
+    translate: -50% 0;
+}
+
+.hokm-seat[data-side='left'],
+.hokm-seat[data-side='top-left']
+{
+    left: 3.5%;
+    align-items: flex-start;
+}
+
+.hokm-seat[data-side='right'],
+.hokm-seat[data-side='top-right']
+{
+    right: 3.5%;
+    align-items: flex-end;
+}
+
+.hokm-seat[data-side='left'],
+.hokm-seat[data-side='right']
+{
+    top: 31%;
+    translate: 0 -50%;
+}
+
+.hokm-seat[data-side='top-left'],
+.hokm-seat[data-side='top-right']
+{
+    top: 17%;
+}
+
+.hokm-plate
+{
+    display: flex;
+    min-inline-size: 0;
+    max-inline-size: 100%;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.3rem 0.6rem 0.3rem 0.3rem;
+    border: 1px solid rgb(255 255 255 / 0.12);
+    border-radius: 999px;
+    background: color-mix(in oklab, var(--void) 82%, transparent);
+    box-shadow: 0 6px 16px -6px rgb(0 0 0 / 0.6);
+    backdrop-filter: blur(6px);
+    transition: box-shadow 200ms ease, border-color 200ms ease;
+}
+
+.hokm-plate.is-turn
+{
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent), 0 0 18px -2px color-mix(in oklab, var(--accent) 70%, transparent);
+}
+
+.hokm-pile
+{
+    position: relative;
+    display: block;
+    block-size: calc(var(--back-w) * 288 / 204);
+    inline-size: min(calc(var(--back-w) + (var(--n) - 1) * var(--back-w) * 0.42), 34cqw);
+}
+
+.hokm-pile > .card-back
+{
+    position: absolute;
+    top: 0;
+    left: calc((100% - var(--back-w)) * var(--i) / max(1, var(--n) - 1));
+}
+
+.hokm-centre
+{
+    position: absolute;
+    inset: 0;
+    margin: auto;
+    inline-size: 40cqmin;
+    block-size: 40cqmin;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.1rem;
+    color: #F5E6B8;
+    text-align: center;
+    text-shadow: 0 1px 2px rgb(0 0 0 / 0.5);
+    pointer-events: none;
+}
+
+.hokm-trick
+{
+    --card-w: clamp(2.6rem, 12cqmin, 4.75rem);
+
+    position: absolute;
     z-index: 1;
+    left: calc(50% + var(--dx) * clamp(2.6rem, 13cqmin, 6.5rem));
+    top: calc(50% + var(--dy) * clamp(2.9rem, 15cqmin, 7rem));
+    translate: -50% -50%;
+    rotate: var(--tilt);
+    filter: drop-shadow(0 3px 5px rgb(0 0 0 / 0.45));
+    animation: hokm-lay 260ms var(--ease-ui, ease) both;
+}
+
+.hokm-trick[data-took='true']
+{
+    z-index: 3;
     rotate: 0deg;
-    filter: drop-shadow(0 3px 6px rgb(0 0 0 / 0.55));
+    filter: drop-shadow(0 0 10px rgb(245 158 11 / 0.55)) drop-shadow(0 3px 6px rgb(0 0 0 / 0.55));
+}
+
+@keyframes hokm-lay
+{
+    from
+    {
+        opacity: 0;
+        translate: calc(-50% + var(--dx) * 2.5rem) calc(-50% + var(--dy) * 2.5rem);
+    }
+}
+
+.hokm-last
+{
+    --card-w: 2.3rem;
+
+    display: flex;
+    gap: 0.25rem;
+}
+
+.hokm-hand
+{
+    --card-w: clamp(3.2rem, 12.5cqi, 5.25rem);
+    --card-h: calc(var(--card-w) * 288 / 204);
+    --step: min(calc(var(--card-w) * 0.62), calc((100% - var(--card-w) - 1.25rem) / max(1, var(--n) - 1)));
+
+    position: relative;
+    block-size: calc(var(--card-h) + 1.6rem);
+    direction: ltr;
+}
+
+.hokm-hand > li
+{
+    position: absolute;
+    top: 0.9rem;
+    left: calc(50% - var(--card-w) / 2 + (var(--i) - (var(--n) - 1) / 2) * var(--step));
+    z-index: calc(var(--i) + 1);
+    rotate: calc(var(--t) * 6deg);
+    translate: 0 calc(var(--t) * var(--t) * 0.5rem);
+    transform-origin: 50% 140%;
+}
+
+.hokm-hand > li:hover,
+.hokm-hand > li:focus-within
+{
+    z-index: 40;
+}
+
+.card-hold
+{
+    display: block;
+    border-radius: calc(var(--card-w) * 0.08);
+    cursor: pointer;
+}
+
+.card-hold .card-face
+{
+    transition: translate 160ms var(--ease-ui, ease), filter 160ms ease, box-shadow 160ms ease;
+}
+
+.card-hold:disabled
+{
+    cursor: default;
+}
+
+.card-hold[data-legal='true'] .card-face
+{
+    translate: 0 -0.55rem;
+    box-shadow: 0 0 0 2px var(--accent), 0 8px 18px -6px rgb(0 0 0 / 0.6);
+}
+
+.card-hold:enabled:hover .card-face,
+.card-hold:focus-visible .card-face
+{
+    translate: 0 -0.9rem;
+}
+
+.card-hold[data-legal='false'] .card-face
+{
+    filter: saturate(0.3) brightness(0.6);
+}
+
+@media (prefers-reduced-motion: reduce)
+{
+    .hokm-trick
+    {
+        animation: none;
+    }
+
+    .card-hold .card-face
+    {
+        transition: none;
+    }
 }
 
 .board-plate
@@ -711,7 +1072,7 @@
     container-type: inline-size;
     inline-size: 100%;
     block-size: 100%;
-    background-image: url('/board/ludo-plate-1024.webp');
+    background-image: url('/board/ludo-board.svg');
     background-size: 100% 100%;
     background-repeat: no-repeat;
     border-radius: var(--radius-panel);
@@ -727,26 +1088,38 @@
     inset-inline-start: calc(var(--rim) + var(--at-col) * var(--cell) + var(--cell) * 0.10);
     inset-block-start: calc(var(--rim) + var(--at-row) * var(--cell) + var(--cell) * 0.10);
 
+    z-index: calc(var(--at-row) * 10);
+
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: center;
 
-    border-radius: 50%;
-    background:
-        radial-gradient(circle at 34% 28%, color-mix(in oklab, white 62%, var(--ink)) 0%, var(--ink) 58%),
-        var(--ink);
-    box-shadow:
-        inset 0 0 0 1px color-mix(in oklab, black 26%, transparent),
-        0 1px 2px color-mix(in oklab, black 42%, transparent),
-        0 3px 6px -2px color-mix(in oklab, black 34%, transparent);
-
     color: white;
-    font-size: clamp(6px, 1.9cqi, 13px);
-    font-weight: 700;
+    font-size: clamp(6px, 1.5cqi, 12px);
+    font-weight: 800;
     line-height: 1;
-    text-shadow: 0 1px 1px color-mix(in oklab, black 55%, transparent);
+    text-shadow: 0 0 2px var(--void), 0 1px 1px var(--void);
     transition: inset-inline-start var(--duration-ui, 180ms) var(--ease-ui, ease),
                 inset-block-start var(--duration-ui, 180ms) var(--ease-ui, ease);
+}
+
+.board-token::before
+{
+    content: '';
+    position: absolute;
+    z-index: -1;
+    inset-inline-start: -15%;
+    inset-block-start: -77.9%;
+    inline-size: 130%;
+    block-size: 156%;
+    background: var(--pawn) center / 100% 100% no-repeat;
+}
+
+.board-token > span
+{
+    position: absolute;
+    inset-block-start: -35%;
+    translate: 0 -50%;
 }
 
 @media (prefers-reduced-motion: reduce)

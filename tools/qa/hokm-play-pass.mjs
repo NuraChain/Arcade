@@ -138,7 +138,7 @@ const pressable = async (page, name) =>
 /**
  * How wide the image behind an element really is, once the browser has fetched it.
  *
- * `card-table-1024.webp` and `deck-1989.webp` are two files that can 404 leaving a table with no
+ * `hokm-table-*.svg` and `deck.svg` are files that can 404 leaving a table with no
  * cloth and a hand of blank rectangles, each with a perfect accessible name - which every other gate
  * in this repository passes. A missing background image is not an error in the DOM, so the only way
  * to know is to fetch it again and read what came back.
@@ -173,7 +173,7 @@ const hand = (page) => page.evaluate(() =>
 
 /** What is lying on the felt, in the order the wire sent it. */
 const table = (page) => page.evaluate(() =>
-    [...document.querySelectorAll('main .card-played')]
+    [...document.querySelectorAll('main .hokm-trick .card-face')]
         .map((one) => one.style.getPropertyValue('--at-rank') + ':' + one.style.getPropertyValue('--at-suit')));
 
 const dana = await seat(SEATS[0]);
@@ -245,7 +245,7 @@ try
         await mina.page.waitForTimeout(SETTLE_MS);
 
         record('the other browser is shown the felt without pressing anything',
-            await loaded(mina.page, '.card-table') > 0);
+            await loaded(mina.page, '.hokm-table') > 0);
     }
 
     // ---------------------------------------------------------------- 3. trump, by the one seat
@@ -339,7 +339,7 @@ try
              */
             if (playable.length < held.length) { followed += 1; }
 
-            const before = await watcher.page.evaluate(() => document.querySelectorAll('main .card-played').length);
+            const before = await watcher.page.evaluate(() => document.querySelectorAll('main .hokm-trick').length);
 
             await mover.page.getByRole('button', { name: playable[0].says }).first().click();
             await mover.page.waitForTimeout(SETTLE_MS);

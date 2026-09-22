@@ -40,8 +40,8 @@ const SCENES: Record<string, () => Promise<Scene>> = {
         const { createLudoBoard } = await import('./board/ludo-board.ts');
 
         return {
-            plate: '/board/ludo-plate-1024.webp',
-            open: (options) => createLudoBoard({ ...options, plate: '/board/ludo-plate-1024.webp' })
+            plate: '/board/ludo-board.svg',
+            open: (options) => createLudoBoard({ ...options, plate: '/board/ludo-board.svg' })
         };
     }
 };
