@@ -1,16 +1,15 @@
 import type { GameId } from '../../data/games.ts';
-import { useHead, useNavigate } from 'azerothjs';
+import { useHead, useNavigate, useQuery } from 'azerothjs';
 
 import Page from '../../components/app/page.component.azeroth';
 import { gameNameOf, groupNameOf, titleOf } from '../../components/chat/chat-title.ts';
 import GameIcon from '../../components/games/game-icon.component.azeroth';
 import FriendRow from '../../components/social/friend-row.component.azeroth';
 import GroupCard from '../../components/social/group-card.component.azeroth';
-import Chip from '../../components/ui/chip.component.azeroth';
+import FilterBar from '../../components/ui/filter-bar.component.azeroth';
 import EmptyState from '../../components/ui/empty-state.component.azeroth';
 import IconButton from '../../components/ui/icon-button.component.azeroth';
 import Pagination from '../../components/ui/pagination.component.azeroth';
-import Rail from '../../components/ui/rail.component.azeroth';
 import SearchInput from '../../components/ui/search-input.component.azeroth';
 import SectionHeading from '../../components/ui/section-heading.component.azeroth';
 import type { Conversation } from '../../data/chat.ts';
@@ -55,9 +54,18 @@ export default component SearchPage()
     const people = usePeople();
     const { navigate } = useNavigate();
 
+    const asked = useQuery();
+
     mount
     {
         social.want('people');
+
+        const term = asked().q;
+
+        if (typeof term === 'string' && term.trim() !== '')
+        {
+            search.setQuery(term);
+        }
     }
 
     useHead({ title: () => locale.t('app.nav.search') });
@@ -98,15 +106,13 @@ export default component SearchPage()
             />
         </header>
 
-        <Rail label={ locale.t('search.scope.all') } bleed class="mb-5">
-            <For each={ SEARCH_SCOPES } key={ (scope) => scope } let={ scope }>
-                <div class="shrink-0 snap-start">
-                    <Chip selected={ search.scope() === scope } onClick={ () => search.setScope(scope as SearchScope) }>
-                        { locale.t(`search.scope.${ scope }`) }
-                    </Chip>
-                </div>
-            </For>
-        </Rail>
+        <FilterBar
+            label={ locale.t('search.scope.all') }
+            class="mb-5"
+            value={ search.scope() }
+            onChange={ (id) => search.setScope(id as SearchScope) }
+            items={ SEARCH_SCOPES.map((scope) => ({ id: scope, label: locale.t(`search.scope.${ scope }`) })) }
+        />
 
         <Show
             when={ query.trim() !== '' }

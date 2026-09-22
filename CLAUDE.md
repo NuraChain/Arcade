@@ -3109,6 +3109,14 @@ landing-page concern, not an app one. Everything else starts in the shell, in th
 `effect` — that forms a cycle and the scheduler gives up with "Reactive flush did not settle".
 Use the updater form (`setX((current) => …)`, which does not subscribe) or `untrack`.
 
+**Three list controls, one each.** `FilterBar` is a single-select row of chips over `Rail`, with an
+optional count on each - the games page counts its categories, the search page names its scopes.
+`Pagination` numbers pages from `@md` of its own width and says "4 of 12" below it, because a row of
+seven 44px targets does not fit a phone; its range is a sentence, so it carries no `tally` - forced
+left to right, the Persian "۱ تا ۱۰ از ۴۰" read backwards. `LoadMore` is the keyset lists' button -
+notifications, match history, the leaderboard - which used to be three differently sized buttons
+written three times.
+
 **Primitives** live in `components/ui/`. `Tooltip` wraps every `IconButton` automatically, so an
 icon-only control has a visible name on a mouse and a long-press name on a finger; it portals to
 `.anchor-root` and must never go through the overlay stack, whose `blocking()` drives `inert`.

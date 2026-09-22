@@ -51,6 +51,7 @@ export const app = {
     'page.range': '{from}–{to} of {total}',
     'page.previous': 'Previous page',
     'page.next': 'Next page',
+    'page.of': '{page} of {pages}',
     'page.go': 'Page {page}',
     'page.more': 'Show {count} more',
 

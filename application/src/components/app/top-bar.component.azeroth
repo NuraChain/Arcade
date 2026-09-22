@@ -63,7 +63,8 @@ export default component TopBar()
                     <div class="flex min-w-0 flex-1 justify-center">
                         <Link to="/app/search" class="flex h-10 w-full max-w-[30rem] items-center gap-2.5 rounded-full border border-line bg-sunk px-4 text-ui-sm text-faint transition-colors duration-150 hover:border-line-strong hover:text-muted coarse:h-11">
                             <Icon name="search" size={ 16 } class="shrink-0" />
-                            <span class="truncate">{ locale.t('app.search.placeholder') }</span>
+                            <span class="min-w-0 flex-1 truncate">{ locale.t('app.search.placeholder') }</span>
+                            <kbd class="shrink-0 rounded-[0.3rem] border border-line bg-field px-1.5 font-ui text-ui-2xs font-semibold text-faint" aria-hidden="true">/</kbd>
                         </Link>
                     </div>
                 }

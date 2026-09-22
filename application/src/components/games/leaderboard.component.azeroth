@@ -1,3 +1,4 @@
+import LoadMore from '../ui/load-more.component.azeroth';
 import { createResource } from 'azerothjs';
 
 import Button from '../ui/button.component.azeroth';
@@ -163,11 +164,7 @@ export default component Leaderboard(props: { game: GameId; titled?: boolean })
 
                     <Show when={ nextFrom !== undefined }>
                         { () =>
-                            <div class="mt-2 flex justify-center">
-                                <Button variant="outline" size="sm" loading={ paging } onClick={ () => void more() }>
-                                    { locale.t('board.more') }
-                                </Button>
-                            </div>
+                            <LoadMore label={ locale.t('board.more') } loading={ paging } onMore={ () => void more() } />
                         }
                     </Show>
                 </Panel>

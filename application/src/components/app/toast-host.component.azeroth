@@ -144,6 +144,7 @@ export default component ToastHost()
             <For each={ items } key={ (toast) => toast.id } let={ toast }>
                 <div
                     class="toast pointer-events-auto"
+                    data-kind={ toast.kind }
                     role={ toast.kind === 'error' ? 'alert' : 'status' }
                     aria-live={ toast.kind === 'error' ? 'assertive' : 'polite' }
                     ref={ (element) => element.style.setProperty('--swipe', '0px') }

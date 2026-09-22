@@ -2,8 +2,7 @@ import { useHead, useNavigate } from 'azerothjs';
 
 import Page from '../../components/app/page.component.azeroth';
 import GameGrid from '../../components/games/game-grid.component.azeroth';
-import Chip from '../../components/ui/chip.component.azeroth';
-import Rail from '../../components/ui/rail.component.azeroth';
+import FilterBar from '../../components/ui/filter-bar.component.azeroth';
 import type { GameCategory, GameId } from '../../data/games.ts';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useLobby } from '../../stores/lobby.store.ts';
@@ -46,11 +45,17 @@ export default component GamesPage()
             </p>
         </header>
 
-        <Rail label={ locale.t('games.filter.all') } bleed class="mb-5">
-            <Chip selected={ filter === 'all' } onClick={ () => filter = 'all' }>{ locale.t('games.filter.all') }</Chip>
-            <Chip icon="cards" selected={ filter === 'cards' } onClick={ () => filter = 'cards' }>{ locale.t('games.category.cards') }</Chip>
-            <Chip icon="dice" selected={ filter === 'board' } onClick={ () => filter = 'board' }>{ locale.t('games.category.board') }</Chip>
-        </Rail>
+        <FilterBar
+            label={ locale.t('games.filter.all') }
+            class="mb-5"
+            value={ filter }
+            onChange={ (id) => filter = id as 'all' | GameCategory }
+            items={ [
+                { id: 'all', label: locale.t('games.filter.all'), count: catalogue.games.length },
+                { id: 'cards', label: locale.t('games.category.cards'), icon: 'cards', count: catalogue.games.filter((game) => game.category === 'cards').length },
+                { id: 'board', label: locale.t('games.category.board'), icon: 'dice', count: catalogue.games.filter((game) => game.category === 'board').length }
+            ] }
+        />
 
         <GameGrid games={ games } detailed label={ locale.t('app.nav.games') } onQuickPlay={ quickPlay } />
     </Page>

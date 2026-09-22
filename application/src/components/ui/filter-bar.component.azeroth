@@ -1,0 +1,45 @@
+import Chip from './chip.component.azeroth';
+import Rail from './rail.component.azeroth';
+import type { IconName } from '../../icons/registry.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+
+export interface FilterItem
+{
+    id: string;
+    label: string;
+    icon?: IconName;
+    count?: number;
+}
+
+export default component FilterBar(props: {
+    items: FilterItem[];
+    value: string;
+    label: string;
+    class?: string;
+    onChange: (id: string) => void;
+})
+{
+    const locale = useLocale();
+
+    <Rail label={ props.label } bleed class={ props.class }>
+        <For each={ props.items } key={ (item) => item.id } let={ item }>
+            <div class="shrink-0 snap-start">
+                <Chip icon={ item.icon } selected={ props.value === item.id } onClick={ () => props.onChange(item.id) }>
+                    <span>{ item.label }</span>
+                    <Show when={ item.count !== undefined }>
+                        { () =>
+                            <span
+                                class={ () => [
+                                    'tally inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-ui-2xs font-bold',
+                                    props.value === item.id ? 'bg-accent/25 text-accent' : 'bg-raised text-muted'
+                                ].join(' ') }
+                            >
+                                { locale.n(item.count!) }
+                            </span>
+                        }
+                    </Show>
+                </Chip>
+            </div>
+        </For>
+    </Rail>
+}

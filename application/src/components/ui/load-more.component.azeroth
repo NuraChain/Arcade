@@ -1,0 +1,10 @@
+import Button from './button.component.azeroth';
+
+export default component LoadMore(props: { label: string; loading?: boolean; class?: string; onMore: () => void })
+{
+    <div class={ [ 'flex justify-center pt-3', props.class ?? '' ].filter(Boolean).join(' ') }>
+        <Button variant="outline" leading="chevron-down" loading={ props.loading === true } class="min-w-[12rem]" onClick={ props.onMore }>
+            { props.label }
+        </Button>
+    </div>
+}

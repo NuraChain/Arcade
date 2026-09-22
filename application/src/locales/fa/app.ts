@@ -54,6 +54,7 @@ export const app: Pick<Dictionary, keyof typeof reference> = {
     'page.range': '{from} تا {to} از {total}',
     'page.previous': 'صفحهٔ قبل',
     'page.next': 'صفحهٔ بعد',
+    'page.of': '{page} از {pages}',
     'page.go': 'صفحهٔ {page}',
     'page.more': 'نمایش {count} مورد دیگر',
 

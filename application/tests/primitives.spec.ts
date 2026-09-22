@@ -3,6 +3,8 @@ import { cleanup, fire, renderTest } from '@azerothjs/testing';
 
 import Avatar from '../src/components/ui/avatar.component.azeroth';
 import Badge from '../src/components/ui/badge.component.azeroth';
+import FilterBar from '../src/components/ui/filter-bar.component.azeroth';
+import LoadMore from '../src/components/ui/load-more.component.azeroth';
 import Pagination from '../src/components/ui/pagination.component.azeroth';
 import Slider from '../src/components/ui/slider.component.azeroth';
 import Tooltip from '../src/components/ui/tooltip.component.azeroth';
@@ -335,6 +337,74 @@ describe('Pagination', () =>
         expect(button.textContent).toContain('32');
         fire(button, 'click');
         expect(onPage).toHaveBeenCalledWith(2);
+    });
+    it('says which page of how many on a narrow column, where a row of numbers does not fit', async () =>
+    {
+        const { container } = renderTest(() => Pagination({ total: 120, size: 10, page: 4, label: 'Pages', onPage: noop }) as Rendered);
+        await settle();
+
+        const compact = container.querySelector('li[aria-hidden="true"]');
+        expect(compact?.textContent?.trim()).toBe('4 of 12');
+        expect([...container.querySelectorAll('li.hidden')].length).toBeGreaterThan(0);
+    });
+
+    it('writes the range as a sentence rather than forcing it left to right', async () =>
+    {
+        useLocale().setLocale('fa');
+        const { container } = renderTest(() => Pagination({ total: 40, size: 10, page: 2, label: 'Pages', onPage: noop }) as Rendered);
+        await settle();
+
+        const range = container.querySelector('nav > p');
+        expect(range?.classList.contains('tally')).toBe(false);
+        expect(range?.textContent).toContain('از');
+        useLocale().setLocale('en');
+    });
+});
+
+describe('FilterBar', () =>
+{
+    it('marks the chosen filter, counts each one, and says which was pressed', async () =>
+    {
+        const onChange = vi.fn();
+        const { container } = renderTest(() => FilterBar({
+            label: 'Games',
+            value: 'cards',
+            onChange,
+            items: [
+                { id: 'all', label: 'All', count: 4 },
+                { id: 'cards', label: 'Cards', count: 2 },
+                { id: 'board', label: 'Board' }
+            ]
+        }) as Rendered);
+        await settle();
+
+        const chips = [...container.querySelectorAll('button[aria-pressed]')] as HTMLButtonElement[];
+        expect(chips.map((chip) => chip.getAttribute('aria-pressed'))).toEqual(['false', 'true', 'false']);
+        expect(chips[0].textContent).toContain('4');
+        expect(chips[2].querySelector('.tally')).toBeNull();
+
+        fire(chips[2], 'click');
+        expect(onChange).toHaveBeenCalledWith('board');
+    });
+});
+
+describe('LoadMore', () =>
+{
+    it('asks for more on press and holds still while it is loading', async () =>
+    {
+        const onMore = vi.fn();
+        const { container } = renderTest(() => LoadMore({ label: 'Show more', onMore }) as Rendered);
+        await settle();
+
+        const button = container.querySelector('button') as HTMLButtonElement;
+        expect(button.textContent).toContain('Show more');
+        fire(button, 'click');
+        expect(onMore).toHaveBeenCalledTimes(1);
+        cleanup();
+
+        const busy = renderTest(() => LoadMore({ label: 'Show more', loading: true, onMore }) as Rendered);
+        await settle();
+        expect((busy.container.querySelector('button') as HTMLButtonElement).disabled).toBe(true);
     });
 });
 

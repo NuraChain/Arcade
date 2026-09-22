@@ -1,3 +1,4 @@
+import LoadMore from '../ui/load-more.component.azeroth';
 import AchievementTile from './achievement-tile.component.azeroth';
 import GameIcon from '../games/game-icon.component.azeroth';
 import Icon from '../../icons/icon.component.azeroth';
@@ -197,11 +198,7 @@ export default component PersonRecord(props: { handle: string; history?: boolean
 
                     <Show when={ record.hasMore() && record.history().length > 0 }>
                         { () =>
-                            <div class="mt-3 flex justify-center">
-                                <Button variant="outline" size="sm" loading={ record.historyLoading() } onClick={ () => void record.more() }>
-                                    { locale.t('history.more') }
-                                </Button>
-                            </div>
+                            <LoadMore label={ locale.t('history.more') } loading={ record.historyLoading() } onMore={ () => void record.more() } />
                         }
                     </Show>
                 </section>

@@ -26,8 +26,8 @@ export default component Pagination(props: {
         <Show
             when={ props.mode === 'more' }
             fallback={
-                <nav class={ [ 'flex flex-wrap items-center justify-between gap-3 pt-3', props.class ?? '' ].filter(Boolean).join(' ') } aria-label={ props.label }>
-                    <p class="tally text-ui-xs text-faint">
+                <nav class={ [ '@container flex flex-wrap items-center justify-between gap-3 pt-3', props.class ?? '' ].filter(Boolean).join(' ') } aria-label={ props.label }>
+                    <p class="text-ui-xs text-faint">
                         { locale.t('page.range', { from: locale.n(view.from), to: locale.n(view.to), total: locale.n(view.total) }) }
                     </p>
                     <ul class="flex items-center gap-1">
@@ -42,8 +42,11 @@ export default component Pagination(props: {
                                 <Icon name="chevron-right" size={ 17 } class="icon-flip rotate-180" />
                             </button>
                         </li>
+                        <li class="flex h-9 items-center px-2 text-ui-sm font-semibold text-text coarse:h-11 @md:hidden" aria-hidden="true">
+                            { locale.t('page.of', { page: locale.n(view.page), pages: locale.n(view.pages) }) }
+                        </li>
                         <For each={ view.items } key={ (item, index) => `${ item }-${ index }` } let={ item }>
-                            <li>
+                            <li class="hidden @md:block">
                                 <Show
                                     when={ item === 'gap' }
                                     fallback={

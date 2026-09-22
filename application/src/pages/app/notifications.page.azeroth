@@ -1,3 +1,4 @@
+import LoadMore from '../../components/ui/load-more.component.azeroth';
 import { useHead, useNavigate } from 'azerothjs';
 
 import Page from '../../components/app/page.component.azeroth';
@@ -86,14 +87,7 @@ export default component NotificationsPage()
                             </ul>
                             <Show when={ notifications.hasMore() }>
                                 { () =>
-                                    <Button
-                                        variant="ghost"
-                                        block
-                                        class="mt-2"
-                                        onClick={ () => void notifications.more() }
-                                    >
-                                        { locale.t('common.more') }
-                                    </Button>
+                                    <LoadMore label={ locale.t('common.more') } onMore={ () => void notifications.more() } />
                                 }
                             </Show>
                         </section>
