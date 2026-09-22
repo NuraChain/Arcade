@@ -382,6 +382,12 @@ gets its own brainstorm → spec → plan before any code:
 - the profile's Games and Achievements tabs group by game
 - every figure has a producer before it has a tile - the rule that deleted the invented stats
 
+**Done 2026-09-23** (`3439406`). Four achievements each for Ludo and Hokm beside the nine shared
+ones, awarded from each game's own tallies. One deviation, argued in CLAUDE.md: the game is not a
+column on the definition but a field of the RULE that awards it (`ACHIEVEMENT_GAME`), so the two
+cannot disagree. Rules answer progress (have/need); unearned tiles draw a bar. The game page shows
+the reader's record and achievements for that game; the profile groups by game.
+
 ### Task 16 (straight after the pages): every asset redrawn to the same standard
 
 Asked for on 2026-09-22: "Redesign all assets ... create wonderful best assets high quality for this
@@ -415,6 +421,14 @@ point):
 - the Ludo plate keeps `game/layout.ts`'s fractions; pawns become sprites the Phaser scene loads
   instead of flat discs; the card faces keep the sheet's grid (column `card % 13`, row `card / 13`)
 
+**Done 2026-09-23** (`e1a5c04`, `0ef61d9`). Vector Ludo board and pawn sprites drawn from the rules'
+own geometry; a walnut-and-baize Hokm table in a wide and a tall cut; a 52-face deck and a back; seat
+plates, card-back piles, the trick laid toward each player, trump / score / last-trick tiles, a
+fanned hand with Sort. Ludo seat panels sit at the board's corners in their colour with the die in
+the active one. Logo, favicon set, app icon, manifest and share image; medals for achievements; an
+illustration on every empty state. Group crests stay icon-on-hue - they were already drawn from the
+icon set, not from an image. The round number is not shown: nothing on the wire counts hands played.
+
 ### Task 17: play at several tables at once
 
 Asked for on 2026-09-22: "user can play multi tables". A person can already hold chairs at several
@@ -428,6 +442,10 @@ PLAYING them together:
 - the realtime `game` doorbell already rings per match, so a move at another table updates its mark
 - a spec and plan first: it changes a wire shape (`tableSummary`) and the play screen's model
 
+**Done 2026-09-23** (`8f5266b`). `yourTurn` on every seated table with a live match, decided by the
+engine in one read; a header on the play screen with the reader's other tables as links; the Games
+nav item counts the tables waiting. Switching tables re-opens the table and its chat.
+
 ### Task 18 (last): the component kit, finished
 
 Asked for on 2026-09-22: "tooltip toast badge best powerful pagination mobile design first then for
@@ -438,3 +456,10 @@ all devices ... search filters and etc.. reusable complete component". After eve
 - mobile first, then every width; 44px targets on coarse pointers; RTL; keyboard; reduced motion
 - one component per job with a spec for each, and every page moved onto them so no page spells its
   own version
+
+**Done 2026-09-23** (`969c261`). FilterBar (chips with counts over the scrolling Rail), LoadMore for
+the keyset lists, Pagination compact on a phone ("4 of 12") with its range no longer forced LTR, a
+toast stripe per kind, the search page reading `?q=` and the / shortcut shown on the search pill.
+Not built, deliberately: a debounce on SearchInput (search runs in memory over what this browser
+holds, so there is no request to save) and a filter SHEET on phones (every filter set in the product
+is three to five chips, which a scrolling row carries without hiding any).
