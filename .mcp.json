@@ -13,6 +13,12 @@
         "context7": {
             "type": "http",
             "url": "https://mcp.context7.com/mcp"
+        },
+        "ui-ux-suite": {
+            "type": "stdio",
+            "command": "npx",
+            "args": ["-y", "ui-ux-suite@0.6.1", "--mcp"],
+            "env": {}
         }
     }
 }
