@@ -30,7 +30,7 @@ import { damping } from '../camera/path.ts';
 import type { MaterialSet } from '../render/materials.ts';
 import type { QualitySettings } from '../quality/tiers.ts';
 import { createLamp, type Lamp } from './lamps.ts';
-import { createBridge, createSlab, repaintGeometry } from './procedural.ts';
+import { createBridge, createSlab } from './procedural.ts';
 
 export interface Market
 {
@@ -39,7 +39,6 @@ export interface Market
     proxies: Mesh[];
 
     setFocus(id: GameId | null): void;
-    relight(lamp: Color, stone: Color): void;
     applyTier(settings: QualitySettings): void;
     update(time: number, deltaMs: number, focus: Vector3): void;
     dispose(): void;
@@ -128,7 +127,6 @@ export function createMarket(options: MarketOptions): Market
     const stations: Station[] = [];
     const proxies: Mesh[] = [];
     const disposables: BufferGeometry[] = [];
-    const tinted: BufferGeometry[] = [];
 
     const proxyMaterial = new MeshBasicMaterial({ visible: false });
 
@@ -161,7 +159,6 @@ export function createMarket(options: MarketOptions): Market
         freeze(slab);
         root.add(slab);
         disposables.push(slabGeometry);
-        tinted.push(slabGeometry);
 
         let surface = top;
         if (setName !== undefined && options.assets.library[setName] !== undefined)
@@ -248,7 +245,6 @@ export function createMarket(options: MarketOptions): Market
         freeze(bridge);
         root.add(bridge);
         disposables.push(geometry);
-        tinted.push(geometry);
     }
 
     const arena = new Vector3(...ARENA_ANCHOR);
@@ -258,7 +254,6 @@ export function createMarket(options: MarketOptions): Market
     freeze(arenaSlab);
     root.add(arenaSlab);
     disposables.push(arenaSlabGeometry);
-    tinted.push(arenaSlabGeometry);
 
     const trophy = options.assets.get('trophy').clone(true);
     trophy.position.set(arena.x, arena.y, arena.z);
@@ -395,22 +390,6 @@ export function createMarket(options: MarketOptions): Market
             for (const station of stations)
             {
                 station.lamp.setFocus(station.id === id);
-            }
-        },
-
-        relight(lamp, stone)
-        {
-            for (const geometry of tinted)
-            {
-                repaintGeometry(geometry, stone);
-            }
-            for (const station of stations)
-            {
-                station.lamp.setColour(lamp);
-            }
-            for (const beam of beams)
-            {
-                beam.light.color.copy(lamp);
             }
         },
 

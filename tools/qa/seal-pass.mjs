@@ -60,18 +60,17 @@ const browser = await chromium.launch(executablePath === undefined ? {} : { exec
 
 const problems = [];
 
-async function open(size, theme, locale)
+async function open(size, locale)
 {
     const context = await browser.newContext({
         viewport: { width: size.width, height: size.height },
         locale: locale === 'fa' ? 'fa-IR' : 'en-US'
     });
 
-    await context.addInitScript(([themeName, localeName]) =>
+    await context.addInitScript((localeName) =>
     {
         try
         {
-            localStorage.setItem('nura-games.theme', themeName);
             localStorage.setItem('nura-games.locale', localeName);
         }
         catch
@@ -116,7 +115,7 @@ async function open(size, theme, locale)
 
         window.addEventListener('eip6963:requestProvider', announce);
         announce();
-    }, [theme, locale]);
+    }, locale);
 
     await context.addInitScript((address) => { window.__walletAddress = address; }, wallet.address);
     await context.exposeFunction('__walletSign', (message) => wallet.signMessage({ message }));
@@ -139,165 +138,162 @@ async function open(size, theme, locale)
     return { context, page, console_, failures };
 }
 
-const label = (size, theme, locale) => `${ size.name } ${ theme } ${ locale }`;
+const label = (size, locale) => `${ size.name } ${ locale }`;
 
 for (const size of SIZES)
 {
-    for (const theme of ['dark', 'light'])
+    for (const locale of ['en', 'fa'])
     {
-        for (const locale of ['en', 'fa'])
+        const where = label(size, locale);
+        emptyTheAccount();
+        const { context, page, console_, failures } = await open(size, locale);
+
+        // ---------------------------------------------------------- sign in
+        await page.goto(`${ BASE }/sign-in`, { waitUntil: 'networkidle' });
+
+        await page.getByRole('button', { name: /^(Connect|اتصال)/ }).first().click();
+        await page.waitForURL(/\/app/, { timeout: 30_000 });
+
+        // ---------------------------------------------------------- enrol
+        await page.goto(`${ BASE }/app/me/devices`, { waitUntil: 'networkidle' });
+
+        const enrol = page.getByRole('button', { name: /Give this browser keys|کلید/i }).first();
+
+        if (await enrol.count() > 0)
         {
-            const where = label(size, theme, locale);
-            emptyTheAccount();
-            const { context, page, console_, failures } = await open(size, theme, locale);
+            await enrol.click();
+            await page.waitForTimeout(1500);
+        }
 
-            // ---------------------------------------------------------- sign in
-            await page.goto(`${ BASE }/sign-in`, { waitUntil: 'networkidle' });
+        // ---------------------------------------------------------- recovery
+        const makePhrase = page.getByRole('button', { name: /Make a recovery phrase|عبارت بازیابی بساز/ }).first();
 
-            await page.getByRole('button', { name: /^(Connect|اتصال)/ }).first().click();
-            await page.waitForURL(/\/app/, { timeout: 30_000 });
+        let phrase = '(none)';
 
-            // ---------------------------------------------------------- enrol
+        if (await makePhrase.count() > 0)
+        {
+            await makePhrase.click();
+
+            // PBKDF2 at 600,000 iterations, then a back-fill of everything this browser holds.
+            await page.waitForTimeout(4000);
+
+            const shown = page.locator('code.select-all').first();
+
+            if (await shown.count() > 0)
+            {
+                phrase = (await shown.evaluate((node) => node.textContent ?? '')).trim();
+                await page.getByRole('button', { name: /written it down|نوشتمش/ }).first().click();
+                await page.waitForTimeout(400);
+            }
+        }
+
+        /*
+         * Losing the browser, and getting back in with the phrase.
+         *
+         * Throwing the keyring away is exactly what losing a laptop looks like from the
+         * server's side: the account keeps its device row and its vault, and the browser comes
+         * back with nothing. The replacement enrols as a SECOND device, which arrives pending -
+         * and the only thing left that can confirm it is the phrase.
+         */
+        let recovered = '(not tried)';
+
+        if (phrase !== '(none)')
+        {
+            await page.evaluate(async () =>
+            {
+                await new Promise((resolve) =>
+                {
+                    const request = indexedDB.deleteDatabase('nura-keyring');
+                    request.onsuccess = resolve;
+                    request.onerror = resolve;
+                    request.onblocked = resolve;
+                });
+            });
+
             await page.goto(`${ BASE }/app/me/devices`, { waitUntil: 'networkidle' });
 
-            const enrol = page.getByRole('button', { name: /Give this browser keys|کلید/i }).first();
+            const again = page.getByRole('button', { name: /Give this browser keys|کلید/i }).first();
 
-            if (await enrol.count() > 0)
+
+
+            if (await again.count() > 0)
             {
-                await enrol.click();
-                await page.waitForTimeout(1500);
+                await again.click();
+                await page.waitForTimeout(3000);
             }
 
-            // ---------------------------------------------------------- recovery
-            const makePhrase = page.getByRole('button', { name: /Make a recovery phrase|عبارت بازیابی بساز/ }).first();
 
-            let phrase = '(none)';
 
-            if (await makePhrase.count() > 0)
+            const field = page.locator('#recovery-phrase');
+
+            if (await field.count() > 0)
             {
-                await makePhrase.click();
-
-                // PBKDF2 at 600,000 iterations, then a back-fill of everything this browser holds.
-                await page.waitForTimeout(4000);
-
-                const shown = page.locator('code.select-all').first();
-
-                if (await shown.count() > 0)
-                {
-                    phrase = (await shown.evaluate((node) => node.textContent ?? '')).trim();
-                    await page.getByRole('button', { name: /written it down|نوشتمش/ }).first().click();
-                    await page.waitForTimeout(400);
-                }
-            }
-
-            /*
-             * Losing the browser, and getting back in with the phrase.
-             *
-             * Throwing the keyring away is exactly what losing a laptop looks like from the
-             * server's side: the account keeps its device row and its vault, and the browser comes
-             * back with nothing. The replacement enrols as a SECOND device, which arrives pending -
-             * and the only thing left that can confirm it is the phrase.
-             */
-            let recovered = '(not tried)';
-
-            if (phrase !== '(none)')
-            {
-                await page.evaluate(async () =>
-                {
-                    await new Promise((resolve) =>
-                    {
-                        const request = indexedDB.deleteDatabase('nura-keyring');
-                        request.onsuccess = resolve;
-                        request.onerror = resolve;
-                        request.onblocked = resolve;
-                    });
-                });
-
+                await field.fill(phrase);
+                await page.getByRole('button', { name: /Confirm with the phrase|تأیید با عبارت/ }).first().click();
+                await page.waitForTimeout(8000);
                 await page.goto(`${ BASE }/app/me/devices`, { waitUntil: 'networkidle' });
-
-                const again = page.getByRole('button', { name: /Give this browser keys|کلید/i }).first();
-
-
-
-                if (await again.count() > 0)
-                {
-                    await again.click();
-                    await page.waitForTimeout(3000);
-                }
-
-
-
-                const field = page.locator('#recovery-phrase');
-
-                if (await field.count() > 0)
-                {
-                    await field.fill(phrase);
-                    await page.getByRole('button', { name: /Confirm with the phrase|تأیید با عبارت/ }).first().click();
-                    await page.waitForTimeout(8000);
-                    await page.goto(`${ BASE }/app/me/devices`, { waitUntil: 'networkidle' });
-                    await page.waitForTimeout(800);
-                }
-
-                const panel = await page.locator('main').innerText();
-
-                recovered = /This browser is set up|این مرورگر آماده است/.test(panel)
-                    ? 'confirmed'
-                    : 'STILL WAITING';
+                await page.waitForTimeout(800);
             }
 
-            const deviceState = await page.locator('main').innerText();
+            const panel = await page.locator('main').innerText();
 
-            // ---------------------------------------------------------- chat
-            await page.goto(`${ BASE }/app/chats`, { waitUntil: 'networkidle' });
-            await page.waitForTimeout(500);
-
-            const firstThread = page.locator('a[href^="/app/chats/"]').first();
-            let threadText = '(no thread)';
-            let sent = false;
-
-            if (await firstThread.count() > 0)
-            {
-                await firstThread.click();
-                await page.waitForTimeout(2500);
-
-                threadText = await page.locator('main').innerText();
-
-                const composer = page.locator('textarea, input[type="text"]').last();
-
-                if (await composer.count() > 0)
-                {
-                    const said = locale === 'fa' ? 'سلام از مرورگر' : 'hello from the browser';
-                    await composer.fill(said);
-
-                    await composer.press('Enter');
-                    await page.waitForTimeout(8000);
-
-                    const after = await page.locator('main').innerText();
-                    sent = after.includes(said);
-                }
-            }
-
-            const overflow = await page.evaluate(() =>
-                document.documentElement.scrollWidth > document.documentElement.clientWidth + 1);
-
-            console.log(`\n=== ${ where } ===`);
-            console.log('  devices panel :', deviceState.split('\n').filter(Boolean).slice(0, 4).join(' / ').slice(0, 160));
-            console.log('  phrase        :', phrase, phrase === '(none)' ? '' : `(${ phrase.replace(/-/g, '').length } symbols)`);
-            console.log('  recovered     :', recovered);
-            console.log('  seal line     :', (threadText.match(/.*(Only the devices|فقط دستگاه|not sealed|مهروموم نشده).*/i)?.[0] ?? '(none)').slice(0, 150));
-            console.log('  sent + read   :', sent);
-            console.log('  h-overflow    :', overflow);
-            console.log('  console errors:', console_.length, console_.slice(0, 3).join(' | ').slice(0, 200));
-
-            const goodPhrase = /^[0-9A-HJKMNP-TV-Z]{4}(-[0-9A-HJKMNP-TV-Z]{4}){5}$/.test(phrase);
-
-            if (!sent || overflow || console_.length > 0 || !goodPhrase || recovered !== 'confirmed')
-            {
-                problems.push(`${ where }: sent=${ sent } phrase=${ goodPhrase } recovered=${ recovered } overflow=${ overflow } console=${ console_.length }`);
-            }
-
-            await context.close();
+            recovered = /This browser is set up|این مرورگر آماده است/.test(panel)
+                ? 'confirmed'
+                : 'STILL WAITING';
         }
+
+        const deviceState = await page.locator('main').innerText();
+
+        // ---------------------------------------------------------- chat
+        await page.goto(`${ BASE }/app/chats`, { waitUntil: 'networkidle' });
+        await page.waitForTimeout(500);
+
+        const firstThread = page.locator('a[href^="/app/chats/"]').first();
+        let threadText = '(no thread)';
+        let sent = false;
+
+        if (await firstThread.count() > 0)
+        {
+            await firstThread.click();
+            await page.waitForTimeout(2500);
+
+            threadText = await page.locator('main').innerText();
+
+            const composer = page.locator('textarea, input[type="text"]').last();
+
+            if (await composer.count() > 0)
+            {
+                const said = locale === 'fa' ? 'سلام از مرورگر' : 'hello from the browser';
+                await composer.fill(said);
+
+                await composer.press('Enter');
+                await page.waitForTimeout(8000);
+
+                const after = await page.locator('main').innerText();
+                sent = after.includes(said);
+            }
+        }
+
+        const overflow = await page.evaluate(() =>
+            document.documentElement.scrollWidth > document.documentElement.clientWidth + 1);
+
+        console.log(`\n=== ${ where } ===`);
+        console.log('  devices panel :', deviceState.split('\n').filter(Boolean).slice(0, 4).join(' / ').slice(0, 160));
+        console.log('  phrase        :', phrase, phrase === '(none)' ? '' : `(${ phrase.replace(/-/g, '').length } symbols)`);
+        console.log('  recovered     :', recovered);
+        console.log('  seal line     :', (threadText.match(/.*(Only the devices|فقط دستگاه|not sealed|مهروموم نشده).*/i)?.[0] ?? '(none)').slice(0, 150));
+        console.log('  sent + read   :', sent);
+        console.log('  h-overflow    :', overflow);
+        console.log('  console errors:', console_.length, console_.slice(0, 3).join(' | ').slice(0, 200));
+
+        const goodPhrase = /^[0-9A-HJKMNP-TV-Z]{4}(-[0-9A-HJKMNP-TV-Z]{4}){5}$/.test(phrase);
+
+        if (!sent || overflow || console_.length > 0 || !goodPhrase || recovered !== 'confirmed')
+        {
+            problems.push(`${ where }: sent=${ sent } phrase=${ goodPhrase } recovered=${ recovered } overflow=${ overflow } console=${ console_.length }`);
+        }
+
+        await context.close();
     }
 }
 

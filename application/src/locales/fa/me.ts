@@ -89,7 +89,6 @@ export const me: Pick<Dictionary, keyof typeof reference> = {
     'settings.notifications.haptics': 'لرزش',
     'settings.notifications.hapticsHint': 'یک لرزش کوتاه وقتی میز آماده می‌شود، دستی برده می‌شود یا حرکتی می‌نشیند.',
 
-    'settings.appearance.theme': 'پوسته',
     'settings.appearance.language': 'زبان',
     'settings.appearance.rail': 'عرض گفت‌وگوی میز',
     'settings.appearance.railHint': 'چقدر از میز عریض را ریل گفت‌وگو بگیرد. بقیه همیشه برای میز می‌ماند.',

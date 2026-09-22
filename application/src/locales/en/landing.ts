@@ -68,9 +68,6 @@ export const landing = {
     'footer.product': 'Product',
     'footer.rights': 'All rights reserved.',
 
-    'theme.label': 'Lighting',
-    'theme.dusk': 'Dusk',
-    'theme.dawn': 'Dawn',
     'locale.label': 'Language',
 
     'a11y.scene': 'An illustrated night market of floating game tables, each lit by a hanging lamp.',

@@ -49,18 +49,17 @@ const record = (name, ok, detail) =>
     console.log(`  ${ ok ? 'PASS' : 'FAIL' }  ${ name }${ detail ? ' — ' + detail : '' }`);
 };
 
-async function open({ width = 1280, height = 900, theme = 'dark', locale = 'en' } = {})
+async function open({ width = 1280, height = 900, locale = 'en' } = {})
 {
     const context = await browser.newContext({
         viewport: { width, height },
         locale: locale === 'fa' ? 'fa-IR' : 'en-US'
     });
 
-    await context.addInitScript(([themeName, localeName]) =>
+    await context.addInitScript((localeName) =>
     {
         try
         {
-            localStorage.setItem('nura-games.theme', themeName);
             localStorage.setItem('nura-games.locale', localeName);
         }
         catch { /* a refused store is a state the product handles */ }
@@ -87,7 +86,7 @@ async function open({ width = 1280, height = 900, theme = 'dark', locale = 'en' 
         }));
         window.addEventListener('eip6963:requestProvider', announce);
         announce();
-    }, [theme, locale]);
+    }, locale);
 
     await context.addInitScript((address) => { window.__walletAddress = address; }, wallet.address);
     await context.exposeFunction('__walletSign', (message) => wallet.signMessage({ message }));
@@ -377,7 +376,7 @@ console.log('\n[6] the server decides what a table may be');
 // ------------------------------------------------------------------ 7. the Persian half
 console.log('\n[7] Persian — the new copy exists in both languages');
 {
-    const { context, page, errors } = await open({ theme: 'light', locale: 'fa', width: 390, height: 700 });
+    const { context, page, errors } = await open({ locale: 'fa', width: 390, height: 700 });
     try
     {
         await page.goto(`${ BASE }/sign-in`, { waitUntil: 'networkidle' });

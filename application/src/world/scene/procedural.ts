@@ -23,21 +23,6 @@ export function paintGeometry(geometry: BufferGeometry, colour: Color): BufferGe
     return geometry;
 }
 
-export function repaintGeometry(geometry: BufferGeometry, colour: Color): void
-{
-    const attribute = geometry.getAttribute('color') as Float32BufferAttribute | undefined;
-    if (attribute === undefined)
-    {
-        paintGeometry(geometry, colour);
-        return;
-    }
-    for (let index = 0; index < attribute.count; index += 1)
-    {
-        attribute.setXYZ(index, colour.r, colour.g, colour.b);
-    }
-    attribute.needsUpdate = true;
-}
-
 export function createSlab(radius: number, colour: Color): BufferGeometry
 {
     const geometry = new CylinderGeometry(radius, radius * 0.62, 0.42, 8, 1);

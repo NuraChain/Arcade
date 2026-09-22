@@ -71,9 +71,6 @@ export const landing: Pick<Dictionary, keyof typeof reference> = {
     'footer.product': 'محصول',
     'footer.rights': 'همهٔ حقوق محفوظ است.',
 
-    'theme.label': 'نور',
-    'theme.dusk': 'غروب',
-    'theme.dawn': 'سپیده',
     'locale.label': 'زبان',
 
     'a11y.scene': 'تصویری از یک بازار شبانه با میزهای بازی معلق که هرکدام زیر یک چراغ آویزان روشن است.',

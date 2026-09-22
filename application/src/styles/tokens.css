@@ -130,8 +130,7 @@
     }
 }
 
-:root,
-:root[data-theme='dark']
+:root
 {
     color-scheme: dark;
 
@@ -178,56 +177,7 @@
     --board-safe: #8C7A5E;
     --board-hint: var(--accent);}
 
-:root[data-theme='light']
-{
-    color-scheme: light;
 
-    --void: oklch(0.972 0.006 254);
-    --sunk: oklch(0.941 0.010 255);
-    --field: oklch(1 0 0);
-    --raised: oklch(0.949 0.010 255);
-    --lifted: oklch(1 0 0);
-    --line: oklch(0.885 0.014 255);
-    --line-strong: oklch(0.812 0.021 256);
-
-    --text: oklch(0.190 0.026 264);
-    --muted: oklch(0.452 0.028 259);
-    --faint: oklch(0.556 0.026 258);
-
-    --accent: oklch(0.502 0.176 257);
-    --accent-ink: oklch(1 0 0);
-    --live: oklch(0.520 0.108 172);
-    --gold: oklch(0.560 0.126 66);
-    --win: oklch(0.495 0.124 158);
-    --danger: oklch(0.510 0.181 20);
-    --madder: oklch(0.470 0.172 17);
-
-    --glass: color-mix(in oklab, var(--field) 80%, transparent);
-    --scrim: color-mix(in oklab, var(--text) 34%, transparent);
-
-    --world-sky: #F3F6FA;
-    --world-fog: #DDE5F0;
-    --world-key: #FFE0B0;
-    --world-fill: #B4C4DC;
-    --world-rim: #FFFFFF;
-    --world-lamp: #E8A33A;
-    --world-stone: #A6B5CB;
-    --world-lamp-intensity: 0.35;
-    --world-fog-density: 0.6;
-    --world-env: 0.7;
-
-    --ludo-red: #CC332E;
-    --ludo-green: #2E854D;
-    --ludo-yellow: #EDBD2E;
-    --ludo-blue: #2E66B8;
-    --board-plate: #F2E8D5;
-    --board-line: #6B5B48;
-    --board-safe: #A08A68;
-    --board-hint: var(--accent);}
-
-:root
-{
-}
 
 @theme inline
 {

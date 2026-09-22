@@ -6,23 +6,8 @@ import { useLocale } from '../../stores/locale.store.ts';
 import { useScroll } from '../../stores/scroll.store.ts';
 import BrandMark from './brand-mark.component.azeroth';
 import LanguageSwitch from './language-switch.component.azeroth';
-import ThemeSwitch from './theme-switch.component.azeroth';
 import Panel from '../ui/panel.component.azeroth';
 
-/**
- * The site chrome, on every public page.
- *
- * `cta` exists for the sign-in page, which IS the connect surface - a header button that opened a
- * wallet chooser on top of a wallet chooser would be two doors to one room.
- *
- * **Somebody already signed in is offered the way IN, not the way to sign in again.** The header
- * said "Connect wallet" to everybody, including the person who had been playing five minutes
- * earlier and only wanted to get back. `beenHere()` reads a cookie the app leaves behind and imports
- * nothing, because this page must hold neither `session.store.ts` nor `api.ts` - see that module for
- * why, and for why a stale answer is safe. Read once at mount rather than as a signal: a cookie does
- * not change while somebody is looking at the landing page, and a button that rewrote itself mid-
- * scroll would be worse than one that is briefly generous.
- */
 export default component SiteHeader(props: { cta?: boolean })
 {
     const locale = useLocale();
@@ -31,26 +16,8 @@ export default component SiteHeader(props: { cta?: boolean })
 
     state open = false;
 
-    /**
-     * Read in `mount` rather than at construction, because this component is PRERENDERED: the
-     * server has no cookie, and a value baked into the static HTML would be wrong for everybody.
-     * Reading after hydration means the first paint is the signed-out header and it corrects itself
-     * in the same frame - which is the same shape `ready` uses for the 3D canvas.
-     *
-     * Which is why the branch below is a `<Show>` rather than the ternary it was written as. A
-     * ternary picking between two whole elements is a STRUCTURAL choice, and structure is only
-     * rebuilt when the enclosing thunk re-runs - which for a `<Show>` child is when its own `when`
-     * changes, and `props.cta !== false` never changes. So `returning` flipped in `mount`, the
-     * signal really was true, and the signed-out button stayed on screen for the rest of the visit.
-     * `when` is tracked by contract, so the read has to be there rather than inside the branch.
-     *
-     * Nothing could see it. The cookie was written, readable and correct - the browser pass proves
-     * that separately - and the matrix builds every context signed IN, so the one page where this
-     * renders is the one page it never reads this way.
-     */
     state returning = false;
 
-    // The only reader of the scroll store, so the only place that needs to start it.
     mount
     {
         returning = beenHere();
@@ -71,7 +38,7 @@ export default component SiteHeader(props: { cta?: boolean })
 
         <div class="pointer-events-auto relative mx-auto flex h-16 w-full max-w-[80rem] items-center justify-between gap-4 px-5 sm:h-20 sm:px-8">
             <a href="/" class="flex items-center gap-2.5 rounded-control" aria-label={ locale.t('brand.name') }>
-                
+
                 <span class="lit flex h-7 w-7 items-center justify-center rounded-control bg-accent text-accent-ink">
                     <Icon name="games" size={ 16 } />
                 </span>
@@ -79,7 +46,6 @@ export default component SiteHeader(props: { cta?: boolean })
             </a>
 
             <nav class="hidden items-center gap-2 sm:flex" aria-label={ locale.t('nav.menu') }>
-                <ThemeSwitch />
                 <LanguageSwitch />
                 <Show when={ props.cta !== false }>
                     { () =>
@@ -97,7 +63,6 @@ export default component SiteHeader(props: { cta?: boolean })
                 </Show>
             </nav>
 
-            
             <button
                 type="button"
                 class="flex h-11 w-11 cursor-pointer items-center justify-center rounded-full border border-line bg-field text-muted transition-colors duration-150 hover:border-accent hover:text-text sm:hidden"
@@ -111,8 +76,7 @@ export default component SiteHeader(props: { cta?: boolean })
 
         <Show when={ open }>
             <div class="pointer-events-auto relative mx-auto flex w-full max-w-[80rem] flex-col gap-3 px-5 pb-4 sm:hidden">
-                <Panel pad="sm" class="flex items-center justify-between gap-3">
-                    <ThemeSwitch />
+                <Panel pad="sm" class="flex items-center gap-3">
                     <LanguageSwitch />
                 </Panel>
                 <Show when={ props.cta !== false }>

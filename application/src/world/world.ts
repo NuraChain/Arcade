@@ -43,22 +43,6 @@ export interface WorldOptions
     callbacks: WorldCallbacks;
 }
 
-/**
- * Builds the world, and releases the GL context if anything on the way out throws.
- *
- * The renderer exists from early in `buildWorld`, and only the asset load was ever guarded - so a
- * throw from the environment, the market, the atmosphere, the rig or the first resize rejected
- * AFTER the context had been created, with no handle returned. `world-canvas` catches that
- * rejection, logs a warning and keeps the static page, so `dispose()` is never called on anything:
- * the context is orphaned with nothing left holding a reference to release it. Repeat that a few
- * times - a flaky asset host, a device that fails on one of these - and it is "Too many active
- * WebGL contexts", which this codebase has already hit twice.
- *
- * Written as a wrapper rather than a `try` around the body, deliberately: the body is a hundred and
- * fifty lines that declare everything the handle closes over, and wrapping it in a block would
- * either re-indent all of it or hoist a dozen bindings out of their scope for a cleanup path.
- * `report` hands the renderer out the moment it exists, which is the only thing the cleanup needs.
- */
 export async function createWorld(options: WorldOptions): Promise<WorldHandle>
 {
     let made: WebGLRenderer | null = null;
@@ -306,18 +290,6 @@ async function buildWorld(options: WorldOptions, report: (renderer: WebGLRendere
 
     let frame = 0;
 
-    /**
-     * Whether the loop is drawing, and whether it is SCHEDULED at all.
-     *
-     * `pause()` used to set this false and nothing else, so the callback went on waking sixty times
-     * a second to reach the guard below and return - for a canvas that is off screen, behind the
-     * signed-in half of the site, or in a background tab. The browser keeps the compositor and this
-     * closure alive for it, and on a laptop that is the difference between an idle page and one
-     * that costs battery for nothing. Cancelling the frame is what makes the pause a pause.
-     *
-     * The guard inside `tick` stays as a belt: a frame already in flight when `pause` runs must not
-     * render against state that is about to be disposed.
-     */
     let running = true;
     let last = performance.now();
     let announced = false;
@@ -387,21 +359,6 @@ async function buildWorld(options: WorldOptions, report: (renderer: WebGLRendere
         {
             side = direction === 'rtl' ? 1 : -1;
             rig.setShots(shotsFor());
-        },
-
-        relight()
-        {
-            const next = palette();
-            (scene.background as Color).set(next.sky);
-            (scene.fog as FogExp2).color.set(next.fog);
-            (scene.fog as FogExp2).density = 0.019 * next.fogDensity;
-            key.color.set(next.key);
-            key.intensity = 1.5 * next.lampIntensity;
-            fill.color.set(next.rim);
-            fill.groundColor.set(next.fill);
-            rim.color.set(next.rim);
-            scene.environmentIntensity = next.environmentIntensity;
-            market.relight(next.lamp, next.stone);
         },
 
         pause()

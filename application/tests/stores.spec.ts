@@ -2,12 +2,10 @@ import { describe, it, expect, beforeEach } from 'vitest';
 
 import { isPast, resolveDirection } from '../src/stores/scroll.store.ts';
 import { LOCALE_DIR, useLocale } from '../src/stores/locale.store.ts';
-import { useTheme } from '../src/stores/theme.store.ts';
 
 beforeEach(() =>
 {
     useLocale().setLocale('en');
-    useTheme().setTheme('dark');
 });
 
 describe('scroll direction', () =>
@@ -74,17 +72,9 @@ describe('locale store', () =>
     });
 });
 
-describe('theme store', () =>
+describe('storage', () =>
 {
-    it('stamps the attribute the palette keys on', () =>
-    {
-        useTheme().setTheme('light');
-        expect(document.documentElement.dataset.theme).toBe('light');
-        useTheme().setTheme('dark');
-        expect(document.documentElement.dataset.theme).toBe('dark');
-    });
-
-    it('survives storage being blocked', () =>
+    it('lets the locale change when site data is blocked', () =>
     {
         const original = Object.getOwnPropertyDescriptor(window, 'localStorage');
         Object.defineProperty(window, 'localStorage', {
@@ -95,12 +85,18 @@ describe('theme store', () =>
             }
         });
 
-        expect(() => useTheme().setTheme('light')).not.toThrow();
-        expect(document.documentElement.dataset.theme).toBe('light');
-
-        if (original !== undefined)
+        try
         {
-            Object.defineProperty(window, 'localStorage', original);
+            expect(() => useLocale().setLocale('fa')).not.toThrow();
+            expect(document.documentElement.lang).toBe('fa');
+        }
+        finally
+        {
+            if (original !== undefined)
+            {
+                Object.defineProperty(window, 'localStorage', original);
+            }
+            useLocale().setLocale('en');
         }
     });
 });

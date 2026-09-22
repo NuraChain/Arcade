@@ -88,7 +88,7 @@ async function seat(handle)
 
     await context.addInitScript(() =>
     {
-        try { localStorage.setItem('nura-games.theme', 'dark'); localStorage.setItem('nura-games.locale', 'en'); }
+        try { localStorage.setItem('nura-games.locale', 'en'); }
         catch { /* a refused store is a state the product handles */ }
     });
 

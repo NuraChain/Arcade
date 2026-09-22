@@ -3,7 +3,6 @@ import { useHead, useNavigate } from 'azerothjs';
 import Page from '../../components/app/page.component.azeroth';
 import FriendRow from '../../components/social/friend-row.component.azeroth';
 import LanguageSwitch from '../../components/layout/language-switch.component.azeroth';
-import ThemeSwitch from '../../components/layout/theme-switch.component.azeroth';
 import Panel from '../../components/ui/panel.component.azeroth';
 import Button from '../../components/ui/button.component.azeroth';
 import Pagination from '../../components/ui/pagination.component.azeroth';
@@ -45,17 +44,6 @@ export default component SettingsPage()
 
     useHead({ title: () => locale.t('settings.title') });
 
-    /**
-     * A toggle that snaps back has to say why.
-     *
-     * `setPrivacy` stores what the SERVER returned rather than what was asked, so the switch is
-     * never left showing a value the account does not hold - but a refused save made it flick back
-     * with no explanation, which reads as a broken control rather than as a failed request. The
-     * throw was swallowed by a bare `void`.
-     *
-     * There is deliberately no toast on SUCCESS: a switch that moved and stayed moved has already
-     * said it, and a confirmation for every flip of two toggles is noise.
-     */
     const save = async (patch: Parameters<typeof social.setPrivacy>[0]): Promise<void> =>
     {
         try
@@ -68,9 +56,7 @@ export default component SettingsPage()
         }
     };
 
-
     derived current = settings.settings();
-
 
     state blockedPage = 1;
     state mutedPage = 1;
@@ -318,10 +304,6 @@ export default component SettingsPage()
             <section aria-labelledby="settings-appearance">
                 <SectionHeading id="settings-appearance" title={ locale.t('settings.appearance') } />
                 <Panel stack="md">
-                    <div class="flex flex-wrap items-center justify-between gap-3">
-                        <span class="text-ui-md font-semibold text-text">{ locale.t('settings.appearance.theme') }</span>
-                        <ThemeSwitch />
-                    </div>
                     <div class="flex flex-wrap items-center justify-between gap-3">
                         <span class="text-ui-md font-semibold text-text">{ locale.t('settings.appearance.language') }</span>
                         <LanguageSwitch />
