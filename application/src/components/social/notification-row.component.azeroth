@@ -1,38 +1,11 @@
-import type { Notification, NotificationKind } from '../../api.ts';
-import Icon from '../../icons/icon.component.azeroth';
-import type { IconName } from '../../icons/registry.ts';
-import type { MessageKey } from '../../locales/en.ts';
+import type { Notification } from '../../api.ts';
+import { sayOf } from '../../lib/notifications.ts';
 import { usePeople } from '../../stores/people.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useSocial } from '../../stores/social.store.ts';
-import Avatar from '../ui/avatar.component.azeroth';
+import NotificationLead from './notification-lead.component.azeroth';
 import Button from '../ui/button.component.azeroth';
 import IconButton from '../ui/icon-button.component.azeroth';
-
-const ICON: Record<NotificationKind, IconName> = {
-    'friend-request': 'friend-add',
-    'friend-accepted': 'friend-check',
-    'group-added': 'people',
-    'table-invite': 'seat',
-    'message': 'chats',
-    'turn': 'dice'
-};
-
-/**
- * What each kind SAYS, composed here rather than stored.
- *
- * The row used to carry a bilingual sentence baked in when it was written, which could not follow
- * a language switch - the same defect the chat lines had and the same fix. `message` is the only
- * one that counts, because it is the only one that can happen twelve times before somebody looks.
- */
-const SAYS: Record<NotificationKind, MessageKey> = {
-    'friend-request': 'notify.friendRequest',
-    'friend-accepted': 'notify.friendAccepted',
-    'group-added': 'notify.groupAdded',
-    'table-invite': 'notify.tableInvite',
-    'turn': 'notify.turn',
-    'message': 'notify.message'
-};
 
 export default component NotificationRow(props: {
     item: Notification;
@@ -48,31 +21,20 @@ export default component NotificationRow(props: {
 
     derived who = person === null ? (props.item.actor ?? '') : person.displayName.split(' ')[0];
 
-    derived said = props.item.kind === 'message'
-        ? locale.plural('notify.message', props.item.count, { who })
-        : locale.t(SAYS[props.item.kind], { who });
+    derived said = sayOf(props.item, who, locale);
 
     derived answerable = props.item.kind === 'friend-request'
         && social.incoming().some((request) => request.from === props.item.actor);
 
-    <div class={ [
+    <div class={ () => [
         'flex flex-col gap-2 rounded-tile px-2 py-2',
         props.item.read ? '' : 'bg-accent/5'
     ].filter(Boolean).join(' ') }>
         <div class="flex items-center gap-3">
             <button type="button" class="flex min-h-11 min-w-0 flex-1 cursor-pointer items-center gap-3 text-start" onClick={ () => props.onOpen(props.item) }>
-                <Show
-                    when={ person !== null }
-                    fallback={
-                        <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-raised text-muted">
-                            <Icon name={ ICON[props.item.kind] } size={ 18 } />
-                        </span>
-                    }
-                >
-                    { () => <Avatar person={ person } size="md" /> }
-                </Show>
+                <NotificationLead item={ props.item } person={ person } />
                 <span class="flex min-w-0 flex-1 flex-col">
-                    <span class={ [ 'line-clamp-2 text-ui-base', props.item.read ? 'text-muted' : 'text-text' ].join(' ') }>
+                    <span class={ () => [ 'line-clamp-2 text-ui-base', props.item.read ? 'text-muted' : 'text-text' ].join(' ') }>
                         { said }
                     </span>
                     <span class="tally text-ui-xs text-faint">{ locale.relative(Date.parse(props.item.at)) }</span>

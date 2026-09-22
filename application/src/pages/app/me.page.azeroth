@@ -87,7 +87,7 @@ export default component MePage()
         }
     };
 
-    useHead({ title: () => locale.t('app.nav.me') });
+    useHead({ title: () => locale.t('app.nav.profile') });
 
     derived user = account.user();
 
@@ -149,7 +149,7 @@ export default component MePage()
         toasts.show({ kind: taken ? 'success' : 'warning', text: locale.t(taken ? 'chain.adopted' : 'profile.failed') });
     };
 
-    <Page width="narrow" label={ locale.t('app.nav.me') }>
+    <Page width="narrow" label={ locale.t('app.nav.profile') }>
         <Show
             when={ user !== null }
             fallback={ <EmptyState icon="me" title={ locale.t('person.notFound') } action={ locale.t('app.nav.home') } to="/app" class="py-12" /> }

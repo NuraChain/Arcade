@@ -27,6 +27,8 @@ export default component TopBar()
 
     derived phone = device.posture() === 'phone';
 
+    derived unread = notifications.unread();
+
     mount
     {
         const onKey = (event: KeyboardEvent): void =>
@@ -50,38 +52,38 @@ export default component TopBar()
         return () => window.removeEventListener('keydown', onKey);
     }
 
-    derived unread = notifications.unread();
+    <header class="z-topbar safe-t sticky top-0 border-b border-line bg-void/85 backdrop-blur-md">
+        <div class="flex h-[var(--topbar-h)] w-full items-center gap-1.5 px-3 sm:gap-2 sm:px-6">
+            <h1 class="sr-only">{ title }</h1>
 
-    <header class="glass z-topbar safe-t sticky top-0 border-b border-line">
-        <div class="flex h-[var(--topbar-h)] w-full items-center gap-1 px-2 sm:px-6 lg:px-8">
-            <Show when={ phone }>
+            <Show
+                when={ phone }
+                fallback={
+                    <div class="flex min-w-0 flex-1 justify-center">
+                        <Link to="/app/search" class="flex h-10 w-full max-w-[30rem] items-center gap-2.5 rounded-full border border-line bg-sunk px-4 text-ui-sm text-faint transition-colors duration-150 hover:border-line-strong hover:text-muted coarse:h-11">
+                            <Icon name="search" size={ 16 } class="shrink-0" />
+                            <span class="truncate">{ locale.t('app.search.placeholder') }</span>
+                        </Link>
+                    </div>
+                }
+            >
                 { () =>
-                    <Link to="/app" class="flex h-11 items-center gap-2 rounded-full ps-2 pe-3" aria-label={ locale.t('app.nav.home') }>
-                        <span class="lit flex h-7 w-7 items-center justify-center rounded-control bg-accent-fill text-accent-ink">
-                            <Icon name="games" size={ 15 } />
-                        </span>
-                        <BrandMark class="text-ui-lg text-text" />
-                    </Link>
+                    <div class="flex min-w-0 flex-1 items-center">
+                        <Link to="/app" class="flex h-11 min-w-0 items-center gap-2.5 rounded-full pe-2" aria-label={ locale.t('app.nav.home') }>
+                            <span class="lit flex h-8 w-8 shrink-0 items-center justify-center rounded-control bg-accent-fill text-accent-ink">
+                                <Icon name="games" size={ 17 } />
+                            </span>
+                            <BrandMark class="truncate text-ui-lg text-text" />
+                        </Link>
+                    </div>
                 }
             </Show>
 
-            <h1 class="label min-w-0 flex-1 truncate text-start text-ui-lg font-semibold text-text">
-                <span class={ phone ? 'sr-only' : '' }>{ title }</span>
-            </h1>
-
-            <Show when={ !phone }>
-                { () =>
-                    <Link to="/app/search" class="me-1 flex h-9 w-60 items-center gap-2 rounded-control border border-line bg-sunk px-2.5 text-ui-sm text-faint transition-colors hover:border-line-strong hover:text-muted coarse:h-11">
-                        <Icon name="search" size={ 16 } />
-                        <span class="truncate">{ locale.t('app.nav.search') }</span>
-                    </Link>
-                }
-            </Show>
             <Show when={ phone }>
                 { () => <IconButton icon="search" label={ locale.t('app.nav.search') } to="/app/search" /> }
             </Show>
             <IconButton icon="bell" label={ locale.t('app.nav.notifications') } to="/app/notifications" count={ unread } />
-            <Link to="/app/me" class="ms-1 flex h-11 w-11 items-center justify-center rounded-full" aria-label={ locale.t('app.nav.me') }>
+            <Link to="/app/me" class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full" aria-label={ locale.t('app.nav.profile') }>
                 <Avatar person={ account.user() } size="sm" />
             </Link>
         </div>

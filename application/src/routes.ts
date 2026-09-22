@@ -39,7 +39,7 @@ export const routes: PageRoute[] = [
             { path: 'discover', lazy: () => import('./pages/app/discover.page.azeroth'), meta: defineMeta({ title: 'app.nav.discover', tab: 'discover' }) },
             { path: 'search', lazy: () => import('./pages/app/search.page.azeroth'), meta: defineMeta({ title: 'app.nav.search', tab: 'search' }) },
             { path: 'notifications', lazy: () => import('./pages/app/notifications.page.azeroth'), meta: defineMeta({ title: 'app.nav.notifications', parent: '/app' }) },
-            { path: 'me', lazy: () => import('./pages/app/me.page.azeroth'), meta: defineMeta({ title: 'app.nav.me', tab: 'me' }) },
+            { path: 'me', lazy: () => import('./pages/app/me.page.azeroth'), meta: defineMeta({ title: 'app.nav.profile', tab: 'me' }) },
             { path: 'me/settings', lazy: () => import('./pages/app/settings.page.azeroth'), meta: defineMeta({ title: 'app.nav.settings', tab: 'me', parent: '/app/me' }) },
             { path: 'me/devices', lazy: () => import('./pages/app/devices.page.azeroth'), meta: defineMeta({ title: 'devices.title', tab: 'me', parent: '/app/me/settings' }) }
         ]

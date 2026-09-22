@@ -1,60 +1,52 @@
 import { Link } from 'azerothjs';
 
 import Icon from '../../icons/icon.component.azeroth';
+import { useAccount } from '../../stores/account.store.ts';
 import { useChat } from '../../stores/chat.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
-import { useAccount } from '../../stores/account.store.ts';
+import { useRealtime } from '../../stores/realtime.store.ts';
 import Avatar from '../ui/avatar.component.azeroth';
 import Badge from '../ui/badge.component.azeroth';
 import Tooltip from '../ui/tooltip.component.azeroth';
-import { NAV, SECONDARY } from './nav-items.ts';
+import { RAIL } from './nav-items.ts';
 
 export default component NavRail()
 {
     const locale = useLocale();
     const account = useAccount();
     const chat = useChat();
+    const live = useRealtime();
+
+    derived user = account.user();
 
     derived unread = chat.totalUnread();
 
-    <nav class="bar safe-t safe-b flex h-dvh w-[var(--rail-w)] flex-col items-center border-e border-line bg-field" aria-label={ locale.t('app.nav.primary') }>
-        <span class="flex h-[var(--topbar-h)] w-full shrink-0 items-center justify-center border-b border-line">
+    <nav class="bar safe-t safe-b flex h-dvh w-[var(--rail-w)] flex-col items-center border-e border-line bg-void" aria-label={ locale.t('app.nav.primary') }>
+        <span class="flex h-[var(--topbar-h)] w-full shrink-0 items-center justify-center">
             <Link to="/app" class="lit flex h-10 w-10 items-center justify-center rounded-control bg-accent-fill text-accent-ink coarse:h-11 coarse:w-11" aria-label={ locale.t('app.nav.home') }>
-                <Icon name="games" size={ 18 } />
+                <Icon name="games" size={ 19 } />
             </Link>
         </span>
-        <ul class="flex shrink-0 flex-col items-center gap-0.5 pt-3">
-            <For each={ NAV } key={ (item) => item.tab } let={ item }>
+        <ul class="flex min-h-0 flex-1 flex-col items-center gap-1 overflow-y-auto pt-3">
+            <For each={ RAIL } key={ (item) => item.to } let={ item }>
                 <li class="shrink-0">
-                    <Link to={ item.to } end={ item.end } activeClass="is-active" prefetch="hover" class="nav-item flex w-16 flex-col items-center gap-0.5 rounded-tile py-1.5 text-ui-2xs font-semibold text-muted">
-                        <span class="nav-pill relative flex h-7 w-11 items-center justify-center rounded-control transition-colors duration-200">
+                    <Tooltip label={ locale.t(item.labelKey) } side="end">
+                        <Link to={ item.to } end={ item.end } activeClass="is-active" prefetch="hover" class="nav-item nav-row relative flex h-11 w-11 items-center justify-center rounded-tile text-muted transition-colors duration-150 hover:bg-raised hover:text-text" aria-label={ locale.t(item.labelKey) }>
                             <Icon name={ item.icon } size={ 20 } />
                             <Show when={ item.tab === 'chats' && unread > 0 }>
                                 { () => <Badge count={ unread } size="sm" anchor label={ locale.plural('common.unread', unread) } /> }
                             </Show>
-                        </span>
-                        <span>{ locale.t(item.labelKey) }</span>
-                    </Link>
-                </li>
-            </For>
-        </ul>
-        <ul class="mt-auto flex shrink-0 flex-col items-center gap-0.5 border-t border-line py-3">
-            <For each={ SECONDARY } key={ (item) => item.tab } let={ item }>
-                <li class="shrink-0">
-                    <Tooltip label={ locale.t(item.labelKey) } side="end">
-                        <Link to={ item.to } activeClass="is-active" class="nav-item flex h-11 w-11 items-center justify-center rounded-control text-muted" aria-label={ locale.t(item.labelKey) }>
-                            <Icon name={ item.icon } size={ 19 } />
                         </Link>
                     </Tooltip>
                 </li>
             </For>
-            <li class="mt-1 shrink-0">
-                <Tooltip label={ locale.t('app.nav.me') } side="end">
-                    <Link to="/app/me" class="flex h-11 w-11 items-center justify-center rounded-control" aria-label={ locale.t('app.nav.me') }>
-                        <Avatar person={ account.user() } size="sm" presence="online" />
-                    </Link>
-                </Tooltip>
-            </li>
         </ul>
+        <div class="shrink-0 py-3">
+            <Tooltip label={ locale.t('app.nav.profile') } side="end">
+                <Link to="/app/me" class="flex h-11 w-11 items-center justify-center rounded-full" aria-label={ locale.t('app.nav.profile') }>
+                    <Avatar person={ user } size="sm" presence={ user !== null && live.status() === 'connected' ? 'online' : null } ringOn="void" />
+                </Link>
+            </Tooltip>
+        </div>
     </nav>
 }

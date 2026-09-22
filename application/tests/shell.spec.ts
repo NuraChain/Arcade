@@ -3,6 +3,9 @@ import { cleanup, fire, renderTest } from '@azerothjs/testing';
 import { RouterProvider, Routes, createMemoryHistory, createRouter, type Route } from 'azerothjs';
 
 import BottomNav from '../src/components/app/bottom-nav.component.azeroth';
+import { RAIL } from '../src/components/app/nav-items.ts';
+import Sidebar from '../src/components/app/sidebar.component.azeroth';
+import SocialPanel from '../src/components/app/social-panel.component.azeroth';
 import OverlayHost from '../src/components/app/overlay-host.component.azeroth';
 import Page from '../src/components/app/page.component.azeroth';
 import ToastHost from '../src/components/app/toast-host.component.azeroth';
@@ -13,6 +16,7 @@ import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import { routes } from '../src/routes.ts';
 import '../src/locales/app-catalogue.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
+import { useNotifications } from '../src/stores/notifications.store.ts';
 import { OVERLAY_SETTLE, useOverlay } from '../src/stores/overlay.store.ts';
 import { useAccount } from '../src/stores/account.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
@@ -267,6 +271,78 @@ describe('BottomNav', () =>
         router.navigate('/app');
         await settle();
         expect(container.querySelector('[aria-current="page"]')?.getAttribute('href')).toBe('/app');
+    });
+});
+
+describe('the shell’s destinations', () =>
+{
+    it('lists the design’s seven in the sidebar, Tournaments not among them', () =>
+    {
+        expect(RAIL.map((item) => item.to)).toEqual(['/app', '/app/games', '/app/friends', '/app/chats', '/app/leaderboard', '/app/discover', '/app/me/settings']);
+    });
+
+    it('calls the fifth phone tab Profile', async () =>
+    {
+        const Stub = (): HTMLElement => document.createElement('div');
+        const router = createRouter({ routes: [{ path: '/app', component: Stub, children: [{ path: '', component: Stub }] }], history: createMemoryHistory('/app'), scroll: false });
+        const { container } = renderTest(() => RouterProvider({ router, children: () => BottomNav({}) }) as Rendered);
+        await settle();
+
+        const labels = [...container.querySelectorAll('a')].map((link) => link.textContent?.trim());
+        expect(labels[4]).toBe('Profile');
+    });
+});
+
+describe('the right panel', () =>
+{
+    const mount = async (): Promise<HTMLElement> =>
+    {
+        const Stub = (): HTMLElement => document.createElement('div');
+        const router = createRouter({ routes: [{ path: '/app', component: Stub }], history: createMemoryHistory('/app'), scroll: false });
+        const { container } = renderTest(() => RouterProvider({ router, children: () => SocialPanel({}) }) as Rendered);
+        await settle();
+        await settle();
+        return container;
+    };
+
+    it('says what lands there, and who is not online, rather than drawing two empty boxes', async () =>
+    {
+        server.friends = [];
+        await useAccount().signIn('Alex');
+        const container = await mount();
+
+        expect(container.textContent).toContain('Friend requests, invitations and messages land here.');
+        expect(container.textContent).toContain('None of your friends are online right now.');
+    });
+
+    it('lists the notifications the server holds, as sentences, each one a way in', async () =>
+    {
+        await useAccount().signIn('Alex');
+        server.notify({ kind: 'friend-request', actor: 'sara.k', dedupeKey: 'friend:sara.k' });
+        useNotifications().reset();
+        const container = await mount();
+
+        const rows = container.querySelectorAll('section[aria-labelledby="panel-activity"] li button');
+        expect(rows.length).toBe(1);
+        expect(rows[0].textContent).toContain('ago');
+    });
+});
+
+describe('the sidebar’s account card', () =>
+{
+    it('keeps a long name inside the card and lets it run in its own direction', async () =>
+    {
+        await useAccount().signIn('Aleksandra Konstantinopolskaya-Wright');
+        const Stub = (): HTMLElement => document.createElement('div');
+        const router = createRouter({ routes: [{ path: '/app', component: Stub }], history: createMemoryHistory('/app'), scroll: false });
+        const { container } = renderTest(() => RouterProvider({ router, children: () => Sidebar({}) }) as Rendered);
+        await settle();
+
+        const card = container.querySelector('a[href="/app/me"]')!;
+        const name = card.querySelector('[dir="auto"]')!;
+        expect(name.className).toContain('truncate');
+        expect(name.parentElement!.className).toContain('min-w-0');
+        expect(card.textContent).not.toContain('Sign out');
     });
 });
 

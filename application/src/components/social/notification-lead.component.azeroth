@@ -1,0 +1,19 @@
+import type { Notification } from '../../api.ts';
+import type { Person } from '../../data/person.ts';
+import Icon from '../../icons/icon.component.azeroth';
+import { NOTIFICATION_ICON } from '../../lib/notifications.ts';
+import Avatar from '../ui/avatar.component.azeroth';
+
+export default component NotificationLead(props: { item: Notification; person: Person | null })
+{
+    <Show
+        when={ props.person !== null }
+        fallback={
+            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-line bg-raised text-accent">
+                <Icon name={ NOTIFICATION_ICON[props.item.kind] } size={ 18 } />
+            </span>
+        }
+    >
+        { () => <Avatar person={ props.person } size="md" /> }
+    </Show>
+}

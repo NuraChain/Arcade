@@ -72,17 +72,8 @@ export default component AppShell(props: { children?: MountNode })
     mount
     {
         shell.resetDepth();
-        // The socket goes up FIRST and, because the teardown below runs in reverse, comes down
-        // LAST. Everything under it - the connection banner, the stores that re-read on a nudge -
-        // holds an unsubscribe against it, and those have to be handed back while there is still
-        // something to hand them back to.
         const stops = [
-            /*
-             * FIRST, so it stops last: the teardown runs in reverse, and a failure raised while
-             * every other store is shutting down is exactly the one nobody would otherwise see.
-             */
             useToasts().start(),
-
             useRealtime().start(),
             useConnection().start(),
             useCatalogue().start(),
@@ -97,28 +88,18 @@ export default component AppShell(props: { children?: MountNode })
             useWallet().start()
         ];
 
-        // Whether THIS browser holds keys is now read outside the devices page - the chat decides
-        // whether anything can be sent with it, and the banner decides whether to offer them - so
-        // somebody has to ask once. `readiness()` answers `absent` until this runs, which would make
-        // every reader of it confidently wrong rather than merely uninformed.
-        //
-        // `look()` and not `refresh()`: this reads the keyring and asks the server nothing. The
-        // device list is a resource keyed on the account and fetches itself as soon as the account
-        // resolves, so calling `refresh()` here asked for it a second time on every page load.
         void useDevices().look();
         return () =>
         {
-            // In reverse, and each one on its own. A stop that throws must not strand the sockets,
-            // timers and listeners belonging to every store after it in the list.
             for (const stop of [...stops].reverse())
             {
                 try
                 {
                     stop();
                 }
-                catch
+                catch (error)
                 {
-                    // Nothing useful to do about it here, and the remaining stops still matter.
+                    reportError(error);
                 }
             }
         };
@@ -136,15 +117,11 @@ export default component AppShell(props: { children?: MountNode })
         <div
             id="app-shell"
             data-posture={ posture }
-            data-social={ showSocial ? 'true' : 'false' }
             inert={ overlay.blocking() }
-            class={ [
+            class={ () => [
                 'grid h-dvh min-h-0 bg-void text-text',
-                posture === 'phone' ? 'grid-cols-1' : '',
-                posture === 'rail' ? 'grid-cols-[var(--rail-w)_1fr]' : '',
-                posture === 'sidebar' && !showSocial ? 'grid-cols-[var(--sidebar-w)_1fr]' : '',
-                showSocial ? 'grid-cols-[var(--sidebar-w)_1fr_var(--social-w)]' : ''
-            ].filter(Boolean).join(' ') }
+                posture === 'phone' ? 'grid-cols-1' : (posture === 'rail' ? 'grid-cols-[var(--rail-w)_minmax(0,1fr)]' : 'grid-cols-[var(--sidebar-w)_minmax(0,1fr)]')
+            ].join(' ') }
         >
             <Show when={ posture === 'rail' }>{ () => <NavRail /> }</Show>
             <Show when={ posture === 'sidebar' }>{ () => <Sidebar /> }</Show>
@@ -153,13 +130,14 @@ export default component AppShell(props: { children?: MountNode })
                 <Show when={ !immersive || posture !== 'phone' }>{ () => <TopBar /> }</Show>
                 <ConnectionBanner />
                 <KeysBanner />
-                <main id="app-main" class="relative min-h-0 flex-1 overflow-hidden">
-                    <Outlet children={ props.children } />
-                </main>
+                <div class="flex min-h-0 flex-1">
+                    <main id="app-main" class="relative min-h-0 min-w-0 flex-1 overflow-hidden">
+                        <Outlet children={ props.children } />
+                    </main>
+                    <Show when={ showSocial }>{ () => <SocialPanel /> }</Show>
+                </div>
                 <Show when={ showBottomNav }>{ () => <BottomNav /> }</Show>
             </div>
-
-            <Show when={ showSocial }>{ () => <SocialPanel /> }</Show>
         </div>
         <OverlayHost />
         <ToastHost />

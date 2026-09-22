@@ -5,6 +5,7 @@ import { haptic } from '../../lib/haptics.ts';
 import { routeMeta } from '../../lib/route-meta.ts';
 import { useChat } from '../../stores/chat.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
+import { useSocial } from '../../stores/social.store.ts';
 import Badge from '../ui/badge.component.azeroth';
 import { NAV } from './nav-items.ts';
 import type { NavItem } from './nav-items.ts';
@@ -13,21 +14,20 @@ export default component BottomNav()
 {
     const locale = useLocale();
     const chat = useChat();
+    const social = useSocial();
     const match = useMatch();
     const { navigate } = useNavigate();
 
     derived unread = chat.totalUnread();
 
-    /**
-     * What a tap on a tab does. On a tab you are not in, nothing - the link navigates. On the tab
-     * you ARE in, the link's navigation is cancelled and the tap does what a phone's own tab bar
-     * does: from somewhere inside the tab - a game, a thread - it walks back out to the tab's
-     * root, and from the root it scrolls whatever is open back to the top. Two taps were landing
-     * on an already-active tab and doing nothing, which reads as the tap being dropped.
-     *
-     * The haptic rides on every press either way: a tab bar that ticks only sometimes feels
-     * broken, not quiet.
-     */
+    derived requests = social.incoming().length;
+
+    const countOf = (item: NavItem): number => item.tab === 'chats' ? unread : (item.tab === 'friends' ? requests : 0);
+
+    const labelOf = (item: NavItem): string => item.tab === 'chats'
+        ? locale.plural('common.unread', unread)
+        : locale.plural('common.requests', requests);
+
     const press = (item: NavItem): ((event: MouseEvent) => void) =>
     {
         return (event: MouseEvent) =>
@@ -52,17 +52,17 @@ export default component BottomNav()
         };
     };
 
-    <nav class="glass z-nav safe-b border-t border-line/60" aria-label={ locale.t('app.nav.primary') }>
+    <nav class="z-nav safe-b border-t border-line bg-void/92 backdrop-blur-md" aria-label={ locale.t('app.nav.primary') }>
         <ul class="mx-auto grid h-[var(--nav-h)] w-full max-w-[40rem] grid-cols-5">
             <For each={ NAV } key={ (item) => item.tab } let={ item }>
                 <li class="flex">
-                    <Link to={ item.to } end={ item.end } activeClass="is-active" prefetch="hover" onClick={ press(item) } class="nav-item flex flex-1 flex-col items-center justify-center gap-0.5 rounded-tile text-ui-2xs font-semibold text-muted">
-                        <span class="nav-pill relative flex h-7 w-12 items-center justify-center rounded-full transition-colors duration-200">
+                    <Link to={ item.to } end={ item.end } activeClass="is-active" prefetch="hover" onClick={ press(item) } class="nav-item flex flex-1 flex-col items-center justify-center gap-1 rounded-tile text-ui-2xs font-semibold text-muted transition-colors duration-150">
+                        <span class="nav-pill relative flex h-6 w-10 items-center justify-center">
                             <Icon name={ item.icon } size={ 22 } />
-                            <Show when={ item.tab === 'chats' && unread > 0 }>
+                            <Show when={ countOf(item) > 0 }>
                                 { () =>
-                                    <span class="absolute -end-0.5 -top-1">
-                                        <Badge count={ unread } tone="accent" label={ locale.plural('common.unread', unread) } />
+                                    <span class="absolute -end-0.5 -top-1.5">
+                                        <Badge count={ countOf(item) } tone="accent" label={ labelOf(item) } />
                                     </span>
                                 }
                             </Show>

@@ -11,15 +11,25 @@ export interface NavItem
     end: boolean;
 }
 
+const HOME: NavItem = { tab: 'home', to: '/app', icon: 'home', labelKey: 'app.nav.home', end: true };
+const GAMES: NavItem = { tab: 'games', to: '/app/games', icon: 'games', labelKey: 'app.nav.games', end: false };
+const FRIENDS: NavItem = { tab: 'friends', to: '/app/friends', icon: 'people', labelKey: 'app.nav.friends', end: false };
+const CHATS: NavItem = { tab: 'chats', to: '/app/chats', icon: 'chats', labelKey: 'app.nav.chats', end: false };
+
 export const NAV: NavItem[] = [
-    { tab: 'home', to: '/app', icon: 'home', labelKey: 'app.nav.home', end: true },
-    { tab: 'games', to: '/app/games', icon: 'games', labelKey: 'app.nav.games', end: false },
-    { tab: 'friends', to: '/app/friends', icon: 'people', labelKey: 'app.nav.friends', end: false },
-    { tab: 'chats', to: '/app/chats', icon: 'chats', labelKey: 'app.nav.chats', end: false },
-    { tab: 'me', to: '/app/me', icon: 'me', labelKey: 'app.nav.me', end: false }
+    HOME,
+    GAMES,
+    FRIENDS,
+    CHATS,
+    { tab: 'me', to: '/app/me', icon: 'me', labelKey: 'app.nav.profile', end: false }
 ];
 
-export const SECONDARY: NavItem[] = [
+export const RAIL: NavItem[] = [
+    HOME,
+    GAMES,
+    FRIENDS,
+    CHATS,
+    { tab: 'leaderboard', to: '/app/leaderboard', icon: 'trophy', labelKey: 'app.nav.leaderboard', end: false },
     { tab: 'discover', to: '/app/discover', icon: 'discover', labelKey: 'app.nav.discover', end: false },
-    { tab: 'search', to: '/app/search', icon: 'search', labelKey: 'app.nav.search', end: false }
+    { tab: 'me', to: '/app/me/settings', icon: 'settings', labelKey: 'app.nav.settings', end: false }
 ];

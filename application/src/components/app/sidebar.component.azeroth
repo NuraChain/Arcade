@@ -1,111 +1,68 @@
-import { Link, useNavigate } from 'azerothjs';
+import { Link } from 'azerothjs';
 
 import Icon from '../../icons/icon.component.azeroth';
-import { useCatalogue } from '../../stores/catalogue.store.ts';
-import { useChat } from '../../stores/chat.store.ts';
-import { useLobby } from '../../stores/lobby.store.ts';
-import { useLocale } from '../../stores/locale.store.ts';
-import { useWallet } from '../../stores/wallet.store.ts';
-import { NURA_CHAIN } from '../../data/chain.ts';
 import { useAccount } from '../../stores/account.store.ts';
-import { useSession } from '../../stores/session.store.ts';
+import { useChat } from '../../stores/chat.store.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import { useRealtime } from '../../stores/realtime.store.ts';
 import BrandMark from '../layout/brand-mark.component.azeroth';
 import Avatar from '../ui/avatar.component.azeroth';
-import Button from '../ui/button.component.azeroth';
-import IconButton from '../ui/icon-button.component.azeroth';
-import { NAV, SECONDARY } from './nav-items.ts';
-import { openTable } from '../../lib/open-table.ts';
+import Badge from '../ui/badge.component.azeroth';
+import { RAIL } from './nav-items.ts';
 
 export default component Sidebar()
 {
     const locale = useLocale();
-    const session = useSession();
     const account = useAccount();
-    const catalogue = useCatalogue();
-    const lobby = useLobby();
     const chat = useChat();
-    const wallet = useWallet();
-    const { navigate } = useNavigate();
+    const live = useRealtime();
 
     derived user = account.user();
 
-    const quickPlay = (): void =>
-    {
-        openTable(lobby.quick(catalogue.featured()), navigate);
-    };
+    derived unread = chat.totalUnread();
 
-    <nav class="safe-t safe-b flex h-dvh w-[var(--sidebar-w)] flex-col border-e border-line bg-field" aria-label={ locale.t('app.nav.primary') }>
-        <Link to="/app" class="flex h-[var(--topbar-h)] shrink-0 items-center gap-2.5 border-b border-line px-4" aria-label={ locale.t('app.nav.home') }>
-            <span class="lit flex h-8 w-8 shrink-0 items-center justify-center rounded-control bg-accent-fill text-accent-ink">
-                <Icon name="games" size={ 16 } />
+    derived dot = user !== null && live.status() === 'connected' ? 'online' as const : null;
+
+    derived status = dot === 'online' ? locale.t('common.online') : (user === null ? '' : `@${ user.handle }`);
+
+    <nav class="safe-t safe-b flex h-dvh w-[var(--sidebar-w)] flex-col border-e border-line bg-void" aria-label={ locale.t('app.nav.primary') }>
+        <Link to="/app" class="flex h-[var(--topbar-h)] shrink-0 items-center gap-3 px-5" aria-label={ locale.t('app.nav.home') }>
+            <span class="lit flex h-9 w-9 shrink-0 items-center justify-center rounded-control bg-accent-fill text-accent-ink">
+                <Icon name="games" size={ 19 } />
             </span>
             <BrandMark class="truncate text-ui-lg text-text" />
         </Link>
 
-        <div class="shrink-0 px-3 pt-4">
-            <Button variant="primary" size="md" block leading="zap" onClick={ quickPlay }>{ locale.t('app.nav.quickPlay') }</Button>
-        </div>
-
-        <ul class="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto px-3 pt-4">
-            <For each={ NAV } key={ (item) => item.tab } let={ item }>
+        <ul class="bar flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-3 pt-3">
+            <For each={ RAIL } key={ (item) => item.to } let={ item }>
                 <li>
-                    <Link to={ item.to } end={ item.end } activeClass="is-active" prefetch="hover" class="nav-item nav-row flex h-11 items-center gap-3 rounded-tile px-3 text-ui-md font-semibold text-muted transition-colors duration-150 hover:bg-raised/70 hover:text-text">
+                    <Link to={ item.to } end={ item.end } activeClass="is-active" prefetch="hover" class="nav-item nav-row flex h-11 items-center gap-3 rounded-tile px-3 text-ui-md font-semibold text-muted transition-colors duration-150 hover:bg-raised hover:text-text">
                         <Icon name={ item.icon } size={ 20 } />
-                        <span class="flex-1">{ locale.t(item.labelKey) }</span>
-                        <Show when={ item.tab === 'chats' && chat.totalUnread() > 0 }>
-                            { () => <span class="tally rounded-full bg-accent-fill px-1.5 text-ui-2xs font-bold text-accent-ink">{ locale.n(chat.totalUnread()) }</span> }
+                        <span class="min-w-0 flex-1 truncate">{ locale.t(item.labelKey) }</span>
+                        <Show when={ item.tab === 'chats' && unread > 0 }>
+                            { () => <Badge count={ unread } tone="accent" label={ locale.plural('common.unread', unread) } /> }
                         </Show>
-                    </Link>
-                </li>
-            </For>
-            <li class="my-2 h-px bg-line/70" aria-hidden="true"></li>
-            <For each={ SECONDARY } key={ (item) => item.tab } let={ item }>
-                <li>
-                    <Link to={ item.to } activeClass="is-active" class="nav-item nav-row flex h-11 items-center gap-3 rounded-tile px-3 text-ui-md font-semibold text-muted transition-colors duration-150 hover:bg-raised/70 hover:text-text">
-                        <Icon name={ item.icon } size={ 20 } />
-                        <span>{ locale.t(item.labelKey) }</span>
                     </Link>
                 </li>
             </For>
         </ul>
 
-        <div class="mt-auto flex shrink-0 items-center gap-1 border-t border-line px-2 py-2">
-            <Link to="/app/me" class="flex min-h-11 min-w-0 flex-1 items-center gap-2.5 rounded-tile px-2 transition-colors hover:bg-raised/70">
-                <Avatar person={ user } size="sm" presence="online" />
-                <span class="flex min-w-0 flex-1 flex-col">
-                    <span class="truncate text-ui-sm font-semibold text-text" dir="auto">{ user === null ? '' : user.displayName }</span>
-                    <Show
-                        when={ account.isWallet() }
-                        fallback={
-                            <span class="flex items-center gap-1.5 text-ui-2xs text-live">
-                                <span class="live-dot h-1.5 w-1.5 rounded-full" aria-hidden="true"></span>
-                                { locale.t('common.online') }
-                            </span>
-                        }
-                    >
-                        { () =>
-                            <span class="flex items-center gap-1.5 text-ui-2xs text-live">
-                                <Icon name="key" size={ 11 } />
-                                <span class="truncate">{ locale.t('wallet.chainReady', { chain: NURA_CHAIN.name }) }</span>
-                            </span>
-                        }
-                    </Show>
-                </span>
-            </Link>
-            <IconButton
-                icon="sign-out"
-                label={ account.isWallet() ? locale.t('wallet.disconnect') : locale.t('app.nav.signOut') }
-                variant="ghost"
-                size="sm"
-                flip
-                tipSide="top"
-                onClick={ () =>
-                {
-                    wallet.disconnect();
-                    session.signOut();
-                    navigate('/sign-in', { replace: true });
-                } }
-            />
-        </div>
+        <Show when={ user !== null }>
+            { () =>
+                <Link to="/app/me" class="m-3 flex min-h-14 shrink-0 items-center gap-3 rounded-tile border border-line bg-field px-3 py-2 transition-colors hover:border-line-strong hover:bg-raised">
+                    <Avatar person={ user } size="md" presence={ dot } />
+                    <span class="flex min-w-0 flex-1 flex-col">
+                        <span class="truncate text-ui-sm font-semibold text-text" dir="auto">{ user?.displayName ?? '' }</span>
+                        <span class={ () => [ 'flex min-w-0 items-center gap-1.5 text-ui-xs', dot === 'online' ? 'text-live' : 'text-muted' ].join(' ') }>
+                            <Show when={ dot === 'online' }>
+                                <span class="live-dot h-1.5 w-1.5" aria-hidden="true"></span>
+                            </Show>
+                            <span class="truncate">{ status }</span>
+                        </span>
+                    </span>
+                    <Icon name="chevron-right" size={ 16 } class="icon-flip shrink-0 text-faint" />
+                </Link>
+            }
+        </Show>
     </nav>
 }
