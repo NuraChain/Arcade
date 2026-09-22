@@ -403,9 +403,16 @@ try
         const sections = await dana.page.evaluate(() =>
             [...document.querySelectorAll('main h2')].map((one) => one.textContent?.trim()));
 
-        record('the profile has a record', sections.includes('Record'), sections.join(', ').slice(0, 80));
-        record('and the achievements beside it', sections.includes('Achievements'));
+        record('the profile opens on the achievements', sections.includes('Achievements'), sections.join(', ').slice(0, 80));
         record('and the games it has played', sections.includes('Recent games'));
+
+        await dana.page.getByRole('tab', { name: 'Games' }).click();
+        await dana.page.waitForTimeout(SETTLE_MS);
+
+        const games = await dana.page.evaluate(() =>
+            [...document.querySelectorAll('main h2')].map((one) => one.textContent?.trim()));
+
+        record('and its Games tab has the record', games.includes('Record'), games.join(', ').slice(0, 80));
 
         const history = await dana.page.evaluate(() =>
             [...document.querySelectorAll('main li')]
