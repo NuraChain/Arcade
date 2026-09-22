@@ -213,6 +213,36 @@ export async function personalSign(provider: Eip1193Provider, address: string, m
     return typeof signature === 'string' ? signature : '';
 }
 
+/**
+ * Hands the wallet a transaction somebody else composed.
+ *
+ * `to` and `data` come from the server, which holds the registry ABI for the read path and
+ * would otherwise need a second copy of it here. Nothing is signed on this side and nothing is
+ * signed on that one: the wallet shows the person what they are about to send, which is the only
+ * place that decision belongs.
+ */
+export async function sendTransaction(provider: Eip1193Provider, from: string, to: string, data: string): Promise<string>
+{
+    const hash = await provider.request({ method: 'eth_sendTransaction', params: [{ from, to, data }] });
+    return typeof hash === 'string' ? hash : '';
+}
+
+/**
+ * Whether a transaction landed, and whether it succeeded.
+ *
+ * Null means the chain has not mined it YET, which is not the same as failing - the caller polls.
+ * A receipt with a zero status is a transaction that ran and reverted, and is a definite no.
+ */
+export async function transactionReceipt(provider: Eip1193Provider, hash: string): Promise<boolean | null>
+{
+    const receipt = await provider.request({ method: 'eth_getTransactionReceipt', params: [hash] });
+    if (receipt === null || typeof receipt !== 'object')
+    {
+        return null;
+    }
+    return (receipt as { status?: unknown }).status === '0x1';
+}
+
 export async function switchChain(provider: Eip1193Provider, chain: ChainConfig): Promise<boolean>
 {
     try

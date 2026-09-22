@@ -9,6 +9,8 @@ import {
     rdnsOf,
     readAccounts,
     readChainId,
+    sendTransaction,
+    transactionReceipt,
     requestAccounts,
     switchChain,
     walletName,
@@ -38,6 +40,16 @@ export interface WalletApi
      * their `Resources` line, so what comes back authorises that device and nothing else.
      */
     sign(message: string): Promise<string | null>;
+    /**
+     * Sends a transaction the server composed, answering with its hash or null.
+     *
+     * The wallet is the only thing that can sign one, and the person is the only thing that
+     * can approve it - so a refusal is an ordinary answer here exactly as it is for sign().
+     */
+    send(to: string, data: string): Promise<string | null>;
+
+    /** Whether a sent transaction landed. Null means the chain has not mined it yet. */
+    settled(hash: string): Promise<boolean | null>;
     adopt(provider: Eip1193Provider | null): void;
     disconnect(): void;
     start(): () => void;
@@ -127,6 +139,43 @@ export const useWallet = createStore((): WalletApi =>
                 setFailure(failureOf(error));
                 return null;
             }
+        },
+
+        /**
+         * Sends a transaction the SERVER composed, and answers with its hash.
+         *
+         * Null covers all three of no wallet, no address and the person saying no, which are
+         * answers rather than errors - `failure()` says which. Landing is a separate question:
+         * a hash is a transaction that was accepted for inclusion and nothing more.
+         */
+        async send(to, data)
+        {
+            const wallet = provider();
+            const account = address();
+
+            if (wallet === null || account === null)
+            {
+                setFailure('no-wallet');
+                return null;
+            }
+
+            try
+            {
+                setFailure(null);
+                return await sendTransaction(wallet, account, to, data);
+            }
+            catch (error)
+            {
+                setFailure(failureOf(error));
+                return null;
+            }
+        },
+
+        /** Whether a sent transaction has landed: true, false for a revert, null for not yet. */
+        async settled(hash)
+        {
+            const wallet = provider();
+            return wallet === null ? null : transactionReceipt(wallet, hash).catch(() => null);
         },
 
         async connect()
