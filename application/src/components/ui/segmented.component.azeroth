@@ -20,7 +20,7 @@ export default component Segmented(props: {
     <div
         class={ [
             'inline-flex items-center gap-0.5 rounded-control border border-line bg-sunk p-0.5 coarse:p-1',
-            props.block === true ? 'w-full' : '',
+            props.block === true ? '@container w-full' : '',
             props.class ?? ''
         ].filter(Boolean).join(' ') }
         role="group"
@@ -36,7 +36,7 @@ export default component Segmented(props: {
                 aria-pressed={ props.value === item.id }
                 onClick={ () => props.onChange(item.id) }
             >
-                <Show when={ item.icon !== undefined }>{ () => <Icon name={ item.icon! } size={ 15 } /> }</Show>
+                <Show when={ item.icon !== undefined }>{ () => <Icon name={ item.icon! } size={ 15 } class={ props.block === true ? 'hidden shrink-0 @xs:block' : 'shrink-0' } /> }</Show>
                 <span class="truncate">{ item.label }</span>
             </button>
         </For>
