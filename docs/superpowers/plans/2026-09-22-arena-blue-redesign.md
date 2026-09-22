@@ -367,3 +367,17 @@ Page kit applied everywhere from here on:
 - [ ] Playwright MCP: every route at 390 / 1280 / 1440, `en` and `fa`, screenshots compared with `design.jpg`; console clean.
 - [ ] ui-ux-suite `uiux_audit_run` over `application/src/styles` and `index.html`; MDVP CLI `npx @mdvp/cli@1.36.1 audit http://localhost:5300/app` via `MDVP_BROWSER_URL`; every contrast pair in the palette table re-checked with `uiux_check_contrast`.
 - [ ] Findings fixed, each in its own commit.
+
+### Task 15 (after the redesign): every game has its own achievements, leaderboard and record
+
+Asked for on 2026-09-22: "all games has their own achievement leaderboard and etc". Today the
+leaderboard is already per game (`GET /catalogue/games/:game/leaderboard`), but achievements are one
+shared set of nine and the profile shows one record. This task is a FEATURE, not a restyle, and it
+gets its own brainstorm → spec → plan before any code:
+
+- achievement definitions keyed by game (a `game` column on the definition, `null` for the few that
+  are genuinely cross-game such as `first-seat`), awarded by each engine's own rules, and seeded in
+  `seed-reference.ts` beside the game they belong to; nothing is awarded for a game with no engine
+- the game page shows that game's achievements, leaderboard and the reader's record for it
+- the profile's Games and Achievements tabs group by game
+- every figure has a producer before it has a tile - the rule that deleted the invented stats
