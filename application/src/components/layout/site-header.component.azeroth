@@ -39,7 +39,7 @@ export default component SiteHeader(props: { cta?: boolean })
         <div class="pointer-events-auto relative mx-auto flex h-16 w-full max-w-[80rem] items-center justify-between gap-4 px-5 sm:h-20 sm:px-8">
             <a href="/" class="flex items-center gap-2.5 rounded-control" aria-label={ locale.t('brand.name') }>
 
-                <span class="lit flex h-7 w-7 items-center justify-center rounded-control bg-accent text-accent-ink">
+                <span class="lit flex h-7 w-7 items-center justify-center rounded-control bg-accent-fill text-accent-ink">
                     <Icon name="games" size={ 16 } />
                 </span>
                 <BrandMark class="text-ui-lg text-text" />

@@ -69,13 +69,6 @@ export default component HomePage()
         return [favourite, ...rest].slice(0, 3);
     })();
 
-    /**
-     * Where this account is sitting, from the server.
-     *
-     * There is no "last result" card any more, because nothing produces a result: no game is
-     * played, so no game is won. What replaces it is the honest version of the same idea - the
-     * table you are still at, which survives a reload and a second device because it is a row.
-     */
     derived table = lobby.seated()[0] ?? null;
 
     derived tableGame = table === null ? '' : locale.t(catalogue.byId(table.game as GameId).nameKey);
@@ -126,7 +119,7 @@ export default component HomePage()
             <Show when={ table !== null }>
                 { () =>
                     <Panel to={ `/app/play/${ table!.id }` } tone="live" glow class="flex items-center gap-4">
-                        <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-live text-accent-ink">
+                        <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-live text-bright-ink">
                             <Icon name="seat" size={ 22 } />
                         </span>
                         <span class="flex min-w-0 flex-1 flex-col">

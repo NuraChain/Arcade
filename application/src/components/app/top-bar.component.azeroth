@@ -29,12 +29,6 @@ export default component TopBar()
 
     mount
     {
-        /**
-         * `/` opens search. The one-key convention every desktop app shares, wired where the
-         * search affordance lives. Phone never binds it - there is no keyboard to spend - and
-         * typing in any field is left alone: a `/` typed into a message or a name is text, not a
-         * command. The search page takes it from there, focus and all.
-         */
         const onKey = (event: KeyboardEvent): void =>
         {
             if (event.key !== '/' || event.defaultPrevented || device.posture() === 'phone')
@@ -63,7 +57,7 @@ export default component TopBar()
             <Show when={ phone }>
                 { () =>
                     <Link to="/app" class="flex h-11 items-center gap-2 rounded-full ps-2 pe-3" aria-label={ locale.t('app.nav.home') }>
-                        <span class="lit flex h-7 w-7 items-center justify-center rounded-control bg-accent text-accent-ink">
+                        <span class="lit flex h-7 w-7 items-center justify-center rounded-control bg-accent-fill text-accent-ink">
                             <Icon name="games" size={ 15 } />
                         </span>
                         <BrandMark class="text-ui-lg text-text" />

@@ -128,15 +128,11 @@
     color: var(--accent);
 }
 
-.nav-item.is-active .nav-pill
-{
-    background: color-mix(in oklab, var(--accent) 16%, transparent);
-}
-
 .nav-item.nav-row.is-active
 {
-    background: color-mix(in oklab, var(--accent) 12%, transparent);
-    color: var(--accent);
+    background: linear-gradient(90deg, var(--accent-fill), color-mix(in oklab, var(--accent-fill) 72%, var(--field)));
+    color: var(--accent-ink);
+    box-shadow: 0 8px 24px -12px color-mix(in oklab, var(--accent) 70%, transparent), inset 0 1px 0 rgb(255 255 255 / 0.12);
 }
 
 .overlay-root
@@ -571,32 +567,6 @@
     }
 }
 
-/*
- * The board is square, and it is the height that has to give.
- *
- * `min()` against `100%` is what guarantees no horizontal overflow at any width - the gate reads
- * that on every one of its cells - and `calc(100dvh - chrome)` is what stops a tall phone producing
- * a board taller than the screen it is on. `aspect-ratio` keeps it square with no JavaScript, so
- * nothing has to measure anything on resize.
- */
-/*
- * The board with its four players around it.
- *
- * Each card belongs to the corner of the colour it is playing, which turns "whose turn is it" and
- * "how far has red got" into a glance rather than a scan down a list of names.
- *
- * **Two cards above, two below, at every width** - and floating into the corners only once there is
- * genuinely room beside the board. That order is deliberate: the stacked form is the one that always
- * works, so it is the default rather than the fallback, and the floating form is an enhancement a
- * wide screen earns. The threshold is a CONTAINER query because this column is narrower than the
- * screen whenever the social panel or the chat rail is open - at 1280 with a rail the main column is
- * about 660px, which is nothing like the 1280 a viewport query would have believed.
- *
- * The corners are PHYSICAL. Red is printed top-left on a board that does not mirror, exactly like
- * the tokens, so the placement uses `left`/`right` while the text inside each card keeps the page's
- * own direction. Declaring `direction: ltr` on the wrapper the way `.board-plate` does would have
- * flipped the names too.
- */
 .board-arena
 {
     position: relative;
@@ -623,22 +593,8 @@
         display: block;
     }
 
-    /*
-     * Capped, so the cards sit BESIDE the board rather than at the far edges of a wide column.
-     * The board is at most 34rem and a card 13rem, so the widest this ever needs to be is the two
-     * of them plus a gutter - and a 1920 monitor was otherwise putting three hundred pixels of
-     * nothing between a player's card and the quadrant it belongs to.
-     */
     .board-arena
     {
-        /*
-         * A DEFINITE size, not `max-inline-size` plus auto margins.
-         *
-         * An auto cross-axis margin on a flex item makes it shrink to fit, and with the cards
-         * absolutely positioned the only thing left in flow was the board - whose own width is a
-         * percentage OF THIS ELEMENT. The two sized each other to nothing and the board disappeared
-         * entirely. `min()` gives it a width to centre rather than a width to compute.
-         */
         inline-size: min(100%, 62rem);
         margin-inline: auto;
     }
@@ -663,11 +619,6 @@
     margin-inline: auto;
     flex: none;
 
-    /*
-     * A flex item stretches on the cross axis by default, and stretching wins over aspect-ratio -
-     * which is how a square board came out 544 wide and 891 tall. Opting out of the stretch is what
-     * lets the ratio decide the other side.
-     */
     align-self: center;
 }
 
@@ -677,20 +628,6 @@
     --board-chrome: 14rem;
 }
 
-/*
- * Held sideways there is no room for chrome, and the HEIGHT is the only thing that matters.
- *
- * `--board-max` was `none` here, which reads as "no cap" and is not a length: substituted into
- * `min(100%, var(--board-max), calc(...))` it makes the whole function fail to parse, so the
- * declaration is invalid at computed-value time and `inline-size` falls back to `auto` - losing the
- * `calc(100dvh - chrome)` term that is the entire point of the rule. At 844x390 the stage then
- * stretched to the full column and `aspect-ratio: 1` made it 724px tall inside a 390px-tall window:
- * the top half of a board, with the cards, the turn line and the roll button a scroll away. The
- * matrix tours landscape and passes it, because nothing overflows HORIZONTALLY.
- *
- * `100%` is the same intent written as a length, and it is already the first term of the `min()` -
- * so the cap is simply the column, and the height term does the work.
- */
 @media (orientation: landscape) and (max-height: 520px)
 {
     .board-stage
@@ -700,18 +637,6 @@
     }
 }
 
-/*
- * One card, cut from the fifty-two `tools/blender/deck.py` renders.
- *
- * The sheet is thirteen ranks across and four suits down at 153x216 a cell, and the maths below is
- * exact rather than approximate: the background is scaled so one cell is exactly `--card-w`, and
- * the offset is that many cells across and down. `--at-rank` and `--at-suit` are the card number
- * itself, which is what makes the sprite's grid something no file has to agree about.
- *
- * The edge and the corner radius are CSS rather than drawn, because they are the two things that
- * have to stay crisp: a hairline baked into a 153px cell is a grey smudge by the time the card is
- * 44px wide on a phone, and a drawn corner cannot let the green felt through.
- */
 .card-face
 {
     --card-w: 3.25rem;
@@ -729,24 +654,9 @@
 
     border-radius: calc(var(--card-w) * 0.09);
 
-    /*
-     * A card casts the same shadow in both themes, for the reason its paper is the same cream in
-     * both: it is a printed object on a table rather than a surface in this product's palette.
-     */
     box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.20), 0 1px 2px rgb(0 0 0 / 0.28);
 }
 
-/*
- * A card in the hand, which is a button with a picture of a card in it.
- *
- * An illegal card is DIMMED rather than taken away - a hand that silently lost nine of its thirteen
- * the moment somebody led a suit would read as a bug, and "you must follow suit" is a rule a player
- * learns by watching which cards went quiet. Dimming alone turned a cream card grey against a dark
- * panel, which reads as a card BACK rather than as a card you may not play, so the desaturation does
- * the talking and the opacity only takes the edge off.
- *
- * A playable card lifts on hover, which is what a hand of cards does when a finger goes under one.
- */
 .card-hold:enabled:hover .card-face
 {
     translate: 0 -0.25rem;
@@ -757,24 +667,6 @@
     filter: saturate(0.25) brightness(0.62);
 }
 
-/*
- * The card table, which is a photograph of the object the market scene already stands on.
- *
- * `tools/blender/board.py` renders `table-card.glb` from an orthographic camera pointing straight
- * down - walnut rim, brass inlay, green baize - so the felt a player lays a card on and the felt
- * standing in the night market are one object photographed rather than two descriptions that agree
- * until somebody edits one. The alpha is the octagon, so the page shows through the corners and the
- * table reads as a table instead of a square picture of one.
- *
- * It is capped at 18rem rather than sized from the viewport the way `.board-stage` is, and that is
- * the difference between the two games: a ludo board IS the interface, so it takes every pixel it
- * can get, while a hokm hand is thirteen buttons underneath and the felt only ever has to hold four
- * cards. A table that grew to fill a monitor would push the hand off the bottom of a phone.
- *
- * No `direction` declaration, unlike `.board-plate`. The cards are placed with `left` and `top`,
- * which are physical and never mirror, so the object stays put while the names under them keep the
- * page's own direction - which is what `.board-plate` had to override the hard way.
- */
 .card-table
 {
     position: relative;
@@ -799,20 +691,11 @@
     align-items: center;
     gap: 0.25rem;
 
-    /* A card laid on the table is a bigger object than one in a fan of thirteen in your hand. */
     --card-w: 4rem;
 
-    /*
-     * A card lying on cloth has a contact shadow and the baize underneath is dark, so the drop is
-     * what separates the two. Without it the four cards read as printed ON the felt.
-     */
     filter: drop-shadow(0 2px 3px rgb(0 0 0 / 0.45));
 }
 
-/*
- * The trick is gathered by whoever took it, and until the next card is led their card is the one
- * lying proud of the others - the same thing a hand reaching across the table says at a real one.
- */
 .card-played[data-took='true']
 {
     z-index: 1;
@@ -820,31 +703,8 @@
     filter: drop-shadow(0 3px 6px rgb(0 0 0 / 0.55));
 }
 
-/*
- * The board is a photograph of the object in the market scene, with tokens drawn over it.
- *
- * `tools/blender/board.py` renders `set-ludo.glb` from an orthographic camera pointing straight
- * down, so the image maps cell-for-cell onto the 15x15 grid the rules use. A token is placed by
- * grid coordinate alone - no measuring, no magic offsets - and the printed board underneath is the
- * same walnut-and-card object a player sees on the landing page.
- *
- * The tokens are CSS rather than sprites on purpose: seen from above a ludo token is a disc with a
- * highlight and a contact shadow, and that draws crisply at 288px on a phone and 704px on a monitor
- * from one rule, in the exact palette, with nothing extra to fetch.
- */
 .board-plate
 {
-    /*
-     * The board does NOT mirror, and this is the one line that says so.
-     *
-     * Everything else in this product is authored in logical properties precisely so it flips with
-     * the reading direction - but a ludo board is a printed object, red is in the corner it is
-     * printed in, and the canvas over it has no idea what language the page is in. `.board-token`
-     * places itself with `inset-inline-start`, which on a Persian page measured from the other
-     * edge: every token appeared in the yard diagonally opposite its own. Declaring the plate's own
-     * direction keeps the rule and fixes the object, rather than spelling one child in physical
-     * properties and hoping the next one remembers.
-     */
     direction: ltr;
 
     position: relative;
@@ -860,15 +720,6 @@
 
 .board-token
 {
-    /*
-     * `--rim` and `--cell` are set on `.board-plate` from `game/layout.ts`, which derives both from
-     * the constants the art is drawn with. They were written here as percentages too, and two
-     * spellings of one measurement is one measurement that goes wrong: the grid does not start at
-     * the paper edge - `atlas.py` draws a 32px margin inside its 1024px region and `set-ludo.py`
-     * insets the UVs by the 16px gutter - and assuming it did put every token near an edge about a
-     * quarter of a cell too far out. The offsets below turn a cell into a centred token, and are the
-     * same 0.5 and 0.40 the canvas uses.
-     */
     position: absolute;
     inline-size: calc(var(--cell) * 0.80);
     block-size: calc(var(--cell) * 0.80);

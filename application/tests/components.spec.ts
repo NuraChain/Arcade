@@ -69,6 +69,15 @@ describe('Button', () =>
         const { container } = renderTest(() => Button({ children: 'Join', disabled: true }) as Rendered);
         expect(container.querySelector('button')!.className).not.toContain('cursor-pointer');
     });
+
+    it('fills a primary button with the blue white text passes AA on, never the text blue', () =>
+    {
+        const { container } = renderTest(() => Button({ variant: 'primary', children: 'Go' }) as Rendered);
+        const button = container.querySelector('button')!;
+        expect(button.className).toContain('bg-accent-fill');
+        expect(button.className).toContain('text-accent-ink');
+        expect(button.className).not.toMatch(/\bbg-accent(?!-)/);
+    });
 });
 
 describe('BrandMark', () =>

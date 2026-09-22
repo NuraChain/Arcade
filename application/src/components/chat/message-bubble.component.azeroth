@@ -12,18 +12,6 @@ import type { MessageKey } from '../../locales/en.ts';
 import Avatar from '../ui/avatar.component.azeroth';
 import Button from '../ui/button.component.azeroth';
 
-/**
- * Why a message is not words, as a sentence rather than an empty bubble.
- *
- * An exhaustive record over the union, like every other state map in this product, so a way of
- * failing to open a message that is added later cannot render as nothing.
- *
- * Two of these are alarms and three are not, and the difference is real: `bad-signature` and
- * `tampered` mean the row was EDITED between being written and being read, which is the thing the
- * whole envelope exists to detect. The rest mean this browser simply does not hold what it needs,
- * which happens for ordinary reasons - a device that was not a recipient of an older epoch, a
- * conversation somebody rotated without it.
- */
 const LOCKED: Record<MessageLock, MessageKey> = {
     'unknown-sender': 'locked.unknownSender',
     'bad-signature': 'locked.badSignature',
@@ -60,14 +48,6 @@ export default component MessageBubble(props: { message: Message; me: string; sh
 
     derived firstName = person === null ? props.message.from : person.displayName.split(' ')[0];
 
-    /**
-     * What this line SAYS.
-     *
-     * A server-authored message carries a catalogue key rather than prose, and the set of keys
-     * this client knows how to render is declared in `lib/lines.ts`. A key it has never heard of
-     * renders as nothing rather than as its own name: an older client meeting a newer server is a
-     * designed state, not a crash and not a leak of an internal identifier onto the screen.
-     */
     const nameOf = (handle: string): string =>
     {
         const person = people.byHandle(handle);
@@ -99,8 +79,6 @@ export default component MessageBubble(props: { message: Message; me: string; sh
         {
             return;
         }
-        // The invitation names its table. There is nothing to reconstruct from a game and a
-        // sender any more: either the line carries an id or it is too old to sit down at.
         const tableId = props.message.ref?.tableId;
         if (tableId === undefined)
         {
@@ -190,7 +168,7 @@ export default component MessageBubble(props: { message: Message; me: string; sh
                                 dir="auto"
                                 class={ () => [
                                     'rounded-tile px-3 py-2 text-ui-base leading-snug',
-                                    mine ? 'bg-accent text-accent-ink' : 'bg-raised text-text'
+                                    mine ? 'bg-accent-fill text-accent-ink' : 'bg-raised text-text'
                                 ].join(' ') }
                             >
                                 { said }

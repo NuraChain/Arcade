@@ -6,30 +6,11 @@ import { usePeople } from '../../stores/people.store.ts';
 import { playersOf, scoreOf, type MatchPlayer } from '../../data/match.ts';
 import type { MatchView } from '../../api.ts';
 
-/**
- * How a game ended, and the offer to play another.
- *
- * A component of this name was deleted with the matchmaking simulation, where it declared a winner
- * nobody had beaten. This one reads the finished match: who won, what it did to each rating, and
- * whether it ended at all - because two quite different things end a game here and the product must
- * not call them the same. Four tokens home is `won`. Being the last one left in a room everybody
- * else walked out of is `abandoned`, and it moves no rating, so there is no number to print beside
- * it and the copy says what happened rather than congratulating anybody.
- *
- * **Playing again is the table's verb, not the match's.** A finished match leaves the seats exactly
- * where they were, so a rematch is the same Start this table already has - which is why this panel
- * asks its caller for one rather than knowing how to deal a board.
- */
 export default component MatchResult(props: { match: MatchView; mine?: number; busy?: boolean; onAgain?: () => void })
 {
     const locale = useLocale();
     const people = usePeople();
 
-    /**
-     * Every game's seats, not ludo's. The badge beside each name is `scoreOf`, which is the one
-     * number that game measures a result in - four tokens home, or a score out of seven - because a
-     * panel every game shares must not hold any game's vocabulary.
-     */
     derived chairs = playersOf(props.match)
         .map((player) => ({ player, score: scoreOf(props.match, player.seat) }))
         .sort((a, b) =>
@@ -73,12 +54,6 @@ export default component MatchResult(props: { match: MatchView; mine?: number; b
             ? null
             : player.ratingAfter - player.ratingBefore;
 
-    /**
-     * Composed here rather than in the catalogue, because it is a sign, a number and a separator
-     * and nothing else - and a string that reads identically in both languages fails
-     * `data.spec.ts` for exactly that reason. The digits go through `locale.n`, which is what
-     * makes them Persian numerals on a Persian page.
-     */
     const swing = (points: number, after: number): string =>
         `${ points >= 0 ? '+' : '−' }${ locale.n(Math.abs(points)) } · ${ locale.n(after) }`;
 
@@ -100,7 +75,7 @@ export default component MatchResult(props: { match: MatchView; mine?: number; b
             <For each={ chairs } key={ (chair) => chair.player.seat } let={ chair }>
                 <li class="flex items-center gap-2 rounded-tile bg-raised/50 px-2.5 py-2">
                     <span
-                        class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent text-ui-2xs font-bold text-accent-ink"
+                        class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent-fill text-ui-2xs font-bold text-accent-ink"
                         aria-hidden="true"
                     >
                         { locale.n(chair.score) }

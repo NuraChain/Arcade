@@ -5,27 +5,12 @@ import { useLocale } from '../../stores/locale.store.ts';
 import SiteFooter from './site-footer.component.azeroth';
 import SiteHeader from './site-header.component.azeroth';
 
-/**
- * The wallet chooser, fetched the first time somebody asks for it.
- *
- * It is a dynamic import and it has to stay one. The dialog reaches the wallet store, which
- * reaches `api.ts`, which has a TOP-LEVEL await that reads the route manifest - and the landing
- * is prerendered to a file, so there is no manifest embedded in it and the client would fall back
- * to fetching `/api/_manifest`. A static import here would therefore make a page whose whole
- * promise is "paints with no JavaScript and no server" open a request to the server on every
- * visit. This is the same rule `lib/guards.ts` follows, for the same reason.
- */
 export default component PublicShell(props: { children?: MountNode })
 {
     const locale = useLocale();
     const connect = useConnect();
     const { navigate } = useNavigate();
 
-    // The loaded component is held in a PLAIN LET and a separate boolean says when it is there.
-    // A signal cannot hold it: a setter treats a bare function argument as an updater, so
-    // `Dialog = module.default` CALLS the component with the previous value - which is null -
-    // instead of storing it, and the symptom is a component whose props are null at construction
-    // rather than any kind of error.
     let Dialog: ((props: { close: () => void; navigate: (to: string) => void }) => MountNode) | null = null;
 
     state loaded = false;
@@ -48,7 +33,7 @@ export default component PublicShell(props: { children?: MountNode })
 
         <a
             href="#main"
-            class="sr-only rounded-full bg-accent px-4 py-2 text-ui-base font-semibold text-accent-ink focus:not-sr-only focus:absolute focus:start-4 focus:top-4 focus:z-50"
+            class="sr-only rounded-full bg-accent-fill px-4 py-2 text-ui-base font-semibold text-accent-ink focus:not-sr-only focus:absolute focus:start-4 focus:top-4 focus:z-50"
         >
             { locale.t('a11y.skip') }
         </a>

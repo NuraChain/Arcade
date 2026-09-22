@@ -1,7 +1,7 @@
 @theme
 {
-    --font-display: 'Fraunces Variable', Georgia, 'Times New Roman', serif;
-    --font-ui: 'Hanken Grotesk Variable', 'Segoe UI', system-ui, ui-sans-serif, sans-serif;
+    --font-display: 'Inter Variable', 'Segoe UI', system-ui, ui-sans-serif, sans-serif;
+    --font-ui: 'Inter Variable', 'Segoe UI', system-ui, ui-sans-serif, sans-serif;
     --font-persian: 'Vazirmatn Variable', Vazirmatn, 'Segoe UI', Tahoma, ui-sans-serif, sans-serif;
 
     --ease-reveal: cubic-bezier(0.16, 1, 0.3, 1);
@@ -45,6 +45,7 @@
     --radius-tile: 0.625rem;
     --radius-panel: 0.875rem;
     --radius-sheet: 1.125rem;
+    --radius-hero: 1rem;
 
     --shadow-1: 0 1px 2px color-mix(in oklab, var(--void) 55%, transparent);
     --shadow-2: 0 10px 28px -14px color-mix(in oklab, var(--void) 80%, transparent);
@@ -134,36 +135,39 @@
 {
     color-scheme: dark;
 
-    --void: oklch(0.175 0.023 262);
-    --sunk: oklch(0.135 0.021 262);
-    --field: oklch(0.222 0.026 262);
-    --raised: oklch(0.277 0.030 261);
-    --lifted: oklch(0.320 0.032 261);
-    --line: oklch(0.336 0.033 261);
-    --line-strong: oklch(0.424 0.038 262);
+    --void: #0B1220;
+    --sunk: #080D19;
+    --field: #111827;
+    --raised: #172133;
+    --lifted: #1B263B;
+    --line: #1F2937;
+    --line-strong: #334155;
 
-    --text: oklch(0.940 0.012 253);
-    --muted: oklch(0.722 0.028 256);
-    --faint: oklch(0.560 0.031 258);
+    --text: #F8FAFC;
+    --muted: #94A3B8;
+    --faint: #7B8AA3;
 
-    --accent: oklch(0.722 0.147 251);
-    --accent-ink: oklch(0.175 0.023 262);
-    --live: oklch(0.816 0.157 165);
-    --gold: oklch(0.840 0.146 82);
-    --win: oklch(0.834 0.164 155);
-    --danger: oklch(0.688 0.185 18);
-    --madder: oklch(0.618 0.191 17);
+    --accent: #3B82F6;
+    --accent-fill: #2563EB;
+    --accent-ink: #FFFFFF;
+    --bright-ink: #0B1220;
+    --live: #22C55E;
+    --gold: #F59E0B;
+    --win: #4ADE80;
+    --danger: #EF4444;
+    --danger-fill: #DC2626;
+    --madder: #F43F5E;
 
-    --glass: color-mix(in oklab, var(--field) 72%, transparent);
-    --scrim: color-mix(in oklab, var(--void) 66%, transparent);
+    --glass: color-mix(in oklab, var(--void) 82%, transparent);
+    --scrim: color-mix(in oklab, var(--void) 70%, transparent);
 
-    --world-sky: #0B111B;
-    --world-fog: #141C2A;
+    --world-sky: #0B1220;
+    --world-fog: #131C2E;
     --world-key: #FFC46A;
-    --world-fill: #24344C;
+    --world-fill: #22324D;
     --world-rim: #7FA6D6;
     --world-lamp: #FFB43D;
-    --world-stone: #2C3A50;
+    --world-stone: #2A3852;
     --world-lamp-intensity: 1;
     --world-fog-density: 1;
     --world-env: 0.35;
@@ -172,12 +176,7 @@
     --ludo-green: #2E854D;
     --ludo-yellow: #EDBD2E;
     --ludo-blue: #2E66B8;
-    --board-plate: #E8DCC4;
-    --board-line: #5C4C3D;
-    --board-safe: #8C7A5E;
-    --board-hint: var(--accent);}
-
-
+}
 
 @theme inline
 {
@@ -192,10 +191,13 @@
     --color-muted: var(--muted);
     --color-faint: var(--faint);
     --color-accent: var(--accent);
+    --color-accent-fill: var(--accent-fill);
     --color-accent-ink: var(--accent-ink);
+    --color-bright-ink: var(--bright-ink);
     --color-live: var(--live);
     --color-gold: var(--gold);
     --color-win: var(--win);
     --color-danger: var(--danger);
+    --color-danger-fill: var(--danger-fill);
     --color-madder: var(--madder);
 }

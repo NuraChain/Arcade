@@ -27,14 +27,6 @@ export default component GameCard(props: {
 
     derived href = `/app/games/${ props.game.slug }`;
 
-    /**
-     * Whether this game can actually be opened, which until now no card asked.
-     *
-     * `games.status` has carried `coming-soon` since the catalogue was written and exactly one
-     * component in the client ever read it - so three games with no engine offered a Quick play
-     * button that the server answers 422 to. A button that cannot do what it says is the defect
-     * this product keeps deleting.
-     */
     derived playable = catalogue.status(props.game.id) === 'available';
 
     <article class={ [
@@ -54,7 +46,7 @@ export default component GameCard(props: {
             >
                 { () =>
                     <span class="absolute start-2.5 top-2.5 flex items-center gap-1.5 rounded-control border border-line/60 bg-void/85 px-2 py-1 text-ui-2xs font-bold text-live backdrop-blur-md">
-                        <span class="live-dot" aria-hidden="true"></span>
+                        <span class="live-dot h-1.5 w-1.5" aria-hidden="true"></span>
                         <span class="tally">{ locale.plural('games.live.playing', stats.playersOnline) }</span>
                     </span>
                 }

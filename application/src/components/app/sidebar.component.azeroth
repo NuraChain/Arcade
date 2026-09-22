@@ -36,7 +36,7 @@ export default component Sidebar()
 
     <nav class="safe-t safe-b flex h-dvh w-[var(--sidebar-w)] flex-col border-e border-line bg-field" aria-label={ locale.t('app.nav.primary') }>
         <Link to="/app" class="flex h-[var(--topbar-h)] shrink-0 items-center gap-2.5 border-b border-line px-4" aria-label={ locale.t('app.nav.home') }>
-            <span class="lit flex h-8 w-8 shrink-0 items-center justify-center rounded-control bg-accent text-accent-ink">
+            <span class="lit flex h-8 w-8 shrink-0 items-center justify-center rounded-control bg-accent-fill text-accent-ink">
                 <Icon name="games" size={ 16 } />
             </span>
             <BrandMark class="truncate text-ui-lg text-text" />
@@ -53,7 +53,7 @@ export default component Sidebar()
                         <Icon name={ item.icon } size={ 20 } />
                         <span class="flex-1">{ locale.t(item.labelKey) }</span>
                         <Show when={ item.tab === 'chats' && chat.totalUnread() > 0 }>
-                            { () => <span class="tally rounded-full bg-accent px-1.5 text-ui-2xs font-bold text-accent-ink">{ locale.n(chat.totalUnread()) }</span> }
+                            { () => <span class="tally rounded-full bg-accent-fill px-1.5 text-ui-2xs font-bold text-accent-ink">{ locale.n(chat.totalUnread()) }</span> }
                         </Show>
                     </Link>
                 </li>

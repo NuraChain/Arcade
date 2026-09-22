@@ -5,21 +5,17 @@ export type AvatarSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl' | '2xl';
 export type BadgeVariant = 'solid' | 'soft' | 'outline';
 export type BadgeSize = 'sm' | 'md';
 
-/**
- * The tones a Panel can wear. `madder` is absent on purpose: it means a table is playing for
- * something, and the destructive colour is `danger`. Leaving it out makes the wrong one unwritable.
- */
 export type PanelTone = 'field' | 'sunk' | 'accent' | 'live' | 'danger' | 'dashed';
 export type PanelPad = 'none' | 'sm' | 'md' | 'lg';
 export type PanelStack = 'none' | 'sm' | 'md';
 
 export const BUTTON_VARIANT: Record<ButtonVariant, string> = {
-    primary: 'bg-accent text-accent-ink hover:brightness-110 active:brightness-95',
+    primary: 'bg-accent-fill text-accent-ink shadow-[inset_0_1px_0_rgb(255_255_255/0.12)] hover:brightness-110 active:brightness-95',
     secondary: 'bg-raised text-text hover:bg-line-strong active:brightness-95',
     outline: 'border border-line-strong text-text hover:border-accent hover:text-accent',
     ghost: 'text-muted hover:bg-raised hover:text-text',
     destructive: 'bg-danger/15 text-danger hover:bg-danger/25',
-    live: 'bg-live text-accent-ink hover:brightness-110 active:brightness-95'
+    live: 'bg-live text-bright-ink hover:brightness-110 active:brightness-95'
 };
 
 export const BUTTON_SIZE: Record<ButtonSize, string> = {
@@ -46,12 +42,12 @@ export const TONE_TEXT: Record<Tone, string> = {
 
 export const TONE_FILL: Record<Tone, string> = {
     neutral: 'bg-raised text-text',
-    accent: 'bg-accent text-accent-ink',
-    live: 'bg-live text-accent-ink',
-    gold: 'bg-gold text-accent-ink',
-    win: 'bg-win text-accent-ink',
-    danger: 'bg-danger text-accent-ink',
-    madder: 'bg-madder text-accent-ink'
+    accent: 'bg-accent-fill text-accent-ink',
+    live: 'bg-live text-bright-ink',
+    gold: 'bg-gold text-bright-ink',
+    win: 'bg-win text-bright-ink',
+    danger: 'bg-danger-fill text-accent-ink',
+    madder: 'bg-madder text-bright-ink'
 };
 
 export const TONE_SOFT: Record<Tone, string> = {

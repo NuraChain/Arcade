@@ -17,7 +17,7 @@ export default component QuickPlayButton(props: {
     <button
         type="button"
         class={ [
-            'sheen group flex w-full cursor-pointer items-center gap-3 rounded-panel bg-accent text-start text-accent-ink shadow-glow-accent',
+            'sheen group flex w-full cursor-pointer items-center gap-3 rounded-panel bg-accent-fill text-start text-accent-ink shadow-glow-accent',
             'transition duration-200 ease-[var(--ease-ui)] hover:brightness-105 active:scale-[0.99] disabled:cursor-wait disabled:brightness-90',
             hero ? 'p-4' : 'p-3',
             props.class ?? ''

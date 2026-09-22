@@ -1,7 +1,6 @@
 @import 'tailwindcss';
 
-@import '@fontsource-variable/fraunces/wonk.css';
-@import '@fontsource-variable/hanken-grotesk';
+@import '@fontsource-variable/inter';
 
 @import '@fontsource-variable/vazirmatn';
 

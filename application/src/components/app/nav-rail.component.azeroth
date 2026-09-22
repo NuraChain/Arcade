@@ -19,7 +19,7 @@ export default component NavRail()
 
     <nav class="bar safe-t safe-b flex h-dvh w-[var(--rail-w)] flex-col items-center border-e border-line bg-field" aria-label={ locale.t('app.nav.primary') }>
         <span class="flex h-[var(--topbar-h)] w-full shrink-0 items-center justify-center border-b border-line">
-            <Link to="/app" class="lit flex h-10 w-10 items-center justify-center rounded-control bg-accent text-accent-ink coarse:h-11 coarse:w-11" aria-label={ locale.t('app.nav.home') }>
+            <Link to="/app" class="lit flex h-10 w-10 items-center justify-center rounded-control bg-accent-fill text-accent-ink coarse:h-11 coarse:w-11" aria-label={ locale.t('app.nav.home') }>
                 <Icon name="games" size={ 18 } />
             </Link>
         </span>

@@ -9,7 +9,6 @@
         -webkit-font-smoothing: antialiased;
     }
 
-    
     html:lang(fa)
     {
         --font-display: var(--font-persian);
@@ -18,28 +17,23 @@
         line-height: 1.85;
     }
 
-    
     h1, h2, h3
     {
         font-family: var(--font-display);
-        font-variation-settings: 'WONK' 1;
-        font-weight: 600;
+        font-weight: 700;
         letter-spacing: -0.02em;
-        line-height: 1.08;
+        line-height: 1.12;
         text-wrap: balance;
     }
 
-    
     html:lang(fa) h1,
     html:lang(fa) h2,
     html:lang(fa) h3
     {
-        font-variation-settings: normal;
         letter-spacing: normal;
         line-height: 1.4;
     }
 
-    
     :focus-visible
     {
         outline: 2px solid var(--accent);
@@ -47,7 +41,6 @@
         border-radius: 3px;
     }
 
-    
     body
     {
         overflow-anchor: none;
@@ -110,6 +103,8 @@
 
 @utility live-dot
 {
+    flex-shrink: 0;
+    border-radius: 9999px;
     background: var(--live);
     box-shadow: 0 0 0 3px color-mix(in oklab, var(--live) 25%, transparent);
 }
@@ -154,9 +149,8 @@
 @utility title
 {
     font-family: var(--font-ui);
-    font-variation-settings: normal;
     font-weight: 700;
-    letter-spacing: -0.012em;
+    letter-spacing: -0.02em;
     line-height: 1.15;
     text-wrap: balance;
 }
@@ -169,7 +163,6 @@
 @utility label
 {
     font-family: var(--font-ui);
-    font-variation-settings: normal;
     font-weight: 600;
     letter-spacing: normal;
     line-height: 1.4;
@@ -217,6 +210,26 @@
 {
     box-shadow: 0 0 0 1px color-mix(in oklab, var(--accent) 40%, transparent),
                 0 8px 40px -12px color-mix(in oklab, var(--accent) 55%, transparent);
+}
+
+@utility hero-surface
+{
+    border: 1px solid color-mix(in oklab, var(--accent) 22%, var(--line));
+    background:
+        radial-gradient(120% 90% at 85% 0%, color-mix(in oklab, var(--accent) 22%, transparent), transparent 60%),
+        linear-gradient(135deg, #0F1B33 0%, var(--field) 55%, var(--void) 100%);
+}
+
+[dir='rtl'] .hero-surface
+{
+    background:
+        radial-gradient(120% 90% at 15% 0%, color-mix(in oklab, var(--accent) 22%, transparent), transparent 60%),
+        linear-gradient(225deg, #0F1B33 0%, var(--field) 55%, var(--void) 100%);
+}
+
+@utility glow-cta
+{
+    box-shadow: 0 10px 28px -12px color-mix(in oklab, var(--accent) 75%, transparent), inset 0 1px 0 rgb(255 255 255 / 0.14);
 }
 
 @utility scrim

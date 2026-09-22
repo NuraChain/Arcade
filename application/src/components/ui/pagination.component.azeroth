@@ -51,7 +51,7 @@ export default component Pagination(props: {
                                             type="button"
                                             class={ [
                                                 'tally flex h-9 min-w-9 cursor-pointer items-center justify-center rounded-control px-2 text-ui-sm font-semibold transition-colors coarse:h-11 coarse:min-w-11',
-                                                item === view.page ? 'bg-accent text-accent-ink' : 'text-muted hover:bg-raised hover:text-text'
+                                                item === view.page ? 'bg-accent-fill text-accent-ink' : 'text-muted hover:bg-raised hover:text-text'
                                             ].join(' ') }
                                             aria-current={ item === view.page ? 'page' : undefined }
                                             aria-label={ locale.t('page.go', { page: locale.n(item as number) }) }
