@@ -1,7 +1,7 @@
 """
 The fifty-two card faces a player presses, drawn by the code that prints the deck in the market.
 
-Run by hand, like `art.py` and `board.py`, because `lib/atlas.py` reaches for Blender's font module:
+Run by hand, like `board.py`, because `lib/atlas.py` reaches for Blender's font module:
 
     blender -b -P tools/blender/deck.py
 

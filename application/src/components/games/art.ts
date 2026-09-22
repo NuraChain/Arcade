@@ -7,12 +7,12 @@ export const GAME_HUE: Record<GameId, number> = {
     ludo: 265
 };
 
-export function gameArt(game: GameId, width: 640 | 1280): string
+export function gameArt(game: GameId): string
 {
-    return `/art/games/${ game }-${ width }.webp`;
+    return `/art/games/${ game }.svg`;
 }
 
-export function gameArtSet(game: GameId): string
+export function gameIcon(game: GameId): string
 {
-    return `${ gameArt(game, 640) } 640w, ${ gameArt(game, 1280) } 1280w`;
+    return `/art/games/${ game }-icon.svg`;
 }

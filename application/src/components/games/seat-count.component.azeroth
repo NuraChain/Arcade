@@ -1,0 +1,13 @@
+import type { Game } from '../../data/games.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+
+export default component SeatCount(props: { game: Game; class?: string })
+{
+    const locale = useLocale();
+
+    derived range = props.game.minPlayers === props.game.maxPlayers
+        ? locale.n(props.game.minPlayers)
+        : `${ locale.n(props.game.minPlayers) }–${ locale.n(props.game.maxPlayers) }`;
+
+    <span class={ props.class ?? '' }><span class="tally">{ range }</span> { locale.t('games.players') }</span>
+}

@@ -1,0 +1,249 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 320" preserveAspectRatio="xMidYMid slice">
+<defs>
+    <filter id="soft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="6"/></filter>
+    <filter id="softer" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="2.4"/></filter>
+    <filter id="lift" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#020617" flood-opacity="0.5"/></filter>
+    <filter id="grain" x="0" y="0" width="100%" height="100%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="7" result="noise"/>
+        <feColorMatrix in="noise" type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.09 0"/>
+        <feComposite in2="SourceGraphic" operator="in"/>
+    </filter>
+    <radialGradient id="vignette" cx="0.5" cy="0.42" r="0.75">
+        <stop offset="0.55" stop-color="#020617" stop-opacity="0"/>
+        <stop offset="1" stop-color="#020617" stop-opacity="0.72"/>
+    </radialGradient>
+    <radialGradient id="spot" cx="0.5" cy="0.15" r="0.7">
+        <stop offset="0" stop-color="#FFF6E0" stop-opacity="0.22"/>
+        <stop offset="1" stop-color="#FFF6E0" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="card-face" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#FFFFFF"/>
+        <stop offset="1" stop-color="#E2E8F0"/>
+    </linearGradient>
+    <linearGradient id="card-back" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#3B6FE0"/>
+        <stop offset="1" stop-color="#172E7A"/>
+    </linearGradient>
+    <pattern id="lattice" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+        <path d="M0 0H8M0 0V8" stroke="#93C5FD" stroke-width="1" opacity="0.32"/>
+    </pattern>
+    <radialGradient id="gloss" cx="0.25" cy="0.12" r="0.95">
+        <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.3"/>
+        <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="pip" cx="0.4" cy="0.35" r="0.7">
+        <stop offset="0" stop-color="#FFFFFF"/>
+        <stop offset="1" stop-color="#D5DDE8"/>
+    </radialGradient>
+    <path id="heart" d="M0 7.5C-1.2 6.4-12 -1.1-12 -7.6C-12 -12-8.6-15-5-15C-2.6-15-0.8-13.7 0-12C0.8-13.7 2.6-15 5-15C8.6-15 12-12 12-7.6C12-1.1 1.2 6.4 0 7.5Z"/>
+    <path id="spade" d="M0 -15C-1.2 -12.6-12 -5.8-12 1.6C-12 6-8.8 8.6-5.4 8.6C-3.4 8.6-1.8 7.7-0.9 6.4C-1.1 9.6-2.4 12.2-4.6 14H4.6C2.4 12.2 1.1 9.6 0.9 6.4C1.8 7.7 3.4 8.6 5.4 8.6C8.8 8.6 12 6 12 1.6C12 -5.8 1.2 -12.6 0 -15Z"/>
+    <path id="diamond" d="M0 -15L10.5 0L0 15L-10.5 0Z"/>
+    <path id="club" d="M0 -15A6.2 6.2 0 0 1 5.4 -5.8A6.2 6.2 0 1 1 1.6 5.2C1.9 8.6 3.1 11.6 5 14H-5C-3.1 11.6-1.9 8.6-1.6 5.2A6.2 6.2 0 1 1-5.4 -5.8A6.2 6.2 0 0 1 0 -15Z"/><radialGradient id="surface" cx="0.5" cy="0.35" r="0.8"><stop offset="0" stop-color="#1F7A4D"/><stop offset="1" stop-color="#08281A"/></radialGradient><linearGradient id="chip-red" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#F87171"/><stop offset="1" stop-color="#B91C1C"/></linearGradient><linearGradient id="chip-green" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4ADE80"/><stop offset="1" stop-color="#15803D"/></linearGradient><linearGradient id="chip-blue" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#60A5FA"/><stop offset="1" stop-color="#1D4ED8"/></linearGradient><linearGradient id="chip-black" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#64748B"/><stop offset="1" stop-color="#1E293B"/></linearGradient><linearGradient id="chip-gold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FCD34D"/><stop offset="1" stop-color="#D97706"/></linearGradient><linearGradient id="rail" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5A3A22"/><stop offset="1" stop-color="#23140A"/></linearGradient>
+</defs>
+<rect width="480" height="320" fill="url(#surface)"/>
+<rect width="480" height="320" fill="#FFFFFF" filter="url(#grain)"/>
+<ellipse cx="240" cy="420" rx="360" ry="150" fill="none" stroke="url(#rail)" stroke-width="40"/>
+<ellipse cx="240" cy="420" rx="336" ry="128" fill="none" stroke="#FFFFFF" stroke-opacity="0.08" stroke-width="2"/>
+<g transform="translate(160 96) rotate(-2)" filter="url(#lift)">
+    <rect x="-26" y="-37" width="52" height="74" rx="4.68" fill="url(#card-face)"/>
+    <rect x="-25.4" y="-36.4" width="50.8" height="72.8" rx="4.68" fill="none" stroke="#CBD5E1" stroke-width="1.2"/>
+    <g >
+        <text x="-17.16" y="-22.2" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="10.4" font-weight="800" fill="#DC2626" text-anchor="middle">Q</text>
+        <use href="#heart" fill="#DC2626" transform="translate(-17.16 -14.059999999999999) scale(0.35359999999999997)"/>
+    </g>
+    <g transform="rotate(180)">
+        <text x="-17.16" y="-22.2" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="10.4" font-weight="800" fill="#DC2626" text-anchor="middle">Q</text>
+        <use href="#heart" fill="#DC2626" transform="translate(-17.16 -14.059999999999999) scale(0.35359999999999997)"/>
+    </g>
+    <use href="#heart" fill="#DC2626" transform="translate(0 1.48) scale(1.248)"/>
+    <rect x="-26" y="-37" width="52" height="74" rx="4.68" fill="url(#gloss)"/>
+</g>
+<g transform="translate(216 94) rotate(1)" filter="url(#lift)">
+    <rect x="-26" y="-37" width="52" height="74" rx="4.68" fill="url(#card-face)"/>
+    <rect x="-25.4" y="-36.4" width="50.8" height="72.8" rx="4.68" fill="none" stroke="#CBD5E1" stroke-width="1.2"/>
+    <g >
+        <text x="-17.16" y="-22.2" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="10.4" font-weight="800" fill="#0F172A" text-anchor="middle">10</text>
+        <use href="#spade" fill="#0F172A" transform="translate(-17.16 -14.059999999999999) scale(0.35359999999999997)"/>
+    </g>
+    <g transform="rotate(180)">
+        <text x="-17.16" y="-22.2" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="10.4" font-weight="800" fill="#0F172A" text-anchor="middle">10</text>
+        <use href="#spade" fill="#0F172A" transform="translate(-17.16 -14.059999999999999) scale(0.35359999999999997)"/>
+    </g>
+    <use href="#spade" fill="#0F172A" transform="translate(0 1.48) scale(1.248)"/>
+    <rect x="-26" y="-37" width="52" height="74" rx="4.68" fill="url(#gloss)"/>
+</g>
+<g transform="translate(272 95) rotate(-1)" filter="url(#lift)">
+    <rect x="-26" y="-37" width="52" height="74" rx="4.68" fill="url(#card-face)"/>
+    <rect x="-25.4" y="-36.4" width="50.8" height="72.8" rx="4.68" fill="none" stroke="#CBD5E1" stroke-width="1.2"/>
+    <g >
+        <text x="-17.16" y="-22.2" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="10.4" font-weight="800" fill="#DC2626" text-anchor="middle">J</text>
+        <use href="#diamond" fill="#DC2626" transform="translate(-17.16 -14.059999999999999) scale(0.35359999999999997)"/>
+    </g>
+    <g transform="rotate(180)">
+        <text x="-17.16" y="-22.2" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="10.4" font-weight="800" fill="#DC2626" text-anchor="middle">J</text>
+        <use href="#diamond" fill="#DC2626" transform="translate(-17.16 -14.059999999999999) scale(0.35359999999999997)"/>
+    </g>
+    <use href="#diamond" fill="#DC2626" transform="translate(0 1.48) scale(1.248)"/>
+    <rect x="-26" y="-37" width="52" height="74" rx="4.68" fill="url(#gloss)"/>
+</g>
+<g transform="translate(328 93) rotate(2)" filter="url(#lift)">
+    <rect x="-26" y="-37" width="52" height="74" rx="4.68" fill="url(#card-back)"/>
+    <rect x="-21" y="-32" width="42" height="64" rx="2.808" fill="url(#lattice)" stroke="#BFDBFE" stroke-opacity="0.55" stroke-width="1"/>
+    <circle r="7.8" fill="#1E3A8A" stroke="#BFDBFE" stroke-width="1.2"/>
+    <use href="#diamond" fill="#BFDBFE" transform="scale(0.312)"/>
+    <rect x="-26" y="-37" width="52" height="74" rx="4.68" fill="url(#gloss)"/>
+</g>
+<ellipse cx="98" cy="227.664" rx="32.199999999999996" ry="9.576" fill="#000000" opacity="0.5" filter="url(#softer)"/>
+<g>
+    <g transform="translate(92.84 214)">
+        <ellipse cy="7.28" rx="28" ry="10.64" fill="#020617"/>
+        <rect x="-28" y="0" width="56" height="7.28" fill="url(#chip-black)"/>
+        <ellipse cy="3.64" rx="28" ry="10.64" fill="none" stroke="#FFFFFF" stroke-width="6.5520000000000005" stroke-dasharray="5.6000000000000005 10.08" opacity="0.92"/>
+        <ellipse rx="28" ry="10.64" fill="url(#chip-black)"/>
+        <ellipse rx="19.040000000000003" ry="7.235200000000001" fill="none" stroke="#FFFFFF" stroke-width="1.3" stroke-dasharray="3.4 3.4" opacity="0.75"/>
+    </g>
+    <g transform="translate(91.16 205.72)">
+        <ellipse cy="7.28" rx="28" ry="10.64" fill="#0F3A8C"/>
+        <rect x="-28" y="0" width="56" height="7.28" fill="url(#chip-blue)"/>
+        <ellipse cy="3.64" rx="28" ry="10.64" fill="none" stroke="#FFFFFF" stroke-width="6.5520000000000005" stroke-dasharray="5.6000000000000005 10.08" opacity="0.92"/>
+        <ellipse rx="28" ry="10.64" fill="url(#chip-blue)"/>
+        <ellipse rx="19.040000000000003" ry="7.235200000000001" fill="none" stroke="#FFFFFF" stroke-width="1.3" stroke-dasharray="3.4 3.4" opacity="0.75"/>
+    </g>
+    <g transform="translate(92.84 197.44)">
+        <ellipse cy="7.28" rx="28" ry="10.64" fill="#0F3A8C"/>
+        <rect x="-28" y="0" width="56" height="7.28" fill="url(#chip-blue)"/>
+        <ellipse cy="3.64" rx="28" ry="10.64" fill="none" stroke="#FFFFFF" stroke-width="6.5520000000000005" stroke-dasharray="5.6000000000000005 10.08" opacity="0.92"/>
+        <ellipse rx="28" ry="10.64" fill="url(#chip-blue)"/>
+        <ellipse rx="19.040000000000003" ry="7.235200000000001" fill="none" stroke="#FFFFFF" stroke-width="1.3" stroke-dasharray="3.4 3.4" opacity="0.75"/>
+    </g>
+    <g transform="translate(91.16 189.16)">
+        <ellipse cy="7.28" rx="28" ry="10.64" fill="#0E5A2A"/>
+        <rect x="-28" y="0" width="56" height="7.28" fill="url(#chip-green)"/>
+        <ellipse cy="3.64" rx="28" ry="10.64" fill="none" stroke="#FFFFFF" stroke-width="6.5520000000000005" stroke-dasharray="5.6000000000000005 10.08" opacity="0.92"/>
+        <ellipse rx="28" ry="10.64" fill="url(#chip-green)"/>
+        <ellipse rx="19.040000000000003" ry="7.235200000000001" fill="none" stroke="#FFFFFF" stroke-width="1.3" stroke-dasharray="3.4 3.4" opacity="0.75"/>
+    </g>
+    <g transform="translate(92.84 180.88)">
+        <ellipse cy="7.28" rx="28" ry="10.64" fill="#7F1111"/>
+        <rect x="-28" y="0" width="56" height="7.28" fill="url(#chip-red)"/>
+        <ellipse cy="3.64" rx="28" ry="10.64" fill="none" stroke="#FFFFFF" stroke-width="6.5520000000000005" stroke-dasharray="5.6000000000000005 10.08" opacity="0.92"/>
+        <ellipse rx="28" ry="10.64" fill="url(#chip-red)"/>
+        <ellipse rx="19.040000000000003" ry="7.235200000000001" fill="none" stroke="#FFFFFF" stroke-width="1.3" stroke-dasharray="3.4 3.4" opacity="0.75"/>
+    </g>
+    <ellipse cx="85" cy="178.22" rx="11.76" ry="3.192" fill="#FFFFFF" opacity="0.2"/>
+</g>
+<ellipse cx="156" cy="263.664" rx="32.199999999999996" ry="9.576" fill="#000000" opacity="0.5" filter="url(#softer)"/>
+<g>
+    <g transform="translate(150.84 250)">
+        <ellipse cy="7.28" rx="28" ry="10.64" fill="#0E5A2A"/>
+        <rect x="-28" y="0" width="56" height="7.28" fill="url(#chip-green)"/>
+        <ellipse cy="3.64" rx="28" ry="10.64" fill="none" stroke="#FFFFFF" stroke-width="6.5520000000000005" stroke-dasharray="5.6000000000000005 10.08" opacity="0.92"/>
+        <ellipse rx="28" ry="10.64" fill="url(#chip-green)"/>
+        <ellipse rx="19.040000000000003" ry="7.235200000000001" fill="none" stroke="#FFFFFF" stroke-width="1.3" stroke-dasharray="3.4 3.4" opacity="0.75"/>
+    </g>
+    <g transform="translate(149.16 241.72)">
+        <ellipse cy="7.28" rx="28" ry="10.64" fill="#0E5A2A"/>
+        <rect x="-28" y="0" width="56" height="7.28" fill="url(#chip-green)"/>
+        <ellipse cy="3.64" rx="28" ry="10.64" fill="none" stroke="#FFFFFF" stroke-width="6.5520000000000005" stroke-dasharray="5.6000000000000005 10.08" opacity="0.92"/>
+        <ellipse rx="28" ry="10.64" fill="url(#chip-green)"/>
+        <ellipse rx="19.040000000000003" ry="7.235200000000001" fill="none" stroke="#FFFFFF" stroke-width="1.3" stroke-dasharray="3.4 3.4" opacity="0.75"/>
+    </g>
+    <g transform="translate(150.84 233.44)">
+        <ellipse cy="7.28" rx="28" ry="10.64" fill="#7F1111"/>
+        <rect x="-28" y="0" width="56" height="7.28" fill="url(#chip-red)"/>
+        <ellipse cy="3.64" rx="28" ry="10.64" fill="none" stroke="#FFFFFF" stroke-width="6.5520000000000005" stroke-dasharray="5.6000000000000005 10.08" opacity="0.92"/>
+        <ellipse rx="28" ry="10.64" fill="url(#chip-red)"/>
+        <ellipse rx="19.040000000000003" ry="7.235200000000001" fill="none" stroke="#FFFFFF" stroke-width="1.3" stroke-dasharray="3.4 3.4" opacity="0.75"/>
+    </g>
+    <g transform="translate(149.16 225.16)">
+        <ellipse cy="7.28" rx="28" ry="10.64" fill="#7F1111"/>
+        <rect x="-28" y="0" width="56" height="7.28" fill="url(#chip-red)"/>
+        <ellipse cy="3.64" rx="28" ry="10.64" fill="none" stroke="#FFFFFF" stroke-width="6.5520000000000005" stroke-dasharray="5.6000000000000005 10.08" opacity="0.92"/>
+        <ellipse rx="28" ry="10.64" fill="url(#chip-red)"/>
+        <ellipse rx="19.040000000000003" ry="7.235200000000001" fill="none" stroke="#FFFFFF" stroke-width="1.3" stroke-dasharray="3.4 3.4" opacity="0.75"/>
+    </g>
+    <ellipse cx="143" cy="222.5" rx="11.76" ry="3.192" fill="#FFFFFF" opacity="0.2"/>
+</g>
+<ellipse cx="390" cy="219.664" rx="32.199999999999996" ry="9.576" fill="#000000" opacity="0.5" filter="url(#softer)"/>
+<g>
+    <g transform="translate(384.84 206)">
+        <ellipse cy="7.28" rx="28" ry="10.64" fill="#7F1111"/>
+        <rect x="-28" y="0" width="56" height="7.28" fill="url(#chip-red)"/>
+        <ellipse cy="3.64" rx="28" ry="10.64" fill="none" stroke="#FFFFFF" stroke-width="6.5520000000000005" stroke-dasharray="5.6000000000000005 10.08" opacity="0.92"/>
+        <ellipse rx="28" ry="10.64" fill="url(#chip-red)"/>
+        <ellipse rx="19.040000000000003" ry="7.235200000000001" fill="none" stroke="#FFFFFF" stroke-width="1.3" stroke-dasharray="3.4 3.4" opacity="0.75"/>
+    </g>
+    <g transform="translate(383.16 197.72)">
+        <ellipse cy="7.28" rx="28" ry="10.64" fill="#0F3A8C"/>
+        <rect x="-28" y="0" width="56" height="7.28" fill="url(#chip-blue)"/>
+        <ellipse cy="3.64" rx="28" ry="10.64" fill="none" stroke="#FFFFFF" stroke-width="6.5520000000000005" stroke-dasharray="5.6000000000000005 10.08" opacity="0.92"/>
+        <ellipse rx="28" ry="10.64" fill="url(#chip-blue)"/>
+        <ellipse rx="19.040000000000003" ry="7.235200000000001" fill="none" stroke="#FFFFFF" stroke-width="1.3" stroke-dasharray="3.4 3.4" opacity="0.75"/>
+    </g>
+    <g transform="translate(384.84 189.44)">
+        <ellipse cy="7.28" rx="28" ry="10.64" fill="#020617"/>
+        <rect x="-28" y="0" width="56" height="7.28" fill="url(#chip-black)"/>
+        <ellipse cy="3.64" rx="28" ry="10.64" fill="none" stroke="#FFFFFF" stroke-width="6.5520000000000005" stroke-dasharray="5.6000000000000005 10.08" opacity="0.92"/>
+        <ellipse rx="28" ry="10.64" fill="url(#chip-black)"/>
+        <ellipse rx="19.040000000000003" ry="7.235200000000001" fill="none" stroke="#FFFFFF" stroke-width="1.3" stroke-dasharray="3.4 3.4" opacity="0.75"/>
+    </g>
+    <g transform="translate(383.16 181.16)">
+        <ellipse cy="7.28" rx="28" ry="10.64" fill="#92400E"/>
+        <rect x="-28" y="0" width="56" height="7.28" fill="url(#chip-gold)"/>
+        <ellipse cy="3.64" rx="28" ry="10.64" fill="none" stroke="#FFFFFF" stroke-width="6.5520000000000005" stroke-dasharray="5.6000000000000005 10.08" opacity="0.92"/>
+        <ellipse rx="28" ry="10.64" fill="url(#chip-gold)"/>
+        <ellipse rx="19.040000000000003" ry="7.235200000000001" fill="none" stroke="#FFFFFF" stroke-width="1.3" stroke-dasharray="3.4 3.4" opacity="0.75"/>
+    </g>
+    <g transform="translate(384.84 172.88)">
+        <ellipse cy="7.28" rx="28" ry="10.64" fill="#92400E"/>
+        <rect x="-28" y="0" width="56" height="7.28" fill="url(#chip-gold)"/>
+        <ellipse cy="3.64" rx="28" ry="10.64" fill="none" stroke="#FFFFFF" stroke-width="6.5520000000000005" stroke-dasharray="5.6000000000000005 10.08" opacity="0.92"/>
+        <ellipse rx="28" ry="10.64" fill="url(#chip-gold)"/>
+        <ellipse rx="19.040000000000003" ry="7.235200000000001" fill="none" stroke="#FFFFFF" stroke-width="1.3" stroke-dasharray="3.4 3.4" opacity="0.75"/>
+    </g>
+    <g transform="translate(383.16 164.6)">
+        <ellipse cy="7.28" rx="28" ry="10.64" fill="#0F3A8C"/>
+        <rect x="-28" y="0" width="56" height="7.28" fill="url(#chip-blue)"/>
+        <ellipse cy="3.64" rx="28" ry="10.64" fill="none" stroke="#FFFFFF" stroke-width="6.5520000000000005" stroke-dasharray="5.6000000000000005 10.08" opacity="0.92"/>
+        <ellipse rx="28" ry="10.64" fill="url(#chip-blue)"/>
+        <ellipse rx="19.040000000000003" ry="7.235200000000001" fill="none" stroke="#FFFFFF" stroke-width="1.3" stroke-dasharray="3.4 3.4" opacity="0.75"/>
+    </g>
+    <ellipse cx="377" cy="161.94" rx="11.76" ry="3.192" fill="#FFFFFF" opacity="0.2"/>
+</g>
+<g transform="translate(222 236) rotate(-14)" filter="url(#lift)">
+    <rect x="-39" y="-55" width="78" height="110" rx="7.02" fill="url(#card-face)"/>
+    <rect x="-38.4" y="-54.4" width="76.8" height="108.8" rx="7.02" fill="none" stroke="#CBD5E1" stroke-width="1.2"/>
+    <g >
+        <text x="-25.74" y="-33" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="15.600000000000001" font-weight="800" fill="#0F172A" text-anchor="middle">A</text>
+        <use href="#spade" fill="#0F172A" transform="translate(-25.74 -20.9) scale(0.5304)"/>
+    </g>
+    <g transform="rotate(180)">
+        <text x="-25.74" y="-33" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="15.600000000000001" font-weight="800" fill="#0F172A" text-anchor="middle">A</text>
+        <use href="#spade" fill="#0F172A" transform="translate(-25.74 -20.9) scale(0.5304)"/>
+    </g>
+    <use href="#spade" fill="#0F172A" transform="translate(0 2.2) scale(1.872)"/>
+    <rect x="-39" y="-55" width="78" height="110" rx="7.02" fill="url(#gloss)"/>
+</g>
+<g transform="translate(280 232) rotate(10)" filter="url(#lift)">
+    <rect x="-39" y="-55" width="78" height="110" rx="7.02" fill="url(#card-face)"/>
+    <rect x="-38.4" y="-54.4" width="76.8" height="108.8" rx="7.02" fill="none" stroke="#CBD5E1" stroke-width="1.2"/>
+    <g >
+        <text x="-25.74" y="-33" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="15.600000000000001" font-weight="800" fill="#DC2626" text-anchor="middle">K</text>
+        <use href="#heart" fill="#DC2626" transform="translate(-25.74 -20.9) scale(0.5304)"/>
+    </g>
+    <g transform="rotate(180)">
+        <text x="-25.74" y="-33" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="15.600000000000001" font-weight="800" fill="#DC2626" text-anchor="middle">K</text>
+        <use href="#heart" fill="#DC2626" transform="translate(-25.74 -20.9) scale(0.5304)"/>
+    </g>
+    <use href="#heart" fill="#DC2626" transform="translate(0 2.2) scale(1.872)"/>
+    <rect x="-39" y="-55" width="78" height="110" rx="7.02" fill="url(#gloss)"/>
+</g>
+<g>
+    <ellipse cx="352" cy="272" rx="22" ry="8" fill="#000000" opacity="0.45" filter="url(#softer)"/>
+    <ellipse cx="350" cy="266" rx="20" ry="8" fill="#CBD5E1"/>
+    <ellipse cx="350" cy="263" rx="20" ry="8" fill="#F8FAFC"/>
+    <text x="350" y="269" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="14" font-weight="800" fill="#0F172A" text-anchor="middle" transform="translate(350 264) scale(1.3 0.62) translate(-350 -264)">D</text>
+</g>
+<rect width="480" height="320" fill="url(#spot)"/>
+<rect width="480" height="320" fill="url(#vignette)"/>
+</svg>

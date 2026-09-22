@@ -1,0 +1,49 @@
+import { Link } from 'azerothjs';
+
+import type { TableSummary } from '../../api.ts';
+import type { GameId } from '../../data/games.ts';
+import Icon from '../../icons/icon.component.azeroth';
+import type { MessageKey } from '../../locales/en.ts';
+import { useCatalogue } from '../../stores/catalogue.store.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import Badge from '../ui/badge.component.azeroth';
+import type { Tone } from '../ui/variants.ts';
+import GameIcon from './game-icon.component.azeroth';
+
+const STATE: Record<'open' | 'ready' | 'playing', { key: MessageKey; tone: Tone }> = {
+    open: { key: 'home.table.open', tone: 'neutral' },
+    ready: { key: 'home.table.ready', tone: 'live' },
+    playing: { key: 'home.table.playing', tone: 'accent' }
+};
+
+export default component TableRow(props: { table: TableSummary })
+{
+    const locale = useLocale();
+    const catalogue = useCatalogue();
+
+    derived game = catalogue.byId(props.table.game as GameId);
+
+    derived state = STATE[props.table.status === 'playing' ? 'playing' : (props.table.status === 'ready' ? 'ready' : 'open')];
+
+    <Link
+        to={ `/app/play/${ props.table.id }` }
+        class="group flex min-h-16 min-w-0 items-center gap-3 rounded-tile border border-line bg-field px-3 py-2.5 transition-colors duration-150 hover:border-line-strong hover:bg-raised"
+    >
+        <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-tile border border-line bg-raised/60">
+            <GameIcon game={ game.id } class="h-9 w-9" />
+        </span>
+        <span class="flex min-w-0 flex-1 flex-col gap-0.5">
+            <span class="flex min-w-0 items-baseline gap-1.5 text-ui-sm">
+                <span class="truncate font-semibold text-text">{ locale.t(game.nameKey) }</span>
+                <span class="tally shrink-0 text-ui-xs text-faint">{ props.table.code }</span>
+            </span>
+            <span class="flex min-w-0 items-center gap-1.5 text-ui-xs text-muted">
+                <span class="shrink-0"><span class="tally">{ `${ locale.n(props.table.taken) }/${ locale.n(props.table.seats) }` }</span> { locale.t('home.table.seated') }</span>
+                <span class="h-1 w-1 shrink-0 rounded-full bg-current opacity-50" aria-hidden="true"></span>
+                <span class="truncate">{ locale.relative(Date.parse(props.table.createdAt)) }</span>
+            </span>
+        </span>
+        <Badge dot text={ locale.t(state.key) } tone={ state.tone } />
+        <Icon name="chevron-right" size={ 16 } class="icon-flip shrink-0 text-faint transition-colors group-hover:text-muted" />
+    </Link>
+}

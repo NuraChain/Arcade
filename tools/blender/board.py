@@ -1,7 +1,7 @@
 """
 The playable board, rendered from the object the market scene already stands on.
 
-Run by hand, like `art.py`, because it needs Blender:
+Run by hand, because it needs Blender:
 
     blender -b -P tools/blender/board.py
 

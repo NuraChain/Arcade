@@ -1,17 +1,16 @@
 import type { GameId } from '../../data/games.ts';
-import { GAME_HUE, gameArt, gameArtSet } from './art.ts';
+import { GAME_HUE, gameArt } from './art.ts';
 
 export default component GameArt(props: {
     game: GameId;
-    ratio?: 'card' | 'wide' | 'square';
-    sizes?: string;
+    ratio?: 'card' | 'wide';
     priority?: boolean;
     class?: string;
 })
 {
     state failed = false;
 
-    derived ratio = props.ratio === 'wide' ? 'aspect-[16/9]' : (props.ratio === 'square' ? 'aspect-square' : 'aspect-[3/2]');
+    derived ratio = props.ratio === 'wide' ? 'aspect-[16/9]' : 'aspect-[3/2]';
 
     <div
         class={ [ 'relative w-full overflow-hidden bg-void', ratio, props.class ?? '' ].filter(Boolean).join(' ') }
@@ -24,13 +23,12 @@ export default component GameArt(props: {
         ></div>
         <Show when={ !failed }>
             <img
-                src={ gameArt(props.game, 640) }
-                srcset={ gameArtSet(props.game) }
-                sizes={ props.sizes ?? '(min-width: 1280px) 30vw, (min-width: 768px) 45vw, 100vw' }
+                src={ gameArt(props.game) }
                 alt=""
                 class="relative h-full w-full object-cover"
                 loading={ props.priority === true ? 'eager' : 'lazy' }
                 decoding="async"
+                draggable="false"
                 onError={ () => failed = true }
             />
         </Show>

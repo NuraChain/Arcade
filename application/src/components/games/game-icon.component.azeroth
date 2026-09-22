@@ -1,0 +1,14 @@
+import type { GameId } from '../../data/games.ts';
+import { gameIcon } from './art.ts';
+
+export default component GameIcon(props: { game: GameId; class?: string })
+{
+    <img
+        src={ gameIcon(props.game) }
+        alt=""
+        class={ `block select-none object-contain ${ props.class ?? '' }` }
+        loading="lazy"
+        decoding="async"
+        draggable="false"
+    />
+}

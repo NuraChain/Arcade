@@ -182,6 +182,8 @@ export const useCatalogue = createStore((): CatalogueApi =>
         reset()
         {
             stop?.();
+            void catalogue.refetch();
+            void live.refetch();
         }
     };
 });

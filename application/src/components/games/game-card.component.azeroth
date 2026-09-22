@@ -1,11 +1,13 @@
 import { Link } from 'azerothjs';
 
 import type { Game, GameId } from '../../data/games.ts';
+import Icon from '../../icons/icon.component.azeroth';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
+import Badge from '../ui/badge.component.azeroth';
 import Button from '../ui/button.component.azeroth';
 import GameArt from './game-art.component.azeroth';
-import { PANEL_TONE } from '../ui/variants.ts';
+import SeatCount from './seat-count.component.azeroth';
 
 export default component GameCard(props: {
     game: Game;
@@ -21,60 +23,51 @@ export default component GameCard(props: {
 
     derived stats = catalogue.stats(props.game.id);
 
-    derived seats = props.game.minPlayers === props.game.maxPlayers
-        ? locale.plural('common.players', props.game.maxPlayers)
-        : locale.t('games.seats.range', { min: props.game.minPlayers, max: props.game.maxPlayers });
-
     derived href = `/app/games/${ props.game.slug }`;
 
-    derived playable = catalogue.status(props.game.id) === 'available';
+    derived known = !catalogue.loading();
 
-    <article class={ [
-        `group relative flex flex-col overflow-hidden rounded-panel ${ PANEL_TONE.field }`,
-        'transition duration-200 ease-[var(--ease-ui)] hover:border-line-strong hover:shadow-2',
-        props.class ?? ''
-    ].filter(Boolean).join(' ') }>
+    derived playable = known && catalogue.status(props.game.id) === 'available';
+
+    derived live = playable && stats.playersOnline > 0;
+
+    <article class={ `group relative flex flex-col overflow-hidden rounded-panel border border-line bg-field transition duration-200 ease-[var(--ease-ui)] hover:-translate-y-0.5 hover:border-line-strong hover:shadow-2 ${ props.class ?? '' }` }>
         <Link to={ href } class="relative block" aria-label={ name } prefetch="hover">
-            <GameArt game={ props.game.id } ratio={ props.compact === true ? 'wide' : 'card' } />
-            <Show
-                when={ playable }
-                fallback={
-                    <span class="absolute start-2.5 top-2.5 rounded-control border border-line/60 bg-void/85 px-2 py-1 text-ui-2xs font-bold text-muted backdrop-blur-md">
-                        { locale.t('games.soon') }
-                    </span>
-                }
-            >
-                { () =>
-                    <span class="absolute start-2.5 top-2.5 flex items-center gap-1.5 rounded-control border border-line/60 bg-void/85 px-2 py-1 text-ui-2xs font-bold text-live backdrop-blur-md">
-                        <span class="live-dot h-1.5 w-1.5" aria-hidden="true"></span>
-                        <span class="tally">{ locale.plural('games.live.playing', stats.playersOnline) }</span>
-                    </span>
-                }
-            </Show>
-        </Link>
-        <div class={ [ 'flex flex-1 flex-col gap-3', props.compact === true ? 'p-3' : 'p-4' ].join(' ') }>
-            <div class="min-w-0">
-                <Link to={ href } data-inline class="title text-ui-lg text-text hover:text-accent">{ name }</Link>
-                <Show when={ props.compact !== true }>
-                    <p class="mt-1 line-clamp-2 text-ui-xs text-muted">{ locale.t(props.game.blurbKey) }</p>
+            <GameArt game={ props.game.id } ratio={ props.compact === true ? 'wide' : 'card' } class="transition-transform duration-500 ease-[var(--ease-reveal)] group-hover:scale-[1.03]" />
+            <span class="absolute start-2.5 top-2.5 flex rounded-full bg-void/70 backdrop-blur-md">
+                <Show when={ live }>
+                    <Badge dot text={ locale.t('games.livePill') } tone="live" />
                 </Show>
-            </div>
-            <div class="mt-auto flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
-                <span class="tally min-w-0 flex-1 basis-[9rem] truncate text-ui-xs text-faint">
-                    { seats } · { locale.plural('games.live.tables', stats.tablesOpen) }
+                <Show when={ known && !playable }>
+                    <Badge dot text={ locale.t('games.soon') } tone="neutral" />
+                </Show>
+            </span>
+        </Link>
+        <div class={ [ 'flex flex-1 flex-col gap-1', props.compact === true ? 'p-3' : 'p-3.5' ].join(' ') }>
+            <Link to={ href } data-inline class="title truncate text-ui-md text-text hover:text-accent">{ name }</Link>
+            <SeatCount game={ props.game } class="text-ui-xs text-muted" />
+            <p class="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-ui-xs text-muted">
+                <span class="flex items-center gap-1.5">
+                    <Icon name="people" size={ 13 } class="shrink-0" />
+                    <span><span class="tally">{ locale.n(stats.playersOnline) }</span> { locale.plural('games.live.playingLabel', stats.playersOnline) }</span>
                 </span>
+                <span class="flex items-center gap-1.5">
+                    <Icon name="seat" size={ 13 } class="shrink-0" />
+                    <span><span class="tally">{ locale.n(stats.tablesOpen) }</span> { locale.plural('games.live.tablesLabel', stats.tablesOpen) }</span>
+                </span>
+            </p>
+            <div class="mt-auto pt-3">
                 <Show
-                    when={ playable }
-                    fallback={
-                        <span class="shrink-0 whitespace-nowrap rounded-control border border-line bg-raised px-2.5 py-1 text-ui-2xs font-semibold text-muted">
-                            { locale.t('games.soon') }
-                        </span>
-                    }
+                    when={ known }
+                    fallback={ <span class="block h-10 w-full animate-pulse rounded-control bg-raised motion-reduce:animate-none coarse:h-11" aria-hidden="true"></span> }
                 >
                     { () =>
-                        <Button variant="primary" size="sm" leading="zap" class="shrink-0 whitespace-nowrap" onClick={ () => props.onQuickPlay(props.game.id) }>
-                            { locale.t('app.nav.quickPlay') }
-                        </Button>
+                        <Show
+                            when={ playable }
+                            fallback={ <Button variant="outline" size="md" block disabled>{ locale.t('games.soon') }</Button> }
+                        >
+                            { () => <Button variant="primary" size="md" block icon="forward" onClick={ () => props.onQuickPlay(props.game.id) }>{ locale.t('games.play') }</Button> }
+                        </Show>
                     }
                 </Show>
             </div>

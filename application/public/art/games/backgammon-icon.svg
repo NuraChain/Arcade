@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="8 12 104 100">
+    <defs>
+        <linearGradient id="wood" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#C98547"/>
+            <stop offset="0.5" stop-color="#9A5A26"/>
+            <stop offset="1" stop-color="#6E3C14"/>
+        </linearGradient>
+        <linearGradient id="edge" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#5A2F10"/>
+            <stop offset="1" stop-color="#3A1D08"/>
+        </linearGradient>
+        <linearGradient id="field" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#F6EDD9"/>
+            <stop offset="1" stop-color="#E4D3B0"/>
+        </linearGradient>
+        <radialGradient id="light-checker" cx="0.35" cy="0.3" r="0.75">
+            <stop offset="0" stop-color="#FFFFFF"/>
+            <stop offset="1" stop-color="#C7CFDB"/>
+        </radialGradient>
+        <radialGradient id="dark-checker" cx="0.35" cy="0.3" r="0.75">
+            <stop offset="0" stop-color="#475569"/>
+            <stop offset="1" stop-color="#0B1220"/>
+        </radialGradient>
+        <radialGradient id="gloss" cx="0.2" cy="0.1" r="0.9">
+            <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.28"/>
+            <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+        </radialGradient>
+        <filter id="blur" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="4"/>
+        </filter>
+        <filter id="checker-shadow" x="-40%" y="-40%" width="180%" height="180%">
+            <feDropShadow dx="0.6" dy="1.2" stdDeviation="0.8" flood-color="#1C0F05" flood-opacity="0.55"/>
+        </filter>
+        <g id="points-top">
+            <path d="M0 0H5.5L2.75 17Z" fill="#B91C1C"/>
+            <path d="M5.5 0H11L8.25 17Z" fill="#1F2937"/>
+            <path d="M11 0H16.5L13.75 17Z" fill="#B91C1C"/>
+            <path d="M16.5 0H22L19.25 17Z" fill="#1F2937"/>
+            <path d="M22 0H27.5L24.75 17Z" fill="#B91C1C"/>
+            <path d="M27.5 0H33L30.25 17Z" fill="#1F2937"/>
+        </g>
+        <g id="points-bottom">
+            <path d="M0 38H5.5L2.75 21Z" fill="#1F2937"/>
+            <path d="M5.5 38H11L8.25 21Z" fill="#B91C1C"/>
+            <path d="M11 38H16.5L13.75 21Z" fill="#1F2937"/>
+            <path d="M16.5 38H22L19.25 21Z" fill="#B91C1C"/>
+            <path d="M22 38H27.5L24.75 21Z" fill="#1F2937"/>
+            <path d="M27.5 38H33L30.25 21Z" fill="#B91C1C"/>
+        </g>
+    </defs>
+
+    <ellipse cx="60" cy="100" rx="46" ry="7" fill="#000000" opacity="0.45" filter="url(#blur)"/>
+
+    <g transform="translate(60 58) rotate(-9)">
+        <rect x="-45" y="-28" width="90" height="62" rx="8" fill="url(#edge)"/>
+        <rect x="-45" y="-33" width="90" height="62" rx="8" fill="url(#wood)"/>
+        <path d="M-40 -24C-20 -26 10 -22 40 -25M-41 18C-15 16 12 20 41 17" fill="none" stroke="#E7B27A" stroke-width="0.8" opacity="0.35"/>
+        <rect x="-39" y="-27" width="36" height="50" rx="2.5" fill="url(#field)"/>
+        <rect x="3" y="-27" width="36" height="50" rx="2.5" fill="url(#field)"/>
+        <g transform="translate(-37.5 -25.5)">
+            <use href="#points-top"/>
+            <use href="#points-bottom" transform="translate(0 9)"/>
+        </g>
+        <g transform="translate(4.5 -25.5)">
+            <use href="#points-top"/>
+            <use href="#points-bottom" transform="translate(0 9)"/>
+        </g>
+        <rect x="-3" y="-27" width="6" height="50" fill="#7A4418"/>
+        <rect x="-45" y="-33" width="90" height="62" rx="8" fill="url(#gloss)"/>
+        <g filter="url(#checker-shadow)">
+            <circle cx="-34.75" cy="-21" r="3.6" fill="url(#light-checker)"/>
+            <circle cx="-34.75" cy="-13.8" r="3.6" fill="url(#light-checker)"/>
+            <circle cx="-23.75" cy="-21" r="3.6" fill="url(#dark-checker)"/>
+            <circle cx="-18.25" cy="18.5" r="3.6" fill="url(#dark-checker)"/>
+            <circle cx="-18.25" cy="11.3" r="3.6" fill="url(#dark-checker)"/>
+            <circle cx="12.75" cy="-21" r="3.6" fill="url(#light-checker)"/>
+            <circle cx="29.25" cy="18.5" r="3.6" fill="url(#dark-checker)"/>
+            <circle cx="34.75" cy="18.5" r="3.6" fill="url(#light-checker)"/>
+            <circle cx="34.75" cy="11.3" r="3.6" fill="url(#light-checker)"/>
+        </g>
+    </g>
+</svg>

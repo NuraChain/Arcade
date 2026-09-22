@@ -165,6 +165,7 @@ export const server =
      * spec that cares about a count says so by putting one here.
      */
     live: [] as { game: string; playing: number; tables: number }[],
+    games: [] as unknown[],
 
     /** A game's leaderboard. Empty by default, which is what a game nobody has played looks like. */
     standings: [] as { handle: string; rating: number; played: number; won: number }[],
@@ -327,6 +328,7 @@ export const server =
 
     reset(): void
     {
+        server.games = [];
         server.groups = GROUP_FIXTURES.map((group) => ({
             id: group.slug,
             slug: group.slug,
@@ -583,7 +585,7 @@ export const client =
         async games()
         {
             server.calls.push('catalogue.games');
-            return { games: [] };
+            return { games: server.games };
         },
         async achievements()
         {

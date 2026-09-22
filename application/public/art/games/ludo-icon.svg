@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="8 12 104 100">
+    <defs>
+        <linearGradient id="red-face" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#FF8A8A"/>
+            <stop offset="0.45" stop-color="#EF4444"/>
+            <stop offset="1" stop-color="#B91C1C"/>
+        </linearGradient>
+        <linearGradient id="red-side" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#9F1717"/>
+            <stop offset="1" stop-color="#6B0F0F"/>
+        </linearGradient>
+        <linearGradient id="blue-face" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#93C5FD"/>
+            <stop offset="0.45" stop-color="#3B82F6"/>
+            <stop offset="1" stop-color="#1D4ED8"/>
+        </linearGradient>
+        <linearGradient id="blue-side" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#1E40AF"/>
+            <stop offset="1" stop-color="#172554"/>
+        </linearGradient>
+        <radialGradient id="gloss" cx="0.28" cy="0.2" r="0.75">
+            <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.55"/>
+            <stop offset="0.45" stop-color="#FFFFFF" stop-opacity="0.12"/>
+            <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+        </radialGradient>
+        <linearGradient id="rim" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.7"/>
+            <stop offset="0.5" stop-color="#FFFFFF" stop-opacity="0.08"/>
+            <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+        </linearGradient>
+        <radialGradient id="pip" cx="0.4" cy="0.35" r="0.7">
+            <stop offset="0" stop-color="#FFFFFF"/>
+            <stop offset="1" stop-color="#DDE5F0"/>
+        </radialGradient>
+        <filter id="blur" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="4"/>
+        </filter>
+        <g id="pips-five">
+            <circle cx="-12" cy="-12" r="4.6"/>
+            <circle cx="12" cy="-12" r="4.6"/>
+            <circle cx="0" cy="0" r="4.6"/>
+            <circle cx="-12" cy="12" r="4.6"/>
+            <circle cx="12" cy="12" r="4.6"/>
+        </g>
+        <g id="pips-three">
+            <circle cx="-10" cy="-10" r="4.2"/>
+            <circle cx="0" cy="0" r="4.2"/>
+            <circle cx="10" cy="10" r="4.2"/>
+        </g>
+    </defs>
+
+    <ellipse cx="62" cy="103" rx="40" ry="7" fill="#000000" opacity="0.45" filter="url(#blur)"/>
+
+    <g transform="translate(44 50) rotate(-14)">
+        <rect x="-24" y="-20" width="50" height="50" rx="12" fill="url(#red-side)"/>
+        <rect x="-25" y="-25" width="50" height="50" rx="12" fill="url(#red-face)"/>
+        <rect x="-25" y="-25" width="50" height="50" rx="12" fill="url(#gloss)"/>
+        <rect x="-24.25" y="-24.25" width="48.5" height="48.5" rx="11.3" fill="none" stroke="url(#rim)" stroke-width="1.5"/>
+        <use href="#pips-five" fill="#7F1111" opacity="0.45" transform="translate(0.7 1)"/>
+        <use href="#pips-five" fill="url(#pip)"/>
+    </g>
+
+    <g transform="translate(78 74) rotate(11)">
+        <rect x="-21" y="-17" width="44" height="44" rx="10.5" fill="url(#blue-side)"/>
+        <rect x="-22" y="-22" width="44" height="44" rx="10.5" fill="url(#blue-face)"/>
+        <rect x="-22" y="-22" width="44" height="44" rx="10.5" fill="url(#gloss)"/>
+        <rect x="-21.25" y="-21.25" width="42.5" height="42.5" rx="9.8" fill="none" stroke="url(#rim)" stroke-width="1.5"/>
+        <use href="#pips-three" fill="#172554" opacity="0.5" transform="translate(0.7 1)"/>
+        <use href="#pips-three" fill="url(#pip)"/>
+    </g>
+</svg>

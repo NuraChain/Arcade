@@ -5,7 +5,7 @@ import Icon from '../../icons/icon.component.azeroth';
 
 export default component SectionHeading(props: { title: string; more?: string; to?: NavigateTarget; actions?: Child; id?: string; class?: string })
 {
-    <div class={ [ 'mb-3 flex items-center justify-between gap-3', props.class ?? '' ].filter(Boolean).join(' ') }>
+    <div class={ [ 'mb-3 flex min-h-11 items-center justify-between gap-3', props.class ?? '' ].filter(Boolean).join(' ') }>
         <h2 id={ props.id } class="min-w-0 flex-1 truncate font-ui text-ui-lg font-semibold text-text">{ props.title }</h2>
         <Show when={ props.actions !== undefined }>
             { () => <span class="flex shrink-0 items-center gap-1">{ props.actions }</span> }

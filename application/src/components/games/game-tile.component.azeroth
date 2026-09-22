@@ -1,0 +1,29 @@
+import { Link } from 'azerothjs';
+
+import type { Game } from '../../data/games.ts';
+import { useCatalogue } from '../../stores/catalogue.store.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import GameIcon from './game-icon.component.azeroth';
+import SeatCount from './seat-count.component.azeroth';
+
+export default component GameTile(props: { game: Game })
+{
+    const locale = useLocale();
+    const catalogue = useCatalogue();
+
+    derived name = locale.t(props.game.nameKey);
+
+    derived soon = !catalogue.loading() && catalogue.status(props.game.id) !== 'available';
+
+    <Link
+        to={ `/app/games/${ props.game.slug }` }
+        prefetch="hover"
+        class="group relative flex h-full flex-col items-center gap-1 rounded-tile border border-line bg-raised/50 px-1.5 pb-2.5 pt-2 text-center transition duration-150 hover:-translate-y-0.5 hover:border-accent/50 hover:bg-raised"
+    >
+        <GameIcon game={ props.game.id } class="h-12 w-12 transition-transform duration-200 group-hover:scale-105 @xl:h-14 @xl:w-14" />
+        <span class="w-full truncate text-ui-2xs font-semibold text-text @md:text-ui-xs">{ name }</span>
+        <Show when={ soon } fallback={ <SeatCount game={ props.game } class="hidden w-full truncate text-ui-2xs text-muted @md:block" /> }>
+            <span class="hidden w-full truncate text-ui-2xs text-muted @md:block">{ locale.t('games.soon') }</span>
+        </Show>
+    </Link>
+}
