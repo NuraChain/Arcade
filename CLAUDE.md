@@ -677,6 +677,69 @@ themselves - and the answer is that a rename refetches, which is what the client
 
 The server still keys everything on uuid internally. Handles are the EDGE.
 
+## The profile the ecosystem holds
+
+`contracts/profile` in the SmartContract project is the Nura identity primitive — one profile per
+address, a global username namespace, and values addressed by `(profile, key, language)` with no
+schema of its own — and it is live on Nurachain. `server/src/chain/profile.ts` is the half of this
+product that talks to it, and `/app/me` is where a person sees the two agree or disagree.
+
+**The ABI is the SERVER's, and so is the calldata.** The read path needs it anyway, and `viem` is
+already a server dependency and NOT an application one — so composing `setFields` in the browser
+would be a second description of one contract AND a new dependency inside the landing budget. It is
+written as human-readable ABI rather than a compiled artifact: five signatures a reader can compare
+against `ProfileTypes.sol` by eye, against fifty kilobytes of JSON nothing here can check. Nothing
+on this server signs; `publish` answers with an UNSENT transaction the browser hands its wallet,
+which is what keeps a key that could write to anybody's profile out of this process.
+
+**Unconfigured is a state, not a failure.** `NURA_RPC_URL`, `NURA_PROFILE_ADDRESS` and
+`NURA_PROFILE_LENS_ADDRESS` are needed together and default to empty, so a deployment pointed at no
+chain answers `configured: false` without opening a transport and the panel renders nothing — the
+shape push already has without VAPID keys. What it must never do is answer "nobody has a profile"
+for a read it could not MAKE: a dropped rpc throws and the page renders the failure, which is the
+rule the second audit wrote down when the leaderboard rendered a refused fetch as an empty world.
+
+**The @handle and the on-chain username are two namespaces and stay that way.** A handle is 2..32 in
+any script — Persian handles are a feature this file describes and `naming.db.spec.ts` pins — and a
+registry username is 3..32 of `[a-z0-9_]`, lower-cased, never starting with `0x`. They cannot be one
+identifier without one of them losing, so Games writes NO username: `createProfile` passes the empty
+string, the registry name is rendered beside the handle, and claiming one is Nura Wallet's job. It
+is also a claim against a global index that can be REFUSED, which is a second refusal path the
+profile sheet deliberately does not have — the same argument that gives `/handle` its own route.
+
+**Both fields go under the default language.** An account holds one bio here, not one per language.
+Writing it under `en` would hide it from a Persian reader resolving `fa` with fallback, while
+claiming to be the English of something nobody ever localized.
+
+**The sync goes both ways, because the other half happens elsewhere.** Publish sends what this page
+says; adopt takes what the registry says. A page that could only push would quietly lose whatever
+somebody wrote in another Nura application. Only the display name and the bio are compared — a
+location or a job title set elsewhere is not drift, it is a field this product has no opinion about
+and must not offer to overwrite.
+
+**A publish answers with five outcomes, not a boolean.** Declining in a wallet is not a failure, a
+revert is the contract refusing, and a transaction nobody has mined yet is neither. This repository
+has twice recorded a screen reporting success before the answer landed; one boolean could say none
+of it, so `settled` reports three states and the store waits through `runtime().clock`.
+
+**A guest sees nothing at all.** No wallet means no address means no profile and nothing a button
+could fix, and a strip explaining an absence nobody can act on is furniture. That is the branch this
+file already records as structurally unrendered by every gate, so it was checked by hand.
+
+**`callsFor` is pure and exported because it is the half that fails SILENTLY.** A read that goes
+wrong throws; a write with the wrong selector or a mistyped field key lands in storage nobody reads,
+costs real gas, and the chain reports success — the registry stores any key that validates and has
+nothing on its side to refuse `displayNmae` with. `tests/chain-profile.spec.ts` decodes both
+branches back out with no chain in the room.
+
+**Testing it needs a chain, and a local one is the honest bed.** Live Nurachain holds the contracts
+and no profiles, and the wallet fixtures have no gas there. `npx hardhat node` in the SmartContract
+project gives accounts 0–5, which ARE `dana.w` through `leila.a`; deploy the implementation, the
+proxy and the lens onto it and point the three variables at those addresses. A browser provider can
+then be a plain fetch proxy to `127.0.0.1:8545` — the node holds the keys, so `personal_sign` and
+`eth_sendTransaction` both work unlocked, and it sets `Access-Control-Allow-Origin: *`. One catch
+worth writing down: it wants the message HEX-encoded, which is the step MetaMask does for you.
+
 ## Groups
 
 `server/src/domains/group/` owns them, and three of its rules are INDEXES rather than application
