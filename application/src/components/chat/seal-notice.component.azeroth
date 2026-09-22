@@ -9,15 +9,6 @@ import { useLocale } from '../../stores/locale.store.ts';
 
 type Blocked = Exclude<MemberSealState, 'ready'>;
 
-/**
- * A stop this notice can actually render a sentence for.
- *
- * `pending` means the room's answer has not landed; both pages hide the notice for it and the
- * composer stands down instead. The guard below already filters it out, but the `let` binding is
- * typed from the accessor's ANNOTATION rather than its body - so annotating it `SendBlock` put
- * `pending` back into the union inside the branch, and every `sealed.member` read failed to
- * compile. Naming the narrowed type is what makes the guard and the type agree.
- */
 type Shown = Exclude<SendBlock, { reason: 'pending' }>;
 
 const ICON: Record<Blocked, IconName> = {
@@ -34,17 +25,6 @@ const SAYS: Record<Blocked, MessageKey> = {
     tampered: 'seal.tampered'
 };
 
-/**
- * The three states THIS BROWSER can be stuck in, which are not the same question as the four above.
- *
- * Those are about accounts and say who to wait for. These are about the machine in front of the
- * reader, and each one has a different answer: `absent` takes one signature, `waiting` takes another
- * device, and `unsupported` takes a different browser. Collapsing them into one boolean would leave
- * the notice unable to tell somebody which of the three they are in.
- *
- * An exhaustive `Record`, like every other map in this file, so a readiness added later fails to
- * compile rather than rendering as nothing.
- */
 const BROWSER: Record<Exclude<Readiness, 'ready'>, MessageKey> = {
     unsupported: 'seal.deviceUnsupported',
     absent: 'seal.noKeysHere',
@@ -57,12 +37,6 @@ const BROWSER_ICON: Record<Exclude<Readiness, 'ready'>, IconName> = {
     waiting: 'clock'
 };
 
-/**
- * The same four reasons, about the person reading them.
- *
- * Being told "alex is signed in without a wallet" when you ARE alex reads like a bug, and it is
- * also the one case where the sentence can say what to do about it rather than who to wait for.
- */
 const SAYS_MINE: Record<Blocked, MessageKey> = {
     'no-wallet': 'seal.noWalletMine',
     'no-device': 'seal.noDeviceMine',
@@ -70,23 +44,6 @@ const SAYS_MINE: Record<Blocked, MessageKey> = {
     tampered: 'seal.tamperedMine'
 };
 
-/**
- * Whether the messages in this thread are sealed, and when they are not, why.
- *
- * The negative case names the person it is about, because "sara.k is signed in without a wallet"
- * is something somebody can act on and "this conversation cannot be encrypted" is not.
- *
- * The POSITIVE case exists now, and only because the mechanism does. This component shipped with a
- * comment saying there would deliberately be no "this conversation IS sealed" line, because a
- * padlock ahead of its mechanism is a claim rather than a fact - and at the time nothing was
- * sealed. What it says now is what actually happens: the bodies are ciphertext, the server stores
- * them, and it cannot open them. It is a quiet line rather than a badge, because the interesting
- * state is still the one where sealing is NOT possible.
- *
- * `tampered` is the one that is not a shrug. Everything else here says a proof is ABSENT; that one
- * says a proof was present and did not check out, which means the device list this browser was
- * handed is not a truthful statement about who is in the conversation.
- */
 export default component SealNotice(props: { stop: SendBlock | null; action?: Child })
 {
     const locale = useLocale();
@@ -101,17 +58,6 @@ export default component SealNotice(props: { stop: SendBlock | null; action?: Ch
             }
         </Show>
 
-        {/*
-            The narrowed form, and why the obvious deriveds are gone.
-
-            The first cut kept `here`/`member`/`state` as memos over `props.stop` and guarded the
-            branch with a separate `when`. Guard and sentence were then two reads of a moving
-            value: across a flip - and `pending` now flips on every refetch - a build could run
-            with a truthy `when` and a `member` memo that had already settled to null, which sent
-            `state` to 'ready', looked up a sentence key that does not exist, and took the page
-            down. The narrowed accessor is a pull memo over the same `when` this branch was built
-            from, so every read below sees one stop - the one the guard saw.
-        */}
         <Show when={ (): Shown | null => (props.stop !== null && props.stop.reason !== 'pending' ? props.stop : null) } let={ sealed }>
             <div
                 class={ [

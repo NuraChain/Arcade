@@ -71,14 +71,6 @@ export default component ChatListItem(props: { conversation: Conversation; me: s
         {
             return locale.t('chat.empty');
         }
-        // A server-authored line says what it says, here as well as in the bubble: "alex joined"
-        // is a better row than "Table update", and it follows a language switch for free. The
-        // generic strings stay as the fallback for a key this client has never heard of.
-        //
-        // Through `namedParams`, because a line's `who` is a HANDLE. The bubble and the table chat
-        // both resolved it and this row did not, so a thread reading "Mina Sadeghi left" was
-        // previewed on the list beside it as "mina left" - which is the exact split the helper's
-        // own docblock says it exists to prevent, with a third renderer nobody counted.
         if (last.kind !== 'text')
         {
             const line = last.line;
@@ -98,7 +90,7 @@ export default component ChatListItem(props: { conversation: Conversation; me: s
         <Link
             to={ `/app/chats/${ props.conversation.id }` }
             class={ [
-                'flex min-h-14 items-center gap-2.5 rounded-tile px-2 py-1.5 transition-colors duration-150 hover:bg-raised coarse:min-h-16',
+                'flex min-h-16 items-center gap-3 rounded-tile px-2 py-2.5 transition-colors duration-150 hover:bg-raised/60',
                 props.onHold === undefined ? '' : 'holdable',
                 props.active === true ? 'bg-raised' : ''
             ].filter(Boolean).join(' ') }

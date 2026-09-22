@@ -167,8 +167,8 @@ export default component MessageBubble(props: { message: Message; me: string; sh
                                 ref={ (element) => bubble = element }
                                 dir="auto"
                                 class={ () => [
-                                    'rounded-tile px-3 py-2 text-ui-base leading-snug',
-                                    mine ? 'bg-accent-fill text-accent-ink' : 'bg-raised text-text'
+                                    'rounded-panel px-3.5 py-2 text-ui-base leading-snug shadow-1',
+                                    mine ? 'rounded-ee-md bg-accent-fill text-accent-ink' : 'rounded-es-md border border-line bg-field text-text'
                                 ].join(' ') }
                             >
                                 { said }

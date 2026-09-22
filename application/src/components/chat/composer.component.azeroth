@@ -2,24 +2,6 @@ import { useLocale } from '../../stores/locale.store.ts';
 import IconButton from '../ui/icon-button.component.azeroth';
 import TextArea from '../ui/text-area.component.azeroth';
 
-/**
- * The composer ASKS for a table rather than picking one.
- *
- * It carried its own rail of games and handed back an id, which made it the second game picker in
- * the product and the one with no seat count - so opening a ludo table from a chat always took the
- * default four, and a thread between two people got a table that needed two more. It also listed
- * every game in the catalogue, available or not.
- *
- * `onGame` now opens the sheet that already knows how to ask both questions, which is one picker
- * rather than two that disagree.
- *
- * And it is NOT disabled with the rest of the composer. `disabled` here means this conversation
- * cannot be sealed - no provable device on one side, or no keys in this browser - and that is a
- * fact about MESSAGES. A table is not sealed: its board is served from the match routes and the
- * line announcing it is `{ key, params }` the server authored. So a browser that cannot type here
- * can still open a game here, which matters because the machine somebody sits down at is often not
- * the one they enrolled.
- */
 export default component Composer(props: {
     value: string;
     disabled?: boolean;
@@ -30,7 +12,7 @@ export default component Composer(props: {
 {
     const locale = useLocale();
 
-    <div class="glass safe-b border-t border-line/60">
+    <div class="safe-b border-t border-line bg-void/92 backdrop-blur-md">
         <form
             class="flex items-end gap-1.5 px-2 py-2"
             onSubmit={ (event) =>

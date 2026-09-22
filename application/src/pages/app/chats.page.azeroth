@@ -103,7 +103,7 @@ export default component ChatsPage()
 
         <Switch
             fallback={
-                <ul class="flex flex-col gap-0.5" aria-label={ locale.t('app.nav.chats') }>
+                <ul class="flex flex-col divide-y divide-line rounded-panel border border-line bg-field px-1.5" aria-label={ locale.t('app.nav.chats') }>
                     <For each={ filtered } key={ (conversation) => conversation.id } let={ conversation }>
                         <li>
                             <ChatListItem
