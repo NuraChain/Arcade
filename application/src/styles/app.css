@@ -1142,3 +1142,145 @@
     inline-size: 100%;
     block-size: 100%;
 }
+
+.medal
+{
+    --metal-light: #F6C7A1;
+    --metal: #D08A52;
+    --metal-dark: #8A4F24;
+
+    position: relative;
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    inline-size: 2.75rem;
+    block-size: 2.75rem;
+    border-radius: 999px;
+    color: color-mix(in oklab, var(--metal-dark) 80%, black);
+    background: radial-gradient(circle at 34% 28%, var(--metal-light), var(--metal) 55%, var(--metal-dark));
+    box-shadow:
+        inset 0 0 0 2px rgb(255 255 255 / 0.35),
+        inset 0 -3px 6px rgb(0 0 0 / 0.25),
+        0 0 0 2px var(--metal-dark),
+        0 6px 14px -6px rgb(0 0 0 / 0.7);
+}
+
+.medal[data-tier='silver']
+{
+    --metal-light: #F8FAFC;
+    --metal: #CBD5E1;
+    --metal-dark: #6B7A90;
+}
+
+.medal[data-tier='gold']
+{
+    --metal-light: #FFE8A3;
+    --metal: #F5B72E;
+    --metal-dark: #A86B12;
+
+    box-shadow:
+        inset 0 0 0 2px rgb(255 255 255 / 0.4),
+        inset 0 -3px 6px rgb(0 0 0 / 0.22),
+        0 0 0 2px var(--metal-dark),
+        0 0 16px -2px rgb(245 183 46 / 0.55);
+}
+
+.medal[data-tier='locked']
+{
+    color: var(--faint);
+    background: var(--sunk);
+    box-shadow: inset 0 0 0 1px var(--line-strong);
+}
+
+.empty-art
+{
+    --tone: var(--accent);
+
+    position: relative;
+    display: block;
+    inline-size: 8.5rem;
+    block-size: 6.75rem;
+    margin-block-end: 1.25rem;
+}
+
+.empty-art[data-tone='live']
+{
+    --tone: var(--live);
+}
+
+.empty-art::before
+{
+    content: '';
+    position: absolute;
+    inset: -12% -18%;
+    background: radial-gradient(closest-side, color-mix(in oklab, var(--tone) 24%, transparent), transparent 72%);
+}
+
+.empty-art::after
+{
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    inline-size: 6.5rem;
+    block-size: 6.5rem;
+    translate: -50% -50%;
+    border: 1px dashed color-mix(in oklab, var(--tone) 38%, transparent);
+    border-radius: 999px;
+}
+
+.empty-art-card
+{
+    position: absolute;
+    left: 0.9rem;
+    top: 0.55rem;
+    inline-size: 2.5rem;
+    block-size: 3.4rem;
+    border: 1px solid var(--line-strong);
+    border-radius: 0.45rem;
+    background: linear-gradient(160deg, var(--lifted), var(--field));
+    box-shadow: 0 8px 18px -10px rgb(0 0 0 / 0.8);
+    rotate: -14deg;
+}
+
+.empty-art-card::after
+{
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    inline-size: 0.7rem;
+    block-size: 0.7rem;
+    translate: -50% -50%;
+    rotate: 45deg;
+    border-radius: 0.15rem;
+    background: color-mix(in oklab, var(--tone) 45%, transparent);
+}
+
+.empty-art-card.is-back
+{
+    left: auto;
+    right: 0.9rem;
+    top: 1.1rem;
+    rotate: 13deg;
+}
+
+.empty-art-disc
+{
+    position: absolute;
+    z-index: 1;
+    left: 50%;
+    top: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    inline-size: 3.75rem;
+    block-size: 3.75rem;
+    translate: -50% -50%;
+    border: 1px solid color-mix(in oklab, var(--tone) 45%, transparent);
+    border-radius: 999px;
+    color: var(--tone);
+    background: color-mix(in oklab, var(--tone) 16%, var(--field));
+    box-shadow: 0 0 26px -6px var(--tone);
+}

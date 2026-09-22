@@ -25,12 +25,6 @@ import type { EarnedAchievement } from '../../api.ts';
  * one colour that carries a meaning carry two. Bronze and silver are the neutral surfaces at two
  * weights instead, which reads as a ladder without inventing a hue.
  */
-const TIER_TONE: Record<string, string> = {
-    bronze: 'bg-raised text-muted',
-    silver: 'bg-raised text-text',
-    gold: 'bg-gold/15 text-gold'
-};
-
 export default component AchievementTile(props: { achievement: EarnedAchievement })
 {
     const locale = useLocale();
@@ -39,18 +33,12 @@ export default component AchievementTile(props: { achievement: EarnedAchievement
 
     <div
         class={ () => [
-            'flex gap-3 rounded-tile border border-line p-3',
-            earned ? 'bg-field' : 'bg-field/40'
+            'flex items-center gap-3 rounded-tile border p-3',
+            earned ? 'border-line bg-field' : 'border-line/70 bg-field/50'
         ].join(' ') }
         aria-label={ locale.text(props.achievement.name) }
     >
-        <span
-            class={ () => [
-                'flex h-10 w-10 shrink-0 items-center justify-center rounded-full',
-                earned ? (TIER_TONE[props.achievement.tier] ?? 'bg-raised text-text') : 'bg-sunk text-faint'
-            ].join(' ') }
-            aria-hidden="true"
-        >
+        <span class="medal" data-tier={ earned ? props.achievement.tier : 'locked' } aria-hidden="true">
             <Icon name={ props.achievement.icon as IconName } size={ 20 } />
         </span>
 
@@ -59,9 +47,23 @@ export default component AchievementTile(props: { achievement: EarnedAchievement
                 { locale.text(props.achievement.name) }
             </p>
             <p class="text-ui-2xs text-muted">{ locale.text(props.achievement.blurb) }</p>
-            <Show when={ !earned }>
-                { () => <p class="mt-0.5 text-ui-2xs text-faint">{ locale.t('achievements.locked') }</p> }
-            </Show>
         </div>
+
+        <Show
+            when={ earned }
+            fallback={
+                <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-sunk text-faint">
+                    <Icon name="lock" size={ 13 } />
+                    <span class="sr-only">{ locale.t('achievements.locked') }</span>
+                </span>
+            }
+        >
+            { () =>
+                <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-live/15 text-live">
+                    <Icon name="selected" size={ 14 } />
+                    <span class="sr-only">{ locale.t('achievements.earnedOne') }</span>
+                </span>
+            }
+        </Show>
     </div>
 }

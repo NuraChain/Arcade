@@ -1,3 +1,4 @@
+import BrandLogo from '../layout/brand-logo.component.azeroth';
 import { Link, useMatch, useNavigate } from 'azerothjs';
 
 import Icon from '../../icons/icon.component.azeroth';
@@ -70,9 +71,7 @@ export default component TopBar()
                 { () =>
                     <div class="flex min-w-0 flex-1 items-center">
                         <Link to="/app" class="flex h-11 min-w-0 items-center gap-2.5 rounded-full pe-2" aria-label={ locale.t('app.nav.home') }>
-                            <span class="lit flex h-8 w-8 shrink-0 items-center justify-center rounded-control bg-accent-fill text-accent-ink">
-                                <Icon name="games" size={ 17 } />
-                            </span>
+                            <BrandLogo size="md" />
                             <BrandMark class="truncate text-ui-lg text-text" />
                         </Link>
                     </div>

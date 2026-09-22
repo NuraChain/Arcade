@@ -1,0 +1,17 @@
+const SIZE = {
+    sm: 'h-7 w-7',
+    md: 'h-8 w-8',
+    lg: 'h-9 w-9'
+};
+
+export default component BrandLogo(props: { size?: 'sm' | 'md' | 'lg' })
+{
+    <span class={ `lit flex shrink-0 overflow-hidden rounded-control ${ SIZE[props.size ?? 'lg'] }` } aria-hidden="true">
+        <svg viewBox="0 0 32 32" class="h-full w-full">
+            <rect width="32" height="32" fill="#2563EB" />
+            <path d="M0 0H32V13C22 17.5 10 17.5 0 11Z" fill="#FFFFFF" fill-opacity="0.13" />
+            <path d="M14.5 7Q16.39 15.61 25 17.5Q16.39 19.39 14.5 28Q12.61 19.39 4 17.5Q12.61 15.61 14.5 7Z" fill="#FFFFFF" />
+            <path d="M24 4Q24.72 7.28 28 8Q24.72 8.72 24 12Q23.28 8.72 20 8Q23.28 7.28 24 4Z" fill="#BFDBFE" />
+        </svg>
+    </span>
+}

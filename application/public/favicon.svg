@@ -1,10 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
     <rect width="32" height="32" rx="8" fill="#2563EB"/>
-    <g transform="translate(4 4)" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <line x1="6" x2="10" y1="11" y2="11"/>
-        <line x1="8" x2="8" y1="9" y2="13"/>
-        <line x1="15" x2="15.01" y1="12" y2="12"/>
-        <line x1="18" x2="18.01" y1="10" y2="10"/>
-        <path d="M17.32 5H6.68a4 4 0 0 0-3.978 3.59c-.006.052-.01.101-.017.152C2.604 9.416 2 14.456 2 16a3 3 0 0 0 3 3c1 0 1.5-.5 2-1l1.414-1.414A2 2 0 0 1 9.828 16h4.344a2 2 0 0 1 1.414.586L17 18c.5.5 1 1 2 1a3 3 0 0 0 3-3c0-1.545-.604-6.584-.685-7.258-.007-.05-.011-.1-.017-.151A4 4 0 0 0 17.32 5z"/>
-    </g>
+    <path d="M8 0H24A8 8 0 0 1 32 8V13C22 17.5 10 17.5 0 11V8A8 8 0 0 1 8 0Z" fill="#FFFFFF" fill-opacity="0.13"/>
+    <path d="M14.5 7Q16.39 15.61 25 17.5Q16.39 19.39 14.5 28Q12.61 19.39 4 17.5Q12.61 15.61 14.5 7Z" fill="#FFFFFF"/>
+    <path d="M24 4Q24.72 7.28 28 8Q24.72 8.72 24 12Q23.28 8.72 20 8Q23.28 7.28 24 4Z" fill="#BFDBFE"/>
 </svg>

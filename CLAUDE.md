@@ -537,6 +537,20 @@ is geometry; the icons are hand-authored. `npm run art` regenerates the scenes. 
 script and its WebPs are gone - the user judged the renders not good enough - and the 3D market's
 GLB kit, which is a live scene rather than an image, stays.
 
+**The brand is a sparkle, because Nura means light.** `BrandLogo` draws it inline - a four-point star
+and a small one on the accent tile - with flat fills and no gradient ids, because an id-referenced
+gradient inside a copy of the logo that is `display: none` (the sidebar on a phone) stops painting
+in every other copy on the page. `public/favicon.svg` is the same drawing, and `tools/art/raster.mjs`
+renders it to the PNG sizes, draws `share.jpg` (the 1200x630 link preview) from the logo and the
+four game scenes, and writes `site.webmanifest`. It needs Chrome, so it takes `QA_CHROME` the way
+the matrix does. `og:image` is a relative url: a deployment behind a real origin should make it
+absolute, which is configuration this repository does not have yet.
+
+**Achievements are medals and empty states are illustrations, both in CSS.** `.medal[data-tier]`
+is a metal gradient per tier with the icon engraved in it, and a locked one is a sunk well - so a
+row reads earned or not before the words do. `.empty-art` is two tilted cards, a dashed orbit and
+the icon disc, toned by the empty state's own `tone`. Neither is an image file, so neither can 404.
+
 The `--world-*` tokens carry the market's own palette and the WebGL layer reads them ONCE, at
 `createWorld`. There is no relight path: it existed only so the market could follow a theme change.
 `--world-sky` equals `--void`, so the canvas and the page share one ground and the seam disappears.

@@ -31,6 +31,7 @@ export const me = {
     'achievements.title': 'Achievements',
     'achievements.earned': { one: '1 earned', other: '{count} earned' },
     'achievements.locked': 'Not earned yet',
+    'achievements.earnedOne': 'Earned',
 
     'history.title': 'Recent games',
     'history.empty': 'Nothing finished yet.',

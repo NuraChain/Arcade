@@ -34,6 +34,7 @@ export const me: Pick<Dictionary, keyof typeof reference> = {
     'achievements.title': 'دستاوردها',
     'achievements.earned': { one: '۱ گرفته', other: '{count} گرفته' },
     'achievements.locked': 'هنوز گرفته نشده',
+    'achievements.earnedOne': 'به دست آمده',
 
     'history.title': 'بازی‌های اخیر',
     'history.empty': 'هنوز چیزی تمام نشده.',

@@ -1,3 +1,4 @@
+import BrandLogo from '../layout/brand-logo.component.azeroth';
 import { Link } from 'azerothjs';
 
 import Icon from '../../icons/icon.component.azeroth';
@@ -23,8 +24,8 @@ export default component NavRail()
 
     <nav class="bar safe-t safe-b flex h-dvh w-[var(--rail-w)] flex-col items-center border-e border-line bg-void" aria-label={ locale.t('app.nav.primary') }>
         <span class="flex h-[var(--topbar-h)] w-full shrink-0 items-center justify-center">
-            <Link to="/app" class="lit flex h-10 w-10 items-center justify-center rounded-control bg-accent-fill text-accent-ink coarse:h-11 coarse:w-11" aria-label={ locale.t('app.nav.home') }>
-                <Icon name="games" size={ 19 } />
+            <Link to="/app" class="flex h-11 w-11 items-center justify-center rounded-control" aria-label={ locale.t('app.nav.home') }>
+                <BrandLogo size="lg" />
             </Link>
         </span>
         <ul class="flex min-h-0 flex-1 flex-col items-center gap-1 overflow-y-auto pt-3">
