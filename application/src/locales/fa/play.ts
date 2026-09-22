@@ -241,6 +241,8 @@ export const play: Pick<Dictionary, keyof typeof reference> = {
     'hokm.lastTrick': 'دست آخر',
     'hokm.lastTrick.none': 'هنوز دستی برده نشده.',
     'hokm.sort': 'مرتب‌سازی',
+    'play.tables': 'میزهای دیگرت',
+    'play.tables.waiting': { one: 'منتظر توست', other: 'میز منتظر توست' },
     'card.turn': 'نوبت اوست',
     'card.yourTurn': 'نوبت توست',
     'card.lost': 'باخت',

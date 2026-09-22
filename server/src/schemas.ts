@@ -1004,6 +1004,8 @@ export const tableSummary = object({
     /** The game being played here, absent until somebody starts one. */
     matchId: string().optional(),
 
+    yourTurn: boolean().optional(),
+
     /**
      * The conversation this table was opened in, absent for a table opened from the games pages.
      *

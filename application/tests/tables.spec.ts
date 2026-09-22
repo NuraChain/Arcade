@@ -216,4 +216,36 @@ describe('the lobby store', () =>
         expect(server.calls).toContain('tables.mine');
         stop();
     });
+
+    it('counts only the tables that are waiting on this account', async () =>
+    {
+        const lobby = useLobby();
+        const first = await lobby.host('hokm', defaultTable('hokm'), []);
+        await lobby.host('ludo', defaultTable('ludo'), []);
+
+        server.tables.find((table) => table.id === first)!.yourTurn = true;
+        await lobby.refresh();
+        await settle();
+
+        expect(lobby.seated().length).toBe(2);
+        expect(lobby.waiting().map((table) => table.id)).toEqual([first]);
+    });
+
+    it('re-reads where it is sitting when a game it plays moves', async () =>
+    {
+        const lobby = useLobby();
+        const stop = lobby.start();
+
+        useRealtime().start();
+        socket.accept();
+        await lobby.host('ludo', defaultTable('ludo'), []);
+        server.calls = [];
+
+        socket.deliver({ v: 1, t: 'nudge', n: 1, scope: 'game', id: 'some-match', at: 0 });
+        clock.advance(NUDGE_WINDOW_MS);
+        await settle();
+
+        expect(server.calls).toContain('tables.mine');
+        stop();
+    });
 });

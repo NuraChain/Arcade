@@ -1472,7 +1472,16 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
 
             async mine(me)
             {
-                return (await table.mine(me)).map(asTable);
+                const rows = await table.mine(me);
+                const turns = await match.turnsAt(rows.flatMap((row) => row.match_id === null ? [] : [row.match_id]));
+
+                return rows.map((row) =>
+                {
+                    const summary = asTable(row);
+                    const turn = row.match_id === null ? undefined : turns.get(row.match_id);
+
+                    return turn === undefined || row.mine === null ? summary : { ...summary, yourTurn: turn === row.mine };
+                });
             },
 
             async view(me, tableId)

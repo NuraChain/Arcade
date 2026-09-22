@@ -1,0 +1,68 @@
+import { Link } from 'azerothjs';
+
+import GameIcon from './game-icon.component.azeroth';
+import Badge from '../ui/badge.component.azeroth';
+import IconButton from '../ui/icon-button.component.azeroth';
+import type { GameId } from '../../data/games.ts';
+import { useCatalogue } from '../../stores/catalogue.store.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import type { TableSummary } from '../../api.ts';
+
+export default component PlayHeader(props: { table: TableSummary; others: TableSummary[] })
+{
+    const locale = useLocale();
+    const catalogue = useCatalogue();
+
+    derived nameOf = (game: string): string => locale.t(catalogue.byId(game as GameId).nameKey);
+
+    derived waiting = props.others.filter((table) => table.yourTurn === true).length;
+
+    <header class="flex min-w-0 flex-col gap-3">
+        <div class="flex min-w-0 items-center gap-3">
+            <IconButton icon="back" label={ locale.t('app.nav.back') } to="/app/games" class="icon-flip shrink-0" />
+            <GameIcon game={ props.table.game as GameId } class="h-10 w-10 shrink-0" />
+            <div class="min-w-0 flex-1">
+                <h1 class="truncate text-ui-xl font-bold text-text">{ nameOf(props.table.game) }</h1>
+                <p class="flex min-w-0 items-center gap-2 text-ui-xs text-muted">
+                    <span class="tally shrink-0">{ locale.plural('common.players', props.table.seats) }</span>
+                    <span class="h-1 w-1 shrink-0 rounded-full bg-faint" aria-hidden="true"></span>
+                    <span class="truncate">{ locale.t(props.table.mode === 'turns' ? 'games.mode.turns' : 'games.mode.live') }</span>
+                </p>
+            </div>
+        </div>
+
+        <Show when={ props.others.length > 0 }>
+            { () =>
+                <nav class="flex min-w-0 flex-col gap-1.5" aria-label={ locale.t('play.tables') }>
+                    <p class="flex items-center gap-2 text-ui-2xs text-faint">
+                        <span class="label">{ locale.t('play.tables') }</span>
+                        <Show when={ waiting > 0 }>
+                            { () => <span class="font-semibold text-live"><span class="tally">{ locale.n(waiting) }</span> { locale.plural('play.tables.waiting', waiting) }</span> }
+                        </Show>
+                    </p>
+                    <ul class="rail-x -mx-1 flex gap-2 px-1 pb-1">
+                        <For each={ props.others } key={ (table) => table.id } let={ table }>
+                            <li class="shrink-0">
+                                <Link
+                                    to={ `/app/play/${ table.id }` }
+                                    class={ () => [
+                                        'flex h-11 items-center gap-2 rounded-full border ps-1.5 pe-3 text-ui-sm font-semibold transition-colors',
+                                        table.yourTurn === true
+                                            ? 'border-live/50 bg-live/10 text-text hover:bg-live/15'
+                                            : 'border-line bg-field text-muted hover:border-line-strong hover:text-text'
+                                    ].join(' ') }
+                                >
+                                    <GameIcon game={ table.game as GameId } class="h-8 w-8" />
+                                    <span class="max-w-[9rem] truncate">{ nameOf(table.game) }</span>
+                                    <Show when={ table.yourTurn === true }>
+                                        { () => <Badge dot text={ locale.t('card.yourTurn') } tone="live" /> }
+                                    </Show>
+                                </Link>
+                            </li>
+                        </For>
+                    </ul>
+                </nav>
+            }
+        </Show>
+    </header>
+}

@@ -17,6 +17,8 @@ export interface LobbyApi
     /** Where this account is sitting right now. Survives a reload and a second device. */
     seated: Getter<TableSummary[]>;
 
+    waiting: Getter<TableSummary[]>;
+
     open(tableId: string): void;
     close(): void;
     openId: Getter<string>;
@@ -151,6 +153,8 @@ export const useLobby = createStore((): LobbyApi =>
 
         seated: () => seated.data()?.tables ?? [],
 
+        waiting: () => (seated.data()?.tables ?? []).filter((table) => table.yourTurn === true),
+
         open: (tableId) => setOpenId(tableId),
         close: () => setOpenId(''),
         openId,
@@ -253,6 +257,11 @@ export const useLobby = createStore((): LobbyApi =>
                 if (scope === 'social')
                 {
                     void revalidate().catch(() => undefined);
+                }
+
+                if (scope === 'game')
+                {
+                    void seated.refetch();
                 }
             });
         },

@@ -238,6 +238,8 @@ export const play = {
     'hokm.lastTrick': 'Last trick',
     'hokm.lastTrick.none': 'No trick has been taken yet.',
     'hokm.sort': 'Sort',
+    'play.tables': 'Your other tables',
+    'play.tables.waiting': { one: 'waiting on you', other: 'waiting on you' },
     'card.turn': 'Their go',
     'card.yourTurn': 'Your go',
     'card.lost': 'Lost',

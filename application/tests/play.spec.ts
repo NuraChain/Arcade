@@ -6,6 +6,7 @@ import { RouterProvider, createMemoryHistory, createRouter, type Route } from 'a
 const SEATED = ['alex', 'sara.k', 'reza.t', 'mina', 'nima.f', 'leila.a'];
 
 import GameCard from '../src/components/games/game-card.component.azeroth';
+import PlayHeader from '../src/components/games/play-header.component.azeroth';
 import { gameArt, gameIcon } from '../src/components/games/art.ts';
 import { GAMES } from '../src/data/games.ts';
 import { manualClock, type ManualClock } from '../src/lib/clock.ts';
@@ -145,5 +146,53 @@ describe('GameCard', () =>
 
         expect(container.querySelector('button'), 'a Play button before the answer could be one the server refuses').toBeNull();
         expect(container.textContent).not.toContain('Live');
+    });
+});
+
+describe('PlayHeader', () =>
+{
+    const table = (id: string, game: string, extra: Record<string, unknown> = {}): never => ({
+        id,
+        code: id.toUpperCase(),
+        game,
+        seats: 4,
+        mode: 'turns',
+        privacy: 'public',
+        target: 7,
+        cube: false,
+        blinds: 'low',
+        status: 'playing',
+        chairs: [],
+        taken: 4,
+        createdAt: '2026-09-22T00:00:00.000Z',
+        ...extra
+    }) as never;
+
+    const mount = (current: never, others: never[]): HTMLElement =>
+    {
+        const Stub = (): HTMLElement => document.createElement('div');
+        const routes: Route[] = [{ path: '/app', component: Stub, children: [{ path: 'play/:id', component: Stub }] }];
+        const router = createRouter({ routes, history: createMemoryHistory('/app/play/one'), scroll: false });
+        return renderTest(() => RouterProvider({ router, children: () => PlayHeader({ table: current, others }) }) as Rendered).container;
+    };
+
+    it('names the game and its pace, and says nothing about other tables when there are none', () =>
+    {
+        const container = mount(table('one', 'hokm'), []);
+
+        expect(container.querySelector('h1')?.textContent).toBe('Hokm');
+        expect(container.textContent).toContain('Turn-based');
+        expect(container.querySelector('nav')).toBeNull();
+    });
+
+    it('offers every other table as a switch, and marks the ones waiting on the reader', () =>
+    {
+        const container = mount(table('one', 'hokm'), [table('two', 'ludo', { yourTurn: true }), table('three', 'hokm', { yourTurn: false })]);
+        const links = [...container.querySelectorAll('nav a')] as HTMLAnchorElement[];
+
+        expect(links.map((link) => link.getAttribute('href'))).toEqual(['/app/play/two', '/app/play/three']);
+        expect(links[0].textContent).toContain('Your go');
+        expect(links[1].textContent).not.toContain('Your go');
+        expect(container.querySelector('nav p')?.textContent).toContain('waiting on you');
     });
 });

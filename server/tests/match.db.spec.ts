@@ -514,4 +514,25 @@ describe.skipIf(!active)('a match, against a real database', () =>
             )).rejects.toThrow();
         });
     });
+
+    describe('whose turn it is, across every table somebody sits at', () =>
+    {
+        it('answers the seat on the move for a live match, and nothing for one that is over or unknown', async () =>
+        {
+            const first = await seatedTable(2);
+            const second = await seatedTable(2);
+            const live = await matches.start(first.players[0], first.tableId);
+            const over = await matches.start(second.players[0], second.tableId);
+            const nowhere = '00000000-0000-4000-8000-000000000000';
+
+            await matches.act(second.players[1], over.match.id, { play: null, key: 'walk' });
+
+            const turns = await matches.turnsAt([live.match.id, over.match.id, nowhere]);
+
+            expect(turns.get(live.match.id)).toBe(matches.turnOf('ludo', live.state));
+            expect(turns.has(over.match.id)).toBe(false);
+            expect(turns.has(nowhere)).toBe(false);
+            expect((await matches.turnsAt([])).size).toBe(0);
+        });
+    });
 });

@@ -1,9 +1,10 @@
-import { Dynamic, type MountNode, useHead, useNavigate, useParams } from 'azerothjs';
+import { Dynamic, type MountNode, useHead, useNavigate, useParams, useRoute } from 'azerothjs';
 
 import ConfirmSheet from '../../components/app/confirm-sheet.component.azeroth';
 import Page from '../../components/app/page.component.azeroth';
 import InviteSheet from '../../components/games/invite-sheet.component.azeroth';
 import LobbyPanel from '../../components/games/lobby-panel.component.azeroth';
+import PlayHeader from '../../components/games/play-header.component.azeroth';
 import WatchBoard from '../../components/games/watch-board.component.azeroth';
 import TableChat from '../../components/games/table-chat.component.azeroth';
 import TableDock from '../../components/games/table-dock.component.azeroth';
@@ -61,9 +62,21 @@ export default component PlayPage()
 
     state drawn = '';
 
+    const route = useRoute();
+
+    effect
+    {
+        const here = route().pathname;
+        const id = params().id ?? '';
+
+        if (id !== '' && here.startsWith('/app/play/'))
+        {
+            lobby.open(id);
+        }
+    }
+
     mount
     {
-        lobby.open(params().id ?? '');
         const release = shell.claimTitle(() => title);
 
         return () =>
@@ -331,6 +344,8 @@ export default component PlayPage()
                         ref={ (element) => arena = element }
                         class="flex min-w-0 flex-1 flex-col gap-5 bg-void py-2"
                     >
+                        <PlayHeader table={ table! } others={ lobby.seated().filter((one) => one.id !== table!.id) } />
+
                         <Show when={ playing !== '' && drawn === playing }>
                             { () => <Dynamic component={ Board! } props={ boardProps } /> }
                         </Show>
@@ -416,7 +431,7 @@ export default component PlayPage()
                             { () =>
                                 <div ref={ (element) => showChat(element) }>
                                     <TableChat
-                                        conversationId={ table!.conversationId! }
+                                        conversationId={ table?.conversationId ?? '' }
                                         class={ `min-h-[18rem] rounded-panel ${ PANEL_TONE.field }` }
                                         onClose={ () => chatOpen = false }
                                     />
@@ -438,7 +453,7 @@ export default component PlayPage()
                     <Show when={ railVisible }>
                         { () =>
                             <aside class="hidden w-[var(--social-w)] shrink-0 border-s border-line bg-field lg:flex lg:min-h-0 lg:flex-col">
-                                <TableChat conversationId={ table!.conversationId! } class="min-h-0 flex-1" />
+                                <TableChat conversationId={ table?.conversationId ?? '' } class="min-h-0 flex-1" />
                             </aside>
                         }
                     </Show>

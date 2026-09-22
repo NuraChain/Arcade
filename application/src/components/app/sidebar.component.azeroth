@@ -4,6 +4,7 @@ import { Link } from 'azerothjs';
 import Icon from '../../icons/icon.component.azeroth';
 import { useAccount } from '../../stores/account.store.ts';
 import { useChat } from '../../stores/chat.store.ts';
+import { useLobby } from '../../stores/lobby.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useRealtime } from '../../stores/realtime.store.ts';
 import BrandMark from '../layout/brand-mark.component.azeroth';
@@ -22,6 +23,10 @@ export default component Sidebar()
 
     derived unread = chat.totalUnread();
 
+    const lobby = useLobby();
+
+    derived waiting = lobby.waiting().length;
+
     derived dot = user !== null && live.status() === 'connected' ? 'online' as const : null;
 
     derived status = dot === 'online' ? locale.t('common.online') : (user === null ? '' : `@${ user.handle }`);
@@ -38,6 +43,9 @@ export default component Sidebar()
                     <Link to={ item.to } end={ item.end } activeClass="is-active" prefetch="hover" class="nav-item nav-row flex h-11 items-center gap-3 rounded-tile px-3 text-ui-md font-semibold text-muted transition-colors duration-150 hover:bg-raised hover:text-text">
                         <Icon name={ item.icon } size={ 20 } />
                         <span class="min-w-0 flex-1 truncate">{ locale.t(item.labelKey) }</span>
+                        <Show when={ item.tab === 'games' && waiting > 0 }>
+                            { () => <Badge count={ waiting } tone="live" label={ locale.plural('common.waitingTables', waiting) } /> }
+                        </Show>
                         <Show when={ item.tab === 'chats' && unread > 0 }>
                             { () => <Badge count={ unread } tone="accent" label={ locale.plural('common.unread', unread) } /> }
                         </Show>

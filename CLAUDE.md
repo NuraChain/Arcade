@@ -1109,6 +1109,25 @@ The column is gone from the entity; `tests/lib.spec.ts` now asserts the key is A
 so it cannot come back without the mechanism. `stakes: 'play-money'` stays: that is a fact about
 a table, not a promise about a random number.
 
+### Playing more than one table
+
+Somebody can sit at as many tables as they like, and a turn-based game is only pleasant if they
+can. `GET /tables/mine` answers `yourTurn` on every seated table with a live match, and the ENGINE
+answers it: `match.turnsAt` loads the live matches in one repository read and asks each game's
+`turnOf`, because no SQL can know how hokm's trump pause or ludo's six decides whose go it is. A
+table with no match, or a finished one, has no `yourTurn` at all rather than a `false` - there is
+no go to be had there.
+
+The play page's header lists the reader's OTHER tables as links, green where one is waiting on
+them, and the Games item in every navigation counts the tables waiting. The lobby store refetches
+the list on any `game` doorbell, which is how a move at one table lights up the chip on another.
+
+**The play page opens its table from an effect over the pathname, not in `mount`.** A switch
+between tables is the same route with a different id, so the page is never remounted; opening once
+at mount left the switch changing the url and nothing else. The chat page answered the same thing
+the same way. `TableChat` follows its `conversationId` prop for the same reason - the rail is not
+rebuilt either, and it would have gone on showing the last table's thread.
+
 ## Playing a game
 
 `server/src/domains/match/` is the first real game engine in this product, and it is what the table

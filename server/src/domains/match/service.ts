@@ -1,5 +1,5 @@
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@azerothjs/http';
-import { IsNull, LessThan, MoreThan, type DataSource, type EntityManager } from 'typeorm';
+import { In, IsNull, LessThan, MoreThan, type DataSource, type EntityManager } from 'typeorm';
 
 import { MatchAction } from '../../entities/match-action.entity.ts';
 import { MatchPlayer } from '../../entities/match-player.entity.ts';
@@ -725,6 +725,21 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
          */
         turnOf: (game: string, state: unknown): number | null =>
             engineFor(game)?.turnOf(state) ?? null,
+
+        turnsAt: async (ids: readonly string[]): Promise<Map<string, number | null>> =>
+        {
+            if (ids.length === 0)
+            {
+                return new Map();
+            }
+
+            const live = await db.getRepository(Match).find({
+                select: { id: true, game: true, state: true },
+                where: { id: In([...ids]), finishedAt: IsNull() }
+            });
+
+            return new Map(live.map((row) => [row.id, engineFor(row.game)?.turnOf(row.state) ?? null]));
+        },
 
         board: (game: string, state: unknown, seat: number | null): MatchBoard =>
         {

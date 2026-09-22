@@ -51,9 +51,18 @@ export default component TableChat(props: { conversationId: string; onClose?: ()
 
     let list: HTMLElement | null = null;
 
+    effect
+    {
+        const id = props.conversationId;
+
+        if (id !== '')
+        {
+            chat.openThread(id);
+        }
+    }
+
     mount
     {
-        chat.openThread(props.conversationId);
         const unstick = list === null ? null : attachStick(list, (value) => near = value);
         return () =>
         {

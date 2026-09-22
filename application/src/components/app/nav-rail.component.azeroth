@@ -4,6 +4,7 @@ import { Link } from 'azerothjs';
 import Icon from '../../icons/icon.component.azeroth';
 import { useAccount } from '../../stores/account.store.ts';
 import { useChat } from '../../stores/chat.store.ts';
+import { useLobby } from '../../stores/lobby.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useRealtime } from '../../stores/realtime.store.ts';
 import Avatar from '../ui/avatar.component.azeroth';
@@ -22,6 +23,10 @@ export default component NavRail()
 
     derived unread = chat.totalUnread();
 
+    const lobby = useLobby();
+
+    derived waiting = lobby.waiting().length;
+
     <nav class="bar safe-t safe-b flex h-dvh w-[var(--rail-w)] flex-col items-center border-e border-line bg-void" aria-label={ locale.t('app.nav.primary') }>
         <span class="flex h-[var(--topbar-h)] w-full shrink-0 items-center justify-center">
             <Link to="/app" class="flex h-11 w-11 items-center justify-center rounded-control" aria-label={ locale.t('app.nav.home') }>
@@ -34,6 +39,9 @@ export default component NavRail()
                     <Tooltip label={ locale.t(item.labelKey) } side="end">
                         <Link to={ item.to } end={ item.end } activeClass="is-active" prefetch="hover" class="nav-item nav-row relative flex h-11 w-11 items-center justify-center rounded-tile text-muted transition-colors duration-150 hover:bg-raised hover:text-text" aria-label={ locale.t(item.labelKey) }>
                             <Icon name={ item.icon } size={ 20 } />
+                            <Show when={ item.tab === 'games' && waiting > 0 }>
+                                { () => <Badge count={ waiting } size="sm" tone="live" anchor label={ locale.plural('common.waitingTables', waiting) } /> }
+                            </Show>
                             <Show when={ item.tab === 'chats' && unread > 0 }>
                                 { () => <Badge count={ unread } size="sm" anchor label={ locale.plural('common.unread', unread) } /> }
                             </Show>

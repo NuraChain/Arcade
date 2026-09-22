@@ -86,6 +86,8 @@ interface TableWire
     taken: number;
     mine?: number;
     conversationId?: string;
+    matchId?: string;
+    yourTurn?: boolean;
     createdAt: string;
 }
 
