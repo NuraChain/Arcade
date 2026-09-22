@@ -44,14 +44,6 @@ export default component GroupPage()
     const people = usePeople();
     const { navigate } = useNavigate();
 
-    /**
-     * Opened once, closed once.
-     *
-     * NOT an effect over `params()`: the route parameter is shared router state, so an effect
-     * that tracks it fires again on the way out with the NEXT route's id in hand - which asked
-     * the groups api for a conversation id and put a 404 in the console on every navigation away
-     * from this page.
-     */
     mount
     {
         groups.open(params().id ?? '');
@@ -86,19 +78,6 @@ export default component GroupPage()
 
     derived game = (group?.game ?? null) as GameId | null;
 
-    /**
-     * Opens a table in the GROUP's room, which is what makes it the group's table.
-     *
-     * It used to invite whoever happened to be online, capped at one fewer than the seats, and open
-     * an `invite` table around them - so a group of eight playing a four-seat game handed three
-     * chairs to the three people who were looking at the moment the button was pressed, and the
-     * other four could not sit down at all. Worse, the chairs were HELD: somebody who came back a
-     * minute later found a table that was not full and still had nowhere to sit.
-     *
-     * Pointing it at the group's conversation makes the guest list the group, first come first
-     * seated, and keeps it out of the open list so quick play cannot drop a stranger into it. The
-     * line the server writes into that room is how the other seven learn it is there.
-     */
     const playTogether = (): void =>
     {
         if (group === null || group.conversationId === undefined)
@@ -107,14 +86,6 @@ export default component GroupPage()
         }
         const pick = game ?? catalogue.featured();
 
-        /**
-         * The biggest seat count this game plays that this group can actually FILL.
-         *
-         * `catalogue.defaults` answers with the game's largest, which for a group of three and a
-         * game that seats four is a table nobody outside the room can complete and nobody inside it
-         * can start. The server refuses that now, so without this the primary button on a small
-         * group's page would simply fail; asking for what fits is what makes it work.
-         */
         const fits = catalogue.rules(pick).seats.filter((count) => count <= group.memberCount);
         const seats = fits[fits.length - 1];
 
@@ -152,13 +123,6 @@ export default component GroupPage()
         toasts.show({ kind: 'success', text: locale.t('groups.joined', { name: one.name }) });
     };
 
-    /**
-     * Leaving says what it will cost before it does it.
-     *
-     * Three different sentences, because three different things happen: an ordinary member walks
-     * out, the owner hands the group on, and the last person out takes the group and its chat
-     * with them. A single "are you sure?" would be the same question for all three.
-     */
     const leave = async (one: GroupSummary): Promise<void> =>
     {
         const alone = one.memberCount <= 1;
@@ -280,7 +244,7 @@ export default component GroupPage()
                             { () =>
                                 <>
                                     <Show when={ group?.conversationId !== undefined }>
-                                        { () => <Button variant="primary" size="lg" leading="zap" onClick={ playTogether }>{ locale.t('groups.playTogether') }</Button> }
+                                        { () => <Button variant="primary" size="lg" leading="play" onClick={ playTogether }>{ locale.t('groups.playTogether') }</Button> }
                                     </Show>
                                     <Show when={ group?.conversationId !== undefined }>
                                         { () => <Button variant="secondary" size="lg" leading="chats" to={ `/app/chats/${ group!.conversationId! }` }>{ locale.t('groups.chat') }</Button> }

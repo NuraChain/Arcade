@@ -26,14 +26,6 @@ import { useToasts } from '../../stores/toasts.store.ts';
 import Panel from '../../components/ui/panel.component.azeroth';
 import { PANEL_TONE } from '../../components/ui/variants.ts';
 
-/**
- * One table, as it stands.
- *
- * The version this replaces had seven phases and a state machine to walk between them: searching,
- * found, lobby, starting, playing, result. Six of the seven were a simulation - opponents arriving
- * on a timer, a countdown to a game that never began, a winner nobody beat - and what is left is
- * the one that was always real: people in chairs.
- */
 export default component PlayPage()
 {
     const locale = useLocale();
@@ -50,25 +42,8 @@ export default component PlayPage()
 
     state chatOpen = false;
 
-    /**
-     * The element the fullscreen button fills the screen with.
-     *
-     * The board and its controls rather than the document, so filling the screen leaves the game
-     * and loses the rail, the top bar and the key banner - which is the whole reason somebody
-     * presses it on a phone. Captured in a plain `let` because it is read by an event handler and
-     * never rendered from; a signal here would be reactivity nothing subscribes to.
-     */
     let arena: HTMLElement | null = null;
 
-    /**
-     * On a phone the chat opens BELOW the board, the turn panel and the seat list - which on a
-     * 390-wide screen is well past the fold, so pressing "Show chat" looked like pressing nothing
-     * at all. Bringing it into view is what makes the button honest about what it did.
-     *
-     * Called from the element's own `ref`, which fires when it mounts, so there is no guessing at
-     * when the panel exists; and it follows the reduced-motion setting, because an unexpected
-     * smooth scroll is exactly the motion that setting is for.
-     */
     const showChat = (element: HTMLElement | null): void =>
     {
         if (element === null)
@@ -76,12 +51,6 @@ export default component PlayPage()
             return;
         }
 
-        /**
-         * `start`, not `nearest`: the panel is taller than whatever is left below the seat list, so
-         * `nearest` counts its top as already visible and scrolls almost nothing - sixty pixels of
-         * chat at the bottom of the screen. And on the NEXT frame, because this runs from the ref
-         * as the element mounts, when it has no box yet and `scrollIntoView` would measure zero.
-         */
         const smooth = !device.reducedMotion();
 
         requestAnimationFrame(() => element.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', block: 'start' }));
@@ -111,21 +80,12 @@ export default component PlayPage()
 
     derived amHost = table?.chairs.find((chair) => chair.seat === table!.mine)?.host === true;
 
-    /** A board worth drawing: this table's game, live or just finished. */
     derived showing = board.match() !== null && board.match()!.tableId === table?.id;
 
     derived ready = table !== null
         && table.status === 'ready'
         && table.chairs.every((chair) => chair.ready);
 
-    /**
-     * A table still loading is not a table that does not exist.
-     *
-     * The title read `play.notFound` whenever `table` was null, which is true for the whole first
-     * fetch - so every navigation into a perfectly good table flashed "No such table." in the tab
-     * and the top bar before the data landed. The same shape `regression-pass.mjs` already guards
-     * for a chat thread.
-     */
     derived title = table !== null
         ? locale.t(catalogue.byId(table.game as GameId).nameKey)
         : (loading ? locale.t('common.loading') : locale.t('play.notFound'));
@@ -136,25 +96,10 @@ export default component PlayPage()
 
     derived railVisible = !phone && seated && table?.conversationId !== undefined;
 
-    /**
-     * The board follows the table.
-     *
-     * A match id appears on the table the moment somebody starts one, and disappears when it ends,
-     * so the store is opened and closed from that rather than from a route parameter - which is
-     * also what makes a second person's Start reach this page through the ordinary doorbell.
-     */
     effect
     {
         const id = table?.matchId;
 
-        /**
-         * Only somebody SITTING here opens the player's board.
-         *
-         * `GET /matches/:id` resolves the caller's chair and answers 404 to anybody who has none -
-         * which is right, and which made a watcher's page fetch it anyway and put a 404 in the
-         * console on every visit. A spectator reads `watch` instead, and the two are kept apart
-         * here rather than by hoping the route is forgiving.
-         */
         if (id !== undefined && seated)
         {
             if (board.openId() !== id)
@@ -165,20 +110,6 @@ export default component PlayPage()
             return;
         }
 
-        /**
-         * A finished match is not a match to close, it is a match to LOOK at.
-         *
-         * `matchId` is the LIVE one, so it clears the instant somebody wins - and closing on that
-         * took the board off the screen at the exact moment it had something to say, dropping the
-         * winner straight back to a lobby with a Start button. It stays until this page is left or
-         * another game is dealt, and the result panel is what offers the rematch.
-         *
-         * The test is which TABLE the held match belongs to, deliberately, and not whether it has
-         * finished yet. Two reads learn about the end separately: the table's own refetch drops
-         * `matchId` first and the match view is still the one from before the final move, so asking
-         * "has it finished?" here closes the board in the window between them - which is exactly the
-         * moment it is wanted. Belonging to this table is true throughout.
-         */
         const held = board.match();
 
         if (held === null || held.tableId !== table?.id)
@@ -187,14 +118,6 @@ export default component PlayPage()
         }
     }
 
-    /**
-     * Watching, which is what a table with a game on it looks like to somebody with no chair.
-     *
-     * The board that arrives is two minutes old and the server is what holds it back - nothing here
-     * waits or buffers, because a delay a client implements is a delay the network tab undoes. It
-     * opens only when there is a match AND this reader is not in it: a player reads the live board
-     * through `board`, and offering them a stale one beside it would be two boards disagreeing.
-     */
     effect
     {
         const id = table?.matchId;
@@ -209,15 +132,6 @@ export default component PlayPage()
         }
     }
 
-    /**
-     * And it stops when this page is left.
-     *
-     * The effect above closes the watch when the TABLE stops having a live match, which never
-     * happens by navigating away - so the store kept the last match id, went on polling it every
-     * ten seconds from whatever page came next, and eventually 404'd into the console once that
-     * game had finished. A store that keeps working after its only reader is gone is the same
-     * defect as a timer nobody clears.
-     */
     mount
     {
         return () =>
@@ -275,8 +189,6 @@ export default component PlayPage()
         }
         const seat = await lobby.claim(table.id);
 
-        // No chair is an ANSWER, not a failure: somebody reached the last one first, which is an
-        // ordinary thing for a table to do between one page load and one tap.
         toasts.show(seat === null
             ? { kind: 'warning', text: locale.t('play.table.tooLate') }
             : { kind: 'success', text: locale.t('play.table.satDown') });
@@ -407,7 +319,7 @@ export default component PlayPage()
                             { () =>
                                 <Panel pad="md" stack="sm" class="items-center text-center">
                                     <p class="text-ui-base text-muted">{ locale.t('match.startHint') }</p>
-                                    <Button variant="primary" size="lg" leading="zap" loading={ starting } onClick={ () => void begin() }>
+                                    <Button variant="primary" size="lg" leading="play" loading={ starting } onClick={ () => void begin() }>
                                         { locale.t('match.start') }
                                     </Button>
                                 </Panel>

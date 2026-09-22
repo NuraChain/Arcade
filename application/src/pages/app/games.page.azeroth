@@ -31,16 +31,18 @@ export default component GamesPage()
     };
 
     <Page label={ locale.t('app.nav.games') } onRefresh={ () => catalogue.refresh() }>
-        <header class="flex flex-col gap-3 pb-5 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-                <h1 class="title text-ui-4xl">{ locale.t('app.nav.games') }</h1>
-                <p class="mt-2 text-ui-md text-muted">{ locale.t('games.lead') }</p>
+        <header class="flex flex-col gap-3 pb-5 @2xl:flex-row @2xl:items-end @2xl:justify-between">
+            <div class="flex flex-col gap-1.5">
+                <h1 class="title text-ui-3xl">{ locale.t('app.nav.games') }</h1>
+                <p class="text-ui-md text-muted">{ locale.t('games.lead') }</p>
             </div>
-            <p class="flex items-center gap-2 text-ui-sm font-semibold text-live">
-                <span class="live-dot h-2.5 w-2.5 rounded-full" aria-hidden="true"></span>
-                <span class="tally">{ locale.plural('games.live.playing', totals.playersOnline) }</span>
+            <p class="flex flex-wrap items-center gap-x-3 gap-y-1 text-ui-sm text-muted">
+                <span class="flex items-center gap-2">
+                    <span class="live-dot h-2 w-2" aria-hidden="true"></span>
+                    <span><span class="tally font-semibold text-text">{ locale.n(totals.playersOnline) }</span> { locale.plural('games.live.playingLabel', totals.playersOnline) }</span>
+                </span>
                 <span class="h-1 w-1 rounded-full bg-faint" aria-hidden="true"></span>
-                <span class="tally text-muted">{ locale.plural('games.live.tables', totals.tablesOpen) }</span>
+                <span><span class="tally font-semibold text-text">{ locale.n(totals.tablesOpen) }</span> { locale.plural('games.live.tablesLabel', totals.tablesOpen) }</span>
             </p>
         </header>
 
@@ -50,6 +52,6 @@ export default component GamesPage()
             <Chip icon="dice" selected={ filter === 'board' } onClick={ () => filter = 'board' }>{ locale.t('games.category.board') }</Chip>
         </Rail>
 
-        <GameGrid games={ games } label={ locale.t('app.nav.games') } onQuickPlay={ quickPlay } />
+        <GameGrid games={ games } detailed label={ locale.t('app.nav.games') } onQuickPlay={ quickPlay } />
     </Page>
 }

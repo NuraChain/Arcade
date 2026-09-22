@@ -38,13 +38,6 @@ export default component PersonPage()
     const people = usePeople();
     const { navigate } = useNavigate();
 
-    /**
-     * The profile, from the server, with the relation and the mutual count it already computes.
-     *
-     * One request for the page whose whole premise is the answer. The version this replaces read a
-     * name out of a fixture and recomputed `mutual` from a fixture friend graph - a number the
-     * server had already worked out and sent.
-     */
     const view = createResource(
         () => params().handle ?? null,
         (handle) => client.social.person({ params: { handle } }),
@@ -141,7 +134,7 @@ export default component PersonPage()
                     <Show when={ relation !== 'blocked' }>
                         { () =>
                             <div class="flex flex-wrap items-center justify-center gap-2">
-                                <Button variant="primary" leading="zap" onClick={ play }>{ locale.t('person.play') }</Button>
+                                <Button variant="primary" leading="play" onClick={ play }>{ locale.t('person.play') }</Button>
                                 <Button variant="secondary" leading="chats" onClick={ message }>{ locale.t('person.message') }</Button>
                                 <Show when={ relation === 'none' }>
                                     { () =>

@@ -89,7 +89,7 @@ export default component GamePage()
                     <Show when={ game !== null && catalogue.status(game.id) === 'available' }>
                         { () =>
                             <div class="glass bleed-pad fixed inset-x-0 bottom-[calc(var(--nav-h)+env(safe-area-inset-bottom,0px))] z-nav flex gap-2 border-t border-line/60 py-3 sm:hidden">
-                                <Button variant="primary" size="lg" leading="zap" class="flex-1" onClick={ quickPlay }>{ locale.t('app.nav.quickPlay') }</Button>
+                                <Button variant="primary" size="lg" leading="play" class="flex-1" onClick={ quickPlay }>{ locale.t('app.nav.quickPlay') }</Button>
                                 <IconButton icon="add" label={ locale.t('games.create') } variant="outline" size="lg" to={ `/app/games/${ game!.slug }/create` } />
                             </div>
                         }

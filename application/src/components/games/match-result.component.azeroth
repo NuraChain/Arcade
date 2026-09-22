@@ -112,7 +112,7 @@ export default component MatchResult(props: { match: MatchView; mine?: number; b
 
         <Show when={ props.onAgain !== undefined }>
             { () =>
-                <Button variant="primary" size="lg" leading="zap" loading={ props.busy === true } onClick={ () => props.onAgain?.() }>
+                <Button variant="primary" size="lg" leading="play" loading={ props.busy === true } onClick={ () => props.onAgain?.() }>
                     { locale.t('match.rematch') }
                 </Button>
             }

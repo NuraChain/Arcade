@@ -24,11 +24,8 @@ export const play: Pick<Dictionary, keyof typeof reference> = {
     'games.live.tablesLabel': { one: 'میز باز', other: 'میز باز' },
     'home.friends.title': 'دوستان آنلاین',
 
-    'games.lead': 'چهار میز. یکی برای بازی باز است و سه‌تا در حال ساخت.',
+    'games.lead': 'یک بازی انتخاب کن و بنشین. آن‌هایی که هنوز در حال ساخت‌اند روی کارتشان نوشته شده.',
     'games.filter.all': 'همه',
-    'games.live.tables': { one: '{count} میز باز', other: '{count} میز باز' },
-    'games.live.playing': { one: '{count} نفر در حال بازی', other: '{count} نفر در حال بازی' },
-    'games.seats.range': '{min} تا {max} بازیکن',
     'games.soon': 'به‌زودی',
     'games.soonLead': 'قوانین، میز و لابی آماده است. خود بازی هنوز در حال ساخت است — همان روزی که تمام شود برای بازی باز می‌شود.',
     'games.create': 'ساخت میز',

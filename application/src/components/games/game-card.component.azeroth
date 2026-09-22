@@ -12,6 +12,7 @@ import SeatCount from './seat-count.component.azeroth';
 export default component GameCard(props: {
     game: Game;
     compact?: boolean;
+    detailed?: boolean;
     class?: string;
     onQuickPlay: (game: GameId) => void;
 })
@@ -45,6 +46,9 @@ export default component GameCard(props: {
         </Link>
         <div class={ [ 'flex flex-1 flex-col gap-1', props.compact === true ? 'p-3' : 'p-3.5' ].join(' ') }>
             <Link to={ href } data-inline class="title truncate text-ui-md text-text hover:text-accent">{ name }</Link>
+            <Show when={ props.detailed === true }>
+                <p class="line-clamp-2 text-ui-sm text-muted">{ locale.t(props.game.blurbKey) }</p>
+            </Show>
             <SeatCount game={ props.game } class="text-ui-xs text-muted" />
             <p class="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-ui-xs text-muted">
                 <span class="flex items-center gap-1.5">

@@ -168,7 +168,7 @@ export default component FriendsPage()
                                                     fallback={ <IconButton icon="zap" label={ locale.t('person.play') } variant="secondary" size="sm" onClick={ () => playWith(person) } /> }
                                                 >
                                                     { () =>
-                                                        <Button variant="secondary" size="sm" leading="zap" class="whitespace-nowrap" onClick={ () => playWith(person) }>
+                                                        <Button variant="secondary" size="sm" leading="play" class="whitespace-nowrap" onClick={ () => playWith(person) }>
                                                             { locale.t('person.play') }
                                                         </Button>
                                                     }
