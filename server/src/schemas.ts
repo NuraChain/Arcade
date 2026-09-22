@@ -289,6 +289,44 @@ export const profileInput = object({
 export const handleResult = object({ handle: string() });
 
 export const signOutResult = object({ ended: number() });
+/* -------------------------------------------------------------------------- the chain */
+
+export const chainProfile = object({
+    id: string(),
+    owner: string(),
+    username: string(),
+    displayName: string(),
+    bio: string(),
+    avatar: string(),
+    cover: string(),
+    location: string(),
+    jobTitle: string(),
+    company: string(),
+    updatedAt: string()
+});
+
+export type ChainProfile = Infer<typeof chainProfile>;
+
+export const chainProfileState = object({
+    configured: boolean(),
+    registry: string(),
+    profile: chainProfile.optional()
+});
+
+export type ChainProfileState = Infer<typeof chainProfileState>;
+
+export const chainCall = object({
+    to: string(),
+    data: string(),
+    kind: enumOf(['create', 'fields'])
+});
+
+export type ChainCall = Infer<typeof chainCall>;
+
+export const chainPublish = object({ calls: array(chainCall) });
+
+export const langQuery = object({ lang: string({ trim: true, max: 32 }).optional() });
+
 
 /* -------------------------------------------------------------------------- devices */
 

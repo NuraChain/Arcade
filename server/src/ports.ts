@@ -9,6 +9,8 @@ import type {
     WatchableTables,
     Account,
     Challenge,
+    ChainCall,
+    ChainProfile,
     GameList,
     MuteSubject,
     PersonSummary,
@@ -492,6 +494,16 @@ export interface MatchPort
     watchable(me: string, game: string | null): Promise<WatchableTables>;
 }
 
+export interface ChainPort
+{
+    readonly configured: boolean;
+    readonly registry: string;
+
+    profile(userId: string, lang: string): Promise<ChainProfile | null>;
+
+    publish(userId: string): Promise<ChainCall[]>;
+}
+
 /** Every port the API declaration may reach. One member per domain. */
 export interface Ports
 {
@@ -505,4 +517,5 @@ export interface Ports
     notify: NotifyPort;
     device: DevicePort;
     chat: ChatPort;
+    chain: ChainPort;
 }

@@ -43,6 +43,9 @@ export function loadServerConfig()
          */
         rpcUrl: str('NURA_RPC_URL', { default: '' }),
 
+        profileRegistry: str('NURA_PROFILE_ADDRESS', { default: '' }),
+        profileLens: str('NURA_PROFILE_LENS_ADDRESS', { default: '' }),
+
         /**
          * Requests per minute per address, for `/api` and `/ws`.
          *

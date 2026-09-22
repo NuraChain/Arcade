@@ -16,6 +16,7 @@ import { endingOf } from './domains/match/declare.ts';
 import { createMatchService, type MatchLoad } from './domains/match/service.ts';
 import { WATCH_DELAY_MS, createWatchService } from './domains/match/watch.ts';
 import { createTableService, type TableRow } from './domains/table/service.ts';
+import { createChainProfiles } from './chain/profile.ts';
 import { createIdentityService } from './domains/identity/service.ts';
 import { maySeeOnline } from './domains/social/policy.ts';
 import { createSocialService, type PersonRow } from './domains/social/service.ts';
@@ -880,6 +881,12 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         ...(row.last_seen_at === null ? {} : { lastSeenAt: row.last_seen_at.toISOString() })
     });
 
+    const chain = createChainProfiles({
+        rpcUrl: config.rpcUrl,
+        registry: config.profileRegistry,
+        lens: config.profileLens
+    });
+
     const identity = createIdentityService(db, {
         origin: config.origin,
         chainId: config.chainId,
@@ -1002,6 +1009,27 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 // everybody with this account on screen has to be told to re-read it.
                 live?.socialChanged(userId);
                 return present(row);
+            }
+        },
+
+        chain: {
+            configured: chain.configured,
+            registry: chain.registry,
+
+            async profile(userId, lang)
+            {
+                const row = await identity.profileFor(userId);
+                return row === null || row.address === null ? null : chain.profile(row.address, lang);
+            },
+
+            async publish(userId)
+            {
+                const row = await identity.profileFor(userId);
+                if (row === null || row.address === null)
+                {
+                    return [];
+                }
+                return chain.publish({ address: row.address, displayName: row.display_name, bio: row.bio });
             }
         },
 

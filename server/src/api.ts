@@ -26,8 +26,11 @@ import {
     conversationList,
     conversationRef,
     cursorQuery,
+    chainProfileState,
+    chainPublish,
     challenge,
     challengeInput,
+    langQuery,
     device,
     deviceLabelInput,
     recoveryChallengeInput,
@@ -291,6 +294,30 @@ export function buildApi(ports: Ports)
          * view of somebody's relationships. `guard()` here rather than `routes.with()` on each
          * one means a route added later is protected by default instead of by remembering.
          */
+        /**
+         * The NuraProfile registry, which is the ecosystem's identity and not this product's.
+         *
+         * Read here rather than in the browser because the ABI is already on this side for the
+         * write path, and two descriptions of one contract are two things to keep in step. The
+         * transactions come back UNSENT: composing calldata is this half's job, sending it is the
+         * wallet's, and nothing on this server ever holds a key that could sign one.
+         */
+        chain: feature('/chain', [session], (routes) => ({
+            profile: routes.get('/profile', { output: chainProfileState, query: langQuery }, async (context) =>
+            {
+                const profile = await ports.chain.profile(context.principal.userId, context.query.lang ?? '');
+                return {
+                    configured: ports.chain.configured,
+                    registry: ports.chain.registry,
+                    ...(profile === null ? {} : { profile })
+                };
+            }),
+
+            publish: routes.post('/profile/publish', { output: chainPublish }, async (context) => ({
+                calls: await ports.chain.publish(context.principal.userId)
+            }))
+        })),
+
         social: feature('/social', [session], (routes) => ({
             /** Everything about my own relationships: friends, both request directions, blocks, mutes. */
             graph: routes.get('/', { output: socialGraph }, (context) => ports.social.graph(context.principal.userId)),
