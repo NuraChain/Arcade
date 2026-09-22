@@ -1015,6 +1015,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         chain: {
             configured: chain.configured,
             registry: chain.registry,
+            chainId: config.chainId,
 
             async profile(userId, lang)
             {

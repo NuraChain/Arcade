@@ -195,5 +195,6 @@ export const me: Pick<Dictionary, keyof typeof reference> = {
     'chain.reverted': 'زنجیره نپذیرفت، پس چیزی عوض نشد.',
     'chain.pending': 'فرستاده شد، ولی هنوز ثبت نشده. همین‌که ثبت شود اینجا پیدا می‌شود.',
     'chain.unavailable': 'به دفتر نرسیدیم، پس چیزی فرستاده نشد.',
+    'chain.wrongChain': 'کیف پولت روی شبکهٔ دیگری است. به {chain} ببرش و دوباره امتحان کن.',
     'chain.adopted': 'حالا پروفایلت همان را می‌گوید که دفتر می‌گوید.'
 };

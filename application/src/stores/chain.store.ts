@@ -24,7 +24,7 @@ export type ChainSync = 'off' | 'absent' | 'synced' | 'drifted';
  * this, and a sheet that reports success before the chain agrees is the defect this product has
  * already recorded twice.
  */
-export type PublishOutcome = 'published' | 'rejected' | 'reverted' | 'pending' | 'unavailable';
+export type PublishOutcome = 'published' | 'rejected' | 'reverted' | 'pending' | 'unavailable' | 'wrong-chain';
 
 const RECEIPT_WAIT_MS = 1_500;
 const RECEIPT_TRIES = 40;
@@ -76,6 +76,27 @@ export const useChain = createStore((): ChainApi =>
         () => client.chain.profile({ query: { lang: locale.locale() } }),
         { name: 'chain.profile' }
     );
+
+    /**
+     * Whether the wallet is on the chain the REGISTRY is on.
+     *
+     * The server names it, not `data/chain.ts`: the registry address is only an address, and the
+     * same twenty bytes on another network is a different contract or nothing at all. An unset
+     * chain id is not a claim, so it does not refuse - but a set one that disagrees with the
+     * wallet means a publish would spend real gas writing somewhere nobody will ever read.
+     */
+    const onRegistryChain = (): boolean =>
+    {
+        const wanted = state.data()?.chainId ?? '';
+        const held = wallet.chainId();
+
+        if (wanted === '' || held === '')
+        {
+            return true;
+        }
+
+        return Number.parseInt(held, 16) === Number(wanted);
+    };
 
     const settled = (hash: string): Promise<boolean | null> =>
         new Promise((resolve) =>
@@ -147,6 +168,11 @@ export const useChain = createStore((): ChainApi =>
             if (busy())
             {
                 return 'pending';
+            }
+
+            if (!onRegistryChain())
+            {
+                return 'wrong-chain';
             }
 
             setBusy(true);

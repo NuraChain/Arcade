@@ -498,6 +498,7 @@ export interface ChainPort
 {
     readonly configured: boolean;
     readonly registry: string;
+    readonly chainId: string;
 
     profile(userId: string, lang: string): Promise<ChainProfile | null>;
 

@@ -310,6 +310,7 @@ export type ChainProfile = Infer<typeof chainProfile>;
 export const chainProfileState = object({
     configured: boolean(),
     registry: string(),
+    chainId: string(),
     profile: chainProfile.optional()
 });
 

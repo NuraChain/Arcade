@@ -309,6 +309,7 @@ export function buildApi(ports: Ports)
                 return {
                     configured: ports.chain.configured,
                     registry: ports.chain.registry,
+                    chainId: ports.chain.chainId,
                     ...(profile === null ? {} : { profile })
                 };
             }),

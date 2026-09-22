@@ -192,5 +192,6 @@ export const me = {
     'chain.reverted': 'The chain refused it, so nothing changed.',
     'chain.pending': 'Sent, but not mined yet. It shows here once it lands.',
     'chain.unavailable': 'The registry could not be reached, so nothing was sent.',
+    'chain.wrongChain': 'Your wallet is on another network. Switch it to {chain} and try again.',
     'chain.adopted': 'Your profile now says what the registry does.'
 };

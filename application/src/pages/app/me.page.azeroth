@@ -29,7 +29,8 @@ const OUTCOME: Record<PublishOutcome, MessageKey> = {
     rejected: 'chain.rejected',
     reverted: 'chain.reverted',
     pending: 'chain.pending',
-    unavailable: 'chain.unavailable'
+    unavailable: 'chain.unavailable',
+    'wrong-chain': 'chain.wrongChain'
 };
 
 /**
@@ -139,7 +140,7 @@ export default component MePage()
     const publish = async (): Promise<void> =>
     {
         const outcome = await chain.publish();
-        toasts.show({ kind: outcome === 'published' ? 'success' : 'warning', text: locale.t(OUTCOME[outcome]) });
+        toasts.show({ kind: outcome === 'published' ? 'success' : 'warning', text: locale.t(OUTCOME[outcome], { chain: NURA_CHAIN.name }) });
     };
 
     const adopt = async (): Promise<void> =>
