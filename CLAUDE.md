@@ -180,9 +180,8 @@ and one budget cannot be right for both. Metering the cheap thing at the rate th
 needs is how a normal visitor ends up taking 429s on their own JavaScript — which is exactly what
 the first run of this matrix showed, as 808 console errors and 377 pages that never booted.
 
-`tools/blender/art.py` renders the game card and hero art; it is run by hand
-(`blender -b -P tools/blender/art.py`, `NURA_ART=<game>` for one) because it needs Blender, and
-`build.mjs` audits the output against its budgets.
+The game art is SVG - `tools/art/games.mjs` (`npm run art`) draws the four scenes and the icons
+are hand-authored beside them; see *Design system*. `tools/blender/build.mjs` audits their size.
 
 ## The framework defect register
 
@@ -450,7 +449,7 @@ application/src/
   components/world/ the ONE component that touches three.js
   sections/         one component per cinematic scene
   data/games.ts     the catalogue — read by the DOM roster AND by the 3D market
-  stores/           theme · locale · focus · scroll
+  stores/           locale · focus · scroll
   styles/tokens.css every colour, font and motion value
 ```
 
@@ -468,50 +467,82 @@ hydration has adopted the server's markup.
 If WebGL is missing, the kit fails to load, or the device cannot cope, `ready` never flips and the
 page stays exactly as it prerendered. Nobody has to remember to write a fallback branch.
 
-## Design system — Arena Blue
+## Design system — Arena Blue, one theme
 
 Tailwind v4, CSS-first. **There is no `tailwind.config.js` and none should be created.**
-Everything lives in `styles/tokens.css` (`@theme`, the two theme blocks, `@theme inline`),
+Everything lives in `styles/tokens.css` (`@theme`, the one `:root` palette, `@theme inline`),
 `styles/base.css` (element rules, `@custom-variant`, `@utility`) and `styles/app.css` (the
-shell, overlay, tooltip and toast CSS that Tailwind cannot see as utilities).
+shell, overlay, tooltip and toast CSS that Tailwind cannot see as utilities). The reference is
+`design.jpg` (the shell and home) and `me.jpg` (a profile); the spec that turned them into tokens
+is `docs/superpowers/specs/2026-09-22-arena-blue-redesign-design.md`.
 
-Two themes, `[data-theme='dark']` (the default) and `[data-theme='light']`. Colours are authored
-in **OKLCH** so both themes come from one perceptual scale.
+**There is one theme and nothing that could hold a second.** No `data-theme`, no theme store, no
+switch, no `prefers-color-scheme` branch, no light block. The pre-paint script in `index.html`
+stamps the language and direction and nothing else, and `theme-color` is `#0B1220`. A second theme
+would be a feature to design, not a block to re-add.
 
-**Five surfaces, not one grey**: `sunk → void → field → raised → lifted`. `sunk` is a well
-(inputs, segmented tracks), `void` the page, `field` cards and bars, `raised` hover and inner
-tiles, `lifted` anything floating (sheet, modal, popover, tooltip, toast). Borders are
-`line` (hairline) and `line-strong` (emphasis).
+**Five surfaces, not one grey**: `sunk #080D19 → void #0B1220 → field #111827 → raised #172133 →
+lifted #1B263B`. `void` is the page AND the chrome (sidebar, top bar, right panel, bottom nav);
+`field` is cards and list groups; `sunk` a well (inputs, the search pill, segmented tracks);
+`raised` hover and inner tiles; `lifted` anything floating. Borders are `line #1F2937` (hairline)
+and `line-strong #334155`. Depth is border-led: a card is `border border-line bg-field`, and the
+glow is reserved for the primary call to action (`glow-cta`) and the active sidebar row.
 
-Accents: `accent` (electric blue — primary action, links, focus ring), `live` (mint — online,
-playing), `gold` (rewards, premium, XP), `win` (victory), `danger` (destructive, errors).
-`accent-ink` is the text colour that sits **on** a saturated fill; never use `text-void` for
-that, it is wrong in the light theme.
+**The ink rule, because one ink cannot pass on every fill.** `accent #3B82F6` is for links, "See
+all", icons, dots, the focus ring, glows and the headline's accent line - never a fill with text
+on it, because white on it is 3.68:1 and fails AA at the size buttons are. Text on blue sits on
+`accent-fill #2563EB` (5.17:1). `accent-ink` is WHITE and sits only on `accent-fill` and
+`danger-fill #DC2626`; `bright-ink` (the page navy) sits on the light fills - `live #22C55E`,
+`gold #F59E0B`, `win #4ADE80`, `madder #F43F5E` - where white fails. `TONE_FILL` in `variants.ts`
+encodes it, so a caller asking for a filled badge gets the right ink without knowing the rule.
 
 `madder` is **functional**: it means a table is playing for something. It is never decoration,
-and it is not the destructive colour — that is `danger`.
+and it is not the destructive colour — that is `danger`. `faint #7B8AA3` is the third text tier and
+is deliberately lighter than slate-500, which is 3.73:1 on a card and fails for 11px timestamps.
 
-**Type is a scale, not arbitrary values.** `text-ui-2xs` (11) through `text-ui-4xl` (38), plus
-`text-ui-input` (16, the iOS zoom guard, for `Input` only) and four display clamps
-`text-display-sm|md|lg|xl`. Do not add `text-[Npx]`.
+**Type is Inter**, for UI and display alike (`@fontsource-variable/inter`); Persian stays Vazirmatn.
+Every heading is the bold sans; Fraunces and Hanken Grotesk are gone. The scale is a scale, not
+arbitrary values: `text-ui-2xs` (11) through `text-ui-4xl` (38), `text-ui-input` (16, the iOS zoom
+guard, for `Input` only) and four display clamps. Do not add `text-[Npx]` or `text-[Nrem]`. Page
+titles are `title text-ui-3xl`; section headings are `SectionHeading`, sentence case at
+`text-ui-lg`, with the blue "See all" beside them and a 44px row whether or not they have one, so
+two headings side by side line up.
 
 **Shape is crisp**: `rounded-control` (8px) for buttons, chips, icon buttons and inputs,
-`rounded-tile` (10px) for rows, `rounded-panel` (14px) for cards, `rounded-sheet` (18px).
-`rounded-full` is reserved for avatars, presence dots and badges.
+`rounded-tile` (10px) for rows and tiles, `rounded-panel` (14px) for cards, `rounded-hero` (16px)
+for hero cards (`hero-surface`), `rounded-sheet` (18px). `rounded-full` is for avatars, presence
+dots, badges, status pills and the search pill.
 
-The `--world-*` tokens carry the market's own palette, and the WebGL layer reads them twice:
-once at `createWorld`, and again through `WorldHandle.relight()` whenever the theme changes
-(`world-canvas.component.azeroth` drives it from `theme.theme()`). `relight` covers everything
-that is a live uniform — sky, fog colour and density, the key/fill/rim lights, environment
-intensity, the lamp pools and glows, and the vertex tint of the plaza slabs and bridges. Both
-`--world-sky` values equal that theme's `--void`, so the canvas and the page share one ground
-and the seam disappears.
+**The kit, and the one of each that pages reuse.** Lists of rows sit on ONE card divided by
+hairlines (`divide-y divide-line rounded-panel border border-line bg-field`), never as a stack of
+separate tiles; a row with nothing to act on ends in a chevron. A status is `Badge dot text tone`
+(the pill: the dot carries the colour, the word stays neutral). Presence dots: online `live`, away
+`gold`, offline `faint`, unknown nothing. A person's header is `ProfileHeader`, used by both the
+reader's own page and anybody else's. A hero is `hero-surface rounded-hero`. A count that sits in a
+sentence is `<span class="tally">{ n }</span> { label }` with a count-free plural label, because
+`tally` forces left-to-right and wrapping a whole phrase in it put a Persian reader's noun on the
+wrong side of the number - that bug was in five places.
 
-What it does **not** touch is the kit itself: felt, walnut, brass, cards, dice and figures are
-baked vertex colours inside the GLBs. Those are real objects — a backgammon board is walnut in
-any light — so they are lit differently by theme but never re-tinted. The lamps stay warm in
-both themes for the same reason: the market is lamplit, and that warmth against a cool ground is
-the whole picture.
+**The shell** (≥1024): sidebar | a column holding the top bar across the page AND the right panel,
+then the banners, then `main` beside the right panel (≥1280). The sidebar lists Home, Games,
+Friends, Chats, Leaderboard, Discover and Settings (`RAIL`); the design's Tournaments has no domain
+and Discover takes its slot. The phone has the bottom nav (`NAV`: Home, Games, Friends, Chats,
+Profile) with counts on Friends (incoming requests) and Chats (unread). The right panel is the
+reader's own notifications and their online friends - nothing the server does not record.
+
+**Game art is illustration, not a render.** `application/public/art/games/<game>.svg` (a 3:2 scene)
+and `<game>-icon.svg` (the tile) are hand-built vector: sharp at any width and a few kilobytes each.
+`tools/art/games.mjs` composes the scenes, because a board in perspective with pieces standing on it
+is geometry; the icons are hand-authored. `npm run art` regenerates the scenes. The Blender art
+script and its WebPs are gone - the user judged the renders not good enough - and the 3D market's
+GLB kit, which is a live scene rather than an image, stays.
+
+The `--world-*` tokens carry the market's own palette and the WebGL layer reads them ONCE, at
+`createWorld`. There is no relight path: it existed only so the market could follow a theme change.
+`--world-sky` equals `--void`, so the canvas and the page share one ground and the seam disappears.
+The kit itself - felt, walnut, brass, cards, dice and figures - is baked vertex colour inside the
+GLBs, and the lamps are warm: the market is lamplit, and that warmth against the navy is the whole
+picture.
 
 ## The schema, and reference data
 
@@ -1378,8 +1409,8 @@ overwritten on conflict, so it reached a database built from nothing.
 The board a player moves tokens on is a **photograph of the object the market scene already stands
 on**. `tools/blender/board.py` imports `application/public/world/set-ludo.glb`, keeps the walnut body
 and the printed face, drops the loose tokens and dice, and renders it with an orthographic camera
-pointing straight down into `application/public/board/ludo-plate-1024.webp`. Run by hand, like
-`art.py`: `blender -b -P tools/blender/board.py`.
+pointing straight down into `application/public/board/ludo-plate-1024.webp`. Run by hand, because
+it needs Blender: `blender -b -P tools/blender/board.py`.
 
 That is not a flourish. Drawing the field a second time in CSS or in canvas would be a second
 description of one object, agreeing until somebody edited one of them. Photographing it means the
@@ -2507,7 +2538,7 @@ sign out.
 
 **`tools/qa/seal-pass.mjs` is the browser pass for this, and it is run by hand.** It injects an
 EIP-1193 provider backed by a hardhat key, signs in through the real chooser, enrols through the
-real button, opens a thread and sends a message — at 390 and 1280, both themes, both languages,
+real button, opens a thread and sends a message — at 390 and 1280, both languages,
 reading the console each time. It empties the account between cells because every fresh browser
 context has an empty keyring and would otherwise enrol a second, pending device. It found two
 defects on its first run: the console error above, and copy still offering a demo seat.
@@ -2628,7 +2659,7 @@ the one place the product must not be confidently wrong. The browser pass found 
 `nura-keyring` and reloading, which is what losing a laptop looks like from the inside.
 
 **`tools/qa/seal-pass.mjs` loses a laptop in every cell.** It makes a phrase, throws the keyring
-away, re-enrols as a pending device and types the phrase back in — at 390 and 1280, both themes,
+away, re-enrols as a pending device and types the phrase back in — at 390 and 1280,
 both languages. Two of the defects above were found that way and neither was visible to any gate.
 
 ## Franking
@@ -3027,7 +3058,7 @@ no handle survived to remove them with. A browser builds one store and never not
 that builds a fresh store scope per render accumulated them.
 
 **Two of them are NOT started by the app shell, and that is deliberate.** `device` starts in
-`App.azeroth` because the landing page reads it too - through the tooltips and the theme controls -
+`App.azeroth` because the landing page reads it too - through the tooltips and the language switch -
 and a watch beginning behind the sign-in would leave the public half of the site deaf to a resize.
 `scroll` starts in `site-header.component.azeroth`, which is its only reader anywhere: it is a
 landing-page concern, not an app one. Everything else starts in the shell, in the `stops` array.
@@ -3223,8 +3254,8 @@ server.
 | three.js chunk | lazy | 165.3 KB gzip, after first paint |
 | `/app` shell + page | lazy per route | 10.0 KB gzip shell, ≤ 6.2 KB per page |
 | GLB kit + textures | < 4.5 MB | see `npm run assets` |
-| game card art, 640 | < 60 KB each | 15–28 KB |
-| game hero art, 1280 | < 110 KB each | 40–70 KB |
+| game art, SVG scene | < 32 KB each | 13–22 KB |
+| game icon, SVG | < 32 KB each | 4–5 KB |
 | kit triangles | — | ~190k, ~20% of it instanced figures |
 
 The `/app` tree is kept out of the landing's initial payload by four things, all of which must
@@ -3567,7 +3598,8 @@ cover what they walk through.
 `node tools/qa/regression-pass.mjs` · `node tools/qa/ludo-pass.mjs` · `node tools/qa/hokm-pass.mjs` ·
 `node tools/qa/play-pass.mjs` · `node tools/qa/hokm-play-pass.mjs`,
 then a browser pass: every route at
-390 and 1280 in both themes and both languages, console clean, and
+390, 1280 and 1440 in both languages, a screenshot of every screen judged against
+`design.jpg`, console clean, and
 the disposal check — repeatedly create and dispose the world and confirm no "Too many active
 WebGL contexts" warning appears. That leak has happened twice already: once from an unreleased
 capability-probe context, once because `renderer.dispose()` alone does not free the GL context
