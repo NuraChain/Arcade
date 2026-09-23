@@ -161,7 +161,7 @@ export default component PersonActions(props: OverlayProps & {
             <Avatar person={ person } size="md" />
             <span class="flex min-w-0 flex-1 flex-col">
                 <span class="truncate text-ui-md font-semibold text-text" dir="auto">{ person === null ? props.personId : person.displayName }</span>
-                <span class="truncate text-ui-xs text-muted">@{ person?.handle ?? props.personId }</span>
+                <span class="truncate text-ui-xs text-muted" dir="ltr">@{ person?.handle ?? props.personId }</span>
             </span>
             <IconButton icon="close" label={ locale.t('common.close') } variant="ghost" onClick={ () => props.close() } />
         </header>

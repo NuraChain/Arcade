@@ -31,7 +31,7 @@ export default component GroupCard(props: { group: GroupSummary; class?: string 
     >
         <GroupCrest crest={ props.group.crest } hue={ props.group.hue } size="md" />
         <span class="flex min-w-0 flex-1 flex-col gap-0.5">
-            <span class="truncate text-ui-md font-semibold text-text">{ props.group.name }</span>
+            <span class="truncate text-ui-md font-semibold text-text" dir="auto">{ props.group.name }</span>
             <span class="truncate text-ui-xs text-muted">
                 { locale.plural('chat.members', props.group.memberCount) }
                 <Show when={ online > 0 }>

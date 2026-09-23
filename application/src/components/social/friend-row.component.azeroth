@@ -53,7 +53,7 @@ export default component FriendRow(props: {
                         { () => <Icon name="shield" size={ 13 } class="shrink-0 text-live" /> }
                     </Show>
                 </span>
-                <span class="truncate text-ui-sm text-muted">{ status }</span>
+                <span class="truncate text-ui-sm text-muted" dir="auto">{ status }</span>
             </span>
             <Show when={ props.actions === undefined }>
                 <Icon name="chevron-right" size={ 16 } class="icon-flip shrink-0 text-faint transition-colors group-hover:text-muted" />
