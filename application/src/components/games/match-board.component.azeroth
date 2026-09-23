@@ -1,9 +1,9 @@
 import BoardCanvas from './board-canvas.component.azeroth';
 import MatchResult from './match-result.component.azeroth';
-import PlayerCard from './player-card.component.azeroth';
+import DieFace from './die-face.component.azeroth';
 import TurnClock from './turn-clock.component.azeroth';
+import YardBadge from './yard-badge.component.azeroth';
 import Button from '../ui/button.component.azeroth';
-import Panel from '../ui/panel.component.azeroth';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useBoard } from '../../stores/match.store.ts';
 import { usePeople } from '../../stores/people.store.ts';
@@ -11,6 +11,9 @@ import type { MatchView } from '../../api.ts';
 import type { BoardView } from '../../game/bridge.ts';
 import { chairsOf, ludoOf } from '../../data/match.ts';
 import { seatsFor } from './seats.ts';
+import { CELL, MARGIN } from '../../game/layout.ts';
+
+const STAGE = `--cell-cq: ${ (CELL * 100).toFixed(4) }cqi; --margin-cq: ${ (MARGIN * 100).toFixed(4) }cqi`;
 
 /**
  * The board, and the controls that are the real interface to it.
@@ -122,24 +125,20 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
         corner: CORNER[chair.seat.colour] ?? 'top-left'
     }));
 
-    /**
-     * Split so the stacked layout puts the top two above the board and the bottom two below it,
-     * which is the same arrangement the floating one makes and is why moving between them does not
-     * move anybody's card to a different side of the table.
-     *
-     * Sorted left-before-right within each half, because seat order is not corner order: blue is
-     * seat three and sits bottom-LEFT, yellow is seat two and sits bottom-RIGHT, so the unsorted
-     * list put each of them over the other one's quadrant. The whole point of a corner card is that
-     * it is beside the colour it belongs to.
-     */
-    const leftFirst = (
-        a: { corner: string },
-        b: { corner: string }
-    ): number => (a.corner.endsWith('left') ? 0 : 1) - (b.corner.endsWith('left') ? 0 : 1);
+    derived hint = ((): string =>
+    {
+        if (over || mine === undefined || mine !== game.turn)
+        {
+            return '';
+        }
 
-    derived topCards = seatCards.filter((entry) => entry.corner.startsWith('top')).sort(leftFirst);
+        if (board.canRoll())
+        {
+            return locale.t('match.hint.roll');
+        }
 
-    derived bottomCards = seatCards.filter((entry) => entry.corner.startsWith('bottom')).sort(leftFirst);
+        return ludo.die !== undefined && board.moves().length > 0 ? locale.t('match.hint.move') : '';
+    })();
 
 
     /**
@@ -195,108 +194,89 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
             : locale.t('match.move.step', { token: label, die: locale.n(ludo.die) });
     };
 
-    <div class="@container flex min-w-0 flex-col gap-4">
-        <div class="board-arena">
-            <For each={ topCards } key={ (entry) => entry.player.seat } let={ entry }>
-                <div class="board-seat" data-corner={ entry.corner }>
-                    <PlayerCard
-                        player={ entry.player }
-                        seat={ entry.seat }
-                        mine={ mine }
-                        active={ entry.player.seat === game.turn }
-                        die={ entry.player.seat === game.turn ? ludo.die : undefined }
-                        finished={ over }
-                    />
-                </div>
-            </For>
-
-            <div class="board-stage">
+    <div class="@container my-auto flex min-w-0 flex-col gap-4">
+        <div class="ludo-table">
+            <div class="board-stage" style={ STAGE }>
                 <BoardCanvas game={ game.game } view={ view } onPick={ (key) => void pick(key) } />
+
+                <For each={ seatCards } key={ (entry) => entry.player.seat } let={ entry }>
+                    <div class="contents">
+                        <YardBadge
+                            player={ entry.player }
+                            seat={ entry.seat }
+                            corner={ entry.corner }
+                            mine={ mine }
+                            active={ entry.player.seat === game.turn }
+                            die={ entry.player.seat === game.turn ? ludo.die : undefined }
+                            finished={ over }
+                        />
+                    </div>
+                </For>
+
+                <Show when={ board.canRoll() }>
+                    { () =>
+                        <button
+                            type="button"
+                            class="board-roll"
+                            aria-label={ locale.t('match.roll') }
+                            disabled={ board.busy() }
+                            onClick={ () => void board.roll() }
+                        >
+                            <span class="board-roll-die" aria-hidden="true">
+                                <DieFace value={ 5 } size="fill" label={ locale.t('match.roll') } />
+                            </span>
+                        </button>
+                    }
+                </Show>
             </div>
 
-            <For each={ bottomCards } key={ (entry) => entry.player.seat } let={ entry }>
-                <div class="board-seat" data-corner={ entry.corner }>
-                    <PlayerCard
-                        player={ entry.player }
-                        seat={ entry.seat }
-                        mine={ mine }
-                        active={ entry.player.seat === game.turn }
-                        die={ entry.player.seat === game.turn ? ludo.die : undefined }
-                        finished={ over }
-                    />
-                </div>
-            </For>
+            <Show when={ !over }>
+                { () =>
+                    <div class="table-actions">
+                        <div class="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
+                            <div class="flex min-w-0 flex-1 basis-[9rem] flex-col gap-0.5">
+                                <p class="text-ui-base font-semibold text-white" aria-live="polite">{ says }</p>
+                                <Show when={ hint !== '' }>
+                                    { () => <p class="text-ui-xs text-muted">{ hint }</p> }
+                                </Show>
+                            </div>
+                            <TurnClock deadline={ game.deadline } over={ over } />
+                        </div>
+
+                        <Show when={ mine !== undefined && mine === game.turn && ludo.die !== undefined && board.moves().length > 0 }>
+                            { () =>
+                                <ul class="grid grid-cols-2 gap-2" aria-label={ locale.t('match.moves') }>
+                                    <For each={ board.moves() } key={ (piece) => piece } let={ piece }>
+                                        <li class="min-w-0">
+                                            <Button
+                                                variant="secondary"
+                                                class="w-full"
+                                                disabled={ board.busy() }
+                                                onClick={ () => void board.move(piece) }
+                                            >
+                                                <span class="truncate">{ moveSays(piece) }</span>
+                                            </Button>
+                                        </li>
+                                    </For>
+                                </ul>
+                            }
+                        </Show>
+                    </div>
+                }
+            </Show>
         </div>
 
-        <div class="board-controls mx-auto flex w-full min-w-0 max-w-[34rem] flex-col gap-3">
-            <Show when={ over }>
-                { () =>
+        <Show when={ over }>
+            { () =>
+                <div class="mx-auto flex w-full min-w-0 max-w-[34rem] flex-col gap-3">
                     <MatchResult
                         match={ game }
                         mine={ mine }
                         busy={ props.starting === true }
                         onAgain={ props.onAgain }
                     />
-                }
-            </Show>
-
-            <Show when={ !over }>
-                { () =>
-            <Panel pad="md" stack="sm">
-                <div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-                    <p class="min-w-0 flex-1 basis-[10rem] text-ui-lg font-semibold text-text" aria-live="polite">{ says }</p>
-                    <TurnClock deadline={ game.deadline } over={ over } />
                 </div>
-
-                <Show when={ board.canRoll() }>
-                    { () =>
-                        <span class="glow-cta flex rounded-control">
-                            <Button
-                                variant="primary"
-                                size="lg"
-                                leading="dice"
-                                block
-                                loading={ board.busy() }
-                                onClick={ () => void board.roll() }
-                            >
-                                { locale.t('match.roll') }
-                            </Button>
-                        </span>
-                    }
-                </Show>
-
-                <Show when={ !over && mine !== undefined && mine === game.turn && ludo.die !== undefined }>
-                    { () =>
-                        <div class="flex flex-col gap-1.5">
-                            <p class="label text-ui-xs text-faint">{ locale.t('match.moves') }</p>
-                            <ul class="flex flex-col gap-1.5">
-                                <For each={ board.moves() } key={ (piece) => piece } let={ piece }>
-                                    <li>
-                                        <Button
-                                            variant="secondary"
-                                            class="w-full"
-                                            disabled={ board.busy() }
-                                            onClick={ () => void board.move(piece) }
-                                        >
-                                            { moveSays(piece) }
-                                        </Button>
-                                    </li>
-                                </For>
-                            </ul>
-                        </div>
-                    }
-                </Show>
-            </Panel>
-                }
-            </Show>
-
-            <Show when={ !over && mine !== undefined }>
-                { () =>
-                    <Button variant="ghost" size="md" onClick={ () => void board.resign() }>
-                        { locale.t('match.resign') }
-                    </Button>
-                }
-            </Show>
-        </div>
+            }
+        </Show>
     </div>
 }

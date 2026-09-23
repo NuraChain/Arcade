@@ -593,27 +593,6 @@
     }
 }
 
-.ludo-seat
-{
-    position: relative;
-    display: flex;
-    min-inline-size: 0;
-    align-items: center;
-    gap: 0.65rem;
-    padding: 0.6rem 0.7rem;
-    border: 2px solid color-mix(in oklab, var(--ink) 70%, transparent);
-    border-radius: var(--radius-panel);
-    background: linear-gradient(160deg, color-mix(in oklab, var(--ink) 16%, var(--field)), var(--field) 60%);
-    box-shadow: 0 8px 20px -10px rgb(0 0 0 / 0.7);
-    transition: box-shadow 200ms ease, border-color 200ms ease;
-}
-
-.ludo-seat.is-turn
-{
-    border-color: var(--ink);
-    box-shadow: 0 0 0 1px var(--ink), 0 0 22px -4px var(--ink), 0 8px 20px -10px rgb(0 0 0 / 0.7);
-}
-
 .ludo-pip
 {
     flex: none;
@@ -630,77 +609,314 @@
     box-shadow: 0 0 6px -1px var(--ink);
 }
 
-.board-arena
+.ludo-table
 {
-    direction: ltr;
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-template-areas: 'top-left top-right' 'stage stage' 'bottom-left bottom-right';
-    gap: 0.75rem;
-}
-
-.board-arena > .board-stage
-{
-    grid-area: stage;
-}
-
-.board-seat
-{
-    min-inline-size: 0;
-}
-
-.board-seat[data-corner='top-left']     { grid-area: top-left; }
-.board-seat[data-corner='top-right']    { grid-area: top-right; }
-.board-seat[data-corner='bottom-left']  { grid-area: bottom-left; }
-.board-seat[data-corner='bottom-right'] { grid-area: bottom-right; }
-
-[dir='rtl'] .board-arena > .board-seat
-{
-    direction: rtl;
-}
-
-@container (min-width: 46rem)
-{
-    .board-arena
-    {
-        grid-template-columns: minmax(8rem, 10.5rem) minmax(0, 34rem) minmax(8rem, 10.5rem);
-        grid-template-rows: auto 1fr auto;
-        justify-content: center;
-        grid-template-areas:
-            'top-left stage top-right'
-            '. stage .'
-            'bottom-left stage bottom-right';
-        align-items: start;
-    }
-
-    .board-seat[data-corner^='bottom']
-    {
-        align-self: end;
-    }
+    margin-inline: calc(0.375rem - var(--page-pad, 1rem));
+    padding: clamp(0.5rem, 2.5cqi, 1.5rem);
+    border-radius: var(--radius-hero);
+    background: #3A2110 url('/board/ludo-table.svg') center / cover no-repeat;
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.07), inset 0 0 0 1px rgb(0 0 0 / 0.45), 0 24px 48px -28px rgb(0 0 0 / 0.9);
 }
 
 .board-stage
 {
-    inline-size: min(100%, var(--board-max, 34rem), calc(100dvh - var(--board-chrome, 22rem)));
+    position: relative;
+    container-type: inline-size;
+    inline-size: min(100%, calc(100dvh - var(--board-chrome, 15rem)));
     aspect-ratio: 1;
     margin-inline: auto;
-    flex: none;
+    border-radius: var(--radius-panel);
+    box-shadow: 0 26px 40px -20px rgb(0 0 0 / 0.85), 0 3px 8px rgb(0 0 0 / 0.45);
 
-    align-self: center;
+    --yard: calc(var(--cell-cq) * 6);
 }
 
-#app-shell[data-posture='rail'] .board-stage,
-#app-shell[data-posture='sidebar'] .board-stage
+@container (min-width: 44rem)
 {
-    --board-chrome: 14rem;
-}
-
-@media (orientation: landscape) and (max-height: 520px)
-{
-    .board-stage
+    .ludo-table
     {
-        --board-chrome: 2rem;
-        --board-max: 100%;
+        display: grid;
+        grid-template-columns: auto minmax(15rem, 18rem);
+        justify-content: center;
+        align-items: center;
+        gap: 1.25rem;
+        margin-inline: 0;
+    }
+
+    .ludo-table > .board-stage
+    {
+        inline-size: min(calc(100cqi - 22rem), calc(100dvh - var(--board-chrome, 14rem)));
+        margin: 0;
+    }
+
+    .ludo-table > .table-actions
+    {
+        inline-size: 100%;
+        margin: 0;
+    }
+}
+
+.yard-badge
+{
+    direction: ltr;
+    position: absolute;
+    z-index: 3;
+    inline-size: var(--yard);
+    block-size: var(--yard);
+    pointer-events: none;
+}
+
+.yard-badge[data-corner='top-left']     { left: var(--margin-cq); top: var(--margin-cq); }
+.yard-badge[data-corner='top-right']    { left: calc(var(--margin-cq) + var(--cell-cq) * 9); top: var(--margin-cq); }
+.yard-badge[data-corner='bottom-left']  { left: var(--margin-cq); top: calc(var(--margin-cq) + var(--cell-cq) * 9); }
+.yard-badge[data-corner='bottom-right'] { left: calc(var(--margin-cq) + var(--cell-cq) * 9); top: calc(var(--margin-cq) + var(--cell-cq) * 9); }
+
+.yard-badge.is-turn::before
+{
+    content: '';
+    position: absolute;
+    inset: calc(var(--cell-cq) * -0.08);
+    border-radius: calc(var(--cell-cq) * 0.45);
+    box-shadow: 0 0 0 calc(var(--cell-cq) * 0.14) var(--ink), 0 0 calc(var(--cell-cq) * 1.1) calc(var(--cell-cq) * 0.12) var(--ink);
+    animation: yard-breathe 1.8s ease-in-out infinite;
+}
+
+.yard-badge.is-out
+{
+    opacity: 0.55;
+}
+
+.yard-avatar
+{
+    position: absolute;
+    inline-size: calc(var(--cell-cq) * 1.62);
+    block-size: calc(var(--cell-cq) * 1.62);
+    top: calc(var(--cell-cq) * 0.2);
+    left: calc(var(--cell-cq) * 0.2);
+}
+
+.yard-badge[data-corner$='right'] .yard-avatar
+{
+    left: auto;
+    right: calc(var(--cell-cq) * 0.2);
+}
+
+.yard-badge[data-corner^='bottom'] .yard-avatar
+{
+    top: auto;
+    bottom: calc(var(--cell-cq) * 0.2);
+}
+
+.yard-avatar > [role='img']
+{
+    inline-size: 100%;
+    block-size: 100%;
+    font-size: max(0.625rem, calc(var(--cell-cq) * 0.6));
+    box-shadow: 0 0 0 calc(var(--cell-cq) * 0.1) var(--ink), 0 3px 8px rgb(0 0 0 / 0.5);
+    border-radius: 999px;
+}
+
+.yard-initial
+{
+    position: absolute;
+    display: grid;
+    place-items: center;
+    inline-size: max(0.875rem, calc(var(--cell-cq) * 0.62));
+    block-size: max(0.875rem, calc(var(--cell-cq) * 0.62));
+    right: calc(var(--cell-cq) * -0.12);
+    bottom: calc(var(--cell-cq) * -0.12);
+    border-radius: 999px;
+    background: var(--ink);
+    color: white;
+    font-size: max(0.5625rem, calc(var(--cell-cq) * 0.38));
+    font-weight: 800;
+    line-height: 1;
+    box-shadow: 0 0 0 2px var(--void);
+}
+
+.yard-die
+{
+    position: absolute;
+    inline-size: max(1.5rem, calc(var(--cell-cq) * 1.05));
+    block-size: max(1.5rem, calc(var(--cell-cq) * 1.05));
+    top: calc(var(--cell-cq) * -0.3);
+    right: calc(var(--cell-cq) * -0.75);
+    filter: drop-shadow(0 4px 6px rgb(0 0 0 / 0.55));
+}
+
+.yard-badge[data-corner$='right'] .yard-die
+{
+    right: auto;
+    left: calc(var(--cell-cq) * -0.75);
+}
+
+.yard-name
+{
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: calc(var(--cell-cq) * 0.08);
+    max-inline-size: calc(var(--cell-cq) * 3.9);
+    min-block-size: calc(var(--cell-cq) * 1.2);
+    padding: calc(var(--cell-cq) * 0.1) calc(var(--cell-cq) * 0.32);
+    top: calc(var(--cell-cq) * 0.41);
+    left: calc(var(--cell-cq) * 1.95);
+    border-radius: calc(var(--cell-cq) * 0.36);
+    background: rgb(8 13 25 / 0.8);
+    backdrop-filter: blur(4px);
+    box-shadow: 0 0 0 1px color-mix(in oklab, var(--ink) 55%, transparent), 0 4px 10px -4px rgb(0 0 0 / 0.6);
+    color: white;
+}
+
+.yard-badge[data-corner$='right'] .yard-name
+{
+    left: auto;
+    right: calc(var(--cell-cq) * 1.95);
+    align-items: flex-end;
+}
+
+.yard-badge[data-corner^='bottom'] .yard-name
+{
+    top: auto;
+    bottom: calc(var(--cell-cq) * 0.41);
+}
+
+.yard-who
+{
+    max-inline-size: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: max(0.6875rem, calc(var(--cell-cq) * 0.5));
+    font-weight: 700;
+    line-height: 1.15;
+}
+
+.yard-state
+{
+    display: flex;
+    min-inline-size: 0;
+    align-items: center;
+    gap: calc(var(--cell-cq) * 0.2);
+}
+
+.yard-pips
+{
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: max(2px, calc(var(--cell-cq) * 0.1));
+}
+
+.yard-pips > .ludo-pip
+{
+    inline-size: max(0.375rem, calc(var(--cell-cq) * 0.3));
+    block-size: max(0.375rem, calc(var(--cell-cq) * 0.3));
+    border-width: 1.5px;
+}
+
+.yard-says
+{
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: max(0.625rem, calc(var(--cell-cq) * 0.4));
+    font-weight: 600;
+    color: var(--muted);
+}
+
+.board-roll
+{
+    position: absolute;
+    z-index: 6;
+    left: 50%;
+    top: 50%;
+    display: grid;
+    place-items: center;
+    inline-size: max(3.5rem, calc(var(--cell-cq) * 3.2));
+    block-size: max(3.5rem, calc(var(--cell-cq) * 3.2));
+    translate: -50% -50%;
+    border-radius: calc(var(--cell-cq) * 0.8);
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.board-roll::before
+{
+    content: '';
+    position: absolute;
+    inset: 4%;
+    border-radius: inherit;
+    box-shadow: 0 0 0 calc(var(--cell-cq) * 0.12) var(--accent), 0 0 calc(var(--cell-cq) * 1.2) calc(var(--cell-cq) * 0.1) var(--accent);
+    animation: roll-ring 1.4s ease-in-out infinite;
+}
+
+.board-roll-die
+{
+    inline-size: 70%;
+    block-size: 70%;
+    filter: drop-shadow(0 8px 10px rgb(0 0 0 / 0.55));
+    animation: roll-bob 1.4s ease-in-out infinite;
+}
+
+.board-roll:active .board-roll-die
+{
+    scale: 0.92;
+}
+
+.board-roll:disabled
+{
+    cursor: progress;
+}
+
+.board-roll:disabled .board-roll-die
+{
+    animation: roll-shake 0.45s linear infinite;
+}
+
+.board-roll:focus-visible
+{
+    outline: 3px solid var(--accent);
+    outline-offset: 2px;
+}
+
+@keyframes yard-breathe
+{
+    0%, 100% { opacity: 0.6; }
+    50% { opacity: 1; }
+}
+
+@keyframes roll-ring
+{
+    0%, 100% { opacity: 0.55; scale: 1; }
+    50% { opacity: 1; scale: 1.06; }
+}
+
+@keyframes roll-bob
+{
+    0%, 100% { translate: 0 0; rotate: -5deg; }
+    50% { translate: 0 -5%; rotate: 5deg; }
+}
+
+@keyframes roll-shake
+{
+    0% { rotate: 0deg; }
+    25% { rotate: 14deg; }
+    50% { rotate: -10deg; }
+    75% { rotate: 8deg; }
+    100% { rotate: 0deg; }
+}
+
+@media (prefers-reduced-motion: reduce)
+{
+    .yard-badge.is-turn::before,
+    .board-roll::before,
+    .board-roll-die,
+    .board-roll:disabled .board-roll-die
+    {
+        animation: none;
     }
 }
 
@@ -760,9 +976,10 @@
 {
     direction: ltr;
 
+    margin-inline: calc(0.375rem - var(--page-pad, 1rem));
+
     position: relative;
     container-type: size;
-    inline-size: 100%;
     aspect-ratio: 1000 / 1200;
     background: url('/board/hokm-table-tall.svg') center / 100% 100% no-repeat;
 }
@@ -1043,6 +1260,17 @@
     translate: 0 -0.9rem;
 }
 
+.hokm-hand > li:has(.card-hold[data-picked='true'])
+{
+    z-index: 50;
+}
+
+.card-hold[data-picked='true'] .card-face
+{
+    translate: 0 -1.6rem;
+    box-shadow: 0 0 0 3px var(--gold), 0 14px 26px -8px rgb(0 0 0 / 0.75);
+}
+
 .card-hold[data-legal='false'] .card-face
 {
     filter: saturate(0.3) brightness(0.6);
@@ -1280,4 +1508,108 @@
     color: var(--tone);
     background: color-mix(in oklab, var(--tone) 16%, var(--field));
     box-shadow: 0 0 26px -6px var(--tone);
+}
+
+.table-actions
+{
+    display: flex;
+    flex-direction: column;
+    gap: 0.625rem;
+    inline-size: min(100%, 36rem);
+    margin-block-start: clamp(0.625rem, 2.5cqi, 1rem);
+    margin-inline: auto;
+    padding: 0.75rem;
+    border: 1px solid rgb(255 255 255 / 0.08);
+    border-radius: var(--radius-panel);
+    background: rgb(8 13 25 / 0.8);
+    backdrop-filter: blur(8px);
+    box-shadow: 0 16px 30px -18px rgb(0 0 0 / 0.9);
+}
+
+.table-sheet
+{
+    box-shadow: 0 -18px 40px -20px rgb(0 0 0 / 0.9);
+    padding-block-end: env(safe-area-inset-bottom);
+}
+
+@container (min-width: 36rem)
+{
+    .ludo-table,
+    .hokm-table
+    {
+        margin-inline: 0;
+    }
+}
+
+@media (orientation: landscape) and (max-height: 540px)
+{
+    .ludo-table
+    {
+        display: grid;
+        grid-template-columns: auto minmax(13rem, 17rem);
+        justify-content: center;
+        align-items: center;
+        gap: 1rem;
+        margin-inline: 0;
+    }
+
+    .ludo-table > .board-stage
+    {
+        inline-size: calc(100dvh - 8.25rem);
+        margin: 0;
+    }
+
+    .play-tables-label
+    {
+        position: absolute;
+        inline-size: 1px;
+        block-size: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+    }
+
+    .ludo-table > .table-actions
+    {
+        inline-size: 100%;
+        margin: 0;
+    }
+
+    .hokm-arena
+    {
+        grid-template-columns: minmax(0, 1fr) minmax(11rem, 13rem);
+        grid-template-areas: 'table side' 'play side';
+        align-items: start;
+    }
+
+    .hokm-table
+    {
+        aspect-ratio: 1600 / 1000;
+        background-image: url('/board/hokm-table-wide.svg');
+        inline-size: min(100%, calc((100dvh - 7rem) * 1.6));
+        justify-self: center;
+        margin-inline: 0;
+    }
+
+    .hokm-seat[data-side='bottom']
+    {
+        bottom: 16%;
+    }
+
+    .hokm-arena > .hokm-play
+    {
+        position: relative;
+        z-index: 3;
+        margin-block-start: -3.25rem;
+    }
+
+    .hokm-side
+    {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .hokm-side > :last-child
+    {
+        grid-column: auto;
+    }
 }

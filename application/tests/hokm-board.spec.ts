@@ -1,11 +1,13 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { cleanup, renderTest } from '@azerothjs/testing';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { cleanup, fire, renderTest } from '@azerothjs/testing';
 
 import HokmBoard from '../src/components/games/hokm-board.component.azeroth';
 import { manualClock } from '../src/lib/clock.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import '../src/locales/app-catalogue.ts';
+import { useDevice } from '../src/stores/device.store.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
+import { useBoard } from '../src/stores/match.store.ts';
 import type { MatchView } from '../src/api.ts';
 
 type Rendered = HTMLElement;
@@ -53,6 +55,8 @@ afterEach(() =>
 {
     cleanup();
     useLocale().setLocale('en');
+    useDevice().overrideCoarse(null);
+    vi.restoreAllMocks();
 });
 
 describe('HokmBoard', () =>
@@ -115,5 +119,59 @@ describe('HokmBoard', () =>
         {
             expect(names.getAttribute('dir'), names.textContent ?? '').toBeNull();
         }
+    });
+});
+
+describe('playing a card with a finger', () =>
+{
+    const turn = (): MatchView => match({ phase: 'tricks', trump: 'spades', turn: 0, lead: 0, hand: [0, 14, 30], plays: [0, 14] }, 0);
+
+    const cardButton = (container: HTMLElement, card: number): HTMLButtonElement =>
+        container.querySelectorAll<HTMLButtonElement>('.card-hold')[[0, 14, 30].indexOf(card)];
+
+    it('lifts the card on the first tap and plays it on the second, so a slip of the thumb costs nothing', () =>
+    {
+        useDevice().overrideCoarse(true);
+        const play = vi.spyOn(useBoard(), 'play').mockResolvedValue(undefined);
+        const { container } = renderTest(() => HokmBoard({ match: turn() }) as Rendered);
+
+        fire(cardButton(container, 14), 'click');
+
+        expect(play).not.toHaveBeenCalled();
+        expect(cardButton(container, 14).dataset.picked).toBe('true');
+        expect(cardButton(container, 14).getAttribute('aria-pressed')).toBe('true');
+
+        fire(cardButton(container, 14), 'click');
+
+        expect(play).toHaveBeenCalledWith({ kind: 'hokm', verb: 'card', card: 14 });
+    });
+
+    it('offers a button that plays the lifted card, and moves the lift when another card is tapped', () =>
+    {
+        useDevice().overrideCoarse(true);
+        const play = vi.spyOn(useBoard(), 'play').mockResolvedValue(undefined);
+        const { container } = renderTest(() => HokmBoard({ match: turn() }) as Rendered);
+
+        fire(cardButton(container, 0), 'click');
+        fire(cardButton(container, 14), 'click');
+
+        expect(cardButton(container, 0).dataset.picked).toBeUndefined();
+        expect(cardButton(container, 14).dataset.picked).toBe('true');
+
+        const button = [...container.querySelectorAll('button')].find((one) => one.textContent?.trim().startsWith('Play the'));
+        fire(button!, 'click');
+
+        expect(play).toHaveBeenCalledWith({ kind: 'hokm', verb: 'card', card: 14 });
+    });
+
+    it('plays on the first click with a mouse, where a hover already lifts the card', () =>
+    {
+        useDevice().overrideCoarse(false);
+        const play = vi.spyOn(useBoard(), 'play').mockResolvedValue(undefined);
+        const { container } = renderTest(() => HokmBoard({ match: turn() }) as Rendered);
+
+        fire(cardButton(container, 0), 'click');
+
+        expect(play).toHaveBeenCalledWith({ kind: 'hokm', verb: 'card', card: 0 });
     });
 });

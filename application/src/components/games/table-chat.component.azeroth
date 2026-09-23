@@ -28,7 +28,14 @@ import TextArea from '../ui/text-area.component.azeroth';
  * same membership rules, the same watermark, the same delivery, and the same sealing when that
  * lands. A second message system beside the first would have been a second set of all of those.
  */
-export default component TableChat(props: { conversationId: string; onClose?: () => void; class?: string })
+export default component TableChat(props: {
+    conversationId: string;
+    onClose?: () => void;
+    onResize?: () => void;
+    wide?: boolean;
+    closeIcon?: 'panel-close' | 'close';
+    class?: string;
+})
 {
     const locale = useLocale();
     const lobby = useLobby();
@@ -161,9 +168,32 @@ export default component TableChat(props: { conversationId: string; onClose?: ()
                 <Icon name="chats" size={ 16 } class="shrink-0 text-muted" />
                 <span class="truncate">{ locale.t('play.table.chat') }</span>
             </h2>
-            <Show when={ props.onClose !== undefined }>
-                { () => <IconButton icon="panel-close" label={ locale.t('play.table.chatHide') } variant="ghost" size="sm" flip onClick={ () => props.onClose?.() } /> }
-            </Show>
+            <span class="flex shrink-0 items-center gap-1">
+                <Show when={ props.onResize !== undefined }>
+                    { () =>
+                        <IconButton
+                            icon={ props.wide === true ? 'compact' : 'expand' }
+                            label={ locale.t(props.wide === true ? 'play.table.chatCompact' : 'play.table.chatExpand') }
+                            variant="ghost"
+                            size="sm"
+                            pressed={ props.wide === true }
+                            onClick={ () => props.onResize?.() }
+                        />
+                    }
+                </Show>
+                <Show when={ props.onClose !== undefined }>
+                    { () =>
+                        <IconButton
+                            icon={ props.closeIcon ?? 'panel-close' }
+                            label={ locale.t('play.table.chatHide') }
+                            variant="ghost"
+                            size="sm"
+                            flip={ (props.closeIcon ?? 'panel-close') === 'panel-close' }
+                            onClick={ () => props.onClose?.() }
+                        />
+                    }
+                </Show>
+            </span>
         </header>
         <ul ref={ (element) => list = element } class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-3" aria-live="polite">
             <Show when={ messages.length === 0 && !chat.threadLoading() }>

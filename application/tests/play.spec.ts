@@ -8,6 +8,8 @@ const SEATED = ['alex', 'sara.k', 'reza.t', 'mina', 'nima.f', 'leila.a'];
 import GameCard from '../src/components/games/game-card.component.azeroth';
 import PlayHeader from '../src/components/games/play-header.component.azeroth';
 import TableChat from '../src/components/games/table-chat.component.azeroth';
+import TableDock from '../src/components/games/table-dock.component.azeroth';
+import TableMenu from '../src/components/games/table-menu.component.azeroth';
 import TurnClock from '../src/components/games/turn-clock.component.azeroth';
 import ChatPage from '../src/pages/app/chat.page.azeroth';
 import PlayPage from '../src/pages/app/play.page.azeroth';
@@ -25,6 +27,7 @@ import { useLocale } from '../src/stores/locale.store.ts';
 import { usePresence } from '../src/stores/presence.store.ts';
 import { useRealtime } from '../src/stores/realtime.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
+import { useSettings } from '../src/stores/settings.store.ts';
 import { client, server } from './fake-api.ts';
 import { socket } from './fake-realtime.ts';
 
@@ -405,5 +408,135 @@ describe('TableChat', () =>
         unmount();
 
         expect(chat.openId()).toBe('conv-b');
+    });
+});
+
+describe('the table’s chat and its controls', () =>
+{
+    const settle = async (): Promise<void> =>
+    {
+        for (let step = 0; step < 10; step += 1)
+        {
+            await Promise.resolve();
+        }
+        await new Promise((resolve) => setTimeout(resolve, 30));
+    };
+
+    afterEach(() =>
+    {
+        useLobby().reset();
+        useDevice().override(null);
+        useSettings().update({ railOpen: true });
+    });
+
+    const open = async (posture: 'phone' | 'sidebar'): Promise<HTMLElement> =>
+    {
+        useDevice().override(posture);
+        const id = await useLobby().host('ludo', defaultTable('ludo'), []);
+        const table: Route[] = [{ path: '/app/play/:id', component: (): HTMLElement => PlayPage() as HTMLElement }];
+        const router = createRouter({ routes: table, history: createMemoryHistory(`/app/play/${ id }`), scroll: false });
+        const { container } = renderTest(() => RouterProvider({ router, children: () => Routes({}) }) as Rendered);
+        await settle();
+        return container;
+    };
+
+    const button = (container: HTMLElement, name: string): HTMLElement | undefined =>
+        [...container.querySelectorAll('button')].find((one) =>
+            one.getAttribute('aria-label') === name || one.textContent?.trim() === name);
+
+    const rail = (container: HTMLElement): HTMLElement | null => container.querySelector('aside.border-s');
+
+    it('docks the chat beside the table on a wide screen, and hides it and brings it back', async () =>
+    {
+        const container = await open('sidebar');
+
+        expect(rail(container)).not.toBeNull();
+        expect(button(container, 'Show chat')).toBeUndefined();
+
+        fire(button(container, 'Hide chat')!, 'click');
+        await settle();
+
+        expect(rail(container)).toBeNull();
+        expect(useSettings().settings().railOpen).toBe(false);
+
+        fire(button(container, 'Show chat')!, 'click');
+        await settle();
+
+        expect(rail(container)).not.toBeNull();
+    });
+
+    it('widens the docked chat and narrows it again', async () =>
+    {
+        const container = await open('sidebar');
+
+        expect(rail(container)!.className).toContain('w-[var(--social-w)]');
+
+        fire(button(container, 'Make the chat bigger')!, 'click');
+        await settle();
+
+        expect(rail(container)!.className).toContain('w-[min(30rem,40vw)]');
+
+        fire(button(container, 'Make the chat smaller')!, 'click');
+        await settle();
+
+        expect(rail(container)!.className).toContain('w-[var(--social-w)]');
+    });
+
+    it('opens the chat over the table on a phone, half the screen first, and can take all of it', async () =>
+    {
+        const container = await open('phone');
+
+        expect(container.querySelector('.table-sheet')).toBeNull();
+
+        fire(button(container, 'Show chat')!, 'click');
+        await settle();
+
+        expect(container.querySelector('.table-sheet')!.className).toContain('h-[48dvh]');
+
+        fire(button(container, 'Make the chat bigger')!, 'click');
+        await settle();
+
+        expect(container.querySelector('.table-sheet')!.className).toContain('top-3');
+
+        fire(button(container, 'Hide chat')!, 'click');
+        await settle();
+
+        expect(container.querySelector('.table-sheet')).toBeNull();
+        expect(button(container, 'Show chat')).not.toBeUndefined();
+    });
+
+    it('gathers the table’s tools into one sheet on a phone, and gives up only after it has closed', () =>
+    {
+        const close = vi.fn();
+        const resign = vi.fn();
+        const container = renderTest(() => TableMenu({ overlayId: 'menu', close, code: 'XD6H9N', full: false, onResign: resign }) as Rendered).container;
+        const labels = [...container.querySelectorAll('ul button')].map((one) => one.textContent?.trim());
+
+        expect(labels).toEqual(['Turn sound on', 'Copy the table code XD6H9N', 'Give up']);
+
+        fire([...container.querySelectorAll('ul button')][2] as HTMLElement, 'click');
+
+        expect(close).toHaveBeenCalledTimes(1);
+        expect(resign).toHaveBeenCalledTimes(1);
+    });
+
+    it('offers no giving up in the sheet when there is no game', () =>
+    {
+        const container = renderTest(() => TableMenu({ overlayId: 'menu', close: vi.fn(), code: 'XD6H9N', full: false }) as Rendered).container;
+
+        expect(container.textContent).not.toContain('Give up');
+    });
+
+    it('offers giving up in the dock only when there is a game to give up', () =>
+    {
+        const resign = vi.fn();
+        const without = renderTest(() => TableDock({}) as Rendered).container;
+
+        expect(button(without, 'Give up')).toBeUndefined();
+
+        const withIt = renderTest(() => TableDock({ onResign: resign }) as Rendered).container;
+        fire(button(withIt, 'Give up')!, 'click');
+
+        expect(resign).toHaveBeenCalledTimes(1);
     });
 });

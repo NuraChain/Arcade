@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 
-import { GRID, centreOf, tokenRadius } from '../layout.ts';
+import { GRID, centreOf, pickNear, tokenRadius } from '../layout.ts';
 import { createSound, type SoundHandle } from '../sound.ts';
 import { FINISHED, YARD, pathBetween, type LudoColour } from './path.ts';
 import type { BoardHandle, BoardOptions, BoardToken, BoardView } from '../bridge.ts';
@@ -153,6 +153,16 @@ class TableScene extends Phaser.Scene
         }
 
         this.#view = this.#options.view;
+
+        this.input.on('pointerup', (pointer: { x: number; y: number }) =>
+        {
+            const key = pickNear(this.#view.tokens, pointer.x, pointer.y, this.#size);
+
+            if (key !== null)
+            {
+                this.#options.onPick?.(key);
+            }
+        });
 
         if (this.#view.die !== null)
         {
@@ -318,7 +328,6 @@ class TableScene extends Phaser.Scene
         const body = this.add.container(spot.x, spot.y, [haloEdge, halo, pawn, mark]).setDepth(this.#depthAt(spot.y));
 
         pawn.setInteractive({ useHandCursor: true });
-        pawn.on('pointerup', () => this.#options.onPick?.(token.key));
         pawn.on('pointerover', () => body.setScale(this.#motion ? 1.08 : 1));
         pawn.on('pointerout', () => body.setScale(1));
 

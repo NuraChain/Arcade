@@ -1,0 +1,107 @@
+import Icon from '../../icons/icon.component.azeroth';
+import IconButton from '../ui/icon-button.component.azeroth';
+import { useLocale } from '../../stores/locale.store.ts';
+import { useSettings } from '../../stores/settings.store.ts';
+import { useToasts } from '../../stores/toasts.store.ts';
+import type { IconName } from '../../icons/registry.ts';
+import type { OverlayProps } from '../../stores/overlay.store.ts';
+
+interface Entry
+{
+    id: string;
+    icon: IconName;
+    label: string;
+    danger?: boolean;
+    run: () => void;
+}
+
+export default component TableMenu(props: OverlayProps & {
+    code: string;
+    full: boolean;
+    onFullscreen?: () => void;
+    onResign?: () => void;
+})
+{
+    const locale = useLocale();
+    const settings = useSettings();
+    const toasts = useToasts();
+
+    derived sound = settings.settings().sound;
+
+    const copyCode = (): void =>
+    {
+        void navigator.clipboard?.writeText(props.code)
+            .then(() => toasts.show({ kind: 'success', text: locale.t('play.dock.codeCopied'), dedupe: 'table-code' }))
+            .catch(() => toasts.show({ kind: 'warning', text: locale.t('play.dock.codeFailed'), dedupe: 'table-code' }));
+    };
+
+    derived entries = ((): Entry[] =>
+    {
+        const list: Entry[] = [
+            {
+                id: 'sound',
+                icon: sound ? 'sound-off' : 'sound',
+                label: locale.t(sound ? 'play.dock.soundOff' : 'play.dock.soundOn'),
+                run: () => settings.update({ sound: !sound })
+            }
+        ];
+
+        if (props.onFullscreen !== undefined)
+        {
+            list.push({
+                id: 'fullscreen',
+                icon: props.full ? 'fullscreen-exit' : 'fullscreen',
+                label: locale.t(props.full ? 'play.dock.windowed' : 'play.dock.fullscreen'),
+                run: () => props.onFullscreen?.()
+            });
+        }
+
+        list.push({
+            id: 'code',
+            icon: 'copy',
+            label: locale.t('play.dock.copy', { code: props.code }),
+            run: copyCode
+        });
+
+        if (props.onResign !== undefined)
+        {
+            list.push({
+                id: 'resign',
+                icon: 'report',
+                label: locale.t('match.resign'),
+                danger: true,
+                run: () => props.onResign?.()
+            });
+        }
+
+        return list;
+    })();
+
+    <div class="flex flex-col gap-1 p-3">
+        <header class="flex items-center gap-3 px-2 pb-2 pt-1">
+            <h2 class="min-w-0 flex-1 truncate text-ui-lg font-semibold text-text">{ locale.t('play.menu.title') }</h2>
+            <IconButton icon="close" label={ locale.t('common.close') } variant="ghost" onClick={ () => props.close() } />
+        </header>
+        <ul class="flex flex-col gap-0.5">
+            <For each={ entries } key={ (entry) => entry.id } let={ entry }>
+                <li>
+                    <button
+                        type="button"
+                        class={ () => [
+                            'flex min-h-12 w-full cursor-pointer items-center gap-3 rounded-tile px-3 text-start text-ui-md transition-colors hover:bg-raised/70',
+                            entry.danger === true ? 'text-danger' : 'text-text'
+                        ].join(' ') }
+                        onClick={ () =>
+                        {
+                            props.close();
+                            entry.run();
+                        } }
+                    >
+                        <Icon name={ entry.icon } size={ 18 } />
+                        <span class="min-w-0 flex-1 truncate">{ entry.label }</span>
+                    </button>
+                </li>
+            </For>
+        </ul>
+    </div>
+}

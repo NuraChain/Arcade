@@ -1,0 +1,105 @@
+import DieFace from './die-face.component.azeroth';
+import Avatar from '../ui/avatar.component.azeroth';
+import { INITIAL } from './seats.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import { usePeople } from '../../stores/people.store.ts';
+import type { LudoSeat, MatchPlayer } from '../../data/match.ts';
+
+const PIPS = [0, 1, 2, 3];
+
+const MISSES_ALLOWED = 3;
+
+export default component YardBadge(props: {
+    player: MatchPlayer;
+    seat: LudoSeat;
+    corner: string;
+    mine?: number;
+    active: boolean;
+    die?: number;
+    finished: boolean;
+})
+{
+    const locale = useLocale();
+    const people = usePeople();
+
+    derived person = people.byHandle(props.player.who);
+
+    derived mine = props.player.seat === props.mine;
+
+    derived turn = props.active && !props.finished;
+
+    derived name = mine
+        ? locale.t('match.you')
+        : (person === null ? props.player.who : locale.text(person.displayName));
+
+    derived warned = props.player.timeouts >= MISSES_ALLOWED - 1 && !props.finished;
+
+    derived routine = props.player.result === undefined && !props.seat.out && props.player.timeouts === 0;
+
+    derived says = ((): string =>
+    {
+        if (props.player.result === 'won')
+        {
+            return locale.t('card.won');
+        }
+
+        if (props.seat.out || props.player.result === 'abandoned')
+        {
+            return locale.t('card.out');
+        }
+
+        if (props.player.result === 'lost')
+        {
+            return locale.t('card.lost');
+        }
+
+        if (props.player.timeouts > 0)
+        {
+            return warned
+                ? locale.t('card.lastChance')
+                : locale.plural('match.missed', props.player.timeouts);
+        }
+
+        if (!turn)
+        {
+            return locale.t('card.waiting');
+        }
+
+        return mine ? locale.t('card.yourTurn') : locale.t('card.turn');
+    })();
+
+    <div
+        class={ () => [
+            'yard-badge',
+            turn ? 'is-turn' : '',
+            props.seat.out ? 'is-out' : ''
+        ].filter(Boolean).join(' ') }
+        data-corner={ props.corner }
+        style={ `--ink: var(--ludo-${ props.seat.colour })` }
+        aria-current={ turn ? 'true' : undefined }
+    >
+        <span class="yard-avatar">
+            <Avatar person={ person } ringOn="void" />
+            <span class="yard-initial" aria-hidden="true">{ INITIAL[props.seat.colour] }</span>
+            <Show when={ props.die !== undefined && turn }>
+                { () =>
+                    <span class="yard-die">
+                        <DieFace value={ props.die! } size="fill" label={ locale.t('match.turn.rolled', { die: locale.n(props.die!) }) } />
+                    </span>
+                }
+            </Show>
+        </span>
+
+        <span class="yard-name">
+            <span class="yard-who" dir="auto">{ name }</span>
+            <span class="yard-state">
+                <span class="yard-pips" role="img" aria-label={ locale.plural('match.tokens', props.seat.home) }>
+                    <For each={ PIPS } key={ (pip) => pip } let={ pip }>
+                        <span class="ludo-pip" data-home={ pip < props.seat.home ? 'true' : 'false' } aria-hidden="true"></span>
+                    </For>
+                </span>
+                <span class={ () => routine ? 'sr-only' : (warned ? 'yard-says text-danger' : 'yard-says') }>{ says }</span>
+            </span>
+        </span>
+    </div>
+}

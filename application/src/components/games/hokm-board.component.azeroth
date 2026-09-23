@@ -8,6 +8,7 @@ import { FACE_KEY, SUITS, SUIT_ICON, arrangeHand, rankOf, suitOf, type Suit } fr
 import { aroundTable, type Chair } from './table-seats.ts';
 import { hokmOf } from '../../data/match.ts';
 import { useBoard } from '../../stores/match.store.ts';
+import { useDevice } from '../../stores/device.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { usePeople } from '../../stores/people.store.ts';
 import type { MatchView } from '../../api.ts';
@@ -37,9 +38,12 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
 {
     const locale = useLocale();
     const board = useBoard();
+    const device = useDevice();
     const people = usePeople();
 
     state sorted = false;
+
+    state picked: number | null = null;
 
     derived game = props.match;
 
@@ -160,6 +164,8 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
 
     derived myTurn = view !== null && !over && view.phase === 'tricks' && view.turn === mine;
 
+    derived chosen = picked !== null && myTurn && legal.has(picked) ? picked : null;
+
     derived hand = view === null ? [] : (sorted ? arrangeHand(view.hand, view.trump) : [...view.hand]);
 
     derived rows = hand.length === 0
@@ -201,7 +207,24 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
             return;
         }
 
+        picked = null;
         await board.play({ kind: 'hokm', verb: 'card', card });
+    };
+
+    const touchCard = (card: number): void =>
+    {
+        if (!legal.has(card))
+        {
+            return;
+        }
+
+        if (!device.coarse() || chosen === card)
+        {
+            void playCard(card);
+            return;
+        }
+
+        picked = card;
     };
 
     const callTrump = async (suit: Suit): Promise<void> =>
@@ -262,6 +285,7 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
                         <div class="hokm-centre" dir={ locale.dir() } aria-hidden="true">
                             <Icon name="crest-crown" size={ 18 } class="text-gold" />
                             <span class="font-display text-ui-lg font-bold">{ locale.t('games.hokm.name') }</span>
+                            <span class="text-ui-2xs font-semibold text-gold">{ locale.t('hokm.round', { n: locale.n(view!.round) }) }</span>
                             <Show when={ view?.trump !== undefined }>
                                 { () =>
                                     <span class="flex items-center gap-1 text-ui-2xs">
@@ -341,9 +365,11 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
                                 type="button"
                                 class="card-hold"
                                 data-legal={ myTurn && legal.has(card) ? 'true' : (myTurn ? 'false' : 'idle') }
+                                data-picked={ chosen === card ? 'true' : undefined }
                                 disabled={ !legal.has(card) || board.busy() }
                                 aria-label={ locale.t('hokm.play', { card: cardSays(card) }) }
-                                onClick={ () => void playCard(card) }
+                                aria-pressed={ device.coarse() ? chosen === card : undefined }
+                                onClick={ () => touchCard(card) }
                             >
                                 <CardFace card={ card } />
                             </button>
@@ -351,6 +377,20 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
                     </For>
                 </ul>
             </For>
+
+            <Show when={ chosen !== null }>
+                { () =>
+                    <span class="glow-cta mx-auto flex w-full max-w-[22rem] rounded-control">
+                        <Button variant="primary" size="lg" leading="cards" block loading={ board.busy() } onClick={ () => void playCard(chosen!) }>
+                            { locale.t('hokm.play', { card: cardSays(chosen!) }) }
+                        </Button>
+                    </span>
+                }
+            </Show>
+
+            <Show when={ chosen === null && myTurn && device.coarse() }>
+                { () => <p class="text-center text-ui-xs text-muted">{ locale.t('hokm.pick') }</p> }
+            </Show>
 
             <Show when={ myTurn && legal.size < (view?.hand.length ?? 0) }>
                 { () => <p class="text-center text-ui-xs text-muted">{ locale.t('hokm.follow') }</p> }
@@ -426,17 +466,6 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
 
         <Show when={ over }>
             { () => <MatchResult match={ game } mine={ mine } busy={ props.starting === true } onAgain={ props.onAgain } /> }
-        </Show>
-
-
-        <Show when={ !over && mine !== undefined }>
-            { () =>
-                <div class="flex justify-center">
-                    <Button variant="ghost" size="sm" leading="report" onClick={ () => void board.resign() }>
-                        { locale.t('match.resign') }
-                    </Button>
-                </div>
-            }
         </Show>
     </div>
 }

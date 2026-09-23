@@ -1,52 +1,27 @@
-import Button from '../ui/button.component.azeroth';
+import TableMenu from './table-menu.component.azeroth';
 import IconButton from '../ui/icon-button.component.azeroth';
 import { useLocale } from '../../stores/locale.store.ts';
+import { useOverlay } from '../../stores/overlay.store.ts';
 import { useSettings } from '../../stores/settings.store.ts';
-import { useToasts } from '../../stores/toasts.store.ts';
 
-/**
- * The small things a person reaches for while a game is going, in one place under the board.
- *
- * Sound, the screen, the room's code and the chat. Every one of them was reachable before only by
- * LEAVING the game: the table's own cues are `settings.sound`, whose single toggle lives on the
- * settings page under notifications - so silencing a game meant navigating away from it, and
- * turning it back on meant remembering where the switch was.
- *
- * **Nothing here is a control with nothing behind it.** No music button, because there is no music;
- * no settings gear, because it would be a link out of the game wearing the clothes of a control in
- * it; no overflow menu, because there is nothing left to put in one. A dock of plausible-looking
- * buttons is the same mistake as a provably-fair badge with no mechanism.
- *
- * **The code is the room, and it is the only thing here a person might need to send somebody.** It
- * is what a table is reached by when it is not in any list - which is every table opened from a
- * chat or a group - so it is shown rather than buried behind a share sheet.
- */
-
-/** Whether this browser will let anything go fullscreen. Absent on iOS Safari for a `div`. */
 const canFullscreen = (): boolean =>
     typeof document !== 'undefined' && document.fullscreenEnabled === true;
 
 export default component TableDock(props: {
-    code: string;
+    code?: string;
     target?: HTMLElement | null;
     onChat?: () => void;
+    onResign?: () => void;
 })
 {
     const locale = useLocale();
     const settings = useSettings();
-    const toasts = useToasts();
+    const overlay = useOverlay();
 
     state full = false;
 
     derived sound = settings.settings().sound;
 
-    /**
-     * Mirrors the browser rather than trusting the last press.
-     *
-     * Escape and the platform's own gesture both leave fullscreen without telling the page, so a
-     * flag this component set on click would go on claiming the game was full-screen and offer the
-     * wrong button for the rest of the match.
-     */
     mount
     {
         const onChanged = (): void =>
@@ -59,12 +34,6 @@ export default component TableDock(props: {
         return () => document.removeEventListener('fullscreenchange', onChanged);
     }
 
-    /**
-     * Best-effort, always. `requestFullscreen` rejects when the gesture is not trusted or the
-     * platform simply refuses, and an unhandled rejection in a game loop is a console error the
-     * matrix reads. There is nothing useful to say to a person about it either: the button did
-     * nothing and they can see that.
-     */
     const toggleFull = (): void =>
     {
         const host = props.target ?? document.documentElement;
@@ -78,48 +47,66 @@ export default component TableDock(props: {
         void document.exitFullscreen?.().catch(() => undefined);
     };
 
-    const copyCode = (): void =>
+    const openMenu = (): void =>
     {
-        void navigator.clipboard?.writeText(props.code)
-            .then(() => toasts.show({ kind: 'success', text: locale.t('play.dock.codeCopied'), dedupe: 'table-code' }))
-            .catch(() => toasts.show({ kind: 'warning', text: locale.t('play.dock.codeFailed'), dedupe: 'table-code' }));
+        overlay.open(
+            TableMenu,
+            {
+                code: props.code ?? '',
+                full,
+                ...(canFullscreen() ? { onFullscreen: toggleFull } : {}),
+                ...(props.onResign === undefined ? {} : { onResign: props.onResign })
+            },
+            { label: locale.t('play.menu.title') }
+        );
     };
 
-    <div class="flex flex-wrap items-center justify-center gap-2">
-        <IconButton
-            icon={ sound ? 'sound' : 'sound-off' }
-            label={ locale.t(sound ? 'play.dock.soundOff' : 'play.dock.soundOn') }
-            variant="secondary"
-            pressed={ sound }
-            onClick={ () => settings.update({ sound: !sound }) }
-        />
+    <div class="flex shrink-0 items-center gap-1">
+        <span class="hidden items-center gap-1 @2xl:flex">
+            <IconButton
+                icon={ sound ? 'sound' : 'sound-off' }
+                label={ locale.t(sound ? 'play.dock.soundOff' : 'play.dock.soundOn') }
+                variant="ghost"
+                pressed={ sound }
+                onClick={ () => settings.update({ sound: !sound }) }
+            />
 
-        <Show when={ canFullscreen() }>
-            { () =>
-                <IconButton
-                    icon={ full ? 'fullscreen-exit' : 'fullscreen' }
-                    label={ locale.t(full ? 'play.dock.windowed' : 'play.dock.fullscreen') }
-                    variant="secondary"
-                    pressed={ full }
-                    onClick={ () => toggleFull() }
-                />
-            }
-        </Show>
+            <Show when={ canFullscreen() }>
+                { () =>
+                    <IconButton
+                        icon={ full ? 'fullscreen-exit' : 'fullscreen' }
+                        label={ locale.t(full ? 'play.dock.windowed' : 'play.dock.fullscreen') }
+                        variant="ghost"
+                        pressed={ full }
+                        onClick={ () => toggleFull() }
+                    />
+                }
+            </Show>
 
-        <button
-            type="button"
-            class="tally flex min-h-11 cursor-pointer items-center gap-2 rounded-control border border-line bg-field px-3 text-ui-sm font-semibold uppercase tracking-wide text-muted transition-colors hover:border-accent/60 hover:text-text"
-            onClick={ () => copyCode() }
-        >
-            <span class="text-ui-2xs font-normal normal-case tracking-normal text-faint">{ locale.t('play.dock.code') }</span>
-            { props.code }
-        </button>
+            <Show when={ props.onResign !== undefined }>
+                { () =>
+                    <IconButton
+                        icon="report"
+                        label={ locale.t('match.resign') }
+                        variant="ghost"
+                        onClick={ () => props.onResign?.() }
+                    />
+                }
+            </Show>
+        </span>
+
+        <span class="flex @2xl:hidden">
+            <IconButton icon="more" label={ locale.t('play.menu.title') } variant="ghost" onClick={ () => openMenu() } />
+        </span>
 
         <Show when={ props.onChat !== undefined }>
             { () =>
-                <Button variant="outline" size="md" leading="chats" onClick={ () => props.onChat?.() }>
-                    { locale.t('play.table.chatShow') }
-                </Button>
+                <IconButton
+                    icon="chats"
+                    label={ locale.t('play.table.chatShow') }
+                    variant="secondary"
+                    onClick={ () => props.onChat?.() }
+                />
             }
         </Show>
     </div>

@@ -1232,7 +1232,7 @@ the union is narrowed (`ludoOf`) and the halves are joined (`chairsOf`), so a sc
 question in the same place every time - the argument `visibleTo` makes on the server. A player the
 board did not mention is DROPPED, never filled in with a blank colour and no tokens: an invented
 chair reads as a fact about the game rather than as a fact about the viewer, which is exactly the
-confusion a hidden hand would cause. `PlayerCard` takes both halves as two props for the same
+confusion a hidden hand would cause. `YardBadge` takes both halves as two props for the same
 reason.
 
 **A log left open is not a redacted game.** `Engine.log(events, seat | null)` is `view`'s sibling and
@@ -1489,8 +1489,16 @@ CELL   = FIELD * 960 / 992 / 15     one square
 
 With the paper's own numbers instead, every token near an edge sits about a quarter of a cell too
 far out, exact in the middle and worst in the corners. The yard wells have the same trap from the
-other end: they are drawn at `corner + 3 +/- 0.95`, which is a POSITION, and `centreOf` adds the
-half cell that turns an index into a centre - so `YARD_SPOTS` passes 1.55 and 3.45, not 2 and 4.
+other end: they are drawn at `NEST +/- NEST_SPREAD`, which is a POSITION, and `centreOf` adds the
+half cell that turns an index into a centre - so `seatsFor` subtracts 0.5 before it hands a parked
+token over.
+
+**The nest is off-centre in its yard on purpose.** Each yard's four wells sit in a smaller pool
+(`NEST_RADIUS` 1.72, wells 0.72 apart) pushed 0.7 squares towards the middle of the board, which
+leaves a band about two squares wide along the yard's two OUTER edges - and that band is where the
+player is drawn: the avatar in the corner, the name along the edge. `NEST` lives in `game/layout.ts`
+and both the art and `seatsFor` read it, so a parked token cannot sit anywhere but on its own well,
+and `game.spec.ts` fails if one ever strays into the band.
 
 Phaser loads the SVG with `load.svg` at 1536 pixels, because it rasterises once at the size it is
 told and a canvas on a 2x phone is up to 1400 device pixels wide.
@@ -2179,6 +2187,76 @@ inside a Persian tile is clipped at the line's end, which in an RTL line is the 
 `Bot 63848b` truncates to `...t 63848b` rather than to `Bot 638...`. Nothing overflows, nothing logs,
 and the accessible name is perfect. It is fixed on the hokm board; **every other place this product
 renders a display name still has it**, because nothing else passes `dir="auto"` to a name.
+
+## The game screen gives the table everything
+
+A game is the one screen in this product somebody looks at for twenty minutes without scrolling, so
+the rule for it is the opposite of every other page: the chrome gets out of the way and the table
+takes what is left. Each of these was a defect found by playing on a phone, and none of them was
+visible to a gate - the matrix passes a board that needs scrolling to reach its own dice.
+
+**The shell steps back on an `immersive` route.** At sidebar width the 15rem sidebar collapses to
+the 4.5rem rail, which is 170px handed to the table; on a phone, and on ANY screen 540px tall or
+less, `bareFor` drops the top bar and the nav as well. The second half matters because a phone
+turned sideways is 844 wide, which is rail posture, and the top bar plus the rail took 130px of a
+390px-tall screen. The keys banner is not drawn on a game route either: it is about reading
+messages, and the table's chat already says the same thing where it applies.
+
+**Everything needed to play is on the table, and most of it is on the board.** Ludo sits on a
+planked walnut tabletop (`ludo-table.svg`, generated beside the hokm tables in
+`tools/art/boards.mjs`). Each player is drawn INSIDE their own yard - `YardBadge`: the avatar in the
+yard's outer corner, a name pill with the four home dots along its outer edge, and the die they rolled
+beside the avatar - so there is no row of cards above and below the board taking height from it, and
+the board is the full width of the phone. Whose turn it is is the whole yard breathing in its colour.
+The badges are `pointer-events: none`, so a tap on a token in the yard goes through to the token.
+
+The roll is a die in the MIDDLE of the board, a real `<button>` named "Roll the dice", shown only
+when the reader can roll: tap it, it shakes while the request is in flight, and it is gone; the tokens
+that can move then glow and a tap on one moves it. The strip on the table under the board carries the
+turn, the clock, a one-line hint ("Tap the die in the middle of the board.") and the move choices,
+which are the keyboard and screen-reader path to the same moves. On a 390x844 phone the roll used to be
+100px below the fold; now nothing scrolls. The table bleeds almost to the screen edge on a phone
+(`margin-inline` against `--page-pad`), and hokm's table does the same.
+
+Everything on the board is placed from `game/layout.ts`: the board stage sets `--cell-cq` and
+`--margin-cq` in `cqi` from `CELL` and `MARGIN`, so a badge sits in its yard at every size for the
+same reason the tokens do, and scales with the board rather than with the screen.
+
+**The dock is in the header.** Sound, full screen, give up and the chat are icon buttons at the right
+of the title, and the table code is a copy chip in the subline - the same pattern a native game uses,
+and it frees the bottom of the screen, which is where the thumb is. Giving up asks first
+(`match.resign.*`, which had copy and no caller): it used to be a bare ghost button that ended the
+game on one tap.
+
+**A rotated phone gets a real landscape layout.** Ludo's table becomes two columns - the board sized
+by the screen's HEIGHT, the strip beside it - which is also what a container of 44rem or more gets on a
+desktop. Hokm uses the wide table, capped by height, with the hand overlapping its bottom rim. Both are
+`@media (orientation: landscape) and (max-height: 540px)`, the same threshold as `bareFor`.
+
+**Chat can be hidden, widened, and reached at every width.** The rail's header has a widen button and
+a hide button; hiding writes `settings.railOpen`, which is a device preference like the others, and a
+chat icon in the header brings it back. Below sidebar width the chat is a sheet over the table,
+half the screen first and the whole screen on request. Before this, the rail was `hidden lg:flex`
+while the phone sheet was offered only below 768, so a tablet between 768 and 1023 had no way to read
+the table's chat at all.
+
+**Things a finger can actually hit.** A tap on the Ludo canvas picks the nearest MOVABLE token within
+1.25 squares of it (`pickNear` in `game/layout.ts`), measured to the pawn's body rather than its foot,
+because a pawn on a phone is 17px across and nobody taps a sprite that exactly. On a coarse pointer a
+hokm card is lifted by the first tap and played by the second, or by the "Play the ..." button that
+appears - a hand of thirteen shows each card as a 26px strip, and one mistap used to throw the wrong
+card. A mouse still plays on the first click, because hover already lifts the card.
+
+**A badge says only what is unusual.** "Your go" and "Waiting" are what the breathing yard and the
+strip already say, and beside four home dots they truncated to "Your...". They are `sr-only`; won,
+out, lost, missed turns and last chance are still written out, because those are what somebody needs
+to read at a glance.
+
+**A page that failed while the server was away heals itself.** `onBack` in `realtime.store.ts` fires
+when the socket connects after being down, and the lobby and the match re-read then. A deploy, a
+restart or a dropped train connection used to leave "Couldn't load this" on screen until somebody
+pressed Try again - found by restarting the built server with a game open. The play page also stopped
+drawing its skeleton and its error at the same time: the error waits until nothing is loading.
 
 ## The game page splits on its container
 
@@ -3397,13 +3475,10 @@ point lights.
 
 **The unprefixed utilities ARE the phone layout.** `sm:`/`md:`/`lg:`/`@3xl:` only ever ADD to it for
 bigger screens; a layout written wide and then patched down with overrides is the defect. The shape
-to copy is `.board-arena`, where two cards above and two below the board is the DEFAULT and the
-three-column grid, a seat card beside each corner of the board, is what a `@container (min-width:
-46rem)` earns. The arena is `direction: ltr` because the board is a printed object that never
-mirrors, and each card sets `direction: rtl` back on a Persian page so its own text still reads right
-to left. The die sits on the active card's corner like a badge rather than in the row, so a roll never
-changes a card's size and nothing under it jumps as a player reaches for a token - at 320px a card
-has 111px inside, which holds an avatar, a name and four home dots and nothing more.
+to copy is `.ludo-table`, where the board with the strip under it is the DEFAULT and the board beside
+the strip is what a `@container (min-width: 44rem)` earns. The yard badges are `direction: ltr`
+because the board is a printed object that never mirrors, and a name inside one carries `dir="auto"`
+so it still reads in its own script.
 
 Prefer a `@container` variant over a viewport one wherever the column is narrower than the screen,
 which in this shell is most places: a rail or sidebar takes up to 16rem on the left and the social

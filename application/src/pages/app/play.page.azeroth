@@ -17,13 +17,13 @@ import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useDevice } from '../../stores/device.store.ts';
 import { useLobby } from '../../stores/lobby.store.ts';
 import { useBoard } from '../../stores/match.store.ts';
+import { useSettings } from '../../stores/settings.store.ts';
 import { useWatch } from '../../stores/watch.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useOverlay } from '../../stores/overlay.store.ts';
 import { useShell } from '../../stores/shell.store.ts';
 import { useToasts } from '../../stores/toasts.store.ts';
 import Panel from '../../components/ui/panel.component.azeroth';
-import { PANEL_TONE } from '../../components/ui/variants.ts';
 import type { MatchView } from '../../api.ts';
 
 export default component PlayPage()
@@ -31,6 +31,7 @@ export default component PlayPage()
     const locale = useLocale();
     const lobby = useLobby();
     const board = useBoard();
+    const settings = useSettings();
     const catalogue = useCatalogue();
     const device = useDevice();
     const watch = useWatch();
@@ -44,19 +45,9 @@ export default component PlayPage()
 
     state chatOpen = false;
 
+    state chatWide = false;
+
     let arena: HTMLElement | null = null;
-
-    const showChat = (element: HTMLElement | null): void =>
-    {
-        if (element === null)
-        {
-            return;
-        }
-
-        const smooth = !device.reducedMotion();
-
-        requestAnimationFrame(() => element.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', block: 'start' }));
-    };
 
     state starting = false;
 
@@ -100,7 +91,7 @@ export default component PlayPage()
 
     derived loading = lobby.loading() && table === null;
 
-    derived failed = lobby.failed() !== undefined && table === null;
+    derived failed = lobby.failed() !== undefined && table === null && !lobby.loading();
 
     derived seated = table?.mine !== undefined;
 
@@ -118,9 +109,49 @@ export default component PlayPage()
 
     useHead({ title: () => title });
 
-    derived phone = device.posture() === 'phone';
+    derived docked = device.posture() === 'sidebar';
 
-    derived railVisible = !phone && seated && table?.conversationId !== undefined;
+    derived hasChat = seated && table?.conversationId !== undefined;
+
+    derived railOpen = settings.settings().railOpen;
+
+    derived railVisible = docked && hasChat && railOpen;
+
+    derived sheetVisible = !docked && hasChat && chatOpen;
+
+    derived openChat = hasChat && (docked ? !railOpen : !chatOpen)
+        ? (): void =>
+        {
+            if (docked)
+            {
+                settings.update({ railOpen: true });
+                return;
+            }
+
+            chatOpen = true;
+        }
+        : undefined;
+
+    derived resigning = seated && showing && board.match()?.finishedAt === undefined;
+
+    const resign = async (): Promise<void> =>
+    {
+        const yes = await overlay.open(
+            ConfirmSheet,
+            {
+                title: locale.t('match.resign.title'),
+                lead: locale.t('match.resign.lead'),
+                confirm: locale.t('match.resign.confirm'),
+                destructive: true
+            },
+            { label: locale.t('match.resign.title') }
+        ).closed;
+
+        if (yes === true)
+        {
+            await board.resign();
+        }
+    };
 
     derived playing = showing ? (board.match()?.game ?? '') : '';
 
@@ -373,9 +404,20 @@ export default component PlayPage()
                 <div class="flex min-h-0 flex-1 gap-4">
                     <div
                         ref={ (element) => arena = element }
-                        class="flex min-w-0 flex-1 flex-col gap-5 bg-void py-2"
+                        class={ () => [ 'flex min-w-0 flex-1 flex-col gap-4 bg-void py-2', sheetVisible ? (chatWide ? '' : 'pb-[48dvh]') : '' ].filter(Boolean).join(' ') }
                     >
-                        <PlayHeader table={ table! } others={ lobby.seated().filter((one) => one.id !== table!.id) } />
+                        <PlayHeader
+                            table={ table! }
+                            others={ lobby.seated().filter((one) => one.id !== table!.id) }
+                            tools={
+                                <TableDock
+                                    code={ table!.code }
+                                    target={ arena }
+                                    onChat={ openChat }
+                                    onResign={ resigning ? () => void resign() : undefined }
+                                />
+                            }
+                        />
 
                         <Show when={ playing !== '' && drawn === playing }>
                             { () => <Dynamic component={ Board! } props={ boardProps } /> }
@@ -462,33 +504,43 @@ export default component PlayPage()
                             }
                         </Show>
 
-                        <Show when={ phone && table?.conversationId !== undefined && chatOpen }>
-                            { () =>
-                                <div ref={ (element) => showChat(element) }>
-                                    <TableChat
-                                        conversationId={ table?.conversationId ?? '' }
-                                        class={ `min-h-[18rem] rounded-panel ${ PANEL_TONE.field }` }
-                                        onClose={ () => chatOpen = false }
-                                    />
-                                </div>
-                            }
-                        </Show>
-
-                        <Show when={ !chatOpen }>
-                            { () =>
-                                <TableDock
-                                    code={ table!.code }
-                                    target={ arena }
-                                    onChat={ phone && table!.conversationId !== undefined ? () => chatOpen = true : undefined }
-                                />
-                            }
-                        </Show>
                     </div>
+
+                    <Show when={ sheetVisible }>
+                        { () =>
+                            <div
+                                class={ () => [
+                                    'table-sheet fixed inset-x-0 bottom-0 z-30 flex flex-col overflow-hidden rounded-t-sheet border-t border-line-strong bg-field',
+                                    chatWide ? 'top-3' : 'h-[48dvh]'
+                                ].join(' ') }
+                            >
+                                <TableChat
+                                    conversationId={ table?.conversationId ?? '' }
+                                    class="min-h-0 flex-1"
+                                    closeIcon="close"
+                                    wide={ chatWide }
+                                    onResize={ () => chatWide = !chatWide }
+                                    onClose={ () => chatOpen = false }
+                                />
+                            </div>
+                        }
+                    </Show>
 
                     <Show when={ railVisible }>
                         { () =>
-                            <aside class="hidden w-[var(--social-w)] shrink-0 border-s border-line bg-field lg:flex lg:min-h-0 lg:flex-col">
-                                <TableChat conversationId={ table?.conversationId ?? '' } class="min-h-0 flex-1" />
+                            <aside
+                                class={ () => [
+                                    'flex min-h-0 shrink-0 flex-col border-s border-line bg-field transition-[width] duration-200',
+                                    chatWide ? 'w-[min(30rem,40vw)]' : 'w-[var(--social-w)]'
+                                ].join(' ') }
+                            >
+                                <TableChat
+                                    conversationId={ table?.conversationId ?? '' }
+                                    class="min-h-0 flex-1"
+                                    wide={ chatWide }
+                                    onResize={ () => chatWide = !chatWide }
+                                    onClose={ () => settings.update({ railOpen: false }) }
+                                />
                             </aside>
                         }
                     </Show>

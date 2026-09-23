@@ -1,4 +1,5 @@
 import type { BoardToken } from '../../game/bridge.ts';
+import { NEST, NEST_SPREAD, NEST_WELLS } from '../../game/layout.ts';
 import type { LudoBoard } from '../../data/match.ts';
 
 /**
@@ -24,21 +25,6 @@ const YARDS: Record<string, readonly [number, number]> = {
     yellow: [9, 9],
     blue: [0, 9]
 };
-
-/**
- * The four wells printed inside each home yard.
- *
- * `atlas.py` draws them at `corner + 3 +/- 0.95` cells - a POSITION on the grid, not a cell index -
- * and `centreOf` adds the half cell that turns an index into a centre. Passing 2 and 4 therefore
- * landed every yard token half a cell down and to the right of the circle it belongs in, which read
- * as "nearly right" and is the hardest kind of wrong to notice.
- */
-const YARD_SPOTS: readonly (readonly [number, number])[] = [
-    [1.55, 1.55],
-    [3.45, 1.55],
-    [1.55, 3.45],
-    [3.45, 3.45]
-];
 
 export const INITIAL: Record<string, string> = {
     red: 'R',
@@ -88,7 +74,9 @@ export function seatsFor(board: LudoBoard, mine?: number): BoardToken[]
                 continue;
             }
 
-            const spot = YARD_SPOTS[parked];
+            const nest = NEST[player.colour] ?? NEST.red;
+            const well = NEST_WELLS[parked] ?? NEST_WELLS[0];
+            const spot = [nest[0] + well[0] * NEST_SPREAD - 0.5, nest[1] + well[1] * NEST_SPREAD - 0.5];
 
             parked += 1;
 

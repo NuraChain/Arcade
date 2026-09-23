@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { CELL, GRID, MARGIN, RIM, centreOf, tokenRadius } from '../src/game/layout.ts';
+import { CELL, GRID, MARGIN, NEST, NEST_RADIUS, RIM, centreOf, pickNear, tokenRadius } from '../src/game/layout.ts';
 import { FINISHED, YARD, pathBetween } from '../src/game/board/path.ts';
 import { createSound } from '../src/game/sound.ts';
 import { ENTRY, RING_CELLS, cellAt } from '../../server/src/domains/match/ludo/board.ts';
@@ -487,4 +487,72 @@ describe('a hand arranged the way a person holds it', () =>
 
         expect([...arrangeHand(hand, 'spades')].sort((a, b) => a - b)).toEqual([...hand].sort((a, b) => a - b));
     });
+});
+
+describe('pointing at a token on a phone', () =>
+{
+    const size = 340;
+    const cell = CELL * size;
+    const tokens = [
+        { key: 'a', col: 6, row: 13, playable: true },
+        { key: 'b', col: 8, row: 13, playable: true },
+        { key: 'c', col: 7, row: 12, playable: false }
+    ];
+
+    it('takes a tap that lands beside a movable token, not only one exactly on it', () =>
+    {
+        const spot = centreOf(6, 13, size);
+
+        expect(pickNear(tokens, spot.x + cell * 0.9, spot.y, size)).toBe('a');
+        expect(pickNear(tokens, spot.x, spot.y - cell * 0.6, size)).toBe('a');
+    });
+
+    it('chooses the nearer of two movable tokens and never one that cannot move', () =>
+    {
+        const left = centreOf(6, 13, size);
+        const right = centreOf(8, 13, size);
+        const frozen = centreOf(7, 12, size);
+
+        expect(pickNear(tokens, right.x - cell * 0.2, right.y, size)).toBe('b');
+        expect(pickNear(tokens, left.x + cell * 0.2, left.y, size)).toBe('a');
+        expect(pickNear(tokens.slice(2), frozen.x, frozen.y, size)).toBeNull();
+    });
+
+    it('ignores a tap far from anything that can move', () =>
+    {
+        const spot = centreOf(0, 0, size);
+
+        expect(pickNear(tokens, spot.x, spot.y, size)).toBeNull();
+    });
+});
+
+describe('the yard leaves its outer corner to the player', () =>
+{
+    const OUTER: Record<string, readonly [number, number]> = { red: [0, 0], green: [15, 0], yellow: [15, 15], blue: [0, 15] };
+    const ORIGIN: Record<string, readonly [number, number]> = { red: [0, 0], green: [9, 0], yellow: [9, 9], blue: [0, 9] };
+
+    const parked = (colour: string): { col: number; row: number }[] => seatsFor({
+        kind: 'ludo',
+        moves: [],
+        seats: [{ seat: 0, colour, home: 0, out: false, tokens: [0, 1, 2, 3].map((piece) => ({ piece, at: -1 })) }]
+    } as unknown as Parameters<typeof seatsFor>[0]).map((token) => ({ col: token.col + 0.5, row: token.row + 0.5 }));
+
+    for (const colour of ['red', 'green', 'yellow', 'blue'])
+    {
+        it(`parks every ${ colour } token inside its nest and clear of the band along the outer edges`, () =>
+        {
+            const nest = NEST[colour];
+            const origin = ORIGIN[colour];
+            const outer = OUTER[colour];
+
+            for (const spot of parked(colour))
+            {
+                const fromNest = Math.hypot(spot.col - (origin[0] + nest[0]), spot.row - (origin[1] + nest[1]));
+
+                expect(fromNest).toBeLessThan(NEST_RADIUS - 0.3);
+                expect(Math.abs(spot.col - outer[0])).toBeGreaterThan(2.4);
+                expect(Math.abs(spot.row - outer[1])).toBeGreaterThan(2.4);
+            }
+        });
+    }
 });

@@ -19,6 +19,19 @@ export const MARGIN = RIM + FIELD * (16 / 992);
 
 export const CELL = FIELD * (960 / 992) / GRID;
 
+export const NEST_RADIUS = 1.72;
+
+export const NEST_SPREAD = 0.72;
+
+export const NEST: Record<string, readonly [number, number]> = {
+    red: [3.7, 3.7],
+    green: [2.3, 3.7],
+    yellow: [2.3, 2.3],
+    blue: [3.7, 2.3]
+};
+
+export const NEST_WELLS: readonly (readonly [number, number])[] = [[-1, -1], [1, -1], [-1, 1], [1, 1]];
+
 export interface Spot
 {
     x: number;
@@ -38,4 +51,40 @@ export function centreOf(col: number, row: number, size: number): Spot
 export function tokenRadius(size: number): number
 {
     return CELL * size * 0.40;
+}
+
+export interface Pickable
+{
+    key: string;
+    col: number;
+    row: number;
+    playable: boolean;
+}
+
+export const PICK_REACH = 1.25;
+
+export function pickNear(tokens: readonly Pickable[], x: number, y: number, size: number): string | null
+{
+    const cell = CELL * size;
+    let best: string | null = null;
+    let closest = cell * PICK_REACH;
+
+    for (const token of tokens)
+    {
+        if (!token.playable)
+        {
+            continue;
+        }
+
+        const spot = centreOf(token.col, token.row, size);
+        const distance = Math.hypot(spot.x - x, spot.y - cell * 0.3 - y);
+
+        if (distance <= closest)
+        {
+            best = token.key;
+            closest = distance;
+        }
+    }
+
+    return best;
 }
