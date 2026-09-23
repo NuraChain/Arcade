@@ -162,10 +162,10 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
         const lift = element('span', 'lp-lift', node);
         const pawn = element('img', 'lp-pawn', lift);
 
-        shadow.src = '/board/pawn-shadow.webp';
+        shadow.src = '/board/pawn-shadow.svg';
         shadow.alt = '';
         shadow.decoding = 'async';
-        pawn.src = `/board/pawn-${ token.colour }.webp`;
+        pawn.src = `/board/pawn-${ token.colour }.svg`;
         pawn.alt = '';
         pawn.decoding = 'async';
         pawn.draggable = false;

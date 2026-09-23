@@ -15,7 +15,7 @@ const ASSET_BUDGET_BYTES = 320 * 1024;
 const SET_BUDGET_BYTES = 600 * 1024;
 const ART_BUDGET_BYTES = 32 * 1024;
 const BOARD = resolve(HERE, '..', '..', 'application', 'public', 'board');
-const SURFACE_BUDGET_BYTES = { 'ludo-table.webp': 320 * 1024, 'hokm-table-wide.webp': 200 * 1024, 'hokm-table-tall.webp': 200 * 1024, 'pawn-red.webp': 24 * 1024, 'pawn-green.webp': 24 * 1024, 'pawn-yellow.webp': 24 * 1024, 'pawn-blue.webp': 24 * 1024, 'pawn-shadow.webp': 8 * 1024, 'ludo-dice.webp': 96 * 1024 };
+const SURFACE_BUDGET_BYTES = { 'ludo-table.webp': 320 * 1024, 'hokm-table-wide.webp': 200 * 1024, 'hokm-table-tall.webp': 200 * 1024 };
 const ATLAS_BUDGET_BYTES = { 'atlas-2048.webp': 500 * 1024, 'atlas-1024.webp': 160 * 1024, 'wood-512.webp': 60 * 1024, 'wood-normal-512.webp': 80 * 1024 };
 
 const CANDIDATES = [

@@ -1455,14 +1455,12 @@ overwritten on conflict, so it reached a database built from nothing.
 
 ## Drawing the board
 
-The Ludo board is **vector art drawn from the rules' own geometry**, and the pieces are **Cycles
-renders**. `tools/art/boards.mjs` imports `application/src/game/layout.ts` for where the grid sits
-and `server/src/domains/match/ludo/board.ts` for the ring, the home runs, the starts and the safe
-squares, writes `application/public/board/ludo-board.svg`, and writes the same geometry with the
-colour ramp to `tools/blender/ludo-geometry.json`. `tools/blender/surfaces.py` reads that file and
-renders the pieces (`NURA_SURFACE=ludo-pieces`): four `pawn-<colour>.webp`, `pawn-shadow.webp` and
-`ludo-dice.webp`. So a start square, a star or an arrow cannot sit anywhere the rules do not put one,
-and the generator throws if the ring stops being 52 cells.
+The Ludo board and its pieces are **vector art drawn from the rules' own geometry**, all of it by
+`tools/art/boards.mjs` (`npm run art`). It imports `application/src/game/layout.ts` for where the
+grid sits and `server/src/domains/match/ludo/board.ts` for the ring, the home runs, the starts and the
+safe squares, and writes `ludo-board.svg`, four `pawn-<colour>.svg`, `pawn-shadow.svg` and
+`ludo-dice.svg` into `application/public/board/`. So a start square, a star or an arrow cannot sit
+anywhere the rules do not put one, and the generator throws if the ring stops being 52 cells.
 
 The board has been a Blender photograph, a glossy vector board, a satin render and the vector board
 again, and it is now a **cartoon**: the owner asked for one that feels like childhood, "because it is
@@ -1472,22 +1470,21 @@ ink line (`#2A1E5C`) on every shape, flat colours a shade brighter than the piec
 toy-wood frame, round yard houses whose four seats are recessed rings, chunky outlined stars, and a
 gold star at the centre.
 
-**The board and the pieces are ONE paint.** `PAINT` in the generator (`fill`, `light`, `dark`, plus
-`tint` and `well` for the seats) is the board's colours, the geometry file carries it and the ink line
-to Blender, and `--ludo-*` in `tokens.css` and `TONE` in `ludo-board.ts` are the same four fills - kept
-equal by hand. The first cartoon board still carried the glossy studio pegs in the older, darker
-palette, and the owner saw it at once: the pieces were from another box.
+**The board and the pieces are ONE paint and ONE line.** `PAINT` in the generator (`fill`, `light`,
+`dark`, plus `tint` and `well` for the seats) colours the board and the pawns alike, `INK` outlines
+both, and `--ludo-*` in `tokens.css` and `TONE` in `ludo-board.ts` are the same four fills - kept equal
+by hand. The pieces went glossy studio render, toon render, and finally flat vector, and each step
+was the owner seeing that the pieces came from another box than the board: a 3D die and a 3D pawn on
+a 2D cartoon board do not belong together however well either is lit.
 
-**The pawn is a toon peg seen from thirty degrees above**: a lathed plinth, bell and ball head, 0.82
-of a square wide and 1.25 tall, rendered in EEVEE because Cycles cannot band shading - `Shader to
-RGB` into a constant ramp gives the board's own three shades (the dark side, the fill, a light stripe
-where the light faces it) plus a hard white glint, and an inverted hull with back-face culling draws
-the board's indigo line round it. The toon light comes from the FRONT-left, above: the studio key sat
-behind the pawn as the camera sees it, which put the whole visible face in the dark band. The shadow
-and the die stay Cycles renders. The sprite is 256 square at 170 pixels to the square; the foot is at
-199/256 and sits `DROP` below the cell centre. Depth is y, as for any standing piece. Nothing is
-printed on the head: the letter that used to be there was a smudge at phone size and a sticker at
-desktop size, and the yard, the plates and the move list's words already say whose piece it is.
+**The pawn is a chunky 2D peg**: plinth, bell and ball head in the board's sticker shading (a light
+stripe on the lit side, the dark side, a white glint) under the board's indigo line, drawn in a
+256-square sprite whose foot is at 199 so it keeps the geometry the renderer places by - 170 pixels
+to the square, drawn at 1.687 squares so it fills its square like a toy piece, sitting `DROP` below the
+cell centre. Depth is y, as for any standing piece. The die is a flat sticker face with indigo pips,
+eight slots of 256 in one sheet. Nothing is printed on a pawn's head: the letter that used to be there
+was a smudge at phone size and a sticker at desktop size, and the yard, the plates and the move list's
+words already say whose piece it is.
 
 **A finished pawn stays on the board**, at 0.62 in its colour's triangle (`HOME_SLOTS`), where it used
 to vanish from the view entirely. Two to four pawns on one square stand side by side (`STACKS`), and

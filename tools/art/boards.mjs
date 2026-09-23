@@ -239,6 +239,74 @@ ${ marks.join('\n') }
 `;
 }
 
+function pawn(colour)
+{
+    const paint = PAINT[colour];
+    const line = 9;
+
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+<g stroke="${ INK }" stroke-width="${ line }" stroke-linejoin="round" stroke-linecap="round">
+    <ellipse cx="128" cy="203" rx="80" ry="28" fill="${ paint.dark }"/>
+    <ellipse cx="128" cy="191" rx="80" ry="28" fill="${ paint.fill }"/>
+    <path d="M60 190C68 154 86 128 96 110H160C170 128 188 154 196 190C176 207 80 207 60 190Z" fill="${ paint.fill }"/>
+    <ellipse cx="128" cy="109" rx="44" ry="15" fill="${ paint.dark }"/>
+    <circle cx="128" cy="62" r="56" fill="${ paint.fill }"/>
+</g>
+<path d="M162 120C174 142 184 164 188 188C178 196 168 198 158 199C156 172 154 146 150 122Z" fill="${ paint.dark }" opacity="0.5"/>
+<path d="M80 184C84 160 94 140 106 124" stroke="${ paint.light }" stroke-width="11" stroke-linecap="round" fill="none"/>
+<path d="M177 35A56 56 0 0 1 152 113A52 52 0 0 0 177 35Z" fill="${ paint.dark }" opacity="0.45"/>
+<path d="M88 46A44 44 0 0 1 120 18" stroke="${ paint.light }" stroke-width="12" stroke-linecap="round" fill="none"/>
+<ellipse cx="104" cy="36" rx="12" ry="8" fill="#FFFFFF" transform="rotate(-30 104 36)"/>
+<path d="M66 196C88 209 168 209 190 196" stroke="${ paint.light }" stroke-width="6" stroke-linecap="round" fill="none" opacity="0.8"/>
+</svg>
+`;
+}
+
+function pawnShadow()
+{
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 128" width="256" height="128">
+<ellipse cx="136" cy="54" rx="80" ry="26" fill="${ INK }" opacity="0.32"/>
+</svg>
+`;
+}
+
+const PIP_GRID = {
+    1: [[0, 0]],
+    2: [[-1, -1], [1, 1]],
+    3: [[-1, -1], [0, 0], [1, 1]],
+    4: [[-1, -1], [1, -1], [-1, 1], [1, 1]],
+    5: [[-1, -1], [1, -1], [0, 0], [-1, 1], [1, 1]],
+    6: [[-1, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [1, 1]]
+};
+
+function dice()
+{
+    const size = 180;
+    const faces = [1, 2, 3, 4, 5, 6].map((value, index) =>
+    {
+        const x = index * 256 + (256 - size) / 2;
+        const y = (256 - size) / 2 - 6;
+        const cx = x + size / 2;
+        const cy = y + size / 2;
+        const pips = PIP_GRID[value]
+            .map(([u, v]) => `<circle cx="${ round(cx + u * size * 0.27) }" cy="${ round(cy + v * size * 0.27) }" r="${ round(size * 0.085) }" fill="${ INK }"/>`)
+            .join('');
+
+        return `<g>
+    <rect x="${ x }" y="${ y + 12 }" width="${ size }" height="${ size }" rx="40" fill="#E6D6B4" stroke="${ INK }" stroke-width="8"/>
+    <rect x="${ x }" y="${ y }" width="${ size }" height="${ size }" rx="40" fill="#FFFFFF" stroke="${ INK }" stroke-width="8"/>
+    <rect x="${ x + 16 }" y="${ y + 14 }" width="${ size - 32 }" height="30" rx="15" fill="#FFF4DC"/>
+    ${ pips }
+    <ellipse cx="${ x + 40 }" cy="${ y + 30 }" rx="12" ry="7" fill="#FFFFFF" transform="rotate(-30 ${ x + 40 } ${ y + 30 })"/>
+</g>`;
+    }).join('\n');
+
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2048 256" width="2048" height="256">
+${ faces }
+</svg>
+`;
+}
+
 function flourish()
 {
     return 'M0 0C38 0 64 10 84 30C66 22 48 20 30 24C44 34 50 48 48 64C40 50 28 42 12 40C22 58 22 76 12 92C8 70 4 46 0 0Z'
@@ -294,34 +362,14 @@ console.log('board hokm-ornaments-tall.svg');
 writeFileSync(join(OUT, 'ludo-board.svg'), ludoBoard());
 console.log('board ludo-board.svg');
 
-const startOf = new Map(COLOURS.map((colour) => [ENTRY[colour], colour]));
+for (const colour of COLOURS)
+{
+    writeFileSync(join(OUT, `pawn-${ colour }.svg`), pawn(colour));
+    console.log(`board pawn-${ colour }.svg`);
+}
 
-const geometry = {
-    margin: MARGIN,
-    cell: CELL,
-    rim: RIM,
-    ring: RING_CELLS.map((cell, index) => ({
-        col: cell.col,
-        row: cell.row,
-        start: startOf.get(index) ?? null,
-        safe: SAFE.includes(index) && !startOf.has(index) ? ARM(cell.col, cell.row) : null
-    })),
-    home: Object.fromEntries(COLOURS.map((colour) => [colour, HOME_CELLS[colour].map((cell) => [cell.col, cell.row])])),
-    arrows: COLOURS.map((colour) =>
-    {
-        const last = RING_CELLS[ringIndex(colour, RING_STEPS - 1)];
-        const first = HOME_CELLS[colour][0];
+writeFileSync(join(OUT, 'pawn-shadow.svg'), pawnShadow());
+console.log('board pawn-shadow.svg');
 
-        return { colour, col: last.col, row: last.row, dx: first.col - last.col, dy: first.row - last.row };
-    }),
-    corners: CORNER,
-    nest: NEST,
-    nestRadius: NEST_RADIUS,
-    nestSpread: NEST_SPREAD,
-    wells: NEST_WELLS,
-    ink: PAINT,
-    line: INK
-};
-
-writeFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'blender', 'ludo-geometry.json'), JSON.stringify(geometry, null, 1) + '\n');
-console.log('board ludo-geometry.json');
+writeFileSync(join(OUT, 'ludo-dice.svg'), dice());
+console.log('board ludo-dice.svg');

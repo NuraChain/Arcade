@@ -1484,7 +1484,7 @@
     z-index: -2;
     inset-block-start: 30.15%;
     block-size: 94.12%;
-    background: url('/board/pawn-shadow.webp') center / 100% 100% no-repeat;
+    background: url('/board/pawn-shadow.svg') center / 100% 100% no-repeat;
     opacity: 0.6;
 }
 
@@ -1561,10 +1561,10 @@
 
 .lp-pawn
 {
-    inset-inline-start: calc(var(--c) * -0.753);
-    inset-block-start: calc(var(--c) * -1.1706);
-    inline-size: calc(var(--c) * 1.506);
-    block-size: calc(var(--c) * 1.506);
+    inset-inline-start: calc(var(--c) * -0.8435);
+    inset-block-start: calc(var(--c) * -1.3114);
+    inline-size: calc(var(--c) * 1.687);
+    block-size: calc(var(--c) * 1.687);
     transform-origin: 50% 77.73%;
 }
 
@@ -1761,7 +1761,7 @@
     z-index: 9500;
     inline-size: 19.12cqi;
     block-size: 19.12cqi;
-    background: url('/board/ludo-dice.webp') calc(var(--face, 0) * 100% / 7) 0 / 800% 100% no-repeat;
+    background: url('/board/ludo-dice.svg') calc(var(--face, 0) * 100% / 7) 0 / 800% 100% no-repeat;
 }
 
 .lb-die-glow
