@@ -1455,27 +1455,53 @@ overwritten on conflict, so it reached a database built from nothing.
 
 ## Drawing the board
 
-The Ludo board is **vector art drawn from the rules' own geometry**. `tools/art/boards.mjs` imports
-`application/src/game/layout.ts` for where the grid sits and `server/src/domains/match/ludo/board.ts`
-for the ring, the home runs, the starts and the safe squares, and writes
-`application/public/board/ludo-board.svg` plus one `pawn-<colour>.svg` per colour. `npm run art`
-regenerates them; nothing needs Blender.
+The Ludo board and its pieces are **Cycles renders built from the rules' own geometry**.
+`tools/art/boards.mjs` imports `application/src/game/layout.ts` for where the grid sits and
+`server/src/domains/match/ludo/board.ts` for the ring, the home runs, the starts and the safe squares,
+and writes them with the colour ramp to `tools/blender/ludo-geometry.json`. `tools/blender/surfaces.py`
+reads that file and renders `ludo-board.webp` (`NURA_SURFACE=ludo-board`) and the pieces
+(`NURA_SURFACE=ludo-pieces`): four `pawn-<colour>.webp`, `pawn-shadow.webp` and `ludo-dice.webp`. So a
+start square, a star or an arrow still cannot sit anywhere the rules do not put one, and the
+generator still throws if the ring stops being 52 cells.
 
-It used to be a Blender photograph of `set-ludo.glb`, and the user judged it not good enough to ship.
-The argument for a photograph was that a second drawing of the field would drift from the first. The
-generator answers that better: it READS the walk, so a start square, a star or an arrow cannot sit
-anywhere the rules do not put one, and it throws if the ring stops being 52 cells.
+It has been a Blender photograph, then vector art, then a render again, and the user judged each of
+the first two not good enough - the last complaint was the PAWNS, clip-art sitting on a lit board.
+Rendering the pieces in the board's own studio, under the same key light, HDRI and view transform,
+is what makes the lacquer match by construction. The direction, in the user's words, is a game that
+feels good to somebody from thirteen to fifty, with the finish of the Hokm table: a quiet satin
+board, and only the pieces and the die glossy, saturated, outlined and lit.
 
 **What is drawn, and where it comes from.** A starred START square in the owner's colour on
 `ENTRY`; a star in the arm's colour on every other `SAFE` index; an arrow in the owner's colour on
-the last ring cell before each home run, pointing into it; the home runs as coloured tiles; the
-centre as four pyramids. Colours are `LUDO_INK` in the generator and `--ludo-*` in `tokens.css`,
-and `PALETTE` in `ludo-board.ts` - three copies of four colours, kept equal by hand.
+the last ring cell before each home run, pointing into it; the home runs as coloured keys; the
+centre as four pyramids under a gold medallion. The wells are concave dishes cut into an ivory tray
+in the colour's pale `tint` - the glossy beads they replaced looked exactly like pawns. Colours are
+`LUDO_INK` in the generator (`base`, `shade`, `deep`, `keyline`, `tint`), `--ludo-*` in `tokens.css`,
+and `PALETTE`/`DEEP` in `ludo-board.ts`, kept equal by hand.
 
-**The pawns are sprites standing on the square, not discs lying on it.** The image's foot is at 82%
-of its height, so `setOrigin(0.5, PAWN_FOOT)` puts the base on the cell centre and the head over the
-cell behind it, and a pawn's depth is its y - a token nearer the reader overlaps the one behind, the
-way standing pieces do. The initial stays, drawn on the head: colour is never the only signal.
+**The pawn is a peg seen from thirty degrees above**: a lathed plinth, bell and ball head, 0.82 of a
+square wide and 1.25 tall, with an inverted-hull keyline in the colour's own darkest ink so a red
+pawn on the red home run still has an edge. Its shadow is a separate sprite so it stays on the
+ground while the pawn hops. The sprite is 256 square at 170 pixels to the square; the foot is at
+`PAWN_FOOT` (199/256) and sits `PAWN_DROP` below the cell centre, so the head reaches less than half a
+square into the one behind. Depth is y, as for any standing piece.
+
+**The initial is drawn only where it can be read** - squares of 28 CSS pixels or more, in the
+colour's `deep` ink. At a phone's 21-pixel square a letter on the head was a five-pixel smudge and the
+noisiest thing on the board, and no reference game prints one. Colour is still never the only
+signal there: the yard a pawn starts in, the badge's initial and the move list's words carry it.
+
+**A finished pawn stays on the board**, at 0.62 in its colour's triangle (`HOME_SLOTS`), where it used
+to vanish from the view entirely. Two to four pawns on one square stand side by side (`STACKS`), and
+`game.spec.ts` holds every footprint inside its tile - which is how it found that the art spec's own
+two-pawn layout overhung the square.
+
+**The canvas draws at device pixels, with mipmaps.** It was sized in CSS pixels and stretched, so on
+a 3x phone every pawn was drawn at a third of the resolution it was shown at. The game is now
+`width * devicePixelRatio` (capped at 3), `ScaleManager` maps the pointer back after
+`scale.refresh()`, and `render.mipmapFilter` is set because Phaser builds mipmaps only when it is, and
+only for POWER-OF-TWO textures - which is why every board texture is 2048, 256 or 256x128. Without
+them the 2048 plate shrunk six times on a phone shimmered at every tile edge.
 
 **The grid does not fill the board, and assuming it does is a bug you look straight at.** The
 fractions come from the old atlas and the generator keeps them exactly, because the canvas, the DOM
@@ -1499,9 +1525,6 @@ leaves a band about two squares wide along the yard's two OUTER edges - and that
 player is drawn: the avatar in the corner, the name along the edge. `NEST` lives in `game/layout.ts`
 and both the art and `seatsFor` read it, so a parked token cannot sit anywhere but on its own well,
 and `game.spec.ts` fails if one ever strays into the band.
-
-Phaser loads the SVG with `load.svg` at 1536 pixels, because it rasterises once at the size it is
-told and a canvas on a 2x phone is up to 1400 device pixels wide.
 
 **Phaser draws it**, and `application/src/game/` is framework-free exactly as `world/` is: no
 AzerothJS import anywhere under it, one bridge interface, and one `.azeroth` component that reaches
@@ -1557,18 +1580,21 @@ really crossed - `game/board/path.ts` asks the SERVER's own `ludo/board.ts` whic
 rather than the renderer keeping a second copy of a fifty-two square ring that would agree right up
 until somebody edited one - so a capture happens on the squares it happened on instead of the piece
 cutting across the middle of the board. A captured token is knocked back to its yard with a spin,
-because being sent home is done TO a piece and must not look like a move its owner chose. A token
-that comes home is ABSENT from the next view, so the walk it never got to make is reconstructed from
-where it stood; destroying it the moment the list shortens made a finished token vanish from under
-the pointer that had just moved it. A second update landing mid-walk cancels the first rather than
-queueing behind it, because the newest state is always the one worth being on the way to.
+because being sent home is done TO a piece and must not look like a move its owner chose: it flashes
+white, arcs up and spins as it flies, and a ring bursts where it stood. A token that comes home walks
+the home run, slides into its triangle and a gold ring bursts. Each step of a walk is an arc - the
+pawn lifts off the square while its shadow stays on the ground - rather than the piece swelling in
+place. A second update landing mid-walk cancels the first rather than queueing behind it, because the
+newest state is always the one worth being on the way to.
 
 **The affordance ring is two strokes, white inside dark, and that is not decoration.** It began as a
 glow in the token's own colour, on the reasoning that a white ring on a yellow piece against cream
 paper is a ring nobody sees - which is true, and which misses that a red ring around a red piece in
 the red yard is invisible exactly where every game begins. Two strokes is the trick a map legend
 uses: the white carries on walnut and on red, the dark carries on cream, and neither depends on
-which colour is playing.
+which colour is playing. It lies on the ground as an ellipse under the foot and turns as twelve
+dashes while the pawn hops; the old breathing circle was 1.17 squares across and spilled onto the
+neighbours. Under reduced motion the pawn simply stands lifted inside a solid ring.
 
 **The table's sounds: one engine per page, unlocked by a real tap.** `game/sound.ts` holds ONE
 `AudioContext` for the whole page, shared by every board through counted handles: `createSound` takes

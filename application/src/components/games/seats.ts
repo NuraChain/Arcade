@@ -1,5 +1,5 @@
 import type { BoardToken } from '../../game/bridge.ts';
-import { NEST, NEST_SPREAD, NEST_WELLS } from '../../game/layout.ts';
+import { HOME_SLOTS, NEST, NEST_SPREAD, NEST_WELLS } from '../../game/layout.ts';
 import type { LudoBoard } from '../../data/match.ts';
 
 /**
@@ -48,6 +48,7 @@ export function seatsFor(board: LudoBoard, mine?: number): BoardToken[]
     {
         const corner = YARDS[player.colour];
         let parked = 0;
+        let finished = 0;
 
         for (const token of player.tokens)
         {
@@ -71,6 +72,12 @@ export function seatsFor(board: LudoBoard, mine?: number): BoardToken[]
 
             if (token.at >= 0)
             {
+                const slots = HOME_SLOTS[player.colour] ?? HOME_SLOTS.red;
+                const slot = slots[Math.min(finished, slots.length - 1)];
+
+                finished += 1;
+
+                placed.push({ key, colour: player.colour, label, at: token.at, col: slot[0], row: slot[1], playable: false });
                 continue;
             }
 

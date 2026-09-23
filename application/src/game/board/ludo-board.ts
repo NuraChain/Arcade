@@ -1,42 +1,9 @@
 import Phaser from 'phaser';
 
-import { GRID, centreOf, pickNear, tokenRadius } from '../layout.ts';
+import { CELL, HOME_SCALE, centreOf, pickNear, stackSpot, tokenRadius } from '../layout.ts';
 import { createSound, type SoundHandle } from '../sound.ts';
 import { FINISHED, YARD, pathBetween, type LudoColour } from './path.ts';
 import type { BoardHandle, BoardOptions, BoardToken, BoardView } from '../bridge.ts';
-
-/**
- * The only file in this repository that imports Phaser.
- *
- * It is reached through one dynamic `import()` inside a component's `mount`, exactly as
- * `world-canvas.component.azeroth` reaches three.js, so the whole library lands in its own chunk and
- * neither the landing page's payload nor any route budget sees it. `tools/budgets.mjs` refuses a
- * build where it appears anywhere else.
- *
- * Every non-default in the config below is here because leaving it out costs something real:
- *
- *   audio        Phaser opens a WebAudio context otherwise and Chrome logs a warning about it. The
- *                640-cell matrix reads every warning, so that is a whole route failing on a sound
- *                nothing plays. The table's own cues are in `game/sound.ts`, which does not open a
- *                context until a gesture has been through the window.
- *   keyboard     Phaser's keyboard plugin attaches a document listener and preventDefaults space and
- *                the arrows. The keyboard belongs entirely to the DOM controls beside this canvas -
- *                that is how the game is playable without a pointer.
- *   autoFocus    the default calls window.focus() on boot, which steals focus mid-navigation.
- *   banner       a console.log the matrix would read.
- *   Scale.NONE   RESIZE listens to the window, and this canvas changes size without one: the chat
- *                rail opening, the posture flipping at 768 and 1024, an overlay sheet. A
- *                ResizeObserver on the host is the only thing that sees all three.
- *
- * **The motion is where a move stops being a diff and becomes a thing that happened.** A token walks
- * the squares it really passed over - `pathBetween` asks the server's own board module which ones
- * those are, rather than the renderer guessing a straight line through the middle of the board - a
- * captured token is knocked back to its yard rather than teleporting, and a die tumbles before it
- * says what it rolled. None of it decides anything: every frame of it is the same authoritative
- * state arriving, drawn over time instead of at once. A second update landing mid-walk cancels the
- * first and walks from wherever the token had got to, because the newest state is always the one
- * worth being on the way to.
- */
 
 const PALETTE: Record<string, number> = {
     red: 0xe5392f,
@@ -45,24 +12,44 @@ const PALETTE: Record<string, number> = {
     blue: 0x2270e6
 };
 
-const PAWN_WIDE = 2.6;
+const DEEP: Record<string, string> = {
+    red: '#72100C',
+    green: '#075022',
+    yellow: '#A45F04',
+    blue: '#062F74'
+};
 
-const PAWN_TALL = PAWN_WIDE * 1.2;
+const PAWN_SIZE = 256 / 170 / 0.40;
 
-const PAWN_FOOT = 0.82;
+const PAWN_FOOT = 199 / 256;
 
-const PAWN_HEAD = (33 / 120 - PAWN_FOOT) * PAWN_TALL;
+const PAWN_DROP = 0.25;
 
-const PLATE_PIXELS = 1536;
+const PAWN_HEAD = 0.25 - 0.762 / 0.40;
 
-const INK = 0x2b1d12;
+const SHADOW_TALL = 128 / 170 / 0.40;
+
+const SHADOW_FOOT = 44 / 128;
+
+const SHADOW_ALPHA = 0.6;
+
+const RING_RADIUS = 1.40;
+
+const MARK_MIN_CSS = 28;
+
+const DIE_SHARE = 0.13 / 0.68;
+
+const INK = 0x0b1220;
+
+const GOLD = 0xe8c36a;
 
 const BONE = 0xf6f1e6;
 
-/** One square of a walk. Fast enough that a six does not hold the turn up, slow enough to follow. */
-const STEP_MS = 105;
+const STEP_MS = 120;
 
-const KNOCK_MS = 430;
+const HOP_MS = 300;
+
+const FLIGHT_MS = 520;
 
 const TUMBLE_MS = 520;
 
@@ -70,29 +57,29 @@ const DIE_HOLD_MS = 1100;
 
 const CONFETTI = 28;
 
-/** Which of the seven pip positions each face lights, as columns and rows in -1..1. */
-const PIPS: Record<number, readonly (readonly [number, number])[]> = {
-    1: [[0, 0]],
-    2: [[-1, -1], [1, 1]],
-    3: [[-1, -1], [0, 0], [1, 1]],
-    4: [[-1, -1], [1, -1], [-1, 1], [1, 1]],
-    5: [[-1, -1], [1, -1], [0, 0], [-1, 1], [1, 1]],
-    6: [[-1, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [1, 1]]
-};
-
 interface Held
 {
     token: BoardToken;
     body: Phaser.GameObjects.Container;
-    halo: Phaser.GameObjects.Arc;
-    haloEdge: Phaser.GameObjects.Arc;
+    shadow: Phaser.GameObjects.Image;
+    glow: Phaser.GameObjects.Ellipse;
+    ring: Phaser.GameObjects.Container;
+    dash: Phaser.GameObjects.Graphics;
     pawn: Phaser.GameObjects.Image;
     mark: Phaser.GameObjects.Text;
-    pulse: Phaser.Tweens.Tween | null;
+    motion: Phaser.Tweens.BaseTween[];
     walk: number;
+    moving: boolean;
 }
 
 const EMPTY: BoardView = { tokens: [], die: null, turn: null, yours: false, winner: null };
+
+const pieceOrder = (key: string): [number, number] =>
+{
+    const [seat, piece] = key.split('-').map(Number);
+
+    return [seat ?? 0, piece ?? 0];
+};
 
 class TableScene extends Phaser.Scene
 {
@@ -104,13 +91,19 @@ class TableScene extends Phaser.Scene
 
     #size = 0;
 
+    #dpr = 1;
+
     #motion = true;
 
     #sound: SoundHandle | null = null;
 
     #view: BoardView = EMPTY;
 
-    #die?: Phaser.GameObjects.Graphics;
+    #dieBox?: Phaser.GameObjects.Container;
+
+    #die?: Phaser.GameObjects.Image;
+
+    #dieGlow: Phaser.GameObjects.Arc[] = [];
 
     #dieFade?: Phaser.Time.TimerEvent;
 
@@ -119,19 +112,22 @@ class TableScene extends Phaser.Scene
         super('table');
     }
 
-    public init(options: BoardOptions): void
+    public init(options: BoardOptions & { dpr?: number }): void
     {
         this.#options = options;
         this.#motion = !options.reducedMotion;
+        this.#dpr = options.dpr ?? 1;
     }
 
     public preload(): void
     {
-        this.load.svg('plate', this.#options.plate, { width: PLATE_PIXELS, height: PLATE_PIXELS });
+        this.load.image('plate', this.#options.plate);
+        this.load.image('pawn-shadow', '/board/pawn-shadow.webp');
+        this.load.spritesheet('dice', '/board/ludo-dice.webp', { frameWidth: 256, frameHeight: 256 });
 
         for (const colour of Object.keys(PALETTE))
         {
-            this.load.svg(`pawn-${ colour }`, `/board/pawn-${ colour }.svg`, { width: 200, height: 240 });
+            this.load.image(`pawn-${ colour }`, `/board/pawn-${ colour }.webp`);
         }
     }
 
@@ -143,9 +139,10 @@ class TableScene extends Phaser.Scene
         this.#plate = this.add.image(0, 0, 'plate').setOrigin(0, 0);
         this.#plate.setDisplaySize(this.#size, this.#size);
 
-        const die = this.add.graphics().setVisible(false).setDepth(50);
-
-        this.#die = die;
+        this.#dieGlow = [0, 1, 2].map(() => this.add.circle(0, 0, 1, 0xffffff, 0));
+        this.#die = this.add.image(0, 0, 'dice', 0);
+        this.#dieBox = this.add.container(0, 0, [...this.#dieGlow, this.#die]).setVisible(false).setDepth(50);
+        this.#placeDie();
 
         for (const token of this.#options.view.tokens)
         {
@@ -153,6 +150,7 @@ class TableScene extends Phaser.Scene
         }
 
         this.#view = this.#options.view;
+        this.#layout(false);
 
         this.input.on('pointerup', (pointer: { x: number; y: number }) =>
         {
@@ -166,9 +164,8 @@ class TableScene extends Phaser.Scene
 
         if (this.#view.die !== null)
         {
-            this.#placeDie();
-            this.#drawDie(this.#view.die);
-            die.setVisible(true);
+            this.#face(this.#view.die);
+            this.#dieBox.setVisible(true);
             this.#fadeDie();
         }
 
@@ -184,10 +181,12 @@ class TableScene extends Phaser.Scene
         for (const held of this.#held.values())
         {
             held.walk += 1;
-            this.#resizeToken(held);
-            this.#settle(held);
+            held.moving = false;
+            this.#dress(held);
+            this.#affordance(held);
         }
 
+        this.#layout(false);
         this.#placeDie();
     }
 
@@ -212,14 +211,6 @@ class TableScene extends Phaser.Scene
         this.#sound = null;
     }
 
-    /**
-     * The authoritative board, drawn over time.
-     *
-     * Everything this reads is a comparison between the view it was last given and the one it has
-     * now - which token gained ground, which one went back to its yard, which one left the board
-     * because it came home. The server already decided all three; the only thing decided here is how
-     * long each takes.
-     */
     public show(next: BoardView): void
     {
         const previous = this.#view;
@@ -244,30 +235,22 @@ class TableScene extends Phaser.Scene
 
             held.token = token;
 
-            this.#affordance(held);
-
             if (was.col === token.col && was.row === token.row)
             {
+                if (was.playable !== token.playable)
+                {
+                    this.#affordance(held);
+                }
                 continue;
             }
 
-            /**
-             * A token can move without going anywhere: the four wells in a yard are filled in order,
-             * so the last one home shuffles along when a neighbour leaves. Walking that would send it
-             * out to the entry square and back, because a walk from the yard is defined as the step
-             * onto the board.
-             */
-            if (was.at === token.at)
-            {
-                held.walk += 1;
-                this.#settle(held);
-                continue;
-            }
+            this.#still(held);
 
-            if (!this.#motion)
+            if (was.at === token.at || !this.#motion)
             {
                 held.walk += 1;
-                this.#settle(held);
+                held.moving = false;
+                this.#affordance(held);
                 continue;
             }
 
@@ -277,7 +260,9 @@ class TableScene extends Phaser.Scene
                 continue;
             }
 
-            this.#walk(held, pathBetween(token.colour as LudoColour, was.at, token.at), () => this.#settle(held));
+            const path = pathBetween(token.colour as LudoColour, was.at, token.at);
+
+            this.#walk(held, path, () => token.at === FINISHED ? this.#home(held) : this.#arrive(held));
         }
 
         for (const [key, held] of [...this.#held])
@@ -291,7 +276,8 @@ class TableScene extends Phaser.Scene
             this.#retire(held);
         }
 
-        this.#roll(previous.die, next.die);
+        this.#layout(true);
+        this.#roll(previous.die, next.die, next.turn);
 
         if (previous.winner === null && next.winner !== null)
         {
@@ -303,53 +289,49 @@ class TableScene extends Phaser.Scene
         }
     }
 
-    // ------------------------------------------------------------------ tokens
-
     #mint(token: BoardToken): Held
     {
-        const radius = tokenRadius(this.#size);
-        const spot = centreOf(token.col, token.row, this.#size);
-
-        const haloEdge = this.add.circle(0, 0, radius * 1.46, INK, 0).setStrokeStyle(Math.max(1, radius * 0.34), INK, 0.55);
-        const halo = this.add.circle(0, 0, radius * 1.46, INK, 0).setStrokeStyle(Math.max(1, radius * 0.2), 0xffffff, 0.95);
-        const pawn = this.add.image(0, 0, `pawn-${ token.colour }`)
-            .setOrigin(0.5, PAWN_FOOT)
-            .setDisplaySize(radius * PAWN_WIDE, radius * PAWN_TALL);
-
-        const mark = this.add.text(0, radius * PAWN_HEAD, token.label, {
+        const shadow = this.add.image(0, 0, 'pawn-shadow').setOrigin(0.5, SHADOW_FOOT).setAlpha(SHADOW_ALPHA);
+        const glow = this.add.ellipse(0, 0, 1, 1, 0xffffff, 0.30);
+        const dash = this.add.graphics();
+        const ring = this.add.container(0, 0, [dash]).setScale(1, 0.5);
+        const pawn = this.add.image(0, 0, `pawn-${ token.colour }`).setOrigin(0.5, PAWN_FOOT);
+        const mark = this.add.text(0, 0, token.label, {
             fontFamily: 'Inter, system-ui, sans-serif',
-            fontSize: `${ Math.round(radius * 0.62) }px`,
             fontStyle: '800',
-            color: '#ffffff',
-            stroke: '#0b1220',
-            strokeThickness: Math.max(1, radius * 0.1)
-        }).setOrigin(0.5, 0.5).setAlpha(0.92);
+            color: DEEP[token.colour] ?? '#0b1220'
+        }).setOrigin(0.5, 0.5).setAlpha(0.8);
 
-        const body = this.add.container(spot.x, spot.y, [haloEdge, halo, pawn, mark]).setDepth(this.#depthAt(spot.y));
+        const spot = centreOf(token.col, token.row, this.#size);
+        const body = this.add.container(spot.x, spot.y, [shadow, glow, ring, pawn, mark]).setDepth(this.#depthAt(spot.y));
 
-        pawn.setInteractive({ useHandCursor: true });
-        pawn.on('pointerover', () => body.setScale(this.#motion ? 1.08 : 1));
-        pawn.on('pointerout', () => body.setScale(1));
+        const held: Held = { token, body, shadow, glow, ring, dash, pawn, mark, motion: [], walk: 0, moving: false };
 
-        const held: Held = { token, body, halo, haloEdge, pawn, mark, pulse: null, walk: 0 };
+        pawn.on('pointerover', () => this.#select(held, true));
+        pawn.on('pointerout', () => this.#select(held, false));
 
+        this.#dress(held);
         this.#affordance(held);
 
         return held;
     }
 
-    #resizeToken(held: Held): void
+    #radius(): number
     {
-        const radius = tokenRadius(this.#size);
+        return tokenRadius(this.#size);
+    }
 
-        held.halo.setRadius(radius * 1.46);
-        held.halo.setStrokeStyle(Math.max(1, radius * 0.2), 0xffffff, 0.95);
-        held.haloEdge.setRadius(radius * 1.46);
-        held.haloEdge.setStrokeStyle(Math.max(1, radius * 0.34), INK, 0.55);
-        held.pawn.setDisplaySize(radius * PAWN_WIDE, radius * PAWN_TALL);
-        held.mark.setPosition(0, radius * PAWN_HEAD);
-        held.mark.setFontSize(Math.round(radius * 0.62));
-        held.mark.setStroke('#0b1220', Math.max(1, radius * 0.1));
+    #dress(held: Held): void
+    {
+        const radius = this.#radius();
+        const lift = radius * PAWN_DROP;
+
+        held.shadow.setPosition(0, lift).setDisplaySize(radius * PAWN_SIZE, radius * SHADOW_TALL);
+        held.glow.setPosition(0, lift).setSize(radius * 1.25, radius * 0.625);
+        held.ring.setPosition(0, lift);
+        held.pawn.setPosition(0, lift).setDisplaySize(radius * PAWN_SIZE, radius * PAWN_SIZE);
+        held.mark.setPosition(0, radius * PAWN_HEAD).setFontSize(Math.max(1, Math.round(radius * 0.85)));
+        held.mark.setVisible(CELL * this.#size / this.#dpr >= MARK_MIN_CSS);
     }
 
     #depthAt(y: number): number
@@ -357,53 +339,209 @@ class TableScene extends Phaser.Scene
         return 10 + y / Math.max(1, this.#size);
     }
 
-    /**
-     * The halo is the only thing on the canvas that says a token can be moved, and it has to read on
-     * every ground this board has: cream paper, walnut rim, and four saturated yards. A glow in the
-     * TOKEN's own colour was the first attempt and it is invisible exactly where it matters most - a
-     * red ring around a red piece sitting in the red yard, which is where every game begins. So it
-     * is two strokes, white inside a dark one, the trick a map legend uses: the white carries on
-     * walnut and on red, the dark carries on cream, and neither depends on which colour is playing.
-     *
-     * It breathes while it waits, because a static ring reads as something printed on the board -
-     * and it does not breathe under reduced motion, where the two strokes have to carry it alone.
-     */
-    #affordance(held: Held): void
+    #drawRing(held: Held, solid: boolean): void
     {
-        held.pulse?.remove();
-        held.pulse = null;
+        const radius = this.#radius();
+        const reach = radius * RING_RADIUS;
+        const dash = held.dash;
 
-        for (const part of [held.halo, held.haloEdge])
+        dash.clear();
+        dash.lineStyle(Math.max(1, radius * 0.25), INK, 0.55);
+        dash.strokeCircle(0, 0, reach);
+        dash.lineStyle(Math.max(1, radius * (solid ? 0.1875 : 0.1375)), 0xffffff, 0.95);
+
+        if (solid)
         {
-            part.setVisible(held.token.playable);
-            part.setAlpha(1);
-            part.setScale(1);
+            dash.strokeCircle(0, 0, reach);
+            return;
         }
 
-        if (!held.token.playable || !this.#motion)
+        const pieces = 12;
+        const arc = (Math.PI * 2) / pieces;
+
+        for (let index = 0; index < pieces; index += 1)
+        {
+            dash.beginPath();
+            dash.arc(0, 0, reach, index * arc, index * arc + arc * 0.75);
+            dash.strokePath();
+        }
+    }
+
+    #still(held: Held): void
+    {
+        for (const tween of held.motion)
+        {
+            tween.remove();
+        }
+        held.motion = [];
+
+        const radius = this.#radius();
+
+        this.tweens.killTweensOf([held.pawn, held.mark, held.shadow, held.dash]);
+        held.pawn.setY(radius * PAWN_DROP).setDisplaySize(radius * PAWN_SIZE, radius * PAWN_SIZE).clearTint().setTintMode(Phaser.TintModes.MULTIPLY).setAngle(0);
+        held.mark.setY(radius * PAWN_HEAD);
+        held.shadow.setDisplaySize(radius * PAWN_SIZE, radius * SHADOW_TALL).setAlpha(SHADOW_ALPHA);
+        held.dash.setAngle(0);
+    }
+
+    #affordance(held: Held): void
+    {
+        this.#still(held);
+
+        const movable = held.token.playable;
+
+        held.glow.setVisible(movable);
+        held.ring.setVisible(movable);
+        held.pawn.disableInteractive();
+
+        if (!movable)
         {
             return;
         }
 
-        held.pulse = this.tweens.add({
-            targets: [held.halo, held.haloEdge],
-            scale: 1.16,
-            alpha: 0.45,
-            duration: 760,
-            yoyo: true,
-            repeat: -1,
-            ease: 'Sine.easeInOut'
+        held.pawn.setInteractive({ useHandCursor: true, hitArea: new Phaser.Geom.Rectangle(52, 15, 152, 230), hitAreaCallback: Phaser.Geom.Rectangle.Contains });
+
+        const radius = this.#radius();
+
+        if (!this.#motion)
+        {
+            this.#drawRing(held, true);
+            held.pawn.setY(radius * (PAWN_DROP - 0.15));
+            held.mark.setY(radius * (PAWN_HEAD - 0.15));
+            held.shadow.setAlpha(SHADOW_ALPHA * 0.9);
+            return;
+        }
+
+        this.#drawRing(held, false);
+
+        const hop = radius * 0.25;
+        const sx = held.pawn.scaleX;
+        const sy = held.pawn.scaleY;
+        const shadowX = held.shadow.scaleX;
+        const shadowY = held.shadow.scaleY;
+        const stagger = (pieceOrder(held.token.key)[1] % 4) * 90;
+
+        held.motion.push(this.tweens.add({ targets: held.dash, angle: 360, duration: 2400, repeat: -1, ease: 'Linear' }));
+
+        held.motion.push(this.tweens.chain({
+            loop: -1,
+            delay: stagger,
+            tweens: [
+                {
+                    targets: [held.pawn, held.mark],
+                    y: `-=${ hop }`,
+                    duration: HOP_MS,
+                    ease: 'Sine.easeOut',
+                    onStart: () =>
+                    {
+                        this.tweens.add({
+                            targets: held.shadow,
+                            scaleX: shadowX * 0.85,
+                            scaleY: shadowY * 0.85,
+                            alpha: SHADOW_ALPHA * 0.75,
+                            duration: HOP_MS,
+                            yoyo: true,
+                            ease: 'Sine.easeOut'
+                        });
+                    }
+                },
+                { targets: [held.pawn, held.mark], y: `+=${ hop }`, duration: HOP_MS, ease: 'Sine.easeIn' },
+                { targets: held.pawn, scaleX: sx * 1.05, scaleY: sy * 0.93, duration: 90, yoyo: true, ease: 'Sine.easeOut' },
+                { targets: held.pawn, alpha: 1, duration: 420 }
+            ]
+        }));
+    }
+
+    #select(held: Held, on: boolean): void
+    {
+        if (!held.token.playable || held.moving)
+        {
+            return;
+        }
+
+        this.#drawRing(held, on || !this.#motion);
+
+        const spot = this.#spotOf(held);
+
+        this.tweens.add({
+            targets: held.body,
+            scale: spot.scale * (on && this.#motion ? 1.06 : 1),
+            duration: on ? 100 : 120,
+            ease: 'Sine.easeOut'
         });
     }
 
-    #settle(held: Held): void
+    #spotOf(held: Held): { x: number; y: number; scale: number }
     {
-        const spot = centreOf(held.token.col, held.token.row, this.#size);
+        const token = held.token;
+        const base = centreOf(token.col, token.row, this.#size);
 
-        held.body.setPosition(spot.x, spot.y);
-        held.body.setDepth(this.#depthAt(spot.y));
-        held.body.setScale(1);
-        held.body.setAngle(0);
+        if (token.at === FINISHED)
+        {
+            return { ...base, scale: HOME_SCALE };
+        }
+
+        if (token.at === YARD)
+        {
+            return { ...base, scale: 1 };
+        }
+
+        const together = this.#view.tokens
+            .filter((one) => one.at !== YARD && one.at !== FINISHED && one.col === token.col && one.row === token.row)
+            .map((one) => one.key)
+            .sort((a, b) =>
+            {
+                const [seatA, pieceA] = pieceOrder(a);
+                const [seatB, pieceB] = pieceOrder(b);
+
+                return seatA - seatB || pieceA - pieceB;
+            });
+
+        const place = stackSpot(Math.max(0, together.indexOf(token.key)), together.length);
+        const cell = CELL * this.#size;
+
+        return { x: base.x + place.dx * cell, y: base.y + place.dy * cell, scale: place.scale };
+    }
+
+    #layout(animate: boolean): void
+    {
+        for (const held of this.#held.values())
+        {
+            if (held.moving)
+            {
+                continue;
+            }
+
+            const spot = this.#spotOf(held);
+
+            held.body.setDepth(this.#depthAt(spot.y));
+
+            if (!animate || !this.#motion || (held.body.x === spot.x && held.body.y === spot.y && held.body.scale === spot.scale))
+            {
+                this.tweens.killTweensOf(held.body);
+                held.body.setPosition(spot.x, spot.y).setScale(spot.scale).setAngle(0).setAlpha(1);
+                continue;
+            }
+
+            this.tweens.add({ targets: held.body, x: spot.x, y: spot.y, scale: spot.scale, duration: 140, ease: 'Sine.easeOut' });
+        }
+    }
+
+    #arrive(held: Held): void
+    {
+        held.moving = false;
+        this.#affordance(held);
+        this.#layout(true);
+
+        if (!this.#motion)
+        {
+            return;
+        }
+
+        const sx = held.pawn.scaleX;
+        const sy = held.pawn.scaleY;
+
+        this.tweens.add({ targets: held.pawn, scaleX: sx * 1.05, scaleY: sy * 0.93, duration: 90, yoyo: true, ease: 'Sine.easeOut' });
     }
 
     #walk(held: Held, cells: readonly { col: number; row: number }[], done: () => void): void
@@ -411,12 +549,16 @@ class TableScene extends Phaser.Scene
         const id = held.walk + 1;
 
         held.walk = id;
+        held.moving = true;
 
         if (cells.length === 0)
         {
             done();
             return;
         }
+
+        const radius = this.#radius();
+        const arc = radius * 0.55;
 
         const step = (index: number): void =>
         {
@@ -435,18 +577,14 @@ class TableScene extends Phaser.Scene
 
             held.body.setDepth(this.#depthAt(Math.max(spot.y, held.body.y)) + 1);
 
-            this.tweens.add({
-                targets: held.body,
-                scale: 1.14,
-                duration: STEP_MS / 2,
-                yoyo: true,
-                ease: 'Sine.easeOut'
-            });
+            this.tweens.add({ targets: [held.pawn, held.mark], y: `-=${ arc }`, duration: STEP_MS / 2, yoyo: true, ease: 'Sine.easeOut' });
+            this.tweens.add({ targets: held.shadow, scaleX: held.shadow.scaleX * 0.8, scaleY: held.shadow.scaleY * 0.8, duration: STEP_MS / 2, yoyo: true });
 
             this.tweens.add({
                 targets: held.body,
                 x: spot.x,
                 y: spot.y,
+                scale: 1,
                 duration: STEP_MS,
                 ease: 'Sine.easeInOut',
                 onComplete: () =>
@@ -460,34 +598,54 @@ class TableScene extends Phaser.Scene
         step(0);
     }
 
-    /**
-     * A captured token does not appear in its yard, it is sent there. The spin is what makes it read
-     * as something done TO the piece rather than a move its owner chose, which is the whole of what a
-     * capture is.
-     */
+    #burst(x: number, y: number, colour: number): void
+    {
+        const radius = this.#radius();
+        const ring = this.add.ellipse(x, y + radius * PAWN_DROP, radius * 0.875, radius * 0.4375)
+            .setStrokeStyle(Math.max(1, radius * 0.15), colour, 0.9)
+            .setFillStyle(0xffffff, 0)
+            .setDepth(this.#depthAt(y) + 2);
+
+        this.tweens.add({
+            targets: ring,
+            scale: 0.95 / 0.35,
+            alpha: 0,
+            duration: 280,
+            ease: 'Quad.easeOut',
+            onComplete: () => ring.destroy()
+        });
+    }
+
     #knock(held: Held): void
     {
         const id = held.walk + 1;
 
         held.walk = id;
+        held.moving = true;
 
+        const from = { x: held.body.x, y: held.body.y };
         const spot = centreOf(held.token.col, held.token.row, this.#size);
+        const radius = this.#radius();
 
         this.#sound?.play('token-capture');
+        this.#burst(from.x, from.y, 0xffffff);
 
-        this.tweens.add({
-            targets: held.body,
-            scale: 1.45,
-            angle: 380,
-            duration: KNOCK_MS * 0.45,
-            ease: 'Quad.easeOut'
-        });
+        held.pawn.setTint(0xffffff).setTintMode(Phaser.TintModes.FILL);
+        this.time.delayedCall(70, () => held.pawn.clearTint().setTintMode(Phaser.TintModes.MULTIPLY));
+
+        held.body.setDepth(60);
+
+        this.tweens.add({ targets: held.shadow, alpha: 0, duration: 120 });
+        this.tweens.add({ targets: held.shadow, alpha: SHADOW_ALPHA, delay: FLIGHT_MS - 120, duration: 120 });
+        this.tweens.add({ targets: [held.pawn, held.mark], y: `-=${ radius * 2.75 }`, duration: FLIGHT_MS / 2, yoyo: true, ease: 'Quad.easeOut' });
+        this.tweens.add({ targets: held.body, angle: 360, duration: FLIGHT_MS, ease: 'Cubic.easeOut' });
+        this.tweens.add({ targets: held.body, scale: 1.2, duration: FLIGHT_MS / 2, yoyo: true, ease: 'Sine.easeInOut' });
 
         this.tweens.add({
             targets: held.body,
             x: spot.x,
             y: spot.y,
-            duration: KNOCK_MS,
+            duration: FLIGHT_MS,
             ease: 'Quad.easeInOut',
             onComplete: () =>
             {
@@ -496,67 +654,83 @@ class TableScene extends Phaser.Scene
                     return;
                 }
 
-                held.body.setAngle(0);
-                held.body.setDepth(this.#depthAt(spot.y));
+                held.body.setAngle(0).setScale(0.9).setDepth(this.#depthAt(spot.y));
+                held.moving = false;
+                this.#affordance(held);
 
-                this.tweens.add({
-                    targets: held.body,
-                    scale: 1,
-                    duration: 160,
-                    ease: 'Back.easeOut'
-                });
+                this.tweens.add({ targets: held.body, scale: 1, duration: 160, ease: 'Back.easeOut' });
             }
         });
     }
 
-    /**
-     * A token leaves the board exactly once, by coming home, and the view it leaves in is one where
-     * it is simply absent - so the walk it never got to make is reconstructed here from where it
-     * stood. Destroying it the moment the list shortens is what made a finished token vanish from
-     * under the pointer that had just moved it.
-     */
-    #retire(held: Held): void
+    #home(held: Held): void
     {
-        const end = (): void =>
-        {
-            this.#sound?.play('home');
+        const spot = this.#spotOf(held);
 
-            this.tweens.add({
-                targets: held.body,
-                x: centreOf((GRID - 1) / 2, (GRID - 1) / 2, this.#size).x,
-                y: centreOf((GRID - 1) / 2, (GRID - 1) / 2, this.#size).y,
-                scale: 0.1,
-                alpha: 0,
-                duration: 420,
-                ease: 'Cubic.easeIn',
-                onComplete: () => held.body.destroy(true)
-            });
-        };
+        this.#sound?.play('home');
 
-        held.pulse?.remove();
-        held.pulse = null;
-
-        if (!this.#motion || held.token.at < 0)
-        {
-            held.body.destroy(true);
-            return;
-        }
-
-        this.#walk(held, pathBetween(held.token.colour as LudoColour, held.token.at, FINISHED), end);
+        this.tweens.add({
+            targets: held.body,
+            x: spot.x,
+            y: spot.y,
+            scale: HOME_SCALE,
+            duration: 220,
+            ease: 'Cubic.easeOut',
+            onComplete: () =>
+            {
+                held.moving = false;
+                held.body.setDepth(this.#depthAt(spot.y));
+                this.#burst(spot.x, spot.y, GOLD);
+                this.#affordance(held);
+            }
+        });
     }
 
-    // ------------------------------------------------------------------ the die
+    #retire(held: Held): void
+    {
+        for (const tween of held.motion)
+        {
+            tween.remove();
+        }
+
+        this.tweens.add({
+            targets: held.body,
+            alpha: 0,
+            duration: this.#motion ? 200 : 0,
+            onComplete: () => held.body.destroy(true)
+        });
+    }
 
     #placeDie(): void
     {
-        this.#die?.setPosition(this.#size / 2, this.#size * 0.5);
+        const cell = CELL * this.#size;
+
+        this.#dieBox?.setPosition(this.#size / 2, this.#size / 2);
+        this.#die?.setDisplaySize(this.#size * DIE_SHARE, this.#size * DIE_SHARE);
+        this.#dieGlow.forEach((circle, index) => circle.setRadius(cell * (1.5 - index * 0.3)));
     }
 
-    #roll(was: number | null, now: number | null): void
+    #face(value: number): void
     {
+        this.#die?.setFrame(Math.min(Math.max(value, 1), 6) - 1);
+    }
+
+    #glow(turn: string | null): void
+    {
+        const tint = turn === null ? null : (PALETTE[turn] ?? null);
+
+        this.#dieGlow.forEach((circle, index) =>
+        {
+            circle.setFillStyle(tint ?? 0xffffff, tint === null ? 0 : 0.12 + index * 0.02);
+        });
+    }
+
+    #roll(was: number | null, now: number | null, turn: string | null): void
+    {
+        const box = this.#dieBox;
         const die = this.#die;
 
-        if (die === undefined)
+        if (box === undefined || die === undefined)
         {
             return;
         }
@@ -566,8 +740,8 @@ class TableScene extends Phaser.Scene
 
         if (now === null)
         {
-            this.tweens.killTweensOf(die);
-            die.setVisible(false);
+            this.tweens.killTweensOf([box, die]);
+            box.setVisible(false);
             return;
         }
 
@@ -578,13 +752,17 @@ class TableScene extends Phaser.Scene
 
         this.#sound?.play('die-land');
         this.#placeDie();
-        this.tweens.killTweensOf(die);
+        this.tweens.killTweensOf([box, die]);
+        this.#glow(null);
 
-        die.setVisible(true).setAlpha(1).setScale(1).setAngle(0);
+        box.setVisible(true).setAlpha(1);
+        die.setAngle(0);
+        this.#placeDie();
 
         if (!this.#motion)
         {
-            this.#drawDie(now);
+            this.#face(now);
+            this.#glow(turn);
             this.#fadeDie();
             return;
         }
@@ -592,7 +770,7 @@ class TableScene extends Phaser.Scene
         const faces = 7;
         let shown = 0;
 
-        this.#drawDie((now * 7) % 6 + 1);
+        this.#face((now * 7) % 6 + 1);
 
         this.time.addEvent({
             delay: TUMBLE_MS / faces,
@@ -600,36 +778,27 @@ class TableScene extends Phaser.Scene
             callback: () =>
             {
                 shown += 1;
-                this.#drawDie(shown >= faces ? now : (now * 7 + shown * 3) % 6 + 1);
+                this.#face(shown >= faces ? now : (now * 7 + shown * 3) % 6 + 1);
 
                 if (shown >= faces)
                 {
+                    this.#glow(turn);
                     this.#fadeDie();
                 }
             }
         });
 
-        this.tweens.add({
-            targets: die,
-            angle: 420,
-            duration: TUMBLE_MS,
-            ease: 'Cubic.easeOut'
-        });
+        const base = die.scaleX;
 
-        this.tweens.add({
-            targets: die,
-            scale: 1.3,
-            duration: TUMBLE_MS * 0.4,
-            yoyo: true,
-            ease: 'Sine.easeInOut'
-        });
+        this.tweens.add({ targets: die, angle: 360, duration: TUMBLE_MS, ease: 'Cubic.easeOut' });
+        this.tweens.add({ targets: die, scaleX: base * 1.3, scaleY: base * 1.3, duration: TUMBLE_MS * 0.4, yoyo: true, ease: 'Sine.easeInOut' });
     }
 
     #fadeDie(): void
     {
-        const die = this.#die;
+        const box = this.#dieBox;
 
-        if (die === undefined)
+        if (box === undefined)
         {
             return;
         }
@@ -637,46 +806,13 @@ class TableScene extends Phaser.Scene
         this.#dieFade = this.time.delayedCall(DIE_HOLD_MS, () =>
         {
             this.tweens.add({
-                targets: die,
+                targets: box,
                 alpha: 0,
                 duration: 260,
-                onComplete: () => die.setVisible(false)
+                onComplete: () => box.setVisible(false)
             });
         });
     }
-
-    #drawDie(face: number): void
-    {
-        const die = this.#die;
-
-        if (die === undefined)
-        {
-            return;
-        }
-
-        const side = this.#size * 0.13;
-        const half = side / 2;
-
-        die.clear();
-
-        die.fillStyle(INK, 0.22);
-        die.fillRoundedRect(-half + side * 0.05, -half + side * 0.07, side, side, side * 0.2);
-
-        die.fillStyle(BONE, 1);
-        die.fillRoundedRect(-half, -half, side, side, side * 0.2);
-
-        die.lineStyle(Math.max(1, side * 0.035), INK, 0.45);
-        die.strokeRoundedRect(-half, -half, side, side, side * 0.2);
-
-        die.fillStyle(INK, 1);
-
-        for (const [col, row] of PIPS[face] ?? PIPS[1])
-        {
-            die.fillCircle(col * side * 0.27, row * side * 0.27, side * 0.085);
-        }
-    }
-
-    // ------------------------------------------------------------------ the win
 
     #celebrate(winner: string): void
     {
@@ -718,25 +854,13 @@ class TableScene extends Phaser.Scene
     }
 }
 
-/**
- * `scene.start` does not start a scene, it QUEUES one: `init`, `preload` and `create` run on the
- * next step of the game loop, so everything the scene owns - its size, its plate, its die - is
- * absent for a frame or two after this function would otherwise have returned. A caller that shows
- * a board into that window throws inside Phaser, and a component that catches the throw concludes
- * the renderer failed and draws its fallback ON TOP of a canvas that is working perfectly. In LTR
- * the two layers land on the same squares and nothing looks wrong at all; it took a Persian page,
- * where the fallback mirrors and the canvas does not, to see it.
- *
- * So the handle is not handed out until the scene says it is up. The timeout is what keeps a failure
- * a failure: a scene that never boots must reject, so the component can fall back once and properly,
- * rather than awaiting something that is never coming.
- */
 const BOOT_MS = 8000;
 
 export async function createLudoBoard(options: BoardOptions): Promise<BoardHandle>
 {
     const scene = new TableScene();
-    const measure = (): number => Math.max(1, Math.round(options.host.getBoundingClientRect().width));
+    const dpr = Math.min(Math.max(window.devicePixelRatio || 1, 1), 3);
+    const measure = (): number => Math.max(1, Math.round(options.host.getBoundingClientRect().width * dpr));
 
     const game = new Phaser.Game({
         type: Phaser.AUTO,
@@ -749,7 +873,7 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
         audio: { noAudio: true },
         input: { keyboard: false, gamepad: false },
         scale: { mode: Phaser.Scale.NONE, autoCenter: Phaser.Scale.NO_CENTER },
-        render: { antialias: true, roundPixels: true, powerPreference: 'low-power' },
+        render: { antialias: true, roundPixels: false, powerPreference: 'low-power', mipmapFilter: 'LINEAR_MIPMAP_LINEAR' },
         scene: [scene]
     });
 
@@ -766,6 +890,7 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
 
     game.scene.start('table', {
         ...options,
+        dpr,
         onReady: () =>
         {
             clearTimeout(timer);
@@ -774,24 +899,8 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
         }
     });
 
-    try
+    const release = (): void =>
     {
-        await up;
-    }
-    catch (reason)
-    {
-        clearTimeout(timer);
-
-        /*
-         * The same three steps `dispose` takes, and for the same reason it states: Phaser's destroy
-         * is DEFERRED, so without draining it and losing the context by hand the context is left for
-         * the garbage collector rather than released.
-         *
-         * This path is the one a struggling device takes - a scene that never boots, or boots past
-         * its watchdog - and `board-canvas` catches the throw and draws the DOM fallback. So the
-         * device least able to afford an orphaned context was the one getting one, and getting
-         * another every time somebody opened a board.
-         */
         const renderer = game.renderer as { getExtension?: (name: string) => unknown } | undefined;
         const lose = renderer?.getExtension?.('WEBGL_lose_context') as { loseContext?: () => void } | undefined;
 
@@ -801,17 +910,29 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
         (game as unknown as { runDestroy?: () => void }).runDestroy?.();
 
         lose?.loseContext?.();
+    };
 
+    try
+    {
+        await up;
+    }
+    catch (reason)
+    {
+        clearTimeout(timer);
+        release();
         throw reason;
     }
 
-    const watcher = new ResizeObserver(() =>
+    const fit = (): void =>
     {
         const size = measure();
 
         game.scale.resize(size, size);
+        game.scale.refresh();
         scene.reflow(size);
-    });
+    };
+
+    const watcher = new ResizeObserver(fit);
 
     watcher.observe(options.host);
 
@@ -822,45 +943,17 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
 
         setSound: (on) => scene.setSound(on),
 
-        resize: () =>
-        {
-            const size = measure();
-
-            game.scale.resize(size, size);
-            scene.reflow(size);
-        },
+        resize: fit,
 
         pause: () => game.loop.sleep(),
 
         resume: () => game.loop.wake(),
 
-        /**
-         * Phaser's destroy is DEFERRED - it sets a pending flag and tears down at the end of the
-         * next game step. A slept loop never takes that step, so the WebGL context is never
-         * released, which is precisely the leak this codebase has already hit twice with three.js.
-         * Hence: wake the loop, destroy, drain the pending destroy directly, and only then lose the
-         * context. The extension has to be captured BEFORE the destroy, because afterwards the
-         * renderer is gone; and losing it first would make every texture delete a no-op and fill
-         * the console with warnings, which is a failing gate in its own right.
-         *
-         * The audio context is closed FIRST and by hand: it is not Phaser's - Phaser's own is turned
-         * off - so nothing in that teardown knows it exists, and a context left open holds a real
-         * device handle for a board that has left the page.
-         */
         dispose: () =>
         {
             watcher.disconnect();
             scene.hush();
-
-            const renderer = game.renderer as { getExtension?: (name: string) => unknown } | undefined;
-            const lose = renderer?.getExtension?.('WEBGL_lose_context') as { loseContext?: () => void } | undefined;
-
-            game.loop.wake();
-            game.destroy(true, false);
-
-            (game as unknown as { runDestroy?: () => void }).runDestroy?.();
-
-            lose?.loseContext?.();
+            release();
         }
     };
 }

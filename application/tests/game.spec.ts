@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { CELL, GRID, MARGIN, NEST, NEST_RADIUS, RIM, centreOf, pickNear, tokenRadius } from '../src/game/layout.ts';
+import { CELL, GRID, HOME_SCALE, HOME_SLOTS, MARGIN, NEST, NEST_RADIUS, RIM, STACKS, centreOf, pickNear, tokenRadius } from '../src/game/layout.ts';
 import { FINISHED, YARD, pathBetween } from '../src/game/board/path.ts';
 import { createSound, offsetOf, resetSound } from '../src/game/sound.ts';
 import { unpack } from '../src/game/sound-files.ts';
@@ -815,4 +815,71 @@ describe('the yard leaves its outer corner to the player', () =>
             }
         });
     }
+});
+
+describe('a finished pawn stands in its own triangle', () =>
+{
+    const MIDDLE = 7.5;
+    const TRIANGLE: Record<string, readonly (readonly [number, number])[]> = {
+        red: [[6, 6], [6, 9], [MIDDLE, MIDDLE]],
+        green: [[6, 6], [9, 6], [MIDDLE, MIDDLE]],
+        yellow: [[9, 6], [9, 9], [MIDDLE, MIDDLE]],
+        blue: [[6, 9], [9, 9], [MIDDLE, MIDDLE]]
+    };
+
+    const inside = (point: readonly [number, number], [a, b, c]: readonly (readonly [number, number])[]): boolean =>
+    {
+        const side = (p: readonly [number, number], q: readonly [number, number], r: readonly [number, number]): number =>
+            (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0]);
+        const signs = [side(a, b, point), side(b, c, point), side(c, a, point)];
+
+        return signs.every((sign) => sign >= 0) || signs.every((sign) => sign <= 0);
+    };
+
+    for (const colour of ['red', 'green', 'yellow', 'blue'])
+    {
+        it(`keeps every ${ colour } footprint inside its triangle and clear of the medallion`, () =>
+        {
+            const across = 0.41 * HOME_SCALE;
+            const deep = 0.205 * HOME_SCALE;
+
+            for (const [col, row] of HOME_SLOTS[colour])
+            {
+                const x = col + 0.5;
+                const y = row + 0.5;
+
+                for (const point of [[x - across, y], [x + across, y], [x, y - deep], [x, y + deep]] as const)
+                {
+                    expect(inside(point, TRIANGLE[colour])).toBe(true);
+                }
+
+                expect(Math.hypot(x - MIDDLE, y - MIDDLE) - across).toBeGreaterThan(0.56 + 0.05);
+            }
+        });
+    }
+
+    it('places finished tokens on those slots instead of dropping them from the board', () =>
+    {
+        const placed = seatsFor({
+            kind: 'ludo',
+            moves: [],
+            seats: [{ seat: 0, colour: 'green', home: 2, out: false, tokens: [0, 1, 2, 3].map((piece) => ({ piece, at: piece < 2 ? FINISHED : -1 })) }]
+        } as unknown as Parameters<typeof seatsFor>[0]);
+        const home = placed.filter((token) => token.at === FINISHED);
+
+        expect(home.map((token) => [token.col, token.row])).toEqual([HOME_SLOTS.green[0], HOME_SLOTS.green[1]].map((slot) => [...slot]));
+        expect(home.every((token) => !token.playable)).toBe(true);
+    });
+
+    it('fits every pawn of a stack inside the square it shares', () =>
+    {
+        for (const layout of Object.values(STACKS))
+        {
+            for (const spot of layout)
+            {
+                expect(Math.abs(spot.dx) + 0.41 * spot.scale).toBeLessThanOrEqual(0.4635);
+                expect(Math.abs(spot.dy) + 0.205 * spot.scale).toBeLessThanOrEqual(0.4635);
+            }
+        }
+    });
 });

@@ -6,6 +6,7 @@ import urllib.request
 
 import bmesh
 import bpy
+from mathutils import Vector
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, '..', '..'))
@@ -13,6 +14,10 @@ OUT = os.path.join(ROOT, 'application', 'public', 'board')
 CACHE = os.path.join(HERE, 'scratch', 'textures')
 ONLY = os.environ.get('NURA_SURFACE', '')
 SAMPLES = int(os.environ.get('NURA_SAMPLES', '256'))
+
+sys.path.insert(0, os.path.join(HERE, 'lib'))
+
+from kit import lathe
 
 
 def texture(asset, kind, resolution='2k'):
@@ -333,8 +338,499 @@ def ludo_table():
     save(scene, 'ludo-table.webp')
 
 
+def linear(hex_colour):
+    value = hex_colour.lstrip('#')
+    channels = [int(value[index:index + 2], 16) / 255 for index in (0, 2, 4)]
+    return tuple(channel / 12.92 if channel <= 0.04045 else ((channel + 0.055) / 1.055) ** 2.4 for channel in channels)
+
+
+def lacquer(name, colour, roughness=0.28, coat=1.0):
+    material = bpy.data.materials.new(name)
+    material.use_nodes = True
+    shader = next(node for node in material.node_tree.nodes if node.type == 'BSDF_PRINCIPLED')
+    shader.inputs['Base Color'].default_value = (*colour, 1.0)
+    shader.inputs['Roughness'].default_value = roughness
+    if 'Coat Weight' in shader.inputs:
+        shader.inputs['Coat Weight'].default_value = coat
+        shader.inputs['Coat Roughness'].default_value = 0.06
+    return material
+
+
+def prism(name, points, top, bottom, material, bevel=0.0, segments=3):
+    mesh = bpy.data.meshes.new(name)
+    bm = bmesh.new()
+    upper = [bm.verts.new((x, y, top)) for x, y in points]
+    lower = [bm.verts.new((x, y, bottom)) for x, y in points]
+    bm.faces.new(upper)
+    bm.faces.new(list(reversed(lower)))
+    count = len(points)
+    for index in range(count):
+        following = (index + 1) % count
+        bm.faces.new((lower[index], lower[following], upper[following], upper[index]))
+    bm.normal_update()
+    bm.to_mesh(mesh)
+    bm.free()
+    obj = bpy.data.objects.new(name, mesh)
+    bpy.context.collection.objects.link(obj)
+    obj.data.materials.append(material)
+    if bevel > 0:
+        modifier = obj.modifiers.new('bevel', 'BEVEL')
+        modifier.width = bevel
+        modifier.segments = segments
+        modifier.limit_method = 'ANGLE'
+        modifier.harden_normals = True
+        weighted = obj.modifiers.new('weighted', 'WEIGHTED_NORMAL')
+        weighted.keep_sharp = True
+    for polygon in obj.data.polygons:
+        polygon.use_smooth = True
+    return obj
+
+
+def circle(cx, cy, radius, segments=64):
+    return [(cx + math.cos(math.tau * step / segments) * radius, cy + math.sin(math.tau * step / segments) * radius) for step in range(segments)]
+
+
+def offset(points, cx, cy):
+    return [(cx + x, cy + y) for x, y in points]
+
+
+def star_points(radius, inner=0.46):
+    points = []
+    for index in range(10):
+        angle = math.pi / 2 + index * math.pi / 5
+        reach = radius if index % 2 == 0 else radius * inner
+        points.append((math.cos(angle) * reach, math.sin(angle) * reach))
+    return points
+
+
+def hdri(asset, resolution='1k'):
+    os.makedirs(CACHE, exist_ok=True)
+    path = os.path.join(CACHE, f'{asset}_{resolution}.hdr')
+
+    if os.path.exists(path):
+        return path
+
+    request = urllib.request.Request(f'https://api.polyhaven.com/files/{asset}', headers={'User-Agent': 'nura-games-build'})
+    files = json.loads(urllib.request.urlopen(request).read())
+    url = files['hdri'][resolution]['hdr']['url']
+    download = urllib.request.Request(url, headers={'User-Agent': 'nura-games-build'})
+
+    with urllib.request.urlopen(download) as response, open(path, 'wb') as target:
+        target.write(response.read())
+
+    return path
+
+
+def studio(scene, asset, strength):
+    world = scene.world
+    tree = world.node_tree
+    background = next(node for node in tree.nodes if node.type == 'BACKGROUND')
+    environment = tree.nodes.new('ShaderNodeTexEnvironment')
+    environment.image = bpy.data.images.load(hdri(asset))
+    tree.links.new(environment.outputs['Color'], background.inputs['Color'])
+    background.inputs['Strength'].default_value = strength
+
+
+def cut(target, cutters, transfer=False):
+    for index, cutter in enumerate(cutters):
+        cutter.hide_render = True
+        cutter.hide_viewport = True
+        modifier = target.modifiers.new(f'cut-{index}', 'BOOLEAN')
+        modifier.operation = 'DIFFERENCE'
+        modifier.solver = 'EXACT'
+        modifier.object = cutter
+        if transfer:
+            modifier.material_mode = 'TRANSFER'
+    for modifier in list(target.modifiers):
+        if modifier.type in ('BEVEL', 'WEIGHTED_NORMAL'):
+            name = modifier.name
+            kind = modifier.type
+            settings = {}
+            if kind == 'BEVEL':
+                settings = {'width': modifier.width, 'segments': modifier.segments}
+            target.modifiers.remove(modifier)
+            again = target.modifiers.new(name, kind)
+            if kind == 'BEVEL':
+                again.width = settings['width']
+                again.segments = settings['segments']
+                again.limit_method = 'ANGLE'
+                again.harden_normals = True
+            else:
+                again.keep_sharp = True
+
+
+def geometry_of():
+    with open(os.path.join(HERE, 'ludo-geometry.json'), encoding='utf-8') as source:
+        return json.load(source)
+
+
+def inks(geometry):
+    return {colour: {shade: linear(value) for shade, value in shades.items()} for colour, shades in geometry['ink'].items()}
+
+
+def ludo_board():
+    geometry = geometry_of()
+    margin = geometry['margin']
+    cell = geometry['cell']
+    rim = geometry['rim']
+    ink = inks(geometry)
+    gap = 2.2 / 1024
+
+    scene = reset(2048, 2048)
+    studio(scene, 'studio_small_09', 0.55)
+
+    def at(u, v):
+        return (u - 0.5, 0.5 - v)
+
+    def centre(col, row, span=1.0):
+        return at(margin + (col + span / 2) * cell, margin + (row + span / 2) * cell)
+
+    graphite = lacquer('graphite', (0.012, 0.016, 0.03), roughness=0.22, coat=1.0)
+    gold = flat_material('gold', (0.86, 0.66, 0.3), 0.2)
+    next(node for node in gold.node_tree.nodes if node.type == 'BSDF_PRINCIPLED').inputs['Metallic'].default_value = 1.0
+    grout = lacquer('grout', (0.50, 0.48, 0.45), roughness=0.6, coat=0.0)
+    white = lacquer('white', (0.93, 0.92, 0.89), roughness=0.34, coat=0.25)
+    colours = {colour: lacquer('lacquer-' + colour, ink[colour]['base'], roughness=0.36, coat=0.25) for colour in ink}
+    dishes = {colour: lacquer('dish-' + colour, ink[colour]['tint'], roughness=0.6, coat=0.0) for colour in ink}
+
+    field = 1 - rim * 2
+    frame('frame', rounded(1.0, 1.0, 0.05), rounded(field, field, 0.018), 0.028, 0.0, graphite)
+    line = rim * 0.5
+    frame('hairline', rounded(1 - line * 2 + 0.0024, 1 - line * 2 + 0.0024, 0.036), rounded(1 - line * 2 - 0.0024, 1 - line * 2 - 0.0024, 0.034), 0.0284, 0.026, gold)
+    plane('base', field + 0.004, field + 0.004, grout, z=0.012)
+
+    tile_top = 0.0172
+    size = cell - gap * 2
+
+    def tile(col, row, material, name):
+        cx, cy = centre(col, row)
+        return prism(name, offset(rounded(size, size, 0.0085, 6), cx, cy), tile_top, 0.012, material, bevel=0.0026)
+
+    for index, square in enumerate(geometry['ring']):
+        start = square['start']
+        tile(square['col'], square['row'], colours[start] if start else white, 'ring-' + str(index))
+        cx, cy = centre(square['col'], square['row'])
+        if start:
+            prism('start-star-' + str(index), offset(star_points(cell * 0.31), cx, cy), tile_top + 0.0024, tile_top - 0.001, white, bevel=0.0012, segments=3)
+        elif square['safe']:
+            prism('safe-star-' + str(index), offset(star_points(cell * 0.31), cx, cy), tile_top + 0.0024, tile_top - 0.001, colours[square['safe']], bevel=0.0012, segments=3)
+
+    for colour, cells in geometry['home'].items():
+        for index, (col, row) in enumerate(cells):
+            tile(col, row, colours[colour], 'home-' + colour + '-' + str(index))
+
+    arrow = [(-30, -8), (4, -8), (4, -22), (32, 0), (4, 22), (4, 8), (-30, 8)]
+    for entry in geometry['arrows']:
+        cx, cy = centre(entry['col'], entry['row'])
+        angle = -math.atan2(entry['dy'], entry['dx'])
+        unit = cell / 100
+        points = [(cx + (x * math.cos(angle) - y * math.sin(angle)) * unit, cy + (x * math.sin(angle) + y * math.cos(angle)) * unit) for x, y in arrow]
+        prism('arrow-' + entry['colour'], points, tile_top + 0.0024, tile_top - 0.001, colours[entry['colour']], bevel=0.0011, segments=3)
+
+    tray_top = 0.0285
+    dish = [(0.0, -0.004), (0.30 * cell, -0.0035), (0.44 * cell, -0.0012), (0.46 * cell, 0.0005), (0.46 * cell, 0.01), (0.0, 0.01)]
+    yard_size = cell * 6 - gap * 2
+    for colour, (col, row) in geometry['corners'].items():
+        cx, cy = centre(col, row, 6)
+        prism('yard-' + colour, offset(rounded(yard_size, yard_size, 0.022, 10), cx, cy), 0.0195, 0.012, colours[colour], bevel=0.0045, segments=5)
+        nx, ny = centre(col + geometry['nest'][colour][0] - 0.5, row + geometry['nest'][colour][1] - 0.5)
+        radius = geometry['nestRadius'] * cell
+        tray = prism('tray-' + colour, circle(nx, ny, radius, 128), tray_top, 0.0195, white, bevel=0.0028, segments=5)
+        cutters = []
+        for index, (dx, dy) in enumerate(geometry['wells']):
+            wx = nx + dx * geometry['nestSpread'] * cell
+            wy = ny - dy * geometry['nestSpread'] * cell
+            cutter = lathe('dish-' + colour + '-' + str(index), dish, sides=96, location=(wx, wy, tray_top))
+            cutter.data.materials.append(dishes[colour])
+            for polygon in cutter.data.polygons:
+                polygon.use_smooth = True
+            cutters.append(cutter)
+        cut(tray, cutters, transfer=True)
+
+    cx, cy = centre(6, 6, 3)
+    half = (cell * 3 - gap * 2) / 2
+    apex = tile_top + 0.03
+    mesh = bpy.data.meshes.new('peak')
+    bm = bmesh.new()
+    corners = [
+        bm.verts.new((cx - half, cy + half, tile_top)),
+        bm.verts.new((cx + half, cy + half, tile_top)),
+        bm.verts.new((cx + half, cy - half, tile_top)),
+        bm.verts.new((cx - half, cy - half, tile_top))
+    ]
+    top = bm.verts.new((cx, cy, apex))
+    order = [('green', 0, 1), ('yellow', 1, 2), ('blue', 2, 3), ('red', 3, 0)]
+    for _, first, second in order:
+        bm.faces.new((corners[first], corners[second], top))
+    bm.normal_update()
+    bm.to_mesh(mesh)
+    bm.free()
+    peak = bpy.data.objects.new('peak', mesh)
+    bpy.context.collection.objects.link(peak)
+    names = [colour for colour, _, _ in order]
+    for colour in names:
+        peak.data.materials.append(colours[colour])
+    for polygon, colour in zip(peak.data.polygons, names):
+        polygon.material_index = names.index(colour)
+    bevelled = peak.modifiers.new('bevel', 'BEVEL')
+    bevelled.width = 0.002
+    bevelled.segments = 3
+    bevelled.limit_method = 'ANGLE'
+    prism('medallion', circle(cx, cy, cell * 0.56, 96), apex + 0.004, apex - 0.02, gold, bevel=0.005, segments=6)
+    prism('medallion-star', offset(star_points(cell * 0.34), cx, cy), apex + 0.0068, apex + 0.003, white, bevel=0.0016, segments=3)
+
+    lamp('key', (-0.9, 1.0, 1.9), 1.2, 30.0, (1.0, 0.97, 0.92))
+    lamp('fill', (0.0, 0.0, 2.6), 3.0, 8.0, (0.92, 0.94, 1.0))
+    camera(scene, 1.0)
+    scene.view_settings.view_transform = 'Standard'
+    scene.view_settings.look = 'None'
+    scene.render.film_transparent = True
+    save(scene, 'ludo-board.webp', quality=90, alpha=True)
+
+
+PAWN_PROFILE = [
+    (0.000, 0.000), (0.380, 0.000), (0.405, 0.012), (0.410, 0.035), (0.410, 0.075), (0.400, 0.098), (0.372, 0.110),
+    (0.352, 0.118), (0.340, 0.170), (0.312, 0.250), (0.270, 0.340), (0.222, 0.430), (0.180, 0.520), (0.155, 0.590), (0.146, 0.630)
+] + [
+    (0.28 * math.cos(math.radians(-59 + step * 149 / 12)), 0.88 + 0.28 * math.sin(math.radians(-59 + step * 149 / 12)))
+    for step in range(12)
+] + [(0.000, 1.160)]
+
+PIECE_PX = 170.0
+KEY = (-0.9, 1.0, 1.9)
+
+
+def socket(sockets, name, kind):
+    return next(one for one in sockets if one.name == name and one.type == kind)
+
+
+def pawn_material(name, base, shade):
+    material = bpy.data.materials.new(name)
+    material.use_nodes = True
+    tree = material.node_tree
+    shader = next(node for node in tree.nodes if node.type == 'BSDF_PRINCIPLED')
+    weight = tree.nodes.new('ShaderNodeLayerWeight')
+    weight.inputs['Blend'].default_value = 0.35
+    ranged = tree.nodes.new('ShaderNodeMapRange')
+    ranged.inputs['From Min'].default_value = 0.35
+    ranged.inputs['From Max'].default_value = 1.0
+    ranged.inputs['To Min'].default_value = 0.0
+    ranged.inputs['To Max'].default_value = 0.55
+    tree.links.new(weight.outputs['Facing'], ranged.inputs['Value'])
+    mix = tree.nodes.new('ShaderNodeMix')
+    mix.data_type = 'RGBA'
+    tree.links.new(ranged.outputs['Result'], socket(mix.inputs, 'Factor', 'VALUE'))
+    socket(mix.inputs, 'A', 'RGBA').default_value = (*base, 1.0)
+    socket(mix.inputs, 'B', 'RGBA').default_value = (*shade, 1.0)
+    tree.links.new(socket(mix.outputs, 'Result', 'RGBA'), shader.inputs['Base Color'])
+    shader.inputs['Roughness'].default_value = 0.2
+    if 'Specular IOR Level' in shader.inputs:
+        shader.inputs['Specular IOR Level'].default_value = 0.5
+    if 'Coat Weight' in shader.inputs:
+        shader.inputs['Coat Weight'].default_value = 1.0
+        shader.inputs['Coat Roughness'].default_value = 0.04
+    return material
+
+
+def keyline_material(name, colour):
+    material = bpy.data.materials.new(name)
+    material.use_nodes = True
+    tree = material.node_tree
+    for node in list(tree.nodes):
+        if node.type == 'BSDF_PRINCIPLED':
+            tree.nodes.remove(node)
+    output = next(node for node in tree.nodes if node.type == 'OUTPUT_MATERIAL')
+    emission = tree.nodes.new('ShaderNodeEmission')
+    emission.inputs['Color'].default_value = (*colour, 1.0)
+    emission.inputs['Strength'].default_value = 1.0
+    clear = tree.nodes.new('ShaderNodeBsdfTransparent')
+    facing = tree.nodes.new('ShaderNodeNewGeometry')
+    mix = tree.nodes.new('ShaderNodeMixShader')
+    tree.links.new(facing.outputs['Backfacing'], mix.inputs[0])
+    tree.links.new(clear.outputs[0], mix.inputs[1])
+    tree.links.new(emission.outputs[0], mix.inputs[2])
+    tree.links.new(mix.outputs[0], output.inputs['Surface'])
+    return material
+
+
+def camera_only(obj):
+    obj.visible_diffuse = False
+    obj.visible_glossy = False
+    obj.visible_shadow = False
+    obj.visible_transmission = False
+    obj.visible_volume_scatter = False
+
+
+def piece_camera(scene, tilt, target, span):
+    data = bpy.data.cameras.new('piece')
+    data.type = 'ORTHO'
+    data.ortho_scale = span
+    obj = bpy.data.objects.new('piece', data)
+    view = Vector((0.0, math.sin(math.radians(tilt)), -math.cos(math.radians(tilt))))
+    obj.location = Vector(target) - view * 20.0
+    obj.rotation_euler = (math.radians(tilt), 0.0, 0.0)
+    bpy.context.collection.objects.link(obj)
+    scene.camera = obj
+    return obj
+
+
+def piece_lights(focus):
+    reach = 12.0
+    direction = Vector(KEY).normalized()
+    lamp('key', tuple(direction * reach), 6.2, 800.0, (1.0, 0.97, 0.92), aim=focus)
+    lamp('fill', (0.0, 0.0, 14.0), 16.0, 230.0, (0.92, 0.94, 1.0), aim=focus)
+    rim = Vector((math.cos(math.radians(20)) * 0.7071, math.cos(math.radians(20)) * 0.7071, math.sin(math.radians(20)))) * reach
+    lamp('rim', tuple(rim), 3.0, 200.0, (0.92, 0.95, 1.0), aim=focus)
+
+
+def piece_scene(width, height):
+    scene = reset(width, height)
+    studio(scene, 'studio_small_09', 0.55)
+    scene.view_settings.view_transform = 'Standard'
+    scene.view_settings.look = 'None'
+    scene.render.film_transparent = True
+    return scene
+
+
+def pawn_mesh(material):
+    pawn = lathe('pawn', PAWN_PROFILE, sides=96)
+    pawn.data.materials.append(material)
+    for polygon in pawn.data.polygons:
+        polygon.use_smooth = True
+    pawn.data.set_sharp_from_angle(angle=math.radians(40))
+    return pawn
+
+
+def ludo_pieces():
+    geometry = geometry_of()
+    ink = inks(geometry)
+    up = Vector((0.0, 0.5, 0.866))
+    span = 256 / PIECE_PX
+
+    for colour in ink:
+        scene = piece_scene(256, 256)
+        pawn = pawn_mesh(pawn_material('pawn-' + colour, ink[colour]['base'], ink[colour]['shade']))
+        hull = pawn.copy()
+        hull.data = pawn.data.copy()
+        hull.data.materials.clear()
+        hull.data.materials.append(keyline_material('keyline-' + colour, ink[colour]['keyline']))
+        bpy.context.collection.objects.link(hull)
+        grow = hull.modifiers.new('grow', 'DISPLACE')
+        grow.strength = 0.0375
+        grow.mid_level = 0.0
+        grow.direction = 'NORMAL'
+        camera_only(hull)
+        piece_lights((0.0, 0.0, 0.6))
+        piece_camera(scene, 60.0, tuple(up * 0.4176), span)
+        save(scene, 'pawn-' + colour + '.webp', quality=92, alpha=True)
+
+    scene = piece_scene(256, 128)
+    next(node for node in scene.world.node_tree.nodes if node.type == 'BACKGROUND').inputs['Strength'].default_value = 0.0
+    pawn = pawn_mesh(pawn_material('pawn-shadow', ink['red']['base'], ink['red']['shade']))
+    pawn.visible_camera = False
+    bpy.ops.mesh.primitive_plane_add(size=4.0, location=(0.0, 0.0, 0.0))
+    ground = bpy.context.active_object
+    ground.is_shadow_catcher = True
+    across = Vector((KEY[0], KEY[1], 0.0)).normalized()
+    high = across * math.cos(math.radians(68)) + Vector((0.0, 0.0, math.sin(math.radians(68))))
+    lamp('key', tuple(high * 12.0), 5.0, 800.0, (1.0, 1.0, 1.0), aim=(0.0, 0.0, 0.6))
+    lamp('contact', (0.0, 0.0, 6.0), 2.2, 180.0, (1.0, 1.0, 1.0), aim=(0.0, 0.0, 0.0))
+    piece_camera(scene, 60.0, tuple(up * -0.1176), span)
+    save(scene, 'pawn-shadow.webp', quality=92, alpha=True)
+
+    ludo_dice()
+
+
+PIPS = {
+    1: [(0, 0)],
+    2: [(-1, 1), (1, -1)],
+    3: [(-1, 1), (0, 0), (1, -1)],
+    4: [(-1, 1), (1, 1), (-1, -1), (1, -1)],
+    5: [(-1, 1), (1, 1), (0, 0), (-1, -1), (1, -1)],
+    6: [(-1, 1), (-1, 0), (-1, -1), (1, 1), (1, 0), (1, -1)]
+}
+
+
+def faces_for(value):
+    around = [face for face in range(1, 7) if face not in (value, 7 - value)]
+    south = min(around)
+    east = min(face for face in around if face not in (south, 7 - south))
+    return {
+        (0, 0, 1): value,
+        (0, 0, -1): 7 - value,
+        (0, -1, 0): south,
+        (0, 1, 0): 7 - south,
+        (1, 0, 0): east,
+        (-1, 0, 0): 7 - east
+    }
+
+
+def face_axes(normal):
+    if normal[2] != 0:
+        return Vector((1, 0, 0)), Vector((0, 1, 0))
+    if normal[1] != 0:
+        return Vector((1, 0, 0)), Vector((0, 0, 1))
+    return Vector((0, 1, 0)), Vector((0, 0, 1))
+
+
+def ludo_dice():
+    scene = piece_scene(2048, 256)
+    edge = 0.68
+    grid = 0.27 * edge
+    reach = 0.092
+    depth = 0.046 * edge
+    bone = lacquer('bone', linear('#F6F1E6'), roughness=0.28, coat=0.8)
+    pip = lacquer('pip', linear('#2B1D12'), roughness=0.6, coat=0.0)
+
+    for value in range(1, 7):
+        x = value - 1 - 3.5
+        bpy.ops.mesh.primitive_cube_add(size=edge, location=(x, 0.0, edge / 2))
+        die = bpy.context.active_object
+        die.name = 'die-' + str(value)
+        die.data.materials.append(bone)
+        rounding = die.modifiers.new('round', 'BEVEL')
+        rounding.width = 0.16 * edge
+        rounding.segments = 6
+        rounding.limit_method = 'NONE'
+        rounding.harden_normals = True
+        for polygon in die.data.polygons:
+            polygon.use_smooth = True
+        cutters = []
+        for normal, count in faces_for(value).items():
+            n = Vector(normal)
+            s, t = face_axes(normal)
+            surface = Vector((x, 0.0, edge / 2)) + n * (edge / 2)
+            for u, v in PIPS[count]:
+                where = surface + s * (u * grid) + t * (v * grid) + n * (reach - depth)
+                bpy.ops.mesh.primitive_uv_sphere_add(radius=reach, segments=32, ring_count=16, location=tuple(where))
+                drill = bpy.context.active_object
+                drill.data.materials.append(pip)
+                for polygon in drill.data.polygons:
+                    polygon.use_smooth = True
+                cutters.append(drill)
+        for index, drill in enumerate(cutters):
+            drill.hide_render = True
+            drill.hide_viewport = True
+            modifier = die.modifiers.new(f'pip-{index}', 'BOOLEAN')
+            modifier.operation = 'DIFFERENCE'
+            modifier.solver = 'EXACT'
+            modifier.object = drill
+            modifier.material_mode = 'TRANSFER'
+        weighted = die.modifiers.new('weighted', 'WEIGHTED_NORMAL')
+        weighted.keep_sharp = True
+
+    bpy.ops.mesh.primitive_plane_add(size=20.0, location=(0.0, 0.0, 0.0))
+    ground = bpy.context.active_object
+    ground.is_shadow_catcher = True
+    piece_lights((0.0, 0.0, 0.3))
+    piece_camera(scene, 10.0, (0.0, -0.04, edge / 2), 8.0)
+    save(scene, 'ludo-dice.webp', quality=92, alpha=True)
+
+
 SURFACES = {
     'ludo-table': ludo_table,
+    'ludo-board': ludo_board,
+    'ludo-pieces': ludo_pieces,
     'hokm-table-wide': lambda: hokm_table('hokm-table-wide', 1600, 1000),
     'hokm-table-tall': lambda: hokm_table('hokm-table-tall', 1000, 1200)
 }

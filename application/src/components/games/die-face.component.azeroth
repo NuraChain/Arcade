@@ -38,7 +38,7 @@ export default component DieFace(props: { value: number; size?: 'sm' | 'md' | 'f
 
     <span
         class={ () => [
-            'inline-grid shrink-0 grid-cols-3 grid-rows-3 rounded-control bg-[#f6f1e6] shadow-1 ring-1 ring-black/20',
+            'inline-grid shrink-0 grid-cols-3 grid-rows-3 rounded-[18%] bg-[#f6f1e6] shadow-[inset_0_-3px_0_rgb(0_0_0/0.12),0_1px_3px_rgb(0_0_0/0.35)] ring-1 ring-black/20',
             box
         ].join(' ') }
         role="img"
@@ -48,7 +48,7 @@ export default component DieFace(props: { value: number; size?: 'sm' | 'md' | 'f
             <span
                 class={ () => [
                     'block rounded-full',
-                    lit.includes(cell) ? 'bg-[#2b1d12]' : 'bg-transparent'
+                    lit.includes(cell) ? 'bg-[#2b1d12] shadow-[inset_0_1px_1.5px_rgb(0_0_0/0.45)]' : 'bg-transparent'
                 ].join(' ') }
                 aria-hidden="true"
             ></span>

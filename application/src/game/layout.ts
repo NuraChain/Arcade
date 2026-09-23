@@ -32,6 +32,43 @@ export const NEST: Record<string, readonly [number, number]> = {
 
 export const NEST_WELLS: readonly (readonly [number, number])[] = [[-1, -1], [1, -1], [-1, 1], [1, 1]];
 
+export const HOME_SCALE = 0.62;
+
+const ACROSS = [6.78, 7.26, 7.74, 8.22];
+
+export const HOME_SLOTS: Record<string, readonly (readonly [number, number])[]> = {
+    red: ACROSS.map((y) => [6.40 - 0.5, y - 0.5] as const),
+    green: ACROSS.map((x) => [x - 0.5, 6.40 - 0.5] as const),
+    yellow: ACROSS.map((y) => [8.60 - 0.5, y - 0.5] as const),
+    blue: ACROSS.map((x) => [x - 0.5, 8.60 - 0.5] as const)
+};
+
+export interface StackSpot
+{
+    dx: number;
+    dy: number;
+    scale: number;
+}
+
+export const STACKS: Record<number, readonly StackSpot[]> = {
+    1: [{ dx: 0, dy: 0, scale: 1 }],
+    2: [{ dx: -0.17, dy: -0.05, scale: 0.70 }, { dx: 0.17, dy: 0.05, scale: 0.70 }],
+    3: [{ dx: -0.19, dy: -0.12, scale: 0.66 }, { dx: 0.19, dy: -0.12, scale: 0.66 }, { dx: 0, dy: 0.10, scale: 0.66 }],
+    4: [
+        { dx: -0.19, dy: -0.13, scale: 0.62 },
+        { dx: 0.19, dy: -0.13, scale: 0.62 },
+        { dx: -0.19, dy: 0.10, scale: 0.62 },
+        { dx: 0.19, dy: 0.10, scale: 0.62 }
+    ]
+};
+
+export function stackSpot(index: number, count: number): StackSpot
+{
+    const layout = STACKS[Math.min(Math.max(count, 1), 4)];
+
+    return layout[Math.min(index, layout.length - 1)];
+}
+
 export interface Spot
 {
     x: number;

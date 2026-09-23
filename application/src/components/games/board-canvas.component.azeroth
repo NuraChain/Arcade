@@ -3,6 +3,7 @@ import { useLocale } from '../../stores/locale.store.ts';
 import { useOverlay } from '../../stores/overlay.store.ts';
 import { useSettings } from '../../stores/settings.store.ts';
 import { CELL, MARGIN } from '../../game/layout.ts';
+import { FINISHED } from '../../game/board/path.ts';
 import type { BoardHandle, BoardView } from '../../game/bridge.ts';
 import { sceneFor } from '../../game/scenes.ts';
 
@@ -175,7 +176,8 @@ export default component BoardCanvas(props: { game: string; view: BoardView; onP
                     <span
                         class="board-token"
                         aria-hidden="true"
-                        style={ `--at-col:${ token.col }; --at-row:${ token.row }; --pawn: url('/board/pawn-${ token.colour }.svg')` }
+                        data-home={ token.at === FINISHED ? 'true' : undefined }
+                        style={ `--at-col:${ token.col }; --at-row:${ token.row }; --pawn: url('/board/pawn-${ token.colour }.webp'); --tone: var(--ludo-${ token.colour })` }
                     >
                         <span>{ token.label }</span>
                     </span>

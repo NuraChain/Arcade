@@ -1350,7 +1350,7 @@
     container-type: inline-size;
     inline-size: 100%;
     block-size: 100%;
-    background-image: url('/board/ludo-board.svg');
+    background-image: url('/board/ludo-board.webp');
     background-size: 100% 100%;
     background-repeat: no-repeat;
     border-radius: var(--radius-panel);
@@ -1372,32 +1372,60 @@
     align-items: flex-start;
     justify-content: center;
 
-    color: white;
-    font-size: clamp(6px, 1.5cqi, 12px);
+    color: color-mix(in oklab, var(--tone) 45%, black);
+    font-size: clamp(6px, 2cqi, 14px);
     font-weight: 800;
     line-height: 1;
-    text-shadow: 0 0 2px var(--void), 0 1px 1px var(--void);
+    transform-origin: 50% 62.5%;
     transition: inset-inline-start var(--duration-ui, 180ms) var(--ease-ui, ease),
                 inset-block-start var(--duration-ui, 180ms) var(--ease-ui, ease);
 }
 
-.board-token::before
+.board-token::before,
+.board-token::after
 {
     content: '';
     position: absolute;
+    inset-inline-start: -44.12%;
+    inline-size: 188.24%;
+}
+
+.board-token::before
+{
     z-index: -1;
-    inset-inline-start: -15%;
-    inset-block-start: -77.9%;
-    inline-size: 130%;
-    block-size: 156%;
+    inset-block-start: -83.82%;
+    block-size: 188.24%;
     background: var(--pawn) center / 100% 100% no-repeat;
+}
+
+.board-token::after
+{
+    z-index: -2;
+    inset-block-start: 30.15%;
+    block-size: 94.12%;
+    background: url('/board/pawn-shadow.webp') center / 100% 100% no-repeat;
+    opacity: 0.6;
 }
 
 .board-token > span
 {
     position: absolute;
-    inset-block-start: -35%;
+    inset-block-start: -32.75%;
     translate: 0 -50%;
+    opacity: 0.8;
+}
+
+.board-token[data-home]
+{
+    scale: 0.62;
+}
+
+@container (max-width: 29.6rem)
+{
+    .board-token > span
+    {
+        display: none;
+    }
 }
 
 @media (prefers-reduced-motion: reduce)
