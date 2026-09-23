@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 import { manualClock, type ManualClock } from '../src/lib/clock.ts';
 import { attachGestures, resist, PULL_ARM, PULL_MAX } from '../src/lib/gestures.ts';
-import { haptic, hapticsAllowed, setHaptics } from '../src/lib/haptics.ts';
+import { HAPTIC_GAP_MS, haptic, hapticsAllowed, resetHaptics, setHaptics } from '../src/lib/haptics.ts';
 import { attachHold } from '../src/lib/hold.ts';
 import { createLongPress } from '../src/lib/press.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
@@ -16,12 +16,12 @@ beforeEach(() =>
     resetRuntime();
     clock = manualClock(10_000);
     setRuntime({ clock });
-    setHaptics(false);
+    resetHaptics();
 });
 
 afterEach(() =>
 {
-    setHaptics(false);
+    resetHaptics();
     resetRuntime();
     document.body.innerHTML = '';
 });
@@ -143,6 +143,56 @@ describe('haptics', () =>
         setHaptics(true);
         expect(haptic('tick')).toBe(true);
         expect(vibrate).toHaveBeenCalledWith(7);
+    });
+
+    it('waits for the reader to have touched the page, because Chrome refuses and logs otherwise', () =>
+    {
+        const vibrate = vi.fn(() => true);
+        Object.defineProperty(navigator, 'vibrate', { value: vibrate, configurable: true });
+        Object.defineProperty(navigator, 'userActivation', { value: { hasBeenActive: false }, configurable: true });
+        setHaptics(true);
+
+        try
+        {
+            expect(haptic('select')).toBe(false);
+            expect(vibrate).not.toHaveBeenCalled();
+        }
+        finally
+        {
+            Object.defineProperty(navigator, 'userActivation', { value: undefined, configurable: true });
+        }
+    });
+
+    it('says nothing from a tab nobody is looking at', () =>
+    {
+        const vibrate = vi.fn(() => true);
+        Object.defineProperty(navigator, 'vibrate', { value: vibrate, configurable: true });
+        Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
+        setHaptics(true);
+
+        try
+        {
+            expect(haptic('win')).toBe(false);
+            expect(vibrate).not.toHaveBeenCalled();
+        }
+        finally
+        {
+            Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
+        }
+    });
+
+    it('lets two buzzes no closer than the gap, so a burst of events is one touch and not a rattle', () =>
+    {
+        const vibrate = vi.fn(() => true);
+        Object.defineProperty(navigator, 'vibrate', { value: vibrate, configurable: true });
+        setHaptics(true);
+
+        expect(haptic('capture')).toBe(true);
+        clock.advance(HAPTIC_GAP_MS - 1);
+        expect(haptic('tick')).toBe(false);
+        clock.advance(1);
+        expect(haptic('kot')).toBe(true);
+        expect(vibrate.mock.calls).toEqual([[[20, 30, 28]], [[20, 40, 20, 40, 60]]]);
     });
 
     it('reports failure rather than throwing where the device has no motor', () =>

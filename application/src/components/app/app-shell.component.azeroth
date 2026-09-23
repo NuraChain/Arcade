@@ -49,7 +49,7 @@ export default component AppShell(props: { children?: MountNode })
 
     effect
     {
-        setHaptics(settings.settings().haptics && device.coarse() && !device.reducedMotion());
+        setHaptics(settings.settings().haptics && device.coarse());
     }
 
     effect

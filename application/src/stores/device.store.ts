@@ -134,7 +134,7 @@ export const useDevice = createStore((): DeviceApi =>
         height,
         posture: () => forced() ?? postureFor(width()),
         social: () => (forced() ?? postureFor(width())) === 'sidebar' && width() >= SOCIAL_MIN,
-        landscape: () => width() > height(),
+        landscape: () => width() * 3 >= height() * 4,
         coarse: () => forcedCoarse() ?? coarse(),
         reducedMotion,
         standalone,

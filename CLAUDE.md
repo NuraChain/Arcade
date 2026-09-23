@@ -2277,7 +2277,11 @@ game on one tap.
 **A rotated phone gets a real landscape layout.** Ludo's table becomes two columns - the board sized
 by the screen's HEIGHT, the strip beside it - which is also what a container of 44rem or more gets on a
 desktop. Hokm uses the wide table, capped by height, with the hand overlapping its bottom rim. Both are
-`@media (orientation: landscape) and (max-height: 540px)`, the same threshold as `bareFor`.
+`@media (orientation: landscape) and (max-height: 540px) and (min-aspect-ratio: 4/3)`, the same
+threshold as `bareFor`, and `device.landscape()` asks the same 4:3. "Wider than tall" alone is not
+landscape: 375x360 is wider than tall, and two columns there need a 228px board, a gap and a 13rem
+strip - 452px on a 375px screen, eight overflowing matrix cells. A near-square window is laid out
+upright, which is also what it looks like.
 
 **Ludo is played upright, and landscape is its safety net rather than its layout.** The board is
 square, so turning a phone sideways only makes it smaller - 258px against 360px upright on the same

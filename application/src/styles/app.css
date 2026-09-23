@@ -1600,7 +1600,7 @@
     --board-chrome: 21rem;
 }
 
-@media (orientation: landscape) and (max-height: 540px)
+@media (orientation: landscape) and (max-height: 540px) and (min-aspect-ratio: 4/3)
 {
     .ludo-table
     {
