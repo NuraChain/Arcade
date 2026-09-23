@@ -25,7 +25,7 @@ export type MatchOutcome = 'won' | 'abandoned' | 'closed';
 @Check('matches_outcome_known', `outcome is null or outcome in ('won', 'abandoned', 'closed')`)
 @Check('matches_rev_matches_state', `(state ->> 'rev')::int = rev`)
 @Check('matches_rev_positive', `rev >= 0`)
-@Check('matches_seats_range', `seats between 2 and 4`)
+@Check('matches_seats_range', `seats between 2 and 9`)
 /**
  * The RULES variant within a game, which is not the game's name.
  *

@@ -34,7 +34,7 @@ export type TableStatus = 'open' | 'closed';
 @Check('tables_mode_known', `mode in ('live', 'turns')`)
 @Check('tables_privacy_known', `privacy in ('invite', 'room', 'friends', 'public')`)
 @Check('tables_room_is_private', `room_id is null or privacy = 'room'`)
-@Check('tables_seats_range', `seats between 2 and 8`)
+@Check('tables_seats_range', `seats between 2 and 9`)
 @Check('tables_status_known', `status in ('open', 'closed')`)
 @Index('tables_code', ['code'], { unique: true })
 @Entity('tables')
