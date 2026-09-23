@@ -11,6 +11,7 @@ import Page from '../src/components/app/page.component.azeroth';
 import ToastHost from '../src/components/app/toast-host.component.azeroth';
 import Button from '../src/components/ui/button.component.azeroth';
 import Tabs from '../src/components/ui/tabs.component.azeroth';
+import NotFoundPage from '../src/pages/not-found.page.azeroth';
 import { manualClock, type ManualClock } from '../src/lib/clock.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import { routes } from '../src/routes.ts';
@@ -495,5 +496,35 @@ describe('routes', () =>
         expect(routes.find((route) => route.path === '/')?.render).toBe('static');
         expect(routes.find((route) => route.path === '/app')?.render).toBe('client');
         expect(routes.find((route) => route.path === '/app')?.children?.length).toBe(17);
+    });
+});
+
+describe('the page nobody asked for', () =>
+{
+    it('is not shown while a guard is still deciding, and is shown for a url nothing answers', async () =>
+    {
+        let admit: (verdict: boolean) => void = () => undefined;
+        const table: Route[] = [
+            {
+                path: '/app',
+                guard: () => new Promise<boolean>((resolve) => admit = resolve),
+                component: (): HTMLElement => Object.assign(document.createElement('h1'), { textContent: 'home' })
+            }
+        ];
+        const router = createRouter({ routes: table, history: createMemoryHistory('/app'), scroll: false });
+        const { container } = renderTest(() => RouterProvider({
+            router,
+            children: () => Routes({ fallback: () => NotFoundPage({ get holding() { return router.pending(); } }) })
+        }) as HTMLElement);
+
+        await Promise.resolve();
+        expect(container.querySelector('#missing-title')).toBeNull();
+
+        admit(true);
+        await vi.waitFor(() => expect(container.textContent).toContain('home'));
+        expect(container.querySelector('#missing-title')).toBeNull();
+
+        router.navigate('/nowhere');
+        await vi.waitFor(() => expect(container.querySelector('#missing-title')).not.toBeNull());
     });
 });

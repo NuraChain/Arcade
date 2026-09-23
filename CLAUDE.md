@@ -3107,6 +3107,16 @@ page. `ErrorPage` takes the error now, logs it always, and shows it on screen in
 an exception's text is written for whoever wrote the code and can carry an id or a path that a
 stranger reading over somebody's shoulder should not be handed.
 
+**The 404 page waits while the router is still deciding.** On a cold load of any `/app` url the
+session guard is async, and until it settles the router has no match, so `<Routes>` rendered its
+fallback: every refresh of every signed-in page, and the sign-in page, opened on "There's no table
+here" for 20 to 180ms before the real page replaced it. The router's own hold covers a chunk that is
+still downloading and not a guard that is still thinking. `router.pending()` is true for both, so
+`App.azeroth` hands it to `NotFoundPage` as `holding` and the page renders nothing until it is
+false; a url nothing answers is never pending, so a real 404 is unchanged. `shell.spec.ts` holds a
+guard open and fails if the page shows. Nothing else could see it: the matrix screenshots a settled
+page, and a flash of the wrong screen is gone before any gate looks.
+
 **Stores own their timers AND their listeners.** No store schedules or subscribes to anything in its
 factory; that work sits behind idempotent `start(): () => void` / `stop()`, one-shot timers are
 tracked and cleared by `reset()`, and every one reads the clock through `runtime()` so tests can

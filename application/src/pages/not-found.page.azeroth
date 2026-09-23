@@ -4,26 +4,28 @@ import Button from '../components/ui/button.component.azeroth';
 import Icon from '../icons/icon.component.azeroth';
 import { useLocale } from '../stores/locale.store.ts';
 
-export default component NotFoundPage()
+export default component NotFoundPage(props: { holding?: boolean })
 {
     const locale = useLocale();
 
-    <main class="flex min-h-dvh items-center justify-center bg-void px-4 py-10">
-        <section class="hero-surface w-full max-w-[30rem] rounded-hero p-7 text-center sm:p-9" aria-labelledby="missing-title">
-            <a href="/" class="mx-auto mb-8 flex w-max items-center gap-2.5">
-                <BrandLogo size="lg" />
-                <BrandMark class="text-ui-lg text-text" />
-            </a>
-            <span class="mx-auto flex h-16 w-16 items-center justify-center rounded-full border border-accent/30 bg-accent/12 text-accent">
-                <Icon name="discover" size={ 28 } />
-            </span>
-            <h1 id="missing-title" class="title mt-5 text-ui-3xl">{ locale.t('notFound.title') }</h1>
-            <p class="mx-auto mt-2 max-w-[36ch] text-ui-md text-muted">{ locale.t('notFound.lead') }</p>
-            <div class="mt-7 flex justify-center">
-                <span class="glow-cta flex rounded-control">
-                    <Button href="/" variant="primary" size="lg" icon="forward">{ locale.t('notFound.cta') }</Button>
+    <Show when={ props.holding !== true }>
+        <main class="flex min-h-dvh items-center justify-center bg-void px-4 py-10">
+            <section class="hero-surface w-full max-w-[30rem] rounded-hero p-7 text-center sm:p-9" aria-labelledby="missing-title">
+                <a href="/" class="mx-auto mb-8 flex w-max items-center gap-2.5">
+                    <BrandLogo size="lg" />
+                    <BrandMark class="text-ui-lg text-text" />
+                </a>
+                <span class="mx-auto flex h-16 w-16 items-center justify-center rounded-full border border-accent/30 bg-accent/12 text-accent">
+                    <Icon name="discover" size={ 28 } />
                 </span>
-            </div>
-        </section>
-    </main>
+                <h1 id="missing-title" class="title mt-5 text-ui-3xl">{ locale.t('notFound.title') }</h1>
+                <p class="mx-auto mt-2 max-w-[36ch] text-ui-md text-muted">{ locale.t('notFound.lead') }</p>
+                <div class="mt-7 flex justify-center">
+                    <span class="glow-cta flex rounded-control">
+                        <Button href="/" variant="primary" size="lg" icon="forward">{ locale.t('notFound.cta') }</Button>
+                    </span>
+                </div>
+            </section>
+        </main>
+    </Show>
 }
