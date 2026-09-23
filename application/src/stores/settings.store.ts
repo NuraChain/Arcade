@@ -32,7 +32,7 @@ export function defaultSettings(): Settings
         sound: true,
         haptics: true,
         railWidth: 0.3,
-        railOpen: true,
+        railOpen: false,
         sidebarOpen: true,
         notifications: { invites: true, requests: true, results: true, messages: true, achievements: true }
     };

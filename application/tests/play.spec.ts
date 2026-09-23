@@ -502,46 +502,54 @@ describe('the table’s chat and its controls', () =>
         [...container.querySelectorAll('button')].find((one) =>
             one.getAttribute('aria-label') === name || one.textContent?.trim() === name);
 
-    const rail = (container: HTMLElement): HTMLElement | null => container.querySelector('aside.border-s');
+    const rail = (container: HTMLElement): HTMLElement | null => container.querySelector('.table-card:not(.hidden)');
 
-    it('docks the chat beside the table on a wide screen, and hides it and brings it back', async () =>
+    const pill = (container: HTMLElement): HTMLElement | null => container.querySelector('.table-pill');
+
+    it('floats the chat as a card on a wide screen, tucks it into a pill, and brings it back', async () =>
     {
+        useSettings().update({ railOpen: false });
         const container = await open('sidebar');
 
+        expect(rail(container)).toBeNull();
+        expect(pill(container)).not.toBeNull();
+
+        fire(pill(container)!, 'click');
+        await settle();
+
         expect(rail(container)).not.toBeNull();
-        expect(button(container, 'Show chat')).toBeUndefined();
+        expect(pill(container)).toBeNull();
+        expect(useSettings().settings().railOpen).toBe(true);
 
         fire(button(container, 'Hide chat')!, 'click');
         await settle();
 
         expect(rail(container)).toBeNull();
+        expect(pill(container)).not.toBeNull();
         expect(useSettings().settings().railOpen).toBe(false);
-
-        fire(button(container, 'Show chat')!, 'click');
-        await settle();
-
-        expect(rail(container)).not.toBeNull();
     });
 
-    it('widens the docked chat and narrows it again', async () =>
+    it('widens the floating chat and narrows it again', async () =>
     {
+        useSettings().update({ railOpen: true });
         const container = await open('sidebar');
 
-        expect(rail(container)!.className).toContain('w-[var(--social-w)]');
+        expect(rail(container)!.className).toContain('w-[min(23rem');
 
         fire(button(container, 'Make the chat bigger')!, 'click');
         await settle();
 
-        expect(rail(container)!.className).toContain('w-[min(30rem,40vw)]');
+        expect(rail(container)!.className).toContain('w-[min(30rem');
 
         fire(button(container, 'Make the chat smaller')!, 'click');
         await settle();
 
-        expect(rail(container)!.className).toContain('w-[var(--social-w)]');
+        expect(rail(container)!.className).toContain('w-[min(23rem');
     });
 
     it('lists who is sitting at the table beside the chat, one row per taken chair', async () =>
     {
+        useSettings().update({ railOpen: true });
         const container = await open('sidebar');
 
         fire(button(container, 'Players')!, 'click');
@@ -563,7 +571,7 @@ describe('the table’s chat and its controls', () =>
     {
         const container = await open('phone');
 
-        expect(container.querySelector('.table-sheet')).toBeNull();
+        expect(container.querySelector('.table-sheet:not(.hidden)')).toBeNull();
 
         fire(button(container, 'Show chat')!, 'click');
         await settle();
@@ -578,7 +586,7 @@ describe('the table’s chat and its controls', () =>
         fire(button(container, 'Hide chat')!, 'click');
         await settle();
 
-        expect(container.querySelector('.table-sheet')).toBeNull();
+        expect(container.querySelector('.table-sheet:not(.hidden)')).toBeNull();
         expect(button(container, 'Show chat')).not.toBeUndefined();
     });
 

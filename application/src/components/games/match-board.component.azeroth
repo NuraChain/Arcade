@@ -42,7 +42,7 @@ const STAGE = `--cell-cq: ${ (CELL * 100).toFixed(4) }cqi; --margin-cq: ${ (MARG
  * bug.
  */
 
-export default component MatchBoard(props: { match: MatchView; starting?: boolean; onAgain?: () => void })
+export default component MatchBoard(props: { match: MatchView; starting?: boolean; onAgain?: () => void; speech?: Record<string, string> })
 {
     const locale = useLocale();
     const board = useBoard();
@@ -212,6 +212,7 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
                             active={ entry.player.seat === game.turn }
                             die={ entry.player.seat === game.turn ? ludo.die : undefined }
                             finished={ over }
+                            bubble={ props.speech?.[entry.player.who] }
                         />
                     </div>
                 </For>

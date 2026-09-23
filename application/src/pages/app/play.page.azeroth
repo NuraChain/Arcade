@@ -13,7 +13,11 @@ import EmptyState from '../../components/ui/empty-state.component.azeroth';
 import ErrorState from '../../components/ui/error-state.component.azeroth';
 import Skeleton from '../../components/ui/skeleton.component.azeroth';
 import type { GameId } from '../../data/games.ts';
+import Icon from '../../icons/icon.component.azeroth';
+import { runtime } from '../../lib/runtime.ts';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
+import { useChat } from '../../stores/chat.store.ts';
+import { usePeople } from '../../stores/people.store.ts';
 import { useDevice } from '../../stores/device.store.ts';
 import { useLobby } from '../../stores/lobby.store.ts';
 import { useBoard } from '../../stores/match.store.ts';
@@ -40,6 +44,8 @@ export default component PlayPage()
     const toasts = useToasts();
     const params = useParams();
     const { navigate } = useNavigate();
+    const chat = useChat();
+    const people = usePeople();
 
     const mine = untrack(() => params().id ?? '');
 
@@ -51,7 +57,27 @@ export default component PlayPage()
 
     state starting = false;
 
-    let Board: ((props: { match: MatchView; starting?: boolean; onAgain?: () => void }) => MountNode) | null = null;
+    let Board: ((props: { match: MatchView; starting?: boolean; onAgain?: () => void; speech?: Record<string, string> }) => MountNode) | null = null;
+
+    let talk: Record<string, string> = {};
+
+    let version = 0;
+
+    state stamp = 0;
+
+    const publish = (): void =>
+    {
+        version += 1;
+        stamp = version;
+    };
+
+    derived speech = ((): Record<string, string> => (stamp >= 0 ? { ...talk } : {}))();
+
+    let heard = new Set<string>();
+
+    let primed = false;
+
+    let hush: (() => void)[] = [];
 
     state drawn = '';
 
@@ -75,6 +101,12 @@ export default component PlayPage()
         return () =>
         {
             release();
+
+            for (const stop of hush)
+            {
+                stop();
+            }
+            hush = [];
 
             const held = untrack(lobby.openId);
 
@@ -109,20 +141,26 @@ export default component PlayPage()
 
     useHead({ title: () => title });
 
-    derived docked = device.posture() === 'sidebar';
+    derived floating = device.posture() !== 'phone';
+
+    derived roomy = device.posture() === 'sidebar';
 
     derived hasChat = seated && table?.conversationId !== undefined;
 
+    derived room = table?.conversationId ?? '';
+
     derived railOpen = settings.settings().railOpen;
 
-    derived railVisible = docked && hasChat && railOpen;
+    derived cardOpen = floating && hasChat && railOpen;
 
-    derived sheetVisible = !docked && hasChat && chatOpen;
+    derived sheetVisible = !floating && hasChat && chatOpen;
 
-    derived openChat = hasChat && (docked ? !railOpen : !chatOpen)
+    derived chatShown = cardOpen || sheetVisible;
+
+    derived openChat = hasChat && !chatShown
         ? (): void =>
         {
-            if (docked)
+            if (floating)
             {
                 settings.update({ railOpen: true });
                 return;
@@ -131,6 +169,88 @@ export default component PlayPage()
             chatOpen = true;
         }
         : undefined;
+
+    const closeChat = (): void =>
+    {
+        if (floating)
+        {
+            settings.update({ railOpen: false });
+            return;
+        }
+
+        chatOpen = false;
+    };
+
+    derived said = chat.openId() === room ? chat.messages() : [];
+
+    derived unread = room === '' ? 0 : chat.unread(room);
+
+    derived preview = ((): string =>
+    {
+        if (unread === 0)
+        {
+            return '';
+        }
+
+        const last = [...said].reverse().find((message) => message.kind === 'text' && message.from !== lobby.me());
+
+        if (last === undefined)
+        {
+            return '';
+        }
+
+        const person = people.byHandle(last.from);
+
+        return `${ person === null ? last.from : locale.text(person.displayName) }: ${ locale.text(last.text) }`;
+    })();
+
+    effect
+    {
+        const lines = said;
+        const settled = chat.openId() === room && room !== '' && !chat.threadLoading();
+        const fresh = lines.filter((message) => message.kind === 'text' && !heard.has(message.id));
+
+        if (!primed)
+        {
+            if (settled)
+            {
+                primed = true;
+                heard = new Set(lines.map((message) => message.id));
+            }
+            return;
+        }
+
+        heard = new Set([...heard, ...lines.map((message) => message.id)]);
+
+        for (const message of fresh)
+        {
+            const who = message.from;
+            const text = locale.text(message.text);
+
+            talk = { ...talk, [who]: text };
+            publish();
+
+            hush.push(runtime().clock.after(4500, () =>
+            {
+                if (talk[who] === text)
+                {
+                    talk = Object.fromEntries(Object.entries(talk).filter(([key]) => key !== who));
+                    publish();
+                }
+            }));
+        }
+    }
+
+    effect
+    {
+        const open = chatShown;
+        const waiting = unread;
+
+        if (open && waiting > 0 && room !== '')
+        {
+            void chat.markRead(room);
+        }
+    }
 
     derived resigning = seated && showing && board.match()?.finishedAt === undefined;
 
@@ -210,10 +330,11 @@ export default component PlayPage()
         draw(want);
     }
 
-    const boardProps = (): { match: MatchView; starting: boolean; onAgain?: () => void } => ({
+    const boardProps = (): { match: MatchView; starting: boolean; onAgain?: () => void; speech: Record<string, string> } => ({
         match: board.match()!,
         starting,
-        onAgain: seated ? () => void begin() : undefined
+        onAgain: seated ? () => void begin() : undefined,
+        speech
     });
 
     effect
@@ -404,7 +525,7 @@ export default component PlayPage()
                 <div class="flex min-h-0 flex-1 gap-4">
                     <div
                         ref={ (element) => arena = element }
-                        class={ () => [ 'flex min-w-0 flex-1 flex-col gap-4 bg-void py-2', sheetVisible ? (chatWide ? '' : 'pb-[48dvh]') : '' ].filter(Boolean).join(' ') }
+                        class={ () => [ 'flex min-w-0 flex-1 flex-col gap-4 bg-void py-2 transition-[padding] duration-200', sheetVisible ? (chatWide ? '' : 'pb-[48dvh]') : '', cardOpen && roomy ? (chatWide ? 'pe-[31.5rem]' : 'pe-[24.5rem]') : '' ].filter(Boolean).join(' ') }
                     >
                         <PlayHeader
                             table={ table! }
@@ -414,7 +535,7 @@ export default component PlayPage()
                                     code={ table!.code }
                                     target={ arena }
                                     upright={ playing === 'ludo' }
-                                    onChat={ openChat }
+                                    onChat={ floating ? undefined : openChat }
                                     onResign={ resigning ? () => void resign() : undefined }
                                 />
                             }
@@ -507,42 +628,56 @@ export default component PlayPage()
 
                     </div>
 
-                    <Show when={ sheetVisible }>
+                    <Show when={ hasChat }>
                         { () =>
                             <div
                                 class={ () => [
-                                    'table-sheet fixed inset-x-0 bottom-0 z-30 flex flex-col overflow-hidden rounded-t-sheet border-t border-line-strong bg-field',
-                                    chatWide ? 'top-3' : 'h-[48dvh]'
-                                ].join(' ') }
+                                    'flex flex-col overflow-hidden bg-field',
+                                    floating
+                                        ? [
+                                            'table-card fixed bottom-5 end-5 z-30 rounded-panel border border-line-strong',
+                                            chatWide ? 'w-[min(30rem,calc(100vw-2.5rem))] h-[calc(100dvh-6.5rem)]' : 'w-[min(23rem,calc(100vw-2.5rem))] h-[min(34rem,calc(100dvh-6.5rem))]'
+                                        ].join(' ')
+                                        : [
+                                            'table-sheet fixed inset-x-0 bottom-0 z-30 rounded-t-sheet border-t border-line-strong',
+                                            chatWide ? 'top-3' : 'h-[48dvh]'
+                                        ].join(' '),
+                                    chatShown ? '' : 'hidden'
+                                ].filter(Boolean).join(' ') }
                             >
                                 <TableChat
-                                    conversationId={ table?.conversationId ?? '' }
+                                    conversationId={ room }
                                     class="min-h-0 flex-1"
                                     closeIcon="close"
                                     wide={ chatWide }
                                     onResize={ () => chatWide = !chatWide }
-                                    onClose={ () => chatOpen = false }
+                                    onClose={ closeChat }
                                 />
                             </div>
                         }
                     </Show>
 
-                    <Show when={ railVisible }>
+                    <Show when={ floating && hasChat && !cardOpen }>
                         { () =>
-                            <aside
-                                class={ () => [
-                                    'flex min-h-0 shrink-0 flex-col border-s border-line bg-field transition-[width] duration-200',
-                                    chatWide ? 'w-[min(30rem,40vw)]' : 'w-[var(--social-w)]'
-                                ].join(' ') }
+                            <button
+                                type="button"
+                                class="table-pill fixed bottom-5 end-5 z-30 flex min-h-12 max-w-[min(21rem,calc(100vw-2.5rem))] cursor-pointer items-center gap-3 rounded-full border border-line-strong bg-lifted py-2 ps-3 pe-5 text-start"
+                                aria-label={ locale.t('play.table.chatShow') }
+                                onClick={ () => openChat?.() }
                             >
-                                <TableChat
-                                    conversationId={ table?.conversationId ?? '' }
-                                    class="min-h-0 flex-1"
-                                    wide={ chatWide }
-                                    onResize={ () => chatWide = !chatWide }
-                                    onClose={ () => settings.update({ railOpen: false }) }
-                                />
-                            </aside>
+                                <span class="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent-fill text-accent-ink">
+                                    <Icon name="chats" size={ 18 } />
+                                    <Show when={ unread > 0 }>
+                                        { () => <span class="tally absolute -end-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-danger-fill px-1 text-ui-2xs font-bold text-accent-ink ring-2 ring-lifted">{ locale.n(unread) }</span> }
+                                    </Show>
+                                </span>
+                                <span class="flex min-w-0 flex-col">
+                                    <span class="text-ui-sm font-semibold text-text">{ locale.t('play.tab.chat') }</span>
+                                    <Show when={ preview !== '' }>
+                                        { () => <span class="truncate text-ui-xs text-muted" dir="auto">{ preview }</span> }
+                                    </Show>
+                                </span>
+                            </button>
                         }
                     </Show>
                 </div>

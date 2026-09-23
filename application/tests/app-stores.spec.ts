@@ -239,10 +239,10 @@ describe('settings', () =>
         expect(stored).not.toContain('showOnline');
     });
 
-    it('starts with sound on and the chat rail open', () =>
+    it('starts with sound on and the table chat tucked into its pill', () =>
     {
         expect(defaultSettings().sound).toBe(true);
-        expect(defaultSettings().railOpen).toBe(true);
+        expect(defaultSettings().railOpen).toBe(false);
     });
 });
 

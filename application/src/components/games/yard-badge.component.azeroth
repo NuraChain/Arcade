@@ -17,6 +17,7 @@ export default component YardBadge(props: {
     active: boolean;
     die?: number;
     finished: boolean;
+    bubble?: string;
 })
 {
     const locale = useLocale();
@@ -94,6 +95,10 @@ export default component YardBadge(props: {
                 <span class={ () => routine ? 'sr-only' : (warned ? 'yard-says text-danger' : 'yard-says') }>{ says }</span>
             </span>
         </span>
+
+        <Show when={ props.bubble !== undefined }>
+            { () => <span class="yard-bubble" dir="auto" role="status">{ props.bubble }</span> }
+        </Show>
 
         <Show when={ props.die !== undefined && turn }>
             { () =>

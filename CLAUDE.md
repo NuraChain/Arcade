@@ -2325,12 +2325,26 @@ refuses quietly. Hokm keeps a real landscape layout, because a card table is wid
 the round and the score sit in two chips in the felt's top corners, because on a phone the tiles that
 hold them are below the hand; on a wider table the side column shows them and the chips go.
 
-**Chat can be hidden, widened, and reached at every width.** The rail's header has a widen button and
-a hide button; hiding writes `settings.railOpen`, which is a device preference like the others, and a
-chat icon in the header brings it back. Below sidebar width the chat is a sheet over the table,
-half the screen first and the whole screen on request. Before this, the rail was `hidden lg:flex`
-while the phone sheet was offered only below 768, so a tablet between 768 and 1023 had no way to read
-the table's chat at all.
+**The table's chat floats, and the board keeps the width.** It used to be a full-height column docked
+beside the game, and the owner called the whole thing ugly: a third of the screen for a thread that
+is quiet most of a game, reading as a second app. The spec is
+`docs/superpowers/specs/2026-09-23-play-screen-chat-design.md`. Above phone width it is a card
+anchored to the bottom-right corner, 23rem by at most 34rem, 30rem and the full height on "bigger";
+closed, it is a pill in the same corner with the unread count and the last line said. It starts
+closed - `settings.railOpen` keeps its old name and now means "the card is open" - and when it is open
+on a sidebar-width screen the table makes room for it, so it never covers the bottom-right player's
+plate. A phone keeps its bottom sheet, half the screen first and the whole screen on request.
+
+**One chat instance, never unmounted while the table is open.** The card and the sheet are the same
+`TableChat` in one container whose classes change with the posture and which is `hidden` when closed.
+That keeps the thread open, which is what makes the unread count, the pill's preview and the speech
+bubbles work while nobody is looking at the chat, and reopening it lands where the reader left it.
+
+**A line appears as a speech bubble over the speaker's plate** for 4.5 seconds, on every screen size -
+the only way a message reaches somebody watching the board. The page keeps the bubbles in a plain
+map and publishes a version stamp rather than writing `speech` from itself, which the
+`self-write-in-effect` rule refuses; the first batch of a thread is recorded as heard once it has
+loaded, so opening a table does not replay the history as bubbles.
 
 **Things a finger can actually hit.** A tap on the Ludo canvas picks the nearest MOVABLE token within
 1.25 squares of it (`pickNear` in `game/layout.ts`), measured to the pawn's body rather than its foot,

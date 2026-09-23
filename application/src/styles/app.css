@@ -2074,3 +2074,100 @@
         opacity: 0.7;
     }
 }
+
+.yard-bubble
+{
+    position: absolute;
+    z-index: 5;
+    inset-block-end: calc(100% + 0.625rem);
+    inset-inline-start: 0.25rem;
+    max-inline-size: min(15rem, 70vw);
+    padding: 0.4375rem 0.75rem;
+    border-radius: 1rem;
+    background: #FFFFFF;
+    color: #1A1433;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    line-height: 1.3;
+    overflow-wrap: anywhere;
+    box-shadow: 0 0 0 2px #2A1E5C, 0 10px 22px -10px rgb(0 0 0 / 0.7);
+    pointer-events: none;
+    transform-origin: 1.25rem 100%;
+    animation: bubble-in 260ms var(--ease-pop, cubic-bezier(0.34, 1.56, 0.64, 1)) both;
+}
+
+.yard-bubble::after
+{
+    content: '';
+    position: absolute;
+    inset-block-start: calc(100% - 0.3125rem);
+    inset-inline-start: 1rem;
+    inline-size: 0.75rem;
+    block-size: 0.75rem;
+    background: #FFFFFF;
+    box-shadow: 2px 2px 0 0 #2A1E5C;
+    rotate: 45deg;
+}
+
+.yard-badge[data-corner$='right'] .yard-bubble
+{
+    inset-inline-start: auto;
+    inset-inline-end: 0.25rem;
+    transform-origin: calc(100% - 1.25rem) 100%;
+}
+
+.yard-badge[data-corner$='right'] .yard-bubble::after
+{
+    inset-inline-start: auto;
+    inset-inline-end: 1rem;
+}
+
+@keyframes bubble-in
+{
+    from
+    {
+        opacity: 0;
+        scale: 0.6;
+    }
+
+    to
+    {
+        opacity: 1;
+        scale: 1;
+    }
+}
+
+@media (prefers-reduced-motion: reduce)
+{
+    .yard-bubble
+    {
+        animation: none;
+    }
+}
+
+.table-card,
+.table-pill
+{
+    box-shadow: 0 24px 48px -16px rgb(0 0 0 / 0.75), 0 0 0 1px rgb(255 255 255 / 0.04);
+}
+
+.table-card
+{
+    animation: card-in 200ms var(--ease-ui) both;
+    transform-origin: 100% 100%;
+}
+
+.table-card.hidden
+{
+    animation: none;
+}
+
+@keyframes card-in
+{
+    from
+    {
+        opacity: 0;
+        scale: 0.94;
+        translate: 0 0.5rem;
+    }
+}
