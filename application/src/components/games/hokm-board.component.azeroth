@@ -237,6 +237,30 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
             { () =>
         <div class="hokm-arena">
             <div class="hokm-table">
+                <div class="hokm-felt-info" aria-hidden="true">
+                    <span class="hokm-chip">
+                        <Show
+                            when={ view?.trump !== undefined }
+                            fallback={ <Icon name="crest-crown" size={ 12 } class="shrink-0 text-gold" /> }
+                        >
+                            { () =>
+                                <span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-text">
+                                    <Icon name={ SUIT_ICON[view!.trump!] } size={ 12 } class={ RED_SUITS.includes(view!.trump!) ? 'text-danger-fill' : 'text-bright-ink' } />
+                                </span>
+                            }
+                        </Show>
+                        <span>{ locale.t('hokm.round', { n: locale.n(view!.round) }) }</span>
+                    </span>
+                    <span class="hokm-chip">
+                        <For each={ sides } key={ (side) => side.index } let={ side }>
+                            <span class="flex items-center gap-1">
+                                <span class={ () => [ 'h-2 w-2 rounded-full bg-current', SIDE_TONE[side.index % SIDE_TONE.length] ].join(' ') }></span>
+                                <span class="tally font-bold text-white">{ locale.n(side.points) }</span>
+                            </span>
+                        </For>
+                        <span class="tally text-white/60">/{ locale.n(view!.target) }</span>
+                    </span>
+                </div>
                 <For each={ plates } key={ (plate) => plate.row.seat } let={ plate }>
                     <div class="hokm-seat" data-side={ plate.side }>
                         <div

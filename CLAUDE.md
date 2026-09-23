@@ -2250,6 +2250,17 @@ by the screen's HEIGHT, the strip beside it - which is also what a container of 
 desktop. Hokm uses the wide table, capped by height, with the hand overlapping its bottom rim. Both are
 `@media (orientation: landscape) and (max-height: 540px)`, the same threshold as `bareFor`.
 
+**Ludo is played upright, and landscape is its safety net rather than its layout.** The board is
+square, so turning a phone sideways only makes it smaller - 258px against 360px upright on the same
+phone. A browser cannot stop a phone rotating, so the landscape layout stays and fits the screen, and
+it says so: "Ludo plays best upright" in the strip. Full screen from a ludo table also asks
+`screen.orientation.lock('portrait')`, which Android grants in full screen and everything else
+refuses quietly. Hokm keeps a real landscape layout, because a card table is wide.
+
+**The felt carries the two numbers somebody glances at.** On a table narrower than 36rem the trump,
+the round and the score sit in two chips in the felt's top corners, because on a phone the tiles that
+hold them are below the hand; on a wider table the side column shows them and the chips go.
+
 **Chat can be hidden, widened, and reached at every width.** The rail's header has a widen button and
 a hide button; hiding writes `settings.railOpen`, which is a device preference like the others, and a
 chat icon in the header brings it back. Below sidebar width the chat is a sheet over the table,

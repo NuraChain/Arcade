@@ -1107,6 +1107,42 @@
 }
 
 
+.hokm-felt-info
+{
+    position: absolute;
+    z-index: 1;
+    inset-inline: 7%;
+    top: 5.5%;
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5rem;
+    pointer-events: none;
+}
+
+.hokm-chip
+{
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.2rem 0.55rem 0.2rem 0.25rem;
+    border: 1px solid rgb(217 180 90 / 0.28);
+    border-radius: 999px;
+    background: rgb(4 20 12 / 0.55);
+    color: #F5E6B8;
+    font-size: var(--text-ui-2xs);
+    font-weight: 600;
+    line-height: 1.2;
+    box-shadow: 0 4px 10px -6px rgb(0 0 0 / 0.6);
+}
+
+@container (min-width: 36rem)
+{
+    .hokm-felt-info
+    {
+        display: none;
+    }
+}
+
 .hokm-plate
 {
     display: flex;

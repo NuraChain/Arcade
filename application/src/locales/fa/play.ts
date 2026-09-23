@@ -186,6 +186,7 @@ export const play: Pick<Dictionary, keyof typeof reference> = {
     'match.turn.waiting': 'منتظر تاس.',
     'match.roll': 'تاس بینداز',
     'match.hint.roll': 'روی تاسِ وسطِ صفحه بزن.',
+    'match.upright': 'منچ را بهتر است ایستاده بازی کنی. گوشی را بچرخان تا صفحه بزرگ‌تر شود.',
     'match.hint.move': 'روی یک مهرهٔ درخشان بزن، یا از پایین انتخاب کن.',
     'match.rolling': 'در حال انداختن…',
     'match.die': '{die} آمد',

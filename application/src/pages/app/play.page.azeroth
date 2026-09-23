@@ -413,6 +413,7 @@ export default component PlayPage()
                                 <TableDock
                                     code={ table!.code }
                                     target={ arena }
+                                    upright={ playing === 'ludo' }
                                     onChat={ openChat }
                                     onResign={ resigning ? () => void resign() : undefined }
                                 />

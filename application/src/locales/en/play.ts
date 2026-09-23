@@ -183,6 +183,7 @@ export const play = {
     'match.turn.waiting': 'Waiting for the roll.',
     'match.roll': 'Roll the dice',
     'match.hint.roll': 'Tap the die in the middle of the board.',
+    'match.upright': 'Ludo plays best upright. Turn your phone for a bigger board.',
     'match.hint.move': 'Tap a glowing token, or choose one below.',
     'match.rolling': 'Rolling…',
     'match.die': 'You rolled a {die}',

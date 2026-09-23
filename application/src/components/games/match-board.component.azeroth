@@ -4,7 +4,9 @@ import DieFace from './die-face.component.azeroth';
 import TurnClock from './turn-clock.component.azeroth';
 import YardBadge from './yard-badge.component.azeroth';
 import Button from '../ui/button.component.azeroth';
+import Icon from '../../icons/icon.component.azeroth';
 import { useLocale } from '../../stores/locale.store.ts';
+import { SHORT_MAX, useDevice } from '../../stores/device.store.ts';
 import { useBoard } from '../../stores/match.store.ts';
 import { usePeople } from '../../stores/people.store.ts';
 import type { MatchView } from '../../api.ts';
@@ -44,6 +46,7 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
 {
     const locale = useLocale();
     const board = useBoard();
+    const device = useDevice();
     const people = usePeople();
 
     derived game = props.match;
@@ -124,6 +127,8 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
         seat: chair.seat,
         corner: CORNER[chair.seat.colour] ?? 'top-left'
     }));
+
+    derived sideways = device.landscape() && device.height() <= SHORT_MAX;
 
     derived hint = ((): string =>
     {
@@ -238,6 +243,14 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
                                 <p class="text-ui-base font-semibold text-white" aria-live="polite">{ says }</p>
                                 <Show when={ hint !== '' }>
                                     { () => <p class="text-ui-xs text-muted">{ hint }</p> }
+                                </Show>
+                                <Show when={ sideways }>
+                                    { () =>
+                                        <p class="flex items-center gap-1.5 text-ui-xs text-gold">
+                                            <Icon name="phone" size={ 14 } class="shrink-0" />
+                                            <span>{ locale.t('match.upright') }</span>
+                                        </p>
+                                    }
                                 </Show>
                             </div>
                             <TurnClock deadline={ game.deadline } over={ over } />

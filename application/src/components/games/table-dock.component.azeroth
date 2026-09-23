@@ -7,11 +7,19 @@ import { useSettings } from '../../stores/settings.store.ts';
 const canFullscreen = (): boolean =>
     typeof document !== 'undefined' && document.fullscreenEnabled === true;
 
+const lockUpright = (): Promise<void> =>
+{
+    const orientation = screen.orientation as (ScreenOrientation & { lock?: (to: string) => Promise<void> }) | undefined;
+
+    return orientation?.lock?.('portrait').catch(() => undefined) ?? Promise.resolve();
+};
+
 export default component TableDock(props: {
     code?: string;
     target?: HTMLElement | null;
     onChat?: () => void;
     onResign?: () => void;
+    upright?: boolean;
 })
 {
     const locale = useLocale();
@@ -40,7 +48,9 @@ export default component TableDock(props: {
 
         if (document.fullscreenElement === null)
         {
-            void host.requestFullscreen?.().catch(() => undefined);
+            void host.requestFullscreen?.()
+                .then(() => props.upright === true ? lockUpright() : undefined)
+                .catch(() => undefined);
             return;
         }
 
