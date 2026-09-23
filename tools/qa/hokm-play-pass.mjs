@@ -152,7 +152,7 @@ const loaded = (page, selector) => page.evaluate(async (which) =>
 
     if (node === null) { return -1; }
 
-    const urls = [...getComputedStyle(node).backgroundImage.matchAll(/url("([^"]+)")/g)].map((match) => match[1]);
+    const urls = [...getComputedStyle(node).backgroundImage.matchAll(/url\("?([^")]+)"?\)/g)].map((match) => match[1]);
 
     if (urls.length === 0) { return 0; }
 

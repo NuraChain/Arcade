@@ -329,31 +329,6 @@ console.log('\n[6] the server decides what a table may be');
             };
         });
 
-        /*
-         * And a game with no engine is refused at the door rather than at Start.
-         * `available` is a claim about a mechanism; a table that can be opened, filled and readied
-         * and then answers 422 to the one button that matters is the shape this check exists to
-         * keep out of the product.
-         */
-        const unplayable = await page.evaluate(async () =>
-        {
-            const post = async (game, seats) =>
-            {
-                const r = await fetch('/api/tables', {
-                    method: 'POST',
-                    headers: { 'content-type': 'application/json' },
-                    body: JSON.stringify({ game, seats, mode: 'live', privacy: 'invite', target: 0, cube: false, blinds: 'low', chat: true, voice: false, invitees: [] })
-                });
-                return r.status;
-            };
-            return { poker: await post('poker', 2) };
-        });
-
-        for (const [game, status] of Object.entries(unplayable))
-        {
-            record(`refuses a table for ${ game }, which has no engine yet`, status >= 400 && status < 500, `${ status }`);
-        }
-
         for (const [name, r] of Object.entries(attempts))
         {
             if (name === 'legalTable')

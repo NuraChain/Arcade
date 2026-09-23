@@ -220,10 +220,10 @@ try
          */
         await mina.page.waitForTimeout(SETTLE_MS);
 
-        const canvases = await mina.page.evaluate(() => document.querySelectorAll('.board-canvas canvas').length);
+        const boards = await mina.page.evaluate(() => document.querySelectorAll('.board-canvas .lb').length);
         const fallback = await mina.page.evaluate(() => document.querySelectorAll('.board-token').length);
 
-        record('the other browser is shown the board without pressing anything', canvases === 1, `${ canvases } canvas`);
+        record('the other browser is shown the board without pressing anything', boards === 1, `${ boards } board`);
 
         /**
          * Both layers drawing at once is invisible in English - the fallback tokens land on the same
@@ -308,12 +308,10 @@ try
 
         const tokens = await dana.page.evaluate(() =>
         {
-            const canvas = document.querySelector('.board-canvas canvas');
-
-            return canvas === null ? 0 : canvas.width;
+            return document.querySelectorAll('.board-canvas .lb .lp').length;
         });
 
-        record('the canvas is still the thing drawing it', tokens > 0, `${ tokens }px`);
+        record('the drawn board is still the thing drawing it', tokens > 0, `${ tokens } pawns`);
     }
 
     // ---------------------------------------------------------------- 4. the game reaches an end
@@ -381,7 +379,7 @@ try
         for (const who of [dana, mina])
         {
             const said = await who.page.evaluate(() =>
-                document.querySelector('.board-controls')?.textContent?.replace(/\s+/g, ' ').trim() ?? '');
+                document.querySelector('main')?.innerText.replace(/\s+/g, ' ').trim() ?? '');
 
             /**
              * The board used to vanish here. `tables.match_id` is the LIVE match, so it clears the
