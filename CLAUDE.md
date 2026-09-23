@@ -3213,6 +3213,15 @@ page. `ErrorPage` takes the error now, logs it always, and shows it on screen in
 an exception's text is written for whoever wrote the code and can carry an id or a path that a
 stranger reading over somebody's shoulder should not be handed.
 
+**The top bar folds the sidebar, and it is the only place that does.** At sidebar width a toggle at
+the far left of the top bar collapses the 15rem sidebar to the 4.5rem rail and back - the pattern
+YouTube, Gmail, Slack and Linear share - and `[` does the same from the keyboard, beside `/` for
+search. The choice is `settings.sidebarOpen`, a device preference like the others, so a wide monitor
+and a laptop can disagree. The toggle is not drawn at rail width, where there is no sidebar to fold,
+nor on a game route, which already has the rail. The top bar's primary action is "Play now", to the
+games list, because starting a game is what the product is for; the sidebar and the rail already
+carry the chat count, so the top bar does not repeat it.
+
 **The 404 page waits while the router is still deciding.** On a cold load of any `/app` url the
 session guard is async, and until it settles the router has no match, so `<Routes>` rendered its
 fallback: every refresh of every signed-in page, and the sign-in page, opened on "There's no table

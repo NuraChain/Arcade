@@ -19,6 +19,8 @@ export const app: Pick<Dictionary, keyof typeof reference> = {
     'app.nav.signOut': 'خروج',
     'create.title': 'ساختن میز',
     'app.nav.quickPlay': 'بازی سریع',
+    'app.sidebar.collapse': 'جمع کردن منو',
+    'app.sidebar.expand': 'باز کردن منو',
     'app.search.placeholder': 'جست‌وجوی بازی، آدم یا گروه…',
 
     'shell.panel': 'فعالیت و دوستان',

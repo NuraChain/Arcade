@@ -7,9 +7,11 @@ import { useDevice } from '../../stores/device.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useNotifications } from '../../stores/notifications.store.ts';
 import { useAccount } from '../../stores/account.store.ts';
+import { useSettings } from '../../stores/settings.store.ts';
 import { useShell } from '../../stores/shell.store.ts';
 import BrandMark from '../layout/brand-mark.component.azeroth';
 import Avatar from '../ui/avatar.component.azeroth';
+import Button from '../ui/button.component.azeroth';
 import IconButton from '../ui/icon-button.component.azeroth';
 
 export default component TopBar()
@@ -18,6 +20,7 @@ export default component TopBar()
     const device = useDevice();
     const account = useAccount();
     const shell = useShell();
+    const settings = useSettings();
     const notifications = useNotifications();
     const match = useMatch();
     const { navigate } = useNavigate();
@@ -30,11 +33,17 @@ export default component TopBar()
 
     derived unread = notifications.unread();
 
+    derived collapsible = device.posture() === 'sidebar' && meta.immersive !== true;
+
+    derived open = settings.settings().sidebarOpen;
+
+    const toggle = (): void => settings.update({ sidebarOpen: !settings.settings().sidebarOpen });
+
     mount
     {
         const onKey = (event: KeyboardEvent): void =>
         {
-            if (event.key !== '/' || event.defaultPrevented || device.posture() === 'phone')
+            if ((event.key !== '/' && event.key !== '[') || event.defaultPrevented || device.posture() === 'phone')
             {
                 return;
             }
@@ -43,6 +52,15 @@ export default component TopBar()
                 && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
             if (editable || event.metaKey || event.ctrlKey || event.altKey)
             {
+                return;
+            }
+            if (event.key === '[')
+            {
+                if (collapsible)
+                {
+                    event.preventDefault();
+                    toggle();
+                }
                 return;
             }
             event.preventDefault();
@@ -56,6 +74,18 @@ export default component TopBar()
     <header class="z-topbar safe-t sticky top-0 border-b border-line bg-void/85 backdrop-blur-md">
         <div class="flex h-[var(--topbar-h)] w-full items-center gap-1.5 px-3 sm:gap-2 sm:px-6">
             <h1 class="sr-only">{ title }</h1>
+
+            <Show when={ collapsible }>
+                { () =>
+                    <IconButton
+                        icon={ open ? 'sidebar-close' : 'sidebar-open' }
+                        label={ locale.t(open ? 'app.sidebar.collapse' : 'app.sidebar.expand') }
+                        variant="ghost"
+                        flip
+                        onClick={ () => toggle() }
+                    />
+                }
+            </Show>
 
             <Show
                 when={ phone }
@@ -81,6 +111,13 @@ export default component TopBar()
 
             <Show when={ phone }>
                 { () => <IconButton icon="search" label={ locale.t('app.nav.search') } to="/app/search" /> }
+            </Show>
+            <Show when={ !phone }>
+                { () =>
+                    <span class="glow-cta me-1 hidden rounded-control lg:flex">
+                        <Button variant="primary" size="sm" leading="play" to="/app/games">{ locale.t('games.play') }</Button>
+                    </span>
+                }
             </Show>
             <IconButton icon="bell" label={ locale.t('app.nav.notifications') } to="/app/notifications" count={ unread } />
             <Link to="/app/me" class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full" aria-label={ locale.t('app.nav.profile') }>

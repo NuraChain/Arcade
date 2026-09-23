@@ -20,6 +20,7 @@ export interface Settings
     haptics: boolean;
     railWidth: number;
     railOpen: boolean;
+    sidebarOpen: boolean;
     notifications: Record<NotificationCategory, boolean>;
 }
 
@@ -32,6 +33,7 @@ export function defaultSettings(): Settings
         haptics: true,
         railWidth: 0.3,
         railOpen: true,
+        sidebarOpen: true,
         notifications: { invites: true, requests: true, results: true, messages: true, achievements: true }
     };
 }

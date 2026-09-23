@@ -16,6 +16,8 @@ export const app = {
     'app.nav.signOut': 'Sign out',
     'create.title': 'Create a table',
     'app.nav.quickPlay': 'Quick play',
+    'app.sidebar.collapse': 'Collapse the menu',
+    'app.sidebar.expand': 'Expand the menu',
     'app.search.placeholder': 'Search games, people, groups…',
 
     'shell.panel': 'Activity and friends',

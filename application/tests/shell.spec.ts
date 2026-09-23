@@ -9,6 +9,7 @@ import SocialPanel from '../src/components/app/social-panel.component.azeroth';
 import OverlayHost from '../src/components/app/overlay-host.component.azeroth';
 import Page from '../src/components/app/page.component.azeroth';
 import ToastHost from '../src/components/app/toast-host.component.azeroth';
+import TopBar from '../src/components/app/top-bar.component.azeroth';
 import Button from '../src/components/ui/button.component.azeroth';
 import Tabs from '../src/components/ui/tabs.component.azeroth';
 import NotFoundPage from '../src/pages/not-found.page.azeroth';
@@ -21,6 +22,8 @@ import { useNotifications } from '../src/stores/notifications.store.ts';
 import { OVERLAY_SETTLE, useOverlay } from '../src/stores/overlay.store.ts';
 import { useAccount } from '../src/stores/account.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
+import { useDevice } from '../src/stores/device.store.ts';
+import { useSettings } from '../src/stores/settings.store.ts';
 import { TOAST_DURATION, useToasts } from '../src/stores/toasts.store.ts';
 import { server } from './fake-api.ts';
 
@@ -315,6 +318,60 @@ describe('the shell’s destinations', () =>
 
         const labels = [...container.querySelectorAll('a')].map((link) => link.textContent?.trim());
         expect(labels[4]).toBe('Profile');
+    });
+});
+
+describe('the top bar', () =>
+{
+    const mount = async (immersive = false): Promise<HTMLElement> =>
+    {
+        const Stub = (): HTMLElement => document.createElement('div');
+        const router = createRouter({
+            routes: [{ path: '/app', component: Stub, children: [{ path: '', component: Stub, meta: immersive ? { immersive: true } : {} }] }],
+            history: createMemoryHistory('/app'),
+            scroll: false
+        });
+        const { container } = renderTest(() => RouterProvider({ router, children: () => TopBar({}) }) as Rendered);
+        await settle();
+        return container;
+    };
+
+    const toggle = (container: HTMLElement): HTMLElement | null =>
+        container.querySelector('button[aria-label="Collapse the menu"], button[aria-label="Expand the menu"]');
+
+    afterEach(() =>
+    {
+        useDevice().override(null);
+        useSettings().update({ sidebarOpen: true });
+    });
+
+    it('collapses the sidebar to the rail and brings it back, and remembers which', async () =>
+    {
+        useDevice().override('sidebar');
+        const container = await mount();
+
+        expect(toggle(container)?.getAttribute('aria-label')).toBe('Collapse the menu');
+
+        fire(toggle(container)!, 'click');
+        await settle();
+
+        expect(useSettings().settings().sidebarOpen).toBe(false);
+        expect(toggle(container)?.getAttribute('aria-label')).toBe('Expand the menu');
+
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: '[' }));
+        await settle();
+
+        expect(useSettings().settings().sidebarOpen).toBe(true);
+    });
+
+    it('offers no toggle where there is no sidebar to fold, or on a game that already has the rail', async () =>
+    {
+        useDevice().override('rail');
+        expect(toggle(await mount())).toBeNull();
+        cleanup();
+
+        useDevice().override('sidebar');
+        expect(toggle(await mount(true))).toBeNull();
     });
 });
 
