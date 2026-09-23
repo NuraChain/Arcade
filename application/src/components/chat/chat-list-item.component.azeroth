@@ -17,6 +17,7 @@ import AvatarGroup from '../ui/avatar-group.component.azeroth';
 import Badge from '../ui/badge.component.azeroth';
 import GroupCrest from '../social/group-crest.component.azeroth';
 import { gameNameOf, groupNameOf, othersOf, titleOf } from './chat-title.ts';
+import { plainOf } from '../../lib/markdown.ts';
 
 export default component ChatListItem(props: { conversation: Conversation; me: string; active?: boolean; onHold?: () => void })
 {
@@ -82,7 +83,7 @@ export default component ChatListItem(props: { conversation: Conversation; me: s
                 ? 'chats.invitePreview'
                 : (last.kind === 'result' ? 'chats.resultPreview' : 'chats.systemPreview'));
         }
-        const body = locale.text(last.text);
+        const body = plainOf(locale.text(last.text), locale.t('chat.spoilerPreview'));
         return last.from === props.me ? `${ locale.t('chats.you') }${ body }` : body;
     })();
 

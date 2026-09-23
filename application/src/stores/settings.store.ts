@@ -21,6 +21,7 @@ export interface Settings
     railWidth: number;
     railOpen: boolean;
     sidebarOpen: boolean;
+    recentEmoji: string[];
     notifications: Record<NotificationCategory, boolean>;
 }
 
@@ -34,6 +35,7 @@ export function defaultSettings(): Settings
         railWidth: 0.3,
         railOpen: false,
         sidebarOpen: true,
+        recentEmoji: [],
         notifications: { invites: true, requests: true, results: true, messages: true, achievements: true }
     };
 }

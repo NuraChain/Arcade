@@ -1,53 +1,181 @@
+import Icon from '../../icons/icon.component.azeroth';
+import { useDevice } from '../../stores/device.store.ts';
+import { useEmojiPop } from '../../stores/emoji-pop.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import IconButton from '../ui/icon-button.component.azeroth';
 import TextArea from '../ui/text-area.component.azeroth';
+import LazyEmojiPicker from './lazy-emoji-picker.component.azeroth';
 
 export default component Composer(props: {
     value: string;
     disabled?: boolean;
+    reply?: { name: string; text: string } | null;
+    placeholder?: string;
+    maxlength?: number;
+    compact?: boolean;
+    onCancelReply?: () => void;
     onInput: (value: string) => void;
     onSend: () => void;
-    onGame: () => void;
+    onGame?: () => void;
 })
 {
     const locale = useLocale();
+    const device = useDevice();
+    const pop = useEmojiPop();
 
-    <div class="safe-b border-t border-line bg-void/95 backdrop-blur-md">
-        <form
-            class="mx-auto flex w-full max-w-[48rem] items-end gap-2 px-3 py-2.5"
-            onSubmit={ (event) =>
+    state docked = false;
+
+    let bar: HTMLElement | null = null;
+
+    derived replying = props.reply !== undefined && props.reply !== null && props.disabled !== true;
+
+    derived empty = props.value.trim() === '';
+
+    const field = (): HTMLTextAreaElement | null => bar?.querySelector('textarea') ?? null;
+
+    const insert = (emoji: string): void =>
+    {
+        const area = field();
+        const value = props.value;
+        const start = area?.selectionStart ?? value.length;
+        const end = area?.selectionEnd ?? value.length;
+
+        props.onInput(`${ value.slice(0, start) }${ emoji }${ value.slice(end) }`);
+
+        requestAnimationFrame(() =>
+        {
+            const target = field();
+            if (target !== null)
             {
-                event.preventDefault();
-                props.onSend();
-            } }
-        >
-            <IconButton
-                icon="add"
-                label={ locale.t('chat.gameMenu') }
-                variant="ghost"
-                class="rounded-full!"
-                onClick={ () => props.onGame() }
-            />
-            <TextArea
-                value={ props.value }
-                onInput={ props.onInput }
-                placeholder={ locale.t('chat.composer') }
-                label={ locale.t('chat.composer') }
-                disabled={ props.disabled === true }
-                enterkeyhint="send"
-                maxlength={ 500 }
-                class="min-w-0 flex-1 rounded-3xl! bg-sunk! ps-4!"
-                onEnter={ () => props.onSend() }
-            />
-            <IconButton
-                icon="send"
-                label={ locale.t('chat.send') }
-                variant="primary"
-                flip
-                class="rounded-full!"
-                disabled={ props.disabled === true || props.value.trim() === '' }
-                onClick={ () => props.onSend() }
-            />
-        </form>
+                const caret = start + emoji.length;
+                target.focus({ preventScroll: true });
+                target.setSelectionRange(caret, caret);
+            }
+        });
+    };
+
+    const emoji = (): void =>
+    {
+        if (device.coarse() || device.posture() === 'phone')
+        {
+            docked = !docked;
+            return;
+        }
+
+        if (bar !== null)
+        {
+            pop.toggle({ anchor: bar, pick: insert, side: 'top', align: 'end', keep: true });
+        }
+    };
+
+    const send = (): void =>
+    {
+        docked = false;
+        pop.close();
+        props.onSend();
+    };
+
+    const dismiss = (event: KeyboardEvent): void =>
+    {
+        if (event.key !== 'Escape')
+        {
+            return;
+        }
+
+        if (docked)
+        {
+            docked = false;
+            event.stopPropagation();
+            return;
+        }
+
+        if (replying)
+        {
+            props.onCancelReply?.();
+            event.stopPropagation();
+        }
+    };
+
+    <div
+        class={ () => props.compact === true ? '' : 'safe-b border-t border-line bg-void/95 backdrop-blur-md' }
+        onKeyDown={ dismiss }
+    >
+        <div class={ () => props.compact === true ? 'flex flex-col gap-2' : 'mx-auto flex w-full max-w-[48rem] flex-col gap-2 px-3 py-2.5' }>
+            <Show when={ docked && props.disabled !== true }>
+                { () => <LazyEmojiPicker onPick={ insert } /> }
+            </Show>
+
+            <div
+                ref={ (element) => bar = element }
+                class={ () => [
+                    'flex flex-col overflow-hidden rounded-[1.375rem] border bg-field transition-[border-color,box-shadow] duration-150 motion-reduce:transition-none',
+                    props.disabled === true ? 'border-line opacity-60' : 'border-line-strong focus-within:border-accent/70 focus-within:ring-3 focus-within:ring-accent/15'
+                ].join(' ') }
+            >
+                <Show when={ replying }>
+                    { () =>
+                        <div class="flex items-center gap-2.5 border-b border-line bg-raised/40 py-1.5 ps-3 pe-1.5">
+                            <Icon name="reply" size={ 16 } class="icon-flip shrink-0 text-accent" />
+                            <span class="flex min-w-0 flex-1 flex-col border-s-2 border-accent ps-2.5">
+                                <span class="truncate text-ui-xs font-semibold text-accent" dir="auto">{ locale.t('chat.replyingTo', { name: props.reply?.name ?? '' }) }</span>
+                                <span class="truncate text-ui-xs text-muted" dir="auto">{ props.reply?.text ?? '' }</span>
+                            </span>
+                            <IconButton icon="close" label={ locale.t('chat.replyCancel') } variant="ghost" size="sm" class="rounded-full!" onClick={ () => props.onCancelReply?.() } />
+                        </div>
+                    }
+                </Show>
+
+                <form
+                    class="flex items-end gap-0.5 p-1"
+                    onSubmit={ (event) =>
+                    {
+                        event.preventDefault();
+                        send();
+                    } }
+                >
+                    <Show when={ props.onGame !== undefined }>
+                        { () =>
+                            <IconButton
+                                icon="add"
+                                label={ locale.t('chat.gameMenu') }
+                                variant="ghost"
+                                class="rounded-full! text-muted hover:text-text"
+                                disabled={ props.disabled === true }
+                                onClick={ () => props.onGame?.() }
+                            />
+                        }
+                    </Show>
+                    <TextArea
+                        value={ props.value }
+                        onInput={ props.onInput }
+                        placeholder={ props.placeholder ?? locale.t('chat.composer') }
+                        label={ props.placeholder ?? locale.t('chat.composer') }
+                        disabled={ props.disabled === true }
+                        enterkeyhint="send"
+                        maxlength={ props.maxlength ?? 500 }
+                        class={ [ 'min-w-0 flex-1 border-0! bg-transparent! py-0! opacity-100!', props.onGame === undefined ? 'ps-3!' : 'ps-1!', 'pe-1!' ].join(' ') }
+                        onEnter={ send }
+                    />
+                    <IconButton
+                        icon="smile"
+                        label={ locale.t('emoji.title') }
+                        variant="ghost"
+                        pressed={ docked || pop.current()?.anchor === bar }
+                        disabled={ props.disabled === true }
+                        class="rounded-full! text-muted hover:text-text"
+                        onClick={ emoji }
+                    />
+                    <IconButton
+                        icon="send"
+                        label={ locale.t('chat.send') }
+                        variant={ empty ? 'ghost' : 'primary' }
+                        flip
+                        class={ empty ? 'rounded-full! text-faint' : 'rounded-full!' }
+                        disabled={ props.disabled === true || empty }
+                        onClick={ send }
+                    />
+                </form>
+            </div>
+        </div>
     </div>
 }

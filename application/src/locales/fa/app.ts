@@ -45,6 +45,7 @@ export const app: Pick<Dictionary, keyof typeof reference> = {
     'common.clear': 'پاک کردن',
     'common.seeAll': 'همه',
     'common.you': 'تو',
+    'common.listJoin': '، ',
     'common.online': 'آنلاین',
     'common.away': 'دور از دسترس',
     'common.players': { one: '{count} بازیکن', other: '{count} بازیکن' },

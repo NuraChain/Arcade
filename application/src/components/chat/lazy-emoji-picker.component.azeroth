@@ -1,0 +1,32 @@
+import { Dynamic, type MountNode } from 'azerothjs';
+
+import Spinner from '../ui/spinner.component.azeroth';
+
+type Picker = (props: { onPick: (emoji: string) => void; focus?: boolean; class?: string }) => MountNode;
+
+export default component LazyEmojiPicker(props: { onPick: (emoji: string) => void; focus?: boolean; class?: string })
+{
+    let Picker: Picker | null = null;
+
+    state loaded = false;
+
+    mount
+    {
+        void import('./emoji-picker.component.azeroth').then((module) =>
+        {
+            Picker = module.default as Picker;
+            loaded = true;
+        });
+    }
+
+    <Show
+        when={ loaded }
+        fallback={
+            <div class="flex h-[21rem] w-full items-center justify-center rounded-panel border border-line-strong bg-lifted">
+                <Spinner size={ 20 } class="text-muted" />
+            </div>
+        }
+    >
+        { () => <Dynamic component={ Picker! } props={ () => ({ onPick: props.onPick, focus: props.focus === true, ...(props.class === undefined ? {} : { class: props.class }) }) } /> }
+    </Show>
+}

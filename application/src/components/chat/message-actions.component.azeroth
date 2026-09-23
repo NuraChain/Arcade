@@ -1,0 +1,145 @@
+import type { Message } from '../../data/chat.ts';
+import { QUICK_REACTIONS } from '../../data/emoji.ts';
+import Icon from '../../icons/icon.component.azeroth';
+import type { IconName } from '../../icons/registry.ts';
+import { plainOf } from '../../lib/markdown.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import type { OverlayProps } from '../../stores/overlay.store.ts';
+import { useToasts } from '../../stores/toasts.store.ts';
+import IconButton from '../ui/icon-button.component.azeroth';
+import LazyEmojiPicker from './lazy-emoji-picker.component.azeroth';
+
+interface Action
+{
+    id: string;
+    icon: IconName;
+    label: string;
+    danger?: boolean;
+    run: () => void;
+}
+
+export default component MessageActions(props: OverlayProps & {
+    message: Message;
+    me: string;
+    pick?: boolean;
+    onReact: (emoji: string) => void;
+    onReply?: () => void;
+    onForward?: () => void;
+    onDelete?: () => void;
+    onPerson?: () => void;
+})
+{
+    const locale = useLocale();
+    const toasts = useToasts();
+
+    state picking = props.pick === true;
+
+    derived preview = plainOf(props.message.text, locale.t('chat.spoilerPreview'));
+
+    derived mine = props.message.from === props.me;
+
+    const react = (emoji: string): void =>
+    {
+        props.close();
+        props.onReact(emoji);
+    };
+
+    const copy = async (): Promise<void> =>
+    {
+        try
+        {
+            await navigator.clipboard.writeText(props.message.text);
+            toasts.show({ kind: 'success', text: locale.t('chat.copied'), dedupe: 'chat-copy' });
+        }
+        catch
+        {
+            toasts.show({ kind: 'error', text: locale.t('chat.copyFailed'), dedupe: 'chat-copy' });
+        }
+    };
+
+    derived actions = ((): Action[] =>
+    {
+        const list: Action[] = [];
+
+        if (props.onReply !== undefined)
+        {
+            list.push({ id: 'reply', icon: 'reply', label: locale.t('chat.reply'), run: () => props.onReply?.() });
+        }
+
+        list.push({ id: 'copy', icon: 'copy', label: locale.t('chat.copy'), run: () => void copy() });
+
+        if (props.onForward !== undefined)
+        {
+            list.push({ id: 'forward', icon: 'forward', label: locale.t('chat.forward'), run: () => props.onForward?.() });
+        }
+
+        if (!mine && props.onPerson !== undefined)
+        {
+            list.push({ id: 'person', icon: 'me', label: locale.t('chat.aboutSender'), run: () => props.onPerson?.() });
+        }
+
+        if (mine && props.onDelete !== undefined)
+        {
+            list.push({ id: 'delete', icon: 'trash', label: locale.t('chat.delete'), danger: true, run: () => props.onDelete?.() });
+        }
+
+        return list;
+    })();
+
+    <div class="flex flex-col gap-2 p-3">
+        <header class="flex items-start gap-3 px-2 pt-1">
+            <p class="line-clamp-2 min-w-0 flex-1 text-ui-sm text-muted" dir="auto">{ preview }</p>
+            <IconButton icon="close" label={ locale.t('common.close') } variant="ghost" onClick={ () => props.close() } />
+        </header>
+
+        <Show
+            when={ !picking }
+            fallback={ <LazyEmojiPicker onPick={ react } /> }
+        >
+            { () =>
+                <ul class="flex items-center justify-between gap-1 rounded-panel border border-line bg-sunk p-1.5" aria-label={ locale.t('chat.react') }>
+                    <For each={ [...QUICK_REACTIONS] } key={ (emoji) => emoji } let={ emoji }>
+                        <li class="flex-1">
+                            <button
+                                type="button"
+                                class={ () => [
+                                    'flex h-11 w-full cursor-pointer items-center justify-center rounded-tile text-ui-2xl transition-transform hover:scale-110 hover:bg-raised motion-reduce:transition-none motion-reduce:hover:scale-100',
+                                    (props.message.reactions ?? []).some((one) => one.from === props.me && one.emoji === emoji) ? 'bg-accent/20' : ''
+                                ].filter(Boolean).join(' ') }
+                                aria-label={ locale.t('chat.reactWith', { emoji: emoji }) }
+                                onClick={ () => react(emoji) }
+                            >
+                                { emoji }
+                            </button>
+                        </li>
+                    </For>
+                    <li class="flex-1">
+                        <IconButton icon="react" label={ locale.t('chat.moreReactions') } variant="ghost" class="h-11! w-full!" onClick={ () => picking = true } />
+                    </li>
+                </ul>
+            }
+        </Show>
+
+        <ul class="flex flex-col gap-0.5">
+            <For each={ actions } key={ (action) => action.id } let={ action }>
+                <li>
+                    <button
+                        type="button"
+                        class={ () => [
+                            'flex min-h-12 w-full cursor-pointer items-center gap-3 rounded-tile px-3 text-start text-ui-md transition-colors hover:bg-raised/70',
+                            action.danger === true ? 'text-danger' : 'text-text'
+                        ].join(' ') }
+                        onClick={ () =>
+                        {
+                            props.close();
+                            action.run();
+                        } }
+                    >
+                        <Icon name={ action.icon } size={ 18 } class={ action.icon === 'reply' || action.icon === 'forward' ? 'icon-flip' : undefined } />
+                        { action.label }
+                    </button>
+                </li>
+            </For>
+        </ul>
+    </div>
+}

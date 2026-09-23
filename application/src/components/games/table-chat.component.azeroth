@@ -8,6 +8,11 @@ import SealNotice from '../chat/seal-notice.component.azeroth';
 import QuietNote from '../chat/quiet-note.component.azeroth';
 import DayDivider from '../chat/day-divider.component.azeroth';
 import MessageBubble from '../chat/message-bubble.component.azeroth';
+import Composer from '../chat/composer.component.azeroth';
+import ConfirmSheet from '../app/confirm-sheet.component.azeroth';
+import type { Message } from '../../data/chat.ts';
+import { plainOf } from '../../lib/markdown.ts';
+import { useOverlay } from '../../stores/overlay.store.ts';
 import { ludoOf } from '../../data/match.ts';
 import { usePeople } from '../../stores/people.store.ts';
 import { useAccount } from '../../stores/account.store.ts';
@@ -25,7 +30,6 @@ import Button from '../ui/button.component.azeroth';
 import Icon from '../../icons/icon.component.azeroth';
 import IconButton from '../ui/icon-button.component.azeroth';
 import Segmented from '../ui/segmented.component.azeroth';
-import TextArea from '../ui/text-area.component.azeroth';
 
 const QUICK: readonly MessageKey[] = ['play.quick.luck', 'play.quick.nice', 'play.quick.gg', 'play.quick.go'];
 
@@ -48,6 +52,7 @@ export default component TableChat(props: {
     const enrolment = useEnrolment();
     const account = useAccount();
     const toasts = useToasts();
+    const overlay = useOverlay();
 
     state draft = '';
 
@@ -98,7 +103,9 @@ export default component TableChat(props: {
         }
     };
 
-    derived messages = chat.messages();
+    derived all = chat.messages();
+
+    derived messages = all.filter((message) => message.kind !== 'deleted');
 
     derived rows = threadRows(messages);
 
@@ -162,6 +169,74 @@ export default component TableChat(props: {
 
         return person === null ? handle : locale.text(person.displayName);
     };
+
+    const warn = (error: unknown): void =>
+    {
+        toasts.show({ kind: 'error', text: sealSentenceOf(error, locale.t), dedupe: 'table-chat-act' });
+    };
+
+    const quoteOf = (quoted: string): Message | undefined => all.find((message) => message.id === quoted);
+
+    const reply = (message: Message): void =>
+    {
+        chat.setReplyTo(props.conversationId, message);
+        requestAnimationFrame(() => list?.closest('section')?.querySelector<HTMLTextAreaElement>('textarea')?.focus());
+    };
+
+    const react = (message: Message, emoji: string): void =>
+    {
+        void chat.react(message, emoji).then(() => haptic('tick')).catch(warn);
+    };
+
+    const jump = (quoted: string): void =>
+    {
+        const target = list?.querySelector(`[data-message="${ quoted }"]`);
+
+        if (target === null || target === undefined)
+        {
+            toasts.show({ kind: 'info', text: locale.t(quoteOf(quoted)?.kind === 'deleted' ? 'chat.quoteDeleted' : 'chat.quoteMissing'), dedupe: 'table-chat-jump' });
+            return;
+        }
+
+        const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        target.scrollIntoView({ block: 'center', behavior: still ? 'auto' : 'smooth' });
+        target.querySelector('.bubble')?.animate(
+            [{ boxShadow: '0 0 0 3px var(--color-accent)' }, { boxShadow: '0 0 0 3px transparent' }],
+            { duration: still ? 1 : 1400, easing: 'ease-out' }
+        );
+    };
+
+    const remove = async (message: Message): Promise<void> =>
+    {
+        const yes = await overlay.open(
+            ConfirmSheet,
+            { title: locale.t('chat.deleteConfirm'), lead: locale.t('chat.deleteLead'), confirm: locale.t('chat.delete'), destructive: true },
+            { label: locale.t('chat.deleteConfirm') }
+        ).closed;
+
+        if (yes === true)
+        {
+            await chat.remove(message).catch(warn);
+        }
+    };
+
+    const actions = (message: Message, pick?: boolean): void =>
+    {
+        void import('../chat/message-actions.component.azeroth').then((module) => overlay.open(
+            module.default,
+            {
+                message,
+                me: lobby.me(),
+                pick: pick === true,
+                onReact: (emoji: string) => react(message, emoji),
+                ...(quiet ? {} : { onReply: () => reply(message) }),
+                onDelete: () => void remove(message)
+            },
+            { label: locale.t('chat.messageActions') }
+        ));
+    };
+
+    derived replying = chat.replyTo(props.conversationId);
 
     derived table = lobby.table();
 
@@ -236,7 +311,7 @@ export default component TableChat(props: {
         <Show when={ tab === 'chat' }>
             { () =>
                 <div class="flex min-h-0 flex-1 flex-col">
-                    <ul ref={ (element) => watch(element) } class="chat-well flex min-h-0 flex-1 flex-col overflow-y-auto px-3 py-3 [&>li:first-child]:mt-auto" aria-live="polite">
+                    <ul ref={ (element) => watch(element) } class="chat-well @container/thread flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden px-3 py-3 [&>li:first-child]:mt-auto" aria-live="polite">
                         <Show when={ messages.length === 0 && !chat.threadLoading() }>
                             { () =>
                                 <li class="m-auto flex max-w-[16rem] flex-col items-center gap-2 px-2 py-8 text-center">
@@ -253,7 +328,19 @@ export default component TableChat(props: {
                                 <Show when={ row.day }>
                                     { () => <DayDivider at={ row.message.at } /> }
                                 </Show>
-                                <MessageBubble message={ row.message } me={ lobby.me() } first={ row.first } last={ row.last } avatar />
+                                <MessageBubble
+                                    message={ row.message }
+                                    me={ lobby.me() }
+                                    first={ row.first }
+                                    last={ row.last }
+                                    avatar
+                                    onActions={ quiet ? undefined : actions }
+                                    onReply={ quiet ? undefined : reply }
+                                    onReact={ quiet ? undefined : react }
+                                    quoteOf={ quoteOf }
+                                    onJump={ jump }
+                                    replying={ replying?.id === row.message.id }
+                                />
                             </li>
                         </For>
                     </ul>
@@ -303,27 +390,17 @@ export default component TableChat(props: {
                                 </ul>
                             }
                         </Show>
-                        <form
-                            class="flex items-end gap-2"
-                            onSubmit={ (event) =>
-                            {
-                                event.preventDefault();
-                                send();
-                            } }
-                        >
-                            <TextArea
-                                value={ draft }
-                                onInput={ (value) => draft = value }
-                                placeholder={ locale.t('play.table.say') }
-                                label={ locale.t('play.table.say') }
-                                enterkeyhint="send"
-                                maxlength={ 240 }
-                                disabled={ stop !== null }
-                                class="min-w-0 flex-1 rounded-3xl! bg-sunk! ps-4!"
-                                onEnter={ send }
-                            />
-                            <IconButton icon="send" label={ locale.t('play.table.send') } variant="primary" flip disabled={ stop !== null || draft.trim() === '' } onClick={ send } class="rounded-full!" />
-                        </form>
+                        <Composer
+                            compact
+                            value={ draft }
+                            disabled={ stop !== null }
+                            placeholder={ locale.t('play.table.say') }
+                            maxlength={ 240 }
+                            reply={ replying === null ? null : { name: replying.from === lobby.me() ? locale.t('chat.yourself') : nameOf(replying.from), text: plainOf(replying.text, locale.t('chat.spoilerPreview')) } }
+                            onCancelReply={ () => chat.setReplyTo(props.conversationId, null) }
+                            onInput={ (value) => draft = value }
+                            onSend={ send }
+                        />
                     </div>
                 </div>
             }

@@ -400,6 +400,8 @@ export interface ChatPort
      */
     send(me: string, sessionId: string, conversationId: string, input: {
         id: string;
+        kind: 'text' | 'reaction';
+        target?: string;
         epoch: number;
         seq: number;
         iv: string;
@@ -410,6 +412,8 @@ export interface ChatPort
         commitment: string;
         expiresAt: number;
     }): Promise<ChatMessage>;
+
+    remove(me: string, conversationId: string, messageId: string): Promise<void>;
 
     /**
      * How long a message in this room lasts, in seconds. Null turns it off.

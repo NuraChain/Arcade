@@ -2829,6 +2829,66 @@ corpus once at module load — a device per fixture person with real P-256 keys 
 attestation, one epoch per thread, every line sealed by its own sender — and `fake-api.ts` serves
 it. A fake handing the browser plaintext would be testing a wire format this product does not have.
 
+## Replies, reactions, forwards and deletions
+
+`docs/superpowers/specs/2026-09-23-chat-actions-design.md` is the design; this is what it cost to
+build and the rules it left behind.
+
+**The plaintext is a document now, and `lib/body.ts` is the only thing that writes or reads it.** A
+text message seals `{"text", "reply"?, "fwd"?}` and a reaction seals `{"react", "on"}`. It was the
+fourth hard cutover of what goes inside the ciphertext, taken for the same reason as the first three:
+nothing has shipped. The envelope, the AAD, the signature and the franking construction did not move.
+A document that does not parse opens as `tampered`, and the franking commitment covers the whole
+document - so a disclosure sends `message.plain`, never the rendered words, or the server recomputes
+a commitment over different bytes and every report of a reply fails verification.
+
+**A reaction is a sealed row whose TARGET is in the clear and whose emoji is not.** The server pages
+history, so a target only the client knew would mean every client downloading every reaction in the
+room to draw one page. Who reacted to what is the same class of fact as who replied when. The target
+column is NOT in the AAD, and that is why the sealed document repeats it as `on`: a server moving a
+reaction onto another message produces a row whose `on` disagrees with its `target_id`, and
+`decodeReaction` drops it. Adding the target to the AAD would have been a fifth field in a format
+this file calls settled.
+
+**A reaction is exactly one emoji**, enforced by `isEmoji` over one grapheme cluster. Without it a
+reaction is a free-text channel that renders as a chip - "BUY NOW" in a pill under somebody's words.
+
+**Deleting leaves a tombstone, not a hole.** `kind = 'deleted'` keeps the id, the sender, the epoch,
+the device and the sequence number, and nulls the body and every cryptographic column. Three things
+need the row: the next sequence number is the maximum the server holds, so a hole would hand the
+same number out twice; a reply has to be able to say its original was deleted rather than never
+loaded; and every browser holding the plaintext in its search archive evicts it when it sees the
+tombstone. The thread never draws one. Reactions on a deleted message go in the same transaction.
+
+**Unread, the list preview, notifications and push all ignore reactions and tombstones.** A reaction
+that rang "new message" would be the most annoying feature in the product, and one that bumped the
+list would reorder somebody's inbox because a friend pressed a thumb.
+
+**The emoji picker is never a modal on a pointer.** One `EmojiPopover`, hosted in the shell and
+opened through `useEmojiPop`, anchors itself to whatever asked - the composer bar, a message's hover
+bar, the "+" chip - with `lib/anchor.ts`, the maths the tooltip uses. A coarse pointer gets the
+long-press sheet or a panel docked above the composer instead, because a popover under a thumb is
+one the keyboard covers. The composer's popover stays open for several picks and a reaction's closes
+on the first, which is the Telegram arrangement and the one people expect.
+
+**The picker and the actions sheet are lazy.** `play.page` sat at 15.5 KB of a 15 KB budget the
+moment the table chat learned reactions; the picker's data and the sheet are only needed once
+somebody asks, and the table chat itself now loads right after the route through `<Dynamic>`, the
+way the boards already did. The route went to 11.6 KB.
+
+**Emoji are the one place an OS-drawn glyph belongs** - they are what somebody typed, or chose in
+place of typing. The product's own chrome still draws none; see *No glyph the OS draws*.
+
+**Formatting is Discord's, painted as DOM nodes.** `lib/markdown.ts` parses and
+`lib/markdown-dom.ts` builds elements with `textContent`; nothing touches `innerHTML`, so a message
+reading `<img onerror=...>` renders as those characters. Bare http(s) links only: a masked link
+whose text lies about its target is a phishing primitive. A message of one to three emoji and nothing
+else renders large and without a bubble.
+
+**A `<For>` row binding cannot be used as a shorthand property.** `{ emoji }` compiles to
+`{ emoji() }`, which does not parse, while `azeroth check` stays green. Framework register #30; write
+`{ emoji: emoji }`.
+
 ## Recovery
 
 A device that loses its keys loses what it could read, and the only honest way back is a secret the
@@ -3695,6 +3755,8 @@ rendered as inline SVG with `currentColor`. **Nothing renders an emoji, a dingba
 character as content** — group identity is a crest (`components/social/group-crest.component
 .azeroth`) drawn from the registry over a hue-tinted tile, and a separator dot is a 4px
 `rounded-full` span, not a `·`. `·` and `–` inside translated sentences are punctuation and stay.
+The one exception is an emoji a PERSON put there - typed, picked from the picker, or reacted with -
+which is their content rather than the product's chrome.
 
 ## The audit, and what it found in shipped code
 

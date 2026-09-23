@@ -1522,7 +1522,7 @@ export const pushEndpoint = object({ endpoint: string() });
 
 /* -------------------------------------------------------------------------- chat */
 
-export const messageKind = enumOf(['text', 'system', 'invite', 'result']);
+export const messageKind = enumOf(['text', 'reaction', 'deleted', 'system', 'invite', 'result']);
 
 /**
  * What a server-authored line may say ABOUT, as a closed set.
@@ -1551,6 +1551,27 @@ export const line = object({ key: string(), params: lineParams });
  * what the client keys people by and what survives being shown to somebody who has never seen
  * this account before.
  */
+export const chatReaction = object({
+    id: string(),
+    conversationId: string(),
+    kind: messageKind,
+    target: string(),
+    from: string().optional(),
+    body: string(),
+    at: string(),
+    epoch: number(),
+    seq: number(),
+    iv: string(),
+    senderDeviceId: string(),
+    senderAccountId: string(),
+    signature: string(),
+    clientAt: string(),
+    commitment: string(),
+    expiresAt: string().optional()
+});
+
+export type ChatReaction = Infer<typeof chatReaction>;
+
 export const chatMessage = object({
     id: string(),
     conversationId: string(),
@@ -1587,7 +1608,8 @@ export const chatMessage = object({
     commitment: string().optional(),
 
     /** When it stops existing, if it does. Absent on a message that lasts. */
-    expiresAt: string().optional()
+    expiresAt: string().optional(),
+    reactions: array(chatReaction).optional()
 });
 
 export type ChatMessage = Infer<typeof chatMessage>;
@@ -1648,6 +1670,8 @@ export type MessagePage = Infer<typeof messagePage>;
  */
 export const sendInput = object({
     id: string(),
+    kind: enumOf(['text', 'reaction']),
+    target: string().optional(),
     epoch: number(),
     seq: number(),
     iv: string(),

@@ -405,3 +405,62 @@ describe('rotation', () =>
         expect(outcome.ok === true && outcome.epoch).toBe(1);
     });
 });
+
+describe('replies, reactions and deletions, all inside the seal', () =>
+{
+    it('carries a reply and a forward inside the ciphertext, where the server cannot edit them', async () =>
+    {
+        const source = createApiSource();
+        await source.post(said('first'));
+        const first = server.messages[0].id;
+
+        await source.post({ ...said('second'), reply: first, forwarded: true });
+
+        const stored = server.messages[1];
+        expect(stored.body).not.toContain(first);
+
+        const thread = await source.thread(THREAD, scope, new AbortController().signal);
+        expect(thread[1].text).toBe('second');
+        expect(thread[1].reply).toBe(first);
+        expect(thread[1].forwarded).toBe(true);
+        expect(thread[1].plain).toContain('"reply"');
+    });
+
+    it('opens a reaction on its target, and drops one the server moved onto another message', async () =>
+    {
+        const source = createApiSource();
+        await source.post(said('one'));
+        await source.post(said('two'));
+        const [one, two] = server.messages;
+
+        await source.react(THREAD, 'alex', one.id, '👍', 1_700_000_000_500, 0);
+
+        const reacted = await source.thread(THREAD, scope, new AbortController().signal);
+        expect(reacted[0].reactions).toEqual([{ id: expect.any(String), from: 'alex', emoji: '👍' }]);
+
+        const moved = one.reactions!.map((reaction) => ({ ...reaction, target: two.id }));
+        one.reactions = [];
+        two.reactions = moved;
+        forgetSigners();
+
+        const after = await source.thread(THREAD, scope, new AbortController().signal);
+        expect(after[0].reactions).toBeUndefined();
+        expect(after[1].reactions).toBeUndefined();
+    });
+
+    it('turns a deleted message into a tombstone and drops its words from the archive', async () =>
+    {
+        const source = createApiSource();
+        await source.post(said('regrettable'));
+        const id = server.messages[0].id;
+
+        await source.thread(THREAD, scope, new AbortController().signal);
+        expect(source.archive(scope).map((message) => message.text)).toContain('regrettable');
+
+        await source.remove(THREAD, id);
+
+        const thread = await source.thread(THREAD, scope, new AbortController().signal);
+        expect(thread.map((message) => message.kind)).toEqual(['deleted']);
+        expect(source.archive(scope).map((message) => message.text)).not.toContain('regrettable');
+    });
+});

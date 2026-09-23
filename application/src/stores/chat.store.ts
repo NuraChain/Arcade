@@ -60,6 +60,11 @@ export interface ChatApi
     draft(id: string): string;
     setDraft(id: string, text: string): void;
     send(id: string, text: string): Promise<void>;
+    replyTo(id: string): Message | null;
+    setReplyTo(id: string, message: Message | null): void;
+    react(message: Message, emoji: string): Promise<void>;
+    remove(message: Message): Promise<void>;
+    forward(message: Message, to: string): Promise<void>;
     markRead(id: string): Promise<void>;
     pinned(id: string): boolean;
     togglePin(id: string): Promise<void>;
@@ -180,6 +185,15 @@ export const useChat = createStore((): ChatApi =>
 
     const publish = (message: Message, expiresAt: number): Promise<void> =>
         active.post(message, expiresAt).then(revalidate);
+
+    const [replies, setReplies] = createSignal<Record<string, Message>>({});
+
+    const lifetimeOf = (id: string, at: number): number =>
+    {
+        const after = rowOf(id)?.conversation.expireAfter ?? null;
+
+        return after === null ? 0 : at + after * 1000;
+    };
 
     let sweep: (() => void) | null = null;
 
@@ -333,21 +347,69 @@ export const useChat = createStore((): ChatApi =>
             setDrafts((current) => ({ ...current, [id]: '' }));
             announced.delete(id);
 
+            const quoted = untrack(replies)[id];
+            setReplies((current) => Object.fromEntries(Object.entries(current).filter(([key]) => key !== id)));
+
             // Computed HERE from the room's setting, at the moment of sending. A source that read
             // the setting itself would be a second place for the two to disagree about how long a
             // message lasts, and the value is signed - so a disagreement would be permanent.
-            const after = rowOf(id)?.conversation.expireAfter ?? null;
-            const at = runtime().clock.now();
+            const message = { ...asked(id, clean), ...(quoted === undefined ? {} : { reply: quoted.id }) };
 
             try
             {
-                await publish(asked(id, clean), after === null ? 0 : at + after * 1000);
+                await publish(message, lifetimeOf(id, message.at));
             }
             catch (error)
             {
                 setDrafts((current) => (current[id] === undefined || current[id] === '' ? { ...current, [id]: clean } : current));
+                if (quoted !== undefined)
+                {
+                    setReplies((current) => (current[id] === undefined ? { ...current, [id]: quoted } : current));
+                }
                 throw error;
             }
+        },
+
+        replyTo: (id) => replies()[id] ?? null,
+
+        setReplyTo(id, message)
+        {
+            setReplies((current) => message === null
+                ? Object.fromEntries(Object.entries(current).filter(([key]) => key !== id))
+                : { ...current, [id]: message });
+        },
+
+        async react(message, emoji)
+        {
+            const me = untrack(meId);
+            const mine = (message.reactions ?? []).filter((one) => one.from === me && one.emoji === emoji);
+
+            if (mine.length > 0)
+            {
+                for (const one of mine)
+                {
+                    await active.remove(message.conversationId, one.id);
+                }
+                await revalidate();
+                return;
+            }
+
+            const at = runtime().clock.now();
+            await active.react(message.conversationId, me, message.id, emoji, at, lifetimeOf(message.conversationId, at));
+            await revalidate();
+        },
+
+        async remove(message)
+        {
+            await active.remove(message.conversationId, message.id);
+            await Promise.all([revalidate(), revalidateList()]);
+        },
+
+        async forward(message, to)
+        {
+            const outgoing = { ...asked(to, message.text), forwarded: true };
+            await active.post(outgoing, lifetimeOf(to, outgoing.at));
+            await revalidateList();
         },
 
         /**

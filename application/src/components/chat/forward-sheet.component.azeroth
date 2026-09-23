@@ -1,0 +1,115 @@
+import type { Conversation, Message } from '../../data/chat.ts';
+import type { GameId } from '../../data/games.ts';
+import Icon from '../../icons/icon.component.azeroth';
+import { plainOf } from '../../lib/markdown.ts';
+import { useCatalogue } from '../../stores/catalogue.store.ts';
+import { useChat } from '../../stores/chat.store.ts';
+import { useGroups } from '../../stores/groups.store.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import type { OverlayProps } from '../../stores/overlay.store.ts';
+import { usePeople } from '../../stores/people.store.ts';
+import { useToasts } from '../../stores/toasts.store.ts';
+import GroupCrest from '../social/group-crest.component.azeroth';
+import Avatar from '../ui/avatar.component.azeroth';
+import IconButton from '../ui/icon-button.component.azeroth';
+import SearchInput from '../ui/search-input.component.azeroth';
+import Spinner from '../ui/spinner.component.azeroth';
+import { gameNameOf, groupNameOf, othersOf, sealSentenceOf, titleOf } from './chat-title.ts';
+
+export default component ForwardSheet(props: OverlayProps & { message: Message })
+{
+    const locale = useLocale();
+    const chat = useChat();
+    const people = usePeople();
+    const groups = useGroups();
+    const catalogue = useCatalogue();
+    const toasts = useToasts();
+
+    state query = '';
+
+    state sending = '';
+
+    const gameName = (game: GameId): string => locale.t(catalogue.byId(game).nameKey);
+
+    const titleFor = (conversation: Conversation): string => locale.text(titleOf(conversation, chat.me(), people.byHandle, {
+        group: groupNameOf(conversation, groups.byId),
+        game: gameNameOf(conversation, gameName)
+    }));
+
+    derived rooms = chat.conversations()
+        .filter((conversation) => !conversation.quiet)
+        .map((conversation) => ({ conversation, title: titleFor(conversation) }))
+        .filter((room) => query.trim() === '' || room.title.toLowerCase().includes(query.trim().toLowerCase()));
+
+    const send = async (conversation: Conversation, title: string): Promise<void> =>
+    {
+        if (sending !== '')
+        {
+            return;
+        }
+
+        sending = conversation.id;
+
+        try
+        {
+            await chat.forward(props.message, conversation.id);
+            toasts.show({ kind: 'success', text: locale.t('chat.forwardedTo', { name: title }), dedupe: 'chat-forward' });
+            props.close();
+        }
+        catch (error)
+        {
+            toasts.show({ kind: 'error', text: sealSentenceOf(error, locale.t), dedupe: 'chat-forward' });
+        }
+        finally
+        {
+            sending = '';
+        }
+    };
+
+    <div class="flex max-h-[80dvh] flex-col gap-3 p-3">
+        <header class="flex items-start gap-3 px-2 pt-1">
+            <span class="flex min-w-0 flex-1 flex-col gap-0.5">
+                <span class="text-ui-md font-semibold text-text">{ locale.t('chat.forwardTitle') }</span>
+                <span class="line-clamp-2 text-ui-sm text-muted" dir="auto">{ plainOf(props.message.text, locale.t('chat.spoilerPreview')) }</span>
+            </span>
+            <IconButton icon="close" label={ locale.t('common.close') } variant="ghost" onClick={ () => props.close() } />
+        </header>
+
+        <SearchInput value={ query } onInput={ (value) => query = value } placeholder={ locale.t('chat.forwardSearch') } label={ locale.t('chat.forwardSearch') } />
+
+        <Show
+            when={ rooms.length > 0 }
+            fallback={ <p class="px-2 py-6 text-center text-ui-sm text-muted">{ locale.t('chat.forwardNone') }</p> }
+        >
+            { () =>
+                <ul class="-mx-1 flex min-h-0 flex-col gap-0.5 overflow-y-auto px-1">
+                    <For each={ rooms } key={ (room) => room.conversation.id } let={ room }>
+                        <li>
+                            <button
+                                type="button"
+                                class="flex min-h-14 w-full cursor-pointer items-center gap-3 rounded-tile px-2 py-2 text-start transition-colors hover:bg-raised/70 disabled:cursor-wait disabled:opacity-60"
+                                disabled={ sending !== '' }
+                                onClick={ () => void send(room.conversation, room.title) }
+                            >
+                                { room.conversation.groupId !== null && groups.byId(room.conversation.groupId) !== undefined
+                                    ? <GroupCrest crest={ groups.byId(room.conversation.groupId!)!.crest } hue={ groups.byId(room.conversation.groupId!)!.hue } size="sm" />
+                                    : (othersOf(room.conversation, chat.me(), people.byHandle).length === 1
+                                        ? <Avatar person={ othersOf(room.conversation, chat.me(), people.byHandle)[0] } size="md" />
+                                        : <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-control border border-line bg-raised text-muted" aria-hidden="true">
+                                            <Icon name={ room.conversation.kind === 'game' ? 'seat' : 'people' } size={ 18 } />
+                                        </span>) }
+                                <span class="min-w-0 flex-1 truncate text-ui-md font-semibold text-text" dir="auto">{ room.title }</span>
+                                <Show
+                                    when={ sending === room.conversation.id }
+                                    fallback={ <Icon name="forward" size={ 16 } class="icon-flip shrink-0 text-faint" /> }
+                                >
+                                    { () => <Spinner size={ 16 } class="shrink-0 text-accent" /> }
+                                </Show>
+                            </button>
+                        </li>
+                    </For>
+                </ul>
+            }
+        </Show>
+    </div>
+}

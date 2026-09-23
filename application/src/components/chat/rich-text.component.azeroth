@@ -1,0 +1,26 @@
+import { paintMarkdown } from '../../lib/markdown-dom.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+
+export default component RichText(props: { text: string; mine?: boolean; reserve?: string; class?: string })
+{
+    const locale = useLocale();
+
+    state host = null as HTMLElement | null;
+
+    effect
+    {
+        const target = host;
+        const text = props.text;
+        const spoiler = locale.t('chat.spoiler');
+        const dir = locale.dir();
+        const reserve = props.reserve;
+        const mine = props.mine === true;
+
+        if (target !== null)
+        {
+            paintMarkdown(target, text, { spoiler, mine, dir, ...(reserve === undefined ? {} : { reserve }) });
+        }
+    }
+
+    <span ref={ (element) => host = element } class={ () => [ 'flex min-w-0 flex-col gap-1', props.class ?? '' ].filter(Boolean).join(' ') }></span>
+}

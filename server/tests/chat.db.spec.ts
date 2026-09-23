@@ -59,7 +59,7 @@ const mintedIn = new Set<string>();
  * directly and the body goes in as itself. `epochs.db.spec.ts` owns the key schedule, with real
  * devices and the real service, and this borrows nothing from it.
  */
-async function say(userId: string, conversationId: string, body: string): Promise<unknown>
+async function say(userId: string, conversationId: string, body: string, reactTo?: string): Promise<{ id: string }>
 {
     let device = deviceOf.get(userId);
 
@@ -97,6 +97,7 @@ async function say(userId: string, conversationId: string, body: string): Promis
         senderDeviceId: device,
         signature: 'signature',
         clientAt: new Date().toISOString(),
+        ...(reactTo === undefined ? { kind: 'text' as const } : { kind: 'reaction' as const, target: reactTo }),
         commitment: 'a-commitment',
         expiresAt: 0
     });
@@ -344,5 +345,82 @@ describe.skipIf(!active)('chat, against a real database', () =>
         const rows = await chat.list(a);
         expect(rows.find((row) => row.id === quiet)?.quiet).toBe(true);
         expect(rows.find((row) => row.id === talking)?.quiet).toBe(false);
+    });
+
+    it('carries a reaction on its target and never as a line of its own', async () =>
+    {
+        const [a, b] = [await makeUser(), await makeUser()];
+        const conversation = await chat.openDirect(a, b);
+        const said = await say(a, conversation, 'good game');
+        const reaction = await say(b, conversation, 'sealed-emoji', said.id);
+
+        const page = await chat.messages(a, conversation, null);
+
+        expect(page.messages.map((row) => row.id)).toEqual([said.id]);
+        expect(page.reactions.map((row) => [row.id, row.target_id, row.kind])).toEqual([[reaction.id, said.id, 'reaction']]);
+    });
+
+    it('refuses a reaction to nothing, to a line, or to a message in another room', async () =>
+    {
+        const [a, b, c] = [await makeUser(), await makeUser(), await makeUser()];
+        const here = await chat.openDirect(a, b);
+        const elsewhere = await chat.openDirect(a, c);
+        const there = await say(a, elsewhere, 'over there');
+
+        await expect(say(b, here, 'x', crypto.randomUUID())).rejects.toThrow('There is no such message here to react to.');
+        await expect(say(b, here, 'x', 'not-a-uuid')).rejects.toThrow('There is no such message here to react to.');
+        await expect(say(b, here, 'x', there.id)).rejects.toThrow('There is no such message here to react to.');
+    });
+
+    it('does not count a reaction as unread, nor show it as the last thing said', async () =>
+    {
+        const [a, b] = [await makeUser(), await makeUser()];
+        const conversation = await chat.openDirect(a, b);
+        await say(a, conversation, 'first');
+        const second = await say(b, conversation, 'second');
+        await chat.markRead(a, conversation);
+        await say(b, conversation, 'sealed-emoji', second.id);
+
+        const row = (await chat.list(a)).find((one) => one.id === conversation)!;
+
+        expect(row.unread).toBe(0);
+        expect(row.last_id).toBe(second.id);
+    });
+
+    it('lets only the author delete, leaves a tombstone, and takes the reactions with it', async () =>
+    {
+        const [a, b] = [await makeUser(), await makeUser()];
+        const conversation = await chat.openDirect(a, b);
+        const said = await say(a, conversation, 'regrettable');
+        await say(b, conversation, 'sealed-emoji', said.id);
+
+        await expect(chat.remove(b, conversation, said.id)).rejects.toThrow('No such message of yours here.');
+        expect(await chat.remove(a, conversation, said.id)).toBe('deleted');
+
+        const rows = rowsOf<{ kind: string; body: string | null; signature: string | null; seq: string | null }>(
+            await db.query('select kind, body, signature, seq from messages where id = $1', [said.id])
+        );
+        expect(rows).toEqual([{ kind: 'deleted', body: null, signature: null, seq: '1' }]);
+
+        const page = await chat.messages(a, conversation, null);
+        expect(page.messages.map((row) => row.kind)).toEqual(['deleted']);
+        expect(page.reactions).toEqual([]);
+
+        const reactions = await db.query(`select count(*)::int as n from messages where kind = 'reaction'`);
+        expect(rowsOf<{ n: number }>(reactions)[0].n).toBe(0);
+
+        const row = (await chat.list(b)).find((one) => one.id === conversation)!;
+        expect(row.last_id).toBeNull();
+    });
+
+    it('takes a reaction back outright', async () =>
+    {
+        const [a, b] = [await makeUser(), await makeUser()];
+        const conversation = await chat.openDirect(a, b);
+        const said = await say(a, conversation, 'hello');
+        const reaction = await say(b, conversation, 'sealed-emoji', said.id);
+
+        expect(await chat.remove(b, conversation, reaction.id)).toBe('withdrawn');
+        expect((await chat.messages(a, conversation, null)).reactions).toEqual([]);
     });
 });

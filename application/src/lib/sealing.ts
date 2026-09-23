@@ -366,6 +366,7 @@ async function verifiedSigner(conversationId: string, deviceId: string): Promise
 export interface SealedSend
 {
     id: string;
+    kind: 'text' | 'reaction';
     epoch: number;
     seq: number;
     iv: string;
@@ -394,7 +395,8 @@ export async function sealForSend(
     conversationId: string,
     text: string,
     at: number,
-    expiresAt: number
+    expiresAt: number,
+    kind: 'text' | 'reaction' = 'text'
 ): Promise<SealedSend>
 {
     const id = crypto.randomUUID();
@@ -409,7 +411,7 @@ export async function sealForSend(
         messageId: id,
         senderAccountId: open.accountId,
         senderDeviceId: open.deviceId,
-        kind: 'text',
+        kind,
         clientAt: at,
         commitment,
         expiresAt
@@ -417,6 +419,7 @@ export async function sealForSend(
 
     return {
         id,
+        kind,
         epoch: open.epoch,
         seq: open.nextSeq,
         iv: sealed.iv,

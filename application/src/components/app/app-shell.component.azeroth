@@ -29,6 +29,7 @@ import OverlayHost from './overlay-host.component.azeroth';
 import Sidebar from './sidebar.component.azeroth';
 import SocialPanel from './social-panel.component.azeroth';
 import ToastHost from './toast-host.component.azeroth';
+import EmojiPopover from '../chat/emoji-popover.component.azeroth';
 import { useToasts } from '../../stores/toasts.store.ts';
 import TopBar from './top-bar.component.azeroth';
 
@@ -147,6 +148,7 @@ export default component AppShell(props: { children?: MountNode })
             </div>
         </div>
         <OverlayHost />
+        <EmojiPopover />
         <ToastHost />
     </div>
 }

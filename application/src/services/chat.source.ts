@@ -1,6 +1,7 @@
 import { ApiError, client } from '../api.ts';
 import type { ChatMessage } from '../api.ts';
-import type { Conversation, Message, MessageKind } from '../data/chat.ts';
+import type { Conversation, Message, MessageKind, Reaction } from '../data/chat.ts';
+import { decodeReaction, decodeText, encodeReaction, encodeText } from '../lib/body.ts';
 import { forget } from '../lib/crypto.ts';
 import { runtime } from '../lib/runtime.ts';
 import { keyStore } from '../lib/device-keys.ts';
@@ -75,6 +76,8 @@ export interface ChatSource
      * disagree about how long a message should last.
      */
     post(message: Message, expiresAt?: number): Promise<void>;
+    react(conversationId: string, from: string, target: string, emoji: string, at: number, expiresAt: number): Promise<void>;
+    remove(conversationId: string, messageId: string): Promise<void>;
     openDirect(scope: ChatScope, personId: string, at: number): Promise<string>;
     archive(scope: ChatScope): Message[];
     reset(): void;
@@ -149,7 +152,7 @@ export function createApiSource(): ChatSource
         // archive is what `search.store.ts` reads, so a disappearing message that stayed here would
         // go on being findable by its words long after it stopped being readable in the thread -
         // which is the opposite of what the room agreed to.
-        if (message.locked === 'expired')
+        if (message.locked === 'expired' || message.kind === 'deleted')
         {
             archive.delete(message.id);
             return message;
@@ -179,7 +182,7 @@ export function createApiSource(): ChatSource
         wire: ChatMessage,
         text: string,
         locked: MessageFailure | null,
-        signed?: { from: string; frankingKey: string }
+        signed?: { from: string; frankingKey: string; plain: string; reply?: string; fwd?: true; reactions: Reaction[] }
     ): Message =>
     {
         const params = Object.fromEntries(
@@ -193,7 +196,10 @@ export function createApiSource(): ChatSource
             kind: wire.kind as MessageKind,
             text,
             ...(locked === null ? {} : { locked }),
-            ...(signed === undefined ? {} : { frankingKey: signed.frankingKey }),
+            ...(signed === undefined ? {} : { frankingKey: signed.frankingKey, plain: signed.plain }),
+            ...(signed?.reply === undefined ? {} : { reply: signed.reply }),
+            ...(signed?.fwd === true ? { forwarded: true } : {}),
+            ...(signed === undefined || signed.reactions.length === 0 ? {} : { reactions: signed.reactions }),
             ...(wire.payload === undefined ? {} : { line: { key: wire.payload.key, params } }),
             ...(wire.expiresAt === undefined ? {} : { expiresAt: Date.parse(wire.expiresAt) }),
             at: wire.clientAt === undefined ? Date.parse(wire.at) : Date.parse(wire.clientAt),
@@ -233,9 +239,98 @@ export function createApiSource(): ChatSource
 
         const opened = await openMessage(wire.conversationId, wire, keyFor);
 
-        return 'text' in opened
-            ? asMessage(wire, opened.text, null, { from: opened.from, frankingKey: opened.frankingKey })
-            : asMessage(wire, '', opened.failure);
+        if (!('text' in opened))
+        {
+            return asMessage(wire, '', opened.failure);
+        }
+
+        const body = decodeText(opened.text);
+
+        if (body === null)
+        {
+            return asMessage(wire, '', 'tampered');
+        }
+
+        return asMessage(wire, body.text, null, {
+            from: opened.from,
+            frankingKey: opened.frankingKey,
+            plain: opened.text,
+            ...(body.reply === undefined ? {} : { reply: body.reply }),
+            ...(body.fwd === true ? { fwd: true as const } : {}),
+            reactions: await openReactions(wire, keyFor)
+        });
+    };
+
+    const openReactions = async (
+        wire: ChatMessage,
+        keyFor: (epoch: number) => Promise<Uint8Array | null>
+    ): Promise<Reaction[]> =>
+    {
+        const now = runtime().clock.now();
+        const live = (wire.reactions ?? []).filter((one) => one.expiresAt === undefined || Date.parse(one.expiresAt) > now);
+
+        const opened = await Promise.all(live.map(async (one): Promise<Reaction | null> =>
+        {
+            const found = await openMessage(one.conversationId, one, keyFor);
+
+            if (!('text' in found))
+            {
+                return null;
+            }
+
+            const emoji = decodeReaction(found.text, one.target);
+
+            return emoji === null ? null : { id: one.id, from: found.from, emoji };
+        }));
+
+        return opened.filter((one): one is Reaction => one !== null);
+    };
+
+    const deliver = async (
+        conversationId: string,
+        from: string,
+        plain: string,
+        at: number,
+        expiresAt: number,
+        kind: 'text' | 'reaction',
+        target?: string
+    ): Promise<void> =>
+    {
+        const secrets = await keyStore().secrets();
+
+        if (secrets === null)
+        {
+            throw new SealFailure('no-keys', null);
+        }
+
+        for (const attempt of [0, 1])
+        {
+            const epoch = await currentEpoch(conversationId, from);
+
+            if (!epoch.ok)
+            {
+                throw new SealFailure(epoch.failure, epoch.blocked);
+            }
+
+            const sealed = await sealForSend(epoch, secrets, conversationId, plain, at, expiresAt, kind);
+            forget(epoch.key);
+
+            try
+            {
+                await client.chat.send({
+                    params: { id: conversationId },
+                    input: target === undefined ? sealed : { ...sealed, target }
+                });
+                return;
+            }
+            catch (error)
+            {
+                if (attempt === 1 || !(error instanceof ApiError) || error.status !== 409)
+                {
+                    throw error;
+                }
+            }
+        }
     };
 
     const asConversation = (wire: {
@@ -322,45 +417,24 @@ export function createApiSource(): ChatSource
          */
         async post(message, expiresAt = 0)
         {
-            const secrets = await keyStore().secrets();
+            const plain = encodeText({
+                text: String(message.text),
+                ...(message.reply === undefined ? {} : { reply: message.reply }),
+                ...(message.forwarded === true ? { fwd: true as const } : {})
+            });
 
-            if (secrets === null)
-            {
-                throw new SealFailure('no-keys', null);
-            }
+            await deliver(message.conversationId, message.from, plain, message.at, expiresAt, 'text');
+        },
 
-            for (const attempt of [0, 1])
-            {
-                const epoch = await currentEpoch(message.conversationId, message.from);
+        async react(conversationId, from, target, emoji, at, expiresAt)
+        {
+            await deliver(conversationId, from, encodeReaction({ react: emoji, on: target }), at, expiresAt, 'reaction', target);
+        },
 
-                if (!epoch.ok)
-                {
-                    throw new SealFailure(epoch.failure, epoch.blocked);
-                }
-
-                const input = await sealForSend(
-                    epoch,
-                    secrets,
-                    message.conversationId,
-                    String(message.text),
-                    message.at,
-                    expiresAt
-                );
-                forget(epoch.key);
-
-                try
-                {
-                    await client.chat.send({ params: { id: message.conversationId }, input });
-                    return;
-                }
-                catch (error)
-                {
-                    if (attempt === 1 || !(error instanceof ApiError) || error.status !== 409)
-                    {
-                        throw error;
-                    }
-                }
-            }
+        async remove(conversationId, messageId)
+        {
+            await client.chat.remove({ params: { id: conversationId, messageId } });
+            archive.delete(messageId);
         },
 
         async openDirect(_scope, personId)

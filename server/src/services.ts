@@ -26,6 +26,7 @@ import type { MatchEventLog, Ports } from './ports.ts';
 import type {
     Account,
     ChatMessage,
+    ChatReaction,
     ConversationDevices,
     ConversationSummary,
     Device,
@@ -228,6 +229,44 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         return message;
     };
 
+    const asReactions = (rows: MessageRow[]): Map<string, ChatReaction[]> =>
+    {
+        const on = new Map<string, ChatReaction[]>();
+
+        for (const row of rows)
+        {
+            if (row.target_id === null || row.body === null || row.epoch === null || row.seq === null || row.iv === null
+                || row.sender_device_id === null || row.sender_account_id === null || row.signature === null
+                || row.client_at === null || row.commitment === null)
+            {
+                continue;
+            }
+
+            const reaction: ChatReaction = {
+                id: row.id,
+                conversationId: row.conversation_id,
+                kind: row.kind,
+                target: row.target_id,
+                body: row.body,
+                at: row.created_at.toISOString(),
+                epoch: row.epoch,
+                seq: Number(row.seq),
+                iv: row.iv,
+                senderDeviceId: row.sender_device_id,
+                senderAccountId: row.sender_account_id,
+                signature: row.signature,
+                clientAt: row.client_at.toISOString(),
+                commitment: row.commitment,
+                ...(row.sender === null ? {} : { from: row.sender }),
+                ...(row.expires_at === null ? {} : { expiresAt: row.expires_at.toISOString() })
+            };
+
+            on.set(row.target_id, [...(on.get(row.target_id) ?? []), reaction]);
+        }
+
+        return on;
+    };
+
     /**
      * A handle, as the uuid the tables are keyed on.
      *
@@ -326,7 +365,8 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 client_at: row.last_client_at,
                 commitment: row.last_commitment,
                 frank: row.last_frank,
-                expires_at: row.last_expires_at
+                expires_at: row.last_expires_at,
+                target_id: null
             });
         }
         return summary;
@@ -2027,8 +2067,14 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             {
                 const page = await chat.messages(me, conversationId, decodeCursor(cursor));
                 const oldest = page.messages[0];
+                const reactions = asReactions(page.reactions);
                 return {
-                    messages: page.messages.map(asMessage),
+                    messages: page.messages.map((row) =>
+                    {
+                        const message = asMessage(row);
+                        const on = reactions.get(row.id);
+                        return on === undefined ? message : { ...message, reactions: on };
+                    }),
                     hasMore: page.hasMore,
                     ...(page.hasMore && oldest !== undefined
                         ? { cursor: encodeCursor(oldest.created_at, oldest.id) }
@@ -2041,6 +2087,12 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 const message = asMessage(
                     await chat.send(me, conversationId, await device.deviceOfSession(sessionId), input)
                 );
+
+                if (input.kind === 'reaction')
+                {
+                    live?.chatChanged(conversationId);
+                    return message;
+                }
 
                 // One notification per conversation, counting up. Twelve messages while somebody
                 // was away is one row saying twelve, not twelve rows to swipe through - and the
@@ -2061,6 +2113,12 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
 
                 live?.chatChanged(conversationId);
                 return message;
+            },
+
+            async remove(me, conversationId, messageId)
+            {
+                await chat.remove(me, conversationId, messageId);
+                live?.chatChanged(conversationId);
             },
 
             /**

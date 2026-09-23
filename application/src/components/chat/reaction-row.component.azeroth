@@ -1,0 +1,85 @@
+import type { Reaction } from '../../data/chat.ts';
+import { usePeople } from '../../stores/people.store.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import IconButton from '../ui/icon-button.component.azeroth';
+import Tooltip from '../ui/tooltip.component.azeroth';
+
+interface Tally
+{
+    emoji: string;
+    who: string[];
+    mine: boolean;
+}
+
+export default component ReactionRow(props: {
+    reactions: readonly Reaction[];
+    me: string;
+    end?: boolean;
+    onToggle: (emoji: string) => void;
+    onAdd?: (anchor: HTMLElement | null) => void;
+})
+{
+    const locale = useLocale();
+    const people = usePeople();
+
+    let add: HTMLElement | null = null;
+
+    derived tallies = props.reactions.reduce<Tally[]>((all, reaction) =>
+    {
+        const found = all.find((one) => one.emoji === reaction.emoji);
+
+        if (found === undefined)
+        {
+            return [...all, { emoji: reaction.emoji, who: [reaction.from], mine: reaction.from === props.me }];
+        }
+
+        if (!found.who.includes(reaction.from))
+        {
+            found.who.push(reaction.from);
+            found.mine = found.mine || reaction.from === props.me;
+        }
+
+        return all;
+    }, []);
+
+    const nameOf = (handle: string): string =>
+    {
+        if (handle === props.me)
+        {
+            return locale.t('common.you');
+        }
+
+        const person = people.byHandle(handle);
+
+        return person === null ? handle : locale.text(person.displayName);
+    };
+
+    <ul class={ () => [ 'mt-1 flex flex-wrap gap-1', props.end === true ? 'justify-end' : '' ].filter(Boolean).join(' ') } aria-label={ locale.t('chat.reactions') }>
+        <For each={ tallies } key={ (tally) => tally.emoji } let={ tally }>
+            <li>
+                <Tooltip label={ tally.who.map(nameOf).join(locale.t('common.listJoin')) }>
+                    <button
+                        type="button"
+                        class={ () => [
+                            'flex h-7 cursor-pointer items-center gap-1 rounded-full border px-2 text-ui-xs font-semibold transition-colors coarse:h-11 coarse:px-3',
+                            tally.mine ? 'border-accent/70 bg-accent/15 text-text' : 'border-line bg-field text-muted hover:border-line-strong hover:text-text'
+                        ].join(' ') }
+                        aria-pressed={ tally.mine }
+                        aria-label={ locale.t('chat.reactedWith', { emoji: tally.emoji, count: locale.n(tally.who.length) }) }
+                        onClick={ () => props.onToggle(tally.emoji) }
+                    >
+                        <span class="text-ui-md leading-none">{ tally.emoji }</span>
+                        <span class="tally">{ locale.n(tally.who.length) }</span>
+                    </button>
+                </Tooltip>
+            </li>
+        </For>
+        <Show when={ props.onAdd !== undefined && tallies.length > 0 }>
+            { () =>
+                <li ref={ (element) => add = element }>
+                    <IconButton icon="react" label={ locale.t('chat.react') } variant="ghost" size="sm" class="h-7! rounded-full! border border-dashed border-line coarse:h-11!" onClick={ () => props.onAdd?.(add) } />
+                </li>
+            }
+        </Show>
+    </ul>
+}

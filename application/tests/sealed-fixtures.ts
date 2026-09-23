@@ -1,3 +1,4 @@
+import { encodeText } from '../src/lib/body.ts';
 import type { Hex } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 
@@ -157,7 +158,8 @@ export async function buildSealedFixtures(): Promise<SealedFixtures>
             const clientAt = Date.parse(when);
 
             const frankingKey = mintFrankingKey();
-            const commitment = await commitmentOf(frankingKey, message.body ?? '');
+            const plain = encodeText({ text: message.body ?? '' });
+            const commitment = await commitmentOf(frankingKey, plain);
 
             const sealed = await sealText(key, sender.secrets, {
                 conversationId: thread.slug,
@@ -170,7 +172,7 @@ export async function buildSealedFixtures(): Promise<SealedFixtures>
                 clientAt,
                 commitment,
                 expiresAt: 0
-            }, message.body ?? '', frankingKey);
+            }, plain, frankingKey);
 
             written.push({
                 id,

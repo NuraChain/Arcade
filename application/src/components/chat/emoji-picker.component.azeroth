@@ -1,0 +1,158 @@
+import { EMOJI_GROUPS, searchEmoji, type EmojiGroup } from '../../data/emoji.ts';
+import { isEmoji } from '../../lib/body.ts';
+import type { IconName } from '../../icons/registry.ts';
+import type { MessageKey } from '../../locales/en.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import { useSettings } from '../../stores/settings.store.ts';
+import IconButton from '../ui/icon-button.component.azeroth';
+import SearchInput from '../ui/search-input.component.azeroth';
+
+const RECENT_MAX = 24;
+
+const GROUPS: readonly { id: EmojiGroup | 'recent'; icon: IconName; key: MessageKey }[] = [
+    { id: 'recent', icon: 'history', key: 'emoji.recent' },
+    { id: 'smileys', icon: 'smile', key: 'emoji.smileys' },
+    { id: 'people', icon: 'hand', key: 'emoji.people' },
+    { id: 'hearts', icon: 'heart', key: 'emoji.hearts' },
+    { id: 'play', icon: 'dice', key: 'emoji.play' },
+    { id: 'nature', icon: 'leaf', key: 'emoji.nature' },
+    { id: 'food', icon: 'food', key: 'emoji.food' },
+    { id: 'objects', icon: 'idea', key: 'emoji.objects' },
+    { id: 'symbols', icon: 'hash', key: 'emoji.symbols' },
+    { id: 'flags', icon: 'flag', key: 'emoji.flags' }
+];
+
+export default component EmojiPicker(props: { onPick: (emoji: string) => void; focus?: boolean; class?: string })
+{
+    const locale = useLocale();
+    const settings = useSettings();
+
+    state query = '';
+
+    state active = 'smileys' as EmojiGroup | 'recent';
+
+    let scroller: HTMLElement | null = null;
+
+    let root: HTMLElement | null = null;
+
+    mount
+    {
+        if (props.focus === true)
+        {
+            root?.querySelector<HTMLInputElement>('input')?.focus({ preventScroll: true });
+        }
+    }
+
+    derived recent = (Array.isArray(settings.settings().recentEmoji) ? settings.settings().recentEmoji : []).filter(isEmoji);
+
+    derived found = searchEmoji(query);
+
+    derived sections = GROUPS
+        .map((group) => ({
+            ...group,
+            emoji: group.id === 'recent' ? recent : (EMOJI_GROUPS.find((one) => one.id === group.id)?.emoji.map((one) => one.char) ?? [])
+        }))
+        .filter((group) => group.emoji.length > 0);
+
+    const pick = (emoji: string): void =>
+    {
+        settings.update({ recentEmoji: [emoji, ...recent.filter((one) => one !== emoji)].slice(0, RECENT_MAX) });
+        props.onPick(emoji);
+    };
+
+    const jump = (id: EmojiGroup | 'recent'): void =>
+    {
+        active = id;
+        query = '';
+        scroller?.querySelector(`[data-group="${ id }"]`)?.scrollIntoView({ block: 'start' });
+    };
+
+    const follow = (): void =>
+    {
+        if (scroller === null)
+        {
+            return;
+        }
+
+        const top = scroller.getBoundingClientRect().top;
+        const headings = [...scroller.querySelectorAll<HTMLElement>('[data-group]')];
+        const current = headings.filter((heading) => heading.getBoundingClientRect().top - top <= 8).pop() ?? headings[0];
+        const id = current?.dataset.group as EmojiGroup | 'recent' | undefined;
+
+        if (id !== undefined && id !== active)
+        {
+            active = id;
+        }
+    };
+
+    <div ref={ (element) => root = element } class={ () => [ 'flex h-[21rem] min-h-0 w-full flex-col overflow-hidden rounded-panel border border-line-strong bg-lifted', props.class ?? '' ].filter(Boolean).join(' ') } role="group" aria-label={ locale.t('emoji.title') }>
+        <div class="shrink-0 border-b border-line p-2">
+            <SearchInput value={ query } onInput={ (value) => query = value } placeholder={ locale.t('emoji.search') } label={ locale.t('emoji.search') } />
+        </div>
+
+        <Show when={ query.trim() === '' }>
+            { () =>
+                <nav class="rail-x flex shrink-0 gap-0.5 border-b border-line px-1.5 py-1" aria-label={ locale.t('emoji.groups') }>
+                    <For each={ sections } key={ (group) => group.id } let={ group }>
+                        <span class="flex">
+                            <IconButton
+                                icon={ group.icon }
+                                label={ locale.t(group.key) }
+                                variant="ghost"
+                                size="sm"
+                                pressed={ active === group.id }
+                                onClick={ () => jump(group.id) }
+                            />
+                        </span>
+                    </For>
+                </nav>
+            }
+        </Show>
+
+        <div ref={ (element) => scroller = element } class="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-2" onScroll={ follow }>
+            <Show
+                when={ query.trim() === '' }
+                fallback={
+                    <Show
+                        when={ found.length > 0 }
+                        fallback={ <p class="px-2 py-8 text-center text-ui-sm text-muted">{ locale.t('emoji.none') }</p> }
+                    >
+                        { () =>
+                            <div class="grid grid-cols-[repeat(auto-fill,minmax(2.5rem,1fr))] coarse:grid-cols-[repeat(auto-fill,minmax(2.75rem,1fr))] pt-2">
+                                <For each={ [...found] } key={ (one) => one.char } let={ one }>
+                                    <button
+                                        type="button"
+                                        class="flex aspect-square cursor-pointer items-center justify-center rounded-control text-ui-2xl transition-transform hover:scale-110 hover:bg-raised focus-visible:bg-raised motion-reduce:transition-none motion-reduce:hover:scale-100"
+                                        aria-label={ one.words.split(' ')[0] }
+                                        onClick={ () => pick(one.char) }
+                                    >
+                                        { one.char }
+                                    </button>
+                                </For>
+                            </div>
+                        }
+                    </Show>
+                }
+            >
+                { () =>
+                    <For each={ sections } key={ (group) => group.id } let={ group }>
+                        <section aria-label={ locale.t(group.key) }>
+                            <h3 data-group={ group.id } class="sticky top-0 z-1 bg-lifted pb-1 pt-2 text-ui-2xs font-semibold text-muted">{ locale.t(group.key) }</h3>
+                            <div class="grid grid-cols-[repeat(auto-fill,minmax(2.5rem,1fr))] coarse:grid-cols-[repeat(auto-fill,minmax(2.75rem,1fr))]">
+                                <For each={ [...group.emoji] } key={ (char) => char } let={ char }>
+                                    <button
+                                        type="button"
+                                        class="flex aspect-square cursor-pointer items-center justify-center rounded-control text-ui-2xl transition-transform hover:scale-110 hover:bg-raised focus-visible:bg-raised motion-reduce:transition-none motion-reduce:hover:scale-100"
+                                        onClick={ () => pick(char) }
+                                    >
+                                        { char }
+                                    </button>
+                                </For>
+                            </div>
+                        </section>
+                    </For>
+                }
+            </Show>
+        </div>
+    </div>
+}

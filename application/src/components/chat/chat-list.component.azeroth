@@ -113,7 +113,7 @@ export default component ChatList(props: { active?: string; pane?: boolean; clas
                 class="mb-3"
             />
 
-            <Tabs items={ items } value={ tab } label={ locale.t('app.nav.chats') } class="mb-3" onChange={ choose } />
+            <Tabs items={ items } value={ tab } label={ locale.t('app.nav.chats') } class="mb-2" onChange={ choose } />
         </div>
 
         <div ref={ (element) => scroller = pane ? element : null } class={ () => pane ? 'min-h-0 flex-1 overflow-y-auto px-2 pb-3' : '' }>

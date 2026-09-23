@@ -6,7 +6,6 @@ import InviteSheet from '../../components/games/invite-sheet.component.azeroth';
 import LobbyPanel from '../../components/games/lobby-panel.component.azeroth';
 import PlayHeader from '../../components/games/play-header.component.azeroth';
 import WatchBoard from '../../components/games/watch-board.component.azeroth';
-import TableChat from '../../components/games/table-chat.component.azeroth';
 import TableDock from '../../components/games/table-dock.component.azeroth';
 import Button from '../../components/ui/button.component.azeroth';
 import EmptyState from '../../components/ui/empty-state.component.azeroth';
@@ -29,6 +28,7 @@ import { useShell } from '../../stores/shell.store.ts';
 import { useToasts } from '../../stores/toasts.store.ts';
 import Panel from '../../components/ui/panel.component.azeroth';
 import type { MatchView } from '../../api.ts';
+import { plainOf } from '../../lib/markdown.ts';
 
 export default component PlayPage()
 {
@@ -58,6 +58,10 @@ export default component PlayPage()
     state starting = false;
 
     let Board: ((props: { match: MatchView; starting?: boolean; onAgain?: () => void; speech?: Record<string, string> }) => MountNode) | null = null;
+
+    let Chat: ((props: { conversationId: string; class?: string; closeIcon?: 'panel-close' | 'close'; wide?: boolean; onResize?: () => void; onClose?: () => void }) => MountNode) | null = null;
+
+    state chatReady = false;
 
     let talk: Record<string, string> = {};
 
@@ -97,6 +101,12 @@ export default component PlayPage()
     mount
     {
         const release = shell.claimTitle(() => title);
+
+        void import('../../components/games/table-chat.component.azeroth').then((module) =>
+        {
+            Chat = module.default;
+            chatReady = true;
+        });
 
         return () =>
         {
@@ -201,7 +211,7 @@ export default component PlayPage()
 
         const person = people.byHandle(last.from);
 
-        return `${ person === null ? last.from : locale.text(person.displayName) }: ${ locale.text(last.text) }`;
+        return `${ person === null ? last.from : locale.text(person.displayName) }: ${ plainOf(locale.text(last.text), locale.t('chat.spoilerPreview')) }`;
     })();
 
     effect
@@ -225,7 +235,7 @@ export default component PlayPage()
         for (const message of fresh)
         {
             const who = message.from;
-            const text = locale.text(message.text);
+            const text = plainOf(locale.text(message.text), locale.t('chat.spoilerPreview'));
 
             talk = { ...talk, [who]: text };
             publish();
@@ -645,14 +655,21 @@ export default component PlayPage()
                                     chatShown ? '' : 'hidden'
                                 ].filter(Boolean).join(' ') }
                             >
-                                <TableChat
-                                    conversationId={ room }
-                                    class="min-h-0 flex-1"
-                                    closeIcon="close"
-                                    wide={ chatWide }
-                                    onResize={ () => chatWide = !chatWide }
-                                    onClose={ closeChat }
-                                />
+                                <Show when={ chatReady }>
+                                    { () =>
+                                        <Dynamic
+                                            component={ Chat! }
+                                            props={ () => ({
+                                                conversationId: room,
+                                                class: 'min-h-0 flex-1',
+                                                closeIcon: 'close' as const,
+                                                wide: chatWide,
+                                                onResize: () => chatWide = !chatWide,
+                                                onClose: closeChat
+                                            }) }
+                                        />
+                                    }
+                                </Show>
                             </div>
                         }
                     </Show>

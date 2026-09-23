@@ -364,6 +364,7 @@ describe.skipIf(!active)('the epoch a conversation is sealed under', () =>
             senderDeviceId: left.device,
             signature: 'signature',
             clientAt: new Date().toISOString(),
+            kind: 'text' as const,
             commitment: 'a-commitment',
             expiresAt: 0
         });
@@ -397,6 +398,7 @@ describe.skipIf(!active)('the epoch a conversation is sealed under', () =>
             senderDeviceId: right.device,
             signature: 'signature',
             clientAt: new Date().toISOString(),
+            kind: 'text' as const,
             commitment: 'a-commitment',
             expiresAt: 0
         })).rejects.toThrow(/not a device this account can seal with/);
@@ -416,6 +418,7 @@ describe.skipIf(!active)('the epoch a conversation is sealed under', () =>
             senderDeviceId: left.device,
             signature: 'signature',
             clientAt: new Date().toISOString(),
+            kind: 'text' as const,
             commitment: 'a-commitment',
             expiresAt: 0
         })).rejects.toThrow(/has not been minted/);
@@ -489,6 +492,7 @@ describe.skipIf(!active)('the epoch a conversation is sealed under', () =>
                 senderDeviceId: right.device,
                 signature: 'signature',
                 clientAt: new Date().toISOString(),
+                kind: 'text' as const,
                 commitment: 'a-commitment',
                 expiresAt: 0
             })).rejects.toThrow(/has not been minted/);
@@ -509,6 +513,7 @@ describe.skipIf(!active)('the epoch a conversation is sealed under', () =>
                 senderDeviceId: left.device,
                 signature: 'signature',
                 clientAt: new Date().toISOString(),
+                kind: 'text' as const,
                 commitment: 'a-commitment',
                 expiresAt: 0
             };
@@ -544,6 +549,7 @@ describe.skipIf(!active)('the epoch a conversation is sealed under', () =>
                 senderDeviceId: left.device,
                 signature: 'signature',
                 clientAt: new Date().toISOString(),
+                kind: 'text' as const,
                 commitment: 'a-commitment',
                 expiresAt: 0
             });
@@ -624,6 +630,7 @@ describe.skipIf(!active)('the epoch a conversation is sealed under', () =>
                 senderDeviceId: device,
                 signature: 'signature',
                 clientAt: new Date(clientAt).toISOString(),
+                kind: 'text' as const,
                 commitment: 'a-commitment',
                 expiresAt: clientAt + HOUR * 1000
             };
@@ -639,6 +646,7 @@ describe.skipIf(!active)('the epoch a conversation is sealed under', () =>
             senderDeviceId: device,
             signature: 'signature',
             clientAt: new Date().toISOString(),
+            kind: 'text' as const,
             commitment: 'a-commitment',
             expiresAt: 0
         });

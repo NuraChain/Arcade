@@ -42,6 +42,7 @@ export const app = {
     'common.clear': 'Clear',
     'common.seeAll': 'See all',
     'common.you': 'You',
+    'common.listJoin': ', ',
     'common.online': 'Online',
     'common.away': 'Away',
     'common.players': { one: '{count} player', other: '{count} players' },

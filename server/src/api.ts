@@ -888,6 +888,12 @@ export function buildApi(ports: Ports)
                 )
             ),
 
+            remove: routes.del('/:id/messages/:messageId', { output: ack }, async (context) =>
+            {
+                await ports.chat.remove(context.principal.userId, context.params.id, context.params.messageId);
+                return { ok: true };
+            }),
+
             read: routes.post('/:id/read', { output: ack }, async (context) =>
             {
                 await ports.chat.markRead(context.principal.userId, context.params.id);

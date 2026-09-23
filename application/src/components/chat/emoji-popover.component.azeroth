@@ -1,0 +1,141 @@
+import { onCleanup, Portal, untrack } from 'azerothjs';
+
+import { boxOf, place, viewportOf, type Placed } from '../../lib/anchor.ts';
+import { useEmojiPop } from '../../stores/emoji-pop.store.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import LazyEmojiPicker from './lazy-emoji-picker.component.azeroth';
+
+export default component EmojiPopover()
+{
+    const pop = useEmojiPop();
+    const locale = useLocale();
+
+    state at = { x: -9999, y: -9999, side: 'top', align: 'end', arrow: 0 } as Placed;
+
+    state placed = false;
+
+    let panel: HTMLElement | null = null;
+
+    derived current = pop.current();
+
+    const settle = (): void =>
+    {
+        const now = untrack(pop.current);
+
+        if (now === null || panel === null || !now.anchor.isConnected)
+        {
+            return;
+        }
+
+        at = place(
+            boxOf(now.anchor),
+            { width: panel.offsetWidth, height: panel.offsetHeight },
+            viewportOf(),
+            { side: now.side, align: now.align, gap: 8, padding: 8, rtl: locale.dir() === 'rtl' }
+        );
+        placed = true;
+    };
+
+    const choose = (emoji: string): void =>
+    {
+        const now = untrack(pop.current);
+
+        if (now === null)
+        {
+            return;
+        }
+
+        if (!now.keep)
+        {
+            pop.close();
+            now.anchor.focus();
+        }
+
+        now.pick(emoji);
+    };
+
+    effect
+    {
+        const now = current;
+
+        placed = false;
+
+        if (now === null)
+        {
+            return;
+        }
+
+        const outside = (event: PointerEvent): void =>
+        {
+            const target = event.target as Node;
+
+            if (panel?.contains(target) === true || now.anchor.contains(target))
+            {
+                return;
+            }
+
+            pop.close();
+        };
+
+        const key = (event: KeyboardEvent): void =>
+        {
+            if (event.key === 'Escape')
+            {
+                event.stopPropagation();
+                pop.close();
+                now.anchor.focus();
+            }
+        };
+
+        const moved = (): void =>
+        {
+            requestAnimationFrame(settle);
+        };
+
+        const sized = new ResizeObserver(moved);
+
+        const frame = requestAnimationFrame(() =>
+        {
+            if (panel !== null)
+            {
+                sized.observe(panel);
+            }
+            settle();
+        });
+
+        document.addEventListener('pointerdown', outside, true);
+        document.addEventListener('keydown', key, true);
+        window.addEventListener('resize', moved, { passive: true });
+        window.addEventListener('scroll', moved, true);
+
+        onCleanup(() =>
+        {
+            cancelAnimationFrame(frame);
+            sized.disconnect();
+            document.removeEventListener('pointerdown', outside, true);
+            document.removeEventListener('keydown', key, true);
+            window.removeEventListener('resize', moved);
+            window.removeEventListener('scroll', moved, true);
+        });
+    }
+
+    <Show when={ current !== null }>
+        { () =>
+            <Portal>
+                <div class="anchor-root">
+                    <div
+                        ref={ (element) => panel = element }
+                        class={ () => [
+                            'pointer-events-auto absolute w-[min(22rem,calc(100vw-1rem))] rounded-panel shadow-2xl shadow-black/50 transition-[opacity,scale] duration-150 ease-out motion-reduce:transition-none',
+                            at.side === 'bottom' ? 'origin-top' : 'origin-bottom',
+                            placed ? 'scale-100 opacity-100' : 'scale-95 opacity-0'
+                        ].join(' ') }
+                        style={ `left: ${ at.x }px; top: ${ at.y }px` }
+                    >
+                        <LazyEmojiPicker onPick={ choose } focus />
+                    </div>
+                </div>
+            </Portal>
+        }
+    </Show>
+}

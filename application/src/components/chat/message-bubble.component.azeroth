@@ -7,10 +7,21 @@ import { usePeople } from '../../stores/people.store.ts';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { attachHold } from '../../lib/hold.ts';
+import { attachSwipeReply } from '../../lib/swipe-reply.ts';
+import { QUICK_REACTIONS } from '../../data/emoji.ts';
+import { isEmoji } from '../../lib/body.ts';
+import { useDevice } from '../../stores/device.store.ts';
+import { useEmojiPop } from '../../stores/emoji-pop.store.ts';
+import { useSettings } from '../../stores/settings.store.ts';
 import { useToasts } from '../../stores/toasts.store.ts';
 import type { MessageKey } from '../../locales/en.ts';
 import Avatar from '../ui/avatar.component.azeroth';
 import Button from '../ui/button.component.azeroth';
+import IconButton from '../ui/icon-button.component.azeroth';
+import { plainOf } from '../../lib/markdown.ts';
+import ReactionRow from './reaction-row.component.azeroth';
+import RichText from './rich-text.component.azeroth';
+import { jumboOf } from '../../lib/markdown-dom.ts';
 
 const LOCKED: Record<MessageLock, MessageKey> = {
     'unknown-sender': 'locked.unknownSender',
@@ -34,7 +45,12 @@ export default component MessageBubble(props: {
     first?: boolean;
     last?: boolean;
     avatar?: boolean;
-    onHold?: (message: Message) => void;
+    onActions?: (message: Message, pick?: boolean) => void;
+    onReply?: (message: Message) => void;
+    onReact?: (message: Message, emoji: string) => void;
+    quoteOf?: (id: string) => Message | undefined;
+    onJump?: (id: string) => void;
+    replying?: boolean;
 })
 {
     const locale = useLocale();
@@ -59,13 +75,52 @@ export default component MessageBubble(props: {
 
     let bubble: HTMLElement | null = null;
 
-    mount
+    let row: HTMLElement | null = null;
+
+    let cue: HTMLElement | null = null;
+
+    let toolbar: HTMLElement | null = null;
+
+    const device = useDevice();
+
+    const pop = useEmojiPop();
+
+    const settings = useSettings();
+
+    derived quick = [...new Set([...(Array.isArray(settings.settings().recentEmoji) ? settings.settings().recentEmoji : []).filter(isEmoji), ...QUICK_REACTIONS])].slice(0, 3);
+
+    const pickFor = (anchor: HTMLElement | null): void =>
     {
-        if (bubble === null || props.onHold === undefined || props.message.from === props.me)
+        if (device.coarse() || anchor === null)
         {
+            props.onActions?.(props.message, true);
             return;
         }
-        return attachHold(bubble, () => props.onHold?.(props.message));
+
+        pop.toggle({ anchor, pick: (emoji) => props.onReact?.(props.message, emoji), side: 'top', align: mine ? 'end' : 'start', keep: false });
+    };
+
+    mount
+    {
+        const releases: (() => void)[] = [];
+
+        if (bubble !== null && props.onActions !== undefined)
+        {
+            releases.push(attachHold(bubble, () => props.onActions?.(props.message)));
+        }
+
+        if (row !== null && props.onReply !== undefined)
+        {
+            releases.push(attachSwipeReply(row, cue, () => locale.dir() === 'rtl', () => props.onReply?.(props.message)));
+        }
+
+        return () =>
+        {
+            for (const release of releases)
+            {
+                release();
+            }
+        };
     }
 
     derived person = people.byHandle(props.message.from) ?? null;
@@ -92,6 +147,37 @@ export default component MessageBubble(props: {
     })();
 
     derived locked = props.message.locked ?? null;
+
+    derived quoted = props.message.reply === undefined ? undefined : props.quoteOf?.(props.message.reply);
+
+    derived quoteName = ((): string =>
+    {
+        if (quoted === undefined || quoted.kind === 'deleted')
+        {
+            return '';
+        }
+
+        return quoted.from === props.me ? locale.t('common.you') : nameOf(quoted.from);
+    })();
+
+    derived quoteText = ((): string =>
+    {
+        if (quoted === undefined)
+        {
+            return locale.t('chat.quoteMissing');
+        }
+
+        if (quoted.kind === 'deleted')
+        {
+            return locale.t('chat.quoteDeleted');
+        }
+
+        return quoted.locked === undefined ? plainOf(quoted.text, locale.t('chat.spoilerPreview')) : locale.t(LOCKED[quoted.locked]);
+    })();
+
+    derived reactions = props.message.reactions ?? [];
+
+    derived jumbo = props.message.reply === undefined && props.message.forwarded !== true && jumboOf(said);
 
     derived alarming = locked !== null && ALARMING.includes(locked);
 
@@ -159,7 +245,14 @@ export default component MessageBubble(props: {
         }
     >
         { () =>
-            <div class={ () => [ 'flex w-full items-end gap-2', mine ? 'flex-row-reverse' : '' ].filter(Boolean).join(' ') }>
+            <div ref={ (element) => row = element } class={ () => [ 'group/row relative flex w-full touch-pan-y items-end gap-2', mine ? 'flex-row-reverse' : '' ].filter(Boolean).join(' ') } data-message={ props.message.id }>
+                <Show when={ props.onReply !== undefined }>
+                    { () =>
+                        <span ref={ (element) => cue = element } class="pointer-events-none absolute end-1 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-raised text-accent opacity-0" aria-hidden="true">
+                            <Icon name="reply" size={ 16 } class="icon-flip" />
+                        </span>
+                    }
+                </Show>
                 <Show when={ crowd }>
                     { () =>
                         <span class="flex w-8 shrink-0 self-end">
@@ -173,10 +266,18 @@ export default component MessageBubble(props: {
                         </span>
                     }
                 </Show>
-                <div class={ () => [ 'flex min-w-0 max-w-[min(34rem,80%)] flex-col', mine ? 'items-end' : 'items-start' ].join(' ') }>
+                <div class={ () => [ 'relative flex min-w-0 max-w-[min(34rem,80%)] flex-col', mine ? 'items-end' : 'items-start' ].join(' ') }>
                     <Show when={ crowd && first }>
                         { () =>
                             <span class="mb-1 px-3 text-ui-2xs font-semibold" style={ `color: hsl(${ person?.hue ?? 210 } 72% 72%)` } dir="auto">{ firstName }</span>
+                        }
+                    </Show>
+                    <Show when={ props.message.forwarded === true && locked === null }>
+                        { () =>
+                            <span class="mb-0.5 flex items-center gap-1 px-3 text-ui-2xs font-medium text-muted">
+                                <Icon name="forward" size={ 12 } class="icon-flip" />
+                                { locale.t('chat.forwarded') }
+                            </span>
                         }
                     </Show>
                     <Show
@@ -199,21 +300,87 @@ export default component MessageBubble(props: {
                                 ref={ (element) => bubble = element }
                                 dir="auto"
                                 class={ () => [
-                                    'bubble relative max-w-full rounded-[1.125rem] px-3 pb-1.5 pt-1.5 text-ui-base leading-snug',
-                                    mine ? 'bg-accent-fill text-accent-ink' : 'border border-line bg-field text-text',
+                                    'bubble relative flex max-w-full flex-col rounded-[1.125rem] px-3 pb-1.5 pt-1.5 text-ui-base leading-snug transition-shadow duration-150',
+                                    props.replying === true ? 'ring-2 ring-accent ring-offset-2 ring-offset-void' : '',
+                                    props.onActions === undefined ? '' : 'holdable',
+                                    jumbo ? 'bg-transparent text-text' : (mine ? 'bg-accent-fill text-accent-ink' : 'border border-line bg-field text-text'),
                                     corners
-                                ].join(' ') }
+                                ].filter(Boolean).join(' ') }
                             >
-                                <span class="whitespace-pre-wrap break-words">{ said }</span>
-                                <span class="invisible ms-2 inline-block text-ui-2xs" dir={ locale.dir() } aria-hidden="true">{ time }</span>
+                                <Show when={ props.message.reply !== undefined }>
+                                    { () =>
+                                        <button
+                                            type="button"
+                                            class={ () => [
+                                                'mb-1 flex min-w-0 max-w-full cursor-pointer flex-col items-start gap-0.5 rounded-tile border-s-[3px] px-2 py-1 text-start transition-colors',
+                                                mine ? 'border-accent-ink/60 bg-black/15 hover:bg-black/25' : 'border-accent bg-raised/70 hover:bg-raised'
+                                            ].join(' ') }
+                                            aria-label={ locale.t('chat.jumpToQuote') }
+                                            onClick={ () => props.onJump?.(props.message.reply ?? '') }
+                                        >
+                                            <Show when={ quoteName !== '' }>
+                                                { () => <span class={ () => [ 'max-w-full truncate text-ui-2xs font-semibold', mine ? 'text-accent-ink' : 'text-accent' ].join(' ') } dir="auto">{ quoteName }</span> }
+                                            </Show>
+                                            <span class={ () => [ 'line-clamp-2 max-w-full text-ui-xs', mine ? 'text-accent-ink/80' : 'text-muted' ].join(' ') } dir="auto">{ quoteText }</span>
+                                        </button>
+                                    }
+                                </Show>
+                                <RichText text={ said } mine={ mine } reserve={ time } />
                                 <time
-                                    class={ () => [ 'absolute bottom-1 end-3 text-ui-2xs leading-none', mine ? 'text-accent-ink/70' : 'text-faint' ].join(' ') }
+                                    class={ () => [ 'absolute bottom-1 end-3 text-ui-2xs leading-none', mine && !jumbo ? 'text-accent-ink/70' : 'text-faint' ].join(' ') }
                                     datetime={ new Date(props.message.at).toISOString() }
-                                    dir={ locale.dir() }
                                 >
-                                    { time }
+                                    <span dir={ locale.dir() }>{ time }</span>
                                 </time>
                             </span>
+                        }
+                    </Show>
+                    <Show when={ props.onActions !== undefined && locked === null }>
+                        { () =>
+                            <div
+                                ref={ (element) => toolbar = element }
+                                class={ () => [
+                                    'absolute -top-10 z-10 hidden items-center gap-0.5 rounded-full border border-line-strong bg-lifted p-0.5 shadow-lg shadow-black/30 opacity-0 transition-opacity duration-150 group-hover/row:opacity-100 focus-within:opacity-100 pointer-fine:flex motion-reduce:transition-none @min-[32rem]/thread:top-1/2 @min-[32rem]/thread:-translate-y-1/2',
+                                    pop.current()?.anchor === toolbar && toolbar !== null ? 'opacity-100' : '',
+                                    mine ? 'end-0 @min-[32rem]/thread:end-full @min-[32rem]/thread:me-2' : 'start-0 @min-[32rem]/thread:start-full @min-[32rem]/thread:ms-2'
+                                ].filter(Boolean).join(' ') }
+                            >
+                                <Show when={ props.onReact !== undefined }>
+                                    { () =>
+                                        <span class="hidden items-center gap-0.5 @min-[32rem]/thread:flex">
+                                            <For each={ quick } key={ (emoji) => emoji } let={ emoji }>
+                                                <button
+                                                    type="button"
+                                                    class="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full text-ui-lg transition-transform duration-150 hover:scale-115 hover:bg-raised motion-reduce:transition-none motion-reduce:hover:scale-100"
+                                                    aria-label={ locale.t('chat.reactWith', { emoji: emoji }) }
+                                                    onClick={ () => props.onReact?.(props.message, emoji) }
+                                                >
+                                                    { emoji }
+                                                </button>
+                                            </For>
+                                            <span class="mx-0.5 h-5 w-px bg-line" aria-hidden="true"></span>
+                                        </span>
+                                    }
+                                </Show>
+                                <Show when={ props.onReact !== undefined }>
+                                    { () => <IconButton icon="react" label={ locale.t('chat.react') } variant="ghost" size="sm" class="rounded-full!" onClick={ () => pickFor(toolbar) } /> }
+                                </Show>
+                                <Show when={ props.onReply !== undefined }>
+                                    { () => <IconButton icon="reply" label={ locale.t('chat.reply') } variant="ghost" size="sm" flip class="rounded-full!" onClick={ () => props.onReply?.(props.message) } /> }
+                                </Show>
+                                <IconButton icon="more" label={ locale.t('chat.more') } variant="ghost" size="sm" class="rounded-full!" onClick={ () => props.onActions?.(props.message) } />
+                            </div>
+                        }
+                    </Show>
+                    <Show when={ reactions.length > 0 && props.onReact !== undefined }>
+                        { () =>
+                            <ReactionRow
+                                reactions={ reactions }
+                                me={ props.me }
+                                end={ mine }
+                                onToggle={ (emoji) => props.onReact?.(props.message, emoji) }
+                                onAdd={ (anchor) => pickFor(anchor) }
+                            />
                         }
                     </Show>
                 </div>

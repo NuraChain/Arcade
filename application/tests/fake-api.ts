@@ -418,6 +418,8 @@ interface FakeMint
 interface FakeSend
 {
     id: string;
+    kind: 'text' | 'reaction';
+    target?: string;
     epoch: number;
     seq: number;
     iv: string;
@@ -752,7 +754,7 @@ export const client =
             const message: ChatMessage = {
                 id: input.id,
                 conversationId: params.id,
-                kind: 'text',
+                kind: input.kind,
                 from: server.me,
                 body: input.body,
                 at: new Date(1_700_000_000_000 + counter * 1000).toISOString(),
@@ -769,6 +771,17 @@ export const client =
             // The real server also stamps its own MAC here. This one does not, because franking is
             // a claim by the SERVER and `franking.db.spec.ts` owns it against a real Postgres -
             // a fake that made up a frank would only prove it agreed with itself.
+            if (input.kind === 'reaction')
+            {
+                const target = server.messages.find((one) => one.id === input.target && one.conversationId === params.id && one.kind === 'text');
+                if (target === undefined)
+                {
+                    throw new ApiError(404, 'not-found', 'There is no such message here to react to.', undefined);
+                }
+                target.reactions = [...(target.reactions ?? []), { ...message, target: target.id } as NonNullable<ChatMessage['reactions']>[number]];
+                return message;
+            }
+
             server.messages.push(message);
 
             const row = server.conversations.find((one) => one.id === params.id);
@@ -778,6 +791,30 @@ export const client =
                 row.unread = 0;
             }
             return message;
+        },
+
+        async remove({ params }: { params: { id: string; messageId: string } })
+        {
+            server.calls.push('chat.remove');
+
+            for (const one of server.messages)
+            {
+                if ((one.reactions ?? []).some((reaction) => reaction.id === params.messageId))
+                {
+                    one.reactions = (one.reactions ?? []).filter((reaction) => reaction.id !== params.messageId);
+                    return { ok: true };
+                }
+            }
+
+            const found = server.messages.findIndex((one) => one.id === params.messageId && one.conversationId === params.id && one.from === server.me);
+            if (found === -1)
+            {
+                throw new ApiError(404, 'not-found', 'No such message of yours here.', undefined);
+            }
+
+            const { id, conversationId, from, at } = server.messages[found];
+            server.messages[found] = { id, conversationId, kind: 'deleted', at, ...(from === undefined ? {} : { from }) };
+            return { ok: true };
         },
 
         async read({ params }: { params: { id: string } })

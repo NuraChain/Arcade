@@ -32,7 +32,14 @@ export interface Conversation
     quiet: boolean;
 }
 
-export type MessageKind = 'text' | 'system' | 'invite' | 'result';
+export type MessageKind = 'text' | 'deleted' | 'system' | 'invite' | 'result';
+
+export interface Reaction
+{
+    id: string;
+    from: string;
+    emoji: string;
+}
 
 /**
  * What a server-authored line says ABOUT, as a closed set.
@@ -101,6 +108,11 @@ export interface Message
      * message this browser could not open does not have one at all.
      */
     frankingKey?: string;
+
+    plain?: string;
+    reply?: string;
+    forwarded?: boolean;
+    reactions?: Reaction[];
 
     line?: MessageLine;
     at: number;

@@ -7,7 +7,7 @@ import { affectedBy, firstRow, rowsOf } from '../../lib/rows.ts';
 import { ConversationMember } from '../../entities/conversation-member.entity.ts';
 import { Conversation } from '../../entities/conversation.entity.ts';
 import { Table } from '../../entities/table.entity.ts';
-import type { MessageKind } from '../../entities/message.entity.ts';
+import { Message, type MessageKind } from '../../entities/message.entity.ts';
 import { User } from '../../entities/user.entity.ts';
 import type { SocialService } from '../social/service.ts';
 
@@ -72,12 +72,15 @@ export interface MessageRow
 
     /** The server's own MAC. Never sent to a client - it is only ever checked here. */
     frank: string | null;
+    target_id: string | null;
 }
 
 /** What a client states when it sends something sealed. */
 export interface SealedInput
 {
     id: string;
+    kind: 'text' | 'reaction';
+    target?: string;
     epoch: number;
     seq: number;
     iv: string;
@@ -268,6 +271,7 @@ export function createChatService(db: DataSource, social: SocialService, frankin
                           where x.conversation_id = c.id
                             and x.created_at > m.last_read_at
                             and (x.expires_at is null or x.expires_at > now())
+                            and x.kind not in ('reaction', 'deleted')
                             and (x.sender_id is null or x.sender_id <> $1))             as unread,
                         last.id                                                          as last_id,
                         last.kind                                                        as last_kind,
@@ -302,6 +306,7 @@ export function createChatService(db: DataSource, social: SocialService, frankin
                        -- preview of a message that has run out and the thread does not, which is
                        -- the one place a disappearing message would still be visible.
                        and (x.expires_at is null or x.expires_at > now())
+                       and x.kind not in ('reaction', 'deleted')
                      order by x.created_at desc, x.id desc
                      limit 1
                  ) last on true
@@ -326,7 +331,7 @@ export function createChatService(db: DataSource, social: SocialService, frankin
          * other end while somebody scrolls up, and an OFFSET page silently repeats or skips a
          * message every time one arrives. The cursor is the last row of the previous page.
          */
-        async messages(me: string, conversationId: string, cursor: { at: Date; id: string } | null): Promise<{ messages: MessageRow[]; hasMore: boolean }>
+        async messages(me: string, conversationId: string, cursor: { at: Date; id: string } | null): Promise<{ messages: MessageRow[]; hasMore: boolean; reactions: MessageRow[] }>
         {
             await mustBeMember(me, conversationId);
 
@@ -334,10 +339,11 @@ export function createChatService(db: DataSource, social: SocialService, frankin
                 `select x.id, x.conversation_id, x.kind, x.body, x.payload, x.created_at,
                         su.handle as sender, x.sender_id as sender_account_id,
                         x.epoch, x.seq, x.iv, x.sender_device_id, x.signature, x.client_at,
-                        x.commitment, x.frank, x.expires_at
+                        x.commitment, x.frank, x.expires_at, x.target_id
                  from messages x
                  left join users su on su.id = x.sender_id
                  where x.conversation_id = $1
+                   and x.kind <> 'reaction'
                    -- Gone is gone. The sweep deletes these on a timer, and a reader must not see
                    -- one in the window between its moment and the next pass.
                    and (x.expires_at is null or x.expires_at > now())
@@ -349,7 +355,38 @@ export function createChatService(db: DataSource, social: SocialService, frankin
 
             const page = rowsOf<MessageRow>(rows);
             const hasMore = page.length > PAGE;
-            return { messages: page.slice(0, PAGE).reverse(), hasMore };
+            const shown = page.slice(0, PAGE).reverse();
+            const texts = shown.filter((row) => row.kind === 'text').map((row) => row.id);
+
+            const reactions = texts.length === 0 ? [] : await db.getRepository(Message)
+                .createQueryBuilder('x')
+                .leftJoin(User, 'su', 'su.id = x.sender_id')
+                .select('x.id', 'id')
+                .addSelect('x.conversation_id', 'conversation_id')
+                .addSelect('x.kind', 'kind')
+                .addSelect('x.body', 'body')
+                .addSelect('x.payload', 'payload')
+                .addSelect('x.created_at', 'created_at')
+                .addSelect('su.handle', 'sender')
+                .addSelect('x.sender_id', 'sender_account_id')
+                .addSelect('x.epoch', 'epoch')
+                .addSelect('x.seq', 'seq')
+                .addSelect('x.iv', 'iv')
+                .addSelect('x.sender_device_id', 'sender_device_id')
+                .addSelect('x.signature', 'signature')
+                .addSelect('x.client_at', 'client_at')
+                .addSelect('x.commitment', 'commitment')
+                .addSelect('x.frank', 'frank')
+                .addSelect('x.expires_at', 'expires_at')
+                .addSelect('x.target_id', 'target_id')
+                .where('x.target_id in (:...texts)', { texts })
+                .andWhere('x.kind = :kind', { kind: 'reaction' })
+                .andWhere('(x.expires_at is null or x.expires_at > now())')
+                .orderBy('x.created_at', 'ASC')
+                .addOrderBy('x.id', 'ASC')
+                .getRawMany<MessageRow>();
+
+            return { messages: shown, hasMore, reactions };
         },
 
         /**
@@ -415,6 +452,29 @@ export function createChatService(db: DataSource, social: SocialService, frankin
             if (clean === '')
             {
                 throw new BadRequestError('A message needs a body.');
+            }
+
+            if (input.kind === 'text' && input.target !== undefined)
+            {
+                throw new BadRequestError('A message is not about another message; a reaction is.');
+            }
+
+            if (input.kind === 'reaction')
+            {
+                const target = input.target ?? '';
+
+                const found = UUID.test(target) && await db.getRepository(Message)
+                    .createQueryBuilder('t')
+                    .where('t.id = :target', { target })
+                    .andWhere('t.conversation_id = :conversationId', { conversationId })
+                    .andWhere('t.kind = :kind', { kind: 'text' })
+                    .andWhere('(t.expires_at is null or t.expires_at > now())')
+                    .getExists();
+
+                if (!found)
+                {
+                    throw new NotFoundError('There is no such message here to react to.');
+                }
             }
 
             if (!Number.isSafeInteger(input.seq) || input.seq < 1)
@@ -513,30 +573,28 @@ export function createChatService(db: DataSource, social: SocialService, frankin
 
             try
             {
-                inserted = await db.query(
-                    `insert into messages
-                         (id, conversation_id, sender_id, kind, body, epoch, seq, iv, sender_device_id,
-                          signature, client_at, commitment, frank, expires_at)
-                     values ($1, $2, $3, 'text', $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-                     returning id, conversation_id, kind, body, payload, created_at,
-                               epoch, seq, iv, sender_device_id, signature, client_at, commitment,
-                               frank, expires_at`,
-                    [
-                        input.id,
+                inserted = await db.getRepository(Message)
+                    .createQueryBuilder()
+                    .insert()
+                    .values({
+                        id: input.id,
                         conversationId,
-                        me,
-                        clean.slice(0, 8000),
-                        input.epoch,
-                        input.seq,
-                        input.iv,
-                        input.senderDeviceId,
-                        input.signature,
+                        senderId: me,
+                        kind: input.kind,
+                        body: clean.slice(0, 8000),
+                        epoch: input.epoch,
+                        seq: String(input.seq),
+                        iv: input.iv,
+                        senderDeviceId: input.senderDeviceId,
+                        signature: input.signature,
                         clientAt,
-                        input.commitment,
+                        commitment: input.commitment,
                         frank,
-                        expiresAt
-                    ]
-                );
+                        expiresAt,
+                        targetId: input.kind === 'reaction' ? input.target ?? null : null
+                    })
+                    .returning('*')
+                    .execute();
             }
             catch (error)
             {
@@ -550,7 +608,7 @@ export function createChatService(db: DataSource, social: SocialService, frankin
                 throw error;
             }
 
-            const message = rowsOf<Omit<MessageRow, 'sender' | 'sender_account_id'>>(inserted)[0];
+            const message = (inserted.raw as Omit<MessageRow, 'sender' | 'sender_account_id'>[])[0];
 
             // Saying something is reading it. Without this the sender's own line comes back as
             // unread to them on the next list.
@@ -566,15 +624,59 @@ export function createChatService(db: DataSource, social: SocialService, frankin
             };
         },
 
+        async remove(me: string, conversationId: string, messageId: string): Promise<'deleted' | 'withdrawn'>
+        {
+            await mustBeMember(me, conversationId);
+
+            if (!UUID.test(messageId))
+            {
+                throw new NotFoundError('No such message of yours here.');
+            }
+
+            return db.transaction(async (tx) =>
+            {
+                const messages = tx.getRepository(Message);
+
+                const found = await messages.findOne({
+                    select: { id: true, kind: true },
+                    where: { id: messageId, conversationId, senderId: me },
+                    lock: { mode: 'pessimistic_write' }
+                });
+
+                if (found === null || (found.kind !== 'text' && found.kind !== 'reaction'))
+                {
+                    throw new NotFoundError('No such message of yours here.');
+                }
+
+                if (found.kind === 'reaction')
+                {
+                    await messages.delete({ id: messageId });
+                    return 'withdrawn';
+                }
+
+                await messages.delete({ targetId: messageId, kind: 'reaction' });
+                await messages.update({ id: messageId }, {
+                    kind: 'deleted',
+                    body: null,
+                    iv: null,
+                    signature: null,
+                    commitment: null,
+                    frank: null
+                });
+
+                return 'deleted';
+            });
+        },
+
         /** A server-authored line: `{ key, params }`, never prose. */
-        async post(conversationId: string, kind: Exclude<MessageKind, 'text'>, payload: Record<string, unknown>, senderId: string | null): Promise<MessageRow>
+        async post(conversationId: string, kind: 'system' | 'invite' | 'result', payload: Record<string, unknown>, senderId: string | null): Promise<MessageRow>
         {
             const inserted = await db.query(
                 `insert into messages (conversation_id, sender_id, kind, payload)
                  values ($1, $2, $3, $4)
                  returning id, conversation_id, kind, body, payload, created_at,
                            epoch, seq, iv, sender_device_id, signature, client_at, commitment,
-                           frank, expires_at`,
+                           frank, expires_at, target_id`,
                 [conversationId, senderId, kind, JSON.stringify(payload)]
             );
             const message = rowsOf<Omit<MessageRow, 'sender' | 'sender_account_id'>>(inserted)[0];
