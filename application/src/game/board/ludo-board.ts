@@ -87,6 +87,7 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
     let motion = !options.reducedMotion;
     let sound: SoundHandle | null = createSound(options.sound);
     let dieFade = 0;
+    let heardRev = Math.max(0, ...(options.view.beats ?? []).map((beat) => beat.rev));
 
     root.style.setProperty('--c', cq(C));
     root.toggleAttribute('data-still', !motion);
@@ -404,6 +405,12 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
     {
         window.clearTimeout(dieFade);
         root.removeAttribute('data-rolled');
+        die.removeAttribute('data-spent');
+
+        for (const running of die.getAnimations())
+        {
+            running.cancel();
+        }
     };
 
     const fadeDie = (): void =>
@@ -472,6 +479,42 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
             { duration: TUMBLE_MS, easing: 'cubic-bezier(0.22, 0.61, 0.36, 1)' }
         );
         glow.animate([{ opacity: 0 }, { opacity: 0, offset: 0.7 }, { opacity: 1 }], { duration: TUMBLE_MS });
+    };
+
+    const spent = (value: number, colour: string | null, why: string | undefined): void =>
+    {
+        for (const running of [...die.getAnimations(), ...glow.getAnimations()])
+        {
+            running.cancel();
+        }
+
+        sound?.play('die-land');
+        root.setAttribute('data-rolled', '');
+        glow.style.setProperty('--tone', colour === null ? 'transparent' : (TONE[colour] ?? '#FFFFFF'));
+        face(value);
+
+        const settle = motion ? TUMBLE_MS : 0;
+
+        if (motion)
+        {
+            die.animate(
+                [{ rotate: '0deg', scale: '1' }, { scale: '1.3', offset: 0.4 }, { rotate: '360deg', scale: '1' }],
+                { duration: TUMBLE_MS, easing: 'cubic-bezier(0.22, 0.61, 0.36, 1)' }
+            );
+        }
+
+        later(settle, () =>
+        {
+            sound?.play(why === 'three-sixes' ? 'deny' : 'pass');
+            die.setAttribute('data-spent', why ?? 'no-move');
+            die.animate(
+                motion
+                    ? [{ rotate: '0deg' }, { rotate: '-8deg' }, { rotate: '8deg' }, { rotate: '-8deg' }, { rotate: '8deg' }, { rotate: '0deg' }]
+                    : [{ opacity: 1 }, { opacity: 0.55 }],
+                { duration: 280, fill: 'forwards' }
+            );
+            fadeDie();
+        });
     };
 
     const celebrate = (winner: string): void =>
@@ -568,7 +611,21 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
             journey();
         }
 
-        roll(previous.die, next.die, next.turn);
+        const fresh = (next.beats ?? []).filter((beat) => beat.rev > heardRev);
+
+        heardRev = Math.max(heardRev, ...fresh.map((beat) => beat.rev));
+
+        const passed = fresh.find((beat) => beat.e === 'pass');
+        const rolled = [...fresh].reverse().find((beat) => beat.e === 'roll' && beat.die !== undefined);
+
+        if (passed !== undefined && rolled !== undefined && next.die === null)
+        {
+            spent(rolled.die!, rolled.colour, passed.why);
+        }
+        else
+        {
+            roll(previous.die, next.die, next.turn);
+        }
 
         if (previous.winner === null && next.winner !== null)
         {

@@ -10,7 +10,7 @@ import { SHORT_MAX, useDevice } from '../../stores/device.store.ts';
 import { useBoard } from '../../stores/match.store.ts';
 import { usePeople } from '../../stores/people.store.ts';
 import type { MatchView } from '../../api.ts';
-import type { BoardView } from '../../game/bridge.ts';
+import type { BoardView, LudoBeat } from '../../game/bridge.ts';
 import { chairsOf, ludoOf } from '../../data/match.ts';
 import { seatsFor } from './seats.ts';
 import { CELL, MARGIN } from '../../game/layout.ts';
@@ -155,12 +155,23 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
      * won and now somebody has. Four separate props would arrive in four separate effects and every
      * one of those edges would be a race.
      */
+    derived beats = ((): LudoBeat[] =>
+    {
+        const colourOf = (seat: number | undefined): string | null =>
+            ludo.seats.find((one) => one.seat === seat)?.colour ?? null;
+
+        return board.events().events.flatMap((event) => event.log.kind === 'ludo'
+            ? event.log.moves.map((move) => ({ rev: event.rev, e: move.e, colour: colourOf(move.seat), die: move.die, why: move.why }))
+            : []);
+    })();
+
     derived view = ((): BoardView => ({
         tokens,
         die: ludo.die ?? null,
         turn: turnSeat?.colour ?? null,
         yours: !over && mine !== undefined && mine === game.turn,
-        winner: ludo.seats.find((seat) => seat.seat === game.winner)?.colour ?? null
+        winner: ludo.seats.find((seat) => seat.seat === game.winner)?.colour ?? null,
+        beats
     }))();
 
     /**

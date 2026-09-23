@@ -22,7 +22,7 @@ import { maySeeOnline } from './domains/social/policy.ts';
 import { createSocialService, type PersonRow } from './domains/social/service.ts';
 import type { ServerConfig } from './env.ts';
 import { readSessionToken, SESSION_TTL_SECONDS } from './http/auth.ts';
-import type { Ports } from './ports.ts';
+import type { MatchEventLog, Ports } from './ports.ts';
 import type {
     Account,
     ChatMessage,
@@ -710,11 +710,14 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         });
     };
 
+    const logged = (events: { rev: number; seat: number; at: Date; log: MatchEventLog['log'] }[]): MatchEventLog[] =>
+        events.map((entry) => ({ rev: entry.rev, seat: entry.seat, at: entry.at.toISOString(), log: entry.log }));
+
     const played = async (
         me: string,
         matchId: string,
         want: { play: MatchPlay | null; key: string; rev?: number }
-    ): Promise<{ match: MatchView; applied: 'now' | 'already' | 'stale' }> =>
+    ): Promise<{ match: MatchView; applied: 'now' | 'already' | 'stale'; events: MatchEventLog[] }> =>
     {
         const answer = await match.act(me, matchId, want);
 
@@ -733,7 +736,9 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             }
         }
 
-        return { match: asMatch(answer.load), applied: answer.applied };
+        const since = want.rev === undefined ? null : await match.since(me, matchId, want.rev);
+
+        return { match: asMatch(answer.load), applied: answer.applied, events: since === null ? [] : logged(since.events) };
     };
 
     /**
@@ -1645,15 +1650,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                     return null;
                 }
 
-                return {
-                    match: asMatch(found.load),
-                    events: found.events.map((entry) => ({
-                        rev: entry.rev,
-                        seat: entry.seat,
-                        at: entry.at.toISOString(),
-                        log: entry.log
-                    }))
-                };
+                return { match: asMatch(found.load), events: logged(found.events) };
             },
 
             start: async (me, tableId) =>

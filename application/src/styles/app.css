@@ -2171,3 +2171,14 @@
         translate: 0 0.5rem;
     }
 }
+
+.lb-die[data-spent]
+{
+    opacity: 0.55;
+    transition: opacity 200ms var(--ease-ui);
+}
+
+.lb-die[data-spent='three-sixes']
+{
+    filter: sepia(1) saturate(4) hue-rotate(-30deg) brightness(0.95);
+}

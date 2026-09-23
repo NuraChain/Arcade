@@ -1570,6 +1570,17 @@ pawn lifts off the square while its shadow stays on the ground - rather than the
 place. A second update landing mid-walk cancels the first rather than queueing behind it, because the
 newest state is always the one worth being on the way to.
 
+**What happened travels with what is.** A move's reply carries `events` - the redacted log since the
+revision the caller acted on - and a nudge reads `since` instead of the whole view, so the board is
+told what happened as well as where things stand. The reply's events are composed by calling the
+match domain's own `since` after the action, which is the same membership check and the same
+per-reader redaction `redaction.db.spec.ts` already holds, rather than a second path for the log to
+leak through. The store keeps the reply's match beside the fetched one and answers whichever has the
+higher revision. The first thing this bought: a roll that passes the turn used to be invisible,
+because by the time the view arrives the die is already spent and gone. The renderer now reads the
+beats, and a roll followed by a `pass` tumbles, wobbles and dims before it fades - "deny" and a red
+tint for three sixes. A batch already on screen when the board mounts is never replayed.
+
 **The affordance ring is two strokes, white inside dark, and that is not decoration.** It began as a
 glow in the token's own colour, on the reasoning that a white ring on a yellow piece against cream
 paper is a ring nobody sees - which is true, and which misses that a red ring around a red piece in

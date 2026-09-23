@@ -458,10 +458,10 @@ export interface MatchPort
      * engine is what reads it - a play addressed to a game this server does not run, or one that
      * does not add up, is refused the same way, because both mean the same to whoever sent it.
      */
-    play(me: string, matchId: string, input: { key: string; rev?: number; play: MatchPlay }): Promise<{ match: MatchView; applied: Applied }>;
+    play(me: string, matchId: string, input: { key: string; rev?: number; play: MatchPlay }): Promise<{ match: MatchView; applied: Applied; events: MatchEventLog[] }>;
 
     /** Gives up. A decision, so a real loss. */
-    resign(me: string, matchId: string, input: { key: string }): Promise<{ match: MatchView; applied: Applied }>;
+    resign(me: string, matchId: string, input: { key: string }): Promise<{ match: MatchView; applied: Applied; events: MatchEventLog[] }>;
 
     /**
      * This reader's finished games, newest first, by keyset.

@@ -1,6 +1,14 @@
 import { createStore, createResource, createSignal, untrack, type Getter } from 'azerothjs';
 
 import { ApiError, client, type MatchPlay, type MatchView } from '../api.ts';
+
+export type MatchEvent = Awaited<ReturnType<typeof client.matches.since>>['events'][number];
+
+export interface EventBatch
+{
+    seq: number;
+    events: readonly MatchEvent[];
+}
 import { ludoOf } from '../data/match.ts';
 import { useAccount } from './account.store.ts';
 import { runtime } from '../lib/runtime.ts';
@@ -50,6 +58,8 @@ export interface BoardApi
      * than the envelope - a game with no die answers false here because it has no ludo board at
      * all, which is the right answer and not a special case anybody has to write.
      */
+    events: Getter<EventBatch>;
+
     canRoll: Getter<boolean>;
 
     /** The tokens this viewer may move right now. Empty unless it is their turn and they rolled. */
@@ -95,6 +105,8 @@ export const useBoard = createStore((): BoardApi =>
 
     const [openId, setOpenId] = createSignal('');
     const [busy, setBusy] = createSignal(false);
+    const [latest, setLatest] = createSignal<MatchView | null>(null);
+    const [events, setEvents] = createSignal<EventBatch>({ seq: 0, events: [] });
 
     const viewing = createResource(
         () => (openId() === '' ? null : { id: openId(), who: who() }),
@@ -132,9 +144,52 @@ export const useBoard = createStore((): BoardApi =>
         return inFlight;
     };
 
-    const board = (): MatchView | null => viewing.data() ?? null;
+    const board = (): MatchView | null =>
+    {
+        const fetched = viewing.data() ?? null;
+        const held = latest();
 
-    const act = async (send: (id: string, key: string, rev: number) => Promise<{ match: MatchView }>): Promise<void> =>
+        if (held === null || held.id !== openId())
+        {
+            return fetched;
+        }
+
+        return fetched !== null && fetched.id === held.id && fetched.rev >= held.rev ? fetched : held;
+    };
+
+    const heard = (match: MatchView, batch: readonly MatchEvent[]): void =>
+    {
+        setLatest((held) => held !== null && held.id === match.id && held.rev >= match.rev ? held : match);
+
+        if (batch.length > 0)
+        {
+            setEvents((current) => ({ seq: current.seq + 1, events: batch }));
+        }
+    };
+
+    const catchUp = async (): Promise<void> =>
+    {
+        const current = untrack(board);
+
+        if (current === null)
+        {
+            await revalidate();
+            return;
+        }
+
+        try
+        {
+            const delta = await client.matches.since({ params: { id: current.id }, query: { rev: String(current.rev) } });
+
+            heard(delta.match, delta.events);
+        }
+        catch
+        {
+            await revalidate();
+        }
+    };
+
+    const act = async (send: (id: string, key: string, rev: number) => Promise<{ match: MatchView; events: readonly MatchEvent[] }>): Promise<void> =>
     {
         const current = untrack(board);
 
@@ -147,8 +202,9 @@ export const useBoard = createStore((): BoardApi =>
 
         try
         {
-            await send(current.id, mintKey(), current.rev);
-            await revalidate();
+            const ack = await send(current.id, mintKey(), current.rev);
+
+            heard(ack.match, ack.events);
         }
         catch
         {
@@ -221,6 +277,8 @@ export const useBoard = createStore((): BoardApi =>
 
         busy,
 
+        events,
+
         roll: async () => await act(async (id, key, rev) =>
             await client.matches.play({ params: { id }, input: { key, rev, play: { kind: 'ludo', verb: 'roll' } } })),
 
@@ -249,14 +307,14 @@ export const useBoard = createStore((): BoardApi =>
             {
                 if (untrack(openId) !== '')
                 {
-                    void revalidate().catch(() => undefined);
+                    void catchUp().catch(() => undefined);
                 }
             });
             const offNudge = live.onNudge((scope, id) =>
             {
                 if (scope === 'game' && (id === undefined || id === untrack(openId)))
                 {
-                    void revalidate().catch(() => undefined);
+                    void catchUp().catch(() => undefined);
                 }
             });
 
@@ -273,6 +331,8 @@ export const useBoard = createStore((): BoardApi =>
         {
             setOpenId('');
             setBusy(false);
+            setLatest(null);
+            setEvents({ seq: 0, events: [] });
             inFlight = Promise.resolve();
         }
     };

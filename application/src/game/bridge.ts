@@ -48,6 +48,17 @@ export interface BoardView
 
     /** Set once, when somebody has won. */
     winner: string | null;
+
+    beats?: readonly LudoBeat[];
+}
+
+export interface LudoBeat
+{
+    rev: number;
+    e: string;
+    colour: string | null;
+    die?: number;
+    why?: string;
 }
 
 export interface BoardOptions

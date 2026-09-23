@@ -1325,7 +1325,8 @@ export const matchDelta = object({ match: matchView, events: array(matchEvent) }
  */
 export const matchAck = object({
     match: matchView,
-    applied: enumOf(['now', 'already', 'stale'])
+    applied: enumOf(['now', 'already', 'stale']),
+    events: array(matchEvent)
 });
 
 /**
