@@ -145,6 +145,7 @@ async function playableTable(browser, storageState)
             cube: false,
             blinds: 'low',
             chat: true,
+            voice: false,
             invitees: []
         }
     });

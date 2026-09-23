@@ -1137,6 +1137,55 @@ the thread it last opened; `play.spec.ts` drives play-to-play and chat-to-chat w
 playing. The table still opens from an effect over the pathname rather than in `mount`, and the
 leaving page's copy of that effect opening the NEW id is harmless.
 
+## Voice at the table
+
+`docs/superpowers/specs/2026-09-23-table-voice-design.md` is the design. A host turns voice on at
+create (`tables.voice`, off by default); seated players join a peer-to-peer call - one
+`RTCPeerConnection` per pair, Opus only, a full mesh of at most seven links per browser - and this
+server does nothing but introduce them.
+
+**The realtime socket carries the introductions and that is its first non-doorbell frame.** `voice`
+joins, leaves and reports a mute; `signal` relays one offer, answer or ICE candidate to one person.
+It is not a delivery path for content - an SDP says how to reach a browser, not what anybody said -
+and nothing about it is stored. The rooms live in the hub's memory and empty themselves when a
+socket closes; a restart drops every call and the client rejoins through `onBack`.
+
+**Who can hear whom is the messaging policy, per PAIR.** Joining asks `social.mayMessage` both ways
+between the newcomer and everybody already in the room, and the hub relays a signal only between
+two people it allowed. A block, a minor's safety rule and "strangers can't reach me" therefore apply
+to voice exactly as to a direct message, and the roster says "can't talk with you" rather than
+showing a connection that silently never forms. This is the rule that matters most in a product
+whose players include children.
+
+**A `voice` frame is metered by a budget, never by a per-type floor.** The gateway's floors drop a
+frame that arrives too soon after the last one of its kind, silently, and a leave sent just after a
+mute was dropped that way - the browser believed it had left and the room went on sending it audio.
+`tools/qa/voice-pass.mjs` found it on its first run. Signals are budgeted the same way, because ICE
+candidates arrive in bursts.
+
+**What the encryption claim is, precisely.** Media is DTLS-SRTP between the browsers. The DTLS
+fingerprints ride inside SDP this server relays, so a server that wanted to could sit in the middle;
+the chat is end-to-end because every line is signed by a device the reader verifies, and voice
+introductions are not signed yet. The copy therefore says the sound goes directly between players
+and is encrypted by the browser - not "end-to-end" - until each fingerprint is signed with the
+device key the sealing already verifies.
+
+**ICE comes from configuration and a TURN secret never reaches a browser.** `GET /api/voice/ice`
+answers `VOICE_STUN_URLS`, and for `VOICE_TURN_URLS` a TURN REST username that expires in an hour
+with its HMAC. With nothing configured the list is empty: one network works, two NATs do not, and
+the roster says "could not connect".
+
+**The microphone is asked for when somebody presses Join, never before**, and refused or missing it
+joins LISTEN-ONLY rather than failing. Everybody joins muted unless they turn that off in settings.
+`services/voice.rtc.ts` is framework-free (perfect negotiation, the lower handle is polite, a peer is
+opened on its first signal so an offer that beats the roster cannot deadlock), and
+`stores/voice.store.ts` takes it through `setVoiceCall` so a spec can observe the store without a
+real `RTCPeerConnection`.
+
+`tools/qa/voice-pass.mjs` is two real browsers on Chromium's fake microphone: join, a live remote
+track in each, the tone lighting "speaking" in the OTHER browser, mute, leave. Run it by hand against
+the built server with every change to this path.
+
 ## Playing a game
 
 `server/src/domains/match/` is the first real game engine in this product, and it is what the table
@@ -3947,7 +3996,7 @@ cover what they walk through.
 
 `npm run check` · `npm test` · `npm run test:shuffle` · `npm run build` · `npm run qa` ·
 `node tools/qa/regression-pass.mjs` · `node tools/qa/ludo-pass.mjs` · `node tools/qa/hokm-pass.mjs` ·
-`node tools/qa/play-pass.mjs` · `node tools/qa/hokm-play-pass.mjs`,
+`node tools/qa/play-pass.mjs` · `node tools/qa/hokm-play-pass.mjs` · `node tools/qa/voice-pass.mjs`,
 then a browser pass: every route at
 390, 1280 and 1440 in both languages, a screenshot of every screen judged against
 `design.jpg`, console clean, and

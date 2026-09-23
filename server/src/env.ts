@@ -83,6 +83,10 @@ export function loadServerConfig()
         vapidPrivateKey: str('VAPID_PRIVATE_KEY', { default: '', secret: true }),
         vapidSubject: str('VAPID_SUBJECT', { default: '' }),
 
+        voiceStunUrls: str('VOICE_STUN_URLS', { default: '' }),
+        voiceTurnUrls: str('VOICE_TURN_URLS', { default: '' }),
+        voiceTurnSecret: str('VOICE_TURN_SECRET', { default: '', secret: true }),
+
         clientDir: str('CLIENT_DIR', { default: '../application/dist' }),
         ssrEntry: str('SSR_ENTRY', { default: '../application/dist-server/entry.server.js' }),
 

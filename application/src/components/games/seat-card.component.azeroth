@@ -5,6 +5,7 @@ import { usePeople } from '../../stores/people.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { usePresence } from '../../stores/presence.store.ts';
 import Avatar from '../ui/avatar.component.azeroth';
+import { useVoice } from '../../stores/voice.store.ts';
 
 export default component SeatCard(props: {
     seat: TableSeat;
@@ -16,6 +17,7 @@ export default component SeatCard(props: {
     const locale = useLocale();
     const presence = usePresence();
     const people = usePeople();
+    const voice = useVoice();
     const account = useAccount();
 
     derived filled = props.seat.who !== undefined;
@@ -92,12 +94,14 @@ export default component SeatCard(props: {
                         { locale.t('play.lobby.host') }
                     </span>
                 </Show>
-                <Avatar
-                    person={ person }
-                    size="lg"
-                    presence={ pending || person === null ? null : presence.dot(person.id) }
-                    class={ pending ? 'opacity-60' : '' }
-                />
+                <span class={ () => [ 'flex rounded-full transition-shadow duration-150', props.seat.who !== undefined && voice.speaking(props.seat.who) ? 'ring-3 ring-live ring-offset-2 ring-offset-field' : '' ].filter(Boolean).join(' ') }>
+                    <Avatar
+                        person={ person }
+                        size="lg"
+                        presence={ pending || person === null ? null : presence.dot(person.id) }
+                        class={ pending ? 'opacity-60' : '' }
+                    />
+                </span>
                 <span class={ () => [ 'w-full truncate text-ui-base font-semibold', pending ? 'text-muted' : 'text-text' ].join(' ') } dir="auto">{ name }</span>
                 <Show when={ tag !== null }>
                     { () =>

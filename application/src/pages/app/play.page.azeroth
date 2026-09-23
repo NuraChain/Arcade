@@ -18,6 +18,7 @@ import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useChat } from '../../stores/chat.store.ts';
 import { usePeople } from '../../stores/people.store.ts';
 import { useDevice } from '../../stores/device.store.ts';
+import { useVoice } from '../../stores/voice.store.ts';
 import { useLobby } from '../../stores/lobby.store.ts';
 import { useBoard } from '../../stores/match.store.ts';
 import { useSettings } from '../../stores/settings.store.ts';
@@ -34,6 +35,7 @@ export default component PlayPage()
 {
     const locale = useLocale();
     const lobby = useLobby();
+    const voice = useVoice();
     const board = useBoard();
     const settings = useSettings();
     const catalogue = useCatalogue();
@@ -112,6 +114,11 @@ export default component PlayPage()
         {
             release();
 
+            if (untrack(voice.table) !== null)
+            {
+                voice.leave();
+            }
+
             for (const stop of hush)
             {
                 stop();
@@ -136,6 +143,25 @@ export default component PlayPage()
     derived failed = lobby.failed() !== undefined && table === null && !lobby.loading();
 
     derived seated = table?.mine !== undefined;
+
+    derived talkable = seated && table?.voice === true && table.status !== 'closed';
+
+    effect
+    {
+        const id = talkable ? table!.id : null;
+        const joined = voice.table();
+
+        if (joined !== null && joined !== id)
+        {
+            voice.leave();
+            return;
+        }
+
+        if (id !== null && joined === null && untrack(settings.settings).voiceAutoJoin)
+        {
+            void voice.join(id);
+        }
+    }
 
     derived amHost = table?.chairs.find((chair) => chair.seat === table!.mine)?.host === true;
 
@@ -547,6 +573,7 @@ export default component PlayPage()
                                     upright={ playing === 'ludo' }
                                     onChat={ floating ? undefined : openChat }
                                     onResign={ resigning ? () => void resign() : undefined }
+                                    voice={ talkable ? table!.id : undefined }
                                 />
                             }
                         />

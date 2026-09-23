@@ -1,6 +1,7 @@
 import type { Principal } from './http/auth.ts';
 import type {
     AchievementList,
+    VoiceIce,
     Leaderboard,
     MatchWatch,
     LiveCounts,
@@ -226,6 +227,7 @@ export interface TablePort
         cube: boolean;
         blinds: string;
         chat: boolean;
+        voice: boolean;
         invitees: string[];
         roomId?: string;
     }): Promise<TableSummary>;
@@ -511,6 +513,11 @@ export interface ChainPort
 }
 
 /** Every port the API declaration may reach. One member per domain. */
+export interface VoicePort
+{
+    ice(me: string): VoiceIce;
+}
+
 export interface Ports
 {
     meta: MetaPort;
@@ -524,4 +531,5 @@ export interface Ports
     device: DevicePort;
     chat: ChatPort;
     chain: ChainPort;
+    voice: VoicePort;
 }

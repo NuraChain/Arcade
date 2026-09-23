@@ -8,6 +8,7 @@ import Button from '../../components/ui/button.component.azeroth';
 import Pagination from '../../components/ui/pagination.component.azeroth';
 import SectionHeading from '../../components/ui/section-heading.component.azeroth';
 import Toggle from '../../components/ui/switch.component.azeroth';
+import Slider from '../../components/ui/slider.component.azeroth';
 import { NURA_CHAIN } from '../../data/chain.ts';
 import type { Person } from '../../data/person.ts';
 import Icon from '../../icons/icon.component.azeroth';
@@ -23,6 +24,7 @@ import { NOTIFICATION_CATEGORIES, useSettings } from '../../stores/settings.stor
 import { useSocial } from '../../stores/social.store.ts';
 import { useToasts } from '../../stores/toasts.store.ts';
 import { useWallet } from '../../stores/wallet.store.ts';
+import { useVoice } from '../../stores/voice.store.ts';
 import type { MessageKey } from '../../locales/en.ts';
 
 const PREMIUM: MessageKey[] = ['settings.premium.item.tables', 'settings.premium.item.frames', 'settings.premium.item.emotes', 'settings.premium.item.stats'];
@@ -34,6 +36,7 @@ const SECTIONS: readonly { id: string; icon: IconName; key: MessageKey }[] = [
     { id: 'settings-appearance', icon: 'palette', key: 'settings.appearance' },
     { id: 'settings-safety', icon: 'shield', key: 'settings.safety' },
     { id: 'settings-notifications', icon: 'bell', key: 'settings.notifications' },
+    { id: 'settings-voice', icon: 'voice', key: 'voice.settings' },
     { id: 'settings-premium', icon: 'sparkles', key: 'settings.premium' }
 ];
 
@@ -48,6 +51,7 @@ export default component SettingsPage()
     const device = useDevice();
     const people = usePeople();
     const toasts = useToasts();
+    const voice = useVoice();
     const { navigate } = useNavigate();
 
     useHead({ title: () => locale.t('settings.title') });
@@ -402,6 +406,43 @@ export default component SettingsPage()
                                         }
                                     </Show>
                                 </div>
+                            </Panel>
+                        </section>
+
+                        <section id="settings-voice" class="scroll-mt-16 @4xl:scroll-mt-4" aria-labelledby="settings-voice-title">
+                            <SectionHeading id="settings-voice-title" title={ locale.t('voice.settings') } />
+                            <Panel stack="md">
+                                <Toggle
+                                    checked={ current.voiceStartMuted }
+                                    label={ locale.t('voice.startMuted') }
+                                    description={ locale.t('voice.startMutedHint') }
+                                    onChange={ (checked) => settings.update({ voiceStartMuted: checked }) }
+                                />
+                                <Toggle
+                                    checked={ current.voiceAutoJoin }
+                                    label={ locale.t('voice.autoJoin') }
+                                    description={ locale.t('voice.autoJoinHint') }
+                                    onChange={ (checked) => settings.update({ voiceAutoJoin: checked }) }
+                                />
+                                <Slider
+                                    value={ current.voiceVolume }
+                                    min={ 0 }
+                                    max={ 1 }
+                                    step={ 0.05 }
+                                    ticks={ [0, 0.5, 1] }
+                                    label={ locale.t('voice.volume') }
+                                    hint={ locale.t('voice.volumeHint') }
+                                    valueText={ locale.n(current.voiceVolume, { style: 'percent' }) }
+                                    onChange={ (value) =>
+                                    {
+                                        settings.update({ voiceVolume: value });
+                                        voice.applyVolume();
+                                    } }
+                                />
+                                <p class="flex items-start gap-2 text-ui-xs text-muted">
+                                    <Icon name="shield" size={ 13 } class="mt-0.5 shrink-0 text-live" />
+                                    { locale.t('voice.privacy') }
+                                </p>
                             </Panel>
                         </section>
 

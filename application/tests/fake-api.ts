@@ -81,6 +81,7 @@ interface TableWire
     cube: boolean;
     blinds: string;
     chat: boolean;
+    voice: boolean;
     status: 'open' | 'ready' | 'closed';
     host?: string;
     chairs: SeatWire[];
@@ -578,6 +579,15 @@ export function walletAccount(address: string): Account
 
 export const client =
 {
+    voice:
+    {
+        async ice()
+        {
+            server.calls.push('voice.ice');
+            return { servers: [] };
+        }
+    },
+
     meta:
     {
         async info()
@@ -1302,6 +1312,7 @@ export const client =
             cube: boolean;
             blinds: string;
             chat: boolean;
+            voice: boolean;
             invitees: string[];
         } })
         {
@@ -1319,6 +1330,7 @@ export const client =
                 cube: input.cube,
                 blinds: input.blinds,
                 chat: input.chat,
+                voice: input.voice,
                 status: 'open',
                 host: server.me,
                 chairs: Array.from({ length: input.seats }, (_, seat) => ({

@@ -84,7 +84,9 @@ beforeAll(async () =>
         recipientsOf: async () => [],
         aliveSessions: async (ids) => new Set(ids),
         touchSeen: () => undefined,
-        report: () => undefined
+        report: () => undefined,
+        voiceAllowed: async () => false,
+        mayTalk: async () => false
     });
 
     const hub = {

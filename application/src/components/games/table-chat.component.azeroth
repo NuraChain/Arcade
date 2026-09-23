@@ -24,6 +24,7 @@ import { useLocale } from '../../stores/locale.store.ts';
 import { useBoard } from '../../stores/match.store.ts';
 import { useSeal } from '../../stores/seal.store.ts';
 import { useToasts } from '../../stores/toasts.store.ts';
+import { useVoice, type VoicePerson } from '../../stores/voice.store.ts';
 import type { MessageKey } from '../../locales/en.ts';
 import Avatar from '../ui/avatar.component.azeroth';
 import Button from '../ui/button.component.azeroth';
@@ -53,6 +54,43 @@ export default component TableChat(props: {
     const account = useAccount();
     const toasts = useToasts();
     const overlay = useOverlay();
+    const voice = useVoice();
+
+    derived voiced = voice.people();
+
+    const voiceOf = (who: string): VoicePerson | undefined => voiced.find((person) => person.who === who);
+
+    const voiceLine = (who: string): string =>
+    {
+        const person = voiceOf(who);
+
+        if (person === undefined)
+        {
+            return '';
+        }
+
+        if (!person.talk)
+        {
+            return locale.t('voice.apart');
+        }
+
+        if (person.link === 'failed')
+        {
+            return locale.t('voice.failed');
+        }
+
+        if (person.link !== 'connected')
+        {
+            return locale.t('voice.connecting');
+        }
+
+        if (person.speaking)
+        {
+            return locale.t('voice.speaking');
+        }
+
+        return locale.t(person.muted ? 'voice.muted' : 'voice.inCall');
+    };
 
     state draft = '';
 
@@ -417,7 +455,10 @@ export default component TableChat(props: {
                             ].join(' ') }
                             aria-current={ row.turn ? 'true' : undefined }
                         >
-                            <span class="relative shrink-0" style={ row.colour === undefined ? '' : `--ink: var(--ludo-${ row.colour })` }>
+                            <span
+                                class={ () => [ 'relative flex shrink-0 rounded-full transition-shadow duration-150', voiceOf(row.who)?.speaking === true ? 'ring-2 ring-live ring-offset-2 ring-offset-field' : '' ].filter(Boolean).join(' ') }
+                                style={ row.colour === undefined ? '' : `--ink: var(--ludo-${ row.colour })` }
+                            >
                                 <Avatar person={ people.byHandle(row.who) ?? null } size="md" />
                                 <Show when={ row.colour !== undefined }>
                                     { () => <span class="absolute -bottom-0.5 -end-0.5 h-3.5 w-3.5 rounded-full ring-2 ring-field" style="background: var(--ink)" aria-hidden="true"></span> }
@@ -434,6 +475,32 @@ export default component TableChat(props: {
                                     { row.turn ? locale.t('play.players.turn') : (live === null ? locale.t(row.ready ? 'play.players.ready' : 'play.players.waiting') : locale.t('play.players.waiting')) }
                                 </span>
                             </span>
+                            <Show when={ voiceOf(row.who) !== undefined }>
+                                { () =>
+                                    <span
+                                        class={ () => [
+                                            'flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-ui-2xs font-semibold',
+                                            voiceOf(row.who)?.talk === false || voiceOf(row.who)?.link === 'failed' ? 'bg-danger/12 text-danger' : (voiceOf(row.who)?.speaking === true ? 'bg-live/15 text-live' : 'bg-raised text-muted')
+                                        ].join(' ') }
+                                        title={ voiceLine(row.who) }
+                                    >
+                                        <Icon name={ voiceOf(row.who)?.muted === true ? 'voice-off' : 'voice' } size={ 12 } />
+                                        <span class="sr-only">{ voiceLine(row.who) }</span>
+                                    </span>
+                                }
+                            </Show>
+                            <Show when={ voice.table() !== null && voiceOf(row.who) !== undefined && voiceOf(row.who)?.me !== true }>
+                                { () =>
+                                    <IconButton
+                                        icon={ voiceOf(row.who)?.silenced === true ? 'sound-off' : 'sound' }
+                                        label={ locale.t(voiceOf(row.who)?.silenced === true ? 'voice.unsilence' : 'voice.silence', { name: nameOf(row.who) }) }
+                                        variant="ghost"
+                                        size="sm"
+                                        pressed={ voiceOf(row.who)?.silenced === true }
+                                        onClick={ () => voice.silence(row.who) }
+                                    />
+                                }
+                            </Show>
                             <Show when={ row.timeouts > 0 }>
                                 { () => <span class="shrink-0 rounded-full bg-danger/15 px-2 py-0.5 text-ui-2xs font-semibold text-danger">{ locale.plural('match.missed', row.timeouts) }</span> }
                             </Show>

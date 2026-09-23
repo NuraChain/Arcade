@@ -10,6 +10,7 @@ import { hokmOf } from '../../data/match.ts';
 import { useBoard } from '../../stores/match.store.ts';
 import { useDevice } from '../../stores/device.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
+import { useVoice } from '../../stores/voice.store.ts';
 import { usePeople } from '../../stores/people.store.ts';
 import type { MatchView } from '../../api.ts';
 
@@ -40,6 +41,7 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
     const board = useBoard();
     const device = useDevice();
     const people = usePeople();
+    const voice = useVoice();
 
     state sorted = false;
 
@@ -271,7 +273,9 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
                             ].filter(Boolean).join(' ') }
                             aria-current={ !over && plate.row.seat === view!.turn ? 'true' : undefined }
                         >
-                            <Avatar person={ people.byHandle(whoAt(plate.row.seat)) } size="sm" ringOn="void" />
+                            <span class={ () => [ 'flex shrink-0 rounded-full transition-shadow duration-150', voice.speaking(whoAt(plate.row.seat)) ? 'ring-2 ring-live ring-offset-2 ring-offset-void' : '' ].filter(Boolean).join(' ') }>
+                                <Avatar person={ people.byHandle(whoAt(plate.row.seat)) } size="sm" ringOn="void" />
+                            </span>
                             <span class="flex min-w-0 flex-col leading-tight">
                                 <span class="flex min-w-0 items-center gap-1">
                                     <span class="truncate text-ui-xs font-semibold text-text" dir="auto">{ nameOf(plate.row.seat) }</span>

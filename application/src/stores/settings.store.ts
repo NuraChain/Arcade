@@ -21,6 +21,9 @@ export interface Settings
     railOpen: boolean;
     sidebarOpen: boolean;
     recentEmoji: string[];
+    voiceStartMuted: boolean;
+    voiceAutoJoin: boolean;
+    voiceVolume: number;
     notifications: Record<NotificationCategory, boolean>;
 }
 
@@ -34,6 +37,9 @@ export function defaultSettings(): Settings
         railOpen: false,
         sidebarOpen: true,
         recentEmoji: [],
+        voiceStartMuted: true,
+        voiceAutoJoin: false,
+        voiceVolume: 1,
         notifications: { invites: true, requests: true, results: true, messages: true, achievements: true }
     };
 }

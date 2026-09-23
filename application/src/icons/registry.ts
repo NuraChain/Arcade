@@ -50,6 +50,7 @@ import {
     MoonStar,
     Menu,
     Mic,
+    MicOff,
     Minimize2,
     MessageCircle,
     MessageCircleOff,
@@ -59,6 +60,7 @@ import {
     PanelRightOpen,
     Palette,
     Pencil,
+    PhoneOff,
     Play,
     Plus,
     RefreshCw,
@@ -187,7 +189,9 @@ export const ICONS = {
     'flag': Flag,
     'reply': Reply,
     'trash': Trash,
-    'palette': Palette
+    'palette': Palette,
+    'voice-off': MicOff,
+    'hang-up': PhoneOff
 } satisfies Record<string, IconNode>;
 
 export type IconName = keyof typeof ICONS;

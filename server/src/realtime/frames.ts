@@ -7,16 +7,35 @@ export interface PresenceEntry
     since: number;
 }
 
+export type SignalKind = 'offer' | 'answer' | 'ice';
+
+export interface VoicePeer
+{
+    who: string;
+    muted: boolean;
+    talk: boolean;
+}
+
+export const SIGNAL_DATA_MAX = 12_288;
+
+const FRAME_MAX = 4096;
+
+const SIGNAL_FRAME_MAX = SIGNAL_DATA_MAX + 512;
+
 export type ServerFrame =
     | { v: 1; t: 'hello'; n: number; rt: string; self: string; at: number }
     | { v: 1; t: 'presence'; n: number; full: boolean; people: PresenceEntry[]; gone?: string[] }
     | { v: 1; t: 'nudge'; n: number; scope: 'chat' | 'social' | 'game'; id?: string; at: number }
-    | { v: 1; t: 'typing'; n: number; who: string; id: string };
+    | { v: 1; t: 'typing'; n: number; who: string; id: string }
+    | { v: 1; t: 'voice'; n: number; table: string; joined: boolean; peers: VoicePeer[] }
+    | { v: 1; t: 'signal'; n: number; table: string; from: string; kind: SignalKind; data: string };
 
 export type ClientFrame =
     | { t: 'sync' }
     | { t: 'presence'; state: PresenceState }
-    | { t: 'typing'; id: string };
+    | { t: 'typing'; id: string }
+    | { t: 'voice'; table: string; on: boolean; muted: boolean }
+    | { t: 'signal'; table: string; to: string; kind: SignalKind; data: string };
 
 /** The transport version, carried in the payload. Independent of `nura-e2ee/v1`, which seals. */
 export const REALTIME_WIRE = 'nura-rt/v1';
@@ -58,6 +77,16 @@ export const nudge = (n: number, scope: 'chat' | 'social' | 'game', at: number, 
 export const typing = (n: number, who: string, id: string): ServerFrame =>
     ({ v: 1, t: 'typing', n, who, id });
 
+export const voice = (n: number, table: string, joined: boolean, peers: VoicePeer[]): ServerFrame =>
+    ({ v: 1, t: 'voice', n, table, joined, peers });
+
+export const signal = (n: number, table: string, from: string, kind: SignalKind, data: string): ServerFrame =>
+    ({ v: 1, t: 'signal', n, table, from, kind, data });
+
+const KINDS = new Set(['offer', 'answer', 'ice']);
+
+const idOf = (value: unknown): value is string => typeof value === 'string' && value.length > 0 && value.length <= 64;
+
 const STATES = new Set(['online', 'away']);
 
 /**
@@ -76,7 +105,9 @@ const STATES = new Set(['online', 'away']);
 const SHAPES: Record<string, ReadonlySet<string>> = Object.assign(Object.create(null), {
     sync: new Set(['v', 't']),
     presence: new Set(['v', 't', 'state']),
-    typing: new Set(['v', 't', 'id'])
+    typing: new Set(['v', 't', 'id']),
+    voice: new Set(['v', 't', 'table', 'on', 'muted']),
+    signal: new Set(['v', 't', 'table', 'to', 'kind', 'data'])
 });
 
 /**
@@ -91,7 +122,7 @@ const SHAPES: Record<string, ReadonlySet<string>> = Object.assign(Object.create(
  */
 export function parseClientFrame(text: string): ClientFrame | null
 {
-    if (text.length > 4096)
+    if (text.length > SIGNAL_FRAME_MAX)
     {
         return null;
     }
@@ -118,7 +149,7 @@ export function parseClientFrame(text: string): ClientFrame | null
     }
 
     const allowed = SHAPES[frame.t];
-    if (allowed === undefined)
+    if (allowed === undefined || (frame.t !== 'signal' && text.length > FRAME_MAX))
     {
         return null;
     }
@@ -140,6 +171,21 @@ export function parseClientFrame(text: string): ClientFrame | null
     {
         return typeof frame.state === 'string' && STATES.has(frame.state)
             ? { t: 'presence', state: frame.state as PresenceState }
+            : null;
+    }
+
+    if (frame.t === 'voice')
+    {
+        return idOf(frame.table) && typeof frame.on === 'boolean' && typeof frame.muted === 'boolean'
+            ? { t: 'voice', table: frame.table, on: frame.on, muted: frame.muted }
+            : null;
+    }
+
+    if (frame.t === 'signal')
+    {
+        return idOf(frame.table) && idOf(frame.to) && typeof frame.kind === 'string' && KINDS.has(frame.kind)
+            && typeof frame.data === 'string' && frame.data.length > 0 && frame.data.length <= SIGNAL_DATA_MAX
+            ? { t: 'signal', table: frame.table, to: frame.to, kind: frame.kind as SignalKind, data: frame.data }
             : null;
     }
 

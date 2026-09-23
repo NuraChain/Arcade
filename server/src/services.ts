@@ -1,3 +1,4 @@
+import { createHmac } from 'node:crypto';
 import { ForbiddenError, NotFoundError } from '@azerothjs/http';
 import type { DataSource } from 'typeorm';
 
@@ -26,6 +27,7 @@ import type { MatchEventLog, Ports } from './ports.ts';
 import type {
     Account,
     ChatMessage,
+    VoiceIce,
     ChatReaction,
     ConversationDevices,
     ConversationSummary,
@@ -72,6 +74,8 @@ export interface Services extends Ports
         sweepTurns(limit: number): Promise<number>;
     };
 }
+
+const TURN_TTL_SECONDS = 3600;
 
 export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteListener): Services
 {
@@ -487,6 +491,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             cube: row.cube,
             blinds: row.blinds,
             chat: row.chat,
+            voice: row.voice,
             status: row.status,
             chairs: row.chairs.map((chair) => ({
                 seat: chair.seat,
@@ -1059,6 +1064,25 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 // everybody with this account on screen has to be told to re-read it.
                 live?.socialChanged(userId);
                 return present(row);
+            }
+        },
+
+        voice: {
+            ice(me)
+            {
+                const list = (value: string): string[] => value.split(',').map((one) => one.trim()).filter((one) => one !== '');
+                const stun = list(config.voiceStunUrls);
+                const turn = list(config.voiceTurnUrls);
+                const servers: VoiceIce['servers'] = stun.length === 0 ? [] : [{ urls: stun }];
+
+                if (turn.length > 0 && config.voiceTurnSecret !== '')
+                {
+                    const username = `${ Math.floor(Date.now() / 1000) + TURN_TTL_SECONDS }:${ me }`;
+                    const credential = createHmac('sha1', config.voiceTurnSecret).update(username).digest('base64');
+                    servers.push({ urls: turn, username, credential });
+                }
+
+                return { servers };
             }
         },
 

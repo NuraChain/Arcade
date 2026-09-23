@@ -1,5 +1,6 @@
 import DieFace from './die-face.component.azeroth';
 import Avatar from '../ui/avatar.component.azeroth';
+import { useVoice } from '../../stores/voice.store.ts';
 import { INITIAL } from './seats.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { usePeople } from '../../stores/people.store.ts';
@@ -22,6 +23,7 @@ export default component YardBadge(props: {
 {
     const locale = useLocale();
     const people = usePeople();
+    const voice = useVoice();
 
     derived person = people.byHandle(props.player.who);
 
@@ -79,7 +81,7 @@ export default component YardBadge(props: {
         style={ `--ink: var(--ludo-${ props.seat.colour })` }
         aria-current={ turn ? 'true' : undefined }
     >
-        <span class="yard-avatar">
+        <span class={ () => [ 'yard-avatar rounded-full transition-shadow duration-150', voice.speaking(props.player.who) ? 'ring-3 ring-live ring-offset-2 ring-offset-void' : '' ].filter(Boolean).join(' ') }>
             <Avatar person={ person } ringOn="void" />
             <span class="yard-initial" aria-hidden="true">{ INITIAL[props.seat.colour] }</span>
         </span>

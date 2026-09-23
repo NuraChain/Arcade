@@ -8,7 +8,7 @@ import type { ServerConfig } from '../env.ts';
 import type { Ports } from '../ports.ts';
 import { admit, toWebRequest } from './admit.ts';
 import { createHandshakeLimit } from './handshake-limit.ts';
-import { parseClientFrame } from './frames.ts';
+import { parseClientFrame, SIGNAL_DATA_MAX } from './frames.ts';
 import type { Connection, Hub } from './hub.ts';
 
 export interface GatewayDeps
@@ -29,6 +29,12 @@ const PRE_AUTH_FRAMES = 4;
 const SWEEP_MS = 30_000;
 
 const THROTTLES: Record<string, number> = { sync: 5000, presence: 2000, typing: 3000 };
+
+const SIGNAL_WINDOW_MS = 10_000;
+
+const SIGNALS_PER_WINDOW = 120;
+
+const VOICE_PER_WINDOW = 30;
 
 /**
  * The one place a WebSocket is accepted.
@@ -67,8 +73,8 @@ export function attachRealtime(server: Server, deps: GatewayDeps): () => void
         // thousand frames therefore accumulated the whole sixteen megabytes in memory before the
         // parser ever saw it and refused it for being over four kilobytes - once per socket, against
         // a connection cap in the thousands.
-        maxPayload: 4096,
-        maxMessage: 4096,
+        maxPayload: SIGNAL_DATA_MAX + 512,
+        maxMessage: SIGNAL_DATA_MAX + 512,
 
         verifyOrigin: admit({
             origin: deps.config.origin,
@@ -96,6 +102,8 @@ export function attachRealtime(server: Server, deps: GatewayDeps): () => void
 
             const buffered: string[] = [];
             const lastSeen: Record<string, number> = {};
+            let signals: number[] = [];
+            let voices: number[] = [];
             let faults = 0;
 
             /**
@@ -127,6 +135,35 @@ export function attachRealtime(server: Server, deps: GatewayDeps): () => void
                 }
 
                 const at = Date.now();
+
+                if (frame.t === 'voice')
+                {
+                    voices = voices.filter((when) => at - when < SIGNAL_WINDOW_MS);
+                    if (voices.length >= VOICE_PER_WINDOW)
+                    {
+                        refusing = true;
+                        socket.close(4429, 'Too many voice changes');
+                        return;
+                    }
+                    voices.push(at);
+                    deps.hub.voice(connection, frame.table, frame.on, frame.muted);
+                    return;
+                }
+
+                if (frame.t === 'signal')
+                {
+                    signals = signals.filter((when) => at - when < SIGNAL_WINDOW_MS);
+                    if (signals.length >= SIGNALS_PER_WINDOW)
+                    {
+                        refusing = true;
+                        socket.close(4429, 'Too many signals');
+                        return;
+                    }
+                    signals.push(at);
+                    deps.hub.signal(connection, frame.table, frame.to, frame.kind, frame.data);
+                    return;
+                }
+
                 const floor = THROTTLES[frame.t] ?? 1000;
                 if (at - (lastSeen[frame.t] ?? 0) < floor)
                 {

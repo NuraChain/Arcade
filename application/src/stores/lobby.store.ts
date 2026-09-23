@@ -123,6 +123,7 @@ export const useLobby = createStore((): LobbyApi =>
         cube: boolean;
         blinds: TableConfig['blinds'];
         chat: boolean;
+        voice: boolean;
         invitees: string[];
     }
 
@@ -143,6 +144,7 @@ export const useLobby = createStore((): LobbyApi =>
             cube: config.cube,
             blinds: config.blinds,
             chat: config.chat,
+            voice: config.voice,
             invitees: [...invitees],
             ...(config.roomId === undefined ? {} : { roomId: config.roomId })
         };

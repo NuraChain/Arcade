@@ -72,6 +72,8 @@ interface World
     touched: string[];
     errors: string[];
     seq: number;
+    seated: Set<string>;
+    apart: Set<string>;
 }
 
 let world: World;
@@ -86,7 +88,9 @@ function build(): World
         alive: new Set(),
         touched: [],
         errors: [],
-        seq: 0
+        seq: 0,
+        seated: new Set(),
+        apart: new Set()
     };
 
     state.hub = createHub({
@@ -105,7 +109,9 @@ function build(): World
         recipientsOf: async (conversationId) => state.recipients.get(conversationId) ?? [],
         aliveSessions: async (ids) => new Set(ids.filter((id) => state.alive.has(id))),
         touchSeen: (ids) => state.touched.push(...ids),
-        report: (_error, where) => state.errors.push(where)
+        report: (_error, where) => state.errors.push(where),
+        voiceAllowed: async (userId, tableId) => state.seated.has(`${ userId }@${ tableId }`),
+        mayTalk: async (a, b) => !state.apart.has([a, b].sort().join('|'))
     });
 
     return state;
@@ -578,5 +584,111 @@ describe('typing', () =>
             sara.wire.framesOf('typing'),
             'a stranger injected a typing notice into a room they are not in'
         ).toHaveLength(0);
+    });
+});
+
+describe('voice at a table', () =>
+{
+    const TABLE = 't-1';
+
+    const seat = (...handles: string[]): void =>
+    {
+        for (const handle of handles)
+        {
+            world.seated.add(`${ handle }@${ TABLE }`);
+        }
+    };
+
+    const rest = async (): Promise<void> =>
+    {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        world.hub.flush();
+    };
+
+    const lastVoice = (wire: FakeWire): Extract<ServerFrame, { t: 'voice' }> | undefined =>
+        wire.framesOf('voice').at(-1) as Extract<ServerFrame, { t: 'voice' }> | undefined;
+
+    it('tells everybody in the room who else is in it, and who is muted', async () =>
+    {
+        seat('alex', 'sara.k');
+        const alex = await connect('alex');
+        const sara = await connect('sara.k');
+
+        world.hub.voice(alex.connection, TABLE, true, false);
+        await rest();
+        world.hub.voice(sara.connection, TABLE, true, true);
+        await rest();
+
+        expect(lastVoice(alex.wire)).toMatchObject({ joined: true, peers: [{ who: 'alex', muted: false, talk: true }, { who: 'sara.k', muted: true, talk: true }] });
+        expect(world.hub.voiceOf(TABLE)).toEqual(['alex', 'sara.k']);
+    });
+
+    it('refuses somebody who is not seated at a table with voice on', async () =>
+    {
+        const stranger = await connect('omid.k');
+
+        world.hub.voice(stranger.connection, TABLE, true, false);
+        await rest();
+
+        expect(lastVoice(stranger.wire)).toMatchObject({ joined: false, peers: [] });
+        expect(world.hub.voiceOf(TABLE)).toEqual([]);
+    });
+
+    it('relays a signal only to somebody in the same room who may talk with the sender', async () =>
+    {
+        seat('alex', 'sara.k', 'mina');
+        world.apart.add(['alex', 'mina'].sort().join('|'));
+        const alex = await connect('alex');
+        const sara = await connect('sara.k');
+        const mina = await connect('mina');
+        const outside = await connect('omid.k');
+
+        for (const one of [alex, sara, mina])
+        {
+            world.hub.voice(one.connection, TABLE, true, false);
+            await rest();
+        }
+
+        world.hub.signal(alex.connection, TABLE, 'sara.k', 'offer', '{"sdp":"a"}');
+        world.hub.signal(alex.connection, TABLE, 'mina', 'offer', '{"sdp":"b"}');
+        world.hub.signal(outside.connection, TABLE, 'sara.k', 'offer', '{"sdp":"c"}');
+        await rest();
+
+        expect(sara.wire.framesOf('signal')).toEqual([expect.objectContaining({ from: 'alex', kind: 'offer', data: '{"sdp":"a"}' })]);
+        expect(mina.wire.framesOf('signal')).toEqual([]);
+        expect(lastVoice(mina.wire)?.peers.find((peer) => peer.who === 'alex')?.talk).toBe(false);
+    });
+
+    it('takes a closed socket out of the room and tells the others', async () =>
+    {
+        seat('alex', 'sara.k');
+        const alex = await connect('alex');
+        const sara = await connect('sara.k');
+
+        world.hub.voice(alex.connection, TABLE, true, false);
+        await rest();
+        world.hub.voice(sara.connection, TABLE, true, false);
+        await rest();
+
+        world.hub.release(sara.connection);
+        await rest();
+
+        expect(lastVoice(alex.wire)?.peers.map((peer) => peer.who)).toEqual(['alex']);
+        expect(world.hub.voiceOf(TABLE)).toEqual(['alex']);
+    });
+
+    it('moves a person to their newest tab rather than letting two tabs talk at once', async () =>
+    {
+        seat('alex');
+        const first = await connect('alex');
+        const second = await connect('alex');
+
+        world.hub.voice(first.connection, TABLE, true, false);
+        await rest();
+        world.hub.voice(second.connection, TABLE, true, false);
+        await rest();
+
+        expect(lastVoice(first.wire)).toMatchObject({ joined: false });
+        expect(lastVoice(second.wire)).toMatchObject({ joined: true });
     });
 });

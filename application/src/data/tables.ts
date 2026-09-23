@@ -29,6 +29,7 @@ export interface TableConfig
     cube: boolean;
     blinds: Blinds;
     chat: boolean;
+    voice: boolean;
     quick: boolean;
 
     /**
@@ -70,6 +71,7 @@ export function defaultTable(game: GameId): TableConfig
         cube: game === 'backgammon',
         blinds: 'low',
         chat: true,
+        voice: false,
         quick: false
     };
 }

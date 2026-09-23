@@ -1,0 +1,89 @@
+import Icon from '../../icons/icon.component.azeroth';
+import { haptic } from '../../lib/haptics.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import { useToasts } from '../../stores/toasts.store.ts';
+import { useVoice } from '../../stores/voice.store.ts';
+import IconButton from '../ui/icon-button.component.azeroth';
+import Spinner from '../ui/spinner.component.azeroth';
+
+export default component VoiceControl(props: { table: string })
+{
+    const locale = useLocale();
+    const voice = useVoice();
+    const toasts = useToasts();
+
+    derived here = voice.table() === props.table;
+
+    derived joining = here && voice.joining();
+
+    derived live = voice.mic() === 'live';
+
+    derived talking = voice.people().filter((person) => !person.me).length;
+
+    derived speaking = voice.people().some((person) => person.me && person.speaking);
+
+    const join = (): void =>
+    {
+        haptic('select');
+        void voice.join(props.table).then(() =>
+        {
+            const mic = voice.mic();
+
+            if (mic === 'denied' || mic === 'absent')
+            {
+                toasts.show({ kind: 'info', text: locale.t(mic === 'denied' ? 'voice.micDenied' : 'voice.micAbsent'), dedupe: 'voice-mic' });
+            }
+        });
+    };
+
+    <Show
+        when={ here }
+        fallback={
+            <button
+                type="button"
+                class="flex h-9 shrink-0 cursor-pointer items-center gap-2 rounded-full border border-line-strong bg-field px-3.5 text-ui-sm font-semibold text-text transition-colors hover:border-accent/60 hover:bg-raised coarse:h-11"
+                onClick={ join }
+            >
+                <Icon name="voice" size={ 16 } class="text-accent" />
+                { locale.t('voice.join') }
+            </button>
+        }
+    >
+        { () =>
+            <span class="flex shrink-0 items-center gap-0.5 rounded-full border border-accent/40 bg-accent/10 p-0.5" role="group" aria-label={ locale.t('voice.title') }>
+                <Show
+                    when={ !joining }
+                    fallback={ <span class="flex h-9 w-9 items-center justify-center coarse:h-11 coarse:w-11"><Spinner size={ 16 } class="text-accent" /></span> }
+                >
+                    { () =>
+                        <IconButton
+                            icon={ voice.muted() ? 'voice-off' : 'voice' }
+                            label={ locale.t(!live ? 'voice.micUnavailable' : (voice.muted() ? 'voice.unmute' : 'voice.mute')) }
+                            variant="ghost"
+                            pressed={ live && !voice.muted() }
+                            disabled={ !live }
+                            class={ speaking ? 'rounded-full! text-live ring-2 ring-live/60' : (voice.muted() ? 'rounded-full! text-muted' : 'rounded-full! text-accent') }
+                            onClick={ () =>
+                            {
+                                haptic('tick');
+                                voice.toggleMute();
+                            } }
+                        />
+                    }
+                </Show>
+                <span class="tally min-w-5 px-1 text-center text-ui-xs font-semibold text-muted" aria-label={ locale.plural('voice.others', talking) }>{ locale.n(talking) }</span>
+                <IconButton
+                    icon="hang-up"
+                    label={ locale.t('voice.leave') }
+                    variant="ghost"
+                    class="rounded-full! text-danger hover:bg-danger/15"
+                    onClick={ () =>
+                    {
+                        haptic('tick');
+                        voice.leave();
+                    } }
+                />
+            </span>
+        }
+    </Show>
+}

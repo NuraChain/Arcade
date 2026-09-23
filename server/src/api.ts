@@ -60,6 +60,7 @@ import {
     personRef,
     pushEndpoint,
     pushKey,
+    voiceIce,
     pushSubscribeInput,
     personView,
     privacy,
@@ -317,6 +318,10 @@ export function buildApi(ports: Ports)
             publish: routes.post('/profile/publish', { output: chainPublish }, async (context) => ({
                 calls: await ports.chain.publish(context.principal.userId)
             }))
+        })),
+
+        voice: feature('/voice', [session], (routes) => ({
+            ice: routes.get('/ice', { output: voiceIce }, (context) => ports.voice.ice(context.principal.userId))
         })),
 
         social: feature('/social', [session], (routes) => ({

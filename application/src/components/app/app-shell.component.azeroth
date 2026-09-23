@@ -31,6 +31,7 @@ import SocialPanel from './social-panel.component.azeroth';
 import ToastHost from './toast-host.component.azeroth';
 import EmojiPopover from '../chat/emoji-popover.component.azeroth';
 import { useToasts } from '../../stores/toasts.store.ts';
+import { useVoice } from '../../stores/voice.store.ts';
 import TopBar from './top-bar.component.azeroth';
 
 
@@ -77,6 +78,7 @@ export default component AppShell(props: { children?: MountNode })
         const stops = [
             useToasts().start(),
             useRealtime().start(),
+            useVoice().start(),
             useConnection().start(),
             useCatalogue().start(),
             useSocial().start(),

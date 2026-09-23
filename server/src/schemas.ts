@@ -995,6 +995,7 @@ export const tableSummary = object({
     cube: boolean(),
     blinds: string(),
     chat: boolean(),
+    voice: boolean(),
     status: tableStatus,
     host: string().optional(),
     chairs: array(tableSeat),
@@ -1036,6 +1037,7 @@ export const tableCreateInput = object({
     cube: boolean(),
     blinds: tableBlinds,
     chat: boolean(),
+    voice: boolean(),
 
     /** Handles. Each one holds a chair until they take it or the host gives it away. */
     invitees: array(string({ max: 32 })),
@@ -1519,6 +1521,16 @@ export const pushSubscribeInput = object({
 });
 
 export const pushEndpoint = object({ endpoint: string() });
+
+export const iceServer = object({
+    urls: array(string()),
+    username: string().optional(),
+    credential: string().optional()
+});
+
+export const voiceIce = object({ servers: array(iceServer) });
+
+export type VoiceIce = Infer<typeof voiceIce>;
 
 /* -------------------------------------------------------------------------- chat */
 

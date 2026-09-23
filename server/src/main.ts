@@ -22,6 +22,7 @@ import { createFranking } from './domains/chat/franking.ts';
 import { createIdentityService } from './domains/identity/service.ts';
 import { createSocialService } from './domains/social/service.ts';
 import { attachRealtime } from './realtime/gateway.ts';
+import { voiceAllowed } from './domains/table/voice.ts';
 import { createHub } from './realtime/hub.ts';
 import { SESSION_TTL_SECONDS } from './http/auth.ts';
 
@@ -102,7 +103,15 @@ const hub = createHub({
         void social.touchSeen(ids).catch((error) => log.debug('last-seen touch failed', { error }));
     },
 
-    report: (error, where) => log.error('realtime failure', { where, error })
+    report: (error, where) => log.error('realtime failure', { where, error }),
+
+    voiceAllowed: (userId, tableId) => voiceAllowed(dataSource, userId, tableId),
+
+    async mayTalk(a, b)
+    {
+        const [there, back] = await Promise.all([social.mayMessage(a, b), social.mayMessage(b, a)]);
+        return there === null && back === null;
+    }
 });
 
 // ONE instance, shared by the API and by the gateway. It used to be built twice here, once for

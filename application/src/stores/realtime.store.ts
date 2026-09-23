@@ -5,6 +5,10 @@ import { createRandom, hashSeed } from '../lib/random.ts';
 import { runtime } from '../lib/runtime.ts';
 import { createSocketSource, type RealtimeSource } from '../services/realtime.source.ts';
 
+export type VoiceFrame = Extract<ServerFrame, { t: 'voice' }>;
+
+export type SignalFrame = Extract<ServerFrame, { t: 'signal' }>;
+
 export type RealtimeStatus = 'idle' | 'connecting' | 'connected' | 'down';
 
 /** Deltas inside this window become one refetch. */
@@ -86,6 +90,14 @@ export interface RealtimeApi
      */
     onTyping(listener: (who: string, conversationId: string) => void): () => void;
 
+    onVoice(listener: (frame: VoiceFrame) => void): () => void;
+
+    onSignal(listener: (frame: SignalFrame) => void): () => void;
+
+    voice(table: string, on: boolean, muted: boolean): void;
+
+    signal(table: string, to: string, kind: SignalFrame['kind'], data: string): void;
+
     /**
      * Every status change, in order.
      *
@@ -151,6 +163,8 @@ export const useRealtime = createStore((): RealtimeApi =>
     const listeners = new Set<(scope: 'chat' | 'social' | 'game', id: string | undefined) => void>();
     const watchers = new Set<(status: RealtimeStatus) => void>();
     const typists = new Set<(who: string, conversationId: string) => void>();
+    const voices = new Set<(frame: VoiceFrame) => void>();
+    const signals = new Set<(frame: SignalFrame) => void>();
     const pending = new Map<string, { scope: 'chat' | 'social' | 'game'; id: string | undefined }>();
 
     let close: (() => void) | null = null;
@@ -241,6 +255,24 @@ export const useRealtime = createStore((): RealtimeApi =>
         if (frame.t === 'nudge')
         {
             nudge(frame.scope, frame.id);
+            return;
+        }
+
+        if (frame.t === 'voice')
+        {
+            for (const listener of voices)
+            {
+                listener(frame);
+            }
+            return;
+        }
+
+        if (frame.t === 'signal')
+        {
+            for (const listener of signals)
+            {
+                listener(frame);
+            }
             return;
         }
 
@@ -438,6 +470,22 @@ export const useRealtime = createStore((): RealtimeApi =>
             return () => listeners.delete(listener);
         },
 
+        onVoice(listener)
+        {
+            voices.add(listener);
+            return () => voices.delete(listener);
+        },
+
+        onSignal(listener)
+        {
+            signals.add(listener);
+            return () => signals.delete(listener);
+        },
+
+        voice: (table, on, muted) => active.send({ t: 'voice', table, on, muted }),
+
+        signal: (table, to, kind, data) => active.send({ t: 'signal', table, to, kind, data }),
+
         onTyping(listener)
         {
             typists.add(listener);
@@ -488,6 +536,8 @@ export const useRealtime = createStore((): RealtimeApi =>
             listeners.clear();
             watchers.clear();
             typists.clear();
+            voices.clear();
+            signals.clear();
             setStalled(false);
             attempt = 0;
             suppressUntil = 0;
