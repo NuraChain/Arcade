@@ -53,7 +53,6 @@ export function seatsFor(board: LudoBoard, mine?: number): BoardToken[]
         for (const token of player.tokens)
         {
             const key = `${ player.seat }-${ token.piece }`;
-            const label = INITIAL[player.colour];
             const playable = mine !== undefined && player.seat === mine && board.moves.includes(token.piece);
 
             if (token.cell !== undefined)
@@ -61,7 +60,6 @@ export function seatsFor(board: LudoBoard, mine?: number): BoardToken[]
                 placed.push({
                     key,
                     colour: player.colour,
-                    label,
                     at: token.at,
                     col: token.cell.col,
                     row: token.cell.row,
@@ -77,7 +75,7 @@ export function seatsFor(board: LudoBoard, mine?: number): BoardToken[]
 
                 finished += 1;
 
-                placed.push({ key, colour: player.colour, label, at: token.at, col: slot[0], row: slot[1], playable: false });
+                placed.push({ key, colour: player.colour, at: token.at, col: slot[0], row: slot[1], playable: false });
                 continue;
             }
 
@@ -90,7 +88,6 @@ export function seatsFor(board: LudoBoard, mine?: number): BoardToken[]
             placed.push({
                 key,
                 colour: player.colour,
-                label,
                 at: token.at,
                 col: corner[0] + spot[0],
                 row: corner[1] + spot[1],

@@ -178,9 +178,7 @@ export default component BoardCanvas(props: { game: string; view: BoardView; onP
                         aria-hidden="true"
                         data-home={ token.at === FINISHED ? 'true' : undefined }
                         style={ `--at-col:${ token.col }; --at-row:${ token.row }; --pawn: url('/board/pawn-${ token.colour }.webp'); --tone: var(--ludo-${ token.colour })` }
-                    >
-                        <span>{ token.label }</span>
-                    </span>
+                    ></span>
                 </For>
             }
         </Show>

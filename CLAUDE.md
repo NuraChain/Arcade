@@ -1470,27 +1470,24 @@ just ludo". The spec is `docs/superpowers/specs/2026-09-23-ludo-cartoon-board-de
 ink line (`#2A1E5C`) on every shape, flat colours a shade brighter than the pieces, sticker shading
 (a lighter band across the top, a darker lip under the bottom, never a gradient), cream card inside a
 toy-wood frame, round yard houses whose four seats are recessed rings, chunky outlined stars, and a
-gold star at the centre. The complaint that started all of it was the PAWNS, which the renders
-replaced; the glossy plastic peg is the childhood piece, so they stay.
+gold star at the centre.
 
-**What is drawn, and where it comes from.** A starred START square in the owner's colour on
-`ENTRY`; a star in the arm's colour on every other `SAFE` index; an arrow in the owner's colour on
-the last ring cell before each home run, pointing into it; the home runs as coloured tiles; the
-centre as four triangles. The board paints from `PAINT` in the generator; the pieces take `base`,
-`shade` and `keyline` from `LUDO_INK` through the geometry file, which match `--ludo-*` in `tokens.css`
-and `TONE` in `ludo-board.ts` - kept equal by hand.
+**The board and the pieces are ONE paint.** `PAINT` in the generator (`fill`, `light`, `dark`, plus
+`tint` and `well` for the seats) is the board's colours, the geometry file carries it and the ink line
+to Blender, and `--ludo-*` in `tokens.css` and `TONE` in `ludo-board.ts` are the same four fills - kept
+equal by hand. The first cartoon board still carried the glossy studio pegs in the older, darker
+palette, and the owner saw it at once: the pieces were from another box.
 
-**The pawn is a peg seen from thirty degrees above**: a lathed plinth, bell and ball head, 0.82 of a
-square wide and 1.25 tall, with an inverted-hull keyline in the colour's own darkest ink so a red
-pawn on the red home run still has an edge. Its shadow is a separate sprite so it stays on the
-ground while the pawn hops. The sprite is 256 square at 170 pixels to the square; the foot is at
-`PAWN_FOOT` (199/256) and sits `PAWN_DROP` below the cell centre, so the head reaches less than half a
-square into the one behind. Depth is y, as for any standing piece.
-
-**The initial is drawn only where it can be read** - squares of 28 CSS pixels or more, in the
-colour's `deep` ink. At a phone's 21-pixel square a letter on the head was a five-pixel smudge and the
-noisiest thing on the board, and no reference game prints one. Colour is still never the only
-signal there: the yard a pawn starts in, the badge's initial and the move list's words carry it.
+**The pawn is a toon peg seen from thirty degrees above**: a lathed plinth, bell and ball head, 0.82
+of a square wide and 1.25 tall, rendered in EEVEE because Cycles cannot band shading - `Shader to
+RGB` into a constant ramp gives the board's own three shades (the dark side, the fill, a light stripe
+where the light faces it) plus a hard white glint, and an inverted hull with back-face culling draws
+the board's indigo line round it. The toon light comes from the FRONT-left, above: the studio key sat
+behind the pawn as the camera sees it, which put the whole visible face in the dark band. The shadow
+and the die stay Cycles renders. The sprite is 256 square at 170 pixels to the square; the foot is at
+199/256 and sits `DROP` below the cell centre. Depth is y, as for any standing piece. Nothing is
+printed on the head: the letter that used to be there was a smudge at phone size and a sticker at
+desktop size, and the yard, the plates and the move list's words already say whose piece it is.
 
 **A finished pawn stays on the board**, at 0.62 in its colour's triangle (`HOME_SLOTS`), where it used
 to vanish from the view entirely. Two to four pawns on one square stand side by side (`STACKS`), and
@@ -1514,10 +1511,11 @@ other end: they are drawn at `NEST +/- NEST_SPREAD`, which is a POSITION, and `c
 half cell that turns an index into a centre - so `seatsFor` subtracts 0.5 before it hands a parked
 token over.
 
-**The nest is off-centre in its yard**: each yard's four wells sit in a smaller pool (`NEST_RADIUS`
-1.72, wells 0.72 apart) pushed 0.7 squares towards the middle of the board. `NEST` lives in
-`game/layout.ts` and both the art and `seatsFor` read it, so a parked token cannot sit anywhere but on
-its own well, and `game.spec.ts` fails if one ever strays towards the outer edges.
+**The house sits in the middle of its yard**: each yard's four seats sit in a disc (`NEST_RADIUS`
+1.9, seats 0.8 apart, each seat 0.36 of a square) centred on the yard. It was pushed 0.7 squares
+inward while the players were drawn in the yard's outer corner; once they moved beside the board the
+owner asked for it back in the middle. `NEST` lives in `game/layout.ts` and both the art and
+`seatsFor` read it, so a parked token cannot sit anywhere but on its own seat.
 
 **The players sit OUTSIDE the board, at their own corner.** They were drawn inside their yards for a
 while - an avatar in the corner, a name along the edge - and the owner asked for them out, which is

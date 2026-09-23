@@ -13,14 +13,18 @@ const EDGE = RIM * S;
 
 const round = (value) => Math.round(value * 100) / 100;
 
-export const LUDO_INK = {
-    red: { base: '#E5392F', shade: '#B01A14', keyline: '#4A0806' },
-    green: { base: '#1FA24C', shade: '#0E7A36', keyline: '#033317' },
-    yellow: { base: '#F7B814', shade: '#D48A0C', keyline: '#6B3C02' },
-    blue: { base: '#2270E6', shade: '#0A4DB0', keyline: '#041D4D' }
+const INK = '#2A1E5C';
+
+const PAPER = '#FFF4DC';
+
+export const PAINT = {
+    red: { fill: '#FF5A4E', light: '#FF9489', dark: '#D8372D', tint: '#FFD0CA', well: '#F2A79E' },
+    green: { fill: '#2FC262', light: '#74DE96', dark: '#1B9646', tint: '#C6F0D3', well: '#8FD6A6' },
+    yellow: { fill: '#FFC72C', light: '#FFE07A', dark: '#DE9C00', tint: '#FFEDB8', well: '#F2CF72' },
+    blue: { fill: '#3F8CFF', light: '#86B6FF', dark: '#2463D1', tint: '#CCE0FF', well: '#96BDF5' }
 };
 
-const COLOURS = Object.keys(LUDO_INK);
+const COLOURS = Object.keys(PAINT);
 
 const CORNER = { red: [0, 0], green: [9, 0], yellow: [9, 9], blue: [0, 9] };
 
@@ -37,17 +41,6 @@ const ARM = (col, row) =>
     }
 
     return col < 6 ? 'red' : 'yellow';
-};
-
-const INK = '#2A1E5C';
-
-const PAPER = '#FFF4DC';
-
-const PAINT = {
-    red: { fill: '#FF5A4E', light: '#FF9489', dark: '#D8372D', tint: '#FFD0CA', well: '#F2A79E' },
-    green: { fill: '#2FC262', light: '#74DE96', dark: '#1B9646', tint: '#C6F0D3', well: '#8FD6A6' },
-    yellow: { fill: '#FFC72C', light: '#FFE07A', dark: '#DE9C00', tint: '#FFEDB8', well: '#F2CF72' },
-    blue: { fill: '#3F8CFF', light: '#86B6FF', dark: '#2463D1', tint: '#CCE0FF', well: '#96BDF5' }
 };
 
 const WHITE = { fill: '#FFFFFF', light: '#FFFFFF', dark: '#E6D6B4' };
@@ -103,12 +96,12 @@ function yard(colour)
     const [col, row] = CORNER[colour];
     const [x, y] = at(col, row);
     const paint = PAINT[colour];
-    const gap = 3;
+    const gap = round(C * 0.24);
     const size = C * 6 - gap * 2;
     const cx = round(G + (col + NEST[colour][0]) * C);
     const cy = round(G + (row + NEST[colour][1]) * C);
     const reach = round(C * NEST_RADIUS);
-    const seat = round(C * 0.46);
+    const seat = round(C * 0.36);
 
     const seats = NEST_WELLS.map(([dx, dy]) =>
     {
@@ -326,7 +319,8 @@ const geometry = {
     nestRadius: NEST_RADIUS,
     nestSpread: NEST_SPREAD,
     wells: NEST_WELLS,
-    ink: LUDO_INK
+    ink: PAINT,
+    line: INK
 };
 
 writeFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'blender', 'ludo-geometry.json'), JSON.stringify(geometry, null, 1) + '\n');

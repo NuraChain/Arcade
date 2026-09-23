@@ -623,6 +623,7 @@
 
 .board-stage
 {
+    isolation: isolate;
     position: relative;
     container-type: inline-size;
     inline-size: min(100%, calc(100dvh - var(--board-chrome, 13rem)));
@@ -1344,6 +1345,7 @@
 
 .hokm-hand
 {
+    isolation: isolate;
     --card-w: clamp(3.2rem, 12.5cqi, 5.25rem);
     --card-h: calc(var(--card-w) * 288 / 204);
     --step: min(calc(var(--card-w) * 0.62), calc((100% - var(--card-w) - 1.25rem) / max(1, var(--n) - 1)));
@@ -1433,6 +1435,7 @@
     direction: ltr;
 
     position: relative;
+    isolation: isolate;
     container-type: inline-size;
     inline-size: 100%;
     block-size: 100%;
@@ -1454,14 +1457,6 @@
 
     z-index: calc(var(--at-row) * 10);
 
-    display: flex;
-    align-items: flex-start;
-    justify-content: center;
-
-    color: color-mix(in oklab, var(--tone) 45%, black);
-    font-size: clamp(6px, 2cqi, 14px);
-    font-weight: 800;
-    line-height: 1;
     transform-origin: 50% 62.5%;
     transition: inset-inline-start var(--duration-ui, 180ms) var(--ease-ui, ease),
                 inset-block-start var(--duration-ui, 180ms) var(--ease-ui, ease);
@@ -1493,25 +1488,9 @@
     opacity: 0.6;
 }
 
-.board-token > span
-{
-    position: absolute;
-    inset-block-start: -32.75%;
-    translate: 0 -50%;
-    opacity: 0.8;
-}
-
 .board-token[data-home]
 {
     scale: 0.62;
-}
-
-@container (max-width: 29.6rem)
-{
-    .board-token > span
-    {
-        display: none;
-    }
 }
 
 @media (prefers-reduced-motion: reduce)
@@ -1533,6 +1512,7 @@
     position: absolute;
     inset: 0;
     overflow: hidden;
+    isolation: isolate;
     pointer-events: none;
 }
 
@@ -1622,25 +1602,6 @@
     stroke-width: 5.5;
     stroke-dasharray: 7.5 2.5;
     animation: lp-dash 2400ms linear infinite;
-}
-
-.lp-mark
-{
-    position: absolute;
-    inset-inline-start: 0;
-    inset-block-start: calc(var(--c) * -0.762);
-    translate: -50% -50%;
-    font: 800 calc(var(--c) * 0.34) / 1 Inter, system-ui, sans-serif;
-    color: color-mix(in oklab, var(--tone) 45%, black);
-    opacity: 0.8;
-}
-
-@container (max-width: 29.6rem)
-{
-    .lp-mark
-    {
-        display: none;
-    }
 }
 
 .lp[data-movable] .lp-ring

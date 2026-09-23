@@ -387,10 +387,6 @@ def geometry_of():
         return json.load(source)
 
 
-def inks(geometry):
-    return {colour: {shade: linear(value) for shade, value in shades.items()} for colour, shades in geometry['ink'].items()}
-
-
 PAWN_PROFILE = [
     (0.000, 0.000), (0.380, 0.000), (0.405, 0.012), (0.410, 0.035), (0.410, 0.075), (0.400, 0.098), (0.372, 0.110),
     (0.352, 0.118), (0.340, 0.170), (0.312, 0.250), (0.270, 0.340), (0.222, 0.430), (0.180, 0.520), (0.155, 0.590), (0.146, 0.630)
@@ -435,35 +431,6 @@ def pawn_material(name, base, shade):
     return material
 
 
-def keyline_material(name, colour):
-    material = bpy.data.materials.new(name)
-    material.use_nodes = True
-    tree = material.node_tree
-    for node in list(tree.nodes):
-        if node.type == 'BSDF_PRINCIPLED':
-            tree.nodes.remove(node)
-    output = next(node for node in tree.nodes if node.type == 'OUTPUT_MATERIAL')
-    emission = tree.nodes.new('ShaderNodeEmission')
-    emission.inputs['Color'].default_value = (*colour, 1.0)
-    emission.inputs['Strength'].default_value = 1.0
-    clear = tree.nodes.new('ShaderNodeBsdfTransparent')
-    facing = tree.nodes.new('ShaderNodeNewGeometry')
-    mix = tree.nodes.new('ShaderNodeMixShader')
-    tree.links.new(facing.outputs['Backfacing'], mix.inputs[0])
-    tree.links.new(clear.outputs[0], mix.inputs[1])
-    tree.links.new(emission.outputs[0], mix.inputs[2])
-    tree.links.new(mix.outputs[0], output.inputs['Surface'])
-    return material
-
-
-def camera_only(obj):
-    obj.visible_diffuse = False
-    obj.visible_glossy = False
-    obj.visible_shadow = False
-    obj.visible_transmission = False
-    obj.visible_volume_scatter = False
-
-
 def piece_camera(scene, tilt, target, span):
     data = bpy.data.cameras.new('piece')
     data.type = 'ORTHO'
@@ -504,32 +471,133 @@ def pawn_mesh(material):
     return pawn
 
 
-def ludo_pieces():
-    geometry = geometry_of()
-    ink = inks(geometry)
-    up = Vector((0.0, 0.5, 0.866))
-    span = 256 / PIECE_PX
+def toon_engine(scene):
+    for engine in ('BLENDER_EEVEE_NEXT', 'BLENDER_EEVEE'):
+        try:
+            scene.render.engine = engine
+            return
+        except TypeError:
+            continue
 
-    for colour in ink:
+
+def band(tree, source, stops):
+    ramp = tree.nodes.new('ShaderNodeValToRGB')
+    ramp.color_ramp.interpolation = 'CONSTANT'
+    elements = ramp.color_ramp.elements
+    while len(elements) < len(stops):
+        elements.new(0.5)
+    for element, (position, colour) in zip(elements, stops):
+        element.position = position
+        element.color = (*colour, 1.0)
+    tree.links.new(source, ramp.inputs['Fac'])
+    return ramp
+
+
+def toon_material(name, paint):
+    material = bpy.data.materials.new(name)
+    material.use_nodes = True
+    tree = material.node_tree
+    for node in list(tree.nodes):
+        if node.type == 'BSDF_PRINCIPLED':
+            tree.nodes.remove(node)
+    output = next(node for node in tree.nodes if node.type == 'OUTPUT_MATERIAL')
+
+    diffuse = tree.nodes.new('ShaderNodeBsdfDiffuse')
+    diffuse.inputs['Color'].default_value = (1.0, 1.0, 1.0, 1.0)
+    lit = tree.nodes.new('ShaderNodeShaderToRGB')
+    tree.links.new(diffuse.outputs[0], lit.inputs[0])
+    body = band(tree, lit.outputs['Color'], [(0.0, paint['dark']), (TOON_SHADE, paint['fill']), (TOON_LIGHT, paint['light'])])
+
+    gloss = tree.nodes.new('ShaderNodeBsdfGlossy')
+    gloss.inputs['Roughness'].default_value = 0.18
+    gloss.inputs['Color'].default_value = (1.0, 1.0, 1.0, 1.0)
+    shine = tree.nodes.new('ShaderNodeShaderToRGB')
+    tree.links.new(gloss.outputs[0], shine.inputs[0])
+    glint = band(tree, shine.outputs['Color'], [(0.0, (0.0, 0.0, 0.0)), (TOON_GLINT, (1.0, 1.0, 1.0))])
+
+    mix = tree.nodes.new('ShaderNodeMix')
+    mix.data_type = 'RGBA'
+    mix.blend_type = 'LIGHTEN'
+    socket(mix.inputs, 'Factor', 'VALUE').default_value = 1.0
+    tree.links.new(body.outputs['Color'], socket(mix.inputs, 'A', 'RGBA'))
+    tree.links.new(glint.outputs['Color'], socket(mix.inputs, 'B', 'RGBA'))
+
+    emission = tree.nodes.new('ShaderNodeEmission')
+    emission.inputs['Strength'].default_value = 1.0
+    tree.links.new(socket(mix.outputs, 'Result', 'RGBA'), emission.inputs['Color'])
+    tree.links.new(emission.outputs[0], output.inputs['Surface'])
+    return material
+
+
+def outline_material(name, colour):
+    material = bpy.data.materials.new(name)
+    material.use_nodes = True
+    tree = material.node_tree
+    for node in list(tree.nodes):
+        if node.type == 'BSDF_PRINCIPLED':
+            tree.nodes.remove(node)
+    output = next(node for node in tree.nodes if node.type == 'OUTPUT_MATERIAL')
+    emission = tree.nodes.new('ShaderNodeEmission')
+    emission.inputs['Color'].default_value = (*colour, 1.0)
+    emission.inputs['Strength'].default_value = 1.0
+    tree.links.new(emission.outputs[0], output.inputs['Surface'])
+    material.use_backface_culling = True
+    return material
+
+
+def toon_pawns(geometry, up, span):
+    paints = {colour: {shade: linear(value) for shade, value in shades.items()} for colour, shades in geometry['ink'].items()}
+    line = linear(geometry['line'])
+
+    for colour, paint in paints.items():
         scene = piece_scene(256, 256)
-        pawn = pawn_mesh(pawn_material('pawn-' + colour, ink[colour]['base'], ink[colour]['shade']))
+        toon_engine(scene)
+        next(node for node in scene.world.node_tree.nodes if node.type == 'BACKGROUND').inputs['Strength'].default_value = 0.0
+        pawn = pawn_mesh(toon_material('toon-' + colour, paint))
         hull = pawn.copy()
         hull.data = pawn.data.copy()
         hull.data.materials.clear()
-        hull.data.materials.append(keyline_material('keyline-' + colour, ink[colour]['keyline']))
+        hull.data.materials.append(outline_material('outline-' + colour, line))
+        hull.data.flip_normals()
         bpy.context.collection.objects.link(hull)
         grow = hull.modifiers.new('grow', 'DISPLACE')
-        grow.strength = 0.0375
+        grow.strength = -TOON_LINE
         grow.mid_level = 0.0
         grow.direction = 'NORMAL'
-        camera_only(hull)
-        piece_lights((0.0, 0.0, 0.6))
+        sun = bpy.data.lights.new('sun', 'SUN')
+        sun.energy = TOON_SUN
+        sun.angle = math.radians(2)
+        sun.use_shadow = False
+        holder = bpy.data.objects.new('sun', sun)
+        bpy.context.collection.objects.link(holder)
+        holder.rotation_euler = Vector(TOON_KEY).normalized().to_track_quat('Z', 'Y').to_euler()
         piece_camera(scene, 60.0, tuple(up * 0.4176), span)
         save(scene, 'pawn-' + colour + '.webp', quality=92, alpha=True)
 
+
+TOON_SHADE = 0.42
+
+TOON_LIGHT = 0.98
+
+TOON_GLINT = 0.72
+
+TOON_LINE = 0.045
+
+TOON_SUN = 3.6
+
+TOON_KEY = (-0.9, -1.3, 1.5)
+
+
+def ludo_pieces():
+    geometry = geometry_of()
+    up = Vector((0.0, 0.5, 0.866))
+    span = 256 / PIECE_PX
+
+    toon_pawns(geometry, up, span)
+
     scene = piece_scene(256, 128)
     next(node for node in scene.world.node_tree.nodes if node.type == 'BACKGROUND').inputs['Strength'].default_value = 0.0
-    pawn = pawn_mesh(pawn_material('pawn-shadow', ink['red']['base'], ink['red']['shade']))
+    pawn = pawn_mesh(pawn_material('pawn-shadow', (1.0, 1.0, 1.0), (1.0, 1.0, 1.0)))
     pawn.visible_camera = False
     bpy.ops.mesh.primitive_plane_add(size=4.0, location=(0.0, 0.0, 0.0))
     ground = bpy.context.active_object

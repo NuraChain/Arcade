@@ -172,10 +172,10 @@
     --world-fog-density: 1;
     --world-env: 0.35;
 
-    --ludo-red: #E5392F;
-    --ludo-green: #1FA24C;
-    --ludo-yellow: #F7B814;
-    --ludo-blue: #2270E6;
+    --ludo-red: #FF5A4E;
+    --ludo-green: #2FC262;
+    --ludo-yellow: #FFC72C;
+    --ludo-blue: #3F8CFF;
 }
 
 @theme inline

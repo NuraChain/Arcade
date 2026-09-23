@@ -21,13 +21,13 @@ export const CELL = FIELD * (960 / 992) / GRID;
 
 export const NEST_RADIUS = 1.72;
 
-export const NEST_SPREAD = 0.72;
+export const NEST_SPREAD = 0.8;
 
 export const NEST: Record<string, readonly [number, number]> = {
-    red: [3.7, 3.7],
-    green: [2.3, 3.7],
-    yellow: [2.3, 2.3],
-    blue: [3.7, 2.3]
+    red: [3, 3],
+    green: [3, 3],
+    yellow: [3, 3],
+    blue: [3, 3]
 };
 
 export const NEST_WELLS: readonly (readonly [number, number])[] = [[-1, -1], [1, -1], [-1, 1], [1, 1]];

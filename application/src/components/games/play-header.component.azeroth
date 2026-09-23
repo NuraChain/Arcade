@@ -42,7 +42,7 @@ export default component PlayHeader(props: { table: TableSummary; others: TableS
                         <button
                             type="button"
                             class="tally -my-3 hidden min-h-11 shrink-0 @2xl:flex cursor-pointer items-center gap-1 rounded-control px-1 font-semibold uppercase tracking-wide text-muted transition-colors hover:text-text"
-                            aria-label={ locale.t('play.dock.copy', { code: props.table.code }) }
+                            aria-label={ locale.t('play.dock.copy', { code: props.table.code.toUpperCase() }) }
                             onClick={ () => copyCode() }
                         >
                             { props.table.code }

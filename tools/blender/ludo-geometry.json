@@ -456,24 +456,24 @@
  },
  "nest": {
   "red": [
-   3.7,
-   3.7
+   3,
+   3
   ],
   "green": [
-   2.3,
-   3.7
+   3,
+   3
   ],
   "yellow": [
-   2.3,
-   2.3
+   3,
+   3
   ],
   "blue": [
-   3.7,
-   2.3
+   3,
+   3
   ]
  },
  "nestRadius": 1.72,
- "nestSpread": 0.72,
+ "nestSpread": 0.8,
  "wells": [
   [
    -1,
@@ -494,24 +494,33 @@
  ],
  "ink": {
   "red": {
-   "base": "#E5392F",
-   "shade": "#B01A14",
-   "keyline": "#4A0806"
+   "fill": "#FF5A4E",
+   "light": "#FF9489",
+   "dark": "#D8372D",
+   "tint": "#FFD0CA",
+   "well": "#F2A79E"
   },
   "green": {
-   "base": "#1FA24C",
-   "shade": "#0E7A36",
-   "keyline": "#033317"
+   "fill": "#2FC262",
+   "light": "#74DE96",
+   "dark": "#1B9646",
+   "tint": "#C6F0D3",
+   "well": "#8FD6A6"
   },
   "yellow": {
-   "base": "#F7B814",
-   "shade": "#D48A0C",
-   "keyline": "#6B3C02"
+   "fill": "#FFC72C",
+   "light": "#FFE07A",
+   "dark": "#DE9C00",
+   "tint": "#FFEDB8",
+   "well": "#F2CF72"
   },
   "blue": {
-   "base": "#2270E6",
-   "shade": "#0A4DB0",
-   "keyline": "#041D4D"
+   "fill": "#3F8CFF",
+   "light": "#86B6FF",
+   "dark": "#2463D1",
+   "tint": "#CCE0FF",
+   "well": "#96BDF5"
   }
- }
+ },
+ "line": "#2A1E5C"
 }

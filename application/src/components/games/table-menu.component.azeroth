@@ -59,7 +59,7 @@ export default component TableMenu(props: OverlayProps & {
         list.push({
             id: 'code',
             icon: 'copy',
-            label: locale.t('play.dock.copy', { code: props.code }),
+            label: locale.t('play.dock.copy', { code: props.code.toUpperCase() }),
             run: copyCode
         });
 

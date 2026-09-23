@@ -20,9 +20,6 @@ export interface BoardToken
 
     colour: string;
 
-    /** The colour's initial, drawn on the token so colour is never the only signal. */
-    label: string;
-
     /** Progress along this colour's own path: -1 in the yard, 56 home. Drives the walk. */
     at: number;
 

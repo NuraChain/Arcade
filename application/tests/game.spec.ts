@@ -786,7 +786,7 @@ describe('pointing at a token on a phone', () =>
     });
 });
 
-describe('the yard leaves its outer corner to the player', () =>
+describe('the yard is a house in the middle of its corner', () =>
 {
     const OUTER: Record<string, readonly [number, number]> = { red: [0, 0], green: [15, 0], yellow: [15, 15], blue: [0, 15] };
     const ORIGIN: Record<string, readonly [number, number]> = { red: [0, 0], green: [9, 0], yellow: [9, 9], blue: [0, 9] };
@@ -799,10 +799,12 @@ describe('the yard leaves its outer corner to the player', () =>
 
     for (const colour of ['red', 'green', 'yellow', 'blue'])
     {
-        it(`parks every ${ colour } token inside its nest and clear of the band along the outer edges`, () =>
+        it(`parks every ${ colour } token inside its nest, and the nest sits in the middle of the yard`, () =>
         {
             const nest = NEST[colour];
             const origin = ORIGIN[colour];
+
+            expect(nest).toEqual([3, 3]);
             const outer = OUTER[colour];
 
             for (const spot of parked(colour))
@@ -810,8 +812,8 @@ describe('the yard leaves its outer corner to the player', () =>
                 const fromNest = Math.hypot(spot.col - (origin[0] + nest[0]), spot.row - (origin[1] + nest[1]));
 
                 expect(fromNest).toBeLessThan(NEST_RADIUS - 0.3);
-                expect(Math.abs(spot.col - outer[0])).toBeGreaterThan(2.4);
-                expect(Math.abs(spot.row - outer[1])).toBeGreaterThan(2.4);
+                expect(Math.abs(spot.col - outer[0])).toBeGreaterThan(1.5);
+                expect(Math.abs(spot.row - outer[1])).toBeGreaterThan(1.5);
             }
         });
     }

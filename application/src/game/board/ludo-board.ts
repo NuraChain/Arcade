@@ -18,10 +18,10 @@ const DIE_HOLD_MS = 1100;
 const CONFETTI = 28;
 
 const TONE: Record<string, string> = {
-    red: '#E5392F',
-    green: '#1FA24C',
-    yellow: '#F7B814',
-    blue: '#2270E6'
+    red: '#FF5A4E',
+    green: '#2FC262',
+    yellow: '#FFC72C',
+    blue: '#3F8CFF'
 };
 
 interface Spot
@@ -160,7 +160,6 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
         const ring = element('span', 'lp-ring', node);
         const lift = element('span', 'lp-lift', node);
         const pawn = element('img', 'lp-pawn', lift);
-        const mark = element('span', 'lp-mark', lift);
 
         shadow.src = '/board/pawn-shadow.webp';
         shadow.alt = '';
@@ -170,7 +169,6 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
         pawn.decoding = 'async';
         pawn.draggable = false;
         ring.innerHTML = RING;
-        mark.textContent = token.label;
         node.style.setProperty('--tone', TONE[token.colour] ?? '#FFFFFF');
         node.dataset.colour = token.colour;
 
