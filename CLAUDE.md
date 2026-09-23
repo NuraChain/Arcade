@@ -1570,13 +1570,38 @@ the red yard is invisible exactly where every game begins. Two strokes is the tr
 uses: the white carries on walnut and on red, the dark carries on cream, and neither depends on
 which colour is playing.
 
-**The table's sounds are synthesised, and armed by a gesture.** Six cues in `game/sound.ts`, each an
-envelope over one or two oscillators - a few hundred bytes of code against the hundred kilobytes a
-sprite sheet of the same six would cost, with nothing to decode and nothing that can 404 halfway
-through a game. `settings.sound` is off by default, so the ordinary path never opens an audio context
-at all; the one it does open waits for a pointer or a key, because a context constructed without one
-makes Chrome log "The AudioContext was not allowed to start" and the matrix reads every console line.
-That is the same reason Phaser's own audio is off in the config.
+**The table's sounds: one engine per page, unlocked by a real tap.** `game/sound.ts` holds ONE
+`AudioContext` for the whole page, shared by every board through counted handles: `createSound` takes
+one and `dispose` gives it back, and the last one back SUSPENDS the context rather than closing it, so
+switching tables never has to unlock audio again. The spec is
+`docs/superpowers/specs/2026-09-23-table-motion-sound-design.md`; the rules that cost something:
+
+- **`pointerdown` is not a gesture on an iPhone.** The context is created and resumed inside
+  `pointerup`, `touchend`, `click` or `keydown`. The old engine armed on `pointerdown` and never
+  called `resume()`, so every table was silent on iOS and Chrome logged "The AudioContext was not
+  allowed to start" on a cold deep link - which the matrix counts as a failure.
+- **The cue of the unlocking tap still plays.** `resume()` is asynchronous, so the tap that unlocks
+  would otherwise lose its own sound; a `resuming` flag lets cues be scheduled while it is on its way.
+  Outside that window nothing is scheduled on a context that is not running.
+- **An interruption re-arms it.** A call, Siri or a screen lock puts WebKit into `interrupted`; the
+  `statechange` listener puts the tap listeners back, and a context still not running 300ms after a tap
+  is rebuilt, because WebKit's can get stuck there.
+- **Recorded foley, synthesised interface.** Cards, dice, wood and the two jingles are CC0 recordings
+  from Kenney (`tools/art/sound-src/`, with their licence), trimmed and encoded to 96 kbps mono MP3 by
+  `npm run sound`, imported through `new URL(..., import.meta.url)` so they land hashed in `/assets/`
+  and are cached as immutable - a file in `public/` is revalidated on every visit. The turn, the ticks,
+  trump, trick, bonus, pass and deny are synthesised. A recording that failed to load falls back to its
+  synthesised voice or to silence and never throws, which keeps "nothing can 404 halfway through a game"
+  true in behaviour. Vite would inline the smallest MP3s as base64, so `assetsInlineLimit` refuses
+  audio, and `tools/budgets.mjs` requires all seventeen files in `dist/assets`, 16 KB each, 160 KB in all.
+- **Mixed like a game, not like a web page.** Three buses (foley 0.9, interface 0.45, jingles 0.6) into
+  a 0.7 master and a limiter; each play varies its rate by up to 10% and its level by 1.5 dB, rotates
+  through the takes, is panned by where it happens, and the same cue is not started more than three
+  times at once or twice within 35ms.
+- **A hidden tab hears only what is urgent** - the turn and the ticks - and the iOS audio session is
+  `ambient`, so the silent switch mutes it and it mixes with the player's music.
+- **Sound is on by default**, because a native game starts with sound; nothing plays before the first
+  tap, and the dock and the table menu turn it off in one press.
 
 **`scene.start` does not start a scene, it QUEUES one.** `init`, `preload` and `create` run on the
 next step of the game loop, so everything the scene owns is absent for a frame or two after

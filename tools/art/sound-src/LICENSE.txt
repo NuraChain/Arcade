@@ -1,0 +1,10 @@
+Sound sources
+
+Every file here is from Kenney (kenney.nl) and released under CC0 1.0 Universal:
+https://creativecommons.org/publicdomain/zero/1.0/
+
+- Casino Audio 1.1: https://kenney.nl/assets/casino-audio
+- Impact Sounds 1.0: https://kenney.nl/assets/impact-sounds
+- Music Jingles 1.0: https://kenney.nl/assets/music-jingles
+
+Credit is not required by the licence and is given anyway.

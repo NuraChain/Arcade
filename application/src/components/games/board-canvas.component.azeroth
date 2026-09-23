@@ -27,11 +27,6 @@ import { sceneFor } from '../../game/scenes.ts';
  * `.board-token` used to carry the two fractions as percentage literals beside the ones the canvas
  * derives, which is two descriptions of where the grid sits inside the plate - agreeing exactly
  * until somebody edited one. They are set here instead, so a change to the art moves both.
- *
- * **Sound is the device's preference and nothing else reads it.** `settings.sound` is off by
- * default, so the ordinary path never opens an audio context at all - and the one the board does
- * open waits for a gesture, because a context created without one makes Chrome log a warning that
- * fails a matrix cell.
  */
 export default component BoardCanvas(props: { game: string; view: BoardView; onPick?: (key: string) => void })
 {

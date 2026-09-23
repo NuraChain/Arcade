@@ -1,8 +1,9 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CELL, GRID, MARGIN, NEST, NEST_RADIUS, RIM, centreOf, pickNear, tokenRadius } from '../src/game/layout.ts';
 import { FINISHED, YARD, pathBetween } from '../src/game/board/path.ts';
-import { createSound } from '../src/game/sound.ts';
+import { createSound, offsetOf, resetSound } from '../src/game/sound.ts';
+import { unpack } from '../src/game/sound-files.ts';
 import { ENTRY, RING_CELLS, cellAt } from '../../server/src/domains/match/ludo/board.ts';
 import { chairsOf, ludoOf, type LudoSeat } from '../src/data/match.ts';
 import { seatsFor } from '../src/components/games/seats.ts';
@@ -157,30 +158,95 @@ describe('the squares a token walks over', () =>
 
 describe('the sound layer', () =>
 {
-    const stub = (): { made: () => number; started: () => number } =>
+    interface Fake
+    {
+        made: () => number;
+        oscillators: () => number;
+        buffers: () => number;
+        last: () => FakeContext | null;
+    }
+
+    interface FakeContext
+    {
+        state: string;
+        resumed: number;
+        suspended: number;
+        closed: number;
+        listeners: (() => void)[];
+    }
+
+    const param = (): Record<string, unknown> => ({ value: 0, setValueAtTime: () => undefined, exponentialRampToValueAtTime: () => undefined });
+
+    const stub = (start = 'suspended'): Fake =>
     {
         let made = 0;
-        let started = 0;
+        let oscillators = 0;
+        let buffers = 0;
+        const contexts: FakeContext[] = [];
 
         const node = (): Record<string, unknown> => ({
-            gain: { setValueAtTime: () => undefined, exponentialRampToValueAtTime: () => undefined },
-            frequency: { setValueAtTime: () => undefined, exponentialRampToValueAtTime: () => undefined },
+            gain: param(),
+            pan: param(),
+            frequency: param(),
+            playbackRate: param(),
+            threshold: param(),
+            knee: param(),
+            ratio: param(),
+            attack: param(),
+            release: param(),
             connect: () => undefined,
-            start: () => started += 1,
             stop: () => undefined
         });
 
-        vi.stubGlobal('AudioContext', class
+        vi.stubGlobal('AudioContext', class implements FakeContext
         {
-            public currentTime = 0;
+            public currentTime = 1;
 
-            public state = 'running';
+            public state = start;
+
+            public resumed = 0;
+
+            public suspended = 0;
+
+            public closed = 0;
+
+            public listeners: (() => void)[] = [];
 
             public destination = {};
 
             constructor()
             {
                 made += 1;
+                contexts.push(this);
+            }
+
+            public addEventListener(_name: string, listener: () => void): void
+            {
+                this.listeners.push(listener);
+            }
+
+            public resume(): Promise<void>
+            {
+                this.resumed += 1;
+                return Promise.resolve().then(() =>
+                {
+                    this.state = 'running';
+                    this.listeners.forEach((listener) => listener());
+                });
+            }
+
+            public suspend(): Promise<void>
+            {
+                this.suspended += 1;
+                this.state = 'suspended';
+                return Promise.resolve();
+            }
+
+            public close(): Promise<void>
+            {
+                this.closed += 1;
+                this.state = 'closed';
+                return Promise.resolve();
             }
 
             public createGain(): Record<string, unknown>
@@ -188,104 +254,298 @@ describe('the sound layer', () =>
                 return node();
             }
 
-            public createOscillator(): Record<string, unknown>
+            public createDynamicsCompressor(): Record<string, unknown>
             {
                 return node();
             }
 
-            public close(): Promise<void>
+            public createStereoPanner(): Record<string, unknown>
             {
-                return Promise.resolve();
+                return node();
+            }
+
+            public createOscillator(): Record<string, unknown>
+            {
+                return { ...node(), start: () => oscillators += 1 };
+            }
+
+            public createBufferSource(): Record<string, unknown>
+            {
+                return { ...node(), start: () => buffers += 1 };
+            }
+
+            public decodeAudioData(): Promise<unknown>
+            {
+                return Promise.resolve({ sampleRate: 1000, getChannelData: () => new Float32Array([0, 0, 0.5, 0.2]) });
             }
         });
 
-        return { made: () => made, started: () => started };
+        return { made: () => made, oscillators: () => oscillators, buffers: () => buffers, last: () => contexts.at(-1) ?? null };
     };
 
-    /**
-     * This is the whole reason the cues are synthesised behind a gesture rather than played by
-     * Phaser. An `AudioContext` constructed without one makes Chrome log "The AudioContext was not
-     * allowed to start", the 640-cell matrix reads every console line, and a sound nobody asked for
-     * would fail whole routes over a game they never opened.
-     */
-    it('constructs no audio context until a gesture has been through the window', () =>
+    const pack = (takes: Record<string, number[][]>): ArrayBuffer =>
     {
-        const counts = stub();
-        const sound = createSound(true);
+        const index: Record<string, [number, number][]> = {};
+        const bodies: number[] = [];
 
-        sound.play('roll');
-        sound.play('win');
-
-        expect(counts.made()).toBe(0);
-        expect(counts.started(), 'a cue was scheduled with no context').toBe(0);
-
-        window.dispatchEvent(new Event('pointerdown'));
-
-        expect(counts.made()).toBe(1);
-
-        window.dispatchEvent(new Event('pointerdown'));
-        window.dispatchEvent(new Event('keydown'));
-
-        expect(counts.made(), 'the arming listener was not one-shot').toBe(1);
-
-        sound.dispose();
-        vi.unstubAllGlobals();
-    });
-
-    it('plays every cue once it is armed, and none of them while it is off', () =>
-    {
-        const counts = stub();
-        const sound = createSound(true);
-
-        window.dispatchEvent(new Event('pointerdown'));
-
-        for (const cue of ['roll', 'step', 'capture', 'home', 'win', 'turn'] as const)
+        for (const [cue, list] of Object.entries(takes))
         {
-            const before = counts.started();
-
-            sound.play(cue);
-
-            expect(counts.started(), `${ cue } scheduled nothing`).toBeGreaterThan(before);
+            index[cue] = list.map((body) =>
+            {
+                const at: [number, number] = [bodies.length, body.length];
+                bodies.push(...body);
+                return at;
+            });
         }
 
-        const armed = counts.started();
+        const header = new TextEncoder().encode(JSON.stringify(index));
+        const out = new Uint8Array(8 + header.length + bodies.length);
 
-        sound.setEnabled(false);
-        sound.play('win');
+        out.set(new TextEncoder().encode('NCUE'), 0);
+        new DataView(out.buffer).setUint32(4, header.length, true);
+        out.set(header, 8);
+        out.set(bodies, 8 + header.length);
 
-        expect(counts.started(), 'a cue played with sound turned off').toBe(armed);
+        return out.buffer;
+    };
 
-        sound.dispose();
+    it('reads every take out of the one pack, and nothing out of a pack that is not one', () =>
+    {
+        const found = unpack(pack({ 'die-land': [[1, 2], [3, 4, 5]], 'win': [[9]], 'bogus': [[7]] }));
+
+        expect([...found.keys()].sort()).toEqual(['die-land', 'win']);
+        expect(found.get('die-land')!.map((take) => [...new Uint8Array(take)])).toEqual([[1, 2], [3, 4, 5]]);
+        expect(unpack(new ArrayBuffer(4)).size).toBe(0);
+        expect(unpack(new TextEncoder().encode('RIFF0000').buffer).size).toBe(0);
+    });
+
+    const tap = (name = 'pointerup'): void =>
+    {
+        window.dispatchEvent(new Event(name));
+    };
+
+    const flush = async (): Promise<void> =>
+    {
+        for (let step = 0; step < 6; step += 1)
+        {
+            await Promise.resolve();
+        }
+    };
+
+    beforeEach(() =>
+    {
+        resetSound();
+        vi.stubGlobal('fetch', () => Promise.reject(new Error('offline')));
+    });
+
+    afterEach(() =>
+    {
+        resetSound();
         vi.unstubAllGlobals();
     });
 
-    it('opens nothing at all in a browser with no WebAudio', () =>
+    it('opens nothing before a real tap, and a touch starting is not one', () =>
     {
+        const fake = stub();
+        const sound = createSound(true);
+
+        sound.play('turn');
+        tap('pointerdown');
+
+        expect(fake.made()).toBe(0);
+        expect(fake.oscillators()).toBe(0);
+
+        tap('pointerup');
+
+        expect(fake.made()).toBe(1);
+        expect(fake.last()?.resumed).toBe(1);
+
+        sound.dispose();
+    });
+
+    it('plays the cue of the tap that unlocked it, while the resume is still on its way', () =>
+    {
+        const fake = stub();
+        const sound = createSound(true);
+
+        tap('keydown');
+        sound.play('turn');
+
+        expect(fake.last()?.state).toBe('suspended');
+        expect(fake.oscillators()).toBeGreaterThan(0);
+
+        sound.dispose();
+    });
+
+    it('stays quiet while suspended with no resume pending, and asks for a tap again', async () =>
+    {
+        const fake = stub();
+        const sound = createSound(true);
+
+        tap();
+        await flush();
+
+        expect(fake.last()?.state).toBe('running');
+
+        const before = fake.oscillators();
+        const context = fake.last()!;
+
+        context.state = 'interrupted';
+        context.listeners.forEach((listener) => listener());
+        sound.play('turn');
+
+        expect(fake.oscillators()).toBe(before);
+
+        tap('touchend');
+
+        expect(context.resumed).toBe(2);
+
+        sound.dispose();
+    });
+
+    it('shares one context between boards, and suspends rather than closes when the last one goes', async () =>
+    {
+        const fake = stub();
+        const ludo = createSound(true);
+        const hokm = createSound(true);
+
+        tap();
+        await flush();
+
+        ludo.dispose();
+
+        expect(fake.last()?.suspended).toBe(0);
+
+        hokm.dispose();
+
+        expect(fake.made()).toBe(1);
+        expect(fake.last()?.suspended).toBe(1);
+        expect(fake.last()?.closed).toBe(0);
+    });
+
+    it('falls back to the synthesised voice when a recording is missing, and to silence when there is none', async () =>
+    {
+        const fake = stub();
+        const sound = createSound(true);
+
+        tap();
+        await flush();
+
+        sound.play('die-land');
+
+        expect(fake.oscillators()).toBeGreaterThan(0);
+        expect(fake.buffers()).toBe(0);
+
+        const before = fake.oscillators();
+
+        sound.play('card-slide');
+
+        expect(fake.oscillators()).toBe(before);
+
+        sound.dispose();
+    });
+
+    it('plays the recording once it has arrived', async () =>
+    {
+        vi.stubGlobal('fetch', () => Promise.resolve({ ok: true, arrayBuffer: () => Promise.resolve(pack({ 'card-slide': [[1, 2, 3]] })) }));
+        const fake = stub();
+        const sound = createSound(true);
+
+        tap();
+        await flush();
+        await flush();
+
+        sound.play('card-slide', { pan: -0.4 });
+
+        expect(fake.buffers()).toBe(1);
+
+        sound.dispose();
+    });
+
+    it('starts a recording at its first loud sample', () =>
+    {
+        expect(offsetOf(new Float32Array([0, 0.001, -0.002, 0.3, 0.1]), 1000)).toBeCloseTo(0.003);
+        expect(offsetOf(new Float32Array([0.5]), 1000)).toBe(0);
+    });
+
+    it('lets a hidden tab hear only what is urgent', async () =>
+    {
+        const fake = stub();
+        const sound = createSound(true);
+
+        tap();
+        await flush();
+
+        const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+        const before = fake.oscillators();
+
+        sound.play('token-step');
+
+        expect(fake.oscillators()).toBe(before);
+
+        sound.play('turn', { urgent: true });
+
+        expect(fake.oscillators()).toBeGreaterThan(before);
+
+        visibility.mockRestore();
+        sound.dispose();
+    });
+
+    it('does not pile the same cue up faster than an ear can separate it', async () =>
+    {
+        const fake = stub();
+        const sound = createSound(true);
+
+        tap();
+        await flush();
+
+        sound.play('tick');
+        const once = fake.oscillators();
+
+        sound.play('tick');
+
+        expect(fake.oscillators()).toBe(once);
+
+        sound.dispose();
+    });
+
+    it('asks for the ambient audio session, which follows the silent switch and mixes with music', () =>
+    {
+        const session = { type: 'auto' };
+        vi.stubGlobal('navigator', { ...navigator, audioSession: session });
+        stub();
+        const sound = createSound(true);
+
+        tap();
+
+        expect(session.type).toBe('ambient');
+
+        sound.dispose();
+    });
+
+    it('plays nothing while it is turned off, and never throws in a browser with no WebAudio', async () =>
+    {
+        const fake = stub();
+        const sound = createSound(false);
+
+        tap();
+        await flush();
+        sound.play('win');
+
+        expect(fake.oscillators()).toBe(0);
+
+        sound.dispose();
+        resetSound();
         vi.stubGlobal('AudioContext', undefined);
         vi.stubGlobal('webkitAudioContext', undefined);
 
-        const sound = createSound(true);
+        const bare = createSound(true);
 
-        window.dispatchEvent(new Event('pointerdown'));
+        tap();
 
-        expect(() => sound.play('capture')).not.toThrow();
+        expect(() => bare.play('token-capture')).not.toThrow();
 
-        sound.dispose();
-        vi.unstubAllGlobals();
-    });
-
-    it('stops listening once it is disposed', () =>
-    {
-        const counts = stub();
-        const sound = createSound(true);
-
-        sound.dispose();
-
-        window.dispatchEvent(new Event('pointerdown'));
-
-        expect(counts.made()).toBe(0);
-
-        vi.unstubAllGlobals();
+        bare.dispose();
     });
 });
 

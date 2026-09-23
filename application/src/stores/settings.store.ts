@@ -29,7 +29,7 @@ const STORAGE_KEY = 'nura-games.settings';
 export function defaultSettings(): Settings
 {
     return {
-        sound: false,
+        sound: true,
         haptics: true,
         railWidth: 0.3,
         railOpen: true,

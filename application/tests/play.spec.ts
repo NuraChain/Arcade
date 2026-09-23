@@ -507,6 +507,7 @@ describe('the table’s chat and its controls', () =>
 
     it('gathers the table’s tools into one sheet on a phone, and gives up only after it has closed', () =>
     {
+        useSettings().update({ sound: false });
         const close = vi.fn();
         const resign = vi.fn();
         const container = renderTest(() => TableMenu({ overlayId: 'menu', close, code: 'XD6H9N', full: false, onResign: resign }) as Rendered).container;

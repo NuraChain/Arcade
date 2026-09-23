@@ -299,7 +299,7 @@ class TableScene extends Phaser.Scene
         }
         else if (!previous.yours && next.yours && previous.winner === null)
         {
-            this.#sound?.play('turn');
+            this.#sound?.play('turn', { urgent: true });
         }
     }
 
@@ -451,7 +451,7 @@ class TableScene extends Phaser.Scene
                 ease: 'Sine.easeInOut',
                 onComplete: () =>
                 {
-                    this.#sound?.play('step');
+                    this.#sound?.play('token-step');
                     step(index + 1);
                 }
             });
@@ -473,7 +473,7 @@ class TableScene extends Phaser.Scene
 
         const spot = centreOf(held.token.col, held.token.row, this.#size);
 
-        this.#sound?.play('capture');
+        this.#sound?.play('token-capture');
 
         this.tweens.add({
             targets: held.body,
@@ -576,7 +576,7 @@ class TableScene extends Phaser.Scene
             return;
         }
 
-        this.#sound?.play('roll');
+        this.#sound?.play('die-land');
         this.#placeDie();
         this.tweens.killTweensOf(die);
 

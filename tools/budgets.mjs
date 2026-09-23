@@ -20,7 +20,7 @@
  * `npm run qa` reads overflow, hit targets, a landmark and the console, and an accessibility check
  * reads the aria. This reads the emitted bundle, which is the only place the difference exists.
  */
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { gzipSync } from 'node:zlib';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -40,6 +40,8 @@ const SHELL_BUDGET = 12 * KB;
 
 /** Any one route's own chunk. */
 const ROUTE_BUDGET = 15 * KB;
+
+const SOUND_BUDGET = 160 * KB;
 
 /**
  * Chunks that must NOT be in the landing page's initial set, and why.
@@ -257,6 +259,24 @@ else
     }
 }
 
+const sounds = readdirSync(ASSETS).filter((name) => /^table-.*.cues$/.test(name));
+const soundTotal = sounds.reduce((sum, name) => sum + statSync(join(ASSETS, name)).size, 0);
+
+if (sounds.length !== 1)
+{
+    problems.push(`${ sounds.length } table sound packs reached dist/assets, expected exactly one`);
+}
+
+if (readdirSync(ASSETS).some((name) => /.(mp3|ogg|wav|m4a)$/.test(name)))
+{
+    problems.push('an audio file with a media extension reached dist/assets - a download manager grabs those and hands the page an empty 204');
+}
+
+if (soundTotal > SOUND_BUDGET)
+{
+    problems.push(`the table sounds are ${ size(soundTotal) }, over ${ size(SOUND_BUDGET) }`);
+}
+
 // ---------------------------------------------------------------- say what was measured, always
 const shell = all.find((name) => /^app-shell\.component-/.test(name));
 const pages = all.filter((name) => /\.page-/.test(name)).map((name) => gzip(name));
@@ -265,6 +285,7 @@ console.log(`  initial JS   ${ size(initialBytes) } / ${ size(INITIAL_BUDGET) } 
 console.log(`  app shell    ${ shell === undefined ? 'absent' : size(gzip(shell)) } / ${ size(SHELL_BUDGET) }`);
 console.log(`  routes       ${ pages.length } chunks, largest ${ size(Math.max(0, ...pages)) } / ${ size(ROUTE_BUDGET) }`);
 console.log(`  board        ${ boardChunk === null ? 'absent' : size(gzip(boardChunk)) } / ${ size(BOARD_BUDGET) }`);
+console.log(`  sounds       ${ sounds.length } pack, ${ size(soundTotal) } / ${ size(SOUND_BUDGET) }`);
 console.log(`  class binds  ${ classBindsRead } read, ${ problems.length === 0 ? 'every one that reads a signal effect-wrapped' : 'see below' }`);
 
 if (problems.length > 0)

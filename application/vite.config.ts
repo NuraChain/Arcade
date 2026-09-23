@@ -66,7 +66,9 @@ export default defineConfig({
         // So this raises the generic warning above the two chunks that are meant to be large,
         // rather than switching it off: a THIRD library of that size appearing still says so, and
         // a warning nobody can act on is one that hides the ones they can.
-        chunkSizeWarningLimit: 1500
+        chunkSizeWarningLimit: 1500,
+
+        assetsInlineLimit: (file: string) => file.endsWith('.cues') ? false : undefined
     },
 
     server:
