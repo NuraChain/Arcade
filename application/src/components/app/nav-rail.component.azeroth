@@ -27,7 +27,7 @@ export default component NavRail()
 
     derived waiting = lobby.waiting().length;
 
-    <nav class="bar safe-t safe-b flex h-dvh w-[var(--rail-w)] flex-col items-center border-e border-line bg-void" aria-label={ locale.t('app.nav.primary') }>
+    <nav class="safe-t safe-b flex h-dvh w-[var(--rail-w)] flex-col items-center border-e border-line bg-void" aria-label={ locale.t('app.nav.primary') }>
         <span class="flex h-[var(--topbar-h)] w-full shrink-0 items-center justify-center">
             <Link to="/app" class="flex h-11 w-11 items-center justify-center rounded-control" aria-label={ locale.t('app.nav.home') }>
                 <BrandLogo size="lg" />

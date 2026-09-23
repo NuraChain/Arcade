@@ -148,7 +148,7 @@ export default component Page(props: { children?: Child; padded?: boolean; width
     <div
         ref={ (element) => root = element }
         class={ () => [
-            'page bar bg-void',
+            'page bg-void',
             slide > 0 ? 'is-sliding' : '',
             props.padded === false ? '' : 'page-pad pb-8 pt-4',
             props.class ?? ''

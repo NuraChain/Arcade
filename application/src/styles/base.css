@@ -39,6 +39,51 @@
         min-inline-size: 0;
     }
 
+    @supports not selector(::-webkit-scrollbar)
+    {
+        *
+        {
+            scrollbar-width: thin;
+            scrollbar-color: var(--line-strong) transparent;
+        }
+
+        *:hover
+        {
+            scrollbar-color: var(--faint) transparent;
+        }
+    }
+
+    ::-webkit-scrollbar
+    {
+        width: 10px;
+        height: 10px;
+    }
+
+    ::-webkit-scrollbar-track,
+    ::-webkit-scrollbar-corner
+    {
+        background: transparent;
+    }
+
+    ::-webkit-scrollbar-button
+    {
+        display: none;
+    }
+
+    ::-webkit-scrollbar-thumb
+    {
+        background: var(--line-strong);
+        border-radius: 999px;
+        border: 3px solid transparent;
+        background-clip: content-box;
+    }
+
+    ::-webkit-scrollbar-thumb:hover
+    {
+        background: var(--faint);
+        background-clip: content-box;
+    }
+
     :focus-visible
     {
         outline: 2px solid var(--accent);
@@ -171,37 +216,6 @@
     font-weight: 600;
     letter-spacing: normal;
     line-height: 1.4;
-}
-
-@utility bar
-{
-    scrollbar-width: thin;
-    scrollbar-color: var(--line-strong) transparent;
-
-    &::-webkit-scrollbar
-    {
-        inline-size: 10px;
-        block-size: 10px;
-    }
-
-    &::-webkit-scrollbar-track
-    {
-        background: transparent;
-    }
-
-    &::-webkit-scrollbar-thumb
-    {
-        background: var(--line-strong);
-        border-radius: 999px;
-        border: 3px solid transparent;
-        background-clip: content-box;
-    }
-
-    &::-webkit-scrollbar-thumb:hover
-    {
-        background: var(--faint);
-        background-clip: content-box;
-    }
 }
 
 @utility tally
