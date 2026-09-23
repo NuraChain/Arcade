@@ -984,7 +984,9 @@
     position: relative;
     container-type: size;
     aspect-ratio: 1000 / 1200;
-    background: url('/board/hokm-table-tall.svg') center / 100% 100% no-repeat;
+    background:
+        url('/board/hokm-ornaments-tall.svg') center / 100% 100% no-repeat,
+        url('/board/hokm-table-tall.webp') center / 100% 100% no-repeat;
 }
 
 .hokm-side
@@ -1004,7 +1006,7 @@
     .hokm-table
     {
         aspect-ratio: 1600 / 1000;
-        background-image: url('/board/hokm-table-wide.svg');
+        background-image: url('/board/hokm-ornaments-wide.svg'), url('/board/hokm-table-wide.webp');
     }
 
     .hokm-side
@@ -1624,7 +1626,7 @@
     .hokm-table
     {
         aspect-ratio: 1600 / 1000;
-        background-image: url('/board/hokm-table-wide.svg');
+        background-image: url('/board/hokm-ornaments-wide.svg'), url('/board/hokm-table-wide.webp');
         inline-size: min(100%, calc((100dvh - 7rem) * 1.6));
         justify-self: center;
         margin-inline: 0;

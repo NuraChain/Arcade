@@ -274,7 +274,7 @@ function flourish()
         + 'M22 8C44 10 60 18 70 30M8 22C10 44 18 60 30 70';
 }
 
-function hokmTable(width, height)
+function hokmOrnaments(width, height)
 {
     const rim = Math.round(Math.min(width, height) * 0.045);
     const lip = Math.round(rim * 0.35);
@@ -296,37 +296,15 @@ function hokmTable(width, height)
 
     return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${ width } ${ height }" width="${ width }" height="${ height }">
 <defs>
-<linearGradient id="walnut" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8A5530"/><stop offset="0.45" stop-color="#6A3E20"/><stop offset="1" stop-color="#4A2A14"/></linearGradient>
-<radialGradient id="baize" cx="0.5" cy="0.45" r="0.72"><stop offset="0" stop-color="#1D7A4C"/><stop offset="0.6" stop-color="#136038"/><stop offset="1" stop-color="#0B4227"/></radialGradient>
-<radialGradient id="shade" cx="0.5" cy="0.5" r="0.7"><stop offset="0.62" stop-color="#000000" stop-opacity="0"/><stop offset="1" stop-color="#000000" stop-opacity="0.45"/></radialGradient>
-<filter id="nap" x="0" y="0" width="100%" height="100%">
-    <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" seed="4" result="noise"/>
-    <feColorMatrix in="noise" type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.07 0"/>
-    <feComposite in2="SourceGraphic" operator="in"/>
-</filter>
-<filter id="grain" x="0" y="0" width="100%" height="100%">
-    <feTurbulence type="fractalNoise" baseFrequency="0.003 0.08" numOctaves="3" seed="3" result="noise"/>
-    <feColorMatrix in="noise" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1.2 -0.5"/>
-    <feComposite in2="SourceGraphic" operator="in"/>
-</filter>
-<filter id="soft" x="-10%" y="-10%" width="120%" height="120%"><feGaussianBlur stdDeviation="${ round(rim * 0.25) }"/></filter>
 <path id="flourish" d="${ flourish() }"/>
 </defs>
-<rect width="${ width }" height="${ height }" rx="${ rim * 1.6 }" fill="url(#walnut)"/>
-<rect width="${ width }" height="${ height }" rx="${ rim * 1.6 }" fill="#2A1508" opacity="0.55" filter="url(#grain)"/>
-<rect x="3" y="3" width="${ width - 6 }" height="${ height - 6 }" rx="${ rim * 1.6 - 3 }" fill="none" stroke="#E7B57E" stroke-opacity="0.4" stroke-width="3"/>
-<rect x="${ rim }" y="${ rim }" width="${ width - rim * 2 }" height="${ height - rim * 2 }" rx="${ rim * 1.1 }" fill="#2B170A"/>
-<rect x="${ fx }" y="${ fx }" width="${ fw }" height="${ fh }" rx="${ rim * 0.9 }" fill="url(#baize)"/>
-<rect x="${ fx }" y="${ fx }" width="${ fw }" height="${ fh }" rx="${ rim * 0.9 }" fill="#FFFFFF" filter="url(#nap)"/>
-<rect x="${ fx }" y="${ fx }" width="${ fw }" height="${ fh }" rx="${ rim * 0.9 }" fill="url(#shade)"/>
-<rect x="${ fx }" y="${ fx }" width="${ fw }" height="${ fh }" rx="${ rim * 0.9 }" fill="none" stroke="#000000" stroke-opacity="0.55" stroke-width="${ rim * 0.5 }" filter="url(#soft)"/>
-<rect x="${ fx + inset }" y="${ fx + inset }" width="${ fw - inset * 2 }" height="${ fh - inset * 2 }" rx="${ rim * 0.5 }" fill="none" stroke="#D9B45A" stroke-opacity="0.38" stroke-width="2.5"/>
-<rect x="${ fx + inset + 8 }" y="${ fx + inset + 8 }" width="${ fw - inset * 2 - 16 }" height="${ fh - inset * 2 - 16 }" rx="${ rim * 0.4 }" fill="none" stroke="#D9B45A" stroke-opacity="0.16" stroke-width="1.5"/>
-${ corners.map(([x, y, turn]) => `<use href="#flourish" transform="translate(${ x } ${ y }) rotate(${ turn }) scale(${ round(Math.min(fw, fh) / 700) })" fill="#D9B45A" fill-opacity="0.34" stroke="#D9B45A" stroke-opacity="0.3" stroke-width="2"/>`).join('\n') }
+<rect x="${ fx + inset }" y="${ fx + inset }" width="${ fw - inset * 2 }" height="${ fh - inset * 2 }" rx="${ rim * 0.5 }" fill="none" stroke="#D9B45A" stroke-opacity="0.34" stroke-width="2.5"/>
+<rect x="${ fx + inset + 8 }" y="${ fx + inset + 8 }" width="${ fw - inset * 2 - 16 }" height="${ fh - inset * 2 - 16 }" rx="${ rim * 0.4 }" fill="none" stroke="#D9B45A" stroke-opacity="0.14" stroke-width="1.5"/>
+${ corners.map(([x, y, turn]) => `<use href="#flourish" transform="translate(${ x } ${ y }) rotate(${ turn }) scale(${ round(Math.min(fw, fh) / 700) })" fill="#D9B45A" fill-opacity="0.3" stroke="#D9B45A" stroke-opacity="0.26" stroke-width="2"/>`).join('\n') }
 <g transform="translate(${ cx } ${ cy })">
-    <circle r="${ medal }" fill="#0B4227" fill-opacity="0.35" stroke="#D9B45A" stroke-opacity="0.32" stroke-width="3"/>
-    <circle r="${ round(medal * 0.9) }" fill="none" stroke="#D9B45A" stroke-opacity="0.18" stroke-width="1.5" stroke-dasharray="3 7"/>
-    <g fill="#D9B45A" fill-opacity="0.07" stroke="#D9B45A" stroke-opacity="0.14" stroke-width="1.5">${ petals }</g>
+    <circle r="${ medal }" fill="#0B4227" fill-opacity="0.22" stroke="#D9B45A" stroke-opacity="0.3" stroke-width="3"/>
+    <circle r="${ round(medal * 0.9) }" fill="none" stroke="#D9B45A" stroke-opacity="0.16" stroke-width="1.5" stroke-dasharray="3 7"/>
+    <g fill="#D9B45A" fill-opacity="0.06" stroke="#D9B45A" stroke-opacity="0.13" stroke-width="1.5">${ petals }</g>
 </g>
 </svg>
 `;
@@ -338,10 +316,10 @@ if (RING_CELLS.length !== RING)
     throw new Error(`the ring has ${ RING_CELLS.length } cells`);
 }
 
-writeFileSync(join(OUT, 'hokm-table-wide.svg'), hokmTable(1600, 1000));
-console.log('board hokm-table-wide.svg');
-writeFileSync(join(OUT, 'hokm-table-tall.svg'), hokmTable(1000, 1200));
-console.log('board hokm-table-tall.svg');
+writeFileSync(join(OUT, 'hokm-ornaments-wide.svg'), hokmOrnaments(1600, 1000));
+console.log('board hokm-ornaments-wide.svg');
+writeFileSync(join(OUT, 'hokm-ornaments-tall.svg'), hokmOrnaments(1000, 1200));
+console.log('board hokm-ornaments-tall.svg');
 
 writeFileSync(join(OUT, 'ludo-board.svg'), ludoBoard());
 console.log('board ludo-board.svg');

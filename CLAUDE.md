@@ -2117,11 +2117,12 @@ a live one sweeps a turn nobody took and a pass that pauses to read the other br
 would have its cards played for it halfway through and report a product defect.
 
 **It checks that the table cloth and the deck really loaded**, which is the one thing no other gate
-in this repository can see at all. `hokm-table-*.svg` and `deck.svg` can 404 leaving a
+in this repository can see at all. The table's two layers and `deck.svg` can 404 leaving a
 table with no felt and a hand of blank rectangles, each carrying a perfect accessible name - the
 matrix reads overflow, hit targets, a landmark and the console, and a missing background image is
 none of them. The only way to know is to fetch the url again from inside the page and read what came
-back; the check answers 0 for a broken file and -1 for no such element, because a pass asking the
+back - every layer of it, so a table whose felt loaded and whose ornaments did not still fails; the
+check answers 0 for a broken file and -1 for no such element, because a pass asking the
 wrong browser at the wrong moment is a different failure from a broken build. It was asked at the
 DEAL first, and at two players the deal pauses with cards in the Hâkem's hand and nowhere else - so
 it passed or failed on which fixture happened to be Hâkem. It is asked after trump is called now, of
@@ -2129,11 +2130,21 @@ the browser that did not call it.
 
 ## The table, and the cards on it
 
-Hokm is played on `hokm-table-wide.svg` (16:10) or `hokm-table-tall.svg` (5:6), chosen by the
-board's container width, and dealt from `deck.svg` with `card-back.svg` for everybody else's hand.
-All four are generated - the tables by `tools/art/boards.mjs`, the deck by `tools/art/deck.mjs` - and
-the suits come from `tools/art/suits.mjs`, which the game illustrations use too, so a spade on a card
-and a spade in the hero art are one path.
+Hokm is played on `hokm-table-wide` (16:10) or `hokm-table-tall` (5:6), chosen by the board's
+container width, and dealt from `deck.svg` with `card-back.svg` for everybody else's hand.
+
+**A table is two layers: a photograph of the object and a drawing of its ornament.** The felt, the
+bevelled walnut rim, the brass inlay and the dark groove are rendered by `tools/blender/surfaces.py`
+in Cycles - real geometry, so the rim casts its shadow onto the edge of the cloth - from Poly Haven's
+CC0 `scuba_suede` (taken to grey and tinted baize green, with a procedural mottle and nap on top,
+because a flat fill reads as plastic) and `dark_wood`. The rim is a hand-built mesh with no UV map, so
+its wood is mapped in OBJECT space; mapped by UV it sampled one pixel and came out a flat orange. The
+gold lines, corner flourishes and medallion stay vector in `hokm-ornaments-*.svg` from
+`tools/art/boards.mjs`, laid over the render as a second background, because a thin gold line is the
+one thing a photo softens and a vector keeps sharp at any size. Each render is about 25 KB, since
+smooth cloth compresses well. The deck comes from `tools/art/deck.mjs`, and the suits from
+`tools/art/suits.mjs`, which the game illustrations use too, so a spade on a card and a spade in the
+hero art are one path.
 
 **Two tables, not one stretched.** A phone column is taller than it is wide and a desktop one is the
 other way round; a single image at `100% 100%` would squash the corner flourishes and the medallion

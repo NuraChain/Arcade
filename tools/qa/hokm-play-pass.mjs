@@ -138,7 +138,7 @@ const pressable = async (page, name) =>
 /**
  * How wide the image behind an element really is, once the browser has fetched it.
  *
- * `hokm-table-*.svg` and `deck.svg` are files that can 404 leaving a table with no
+ * `hokm-table-*.webp`, `hokm-ornaments-*.svg` and `deck.svg` are files that can 404 leaving a table with no
  * cloth and a hand of blank rectangles, each with a perfect accessible name - which every other gate
  * in this repository passes. A missing background image is not an error in the DOM, so the only way
  * to know is to fetch it again and read what came back.
@@ -152,18 +152,20 @@ const loaded = (page, selector) => page.evaluate(async (which) =>
 
     if (node === null) { return -1; }
 
-    const url = /url\("([^"]+)"\)/.exec(getComputedStyle(node).backgroundImage)?.[1];
+    const urls = [...getComputedStyle(node).backgroundImage.matchAll(/url("([^"]+)")/g)].map((match) => match[1]);
 
-    if (url === undefined) { return 0; }
+    if (urls.length === 0) { return 0; }
 
-    return await new Promise((done) =>
+    const widths = await Promise.all(urls.map((url) => new Promise((done) =>
     {
         const image = new Image();
 
         image.onload = () => done(image.naturalWidth);
         image.onerror = () => done(0);
         image.src = url;
-    });
+    })));
+
+    return Math.min(...widths);
 }, selector);
 
 /** The cards this browser is showing in the hand, and whether each one can be pressed. */
