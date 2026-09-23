@@ -63,6 +63,8 @@ const stateFor = (): SecretState => ({ rev: 1, turn: 0, secrets: [...SECRETS] })
 const secretEngine: Engine<SecretState, { seat: number }> = {
     id: 'ludo',
 
+    seats: [2, 3, 4],
+
     create: (): SecretState => stateFor(),
 
     parse: (): { seat: number } => ({ seat: 0 }),

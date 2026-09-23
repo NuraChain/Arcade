@@ -14,7 +14,7 @@ import { hokmEngine } from './engines/hokm.ts';
 import { ludoEngine } from './engines/ludo.ts';
 import type { MatchBoard, MatchLog } from '../../schemas.ts';
 import type { MatchHistory } from '../../schemas.ts';
-import type { Draws, Engine } from './engine.ts';
+import type { Draws, Engine, TableConfig } from './engine.ts';
 import type { MatchPlay } from '../../schemas.ts';
 
 /** One page of somebody's history. Big enough to be worth a request, small enough to render. */
@@ -189,15 +189,9 @@ function stateOf(match: Match): unknown
     return match.state;
 }
 
-/**
- * The engines this server can run, injected rather than imported.
- *
- * Every other service in this codebase takes its collaborators as arguments and this one reached
- * for ludo by name, which is why it refused three games with `if (table.game !== 'ludo')`. Passing
- * them in means the set is decided at the composition root, a spec can build a service around a
- * fixture engine, and adding a game touches `main.ts` rather than the middle of a 680-line file.
- */
-export function createMatchService(db: DataSource, achieve: AchieveService, engines: readonly Engine[] = [ludoEngine, hokmEngine])
+export const ENGINES: readonly Engine[] = [ludoEngine, hokmEngine];
+
+export function createMatchService(db: DataSource, achieve: AchieveService, engines: readonly Engine[] = ENGINES)
 {
     const recorder = createRecorder(achieve);
 
@@ -531,7 +525,7 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
             }
 
             const seats = chairs.map((chair) => chair.seat);
-            const state = engine.create(seats, draws, table.target);
+            const state = engine.create(seats, draws, { target: table.target, cube: table.cube, blinds: table.blinds as TableConfig['blinds'] });
 
             const matchId = await db.transaction(async (tx) =>
             {

@@ -24,12 +24,9 @@ import type { LudoState } from '../src/domains/match/ludo/state.ts';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
-/**
- * Every pure engine, not just the first one. The rule is about what an ENGINE may reach for, so a
- * second game listed here costs a line and a second copy of this file would have been a rule that
- * holds for whichever directory somebody remembered.
- */
-const PURE = ['ludo', 'hokm'];
+const PURE = readdirSync(join(HERE, '..', 'src', 'domains', 'match'), { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && entry.name !== 'engines')
+    .map((entry) => entry.name);
 
 const FORBIDDEN = [
     'node:',

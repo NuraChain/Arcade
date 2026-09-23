@@ -49,7 +49,7 @@ function forged(hand: readonly number[]): number[]
 }
 
 const opened = (seats: number, seed: number): HokmState =>
-    hokmEngine.create(Array.from({ length: seats }, (_, seat) => seat), seeded(seed), 7) as HokmState;
+    hokmEngine.create(Array.from({ length: seats }, (_, seat) => seat), seeded(seed), { target: 7, cube: false, blinds: 'low' }) as HokmState;
 
 describe('what one seat may see of another', () =>
 {

@@ -1,4 +1,8 @@
+import 'reflect-metadata';
+import { getMetadataArgsStorage } from 'typeorm';
 import { describe, expect, it } from 'vitest';
+
+import '../src/entities/index.ts';
 
 import { ACHIEVEMENT_SEEDS, GAME_SEEDS } from '../src/db/seed-reference.ts';
 import { GAMES } from '../../application/src/data/games.ts';
@@ -113,6 +117,26 @@ describe('achievements: the server definitions hold together', () =>
         {
             expect(seed.nameFa).not.toBe(seed.nameEn);
             expect(seed.blurbFa).not.toBe(seed.blurbEn);
+        }
+    });
+
+    it('seeds only seat counts both seat CHECKs accept', () =>
+    {
+        for (const name of ['matches_seats_range', 'tables_seats_range'])
+        {
+            const check = getMetadataArgsStorage().checks.find((one) => one.name === name);
+            const range = /seats between (\d+) and (\d+)/.exec(check?.expression ?? '');
+
+            expect(range, name).not.toBeNull();
+
+            for (const game of GAME_SEEDS)
+            {
+                for (const seats of game.seats)
+                {
+                    expect(seats, `${ game.id } seats ${ seats } against ${ name }`).toBeGreaterThanOrEqual(Number(range![1]));
+                    expect(seats, `${ game.id } seats ${ seats } against ${ name }`).toBeLessThanOrEqual(Number(range![2]));
+                }
+            }
         }
     });
 });

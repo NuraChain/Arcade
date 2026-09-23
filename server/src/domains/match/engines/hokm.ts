@@ -1,8 +1,8 @@
 import { legalCards, suitOf, type Suit } from '../hokm/cards.ts';
-import { apply, autoplay, create, dealerSeat, legalMoves } from '../hokm/engine.ts';
+import { apply, autoplay, create, dealerSeat, legalMoves, SEATS } from '../hokm/engine.ts';
 import { trickCount, winningTricks } from '../hokm/scoring.ts';
 import { sideCount, sideOf, type HokmAction, type HokmEvent, type HokmState } from '../hokm/state.ts';
-import type { Draws, Ending, Engine, ForfeitReason, Placement, Tally } from '../engine.ts';
+import type { Draws, Ending, Engine, ForfeitReason, Placement, TableConfig, Tally } from '../engine.ts';
 import type { MatchBoard, MatchLog, MatchPlay } from '../../../schemas.ts';
 
 /**
@@ -21,8 +21,10 @@ import type { MatchBoard, MatchLog, MatchPlay } from '../../../schemas.ts';
 export const hokmEngine: Engine<HokmState, HokmAction> = {
     id: 'hokm',
 
-    create: (seats: readonly number[], draws: Draws, target: number): HokmState =>
-        create(seats.length, target > 0 ? target : 7, (sides) => draws.die(sides)),
+    seats: SEATS,
+
+    create: (seats: readonly number[], draws: Draws, table: TableConfig): HokmState =>
+        create(seats.length, table.target > 0 ? table.target : 7, (sides) => draws.die(sides)),
 
     /**
      * A play addressed to another game, or one missing the thing its verb needs, is null - the

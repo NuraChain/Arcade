@@ -305,7 +305,7 @@ describe('achievements read the tallies an engine really keeps', () =>
     {
         const draws = { die: (): number => 1 };
         let state: HokmState = {
-            ...hokmEngine.create([0, 1, 2, 3], draws, 7),
+            ...hokmEngine.create([0, 1, 2, 3], draws, { target: 7, cube: false, blinds: 'low' }),
             phase: 'tricks',
             trump: 'spades',
             hakem: 0,

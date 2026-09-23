@@ -85,19 +85,21 @@ export interface Ending
     outcome: 'won' | 'abandoned';
 }
 
+export interface TableConfig
+{
+    target: number;
+    cube: boolean;
+    blinds: 'low' | 'mid' | 'high';
+}
+
 export interface Engine<S = unknown, A = unknown>
 {
     /** The `games.id` this engine plays. One engine, one game. */
     readonly id: string;
 
-    /**
-     * `target` is what the TABLE was opened to play to - seven points at hokm, a number of games at
-     * backgammon - and zero for a game that has none. It is on the table row and the engine is the
-     * only thing that knows what to do with it, so it travels rather than being defaulted here: a
-     * hokm engine that assumed seven would quietly ignore a thirteen-point table the create form
-     * offers and the database already stored.
-     */
-    create(seats: readonly number[], draws: Draws, target: number): S;
+    readonly seats: readonly number[];
+
+    create(seats: readonly number[], draws: Draws, table: TableConfig): S;
 
     /**
      * What a caller asked for, turned into something this engine will act on - or null.

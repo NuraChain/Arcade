@@ -27,6 +27,8 @@ import type { MatchBoard, MatchLog, MatchPlay } from '../../../schemas.ts';
 export const ludoEngine: Engine<LudoState, EngineAction> = {
     id: 'ludo',
 
+    seats: [2, 3, 4],
+
     create: (seats: readonly number[], draws: Draws): LudoState =>
         create(seats, draws.die(seats.length) - 1),
 
@@ -86,7 +88,7 @@ export const ludoEngine: Engine<LudoState, EngineAction> = {
     turnOf: (state: LudoState): number | null =>
         state.winner === null ? (state.players[state.turn]?.seat ?? null) : null,
 
-    autoplay: (state: LudoState, seat: number, draws: Draws): EngineAction | null =>
+    autoplay: (state: LudoState, seat: number): EngineAction | null =>
     {
         if (state.winner !== null)
         {
@@ -95,7 +97,7 @@ export const ludoEngine: Engine<LudoState, EngineAction> = {
 
         if (state.die === null)
         {
-            return { kind: 'roll', seat, die: draws.die(6) };
+            return { kind: 'roll', seat, die: 0 };
         }
 
         const piece = legalMoves(state)[0];

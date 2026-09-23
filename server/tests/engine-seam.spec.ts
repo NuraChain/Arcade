@@ -47,7 +47,9 @@ describe('the shared path', () =>
             for (const [, specifier] of read(name).matchAll(/from '([^']+)'/g))
             {
                 expect(
-                    specifier.includes('/ludo/'),
+                    name.startsWith('domains/match/')
+                        ? /^\.\/(?!engines\/)[^/]+\//.test(specifier)
+                        : /domains\/match\/(?!engines\/)[^/]+\//.test(specifier),
                     `${ name } imports ${ specifier }, so the shared path knows a board again`
                 ).toBe(false);
             }
