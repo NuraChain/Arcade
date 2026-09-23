@@ -377,7 +377,7 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
                     </Show>
                     <p class="flex min-w-0 items-center gap-1.5 text-ui-2xs text-muted">
                         <Icon name="crest-crown" size={ 12 } class="shrink-0 text-gold" />
-                        <span class="truncate">
+                        <span class="line-clamp-2">
                             { view!.hakem === mine ? locale.t('hokm.hakem.you') : locale.t('hokm.hakem', { name: nameOf(view!.hakem) }) }
                         </span>
                     </p>
@@ -391,7 +391,7 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
                     <dl class="flex flex-col gap-2">
                         <For each={ sides } key={ (side) => side.index } let={ side }>
                             <div class="flex min-w-0 items-baseline justify-between gap-2">
-                                <dt class={ () => [ 'min-w-0 truncate text-ui-xs', SIDE_TONE[side.index % SIDE_TONE.length] ].join(' ') } dir="auto">{ side.names }</dt>
+                                <dt class={ () => [ 'min-w-0 line-clamp-2 text-ui-xs', SIDE_TONE[side.index % SIDE_TONE.length] ].join(' ') }>{ side.names }</dt>
                                 <dd class="flex shrink-0 flex-col items-end">
                                     <span class="text-ui-sm font-bold text-text">{ locale.t('hokm.points', { points: locale.n(side.points), target: locale.n(view!.target) }) }</span>
                                     <span class="text-ui-2xs text-muted">{ locale.plural('hokm.tricks', side.tricks) }</span>
@@ -414,7 +414,7 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
                                         <li><CardFace card={ card } /></li>
                                     </For>
                                 </ul>
-                                <p class="truncate text-ui-2xs text-muted">{ locale.t('hokm.table.took', { name: nameOf(view!.took!.seat) }) }</p>
+                                <p class="line-clamp-2 text-ui-2xs text-muted">{ locale.t('hokm.table.took', { name: nameOf(view!.took!.seat) }) }</p>
                             </div>
                         }
                     </Show>

@@ -238,7 +238,7 @@ export const play: Pick<Dictionary, keyof typeof reference> = {
     'hokm.summary': 'حکم، امتیاز و دست آخر',
     'hokm.trump.none': 'هنوز گفته نشده',
     'hokm.score': 'امتیاز',
-    'hokm.round': 'دست {n}',
+    'hokm.round': 'دور {n}',
     'hokm.lastTrick': 'دست آخر',
     'hokm.lastTrick.none': 'هنوز دستی برده نشده.',
     'hokm.sort': 'مرتب‌سازی',

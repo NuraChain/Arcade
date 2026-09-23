@@ -107,5 +107,13 @@ describe('HokmBoard', () =>
         {
             expect(sentence.getAttribute('dir'), sentence.textContent ?? '').toBeNull();
         }
+
+        const sides = [...side.querySelectorAll('dt')];
+
+        expect(sides.length).toBe(2);
+        for (const names of sides)
+        {
+            expect(names.getAttribute('dir'), names.textContent ?? '').toBeNull();
+        }
     });
 });
