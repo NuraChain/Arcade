@@ -1,33 +1,33 @@
 import { untrack } from 'azerothjs';
-
 import { isLineKey, namedParams } from '../../lib/lines.ts';
 import { attachStick } from '../../lib/stick.ts';
 import { sendBlockOf } from '../../lib/seal-state.ts';
 import { haptic } from '../../lib/haptics.ts';
 import { sealSentenceOf } from '../chat/chat-title.ts';
 import SealNotice from '../chat/seal-notice.component.azeroth';
+import { ludoOf } from '../../data/match.ts';
 import { usePeople } from '../../stores/people.store.ts';
 import { useAccount } from '../../stores/account.store.ts';
 import { useChat } from '../../stores/chat.store.ts';
 import { useDevices } from '../../stores/devices.store.ts';
+import { useEnrolment } from '../../stores/enrolment.store.ts';
 import { useLobby } from '../../stores/lobby.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
+import { useBoard } from '../../stores/match.store.ts';
 import { useSeal } from '../../stores/seal.store.ts';
 import { useToasts } from '../../stores/toasts.store.ts';
+import type { MessageKey } from '../../locales/en.ts';
 import Avatar from '../ui/avatar.component.azeroth';
-import EmptyState from '../ui/empty-state.component.azeroth';
+import Button from '../ui/button.component.azeroth';
 import Icon from '../../icons/icon.component.azeroth';
 import IconButton from '../ui/icon-button.component.azeroth';
+import Segmented from '../ui/segmented.component.azeroth';
 import TextArea from '../ui/text-area.component.azeroth';
 
-/**
- * The table's conversation, which is a CONVERSATION.
- *
- * It used to be a private list of invented lines the lobby store typed to itself. It is now the
- * thread the table owns, read and written through the chat domain like every other one - so the
- * same membership rules, the same watermark, the same delivery, and the same sealing when that
- * lands. A second message system beside the first would have been a second set of all of those.
- */
+const QUICK: readonly MessageKey[] = ['play.quick.luck', 'play.quick.nice', 'play.quick.gg', 'play.quick.go'];
+
+const GROUP_MS = 3 * 60 * 1000;
+
 export default component TableChat(props: {
     conversationId: string;
     onClose?: () => void;
@@ -39,24 +39,24 @@ export default component TableChat(props: {
 {
     const locale = useLocale();
     const lobby = useLobby();
+    const board = useBoard();
     const chat = useChat();
     const people = usePeople();
     const seal = useSeal();
     const devices = useDevices();
+    const enrolment = useEnrolment();
     const account = useAccount();
     const toasts = useToasts();
 
     state draft = '';
 
-    /**
-     * Whether the reader was at the bottom BEFORE whatever just arrived.
-     *
-     * Read through `untrack` below, deliberately: the effect must decide the answer without making
-     * itself run again when the answer changes.
-     */
     state near = true;
 
+    state tab = 'chat';
+
     let list: HTMLElement | null = null;
+
+    let unstick: (() => void) | null = null;
 
     let opened = '';
 
@@ -73,7 +73,6 @@ export default component TableChat(props: {
 
     mount
     {
-        const unstick = list === null ? null : attachStick(list, (value) => near = value);
         return () =>
         {
             unstick?.();
@@ -85,19 +84,33 @@ export default component TableChat(props: {
         };
     }
 
+    const watch = (element: HTMLElement | null): void =>
+    {
+        unstick?.();
+        unstick = null;
+        list = element;
+
+        if (element !== null)
+        {
+            unstick = attachStick(element, (value) => near = value);
+            element.scrollTop = element.scrollHeight;
+        }
+    };
+
     derived messages = chat.messages();
 
-    /**
-     * Follow the conversation, unless somebody is reading back through it.
-     *
-     * This used to read `chat.messages()` for the subscription and then scroll unconditionally, so
-     * every change yanked the panel to the bottom - including a revalidation, which is what happens
-     * on every realtime nudge. Scrolling up to re-read a line while a table is talking was
-     * impossible: the list snapped back before the next word was out.
-     *
-     * The guard is the chat page's, from the same module, because it is the same rule and a second
-     * copy of "near enough to the bottom" would be a second answer to it.
-     */
+    derived rows = messages.map((message, index) =>
+    {
+        const before = messages[index - 1];
+        const first = before === undefined
+            || before.kind !== 'text'
+            || message.kind !== 'text'
+            || before.from !== message.from
+            || message.at - before.at > GROUP_MS;
+
+        return { message, first };
+    });
+
     effect
     {
         const tail = messages[messages.length - 1]?.id ?? '';
@@ -108,15 +121,6 @@ export default component TableChat(props: {
         }
     }
 
-    /**
-     * What stands in the way of sending, asked the same way the chat page asks it.
-     *
-     * This panel used to ask nothing. The composer was always enabled, `send` cleared the box
-     * before the post resolved, and a browser with no keys got a rejected promise nobody was
-     * listening to - so the message vanished, the box emptied as though it had gone, and the only
-     * record was a console error. Clearing on the way in is what made it a lie rather than a
-     * failure: an empty box is how this product says a message was sent.
-     */
     derived stop = sendBlockOf({
         sealability: seal.sealability(),
         readiness: devices.readiness(),
@@ -124,6 +128,18 @@ export default component TableChat(props: {
         isWallet: account.isWallet(),
         pending: seal.loading()
     });
+
+    const post = (text: string, restore: boolean): void =>
+    {
+        void chat.send(props.conversationId, text).then(() => haptic('tick')).catch((error) =>
+        {
+            if (restore && draft === '')
+            {
+                draft = text;
+            }
+            toasts.show({ kind: 'error', text: sealSentenceOf(error, locale.t), dedupe: 'table-chat-send' });
+        });
+    };
 
     const send = (): void =>
     {
@@ -133,18 +149,24 @@ export default component TableChat(props: {
             return;
         }
         draft = '';
-        void chat.send(props.conversationId, text).then(() => haptic('tick')).catch((error) =>
+        post(text, true);
+    };
+
+    const quick = (key: MessageKey): void =>
+    {
+        if (stop === null)
         {
-            if (draft === '')
-            {
-                draft = text;
-            }
-            toasts.show({ kind: 'error', text: sealSentenceOf(error, locale.t), dedupe: 'table-chat-send' });
-        });
+            post(locale.t(key), false);
+        }
     };
 
     const nameOf = (handle: string): string =>
     {
+        if (handle === lobby.me())
+        {
+            return locale.t('match.you');
+        }
+
         const person = people.byHandle(handle);
 
         return person === null ? handle : locale.text(person.displayName);
@@ -162,13 +184,47 @@ export default component TableChat(props: {
             : '';
     };
 
-    <section class={ () => [ 'flex min-h-0 flex-col bg-field', props.class ?? '' ].filter(Boolean).join(' ') } aria-label={ locale.t('play.table.chat') }>
-        <header class="flex shrink-0 items-center justify-between gap-2 border-b border-line px-4 py-3">
-            <h2 class="flex min-w-0 items-center gap-2 text-ui-base font-semibold text-text">
-                <Icon name="chats" size={ 16 } class="shrink-0 text-muted" />
-                <span class="truncate">{ locale.t('play.table.chat') }</span>
-            </h2>
-            <span class="flex shrink-0 items-center gap-1">
+    derived table = lobby.table();
+
+    derived match = board.match();
+
+    derived live = match !== null && match.tableId === table?.id ? match : null;
+
+    derived yards = live === null ? [] : (ludoOf(live)?.seats ?? []);
+
+    derived players = (table?.chairs ?? [])
+        .filter((chair) => chair.who !== undefined)
+        .map((chair) =>
+        {
+            const player = live?.players.find((one) => one.seat === chair.seat);
+            const yard = yards.find((one) => one.seat === chair.seat);
+
+            return {
+                seat: chair.seat,
+                who: chair.who!,
+                host: chair.host,
+                ready: chair.ready,
+                turn: live !== null && live.finishedAt === undefined && live.turn === chair.seat,
+                colour: yard?.colour,
+                home: yard?.home,
+                timeouts: player?.timeouts ?? 0
+            };
+        });
+
+    <section class={ () => [ 'table-panel flex min-h-0 flex-col bg-field', props.class ?? '' ].filter(Boolean).join(' ') } aria-label={ locale.t('play.table.chat') }>
+        <header class="flex shrink-0 items-center gap-2 border-b border-line px-3 py-2.5">
+            <Segmented
+                items={ [
+                    { id: 'chat', label: locale.t('play.tab.chat'), icon: 'chats' },
+                    { id: 'players', label: locale.t('play.tab.players'), icon: 'people' }
+                ] }
+                value={ tab }
+                label={ locale.t('play.table.chat') }
+                onChange={ (next) => tab = next }
+                class="min-w-0 flex-1"
+                block
+            />
+            <span class="flex shrink-0 items-center gap-0.5">
                 <Show when={ props.onResize !== undefined }>
                     { () =>
                         <IconButton
@@ -195,60 +251,165 @@ export default component TableChat(props: {
                 </Show>
             </span>
         </header>
-        <ul ref={ (element) => list = element } class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-3" aria-live="polite">
-            <Show when={ messages.length === 0 && !chat.threadLoading() }>
-                { () =>
-                    <li class="m-auto">
-                        <EmptyState icon="chats" title={ locale.t('chat.empty') } lead={ locale.t('play.table.chatLead') } class="px-2 py-6" />
-                    </li>
-                }
-            </Show>
-            <For each={ messages } key={ (message) => message.id } let={ message }>
-                <li class={ () => [
-                    'flex',
-                    message.kind === 'text'
-                        ? (message.from === lobby.me() ? 'flex-row-reverse items-end gap-2' : 'items-end gap-2')
-                        : 'justify-center'
-                ].join(' ') }>
-                    <Show
-                        when={ message.kind === 'text' }
-                        fallback={ <span class="rounded-full bg-raised/60 px-3 py-1 text-ui-2xs text-muted">{ said(message) }</span> }
-                    >
+
+        <Show when={ tab === 'chat' }>
+            { () =>
+                <div class="flex min-h-0 flex-1 flex-col">
+                    <ul ref={ (element) => watch(element) } class="flex min-h-0 flex-1 flex-col overflow-y-auto px-3 py-3" aria-live="polite">
+                        <Show when={ messages.length === 0 && !chat.threadLoading() }>
+                            { () =>
+                                <li class="m-auto flex max-w-[16rem] flex-col items-center gap-2 px-2 py-8 text-center">
+                                    <span class="flex h-11 w-11 items-center justify-center rounded-full bg-accent/12 text-accent">
+                                        <Icon name="chats" size={ 20 } />
+                                    </span>
+                                    <p class="text-ui-sm font-semibold text-text">{ locale.t('chat.empty') }</p>
+                                    <p class="text-ui-xs text-muted">{ locale.t('play.table.chatLead') }</p>
+                                </li>
+                            }
+                        </Show>
+                        <For each={ rows } key={ (row) => row.message.id } let={ row }>
+                            <li class={ () => row.message.kind !== 'text' ? 'flex justify-center py-1.5' : (row.first ? 'flex gap-2.5 pt-3 first:pt-0' : 'flex gap-2.5 pt-0.5') }>
+                                <Show
+                                    when={ row.message.kind === 'text' }
+                                    fallback={ <span class="rounded-full bg-raised/70 px-3 py-1 text-ui-2xs text-muted">{ said(row.message) }</span> }
+                                >
+                                    { () =>
+                                        <>
+                                            <span class="w-8 shrink-0">
+                                                <Show when={ row.first }>
+                                                    { () => <Avatar person={ people.byHandle(row.message.from) ?? null } size="sm" /> }
+                                                </Show>
+                                            </span>
+                                            <span class="flex min-w-0 flex-1 flex-col">
+                                                <Show when={ row.first }>
+                                                    { () =>
+                                                        <span class="flex min-w-0 items-baseline gap-2">
+                                                            <span
+                                                                class={ () => [ 'truncate text-ui-sm font-semibold', row.message.from === lobby.me() ? 'text-accent' : 'text-text' ].join(' ') }
+                                                                dir="auto"
+                                                            >
+                                                                { nameOf(row.message.from) }
+                                                            </span>
+                                                            <time class="tally shrink-0 text-ui-2xs text-faint">{ locale.date(row.message.at, { hour: '2-digit', minute: '2-digit' }) }</time>
+                                                        </span>
+                                                    }
+                                                </Show>
+                                                <span class="break-words text-ui-sm leading-snug text-text/90" dir="auto">{ said(row.message) }</span>
+                                            </span>
+                                        </>
+                                    }
+                                </Show>
+                            </li>
+                        </For>
+                    </ul>
+
+                    <Show when={ !seal.loading() && stop !== null }>
                         { () =>
-                            <>
-                                <Avatar person={ people.byHandle(message.from) ?? null } size="xs" />
-                                <span class={ () => [
-                                    'max-w-[80%] rounded-tile px-3 py-2 text-ui-base leading-snug',
-                                    message.from === lobby.me() ? 'bg-accent/15 text-text' : 'bg-raised text-text'
-                                ].join(' ') } dir="auto">
-                                    <Show when={ message.from !== lobby.me() }>
-                                        { () => <span class="mb-0.5 block text-ui-2xs font-semibold text-muted" dir="auto">{ locale.text(people.byHandle(message.from)?.displayName ?? { en: message.from, fa: message.from }) }</span> }
-                                    </Show>
-                                    { said(message) }
-                                </span>
-                            </>
+                            <div class="shrink-0 border-t border-line px-3 pt-2">
+                                <SealNotice
+                                    stop={ stop }
+                                    action={ stop?.reason !== 'browser' || stop.readiness === 'unsupported'
+                                        ? undefined
+                                        : (stop.readiness === 'absent'
+                                            ? <Button variant="primary" size="sm" leading="key" loading={ devices.busy() } onClick={ () => void enrolment.give() }>
+                                                { locale.t('devices.enrol') }
+                                            </Button>
+                                            : <Button variant="outline" size="sm" leading="key" to="/app/me/devices">
+                                                { locale.t('devices.title') }
+                                            </Button>) }
+                                />
+                            </div>
                         }
                     </Show>
-                </li>
-            </For>
-        </ul>
-        <Show when={ !seal.loading() && stop !== null }>
-            { () =>
-                <div class="shrink-0 border-t border-line px-3 pt-2">
-                    <SealNotice stop={ stop } />
+
+                    <div class="shrink-0 border-t border-line px-3 pb-3 pt-2.5">
+                        <Show when={ stop === null }>
+                            { () =>
+                                <ul class="rail-x -mx-3 mb-2 flex gap-1.5 px-3" aria-label={ locale.t('play.quick.label') }>
+                                    <For each={ [...QUICK] } key={ (key) => key } let={ key }>
+                                        <li class="shrink-0">
+                                            <button
+                                                type="button"
+                                                class="flex min-h-8 cursor-pointer items-center rounded-full border border-line bg-sunk px-3 text-ui-xs font-medium text-muted transition-colors hover:border-accent/60 hover:text-text coarse:min-h-11"
+                                                onClick={ () => quick(key) }
+                                            >
+                                                { locale.t(key) }
+                                            </button>
+                                        </li>
+                                    </For>
+                                </ul>
+                            }
+                        </Show>
+                        <form
+                            class="flex items-end gap-2"
+                            onSubmit={ (event) =>
+                            {
+                                event.preventDefault();
+                                send();
+                            } }
+                        >
+                            <TextArea
+                                value={ draft }
+                                onInput={ (value) => draft = value }
+                                placeholder={ locale.t('play.table.say') }
+                                label={ locale.t('play.table.say') }
+                                enterkeyhint="send"
+                                maxlength={ 240 }
+                                disabled={ stop !== null }
+                                class="min-w-0 flex-1 rounded-3xl! bg-sunk! ps-4!"
+                                onEnter={ send }
+                            />
+                            <IconButton icon="send" label={ locale.t('play.table.send') } variant="primary" flip disabled={ stop !== null || draft.trim() === '' } onClick={ send } class="rounded-full!" />
+                        </form>
+                    </div>
                 </div>
             }
         </Show>
-        <form
-            class="flex shrink-0 items-end gap-2 border-t border-line px-3 py-3"
-            onSubmit={ (event) =>
-            {
-                event.preventDefault();
-                send();
-            } }
-        >
-            <TextArea value={ draft } onInput={ (value) => draft = value } placeholder={ locale.t('play.table.say') } label={ locale.t('play.table.say') } enterkeyhint="send" maxlength={ 240 } disabled={ stop !== null } class="min-w-0 flex-1" onEnter={ send } />
-            <IconButton icon="send" label={ locale.t('play.table.send') } variant="primary" flip disabled={ stop !== null || draft.trim() === '' } onClick={ send } />
-        </form>
+
+        <Show when={ tab === 'players' }>
+            { () =>
+                <ul class="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto p-3" aria-label={ locale.t('play.tab.players') }>
+                    <For each={ players } key={ (row) => row.seat } let={ row }>
+                        <li
+                            class={ () => [
+                                'flex items-center gap-3 rounded-tile border px-3 py-2.5 transition-colors',
+                                row.turn ? 'border-accent/60 bg-accent/10' : 'border-line bg-sunk/60'
+                            ].join(' ') }
+                            aria-current={ row.turn ? 'true' : undefined }
+                        >
+                            <span class="relative shrink-0" style={ row.colour === undefined ? '' : `--ink: var(--ludo-${ row.colour })` }>
+                                <Avatar person={ people.byHandle(row.who) ?? null } size="md" />
+                                <Show when={ row.colour !== undefined }>
+                                    { () => <span class="absolute -bottom-0.5 -end-0.5 h-3.5 w-3.5 rounded-full ring-2 ring-field" style="background: var(--ink)" aria-hidden="true"></span> }
+                                </Show>
+                            </span>
+                            <span class="flex min-w-0 flex-1 flex-col gap-0.5">
+                                <span class="flex min-w-0 items-center gap-1.5">
+                                    <span class="truncate text-ui-sm font-semibold text-text" dir="auto">{ nameOf(row.who) }</span>
+                                    <Show when={ row.host }>
+                                        { () => <Icon name="crest-crown" size={ 12 } class="shrink-0 text-gold" /> }
+                                    </Show>
+                                </span>
+                                <span class={ () => [ 'text-ui-2xs', row.turn ? 'font-semibold text-accent' : 'text-muted' ].join(' ') }>
+                                    { row.turn ? locale.t('play.players.turn') : (live === null ? locale.t(row.ready ? 'play.players.ready' : 'play.players.waiting') : locale.t('play.players.waiting')) }
+                                </span>
+                            </span>
+                            <Show when={ row.timeouts > 0 }>
+                                { () => <span class="shrink-0 rounded-full bg-danger/15 px-2 py-0.5 text-ui-2xs font-semibold text-danger">{ locale.plural('match.missed', row.timeouts) }</span> }
+                            </Show>
+                            <Show when={ row.home !== undefined }>
+                                { () =>
+                                    <span class="flex shrink-0 items-center gap-1" style={ `--ink: var(--ludo-${ row.colour })` } role="img" aria-label={ locale.plural('match.tokens', row.home!) }>
+                                        <For each={ [0, 1, 2, 3] } key={ (pip) => pip } let={ pip }>
+                                            <span class="ludo-pip" data-home={ pip < row.home! ? 'true' : 'false' } aria-hidden="true"></span>
+                                        </For>
+                                    </span>
+                                }
+                            </Show>
+                        </li>
+                    </For>
+                </ul>
+            }
+        </Show>
     </section>
 }

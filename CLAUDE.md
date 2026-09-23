@@ -3618,6 +3618,16 @@ Both catalogues are split by area under `locales/{en,fa}/` and typed
 key that is *identical* in both languages fails `tests/data.spec.ts`. Interpolation-only strings
 therefore do not belong in the catalogue.
 
+**A MEASURED coordinate is physical, and so is the property that applies it.** The tooltip placed
+itself with `inset-inline-start: var(--x)` while `place()` hands back a `left` read off
+`getBoundingClientRect` - which worked only by accident. The bubble carries `dir="auto"` so a Latin
+label reads the right way round, and that makes `inline-start` follow the LABEL: every Persian
+tooltip measured its `--x` from the right edge and drew in the mirror image of where it belonged,
+the ⋯ button's name floating at the far side of the header. The logical-properties rule is about
+layout that should flip; a number that came from the layout engine already has a side, and applying
+it logically flips it a second time. `.tooltip` and its arrow use `left`/`top` for exactly that
+reason.
+
 Locale is switched client-side and remembered in storage, not carried in the url, because
 AzerothJS prefix routing is recorded as broken in the framework's own `framework-bugs.md`.
 

@@ -226,8 +226,8 @@ describe('settings', () =>
     it('persists a patch to this device', () =>
     {
         const settings = useSettings();
-        settings.update({ sound: true });
-        expect(JSON.parse(memory.get('nura-games.settings') ?? '{}').sound).toBe(true);
+        settings.update({ sound: false });
+        expect(JSON.parse(memory.get('nura-games.settings') ?? '{}').sound).toBe(false);
     });
 
     it('keeps nothing that belongs to the account', () =>
@@ -239,9 +239,9 @@ describe('settings', () =>
         expect(stored).not.toContain('showOnline');
     });
 
-    it('starts silent and with the chat rail open', () =>
+    it('starts with sound on and the chat rail open', () =>
     {
-        expect(defaultSettings().sound).toBe(false);
+        expect(defaultSettings().sound).toBe(true);
         expect(defaultSettings().railOpen).toBe(true);
     });
 });

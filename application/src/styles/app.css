@@ -506,8 +506,8 @@
 .tooltip
 {
     position: absolute;
-    inset-inline-start: var(--x);
-    inset-block-start: var(--y);
+    left: var(--x);
+    top: var(--y);
     max-inline-size: 18rem;
     padding: 0.3125rem 0.5rem;
     border-radius: var(--radius-control);
@@ -540,34 +540,34 @@
 
 .tooltip[data-side='top']::after
 {
-    inset-block-end: -5px;
-    inset-inline-start: calc(var(--arrow) - 4px);
-    border-block-start: 0;
-    border-inline-start: 0;
+    bottom: -5px;
+    left: calc(var(--arrow) - 4px);
+    border-top: 0;
+    border-left: 0;
 }
 
 .tooltip[data-side='bottom']::after
 {
-    inset-block-start: -5px;
-    inset-inline-start: calc(var(--arrow) - 4px);
-    border-block-end: 0;
-    border-inline-end: 0;
+    top: -5px;
+    left: calc(var(--arrow) - 4px);
+    border-bottom: 0;
+    border-right: 0;
 }
 
 .tooltip[data-side='left']::after
 {
-    inset-inline-end: -5px;
-    inset-block-start: calc(var(--arrow) - 4px);
-    border-block-end: 0;
-    border-inline-start: 0;
+    right: -5px;
+    top: calc(var(--arrow) - 4px);
+    border-bottom: 0;
+    border-left: 0;
 }
 
 .tooltip[data-side='right']::after
 {
-    inset-inline-start: -5px;
-    inset-block-start: calc(var(--arrow) - 4px);
-    border-block-start: 0;
-    border-inline-end: 0;
+    left: -5px;
+    top: calc(var(--arrow) - 4px);
+    border-top: 0;
+    border-right: 0;
 }
 
 @keyframes tooltip-in
@@ -1616,16 +1616,6 @@
     {
         inline-size: calc(100dvh - 8.25rem);
         margin: 0;
-    }
-
-    .play-tables-label
-    {
-        position: absolute;
-        inline-size: 1px;
-        block-size: 1px;
-        overflow: hidden;
-        clip-path: inset(50%);
-        white-space: nowrap;
     }
 
     .ludo-table > .table-actions

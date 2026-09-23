@@ -482,6 +482,25 @@ describe('the table’s chat and its controls', () =>
         expect(rail(container)!.className).toContain('w-[var(--social-w)]');
     });
 
+    it('lists who is sitting at the table beside the chat, one row per taken chair', async () =>
+    {
+        const container = await open('sidebar');
+
+        fire(button(container, 'Players')!, 'click');
+        await settle();
+
+        const rows = [...rail(container)!.querySelectorAll('ul[aria-label="Players"] > li')];
+
+        expect(rows).toHaveLength(useLobby().table()!.chairs.filter((chair) => chair.who !== undefined).length);
+        expect(rows[0].textContent).toContain('You');
+
+        fire(button(container, 'Chat')!, 'click');
+        await settle();
+
+        expect(rail(container)!.querySelector('ul[aria-label="Players"]')).toBeNull();
+        expect(rail(container)!.querySelector('textarea')).not.toBeNull();
+    });
+
     it('opens the chat over the table on a phone, half the screen first, and can take all of it', async () =>
     {
         const container = await open('phone');

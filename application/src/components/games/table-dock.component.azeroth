@@ -72,7 +72,7 @@ export default component TableDock(props: {
     };
 
     <div class="flex shrink-0 items-center gap-1">
-        <span class="hidden items-center gap-1 @2xl:flex">
+        <span class="hidden items-center gap-0.5 rounded-full border border-line bg-field/70 p-1 @2xl:flex">
             <IconButton
                 icon={ sound ? 'sound' : 'sound-off' }
                 label={ locale.t(sound ? 'play.dock.soundOff' : 'play.dock.soundOn') }
