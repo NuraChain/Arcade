@@ -68,6 +68,9 @@ export class Table
     @Column({ type: 'varchar', length: 8, default: 'low' })
     blinds!: string;
 
+    @Column({ type: 'boolean' })
+    chat!: boolean;
+
     @Column({ type: 'varchar', length: 16, default: 'open' })
     status!: TableStatus;
 

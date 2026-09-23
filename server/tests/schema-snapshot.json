@@ -256,6 +256,7 @@
         "table_seats.table_id uuid NO -",
         "table_seats.user_id uuid YES -",
         "tables.blinds character varying NO 'low'::character varying",
+        "tables.chat boolean NO -",
         "tables.closed_at timestamp with time zone YES -",
         "tables.code USER-DEFINED NO -",
         "tables.created_at timestamp with time zone NO now()",
