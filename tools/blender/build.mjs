@@ -14,6 +14,8 @@ const KIT_BUDGET_BYTES = 4.5 * 1024 * 1024;
 const ASSET_BUDGET_BYTES = 320 * 1024;
 const SET_BUDGET_BYTES = 600 * 1024;
 const ART_BUDGET_BYTES = 32 * 1024;
+const BOARD = resolve(HERE, '..', '..', 'application', 'public', 'board');
+const SURFACE_BUDGET_BYTES = { 'ludo-table.webp': 320 * 1024 };
 const ATLAS_BUDGET_BYTES = { 'atlas-2048.webp': 500 * 1024, 'atlas-1024.webp': 160 * 1024, 'wood-512.webp': 60 * 1024, 'wood-normal-512.webp': 80 * 1024 };
 
 const CANDIDATES = [
@@ -63,6 +65,7 @@ mkdirSync(OUT, { recursive: true });
 const onlyIndex = process.argv.indexOf('--only');
 const only = onlyIndex === -1 ? null : process.argv[onlyIndex + 1];
 const skipAtlas = process.argv.includes('--skip-atlas');
+const skipSurfaces = process.argv.includes('--skip-surfaces');
 
 const scripts = readdirSync(ASSETS)
     .filter((name) => name.endsWith('.py'))
@@ -125,6 +128,35 @@ for (const script of scripts)
     if (over)
     {
         failed += 1;
+    }
+}
+
+if (!skipSurfaces && (only === null || only === 'surfaces'))
+{
+    process.stdout.write(`
+  ${ 'surfaces'.padEnd(24) }`);
+    const result = run(blender, join(HERE, 'surfaces.py'));
+    if (result.status !== 0)
+    {
+        failed += 1;
+        console.log('FAILED');
+        console.log((result.stderr || result.stdout || '').split('
+').slice(-25).join('
+'));
+    }
+    else
+    {
+        const sizes = Object.keys(SURFACE_BUDGET_BYTES).map((name) =>
+        {
+            const size = existsSync(join(BOARD, name)) ? statSync(join(BOARD, name)).size : 0;
+            const over = size === 0 || size > SURFACE_BUDGET_BYTES[name];
+            if (over)
+            {
+                failed += 1;
+            }
+            return `${ name } ${ human(size) }${ over ? ' OVER BUDGET' : '' }`;
+        });
+        console.log(sizes.join('  '));
     }
 }
 

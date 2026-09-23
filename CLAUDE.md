@@ -2203,8 +2203,14 @@ turned sideways is 844 wide, which is rail posture, and the top bar plus the rai
 messages, and the table's chat already says the same thing where it applies.
 
 **Everything needed to play is on the table, and most of it is on the board.** Ludo sits on a
-planked walnut tabletop (`ludo-table.svg`, generated beside the hokm tables in
-`tools/art/boards.mjs`). Each player is drawn INSIDE their own yard - `YardBadge`: the avatar in the
+real wooden tabletop: `ludo-table.webp` is rendered by `tools/blender/surfaces.py` in Cycles from
+Poly Haven's CC0 `wood_table_001` (colour, roughness and normal maps, fetched into the git-ignored
+`tools/blender/scratch/`), lit evenly from off-axis, with the specular turned down because an
+orthographic camera looking straight down sees every overhead lamp as a white disc. The lamp pool and
+the vignette are CSS gradients over it rather than baked in, because the photo is cover-cropped to a
+phone's tall table and a desktop's wide one and a baked pool would sit in the wrong place on both.
+`npm run assets` renders it with the atlas and holds it to a byte budget; the committed WebP means
+nothing else ever needs Blender. Each player is drawn INSIDE their own yard - `YardBadge`: the avatar in the
 yard's outer corner, a name pill with the four home dots along its outer edge, and the die they rolled
 beside the avatar - so there is no row of cards above and below the board taking height from it, and
 the board is the full width of the phone. Whose turn it is is the whole yard breathing in its colour.

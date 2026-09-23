@@ -332,47 +332,6 @@ ${ corners.map(([x, y, turn]) => `<use href="#flourish" transform="translate(${ 
 `;
 }
 
-function ludoTable(width, height)
-{
-    const planks = 7;
-    const pitch = height / planks;
-    const tones = ['#5A3319', '#4E2C15', '#603719', '#53301A', '#5C3418', '#4B2A14', '#583219'];
-    const rows = Array.from({ length: planks }, (_, index) =>
-    {
-        const y = round(index * pitch);
-        const joint = round(((index * 7919) % 97) / 97 * width * 0.7 + width * 0.15);
-
-        return `<rect y="${ y }" width="${ width }" height="${ round(pitch) }" fill="${ tones[index % tones.length] }"/>
-<rect y="${ y }" width="${ width }" height="${ round(pitch) }" fill="url(#sheen)" opacity="0.5"/>
-<line x1="0" y1="${ y }" x2="${ width }" y2="${ y }" stroke="#1E0F06" stroke-opacity="0.7" stroke-width="3"/>
-<line x1="0" y1="${ y + 2 }" x2="${ width }" y2="${ y + 2 }" stroke="#B07A4A" stroke-opacity="0.12" stroke-width="1.5"/>
-<line x1="${ joint }" y1="${ y }" x2="${ joint }" y2="${ round(y + pitch) }" stroke="#1E0F06" stroke-opacity="0.55" stroke-width="2.5"/>`;
-    }).join('\n');
-
-    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${ width } ${ height }" width="${ width }" height="${ height }" preserveAspectRatio="xMidYMid slice">
-<defs>
-<linearGradient id="sheen" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF" stop-opacity="0.07"/><stop offset="0.5" stop-color="#FFFFFF" stop-opacity="0"/><stop offset="1" stop-color="#000000" stop-opacity="0.12"/></linearGradient>
-<radialGradient id="lamp" cx="0.5" cy="0.42" r="0.62"><stop offset="0" stop-color="#FFB45C" stop-opacity="0.24"/><stop offset="0.55" stop-color="#FF9A3C" stop-opacity="0.07"/><stop offset="1" stop-color="#FF9A3C" stop-opacity="0"/></radialGradient>
-<radialGradient id="dark" cx="0.5" cy="0.45" r="0.78"><stop offset="0.55" stop-color="#000000" stop-opacity="0"/><stop offset="1" stop-color="#000000" stop-opacity="0.62"/></radialGradient>
-<filter id="grain" x="0" y="0" width="100%" height="100%">
-    <feTurbulence type="fractalNoise" baseFrequency="0.0022 0.07" numOctaves="4" seed="11" result="noise"/>
-    <feColorMatrix in="noise" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1.5 -0.62"/>
-    <feComposite in2="SourceGraphic" operator="in"/>
-</filter>
-<filter id="figure" x="0" y="0" width="100%" height="100%">
-    <feTurbulence type="fractalNoise" baseFrequency="0.0009 0.018" numOctaves="2" seed="5" result="noise"/>
-    <feColorMatrix in="noise" type="matrix" values="0 0 0 0 0.85  0 0 0 0 0.55  0 0 0 0 0.3  0 0 0 0.9 -0.42"/>
-    <feComposite in2="SourceGraphic" operator="in"/>
-</filter>
-</defs>
-${ rows }
-<rect width="${ width }" height="${ height }" fill="#FFFFFF" opacity="0.5" filter="url(#figure)"/>
-<rect width="${ width }" height="${ height }" fill="#1A0C04" opacity="0.75" filter="url(#grain)"/>
-<rect width="${ width }" height="${ height }" fill="url(#lamp)"/>
-<rect width="${ width }" height="${ height }" fill="url(#dark)"/>
-</svg>
-`;
-}
 
 if (RING_CELLS.length !== RING)
 {
@@ -383,9 +342,6 @@ writeFileSync(join(OUT, 'hokm-table-wide.svg'), hokmTable(1600, 1000));
 console.log('board hokm-table-wide.svg');
 writeFileSync(join(OUT, 'hokm-table-tall.svg'), hokmTable(1000, 1200));
 console.log('board hokm-table-tall.svg');
-
-writeFileSync(join(OUT, 'ludo-table.svg'), ludoTable(1600, 1200));
-console.log('board ludo-table.svg');
 
 writeFileSync(join(OUT, 'ludo-board.svg'), ludoBoard());
 console.log('board ludo-board.svg');
