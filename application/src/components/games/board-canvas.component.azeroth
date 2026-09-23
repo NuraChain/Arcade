@@ -8,7 +8,7 @@ import type { BoardHandle, BoardView } from '../../game/bridge.ts';
 import { sceneFor } from '../../game/scenes.ts';
 
 /**
- * The one component that touches Phaser.
+ * The one component that reaches a board renderer.
  *
  * The import is dynamic and inside `mount`, which is the shape `world-canvas.component.azeroth` uses
  * for three.js and the reason the library lands in its own chunk. Nothing above this component knows
@@ -19,7 +19,7 @@ import { sceneFor } from '../../game/scenes.ts';
  * reader never has to reach in here, and neither does `npm run qa`, which cannot see inside a canvas
  * at all.
  *
- * If WebGL is missing or Phaser fails to boot, `failed` flips and the tokens are drawn as ordinary
+ * If a game has no renderer, or its renderer fails to start, `failed` flips and the tokens are drawn as ordinary
  * elements over the same plate, positioned from the same two fractions the canvas uses. A board
  * without animation is still a board; a blank square is not. The fallback is the default state,
  * exactly as it is for the world.
@@ -58,7 +58,7 @@ export default component BoardCanvas(props: { game: string; view: BoardView; onP
                  * Which scene draws this game is `game/scenes.ts`'s decision, not this file's.
                  * A game with no scene is a real state rather than a throw - an old client meeting
                  * a newer server - and it falls through to the same DOM board a browser with no
-                 * WebGL gets.
+                 * failed renderer gets.
                  */
                 const scene = sceneFor(props.game);
 

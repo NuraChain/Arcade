@@ -57,18 +57,10 @@ const MUST_BE_LAZY = [
     { match: /^app-catalogue-/, why: 'the app message catalogue — only the shell and sign-in import it' },
     { match: /^session\.store-/, why: 'lib/guards.ts imports session.store.ts dynamically' },
     { match: /^connect-dialog\.component-/, why: 'public-shell imports connect-dialog dynamically' },
-    { match: /-board-/, why: 'Phaser — dynamic import inside mount, only once a match is running' }
+    { match: /-board-/, why: 'a board renderer — dynamic import inside mount, only once a match is running' }
 ];
 
-/** What the board chunk may weigh. Phaser is most of it; the board code is a few KB. */
-const BOARD_BUDGET = 380 * KB;
-
-/**
- * Phaser announces itself with this literal, and it survives minification because it sits behind a
- * runtime flag rather than a build one. Finding the library by CONTENT rather than by chunk name is
- * what stops a rename defeating the check.
- */
-const PHASER_MARK = 'Phaser v';
+const BOARD_BUDGET = 16 * KB;
 
 const gzip = (name) => gzipSync(readFileSync(join(ASSETS, name))).length;
 
@@ -139,12 +131,11 @@ for (const name of all)
     }
 }
 
-// ---------------------------------------------------------------- where Phaser ended up
+// ---------------------------------------------------------------- the board renderers
 //
-// The scenes come from the registry rather than from a filename. This used to look for
-// `game/board/ludo-board.ts` and assert the chunk called `ludo-board-*`, so a second game's scene
-// would have ridden into a route chunk with the rule still passing - it was measuring one file, not
-// the property. `game/scenes.ts` is the list, and every game on it has to have a module on disk.
+// The scenes come from the registry rather than from a filename, so a second game's renderer is
+// measured by the same rule. Each one is a dynamic import inside `mount`: it has to land in a chunk of
+// its own, never in the landing page's initial set and never folded into a route or a component.
 const SCENES = join(ROOT, 'application', 'src', 'game', 'scenes.ts');
 
 let boardChunk = null;
@@ -172,38 +163,28 @@ if (existsSync(SCENES))
         if (!existsSync(file))
         {
             problems.push(`game/scenes.ts imports ${ specifier }, which is not on disk`);
-        }
-    }
-
-    const carries = all.filter((name) => readFileSync(join(ASSETS, name), 'utf8').includes(PHASER_MARK));
-
-    if (carries.length === 0)
-    {
-        problems.push('the board renderer exists but no chunk carries Phaser, so this check measured nothing');
-    }
-
-    if (carries.length > 1)
-    {
-        problems.push(`Phaser is in ${ carries.length } chunks (${ carries.join(', ') }) — it must be reachable from one dynamic import`);
-    }
-
-    for (const name of carries)
-    {
-        boardChunk = name;
-
-        if (initial.includes(name))
-        {
-            problems.push(`${ name } carries Phaser and is in the landing page's initial set`);
+            continue;
         }
 
-        if (/\.page-/.test(name) || /\.component-/.test(name))
+        const stem = specifier.split('/').pop().replace(/\.ts$/, '');
+        const chunk = all.find((name) => name.startsWith(`${ stem }-`));
+
+        if (chunk === undefined)
         {
-            problems.push(`${ name } carries Phaser into a route or component chunk — it must stay behind the dynamic import in mount`);
+            problems.push(`${ specifier } has no chunk of its own — it must stay behind the dynamic import in mount`);
+            continue;
         }
 
-        if (gzip(name) > BOARD_BUDGET)
+        boardChunk = chunk;
+
+        if (initial.includes(chunk))
         {
-            problems.push(`${ name } is ${ size(gzip(name)) }, over the ${ size(BOARD_BUDGET) } board budget`);
+            problems.push(`${ chunk } is in the landing page's initial set`);
+        }
+
+        if (gzip(chunk) > BOARD_BUDGET)
+        {
+            problems.push(`${ chunk } is ${ size(gzip(chunk)) }, over the ${ size(BOARD_BUDGET) } board budget`);
         }
     }
 }

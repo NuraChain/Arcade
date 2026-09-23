@@ -201,9 +201,7 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
 
     <div class="@container my-auto flex min-w-0 flex-col gap-4">
         <div class="ludo-table">
-            <div class="board-stage" style={ STAGE }>
-                <BoardCanvas game={ game.game } view={ view } onPick={ (key) => void pick(key) } />
-
+            <div class="ludo-frame">
                 <For each={ seatCards } key={ (entry) => entry.player.seat } let={ entry }>
                     <div class="contents">
                         <YardBadge
@@ -218,21 +216,25 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
                     </div>
                 </For>
 
-                <Show when={ board.canRoll() }>
-                    { () =>
-                        <button
-                            type="button"
-                            class="board-roll"
-                            aria-label={ locale.t('match.roll') }
-                            disabled={ board.busy() }
-                            onClick={ () => void board.roll() }
-                        >
-                            <span class="board-roll-die" aria-hidden="true">
-                                <DieFace value={ 5 } size="fill" label={ locale.t('match.roll') } />
-                            </span>
-                        </button>
-                    }
-                </Show>
+                <div class="board-stage" style={ STAGE }>
+                    <BoardCanvas game={ game.game } view={ view } onPick={ (key) => void pick(key) } />
+
+                    <Show when={ board.canRoll() }>
+                        { () =>
+                            <button
+                                type="button"
+                                class="board-roll"
+                                aria-label={ locale.t('match.roll') }
+                                disabled={ board.busy() }
+                                onClick={ () => void board.roll() }
+                            >
+                                <span class="board-roll-die" aria-hidden="true">
+                                    <DieFace value={ 5 } size="fill" label={ locale.t('match.roll') } />
+                                </span>
+                            </button>
+                        }
+                    </Show>
+                </div>
             </div>
 
             <Show when={ !over }>

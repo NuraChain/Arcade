@@ -318,9 +318,7 @@ def felt_table(key, pixels_w, pixels_h, colour, rim_ratio=0.045):
     save(scene, f'{key}.webp', alpha=True)
 
 
-
 BAIZE = (0.022, 0.12, 0.065)
-
 
 
 def hokm_table(key, pixels_w, pixels_h):
@@ -356,53 +354,6 @@ def lacquer(name, colour, roughness=0.28, coat=1.0):
     return material
 
 
-def prism(name, points, top, bottom, material, bevel=0.0, segments=3):
-    mesh = bpy.data.meshes.new(name)
-    bm = bmesh.new()
-    upper = [bm.verts.new((x, y, top)) for x, y in points]
-    lower = [bm.verts.new((x, y, bottom)) for x, y in points]
-    bm.faces.new(upper)
-    bm.faces.new(list(reversed(lower)))
-    count = len(points)
-    for index in range(count):
-        following = (index + 1) % count
-        bm.faces.new((lower[index], lower[following], upper[following], upper[index]))
-    bm.normal_update()
-    bm.to_mesh(mesh)
-    bm.free()
-    obj = bpy.data.objects.new(name, mesh)
-    bpy.context.collection.objects.link(obj)
-    obj.data.materials.append(material)
-    if bevel > 0:
-        modifier = obj.modifiers.new('bevel', 'BEVEL')
-        modifier.width = bevel
-        modifier.segments = segments
-        modifier.limit_method = 'ANGLE'
-        modifier.harden_normals = True
-        weighted = obj.modifiers.new('weighted', 'WEIGHTED_NORMAL')
-        weighted.keep_sharp = True
-    for polygon in obj.data.polygons:
-        polygon.use_smooth = True
-    return obj
-
-
-def circle(cx, cy, radius, segments=64):
-    return [(cx + math.cos(math.tau * step / segments) * radius, cy + math.sin(math.tau * step / segments) * radius) for step in range(segments)]
-
-
-def offset(points, cx, cy):
-    return [(cx + x, cy + y) for x, y in points]
-
-
-def star_points(radius, inner=0.46):
-    points = []
-    for index in range(10):
-        angle = math.pi / 2 + index * math.pi / 5
-        reach = radius if index % 2 == 0 else radius * inner
-        points.append((math.cos(angle) * reach, math.sin(angle) * reach))
-    return points
-
-
 def hdri(asset, resolution='1k'):
     os.makedirs(CACHE, exist_ok=True)
     path = os.path.join(CACHE, f'{asset}_{resolution}.hdr')
@@ -431,34 +382,6 @@ def studio(scene, asset, strength):
     background.inputs['Strength'].default_value = strength
 
 
-def cut(target, cutters, transfer=False):
-    for index, cutter in enumerate(cutters):
-        cutter.hide_render = True
-        cutter.hide_viewport = True
-        modifier = target.modifiers.new(f'cut-{index}', 'BOOLEAN')
-        modifier.operation = 'DIFFERENCE'
-        modifier.solver = 'EXACT'
-        modifier.object = cutter
-        if transfer:
-            modifier.material_mode = 'TRANSFER'
-    for modifier in list(target.modifiers):
-        if modifier.type in ('BEVEL', 'WEIGHTED_NORMAL'):
-            name = modifier.name
-            kind = modifier.type
-            settings = {}
-            if kind == 'BEVEL':
-                settings = {'width': modifier.width, 'segments': modifier.segments}
-            target.modifiers.remove(modifier)
-            again = target.modifiers.new(name, kind)
-            if kind == 'BEVEL':
-                again.width = settings['width']
-                again.segments = settings['segments']
-                again.limit_method = 'ANGLE'
-                again.harden_normals = True
-            else:
-                again.keep_sharp = True
-
-
 def geometry_of():
     with open(os.path.join(HERE, 'ludo-geometry.json'), encoding='utf-8') as source:
         return json.load(source)
@@ -466,126 +389,6 @@ def geometry_of():
 
 def inks(geometry):
     return {colour: {shade: linear(value) for shade, value in shades.items()} for colour, shades in geometry['ink'].items()}
-
-
-def ludo_board():
-    geometry = geometry_of()
-    margin = geometry['margin']
-    cell = geometry['cell']
-    rim = geometry['rim']
-    ink = inks(geometry)
-    gap = 2.2 / 1024
-
-    scene = reset(2048, 2048)
-    studio(scene, 'studio_small_09', 0.55)
-
-    def at(u, v):
-        return (u - 0.5, 0.5 - v)
-
-    def centre(col, row, span=1.0):
-        return at(margin + (col + span / 2) * cell, margin + (row + span / 2) * cell)
-
-    graphite = lacquer('graphite', (0.012, 0.016, 0.03), roughness=0.22, coat=1.0)
-    gold = flat_material('gold', (0.86, 0.66, 0.3), 0.2)
-    next(node for node in gold.node_tree.nodes if node.type == 'BSDF_PRINCIPLED').inputs['Metallic'].default_value = 1.0
-    grout = lacquer('grout', (0.50, 0.48, 0.45), roughness=0.6, coat=0.0)
-    white = lacquer('white', (0.93, 0.92, 0.89), roughness=0.34, coat=0.25)
-    colours = {colour: lacquer('lacquer-' + colour, ink[colour]['base'], roughness=0.36, coat=0.25) for colour in ink}
-    dishes = {colour: lacquer('dish-' + colour, ink[colour]['tint'], roughness=0.6, coat=0.0) for colour in ink}
-
-    field = 1 - rim * 2
-    frame('frame', rounded(1.0, 1.0, 0.05), rounded(field, field, 0.018), 0.028, 0.0, graphite)
-    line = rim * 0.5
-    frame('hairline', rounded(1 - line * 2 + 0.0024, 1 - line * 2 + 0.0024, 0.036), rounded(1 - line * 2 - 0.0024, 1 - line * 2 - 0.0024, 0.034), 0.0284, 0.026, gold)
-    plane('base', field + 0.004, field + 0.004, grout, z=0.012)
-
-    tile_top = 0.0172
-    size = cell - gap * 2
-
-    def tile(col, row, material, name):
-        cx, cy = centre(col, row)
-        return prism(name, offset(rounded(size, size, 0.0085, 6), cx, cy), tile_top, 0.012, material, bevel=0.0026)
-
-    for index, square in enumerate(geometry['ring']):
-        start = square['start']
-        tile(square['col'], square['row'], colours[start] if start else white, 'ring-' + str(index))
-        cx, cy = centre(square['col'], square['row'])
-        if start:
-            prism('start-star-' + str(index), offset(star_points(cell * 0.31), cx, cy), tile_top + 0.0024, tile_top - 0.001, white, bevel=0.0012, segments=3)
-        elif square['safe']:
-            prism('safe-star-' + str(index), offset(star_points(cell * 0.31), cx, cy), tile_top + 0.0024, tile_top - 0.001, colours[square['safe']], bevel=0.0012, segments=3)
-
-    for colour, cells in geometry['home'].items():
-        for index, (col, row) in enumerate(cells):
-            tile(col, row, colours[colour], 'home-' + colour + '-' + str(index))
-
-    arrow = [(-30, -8), (4, -8), (4, -22), (32, 0), (4, 22), (4, 8), (-30, 8)]
-    for entry in geometry['arrows']:
-        cx, cy = centre(entry['col'], entry['row'])
-        angle = -math.atan2(entry['dy'], entry['dx'])
-        unit = cell / 100
-        points = [(cx + (x * math.cos(angle) - y * math.sin(angle)) * unit, cy + (x * math.sin(angle) + y * math.cos(angle)) * unit) for x, y in arrow]
-        prism('arrow-' + entry['colour'], points, tile_top + 0.0024, tile_top - 0.001, colours[entry['colour']], bevel=0.0011, segments=3)
-
-    tray_top = 0.0285
-    dish = [(0.0, -0.004), (0.30 * cell, -0.0035), (0.44 * cell, -0.0012), (0.46 * cell, 0.0005), (0.46 * cell, 0.01), (0.0, 0.01)]
-    yard_size = cell * 6 - gap * 2
-    for colour, (col, row) in geometry['corners'].items():
-        cx, cy = centre(col, row, 6)
-        prism('yard-' + colour, offset(rounded(yard_size, yard_size, 0.022, 10), cx, cy), 0.0195, 0.012, colours[colour], bevel=0.0045, segments=5)
-        nx, ny = centre(col + geometry['nest'][colour][0] - 0.5, row + geometry['nest'][colour][1] - 0.5)
-        radius = geometry['nestRadius'] * cell
-        tray = prism('tray-' + colour, circle(nx, ny, radius, 128), tray_top, 0.0195, white, bevel=0.0028, segments=5)
-        cutters = []
-        for index, (dx, dy) in enumerate(geometry['wells']):
-            wx = nx + dx * geometry['nestSpread'] * cell
-            wy = ny - dy * geometry['nestSpread'] * cell
-            cutter = lathe('dish-' + colour + '-' + str(index), dish, sides=96, location=(wx, wy, tray_top))
-            cutter.data.materials.append(dishes[colour])
-            for polygon in cutter.data.polygons:
-                polygon.use_smooth = True
-            cutters.append(cutter)
-        cut(tray, cutters, transfer=True)
-
-    cx, cy = centre(6, 6, 3)
-    half = (cell * 3 - gap * 2) / 2
-    apex = tile_top + 0.03
-    mesh = bpy.data.meshes.new('peak')
-    bm = bmesh.new()
-    corners = [
-        bm.verts.new((cx - half, cy + half, tile_top)),
-        bm.verts.new((cx + half, cy + half, tile_top)),
-        bm.verts.new((cx + half, cy - half, tile_top)),
-        bm.verts.new((cx - half, cy - half, tile_top))
-    ]
-    top = bm.verts.new((cx, cy, apex))
-    order = [('green', 0, 1), ('yellow', 1, 2), ('blue', 2, 3), ('red', 3, 0)]
-    for _, first, second in order:
-        bm.faces.new((corners[first], corners[second], top))
-    bm.normal_update()
-    bm.to_mesh(mesh)
-    bm.free()
-    peak = bpy.data.objects.new('peak', mesh)
-    bpy.context.collection.objects.link(peak)
-    names = [colour for colour, _, _ in order]
-    for colour in names:
-        peak.data.materials.append(colours[colour])
-    for polygon, colour in zip(peak.data.polygons, names):
-        polygon.material_index = names.index(colour)
-    bevelled = peak.modifiers.new('bevel', 'BEVEL')
-    bevelled.width = 0.002
-    bevelled.segments = 3
-    bevelled.limit_method = 'ANGLE'
-    prism('medallion', circle(cx, cy, cell * 0.56, 96), apex + 0.004, apex - 0.02, gold, bevel=0.005, segments=6)
-    prism('medallion-star', offset(star_points(cell * 0.34), cx, cy), apex + 0.0068, apex + 0.003, white, bevel=0.0016, segments=3)
-
-    lamp('key', (-0.9, 1.0, 1.9), 1.2, 30.0, (1.0, 0.97, 0.92))
-    lamp('fill', (0.0, 0.0, 2.6), 3.0, 8.0, (0.92, 0.94, 1.0))
-    camera(scene, 1.0)
-    scene.view_settings.view_transform = 'Standard'
-    scene.view_settings.look = 'None'
-    scene.render.film_transparent = True
-    save(scene, 'ludo-board.webp', quality=90, alpha=True)
 
 
 PAWN_PROFILE = [
@@ -829,7 +632,6 @@ def ludo_dice():
 
 SURFACES = {
     'ludo-table': ludo_table,
-    'ludo-board': ludo_board,
     'ludo-pieces': ludo_pieces,
     'hokm-table-wide': lambda: hokm_table('hokm-table-wide', 1600, 1000),
     'hokm-table-tall': lambda: hokm_table('hokm-table-tall', 1000, 1200)

@@ -1455,29 +1455,27 @@ overwritten on conflict, so it reached a database built from nothing.
 
 ## Drawing the board
 
-The Ludo board and its pieces are **Cycles renders built from the rules' own geometry**.
-`tools/art/boards.mjs` imports `application/src/game/layout.ts` for where the grid sits and
-`server/src/domains/match/ludo/board.ts` for the ring, the home runs, the starts and the safe squares,
-and writes them with the colour ramp to `tools/blender/ludo-geometry.json`. `tools/blender/surfaces.py`
-reads that file and renders `ludo-board.webp` (`NURA_SURFACE=ludo-board`) and the pieces
-(`NURA_SURFACE=ludo-pieces`): four `pawn-<colour>.webp`, `pawn-shadow.webp` and `ludo-dice.webp`. So a
-start square, a star or an arrow still cannot sit anywhere the rules do not put one, and the
-generator still throws if the ring stops being 52 cells.
+The Ludo board is **vector art drawn from the rules' own geometry**, and the pieces are **Cycles
+renders**. `tools/art/boards.mjs` imports `application/src/game/layout.ts` for where the grid sits
+and `server/src/domains/match/ludo/board.ts` for the ring, the home runs, the starts and the safe
+squares, writes `application/public/board/ludo-board.svg`, and writes the same geometry with the
+colour ramp to `tools/blender/ludo-geometry.json`. `tools/blender/surfaces.py` reads that file and
+renders the pieces (`NURA_SURFACE=ludo-pieces`): four `pawn-<colour>.webp`, `pawn-shadow.webp` and
+`ludo-dice.webp`. So a start square, a star or an arrow cannot sit anywhere the rules do not put one,
+and the generator throws if the ring stops being 52 cells.
 
-It has been a Blender photograph, then vector art, then a render again, and the user judged each of
-the first two not good enough - the last complaint was the PAWNS, clip-art sitting on a lit board.
-Rendering the pieces in the board's own studio, under the same key light, HDRI and view transform,
-is what makes the lacquer match by construction. The direction, in the user's words, is a game that
-feels good to somebody from thirteen to fifty, with the finish of the Hokm table: a quiet satin
-board, and only the pieces and the die glossy, saturated, outlined and lit.
+The board has been a Blender photograph, this vector board, a satin render and this vector board
+again. The owner put the three side by side and chose the vector board with its wooden frame - it
+sits on the walnut the way the Hokm table does - and the complaint that started all of it was the
+PAWNS, which is what the renders replaced. The next direction the owner has asked for is a cartoon
+board that feels like childhood; that is its own spec when it happens, not a tweak to this one.
 
 **What is drawn, and where it comes from.** A starred START square in the owner's colour on
 `ENTRY`; a star in the arm's colour on every other `SAFE` index; an arrow in the owner's colour on
-the last ring cell before each home run, pointing into it; the home runs as coloured keys; the
-centre as four pyramids under a gold medallion. The wells are concave dishes cut into an ivory tray
-in the colour's pale `tint` - the glossy beads they replaced looked exactly like pawns. Colours are
-`LUDO_INK` in the generator (`base`, `shade`, `deep`, `keyline`, `tint`), `--ludo-*` in `tokens.css`,
-and `PALETTE`/`DEEP` in `ludo-board.ts`, kept equal by hand.
+the last ring cell before each home run, pointing into it; the home runs as coloured tiles; the
+centre as four pyramids. Colours are `LUDO_INK` in the generator (`light`, `base`, `dark`, `deep` for
+the board; `shade`, `keyline` for the renders), `--ludo-*` in `tokens.css`, and `TONE` in
+`ludo-board.ts`, kept equal by hand.
 
 **The pawn is a peg seen from thirty degrees above**: a lathed plinth, bell and ball head, 0.82 of a
 square wide and 1.25 tall, with an inverted-hull keyline in the colour's own darkest ink so a red
@@ -1496,12 +1494,6 @@ to vanish from the view entirely. Two to four pawns on one square stand side by 
 `game.spec.ts` holds every footprint inside its tile - which is how it found that the art spec's own
 two-pawn layout overhung the square.
 
-**The canvas draws at device pixels, with mipmaps.** It was sized in CSS pixels and stretched, so on
-a 3x phone every pawn was drawn at a third of the resolution it was shown at. The game is now
-`width * devicePixelRatio` (capped at 3), `ScaleManager` maps the pointer back after
-`scale.refresh()`, and `render.mipmapFilter` is set because Phaser builds mipmaps only when it is, and
-only for POWER-OF-TWO textures - which is why every board texture is 2048, 256 or 256x128. Without
-them the 2048 plate shrunk six times on a phone shimmered at every tile edge.
 
 **The grid does not fill the board, and assuming it does is a bug you look straight at.** The
 fractions come from the old atlas and the generator keeps them exactly, because the canvas, the DOM
@@ -1519,56 +1511,46 @@ other end: they are drawn at `NEST +/- NEST_SPREAD`, which is a POSITION, and `c
 half cell that turns an index into a centre - so `seatsFor` subtracts 0.5 before it hands a parked
 token over.
 
-**The nest is off-centre in its yard on purpose.** Each yard's four wells sit in a smaller pool
-(`NEST_RADIUS` 1.72, wells 0.72 apart) pushed 0.7 squares towards the middle of the board, which
-leaves a band about two squares wide along the yard's two OUTER edges - and that band is where the
-player is drawn: the avatar in the corner, the name along the edge. `NEST` lives in `game/layout.ts`
-and both the art and `seatsFor` read it, so a parked token cannot sit anywhere but on its own well,
-and `game.spec.ts` fails if one ever strays into the band.
+**The nest is off-centre in its yard**: each yard's four wells sit in a smaller pool (`NEST_RADIUS`
+1.72, wells 0.72 apart) pushed 0.7 squares towards the middle of the board. `NEST` lives in
+`game/layout.ts` and both the art and `seatsFor` read it, so a parked token cannot sit anywhere but on
+its own well, and `game.spec.ts` fails if one ever strays towards the outer edges.
 
-**Phaser draws it**, and `application/src/game/` is framework-free exactly as `world/` is: no
-AzerothJS import anywhere under it, one bridge interface, and one `.azeroth` component that reaches
-the library through a dynamic `import()` inside `mount`. Phaser therefore lands in its own chunk -
-about 350 KB gzip - which no route and no landing payload ever pays for, and `tools/budgets.mjs`
-enforces that by finding the library through the `Phaser v` literal it prints rather than by chunk
-name: more than one chunk carrying it, or a chunk that is a route or a component, or no chunk at all
-while the renderer exists, all fail the build.
+**The players sit OUTSIDE the board, at their own corner.** They were drawn inside their yards for a
+while - an avatar in the corner, a name along the edge - and the owner asked for them out, which is
+what Ludo King and Ludo Club do: the yard belongs to the pawns. `.ludo-frame` is a grid: on a phone a
+row of plates above the board (the two top yards) and a row below (the two bottom ones), which is the
+empty ground a portrait phone has anyway; on a container of 44rem or more they become compact cards
+in two side columns, so a desktop board keeps its height. A plate glows in its colour on its turn and
+carries the die that was rolled.
+
+**The board is DOM, and there is no Phaser.** It was a Phaser scene - about 350 KB gzip, a WebGL
+context to leak, a deferred destroy, a boot that QUEUES rather than starts - to move sixteen pictures
+around a square. `game/board/ludo-board.ts` builds plain elements into the board's host and animates
+them with the Web Animations API, and the whole chunk is about 5 KB. Every position is in `cqi`: the
+host sits inside `.board-plate`, which is an inline-size container, so a piece at `translate: X Y` in
+container units stays on its square at every size with no resize code at all, and the browser draws
+the images at device resolution for free. A walk is one animation of the piece through every square
+it crosses plus an arc on its lift; the idle hop of a movable pawn and the turning dashes of its ring
+are CSS keyframes. `application/src/game/` stays framework-free exactly as `world/` is, and
+`tools/budgets.mjs` requires every registered renderer to sit in a lazy chunk of its own under 16 KB.
 
 **`game/scenes.ts` decides WHICH renderer draws which game, and it is the only place that does.**
 `board-canvas` named one module, one export and one image file, so a second game's board meant
 editing the component every board goes through - and the build gate asserted the lazy chunk by the
 literal filename `ludo-board-`, which would have gone on passing while a second scene rode into a
-route chunk unmeasured. The registry's loader is a FUNCTION returning a dynamic import, because a
-static one puts Phaser into the component's chunk and from there into every route that renders a
-board. The plate belongs to the scene rather than to the caller: it is the photograph of the object
-that game is played on, which is a fact about the game and not a prop a component should be trusted
-to pass. A game with no scene falls through to the DOM board a browser with no WebGL gets, which is
-the rule `lib/lines.ts` follows for a line key it has never heard of.
+route chunk unmeasured. The registry's loader is a FUNCTION returning a dynamic import, so a
+renderer lands in its own chunk rather than in every route that renders a board. A game with no
+scene falls through to the plain DOM tokens, which is the rule `lib/lines.ts` follows for a line key
+it has never heard of. `budgets.mjs` reads that registry - one dynamic import per registered scene,
+each module on disk and in a chunk of its own - so the rule is about the property rather than about
+one file.
 
-`budgets.mjs` reads that registry - one dynamic import per registered scene, each module on disk -
-so the rule is about the property rather than about one file.
-
-Four of the config values are load-bearing and each costs something real if left out. `audio` off,
-because Phaser opens a WebAudio context and Chrome warns about it, and the matrix reads every
-warning. `keyboard` off, because Phaser's plugin preventDefaults space and the arrows, and the
-keyboard belongs to the DOM controls. `autoFocus` off, because the default steals focus
-mid-navigation. `Scale.NONE` with a `ResizeObserver`, because this canvas changes size without a
-window resize - the chat rail opening, the posture flipping, a sheet over it.
-
-**Phaser's `destroy` is deferred**, which is a live context leak with this codebase's exact history.
-It sets a pending flag and tears down at the end of the next game step, and a slept loop never takes
-that step - so the teardown wakes the loop, destroys, drains the pending destroy directly, and only
-then loses the context. The extension handle is captured BEFORE the destroy because afterwards the
-renderer is gone, and losing the context first would make every texture delete a no-op and fill the
-console with warnings.
-
-**The canvas is the illustration, not the interface.** Every move is takeable from a button beside
-it, the turn is an `aria-live` region, and the canvas is `aria-hidden` inside a labelled host. That
-is what makes the game playable by keyboard and readable by a screen reader - and it is what gives
-`npm run qa` something to hit-test, because the matrix cannot see inside a canvas at all. Pointing
-at a token is a shortcut to the move list and nothing more: a tap on a token the server did not call
-legal does nothing. If WebGL is missing or Phaser fails to boot, the tokens render as ordinary
-elements over the same plate, from the same two fractions. The fallback is the default state.
+**The board is the illustration, not the interface.** Every move is takeable from a button beside
+it, the turn is an `aria-live` region, and the pieces are `aria-hidden` inside a labelled host. That
+is what makes the game playable by keyboard and readable by a screen reader. Pointing at a token is a
+shortcut to the move list and nothing more: a tap anywhere near a token the server called legal picks
+it (`pickNear`), and a tap on anything else does nothing.
 
 **`/app/play/:id` is in the matrix now**, and was not for a long time - so the one route carrying a
 board was the one route the 640-cell gate never toured. `matrix.mjs` seats a second wallet fixture,
@@ -1633,20 +1615,11 @@ switching tables never has to unlock audio again. The spec is
 - **Sound is on by default**, because a native game starts with sound; nothing plays before the first
   tap, and the dock and the table menu turn it off in one press.
 
-**`scene.start` does not start a scene, it QUEUES one.** `init`, `preload` and `create` run on the
-next step of the game loop, so everything the scene owns is absent for a frame or two after
-`createLudoBoard` would otherwise have returned - and a caller that shows a board into that window
-throws inside Phaser. The component caught the throw, concluded the renderer had failed, and drew its
-fallback ON TOP of a canvas that was working perfectly. In English the two layers land on the same
-squares and nothing looks wrong at all; it took a Persian page to see it. So the handle is not handed
-out until the scene says it is up, with a timeout so a scene that never boots still REJECTS - and
-`failed` now means "there is no canvas" rather than "something threw", because the catch disposes
-before it sets the flag.
-
-**The board does not mirror, and `.board-plate` declares `direction: ltr` to say so.** Everything
-else in this product is authored in logical properties precisely so it flips with the reading
-direction, but a ludo board is a printed object: red is in the corner it is printed in, and the
-canvas over it has no idea what language the page is in. The DOM fallback places its tokens with
+**The board does not mirror, and `.board-plate` and `.ludo-frame` declare `direction: ltr` to say
+so.** Everything else in this product is authored in logical properties precisely so it flips with
+the reading direction, but a ludo board is a printed object: red is in the corner it is printed in,
+and the pieces over it - and the plates beside its corners - have to agree with the print, whatever
+language the page is in. The DOM fallback places its tokens with
 `inset-inline-start`, which on a Persian page measured from the other edge and put every token in the
 yard diagonally opposite its own. One line on the container keeps the house rule and fixes the object,
 rather than spelling one child in physical properties and hoping the next one remembers.
@@ -3602,10 +3575,10 @@ point lights.
 
 **The unprefixed utilities ARE the phone layout.** `sm:`/`md:`/`lg:`/`@3xl:` only ever ADD to it for
 bigger screens; a layout written wide and then patched down with overrides is the defect. The shape
-to copy is `.ludo-table`, where the board with the strip under it is the DEFAULT and the board beside
-the strip is what a `@container (min-width: 44rem)` earns. The yard badges are `direction: ltr`
-because the board is a printed object that never mirrors, and a name inside one carries `dir="auto"`
-so it still reads in its own script.
+to copy is `.ludo-frame`, where the player plates in a row above and below the board are the DEFAULT
+and the plates as cards beside it are what a `@container (min-width: 44rem)` earns. The frame is
+`direction: ltr` because the board is a printed object that never mirrors, and a name inside a plate
+carries `dir="auto"` so it still reads in its own script.
 
 Prefer a `@container` variant over a viewport one wherever the column is narrower than the screen,
 which in this shell is most places: a rail or sidebar takes up to 16rem on the left and the social

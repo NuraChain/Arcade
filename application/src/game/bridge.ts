@@ -2,7 +2,7 @@
  * The only contract between the product and the board renderer.
  *
  * Shaped like `world/bridge.ts` and for the same reason: everything under `game/` imports nothing
- * from AzerothJS, so the board maths can be tested with no GPU and Phaser stays out of every bundle
+ * from AzerothJS, so the board maths can be tested with no browser and the renderer stays out of every bundle
  * that does not ask for it. The renderer is told what the board looks like and emits which token was
  * pointed at; it never decides whether a move is legal, who was captured or who won. Those answers
  * come from the server and arrive here already made.

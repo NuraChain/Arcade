@@ -81,13 +81,6 @@ export default component YardBadge(props: {
         <span class="yard-avatar">
             <Avatar person={ person } ringOn="void" />
             <span class="yard-initial" aria-hidden="true">{ INITIAL[props.seat.colour] }</span>
-            <Show when={ props.die !== undefined && turn }>
-                { () =>
-                    <span class="yard-die">
-                        <DieFace value={ props.die! } size="fill" label={ locale.t('match.turn.rolled', { die: locale.n(props.die!) }) } />
-                    </span>
-                }
-            </Show>
         </span>
 
         <span class="yard-name">
@@ -101,5 +94,13 @@ export default component YardBadge(props: {
                 <span class={ () => routine ? 'sr-only' : (warned ? 'yard-says text-danger' : 'yard-says') }>{ says }</span>
             </span>
         </span>
+
+        <Show when={ props.die !== undefined && turn }>
+            { () =>
+                <span class="yard-die">
+                    <DieFace value={ props.die! } size="fill" label={ locale.t('match.turn.rolled', { die: locale.n(props.die!) }) } />
+                </span>
+            }
+        </Show>
     </div>
 }

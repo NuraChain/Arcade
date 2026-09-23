@@ -6,14 +6,19 @@ import { CELL, MARGIN, NEST, NEST_RADIUS, NEST_SPREAD, NEST_WELLS, RIM } from '.
 import { ENTRY, HOME_CELLS, RING, RING_CELLS, RING_STEPS, SAFE, ringIndex } from '../../server/src/domains/match/ludo/board.ts';
 
 const OUT = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'application', 'public', 'board');
+const S = 1024;
+const G = MARGIN * S;
+const C = CELL * S;
+const EDGE = RIM * S;
+const GAP = 2.6;
 
 const round = (value) => Math.round(value * 100) / 100;
 
 export const LUDO_INK = {
-    red: { base: '#E5392F', shade: '#B01A14', deep: '#72100C', keyline: '#4A0806', tint: '#ED9E96' },
-    green: { base: '#1FA24C', shade: '#0E7A36', deep: '#075022', keyline: '#033317', tint: '#94CDA3' },
-    yellow: { base: '#F7B814', shade: '#D48A0C', deep: '#A45F04', keyline: '#6B3C02', tint: '#F5D78A' },
-    blue: { base: '#2270E6', shade: '#0A4DB0', deep: '#062F74', keyline: '#041D4D', tint: '#96B7E8' }
+    red: { light: '#FF7A6B', base: '#E5392F', dark: '#AD1F1B', deep: '#7A1411', shade: '#B01A14', keyline: '#4A0806' },
+    green: { light: '#5BD98A', base: '#1FA24C', dark: '#137535', deep: '#0B5023', shade: '#0E7A36', keyline: '#033317' },
+    yellow: { light: '#FFE070', base: '#F7B814', dark: '#C98A00', deep: '#8F6100', shade: '#D48A0C', keyline: '#6B3C02' },
+    blue: { light: '#6AAEFF', base: '#2270E6', dark: '#1550B3', deep: '#0C367D', shade: '#0A4DB0', keyline: '#041D4D' }
 };
 
 const COLOURS = Object.keys(LUDO_INK);
@@ -34,6 +39,210 @@ const ARM = (col, row) =>
 
     return col < 6 ? 'red' : 'yellow';
 };
+
+const at = (col, row) => [round(G + col * C), round(G + row * C)];
+
+function starPath(radius, inner = 0.46)
+{
+    const points = [];
+
+    for (let index = 0; index < 10; index += 1)
+    {
+        const angle = -Math.PI / 2 + index * Math.PI / 5;
+        const reach = index % 2 === 0 ? radius : radius * inner;
+
+        points.push(`${ round(Math.cos(angle) * reach) } ${ round(Math.sin(angle) * reach) }`);
+    }
+
+    return `M${ points.join('L') }Z`;
+}
+
+function gradients()
+{
+    const parts = [];
+
+    for (const colour of COLOURS)
+    {
+        const ink = LUDO_INK[colour];
+
+        parts.push(`<linearGradient id="yard-${ colour }" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${ ink.light }"/><stop offset="0.22" stop-color="${ ink.base }"/><stop offset="1" stop-color="${ ink.dark }"/></linearGradient>`);
+        parts.push(`<radialGradient id="well-${ colour }" cx="0.5" cy="0.38" r="0.62"><stop offset="0" stop-color="${ ink.deep }" stop-opacity="0.55"/><stop offset="0.75" stop-color="${ ink.dark }" stop-opacity="0.35"/><stop offset="1" stop-color="${ ink.light }" stop-opacity="0.5"/></radialGradient>`);
+        parts.push(`<radialGradient id="pool-${ colour }" cx="0.42" cy="0.36" r="0.7"><stop offset="0" stop-color="${ ink.base }"/><stop offset="1" stop-color="${ ink.dark }"/></radialGradient>`);
+        parts.push(`<linearGradient id="tile-${ colour }" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${ ink.light }"/><stop offset="0.5" stop-color="${ ink.base }"/><stop offset="1" stop-color="${ ink.dark }"/></linearGradient>`);
+        parts.push(`<linearGradient id="peak-a-${ colour }" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${ ink.light }"/><stop offset="1" stop-color="${ ink.base }"/></linearGradient>`);
+        parts.push(`<linearGradient id="peak-b-${ colour }" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${ ink.base }"/><stop offset="1" stop-color="${ ink.dark }"/></linearGradient>`);
+    }
+
+    return parts.join('\n');
+}
+
+function tileSymbol(id, fill, edge)
+{
+    const size = round(C - GAP * 2);
+
+    return `<symbol id="${ id }" overflow="visible">
+    <rect x="${ GAP }" y="${ GAP + 1.6 }" width="${ size }" height="${ size }" rx="7" fill="${ edge }"/>
+    <rect x="${ GAP }" y="${ GAP }" width="${ size }" height="${ size - 1.2 }" rx="7" fill="${ fill }"/>
+    <rect x="${ GAP + 1.2 }" y="${ GAP + 1.2 }" width="${ size - 2.4 }" height="${ round((size - 2.4) * 0.46) }" rx="6" fill="#FFFFFF" opacity="0.2"/>
+</symbol>`;
+}
+
+function frame()
+{
+    return `<rect width="${ S }" height="${ S }" rx="46" fill="url(#wood)"/>
+<rect width="${ S }" height="${ S }" rx="46" fill="#4A260C" opacity="0.5" filter="url(#grain)"/>
+<rect x="3" y="3" width="${ S - 6 }" height="${ S - 6 }" rx="43" fill="none" stroke="#FFD9A0" stroke-opacity="0.3" stroke-width="3"/>
+<rect x="1" y="1" width="${ S - 2 }" height="${ S - 2 }" rx="45" fill="none" stroke="#2A1305" stroke-opacity="0.8" stroke-width="2"/>
+<rect x="${ round(EDGE - 5) }" y="${ round(EDGE - 5) }" width="${ round(S - EDGE * 2 + 10) }" height="${ round(S - EDGE * 2 + 10) }" rx="20" fill="none" stroke="#D9B45A" stroke-opacity="0.75" stroke-width="2.5"/>
+<rect x="${ round(EDGE) }" y="${ round(EDGE) }" width="${ round(S - EDGE * 2) }" height="${ round(S - EDGE * 2) }" rx="16" fill="#2B1A10"/>
+<rect x="${ round(EDGE) }" y="${ round(EDGE) }" width="${ round(S - EDGE * 2) }" height="${ round(S - EDGE * 2) }" rx="16" fill="none" stroke="#120904" stroke-opacity="0.9" stroke-width="5" filter="url(#blur-2)"/>`;
+}
+
+function yard(colour)
+{
+    const [col, row] = CORNER[colour];
+    const [x, y] = at(col, row);
+    const size = round(C * 6 - GAP * 2);
+    const cx = round(G + (col + NEST[colour][0]) * C);
+    const cy = round(G + (row + NEST[colour][1]) * C);
+    const wells = NEST_WELLS
+        .map(([dx, dy]) => `<circle cx="${ round(cx + dx * NEST_SPREAD * C) }" cy="${ round(cy + dy * NEST_SPREAD * C) }" r="${ round(C * 0.37) }" fill="url(#well-${ colour })"/>
+    <circle cx="${ round(cx + dx * NEST_SPREAD * C) }" cy="${ round(cy + dy * NEST_SPREAD * C) }" r="${ round(C * 0.37) }" fill="none" stroke="#FFFFFF" stroke-opacity="0.35" stroke-width="2"/>`)
+        .join('\n    ');
+
+    return `<g>
+    <rect x="${ round(x + GAP) }" y="${ round(y + GAP + 2) }" width="${ size }" height="${ size }" rx="18" fill="${ LUDO_INK[colour].deep }"/>
+    <rect x="${ round(x + GAP) }" y="${ round(y + GAP) }" width="${ size }" height="${ size }" rx="18" fill="url(#yard-${ colour })"/>
+    <rect x="${ round(x + GAP) }" y="${ round(y + GAP) }" width="${ size }" height="${ size }" rx="18" fill="url(#sheen)"/>
+    <rect x="${ round(x + GAP + 2) }" y="${ round(y + GAP + 2) }" width="${ size - 4 }" height="${ size - 4 }" rx="16" fill="none" stroke="#FFFFFF" stroke-opacity="0.28" stroke-width="2.5"/>
+    <circle cx="${ cx }" cy="${ round(cy + 3) }" r="${ round(C * NEST_RADIUS) }" fill="${ LUDO_INK[colour].deep }" opacity="0.45" filter="url(#blur-4)"/>
+    <circle cx="${ cx }" cy="${ cy }" r="${ round(C * NEST_RADIUS) }" fill="url(#pool-${ colour })"/>
+    <circle cx="${ cx }" cy="${ cy }" r="${ round(C * NEST_RADIUS) }" fill="none" stroke="#FFFFFF" stroke-opacity="0.7" stroke-width="5"/>
+    <circle cx="${ cx }" cy="${ cy }" r="${ round(C * (NEST_RADIUS - 0.26)) }" fill="none" stroke="#FFFFFF" stroke-opacity="0.22" stroke-width="2"/>
+    ${ wells }
+</g>`;
+}
+
+function tile(col, row, symbol)
+{
+    const [x, y] = at(col, row);
+
+    return `<use href="#${ symbol }" x="${ x }" y="${ y }"/>`;
+}
+
+function star(col, row, fill, stroke)
+{
+    const [x, y] = at(col, row);
+
+    return `<path d="${ starPath(C * 0.3) }" transform="translate(${ round(x + C / 2) } ${ round(y + C / 2) })" fill="${ fill }" stroke="${ stroke }" stroke-width="2" stroke-linejoin="round"/>`;
+}
+
+function arrow(colour)
+{
+    const last = RING_CELLS[ringIndex(colour, RING_STEPS - 1)];
+    const first = HOME_CELLS[colour][0];
+    const turn = round((Math.atan2(first.row - last.row, first.col - last.col) * 180 / Math.PI + 360) % 360);
+    const [x, y] = at(last.col, last.row);
+    const u = C / 100;
+    const path = `M${ round(-30 * u) } ${ round(-8 * u) }H${ round(4 * u) }V${ round(-22 * u) }L${ round(32 * u) } 0L${ round(4 * u) } ${ round(22 * u) }V${ round(8 * u) }H${ round(-30 * u) }Z`;
+
+    return `<path d="${ path }" transform="translate(${ round(x + C / 2) } ${ round(y + C / 2) }) rotate(${ turn })" fill="${ LUDO_INK[colour].base }" stroke="${ LUDO_INK[colour].dark }" stroke-width="2" stroke-linejoin="round"/>`;
+}
+
+function centre()
+{
+    const [x, y] = at(6, 6);
+    const size = round(C * 3 - GAP * 2);
+    const x0 = round(x + GAP);
+    const y0 = round(y + GAP);
+    const x1 = round(x0 + size);
+    const y1 = round(y0 + size);
+    const mx = round(x0 + size / 2);
+    const my = round(y0 + size / 2);
+    const faces = [
+        ['red', `${ x0 } ${ y0 } ${ x0 } ${ my } ${ mx } ${ my }`, `${ x0 } ${ my } ${ x0 } ${ y1 } ${ mx } ${ my }`],
+        ['green', `${ x0 } ${ y0 } ${ mx } ${ y0 } ${ mx } ${ my }`, `${ mx } ${ y0 } ${ x1 } ${ y0 } ${ mx } ${ my }`],
+        ['yellow', `${ x1 } ${ y0 } ${ x1 } ${ my } ${ mx } ${ my }`, `${ x1 } ${ my } ${ x1 } ${ y1 } ${ mx } ${ my }`],
+        ['blue', `${ x0 } ${ y1 } ${ mx } ${ y1 } ${ mx } ${ my }`, `${ mx } ${ y1 } ${ x1 } ${ y1 } ${ mx } ${ my }`]
+    ];
+
+    return `<g clip-path="url(#centre-clip)">
+    ${ faces.map(([colour, a, b]) => `<polygon points="${ a }" fill="url(#peak-a-${ colour })"/>
+    <polygon points="${ b }" fill="url(#peak-b-${ colour })"/>`).join('\n    ') }
+    <path d="M${ x0 } ${ y0 }L${ x1 } ${ y1 }M${ x1 } ${ y0 }L${ x0 } ${ y1 }" stroke="#FFFFFF" stroke-opacity="0.35" stroke-width="2"/>
+</g>
+<rect x="${ x0 }" y="${ y0 }" width="${ size }" height="${ size }" rx="10" fill="none" stroke="#FFFFFF" stroke-opacity="0.3" stroke-width="2"/>
+<circle cx="${ mx }" cy="${ my }" r="${ round(C * 0.2) }" fill="url(#gem)" stroke="#FFFFFF" stroke-opacity="0.8" stroke-width="2"/>`;
+}
+
+function ludoBoard()
+{
+    const starts = new Map(COLOURS.map((colour) => [ENTRY[colour], colour]));
+    const tiles = [];
+    const marks = [];
+
+    RING_CELLS.forEach((cell, index) =>
+    {
+        const owner = starts.get(index);
+
+        if (owner !== undefined)
+        {
+            tiles.push(tile(cell.col, cell.row, `tile-${ owner }-face`));
+            marks.push(star(cell.col, cell.row, '#FFFFFF', LUDO_INK[owner].dark));
+            return;
+        }
+
+        tiles.push(tile(cell.col, cell.row, 'tile-plain'));
+
+        if (SAFE.includes(index))
+        {
+            const colour = ARM(cell.col, cell.row);
+
+            marks.push(star(cell.col, cell.row, LUDO_INK[colour].base, LUDO_INK[colour].dark));
+        }
+    });
+
+    for (const colour of COLOURS)
+    {
+        for (const cell of HOME_CELLS[colour])
+        {
+            tiles.push(tile(cell.col, cell.row, `tile-${ colour }-face`));
+        }
+
+        marks.push(arrow(colour));
+    }
+
+    const [cx, cy] = at(6, 6);
+    const csize = round(C * 3 - GAP * 2);
+
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${ S } ${ S }" width="${ S }" height="${ S }">
+<defs>
+<linearGradient id="wood" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#9A5F34"/><stop offset="0.4" stop-color="#7A4524"/><stop offset="0.75" stop-color="#5E3319"/><stop offset="1" stop-color="#452410"/></linearGradient>
+<filter id="grain" x="0" y="0" width="100%" height="100%">
+    <feTurbulence type="fractalNoise" baseFrequency="0.004 0.11" numOctaves="3" seed="11" result="noise"/>
+    <feColorMatrix in="noise" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1.3 -0.55"/>
+    <feComposite in2="SourceGraphic" operator="in"/>
+</filter>
+<filter id="blur-2" x="-10%" y="-10%" width="120%" height="120%"><feGaussianBlur stdDeviation="2"/></filter>
+<filter id="blur-4" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="4"/></filter>
+<linearGradient id="sheen" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF" stop-opacity="0.2"/><stop offset="0.4" stop-color="#FFFFFF" stop-opacity="0.04"/><stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/></linearGradient>
+<linearGradient id="cream" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#EAE3D6"/></linearGradient>
+<radialGradient id="gem" cx="0.38" cy="0.32" r="0.75"><stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#D9DEE8"/></radialGradient>
+<linearGradient id="varnish" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFFFFF" stop-opacity="0.16"/><stop offset="0.4" stop-color="#FFFFFF" stop-opacity="0"/><stop offset="1" stop-color="#000000" stop-opacity="0.12"/></linearGradient>
+<clipPath id="centre-clip"><rect x="${ round(cx + GAP) }" y="${ round(cy + GAP) }" width="${ csize }" height="${ csize }" rx="10"/></clipPath>
+${ gradients() }
+${ tileSymbol('tile-plain', 'url(#cream)', '#B9AE98') }
+${ COLOURS.map((colour) => tileSymbol(`tile-${ colour }-face`, `url(#tile-${ colour })`, LUDO_INK[colour].deep)).join('\n') }
+</defs>
+${ frame() }
+${ COLOURS.map(yard).join('\n') }
+${ tiles.join('\n') }
+${ centre() }
+${ marks.join('\n') }
+<rect x="${ round(EDGE) }" y="${ round(EDGE) }" width="${ round(S - EDGE * 2) }" height="${ round(S - EDGE * 2) }" rx="16" fill="url(#varnish)"/>
+</svg>
+`;
+}
 
 function flourish()
 {
@@ -77,6 +286,7 @@ ${ corners.map(([x, y, turn]) => `<use href="#flourish" transform="translate(${ 
 `;
 }
 
+
 if (RING_CELLS.length !== RING)
 {
     throw new Error(`the ring has ${ RING_CELLS.length } cells`);
@@ -86,6 +296,9 @@ writeFileSync(join(OUT, 'hokm-ornaments-wide.svg'), hokmOrnaments(1600, 1000));
 console.log('board hokm-ornaments-wide.svg');
 writeFileSync(join(OUT, 'hokm-ornaments-tall.svg'), hokmOrnaments(1000, 1200));
 console.log('board hokm-ornaments-tall.svg');
+
+writeFileSync(join(OUT, 'ludo-board.svg'), ludoBoard());
+console.log('board ludo-board.svg');
 
 const startOf = new Map(COLOURS.map((colour) => [ENTRY[colour], colour]));
 

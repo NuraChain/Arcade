@@ -10,11 +10,11 @@ import type { BoardHandle, BoardOptions } from './bridge.ts';
  * than a sentence about one file.
  *
  * **The loader is a function returning a dynamic import, and that is the whole point.** A static
- * import here would put Phaser - about 350 KB gzip - into the component's chunk, and from there
+ * import here would put the renderer into the component's chunk, and from there
  * into every route that renders a board. The import happens inside `mount`, once somebody is
  * actually looking at a game.
  *
- * The PLATE belongs to the scene rather than to the caller. It is the photograph of the object that
+ * The PLATE belongs to the scene rather than to the caller. It is the picture of the object that
  * game is played on, which is a fact about the game and not a prop a component should be trusted to
  * pass correctly.
  */
@@ -40,8 +40,8 @@ const SCENES: Record<string, () => Promise<Scene>> = {
         const { createLudoBoard } = await import('./board/ludo-board.ts');
 
         return {
-            plate: '/board/ludo-board.webp',
-            open: (options) => createLudoBoard({ ...options, plate: '/board/ludo-board.webp' })
+            plate: '/board/ludo-board.svg',
+            open: (options) => createLudoBoard({ ...options, plate: '/board/ludo-board.svg' })
         };
     }
 };
