@@ -176,6 +176,17 @@
     --ludo-green: #2FC262;
     --ludo-yellow: #FFC72C;
     --ludo-blue: #3F8CFF;
+
+    --nard-frame: #4A2E1C;
+    --nard-inlay: #C9A15C;
+    --nard-field: #EADBB8;
+    --nard-tray: #3A2416;
+    --nard-point-a: #8C2F2B;
+    --nard-point-b: #1F3B35;
+    --nard-light: #F6F0E2;
+    --nard-light-rim: #B9A889;
+    --nard-dark: #2A1D17;
+    --nard-dark-rim: #7A5A45;
 }
 
 @theme inline

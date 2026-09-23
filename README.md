@@ -4,8 +4,8 @@ A social gaming platform: a cinematic 3D landing page at `/` — a night market 
 tables the reader travels through by scrolling — and the signed-in product at `/app/*`, where the
 games are actually played.
 
-**Ludo** and **Hokm** are playable end to end: real engines, real turn order, real ratings.
-Backgammon and poker have tables and art but no engine yet. Everything is free to play; there is no
+**Ludo**, **Hokm** and **Backgammon** are playable end to end: real engines, real turn order, real
+ratings. Poker has tables and art but no engine yet. Everything is free to play; there is no
 wagering, no deposit and nothing to cash out.
 
 Chat is end to end encrypted (`nura-e2ee/v1`): the server stores the bodies and cannot read them.

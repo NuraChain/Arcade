@@ -95,7 +95,7 @@ export const GAME_SEEDS: GameSeed[] = [
         category: 'board',
         minPlayers: 2,
         maxPlayers: 2,
-        status: 'coming-soon',
+        status: 'available',
         seats: [2],
         modes: ['live', 'turns'],
         targets: [1, 3, 5],

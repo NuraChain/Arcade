@@ -1,0 +1,735 @@
+import MatchResult from './match-result.component.azeroth';
+import TurnClock from './turn-clock.component.azeroth';
+import DieFace from './die-face.component.azeroth';
+import Avatar from '../ui/avatar.component.azeroth';
+import Button from '../ui/button.component.azeroth';
+import Icon from '../../icons/icon.component.azeroth';
+import { backgammonOf } from '../../data/match.ts';
+import { useBoard } from '../../stores/match.store.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import { usePeople } from '../../stores/people.store.ts';
+import { useVoice } from '../../stores/voice.store.ts';
+import { diceOf, stage } from '../../../../server/src/domains/match/backgammon/moves.ts';
+import type { Hop } from '../../../../server/src/domains/match/backgammon/board.ts';
+import {
+    BAR_LEFT,
+    BAR_WIDTH,
+    BOTTOM,
+    FIELD_LEFT,
+    FIELD_RIGHT,
+    FRAME,
+    HEIGHT,
+    MIDDLE,
+    POINT_HEIGHT,
+    POINT_WIDTH,
+    RADIUS,
+    STACK_SHOWN,
+    TOP,
+    TRAY,
+    TRAY_LEFT,
+    WIDTH,
+    columnOf,
+    pointAt,
+    stackAt,
+    type Row
+} from '../../game/backgammon-layout.ts';
+import type { MatchView } from '../../api.ts';
+
+type Tone = 'light' | 'dark';
+
+interface Piece
+{
+    key: string;
+    x: number;
+    y: number;
+    tone: Tone;
+    label: string;
+    lit: boolean;
+}
+
+interface Slab
+{
+    key: string;
+    y: number;
+    tone: Tone;
+}
+
+interface Spike
+{
+    point: number;
+    path: string;
+    shade: 'a' | 'b';
+}
+
+interface Mark
+{
+    key: string;
+    x: number;
+    y: number;
+}
+
+const POINTS = Array.from({ length: 24 }, (_, index) => index + 1);
+
+const SPIKES: readonly Spike[] = POINTS.map((point) =>
+{
+    const column = columnOf(point);
+    const base = column.row === 'top' ? TOP : BOTTOM;
+    const tip = column.row === 'top' ? TOP + POINT_HEIGHT : BOTTOM - POINT_HEIGHT;
+
+    return {
+        point,
+        path: `${ column.x },${ base } ${ column.x + POINT_WIDTH },${ base } ${ column.x + POINT_WIDTH / 2 },${ tip }`,
+        shade: point % 2 === 0 ? 'a' : 'b'
+    };
+});
+
+const SLAB = (BOTTOM - TOP - 40) / 30;
+
+const GAP = 10;
+
+const centreOf = (point: number): number => columnOf(point).x + POINT_WIDTH / 2;
+
+export default component BackgammonBoard(props: { match: MatchView; starting?: boolean; onAgain?: () => void })
+{
+    const locale = useLocale();
+    const board = useBoard();
+    const people = usePeople();
+    const voice = useVoice();
+
+    state staged: Hop[] = [];
+
+    state picked: number | null = null;
+
+    derived game = props.match;
+
+    effect
+    {
+        const rev = game.rev;
+
+        if (rev >= 0)
+        {
+            staged = [];
+            picked = null;
+        }
+    }
+
+    derived view = backgammonOf(game);
+
+    derived over = game.finishedAt !== undefined;
+
+    derived mine = game.mine;
+
+    derived viewer = mine ?? 0;
+
+    const toneOf = (seat: number): Tone => (seat === 0 ? 'light' : 'dark');
+
+    derived rowOf = (seat: number): readonly number[] =>
+        view?.seats.find((row) => row.seat === seat)?.checkers ?? [];
+
+    derived whoAt = (seat: number): string => game.players.find((one) => one.seat === seat)?.who ?? '';
+
+    derived nameOf = (seat: number): string =>
+    {
+        if (seat === mine)
+        {
+            return locale.t('match.you');
+        }
+
+        const who = whoAt(seat);
+        const person = people.byHandle(who);
+
+        return person === null ? who : locale.text(person.displayName);
+    };
+
+    derived myTurn = view !== null && !over && mine !== undefined && view.turn === mine;
+
+    derived plan = myTurn && view!.phase === 'move' && view!.dice.length === 2
+        ? stage({ me: [...rowOf(viewer)], them: [...rowOf(1 - viewer)] }, view!.dice, staged)
+        : null;
+
+    derived near = plan?.at.me ?? rowOf(viewer);
+
+    derived far = plan?.at.them ?? rowOf(1 - viewer);
+
+    derived sources = new Set(picked === null ? (plan?.next ?? []).map((hop) => hop.from) : []);
+
+    derived targets = picked === null ? [] : (plan?.next ?? []).filter((hop) => hop.from === picked).map((hop) => hop.to);
+
+    const stack = (key: string, count: number, x: number, row: Row, base: number | undefined, tone: Tone, lit: boolean): Piece[] =>
+        Array.from({ length: Math.min(count, STACK_SHOWN) }, (_, index) => ({
+            key: `${ key }-${ index }`,
+            x,
+            y: stackAt(row, index, base),
+            tone,
+            label: index === STACK_SHOWN - 1 && count > STACK_SHOWN ? String(count) : '',
+            lit: lit && index === Math.min(count, STACK_SHOWN) - 1
+        }));
+
+    derived pieces = ((): Piece[] =>
+    {
+        if (view === null)
+        {
+            return [];
+        }
+
+        const mineTone = toneOf(viewer);
+        const theirTone = toneOf(1 - viewer);
+        const out: Piece[] = [];
+
+        for (const point of POINTS)
+        {
+            const column = columnOf(point);
+            const own = near[point] ?? 0;
+            const theirs = far[25 - point] ?? 0;
+
+            if (own > 0)
+            {
+                out.push(...stack(`n${ point }`, own, centreOf(point), column.row, undefined, mineTone, sources.has(point) || picked === point));
+            }
+
+            if (theirs > 0)
+            {
+                out.push(...stack(`f${ point }`, theirs, centreOf(point), column.row, undefined, theirTone, false));
+            }
+        }
+
+        const barX = BAR_LEFT + BAR_WIDTH / 2;
+
+        out.push(...stack('nbar', near[25] ?? 0, barX, 'top', MIDDLE + GAP, mineTone, sources.has(25) || picked === 25));
+        out.push(...stack('fbar', far[25] ?? 0, barX, 'bottom', MIDDLE - GAP, theirTone, false));
+
+        return out;
+    })();
+
+    derived slabs = ((): Slab[] =>
+    {
+        const out: Slab[] = [];
+
+        for (let index = 0; index < (near[0] ?? 0); index += 1)
+        {
+            out.push({ key: `n${ index }`, y: BOTTOM - 12 - (index + 1) * SLAB, tone: toneOf(viewer) });
+        }
+
+        for (let index = 0; index < (far[0] ?? 0); index += 1)
+        {
+            out.push({ key: `f${ index }`, y: TOP + 12 + index * SLAB, tone: toneOf(1 - viewer) });
+        }
+
+        return out;
+    })();
+
+    derived marks = targets.filter((to) => to !== 0).map((to): Mark =>
+    {
+        const column = columnOf(to);
+        const own = near[to] ?? 0;
+
+        return { key: `m${ to }`, x: centreOf(to), y: stackAt(column.row, Math.min(own, STACK_SHOWN - 1)) };
+    });
+
+    derived trayLit = targets.includes(0);
+
+    derived dice = view === null ? [] : diceOf(view.dice);
+
+    derived spent = ((): boolean[] =>
+    {
+        const left = [...dice];
+        const used = dice.map(() => false);
+
+        for (const hop of staged)
+        {
+            const distance = hop.from - hop.to;
+            let at = left.indexOf(distance);
+
+            if (at < 0 && hop.to === 0)
+            {
+                const bigger = left.filter((face) => face > distance).sort((a, b) => a - b)[0];
+
+                at = bigger === undefined ? -1 : left.indexOf(bigger);
+            }
+
+            if (at >= 0)
+            {
+                const face = left[at];
+
+                left.splice(at, 1);
+
+                const slot = dice.findIndex((one, index) => one === face && !used[index]);
+
+                if (slot >= 0)
+                {
+                    used[slot] = true;
+                }
+            }
+        }
+
+        return used;
+    })();
+
+    derived faces = dice.map((face, index) => ({ face, index, spent: spent[index] === true }));
+
+    derived cubeY = ((): number =>
+    {
+        if (view === null || view.owner === undefined)
+        {
+            return MIDDLE;
+        }
+
+        return view.owner === viewer ? BOTTOM - 44 : TOP + 44;
+    })();
+
+    const spotSays = (spot: number): string =>
+    {
+        if (spot === 25)
+        {
+            return locale.t('backgammon.bar');
+        }
+
+        return spot === 0 ? locale.t('backgammon.off') : locale.n(spot);
+    };
+
+    const hopSays = (hop: Hop): string => locale.t('backgammon.hop', { from: spotSays(hop.from), to: spotSays(hop.to) });
+
+    derived options = [...(plan?.next ?? [])].sort((a, b) => b.from - a.from || b.to - a.to);
+
+    derived says = ((): string =>
+    {
+        if (view === null)
+        {
+            return '';
+        }
+
+        if (over)
+        {
+            if (game.winner === undefined)
+            {
+                return locale.t('match.abandoned');
+            }
+
+            return game.winner === mine ? locale.t('match.won.you') : locale.t('match.won.them', { name: nameOf(game.winner) });
+        }
+
+        if (view.phase === 'double')
+        {
+            const offered = locale.n(view.cube * 2);
+
+            if (view.turn === mine)
+            {
+                return locale.t('backgammon.doubled.you', { name: nameOf(1 - view.turn), cube: offered });
+            }
+
+            return mine === undefined
+                ? locale.t('backgammon.doubled.watch', { name: nameOf(1 - view.turn), cube: offered })
+                : locale.t('backgammon.doubled.them', { name: nameOf(view.turn), cube: offered });
+        }
+
+        if (!myTurn)
+        {
+            return locale.t('match.turn.theirs', { name: nameOf(view.turn) });
+        }
+
+        if (view.phase === 'roll')
+        {
+            return locale.t('backgammon.turn.roll');
+        }
+
+        if (plan?.done === true && staged.length > 0)
+        {
+            return locale.t('backgammon.turn.confirm');
+        }
+
+        return locale.t('backgammon.turn.move', { dice: locale.list(view.dice.map((face) => locale.n(face))) });
+    })();
+
+    derived stacksSaid = (seat: number): string =>
+    {
+        const row = seat === viewer ? near : far;
+        const own = seat === viewer;
+        const parts = POINTS
+            .map((point) => ({ point: own ? point : 25 - point, count: row[own ? point : 25 - point] ?? 0 }))
+            .filter((entry) => entry.count > 0)
+            .map((entry) => locale.t('backgammon.stack', { count: locale.n(entry.count), point: locale.n(own ? entry.point : 25 - entry.point) }));
+
+        if ((row[25] ?? 0) > 0)
+        {
+            parts.push(locale.t('backgammon.stack.bar', { count: locale.n(row[25]) }));
+        }
+
+        if ((row[0] ?? 0) > 0)
+        {
+            parts.push(locale.t('backgammon.stack.off', { count: locale.n(row[0]) }));
+        }
+
+        return `${ nameOf(seat) }: ${ locale.list(parts) }`;
+    };
+
+    const add = (hop: Hop): void =>
+    {
+        staged = [...staged, hop];
+        picked = null;
+    };
+
+    const undo = (): void =>
+    {
+        staged = staged.slice(0, -1);
+        picked = null;
+    };
+
+    const tap = (event: PointerEvent): void =>
+    {
+        const held = plan;
+
+        if (held === null || board.busy())
+        {
+            return;
+        }
+
+        const box = (event.currentTarget as SVGSVGElement).getBoundingClientRect();
+        const found = pointAt((event.clientX - box.left) / box.width * WIDTH, (event.clientY - box.top) / box.height * HEIGHT);
+
+        if (found === null)
+        {
+            picked = null;
+            return;
+        }
+
+        const spot = found === 'bar' ? 25 : (found === 'tray' ? 0 : found);
+
+        if (picked !== null)
+        {
+            const hop = held.next.find((one) => one.from === picked && one.to === spot);
+
+            if (hop !== undefined)
+            {
+                add(hop);
+                return;
+            }
+        }
+
+        const leaving = held.next.filter((one) => one.from === spot);
+
+        if (leaving.length === 0)
+        {
+            picked = null;
+            return;
+        }
+
+        if (new Set(leaving.map((one) => one.to)).size === 1)
+        {
+            add(leaving[0]);
+            return;
+        }
+
+        picked = spot;
+    };
+
+    const play = async (verb: 'roll' | 'double' | 'take' | 'drop'): Promise<void> =>
+    {
+        await board.play({ kind: 'backgammon', verb });
+    };
+
+    const submit = async (): Promise<void> =>
+    {
+        if (plan?.done !== true || staged.length === 0)
+        {
+            return;
+        }
+
+        await board.play({ kind: 'backgammon', verb: 'move', hops: [...staged] });
+    };
+
+    derived plates = [1 - viewer, viewer].map((seat) => ({
+        seat,
+        tone: toneOf(seat),
+        row: view?.seats.find((one) => one.seat === seat)
+    }));
+
+    <div class="@container flex min-w-0 flex-col gap-3">
+        <Show when={ view !== null }>
+            { () =>
+                <div class="grid min-w-0 grid-cols-1 gap-3 [grid-template-areas:'players'_'board'_'side'] @4xl:grid-cols-[minmax(0,1fr)_19rem] @4xl:items-start @4xl:gap-x-5 @4xl:[grid-template-areas:'players_side'_'board_side'] sideways:grid-cols-[auto_minmax(0,1fr)] sideways:items-start sideways:gap-x-4 sideways:[grid-template-areas:'board_players'_'board_side']">
+                    <ul class="mx-auto grid w-full max-w-[max(18rem,calc((100dvh-24rem)*1.22))] grid-cols-2 gap-2 [grid-area:players] @4xl:max-w-none sideways:max-w-none" aria-label={ locale.t('backgammon.players') }>
+                        <For each={ plates } key={ (plate) => plate.seat } let={ plate }>
+                            <li
+                                class={ () => [
+                                    'flex min-w-0 items-center gap-2 rounded-tile border bg-field px-2.5 py-2 transition-colors',
+                                    !over && view!.turn === plate.seat ? 'border-accent shadow-[0_0_0_1px_var(--accent)]' : 'border-line'
+                                ].join(' ') }
+                                aria-current={ !over && view!.turn === plate.seat ? 'true' : undefined }
+                            >
+                                <span class={ () => [ 'flex shrink-0 rounded-full transition-shadow duration-150', voice.speaking(whoAt(plate.seat)) ? 'ring-2 ring-live ring-offset-2 ring-offset-void' : '' ].filter(Boolean).join(' ') }>
+                                    <Avatar person={ people.byHandle(whoAt(plate.seat)) } size="sm" ringOn="void" />
+                                </span>
+                                <span class="flex min-w-0 flex-1 flex-col leading-tight">
+                                    <span class="flex min-w-0 items-center gap-1.5">
+                                        <span
+                                            class={ () => [ 'h-3 w-3 shrink-0 rounded-full ring-1', plate.tone === 'light' ? 'bg-[var(--nard-light)] ring-black/30' : 'bg-[var(--nard-dark)] ring-white/30' ].join(' ') }
+                                            aria-hidden="true"
+                                        ></span>
+                                        <span class="truncate text-ui-xs font-semibold text-text" dir="auto">{ nameOf(plate.seat) }</span>
+                                    </span>
+                                    <span class="flex items-center gap-2 text-ui-2xs text-muted">
+                                        <span>{ locale.t('backgammon.score', { score: locale.n(plate.row?.score ?? 0), target: locale.n(view!.target) }) }</span>
+                                        <span>{ locale.plural('backgammon.pips', plate.row?.pips ?? 0) }</span>
+                                    </span>
+                                </span>
+                            </li>
+                        </For>
+                    </ul>
+
+                    <div class="mx-auto flex w-full min-w-0 max-w-[max(18rem,calc((100dvh-24rem)*1.22))] flex-col gap-3 [grid-area:board] @4xl:max-w-[max(18rem,calc((100dvh-15rem)*1.22))] sideways:w-[min(60vw,calc((100dvh-9rem)*1.22))] sideways:max-w-none">
+                        <div class="relative [direction:ltr]">
+                            <svg
+                                viewBox={ `0 0 ${ WIDTH } ${ HEIGHT }` }
+                                class={ () => [ 'block h-auto w-full select-none touch-manipulation rounded-panel', plan !== null ? 'cursor-pointer' : '' ].filter(Boolean).join(' ') }
+                                aria-hidden="true"
+                                onPointerUp={ tap }
+                            >
+                                <rect x="0" y="0" width={ WIDTH } height={ HEIGHT } rx="22" fill="var(--nard-frame)" />
+                                <rect x={ FIELD_LEFT } y={ TOP } width={ FIELD_RIGHT - FIELD_LEFT } height={ BOTTOM - TOP } rx="6" fill="var(--nard-field)" />
+                                <rect x={ BAR_LEFT } y={ TOP - 6 } width={ BAR_WIDTH } height={ BOTTOM - TOP + 12 } fill="var(--nard-frame)" />
+                                <rect
+                                    x={ TRAY_LEFT }
+                                    y={ TOP }
+                                    width={ TRAY }
+                                    height={ BOTTOM - TOP }
+                                    rx="8"
+                                    fill="var(--nard-tray)"
+                                    stroke={ trayLit ? 'var(--accent)' : 'none' }
+                                    stroke-width="6"
+                                />
+                                <line x1={ TRAY_LEFT + 8 } y1={ MIDDLE } x2={ TRAY_LEFT + TRAY - 8 } y2={ MIDDLE } stroke="var(--nard-frame)" stroke-width="4" />
+
+                                <For each={ [...SPIKES] } key={ (spike) => spike.point } let={ spike }>
+                                    <g>
+                                        <polygon points={ spike.path } fill={ spike.shade === 'a' ? 'var(--nard-point-a)' : 'var(--nard-point-b)' } />
+                                    </g>
+                                </For>
+
+                                <For each={ slabs } key={ (slab) => slab.key } let={ slab }>
+                                    <g>
+                                        <rect
+                                            x={ TRAY_LEFT + 9 }
+                                            y={ slab.y }
+                                            width={ TRAY - 18 }
+                                            height={ SLAB - 2 }
+                                            rx="3"
+                                            fill={ slab.tone === 'light' ? 'var(--nard-light)' : 'var(--nard-dark)' }
+                                            stroke={ slab.tone === 'light' ? 'var(--nard-light-rim)' : 'var(--nard-dark-rim)' }
+                                            stroke-width="2"
+                                        />
+                                    </g>
+                                </For>
+
+                                <For each={ pieces } key={ (piece) => piece.key } let={ piece }>
+                                    <g>
+                                        <circle
+                                            cx={ piece.x }
+                                            cy={ piece.y }
+                                            r={ RADIUS - 1 }
+                                            fill={ piece.tone === 'light' ? 'var(--nard-light)' : 'var(--nard-dark)' }
+                                            stroke={ piece.lit ? 'var(--accent)' : (piece.tone === 'light' ? 'var(--nard-light-rim)' : 'var(--nard-dark-rim)') }
+                                            stroke-width={ piece.lit ? 7 : 3 }
+                                        />
+                                        <circle
+                                            cx={ piece.x }
+                                            cy={ piece.y }
+                                            r={ RADIUS * 0.6 }
+                                            fill="none"
+                                            stroke={ piece.tone === 'light' ? 'var(--nard-light-rim)' : 'var(--nard-dark-rim)' }
+                                            stroke-width="2"
+                                            opacity="0.6"
+                                        />
+                                        <Show when={ piece.label !== '' }>
+                                            { () =>
+                                                <text
+                                                    x={ piece.x }
+                                                    y={ piece.y + 9 }
+                                                    text-anchor="middle"
+                                                    font-size="26"
+                                                    font-weight="700"
+                                                    fill={ piece.tone === 'light' ? 'var(--nard-dark)' : 'var(--nard-light)' }
+                                                >{ piece.label }</text>
+                                            }
+                                        </Show>
+                                    </g>
+                                </For>
+
+                                <For each={ marks } key={ (mark) => mark.key } let={ mark }>
+                                    <g>
+                                        <circle cx={ mark.x } cy={ mark.y } r={ RADIUS - 4 } fill="var(--accent)" fill-opacity="0.28" stroke="var(--accent)" stroke-width="4" stroke-dasharray="10 7" />
+                                    </g>
+                                </For>
+
+                                <Show when={ view!.cubed }>
+                                    { () =>
+                                        <g>
+                                            <rect
+                                                x={ BAR_LEFT + BAR_WIDTH / 2 - 24 }
+                                                y={ cubeY - 24 }
+                                                width="48"
+                                                height="48"
+                                                rx="8"
+                                                fill="var(--nard-light)"
+                                                stroke="var(--nard-dark)"
+                                                stroke-width="3"
+                                            />
+                                            <text
+                                                x={ BAR_LEFT + BAR_WIDTH / 2 }
+                                                y={ cubeY + 9 }
+                                                text-anchor="middle"
+                                                font-size="26"
+                                                font-weight="800"
+                                                fill="var(--nard-dark)"
+                                            >{ String(view!.cube === 1 ? 64 : view!.cube) }</text>
+                                        </g>
+                                    }
+                                </Show>
+
+                                <rect x={ FRAME / 2 } y={ FRAME / 2 } width={ WIDTH - FRAME } height={ HEIGHT - FRAME } rx="16" fill="none" stroke="var(--nard-inlay)" stroke-width="3" />
+                            </svg>
+
+                            <Show when={ faces.length > 0 && !over }>
+                                { () =>
+                                    <div
+                                        class="pointer-events-none absolute top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center gap-1.5"
+                                        style={ `left: ${ ((BAR_LEFT + BAR_WIDTH + POINT_WIDTH * 3) / WIDTH * 100).toFixed(3) }%` }
+                                        role="img"
+                                        aria-label={ locale.t('backgammon.dice', { dice: locale.list(view!.dice.map((face) => locale.n(face))) }) }
+                                    >
+                                        <For each={ faces } key={ (die) => die.index } let={ die }>
+                                            <span class={ () => [ 'flex transition-opacity duration-200', die.spent ? 'opacity-35' : '' ].filter(Boolean).join(' ') } aria-hidden="true">
+                                                <DieFace value={ die.face } size="sm" label="" />
+                                            </span>
+                                        </For>
+                                    </div>
+                                }
+                            </Show>
+                        </div>
+
+                        <div class="sr-only">
+                            <p>{ stacksSaid(viewer) }</p>
+                            <p>{ stacksSaid(1 - viewer) }</p>
+                        </div>
+
+                        <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-ui-2xs text-muted">
+                            <span>{ locale.t('backgammon.match', { target: locale.n(view!.target), round: locale.n(view!.round) }) }</span>
+                            <Show when={ view!.cubed }>
+                                { () =>
+                                    <span class="flex items-center gap-1">
+                                        <Icon name="dice" size={ 12 } />
+                                        { view!.owner === undefined
+                                            ? locale.t('backgammon.cube.centre', { cube: locale.n(view!.cube) })
+                                            : locale.t('backgammon.cube.owner', { cube: locale.n(view!.cube), name: nameOf(view!.owner) }) }
+                                    </span>
+                                }
+                            </Show>
+                            <Show when={ view!.crawford }>
+                                { () => <span class="font-semibold text-gold">{ locale.t('backgammon.crawford') }</span> }
+                            </Show>
+                        </div>
+
+                    </div>
+
+                    <Show when={ !over }>
+                        { () =>
+                            <section class="mx-auto flex w-full min-w-0 max-w-[max(18rem,calc((100dvh-24rem)*1.22))] flex-col gap-3 [grid-area:side] @4xl:max-w-none sideways:max-w-none">
+                                <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+                                    <p class="min-w-0 flex-1 basis-[10rem] text-ui-lg font-semibold text-text" aria-live="polite">{ says }</p>
+                                    <TurnClock remainingMs={ game.remainingMs } over={ over } />
+                                </div>
+
+                                <Show when={ myTurn && view!.phase === 'roll' }>
+                                    { () =>
+                                        <div class="flex flex-wrap gap-2">
+                                            <span class="glow-cta flex rounded-control">
+                                                <Button variant="primary" size="lg" leading="dice" loading={ board.busy() } onClick={ () => void play('roll') }>
+                                                    { locale.t('backgammon.roll') }
+                                                </Button>
+                                            </span>
+                                            <Show when={ view!.doubling }>
+                                                { () =>
+                                                    <Button variant="secondary" size="lg" disabled={ board.busy() } onClick={ () => void play('double') }>
+                                                        { locale.t('backgammon.double', { cube: locale.n(view!.cube * 2) }) }
+                                                    </Button>
+                                                }
+                                            </Show>
+                                        </div>
+                                    }
+                                </Show>
+
+                                <Show when={ myTurn && view!.phase === 'double' }>
+                                    { () =>
+                                        <div class="flex flex-wrap gap-2">
+                                            <Button variant="primary" size="lg" loading={ board.busy() } onClick={ () => void play('take') }>
+                                                { locale.t('backgammon.take', { cube: locale.n(view!.cube * 2) }) }
+                                            </Button>
+                                            <Button variant="destructive" size="lg" disabled={ board.busy() } onClick={ () => void play('drop') }>
+                                                { locale.t('backgammon.drop') }
+                                            </Button>
+                                        </div>
+                                    }
+                                </Show>
+
+                                <Show when={ plan !== null }>
+                                    { () =>
+                                        <div class="flex flex-col gap-3">
+                                            <div class="flex flex-wrap gap-2">
+                                                <Button variant="secondary" size="md" leading="undo" disabled={ staged.length === 0 || board.busy() } onClick={ undo }>
+                                                    { locale.t('backgammon.undo') }
+                                                </Button>
+                                                <span class={ () => [ 'flex rounded-control', plan?.done === true && staged.length > 0 ? 'glow-cta' : '' ].filter(Boolean).join(' ') }>
+                                                    <Button
+                                                        variant="primary"
+                                                        size="md"
+                                                        leading="selected"
+                                                        disabled={ plan?.done !== true || staged.length === 0 }
+                                                        loading={ board.busy() }
+                                                        onClick={ () => void submit() }
+                                                    >
+                                                        { locale.t('backgammon.play') }
+                                                    </Button>
+                                                </span>
+                                            </div>
+
+                                            <Show when={ options.length > 0 }>
+                                                { () =>
+                                                    <div class="flex flex-col gap-1.5">
+                                                        <p class="text-ui-xs text-muted">{ locale.t('backgammon.pick') }</p>
+                                                        <ul class="flex flex-wrap gap-1.5" aria-label={ locale.t('backgammon.moves') }>
+                                                            <For each={ options } key={ (hop) => `${ hop.from }/${ hop.to }` } let={ hop }>
+                                                                <li class="flex">
+                                                                    <button
+                                                                        type="button"
+                                                                        class={ () => [
+                                                                            'inline-flex h-9 min-w-11 cursor-pointer items-center justify-center rounded-control border px-2.5 text-ui-sm font-semibold transition-colors coarse:h-11 disabled:cursor-not-allowed disabled:opacity-50',
+                                                                            picked === hop.from ? 'border-accent bg-accent/15 text-text' : 'border-line-strong bg-raised text-text hover:border-accent'
+                                                                        ].join(' ') }
+                                                                        disabled={ board.busy() }
+                                                                        aria-label={ hopSays(hop) }
+                                                                        onClick={ () => add(hop) }
+                                                                    >
+                                                                        { spotSays(hop.from) }
+                                                                        <Icon name="chevron-right" size={ 14 } class="icon-flip mx-0.5 text-muted" />
+                                                                        { spotSays(hop.to) }
+                                                                    </button>
+                                                                </li>
+                                                            </For>
+                                                        </ul>
+                                                    </div>
+                                                }
+                                            </Show>
+                                        </div>
+                                    }
+                                </Show>
+                            </section>
+                        }
+                    </Show>
+                </div>
+            }
+        </Show>
+
+        <Show when={ over }>
+            { () => <MatchResult match={ game } mine={ mine } busy={ props.starting === true } onAgain={ props.onAgain } /> }
+        </Show>
+    </div>
+}

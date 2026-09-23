@@ -115,6 +115,7 @@
 @custom-variant phone (&:where([data-posture='phone'], [data-posture='phone'] *));
 @custom-variant rail (&:where([data-posture='rail'], [data-posture='rail'] *));
 @custom-variant sidebar (&:where([data-posture='sidebar'], [data-posture='sidebar'] *));
+@custom-variant sideways (@media (orientation: landscape) and (max-height: 540px) and (min-aspect-ratio: 4/3));
 
 @utility safe-t
 {

@@ -25,6 +25,43 @@ function seeded(seed: number): { draws: Draws; next: () => number }
 const opened = (seed: number, target: number, cube: boolean): BackgammonState =>
     backgammonEngine.create([0, 1], seeded(seed).draws, { target, cube, blinds: 'low' });
 
+describe('whose turn the board says it is', () =>
+{
+    it('names the seat that must act, the same seat the engine does, even while a double waits for an answer', () =>
+    {
+        const { draws, next } = seeded(77);
+        let state = backgammonEngine.create([0, 1], draws, { target: 5, cube: true, blinds: 'low' });
+        let doubles = 0;
+
+        while (backgammonEngine.finish(state) === null)
+        {
+            const seat = backgammonEngine.turnOf(state)!;
+            const board = backgammonEngine.view(state, null) as { turn: number; phase: string };
+
+            expect(board.turn).toBe(seat);
+
+            if (board.phase === 'double')
+            {
+                doubles += 1;
+            }
+
+            const legal = backgammonEngine.legal(state, seat);
+            const doubling = legal.find((action) => action.kind === 'double');
+            const chosen = doubling !== undefined && next() < 0.3 ? doubling : legal[Math.floor(next() * legal.length)];
+            const applied = backgammonEngine.apply(state, chosen, draws);
+
+            if (!applied.ok)
+            {
+                throw new Error(applied.reason);
+            }
+
+            state = applied.state;
+        }
+
+        expect(doubles).toBeGreaterThan(0);
+    });
+});
+
 describe('what one seat may see of the other', () =>
 {
     it('shows every reader the same board and the same log, all match long', () =>

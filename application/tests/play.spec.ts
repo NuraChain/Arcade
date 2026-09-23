@@ -425,7 +425,7 @@ describe('PlayPage', () =>
 
         expect(container.textContent).toContain(useLocale().t('match.cannotDraw'));
         expect(container.textContent).toContain(useLocale().t('watch.title'));
-        expect(Object.keys(BOARDS).sort()).toEqual(['hokm', 'ludo']);
+        expect(Object.keys(BOARDS).sort()).toEqual(['backgammon', 'hokm', 'ludo']);
     });
 
     it('is the same for a conversation replaced by another one while it leaves', async () =>
@@ -568,7 +568,7 @@ describe('the table’s chat and its controls', () =>
         useSettings().update({ railOpen: true });
     });
 
-    const open = async (posture: 'phone' | 'sidebar'): Promise<HTMLElement> =>
+    const open = async (posture: 'phone' | 'rail' | 'sidebar'): Promise<HTMLElement> =>
     {
         useDevice().override(posture);
         const id = await useLobby().host('ludo', defaultTable('ludo'), []);
@@ -582,6 +582,13 @@ describe('the table’s chat and its controls', () =>
     const button = (container: HTMLElement, name: string): HTMLElement | undefined =>
         [...container.querySelectorAll('button')].find((one) =>
             one.getAttribute('aria-label') === name || one.textContent?.trim() === name);
+
+    const found = async (container: HTMLElement, name: string): Promise<HTMLElement> =>
+    {
+        await vi.waitFor(() => expect(button(container, name)).toBeDefined(), { timeout: 4000 });
+
+        return button(container, name)!;
+    };
 
     const rail = (container: HTMLElement): HTMLElement | null => container.querySelector('.table-card:not(.hidden)');
 
@@ -602,7 +609,7 @@ describe('the table’s chat and its controls', () =>
         expect(pill(container)).toBeNull();
         expect(useSettings().settings().railOpen).toBe(true);
 
-        fire(button(container, 'Hide chat')!, 'click');
+        fire(await found(container, 'Hide chat'), 'click');
         await settle();
 
         expect(rail(container)).toBeNull();
@@ -617,12 +624,12 @@ describe('the table’s chat and its controls', () =>
 
         expect(rail(container)!.className).toContain('w-[min(23rem');
 
-        fire(button(container, 'Make the chat bigger')!, 'click');
+        fire(await found(container, 'Make the chat bigger'), 'click');
         await settle();
 
         expect(rail(container)!.className).toContain('w-[min(30rem');
 
-        fire(button(container, 'Make the chat smaller')!, 'click');
+        fire(await found(container, 'Make the chat smaller'), 'click');
         await settle();
 
         expect(rail(container)!.className).toContain('w-[min(23rem');
@@ -633,7 +640,7 @@ describe('the table’s chat and its controls', () =>
         useSettings().update({ railOpen: true });
         const container = await open('sidebar');
 
-        fire(button(container, 'Players')!, 'click');
+        fire(await found(container, 'Players'), 'click');
         await settle();
 
         const rows = [...rail(container)!.querySelectorAll('ul[aria-label="Players"] > li')];
@@ -641,11 +648,69 @@ describe('the table’s chat and its controls', () =>
         expect(rows).toHaveLength(useLobby().table()!.chairs.filter((chair) => chair.who !== undefined).length);
         expect(rows[0].textContent).toContain('You');
 
-        fire(button(container, 'Chat')!, 'click');
+        fire(await found(container, 'Chat'), 'click');
         await settle();
 
         expect(rail(container)!.querySelector('ul[aria-label="Players"]')).toBeNull();
         expect(rail(container)!.querySelector('textarea')).not.toBeNull();
+    });
+
+    const screen = (width: number, height: number): void =>
+    {
+        Object.defineProperty(window, 'innerWidth', { configurable: true, value: width });
+        Object.defineProperty(window, 'innerHeight', { configurable: true, value: height });
+        useDevice().start();
+        window.dispatchEvent(new Event('resize'));
+    };
+
+    afterEach(() =>
+    {
+        screen(1024, 768);
+        useDevice().stop();
+    });
+
+    it('opens the chat on a phone turned sideways only when asked, as a sheet down the side', async () =>
+    {
+        screen(844, 390);
+        useSettings().update({ railOpen: true });
+        const container = await open('rail');
+
+        expect(rail(container)).toBeNull();
+        expect(container.querySelector('.table-sheet:not(.hidden)')).toBeNull();
+
+        fire(await found(container, 'Show chat'), 'click');
+        await settle();
+
+        const sheet = container.querySelector('.table-sheet:not(.hidden)')!;
+
+        expect(sheet.className).toContain('inset-y-0');
+        expect(sheet.className).not.toContain('h-[48dvh]');
+        expect(container.querySelector('[class*="pb-[48dvh]"]')).toBeNull();
+    });
+
+    it('floats the chat beside the board in a landscape window with height to spare, and makes room for it', async () =>
+    {
+        screen(1000, 700);
+        useSettings().update({ railOpen: true });
+        const container = await open('rail');
+
+        expect(rail(container)).not.toBeNull();
+        expect(container.querySelector('[class*="pe-[24.5rem]"]')).not.toBeNull();
+    });
+
+    it('opens the chat as the bottom sheet on an upright tablet, where a floating card would cover the board', async () =>
+    {
+        screen(800, 1100);
+        useSettings().update({ railOpen: true });
+        const container = await open('rail');
+
+        expect(rail(container)).toBeNull();
+        expect(pill(container)).toBeNull();
+
+        fire(await found(container, 'Show chat'), 'click');
+        await settle();
+
+        expect(container.querySelector('.table-sheet')!.className).toContain('h-[48dvh]');
     });
 
     it('opens the chat over the table on a phone, half the screen first, and can take all of it', async () =>

@@ -232,7 +232,7 @@ console.log('\n[4] the guest seat — no button that signs you out under a walle
         await page.waitForTimeout(1500);
         const text = await page.locator('body').innerText();
         record('settings offers no "Connect a wallet"', !/Connect a wallet/i.test(text), '');
-        const card = page.locator('section[aria-labelledby="settings-account"]');
+        const card = page.locator('section#settings-account');
         const signOuts = await card.getByRole('button', { name: /^Sign out$/ }).count();
         const primaries = await card.locator('button').count();
         record('the account card has exactly one sign-out', signOuts === 1, `found ${ signOuts } of ${ primaries } buttons`);
@@ -330,7 +330,7 @@ console.log('\n[6] the server decides what a table may be');
         });
 
         /*
-         * And the three games with no engine are refused at the door rather than at Start.
+         * And a game with no engine is refused at the door rather than at Start.
          * `available` is a claim about a mechanism; a table that can be opened, filled and readied
          * and then answers 422 to the one button that matters is the shape this check exists to
          * keep out of the product.
@@ -346,7 +346,7 @@ console.log('\n[6] the server decides what a table may be');
                 });
                 return r.status;
             };
-            return { poker: await post('poker', 2), backgammon: await post('backgammon', 2) };
+            return { poker: await post('poker', 2) };
         });
 
         for (const [game, status] of Object.entries(unplayable))

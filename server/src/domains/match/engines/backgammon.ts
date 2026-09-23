@@ -88,7 +88,7 @@ export const backgammonEngine: Engine<BackgammonState, BackgammonAction> = {
         const board: MatchBoard = {
             kind: 'backgammon',
             phase: state.phase,
-            turn: state.turn,
+            turn: state.phase === 'double' ? 1 - state.turn : state.turn,
             dice: [...state.dice],
             seats: state.checkers.map((checkers, seat) => ({
                 seat,

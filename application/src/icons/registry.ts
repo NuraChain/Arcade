@@ -83,6 +83,7 @@ import {
     Trash,
     Trophy,
     TriangleAlert,
+    Undo2,
     UserCheck,
     UserPlus,
     Users,
@@ -191,7 +192,8 @@ export const ICONS = {
     'trash': Trash,
     'palette': Palette,
     'voice-off': MicOff,
-    'hang-up': PhoneOff
+    'hang-up': PhoneOff,
+    'undo': Undo2
 } satisfies Record<string, IconNode>;
 
 export type IconName = keyof typeof ICONS;

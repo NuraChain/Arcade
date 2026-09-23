@@ -17,7 +17,7 @@ import { runtime } from '../../lib/runtime.ts';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useChat } from '../../stores/chat.store.ts';
 import { usePeople } from '../../stores/people.store.ts';
-import { useDevice } from '../../stores/device.store.ts';
+import { SHORT_MAX, useDevice } from '../../stores/device.store.ts';
 import { useVoice } from '../../stores/voice.store.ts';
 import { useLobby } from '../../stores/lobby.store.ts';
 import { useBoard } from '../../stores/match.store.ts';
@@ -189,9 +189,9 @@ export default component PlayPage()
 
     useHead({ title: () => title });
 
-    derived floating = device.posture() !== 'phone';
+    derived sideways = device.landscape() && device.height() <= SHORT_MAX;
 
-    derived roomy = device.posture() === 'sidebar';
+    derived floating = !sideways && (device.posture() === 'sidebar' || (device.posture() === 'rail' && device.landscape()));
 
     derived hasChat = seated && table?.conversationId !== undefined;
 
@@ -583,7 +583,7 @@ export default component PlayPage()
                 <div class="flex min-h-0 flex-1 gap-4">
                     <div
                         ref={ (element) => arena = element }
-                        class={ () => [ 'flex min-w-0 flex-1 flex-col gap-4 bg-void py-2 transition-[padding] duration-200', sheetVisible ? (chatWide ? '' : 'pb-[48dvh]') : '', cardOpen && roomy ? (chatWide ? 'pe-[31.5rem]' : 'pe-[24.5rem]') : '' ].filter(Boolean).join(' ') }
+                        class={ () => [ 'flex min-w-0 flex-1 flex-col gap-4 bg-void py-2 transition-[padding] duration-200', sheetVisible && !sideways && !chatWide ? 'pb-[48dvh]' : '', cardOpen ? (chatWide ? 'pe-[31.5rem]' : 'pe-[24.5rem]') : '' ].filter(Boolean).join(' ') }
                     >
                         <PlayHeader
                             table={ table! }
@@ -710,10 +710,15 @@ export default component PlayPage()
                                             'table-card fixed bottom-5 end-5 z-30 rounded-panel border border-line-strong',
                                             chatWide ? 'w-[min(30rem,calc(100vw-2.5rem))] h-[calc(100dvh-6.5rem)]' : 'w-[min(23rem,calc(100vw-2.5rem))] h-[min(34rem,calc(100dvh-6.5rem))]'
                                         ].join(' ')
-                                        : [
-                                            'table-sheet fixed inset-x-0 bottom-0 z-30 rounded-t-sheet border-t border-line-strong',
-                                            chatWide ? 'top-3' : 'h-[48dvh]'
-                                        ].join(' '),
+                                        : (sideways
+                                            ? [
+                                                'table-sheet fixed inset-y-0 end-0 z-30 border-s border-line-strong',
+                                                chatWide ? 'w-[min(30rem,85vw)]' : 'w-[min(23rem,60vw)]'
+                                            ]
+                                            : [
+                                                'table-sheet fixed inset-x-0 bottom-0 z-30 rounded-t-sheet border-t border-line-strong',
+                                                chatWide ? 'top-3' : 'h-[48dvh]'
+                                            ]).join(' '),
                                     chatShown ? '' : 'hidden'
                                 ].filter(Boolean).join(' ') }
                             >

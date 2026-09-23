@@ -49,7 +49,8 @@ const ROUTES = [
     { id: 'chats', path: '/app/chats' },
     { id: 'chat', path: '/app/chats/:conversation' },
     { id: 'group', path: '/app/groups/balcony-backgammon' },
-    { id: 'play', path: '/app/play/:table' },
+    { id: 'play', path: '/app/play/:ludo' },
+    { id: 'play-backgammon', path: '/app/play/:backgammon' },
     { id: 'leaderboard', path: '/app/leaderboard' },
     { id: 'discover', path: '/app/discover' },
     { id: 'search', path: '/app/search' },
@@ -122,12 +123,12 @@ async function signedIn(browser, handle = TOUR_HANDLE)
  * starts one - and reuses a live match when a previous run already left one behind, so repeated
  * runs do not litter the database with tables.
  */
-async function playableTable(browser, storageState)
+async function playableTable(browser, storageState, game)
 {
     const mine = await browser.newContext({ storageState });
 
     const seated = await mine.request.get(`${ BASE }/api/tables/mine`);
-    const already = seated.ok() ? (await seated.json()).tables.find((one) => one.matchId !== undefined) : undefined;
+    const already = seated.ok() ? (await seated.json()).tables.find((one) => one.matchId !== undefined && one.game === game) : undefined;
 
     if (already !== undefined)
     {
@@ -137,11 +138,11 @@ async function playableTable(browser, storageState)
 
     const made = await mine.request.post(`${ BASE }/api/tables/`, {
         data: {
-            game: 'ludo',
+            game,
             seats: 2,
-            mode: 'live',
+            mode: 'turns',
             privacy: 'public',
-            target: 0,
+            target: game === 'backgammon' ? 1 : 0,
             cube: false,
             blinds: 'low',
             chat: true,
@@ -153,7 +154,7 @@ async function playableTable(browser, storageState)
     if (!made.ok())
     {
         await mine.close();
-        throw new Error(`qa: could not open a ludo table (${ made.status() })`);
+        throw new Error(`qa: could not open a ${ game } table (${ made.status() })`);
     }
 
     const table = (await made.json()).id;
@@ -172,7 +173,7 @@ async function playableTable(browser, storageState)
 
     if (!started.ok())
     {
-        throw new Error(`qa: could not start a ludo match (${ started.status() })`);
+        throw new Error(`qa: could not start a ${ game } match (${ started.status() })`);
     }
 
     return table;
@@ -299,7 +300,7 @@ async function main()
     }
     const conversation = conversations[0].id;
 
-    const table = await playableTable(browser, storageState);
+    const tables = { ludo: await playableTable(browser, storageState, 'ludo'), backgammon: await playableTable(browser, storageState, 'backgammon') };
     const failures = [];
     const rows = [];
     let cells = 0;
@@ -348,7 +349,8 @@ async function main()
 
                     const target = route.path
                         .replace(':conversation', conversation)
-                        .replace(':table', table);
+                        .replace(':ludo', tables.ludo)
+                        .replace(':backgammon', tables.backgammon);
                     await page.goto(`${ BASE }${ target }`, { waitUntil: 'networkidle' }).catch(() => undefined);
                     await page.waitForTimeout(120);
 

@@ -14,7 +14,8 @@ export type BoardComponent = (props: BoardProps) => MountNode;
 
 export const BOARDS: Readonly<Record<string, () => Promise<{ default: BoardComponent }>>> = {
     ludo: () => import('./match-board.component.azeroth'),
-    hokm: () => import('./hokm-board.component.azeroth')
+    hokm: () => import('./hokm-board.component.azeroth'),
+    backgammon: () => import('./backgammon-board.component.azeroth')
 };
 
 export const drawable = (game: string): boolean => Object.hasOwn(BOARDS, game);

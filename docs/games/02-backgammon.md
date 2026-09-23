@@ -1,8 +1,7 @@
 # Backgammon — تخته‌نرد
 
-**Status:** the rules engine is built and registered behind the seam. The board, the art, the QA
-passes and the achievements are not, so `games.status` stays `coming-soon` and a table cannot be
-opened yet. The flip to `available` belongs to the commit that lands the board.
+**Status:** playable. The engine, the board and the API pass are built and `games.status` is
+`available`. The achievements are not built yet.
 
 Canonical ruleset: [bkgm.com rules](https://bkgm.com/rules.html) and
 [bkgm.com match play](https://bkgm.com/rules/match.html). Free to play; the doubling cube multiplies
@@ -187,11 +186,19 @@ about the same as a ludo or hokm win.
 
 ---
 
+## The board
+
+`application/src/components/games/backgammon-board.component.azeroth` draws the board as one inline
+SVG from `application/src/game/backgammon-layout.ts`, with the reader's home bottom right whatever
+their seat. A turn is staged one hop at a time - tap a checker, then where it goes, or pick a move
+from the list of buttons under the board - and `stage()` from the server's own `moves.ts` decides
+which hops are left after each one. Undo takes a staged hop back; "Play the move" sends the whole
+turn once it is complete. See CLAUDE.md, *Backgammon*.
+
+`tools/qa/backgammon-pass.mjs` plays whole matches at 1, 3 and 5 points over the real api.
+
 ## Not built yet
 
-1. The board: DOM and SVG rather than Phaser, a move list of real buttons, tap-to-stage with undo,
-   the client's highlighting importing the server's own `moves.ts`.
-2. The art: `backgammon-board.svg` from `tools/art/boards.mjs`, reading `board.ts`.
-3. `tools/qa/backgammon-pass.mjs` over the real api, and a two-browser play pass.
-4. The achievements (`backgammon-first-win`, `-gammon`, `-cube`, `-master`) and the rating cases.
-5. The status flip to `available`, with the development database rebuilt.
+1. The achievements (`backgammon-first-win`, `-gammon`, `-cube`, `-master`) and the rating cases.
+2. A two-browser play pass that plays a match through the interface, like `play-pass.mjs` does for
+   ludo.

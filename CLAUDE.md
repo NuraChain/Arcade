@@ -110,6 +110,9 @@ unique and every expressible index. Three tests hold it there, all in `npm run t
   express (and `syncSchema` rebuilds them afterwards, which is why its order matters), and
   `conversation_members.last_read_at` re-issues its default because TypeORM compares defaults as
   strings and Postgres renders `to_timestamp(0)` back as `to_timestamp((0)::double precision)`.
+  It builds a throwaway database of its own, and BOTH of its hooks carry a long timeout: dropping
+  that database overran vitest's 10-second default while the machine was busy with the responsive
+  matrix, which read as a flaky schema failure in a suite with nothing wrong in it.
 - `naming.db.spec.ts` proves the database stores every handle and slug the product accepts.
 
 **`uuidExtension: 'pgcrypto'` is on the DataSource and is not decoration.** Without it TypeORM
@@ -1558,6 +1561,53 @@ serialiser and the wire.
 is the thing that opens the door, and it happened in the commit that made it true. `status` is never
 overwritten on conflict, so it reached a database built from nothing.
 
+## Backgammon
+
+The third engine, and the first one somebody plays by PLACING things rather than by choosing one of a
+handful: a turn is up to four checker moves whose legality depends on each other. `docs/games/02-backgammon.md`
+is the rulebook - standard match play to one, three or five points, the cube dead in a one-point
+match, Crawford, no Jacoby and no beavers - and `backgammon-rules.spec.ts` holds the move generator to a
+naive enumerator written inside the spec, over hundreds of self-played positions.
+
+**The board stages a turn one hop at a time, and the SERVER's rules say which hops are left.**
+`moves.ts` exports `stage(side, roll, staged)`, which answers, for any prefix of hops in any order,
+the hops some complete legal turn still continues with - so the board highlights only checkers that
+can move, only destinations they can reach, and enables "Play the move" exactly when the turn is
+whole. The browser imports it from `server/src/domains/match/backgammon/`, the way ludo's path code
+imports `ludo/board.ts`: a second copy of the forced-move rules in the client would agree with the
+server right up until the position where it mattered. A staged turn is local until it is sent, so
+Undo costs nothing and nothing is ever half-played on the wire.
+
+**Every move is a button as well as a tap.** The board is one inline SVG drawn from
+`game/backgammon-layout.ts` and is `aria-hidden`; the hops on offer are listed beneath it as real
+buttons with sentences for names, and a screen reader is given each side's stacks in words. That is
+the canvas rule ludo already follows, for the same two reasons: a keyboard and a screen reader can
+play, and the responsive matrix has something to hit-test. The SVG takes the tap itself and turns the
+pointer into a point with `pointAt`, rather than twenty-four invisible buttons none of which could be
+44px wide on a phone.
+
+**The board is printed, so it does not mirror** - `[direction:ltr]` on its wrapper, exactly as
+`.board-plate` and `.hokm-table` do - and the reader's home is always bottom right, whichever seat
+the server gave them. Seat 0 plays the light checkers and seat 1 the dark, for everybody.
+
+**The board's `turn` is the seat that must ACT.** While a double waits for an answer that is the
+player it was offered to, not the one who offered it - the same seat `turnOf` names and
+`matchView.turn` carries. It shipped for one commit naming the doubler, which would have offered
+Take and Drop to the player who had just doubled and "waiting" to the one being asked;
+`tools/qa/backgammon-pass.mjs` found it on its first run, because an API pass that answers doubles as
+whoever the board names is refused with a 403. `backgammon-seam.spec.ts` now pins the equality over a
+whole match with doubles in it.
+
+**The board is capped by the viewport's height, not only by its column.** A 16:13 board as wide as a
+750px column is 615px tall, which on a laptop put Roll and "Play the move" below the fold - the
+board fitted and the game did not. The single column caps the board at `(100dvh - 24rem) * 1.22`;
+from `@4xl` of container the controls move into a column beside it and the cap relaxes.
+
+**`tools/qa/backgammon-pass.mjs`** plays whole matches at one, three and five points over the real
+api, answering doubles both ways, and asserts at every turn that both players read the same board
+(nothing is hidden), fifteen checkers a side and never two colours on one point, and that the winner
+really reached the target.
+
 ## Drawing the board
 
 The Ludo board and its pieces are **vector art drawn from the rules' own geometry**, all of it by
@@ -1672,7 +1722,11 @@ it (`pickNear`), and a tap on anything else does nothing.
 **`/app/play/:id` is in the matrix now**, and was not for a long time - so the one route carrying a
 board was the one route the 640-cell gate never toured. `matrix.mjs` seats a second wallet fixture,
 readies both and starts a match in its setup, reusing a live one when a previous run left one
-behind, and the matrix is 680 cells.
+behind. It tours a ludo board AND a backgammon board now, each found by GAME: it used to reuse
+whichever live match the account had, so which board the gate toured depended on what the last
+hand-run pass happened to leave behind. Both are opened as `turns` tables, because a live table's
+sweep forfeits two absent players within a few minutes and the rest of the run would tour a lobby.
+The matrix is 760 cells.
 
 **A move is drawn over time, and the renderer decides only that.** A token walks the squares it
 really crossed - `game/board/path.ts` asks the SERVER's own `ludo/board.ts` which ones those are,
@@ -2455,12 +2509,21 @@ hold them are below the hand; on a wider table the side column shows them and th
 **The table's chat floats, and the board keeps the width.** It used to be a full-height column docked
 beside the game, and the owner called the whole thing ugly: a third of the screen for a thread that
 is quiet most of a game, reading as a second app. The spec is
-`docs/superpowers/specs/2026-09-23-play-screen-chat-design.md`. Above phone width it is a card
+`docs/superpowers/specs/2026-09-23-play-screen-chat-design.md`. At sidebar width, and on any screen
+turned sideways (landscape at rail width, or any landscape 540px tall or less), it is a card
 anchored to the bottom-right corner, 23rem by at most 34rem, 30rem and the full height on "bigger";
 closed, it is a pill in the same corner with the unread count and the last line said. It starts
-closed - `settings.railOpen` keeps its old name and now means "the card is open" - and when it is open
-on a sidebar-width screen the table makes room for it, so it never covers the bottom-right player's
-plate. A phone keeps its bottom sheet, half the screen first and the whole screen on request.
+closed - `settings.railOpen` keeps its old name and now means "the card is open" - and whenever it is
+open the table makes room for it, so it never covers the board or the bottom-right player's plate.
+Everywhere else - a phone held upright, and an upright tablet - it is the bottom sheet, half the
+screen first and the whole screen on request.
+
+The rule is about which way the SPARE ROOM runs, not about width. It used to float the card at
+every width above a phone and make room only at sidebar width, so a phone turned sideways (844x390,
+which is rail posture) opened a 23rem card straight over the board, and an upright tablet did the
+same over the bottom of the board. A board is sized by the screen's height in landscape, which
+leaves room beside it, and by its width upright, which leaves room below it - so the card goes where
+the room is. `play.spec.ts` holds both shapes.
 
 **One chat instance, never unmounted while the table is open.** The card and the sheet are the same
 `TableChat` in one container whose classes change with the posture and which is `hidden` when closed.
