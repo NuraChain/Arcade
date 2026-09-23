@@ -61,7 +61,7 @@ export default component OpenHereSheet(props: OverlayProps & { conversationId: s
     derived fits = (entry: Game): number[] => catalogue.rules(entry.id).seats.filter((count) => count <= capacity);
 
     derived playable = catalogue.games
-        .filter((entry) => catalogue.status(entry.id) === 'available')
+        .filter((entry) => catalogue.playable(entry.id))
         .filter((entry) => fits(entry).length > 0);
 
     derived allowed = fits(catalogue.byId(game));

@@ -232,30 +232,39 @@ const expiries = setInterval(() =>
 
 expiries.unref();
 
-/**
- * How often the turns that ran out get played, and how many at once.
- *
- * `match.due` and `match.expire` were written, tested against a real Postgres and called by NOTHING
- * - so a live table whose player closed the tab sat on a forty-five second deadline forever, no
- * seat was ever forfeited, and no match ever ended `abandoned`. This is the tick they were waiting
- * for.
- *
- * Fifteen seconds against a forty-five second live deadline: fine enough that a dead turn is played
- * within a third of the time it was allowed, coarse enough to be four queries a minute on an idle
- * server. The batch is bounded because `due` takes `skip locked` - anything this tick cannot reach
- * is picked up by the next one rather than held.
- */
-const TURN_SWEEP_MS = 15_000;
+const TURN_SWEEP_MS = 5_000;
 
-const TURN_SWEEP_BATCH = 32;
+const TURN_SWEEP_BUDGET_MS = 4_000;
 
-const turns = setInterval(() =>
+let turns: NodeJS.Timeout | null = null;
+
+const sweepTurns = (): void =>
 {
-    void ports.jobs.sweepTurns(TURN_SWEEP_BATCH)
-        .then((played) => { if (played > 0) { log.info('expired turns played', { played }); } })
-        .catch((error: unknown) => log.error('turn sweep failed', { error }));
-}, TURN_SWEEP_MS);
+    void ports.jobs.sweepTurns(TURN_SWEEP_BUDGET_MS)
+        .then(({ played, stuck }) =>
+        {
+            if (played > 0)
+            {
+                log.info('expired turns played', { played });
+            }
 
+            for (const one of stuck)
+            {
+                log.error('unplayable match', one);
+            }
+        })
+        .catch((error: unknown) => log.error('turn sweep failed', { error }))
+        .finally(() =>
+        {
+            if (turns !== null)
+            {
+                turns = setTimeout(sweepTurns, TURN_SWEEP_MS);
+                turns.unref();
+            }
+        });
+};
+
+turns = setTimeout(sweepTurns, TURN_SWEEP_MS);
 turns.unref();
 
 handleShutdownSignals(served, {
@@ -273,7 +282,11 @@ handleShutdownSignals(served, {
         // network failing, which sends every client into a reconnect backoff for a restart they
         // were told about.
         clearInterval(expiries);
-        clearInterval(turns);
+        if (turns !== null)
+        {
+            clearTimeout(turns);
+            turns = null;
+        }
 
         const saidGoodbye = hub.closeAll(1001, 'Server restarting');
 

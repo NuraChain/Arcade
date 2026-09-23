@@ -1,4 +1,4 @@
-import { Dynamic, type MountNode, untrack, useHead, useNavigate, useParams, useRoute } from 'azerothjs';
+import { Dynamic, type MountNode, onCleanup, untrack, useHead, useNavigate, useParams, useRoute } from 'azerothjs';
 
 import ConfirmSheet from '../../components/app/confirm-sheet.component.azeroth';
 import Page from '../../components/app/page.component.azeroth';
@@ -30,6 +30,8 @@ import { useToasts } from '../../stores/toasts.store.ts';
 import Panel from '../../components/ui/panel.component.azeroth';
 import type { MatchView } from '../../api.ts';
 import { plainOf } from '../../lib/markdown.ts';
+import { holdScreen } from '../../lib/wake-lock.ts';
+import { BOARDS, drawable, type BoardComponent } from '../../components/games/boards.ts';
 
 export default component PlayPage()
 {
@@ -59,7 +61,7 @@ export default component PlayPage()
 
     state starting = false;
 
-    let Board: ((props: { match: MatchView; starting?: boolean; onAgain?: () => void; speech?: Record<string, string> }) => MountNode) | null = null;
+    let Board: BoardComponent | null = null;
 
     let Chat: ((props: { conversationId: string; class?: string; closeIcon?: 'panel-close' | 'close'; wide?: boolean; onResize?: () => void; onClose?: () => void }) => MountNode) | null = null;
 
@@ -166,6 +168,16 @@ export default component PlayPage()
     derived amHost = table?.chairs.find((chair) => chair.seat === table!.mine)?.host === true;
 
     derived showing = board.match() !== null && board.match()!.tableId === table?.id;
+
+    derived awake = showing && board.match()!.finishedAt === undefined;
+
+    effect
+    {
+        if (awake)
+        {
+            onCleanup(holdScreen());
+        }
+    }
 
     derived ready = table !== null
         && table.status === 'ready'
@@ -319,11 +331,14 @@ export default component PlayPage()
     {
         boardFailed = false;
 
-        const load = want === 'hokm'
-            ? import('../../components/games/hokm-board.component.azeroth')
-            : import('../../components/games/match-board.component.azeroth');
+        const load = BOARDS[want];
 
-        void load.then((module) =>
+        if (load === undefined)
+        {
+            return;
+        }
+
+        void load().then((module) =>
         {
             if (playing !== want)
             {
@@ -506,8 +521,15 @@ export default component PlayPage()
 
         if (yes === true)
         {
-            await lobby.end(table.id);
-            navigate('/app/games');
+            try
+            {
+                await lobby.end(table.id);
+                navigate('/app/games');
+            }
+            catch
+            {
+                toasts.show({ kind: 'warning', text: locale.t('play.close.refused') });
+            }
         }
     };
 
@@ -586,7 +608,20 @@ export default component PlayPage()
                             { () => <ErrorState title={ locale.t('state.errorTitle') } lead={ locale.t('state.errorLead') } onRetry={ redraw } class="py-12" /> }
                         </Show>
 
-                        <Show when={ playing !== '' && drawn !== playing && !boardFailed }>
+                        <Show when={ playing !== '' && !drawable(playing) }>
+                            { () =>
+                                <EmptyState
+                                    icon="dice"
+                                    title={ locale.t('match.cannotDraw') }
+                                    lead={ locale.t('match.cannotDrawLead') }
+                                    action={ locale.t('match.cannotDrawAction') }
+                                    onAction={ () => window.location.reload() }
+                                    class="py-12"
+                                />
+                            }
+                        </Show>
+
+                        <Show when={ playing !== '' && drawable(playing) && drawn !== playing && !boardFailed }>
                             { () =>
                                 <div class="flex flex-col gap-3" aria-busy="true">
                                     <Skeleton class="aspect-[16/10] w-full rounded-hero" />

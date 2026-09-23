@@ -1264,7 +1264,7 @@ export const client =
 
     tables:
     {
-        async open({ query }: { query: { game?: string } })
+        async open({ query }: { query: { game?: string; mode?: string } })
         {
             server.calls.push('tables.open');
             return {
@@ -1272,6 +1272,7 @@ export const client =
                     table.status === 'open'
                     && table.privacy === 'public'
                     && (query.game === undefined || table.game === query.game)
+                    && (query.mode === undefined || table.mode === query.mode)
                     && table.chairs.some((chair) => chair.who === undefined)
                     && !table.chairs.some((chair) => chair.who === server.me))
             };
@@ -1416,6 +1417,13 @@ export const client =
                 free.invited = input.id;
             }
             return restate(table);
+        },
+
+        async start({ params }: { params: { id: string } })
+        {
+            server.calls.push('tables.start');
+            mustTable(params.id);
+            return {};
         },
 
         async close({ params }: { params: { id: string } })

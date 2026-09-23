@@ -1075,9 +1075,27 @@ no music, no settings gear because it would be a link out of the game wearing th
 control in it, no overflow because there is nothing left to put in one. The code is there because it
 is how a table is reached when it is in no list, which is every table opened from a chat or a group.
 
-**Matchmaking is a query.** `quick(game)` reads the open public tables for that game, claims a
-chair at the first one that still has one, and opens a table to wait in only when there is nothing
-to join. Nobody is invented to fill it.
+**Matchmaking is a query.** `quick(game)` reads the open LIVE tables for that game, claims a chair
+at the first one that still has one, and opens a table to wait in only when there is nothing to
+join. Nobody is invented to fill it. Three things about that list were wrong for as long as there was
+one game, and each put somebody at the wrong table silently:
+
+- **A table with a game running is not open.** A player who left mid-game frees a chair, and the list
+  offered it - to a newcomer who would sit in a chair with no seat in the match. `open()` excludes any
+  table with an unfinished match.
+- **Quick play means live.** A `turns` table is a day per move, and landing in one from a button
+  called Quick play is a correspondence game nobody chose. The list takes a `mode` and quick play
+  asks for `live`.
+- **Fullest first, then oldest.** Newest-first scattered a burst of quick players across a burst of
+  fresh tables, one each, all waiting. Filling the nearest-to-full table first is what actually starts
+  games.
+
+Quick play also sits down READY, and whoever takes the last chair presses Start - `matches_one_live`
+already makes that idempotent, so two people filling the last two chairs at once still make one
+match. A quick-play table waiting on somebody to press Ready is a table that never starts because
+nobody was told they had to. `catalogue.defaults` opens the SMALLEST seat count of four or more, or
+the largest the game plays: the largest was nine-seat poker, which a quick player would wait at all
+evening.
 
 **The table's chat is the chat domain.** A table owns a `kind: 'game'` conversation, one per
 table by partial unique index, and membership moves with the seats inside the same transaction —
@@ -1218,6 +1236,13 @@ and the same die always give the same result.
 **`apply` never throws.** A refusal is a value - `{ ok: false, reason }` over a closed union - so the
 service maps reasons onto statuses in one place and the timeout sweep can fold actions over a state.
 A pure function that throws for ordinary control flow is one nothing can fold.
+
+**Every refusal has words, and the compiler checks it.** `REFUSALS` in `match/service.ts` maps each
+reason an engine can give to a status and a sentence. It is a literal map rather than a
+`Record<string, ...>` so `engine-contract.spec.ts` can require every engine's refusal union to be a
+subset of its keys - the reasons are type unions and nothing about them exists at runtime to iterate.
+An unlisted reason still answers, as "That move is not allowed.", but hokm's were unlisted for a whole
+release and every one of them told a card player their TOKEN could not move there.
 
 **The engine never sees a uuid.** It is handed a seat number and answers with one. `match_players` is
 the only join between a seat and a person, which turns "you cannot move somebody else's token" into
@@ -1392,8 +1417,10 @@ that strands a table whose host closed the tab.
 
 **A table says `playing` and it is DERIVED, never stored.** `TABLE_COLUMNS` reads it from whether an
 unfinished match exists, for the same reason `ready` is read from occupied chairs - and with more
-force, because playing has three ways to end: a win, a timeout cascade and the host closing the
-table. A stored copy would go stale the first time one of them forgot.
+force, because playing has two ways to end - a win and a timeout cascade - and a stored copy would
+go stale the first time one of them forgot. Closing is NOT a third: `close` refuses while a match is
+live, because a host who could close the table mid-game could erase a loss by leaving. Last one out
+still closes it, since everybody has gone and the forfeits that follow are the honest result.
 
 **Realtime gets a third scope, `game`, and this is the first one that earns it.** The objection beside
 `ringTable` - that a third scope would be new vocabulary for information `chat` and `social` already
@@ -1406,11 +1433,40 @@ because unlike a conversation's membership a match's seats cannot change while t
 air.
 
 **A turn that runs out is played, not punished.** The sweep finds due matches by Postgres `now()` -
-never `MoreThan(new Date())`, because the deadline was written by Postgres and a Node clock would
-disagree with it - rolls or plays the lowest legal token, and bumps `timeouts`. The third miss in a
-row forfeits that seat, and when forfeits leave one player standing the match ends `abandoned`. The
-server's own actions are written with `user_id = null`, which is what distinguishes them in the
-ledger.
+never `MoreThan(new Date())`, because the deadline is written by Postgres too (`commit` sets it as
+`now() + make_interval(...)`) and a Node clock would disagree with it - asks the engine's
+`autoplay`, and bumps `timeouts`. The third miss IN A ROW forfeits that seat: any action a person
+takes puts their count back to zero, because a count that only ever grew forfeited somebody for three
+misses spread across a whole match, and a Sit & Go is two hundred decisions a seat. When forfeits
+leave one player standing the match ends `abandoned`. The server's own actions are written with
+`user_id = null`, which is what distinguishes them in the ledger.
+
+**The clock is the SERVER's, counted from the moment its answer arrived.** `matchView.remainingMs` is
+worked out when the response is composed, and `TurnClock` counts down from the instant it lands -
+never `deadline - Date.now()` on the device, which is whatever the phone's clock says and was minutes
+out on real hardware. At zero it says the turn is being played for them rather than "0 s", because
+the sweep takes up to five seconds to arrive and a clock frozen at zero reads as a hung game.
+
+**A live game holds the screen awake.** `lib/wake-lock.ts` asks for a screen wake lock while a live
+match is on the page, asks again when the tab comes back (hiding a tab drops it), and treats a refusal
+as ordinary - battery saver refuses it. A phone that dims and locks mid-hand has made its owner miss
+a turn.
+
+**The sweep cannot stall, and that is the property worth defending.** `expireNext` is ONE match per
+transaction, picked `for update skip locked` INSIDE that transaction - the only place `skip locked`
+means anything; a lock taken by a bare select is released the instant the select returns - and it
+ALWAYS moves the deadline. A match it cannot play (no engine, `turnOf` null, `autoplay` null, or
+`apply` refusing) is pushed a turn into the future without charging anybody a miss, and so is one
+whose engine throws, from a second transaction. The first version had neither guard: due matches
+were ordered by oldest deadline, so one engine bug put the same match first in every tick and
+stopped every turn on the deployment, silently, until somebody noticed nobody's game moved. The
+unplayable ones come back to `main.ts` and are logged as `unplayable match`, because a
+deadline quietly pushed forever is the same bug with better manners.
+
+`sweepTurns` drains `expireNext` for up to four seconds and the tick is a self-rescheduling five
+second `setTimeout`, so two ticks can never overlap and a dead turn is played within five seconds of
+its deadline rather than fifteen. At roughly twenty milliseconds an expiry that is about forty a
+second per process, against the two a second a fixed batch of thirty-two every fifteen seconds gave.
 
 **`match_actions` is an audit trail, an idempotency ledger and a catch-up feed - and NOT a rebuild
 log.** `matches.state` is the authority and nothing replays those rows to reconstruct a board. A
@@ -1581,6 +1637,20 @@ the images at device resolution for free. A walk is one animation of the piece t
 it crosses plus an arc on its lift; the idle hop of a movable pawn and the turning dashes of its ring
 are CSS keyframes. `application/src/game/` stays framework-free exactly as `world/` is, and
 `tools/budgets.mjs` requires every registered renderer to sit in a lazy chunk of its own under 16 KB.
+
+**`components/games/boards.ts` decides which BOARD COMPONENT draws which game**, and the play page
+and the spectator view both go through it. The page used to load `hokm-board` for hokm and
+`match-board` for everything else, so a third game was drawn as an empty ludo plate with no controls
+and nothing logged - and `WatchBoard` drew a ludo canvas for every game, which is why spectating a
+hokm table showed an empty ludo board for as long as hokm existed. A game with no entry renders
+`match.cannotDraw` with a reload, which is the state an old tab reaches the day a new game goes live.
+`catalogue.playable` is `available` on the server AND an entry here, and it is what every Play button
+reads, so a client can ship before the server flips a status and never offer a game it cannot draw.
+The leaderboard keeps `status`, because a board of results needs no renderer.
+
+A spectator gets the same board a player does, with no `mine`, which every board already reads as
+"no controls". It has no clock either: a watcher's board is thirty seconds old, and a countdown for
+the live turn beside a board from three moves ago says two different things at once.
 
 **`game/scenes.ts` decides WHICH renderer draws which game, and it is the only place that does.**
 `board-canvas` named one module, one export and one image file, so a second game's board meant
@@ -2146,8 +2216,8 @@ rather than noticing what it never does.
 **The turn sweep had no caller.** `match.due` and `match.expire` were written, tested against a real
 Postgres and driven by nothing - so a turn that ran out was never played, no seat was ever forfeited,
 and a table somebody closed the tab on sat on its deadline forever while this file described the
-sweep in the present tense. `main.ts` runs it every fifteen seconds now, beside the expiry sweep and
-cleared in the same `beforeShutdown`.
+sweep in the present tense. `main.ts` runs it now, beside the expiry sweep and cleared in the same
+`beforeShutdown` - see *A turn that runs out is played* for why it is no longer a fixed interval.
 
 **`chat.line.result` and `chat.line.invite` had no producer**, and `MessageKind` reserved a slot for
 each. `lines.spec.ts` was supposed to be the rule - a key with no producer is filler copy - and it

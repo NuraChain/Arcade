@@ -116,6 +116,7 @@ export const play = {
     'play.close.title': 'Close this table?',
     'play.close.lead': 'Everyone loses their chair, and the table chat goes with it.',
     'play.close.confirm': 'Close the table',
+    'play.close.refused': 'A game is still being played here. Finish it or resign first.',
 
     'play.notFound': 'No such table.',
     'play.notFoundLead': 'That link points at a table that was never opened, or one that has closed since.',
@@ -274,6 +275,10 @@ export const play = {
     'match.deadline.minutes': 'About {minutes} min left',
     'match.deadline.hours': 'About {hours}h left',
     'match.deadline': 'About {seconds}s left',
+    'match.deadline.expiring': 'Playing for them…',
+    'match.cannotDraw': 'This game needs a newer page',
+    'match.cannotDrawLead': 'The table is playing a game this copy of Nura cannot draw yet. Reloading fetches the version that can.',
+    'match.cannotDrawAction': 'Reload',
     'match.refused': 'That move would not go through.',
     'match.reading': 'Catching up…',
     'voice.title': 'Voice',

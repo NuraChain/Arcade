@@ -267,7 +267,7 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
                                     }
                                 </Show>
                             </div>
-                            <TurnClock deadline={ game.deadline } over={ over } />
+                            <TurnClock remainingMs={ game.remainingMs } over={ over } />
                         </div>
 
                         <Show when={ mine !== undefined && mine === game.turn && ludo.die !== undefined && board.moves().length > 0 }>

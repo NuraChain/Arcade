@@ -8,26 +8,42 @@ const MINUTE = 60;
 
 const HOUR = 60 * MINUTE;
 
-export default component TurnClock(props: { deadline?: string; over: boolean; class?: string })
+export default component TurnClock(props: { remainingMs?: number; over: boolean; class?: string })
 {
     const locale = useLocale();
 
     state now = runtime().clock.now();
+
+    state endsAt: number | null = null;
 
     mount
     {
         return runtime().clock.every(1000, () => now = runtime().clock.now());
     }
 
-    derived secondsLeft = props.over || props.deadline === undefined
+    effect
+    {
+        const left = props.remainingMs;
+        const at = runtime().clock.now();
+
+        endsAt = left === undefined ? null : at + left;
+        now = at;
+    }
+
+    derived secondsLeft = props.over || endsAt === null
         ? null
-        : Math.max(0, Math.round((new Date(props.deadline).getTime() - now) / 1000));
+        : Math.max(0, Math.round((endsAt - now) / 1000));
 
     derived says = ((): string | null =>
     {
         if (secondsLeft === null)
         {
             return null;
+        }
+
+        if (secondsLeft === 0)
+        {
+            return locale.t('match.deadline.expiring');
         }
 
         if (secondsLeft < 90)

@@ -257,12 +257,12 @@ describe.skipIf(!active)('claiming a seat, against a real database', () =>
         const priv = await openTable(host, 4, { privacy: 'invite' });
         const pub = await openTable(host, 4);
 
-        const listed = (await tables.open(looker, 'seat-fixture', 20)).map((table) => table.id);
+        const listed = (await tables.open(looker, { game: 'seat-fixture', mode: null }, 20)).map((table) => table.id);
         expect(listed).toContain(pub);
         expect(listed).not.toContain(priv);
 
         await tables.claimSeat(looker, pub);
-        expect((await tables.open(looker, 'seat-fixture', 20)).map((table) => table.id)).not.toContain(pub);
+        expect((await tables.open(looker, { game: 'seat-fixture', mode: null }, 20)).map((table) => table.id)).not.toContain(pub);
     });
 
     it('does not offer a table hosted by somebody either side has blocked', async () =>
@@ -273,7 +273,7 @@ describe.skipIf(!active)('claiming a seat, against a real database', () =>
 
         await social.block(looker, host);
 
-        expect((await tables.open(looker, 'seat-fixture', 20)).map((table) => table.id)).not.toContain(tableId);
+        expect((await tables.open(looker, { game: 'seat-fixture', mode: null }, 20)).map((table) => table.id)).not.toContain(tableId);
         await expect(tables.claimSeat(looker, tableId)).rejects.toThrow();
     });
 
@@ -458,8 +458,8 @@ describe.skipIf(!active)('claiming a seat, against a real database', () =>
 
             const id = await openTable(host, 4, { privacy: 'friends' });
 
-            expect((await tables.open(friend, 'seat-fixture', 20)).map((row) => row.id)).toContain(id);
-            expect((await tables.open(stranger, 'seat-fixture', 20)).map((row) => row.id)).not.toContain(id);
+            expect((await tables.open(friend, { game: 'seat-fixture', mode: null }, 20)).map((row) => row.id)).toContain(id);
+            expect((await tables.open(stranger, { game: 'seat-fixture', mode: null }, 20)).map((row) => row.id)).not.toContain(id);
         });
 
         it('shows a room table to the room and to nobody outside it', async () =>
@@ -488,7 +488,7 @@ describe.skipIf(!active)('claiming a seat, against a real database', () =>
 
             const id = await openTable(host, 2, { roomId: room });
 
-            expect((await tables.open(member, 'seat-fixture', 20)).map((row) => row.id)).not.toContain(id);
+            expect((await tables.open(member, { game: 'seat-fixture', mode: null }, 20)).map((row) => row.id)).not.toContain(id);
         });
 
         it('refuses to open a table in a conversation the caller is not in', async () =>

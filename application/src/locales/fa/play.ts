@@ -119,6 +119,7 @@ export const play: Pick<Dictionary, keyof typeof reference> = {
     'play.close.title': 'این میز بسته شود؟',
     'play.close.lead': 'همه صندلی‌شان را از دست می‌دهند و گفت‌وگوی میز هم می‌رود.',
     'play.close.confirm': 'بستن میز',
+    'play.close.refused': 'هنوز اینجا بازی در جریان است. اول تمامش کن یا کنار بکش.',
 
     'play.notFound': 'چنین میزی نداریم.',
     'play.notFoundLead': 'این نشانی به میزی اشاره می‌کند که هیچ‌وقت باز نشده، یا از آن‌وقت بسته شده.',
@@ -277,6 +278,10 @@ export const play: Pick<Dictionary, keyof typeof reference> = {
     'match.deadline.minutes': 'حدود {minutes} دقیقه مانده',
     'match.deadline.hours': 'حدود {hours} ساعت مانده',
     'match.deadline': 'حدود {seconds} ثانیه مانده',
+    'match.deadline.expiring': 'به جایش بازی می‌شود…',
+    'match.cannotDraw': 'این بازی نسخهٔ تازه‌تری از صفحه می‌خواهد',
+    'match.cannotDrawLead': 'این میز بازی‌ای را اجرا می‌کند که این نسخه از نورا هنوز نمی‌تواند نشانش دهد. با بارگذاری دوباره نسخه‌ای می‌آید که می‌تواند.',
+    'match.cannotDrawAction': 'بارگذاری دوباره',
     'match.refused': 'آن حرکت انجام نشد.',
     'match.reading': 'در حال به‌روزرسانی…',
     'voice.title': 'صدا',

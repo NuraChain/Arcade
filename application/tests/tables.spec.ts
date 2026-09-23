@@ -5,6 +5,7 @@ import { defaultTable, TABLE_RULES } from '../src/data/tables.ts';
 import { GAMES } from '../src/data/games.ts';
 import { manualClock } from '../src/lib/clock.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
+import { useCatalogue } from '../src/stores/catalogue.store.ts';
 import { useLobby } from '../src/stores/lobby.store.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
 import { NUDGE_WINDOW_MS, useRealtime } from '../src/stores/realtime.store.ts';
@@ -127,6 +128,44 @@ describe('the lobby store', () =>
         expect(server.calls).toContain('tables.open');
         expect(server.calls).toContain('tables.claim');
         expect(server.calls).not.toContain('tables.create');
+    });
+
+    it('sits down ready, and starts the game when it takes the last chair', async () =>
+    {
+        const lobby = useLobby();
+        const theirs = await lobby.host('ludo', { ...defaultTable('ludo'), seats: 2, privacy: 'public' }, []);
+
+        server.tables[0].chairs[0].who = 'sara.k';
+        server.tables[0].chairs[0].ready = true;
+        server.tables[0].host = 'sara.k';
+        server.calls = [];
+
+        expect(await lobby.quick('ludo', { ...defaultTable('ludo'), seats: 2 })).toBe(theirs);
+        expect(server.calls).toEqual(expect.arrayContaining(['tables.claim', 'tables.ready', 'tables.start']));
+    });
+
+    it('opens the smallest table of four or more, or the largest the game plays', () =>
+    {
+        const catalogue = useCatalogue();
+
+        expect(catalogue.defaults('ludo').seats).toBe(4);
+        expect(catalogue.defaults('hokm').seats).toBe(4);
+        expect(catalogue.defaults('backgammon').seats).toBe(2);
+    });
+
+    it('looks only at live tables, because a day-long turn is not a quick game', async () =>
+    {
+        const lobby = useLobby();
+
+        await lobby.host('ludo', { ...defaultTable('ludo'), mode: 'turns', privacy: 'public' }, []);
+        server.tables[0].chairs[0].who = 'sara.k';
+        server.tables[0].host = 'sara.k';
+        server.calls = [];
+
+        await lobby.quick('ludo', { ...defaultTable('ludo'), mode: 'live' });
+
+        expect(server.calls).not.toContain('tables.claim');
+        expect(server.calls).toContain('tables.create');
     });
 
     it('opens one and waits when there is nothing to join', async () =>

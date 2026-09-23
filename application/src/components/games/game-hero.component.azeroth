@@ -15,7 +15,7 @@ export default component GameHero(props: { game: Game; onQuickPlay: () => void }
 
     derived known = !catalogue.loading();
 
-    derived playable = known && catalogue.status(props.game.id) === 'available';
+    derived playable = known && catalogue.playable(props.game.id);
 
     derived rules = catalogue.rules(props.game.id);
 

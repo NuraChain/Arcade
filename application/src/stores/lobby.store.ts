@@ -150,6 +150,16 @@ export const useLobby = createStore((): LobbyApi =>
         };
     };
 
+    const settle = async (tableId: string): Promise<void> =>
+    {
+        const table = await client.tables.ready({ params: { id: tableId }, input: { ready: true } });
+
+        if (table.chairs.every((chair) => chair.who !== undefined && chair.ready))
+        {
+            await client.tables.start({ params: { id: tableId } }).catch(() => undefined);
+        }
+    };
+
     return {
         table: () => viewing.data() ?? null,
         loading: () => viewing.loading(),
@@ -172,36 +182,26 @@ export const useLobby = createStore((): LobbyApi =>
             return made.id;
         },
 
-        /**
-         * The whole of matchmaking, and it is a query.
-         *
-         * Look for an open public table for this game with a chair going, and take one. If
-         * somebody takes the last chair between the read and the claim, try the next table; if
-         * there is nothing left, open one and wait in it. Nobody is invented to fill it.
-         */
         async quick(game, config)
         {
-            const { tables } = await client.tables.open({ query: { game } });
+            const wanted = config ?? catalogue.defaults(game);
+            const { tables } = await client.tables.open({ query: { game, mode: wanted.mode } });
 
             for (const candidate of tables)
             {
                 const claimed = await client.tables.claim({ params: { id: candidate.id } });
                 if (claimed.seat !== undefined)
                 {
+                    await settle(candidate.id);
                     await revalidate();
                     return candidate.id;
                 }
             }
 
-            /*
-              * The table this opens has to be one the GAME plays. The fallback here was a literal
-              * four seats and no target, so quick-matching backgammon - which plays two - asked for
-              * a four-seat table, and nothing refused it until the server started checking. Asking
-              * the catalogue answers from the server's own rules, which is where seat counts live.
-              */
             const made = await client.tables.create({
-                input: asInput(game, config ?? catalogue.defaults(game), 'public', [])
+                input: asInput(game, wanted, 'public', [])
             });
+            await settle(made.id);
             await revalidate();
             return made.id;
         },

@@ -1,5 +1,5 @@
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@azerothjs/http';
-import { In, IsNull, LessThan, MoreThan, type DataSource, type EntityManager } from 'typeorm';
+import { In, IsNull, MoreThan, type DataSource, type EntityManager } from 'typeorm';
 
 import { MatchAction } from '../../entities/match-action.entity.ts';
 import { MatchPlayer } from '../../entities/match-player.entity.ts';
@@ -81,6 +81,10 @@ const MAX_TIMEOUTS = 3;
 
 export type Applied = 'now' | 'already' | 'stale';
 
+export type Expired =
+    | { matchId: string; game: string; played: true }
+    | { matchId: string; game: string; played: false; reason: string };
+
 export interface MatchSeatRow
 {
     seat: number;
@@ -130,31 +134,30 @@ export interface ActionLog
     log: MatchLog;
 }
 
-/**
- * What a refusal MEANS, over the reasons the engines here actually give.
- *
- * Keyed by plain string rather than by ludo's own `RefusalReason`, because the reasons are the
- * game's: hokm refuses a card for not following suit and poker a raise for being too small, and a
- * closed union declared in the shared path would have to name every game's vocabulary before the
- * game existed. An unlisted reason falls through to `illegal-move`, which is the honest generic -
- * a refusal nobody has written copy for is still a refusal, and it must not be a 500.
- */
-const REFUSALS: Record<string, 'forbidden' | 'conflict'> = {
+export const REFUSALS = {
     'not-your-turn': 'forbidden',
     'not-playing': 'forbidden',
+    'not-the-hakem': 'forbidden',
     'already-rolled': 'conflict',
     'must-roll-first': 'conflict',
     'illegal-move': 'conflict',
-    'game-over': 'conflict'
-};
+    'game-over': 'conflict',
+    'trump-already-set': 'conflict',
+    'must-follow-suit': 'conflict',
+    'no-such-card': 'conflict'
+} as const satisfies Record<string, 'forbidden' | 'conflict'>;
 
-const SAYS: Record<string, string> = {
+const SAYS: Record<keyof typeof REFUSALS, string> = {
     'not-your-turn': 'It is not your turn.',
     'not-playing': 'You are not in this game.',
+    'not-the-hakem': 'Only the Hakem names trump.',
     'already-rolled': 'You have already rolled.',
     'must-roll-first': 'Roll the dice first.',
-    'illegal-move': 'That token cannot move there.',
-    'game-over': 'This game has finished.'
+    'illegal-move': 'That move is not allowed.',
+    'game-over': 'This game has finished.',
+    'trump-already-set': 'Trump has already been named.',
+    'must-follow-suit': 'You have to follow suit.',
+    'no-such-card': 'That card is not in your hand.'
 };
 
 function refuse(reason: string): never
@@ -164,7 +167,9 @@ function refuse(reason: string): never
         throw new ConflictError(SAYS['illegal-move']);
     }
 
-    throw REFUSALS[reason] === 'forbidden' ? new ForbiddenError(SAYS[reason]) : new ConflictError(SAYS[reason]);
+    const known = reason as keyof typeof REFUSALS;
+
+    throw REFUSALS[known] === 'forbidden' ? new ForbiddenError(SAYS[known]) : new ConflictError(SAYS[known]);
 }
 
 /**
@@ -253,6 +258,14 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
 
     const turnMs = (mode: string): number => TURN_MS[mode] ?? TURN_MS.live;
 
+    const deadlineFrom = (mode: string): () => string =>
+        () => `now() + make_interval(secs => ${ turnMs(mode) / 1000 })`;
+
+    const postpone = async (tx: EntityManager, matchId: string, mode: string): Promise<void> =>
+    {
+        await tx.getRepository(Match).update({ id: matchId, finishedAt: IsNull() }, { deadlineAt: deadlineFrom(mode) });
+    };
+
     const modeOf = async (tx: EntityManager, tableId: string): Promise<string> =>
         (await tx.getRepository(Table).findOne({ select: { mode: true }, where: { id: tableId } }))?.mode ?? 'live';
 
@@ -275,10 +288,10 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
             {
                 state: next as Record<string, unknown>,
                 rev: revOf(next),
-                deadlineAt: over ? null : new Date(Date.now() + turnMs(mode)),
+                deadlineAt: over ? null : deadlineFrom(mode),
                 winnerSeat,
                 outcome: ending?.outcome ?? null,
-                finishedAt: over ? new Date() : null
+                finishedAt: over ? () => 'now()' : null
             }
         );
 
@@ -307,6 +320,11 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
         });
 
         const players = tx.getRepository(MatchPlayer);
+
+        if (action.userId !== null)
+        {
+            await players.update({ matchId: match.id, seat: action.seat }, { timeouts: 0 });
+        }
 
         /**
          * Every result is written here and nowhere else, and that ordering is load-bearing.
@@ -772,91 +790,109 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
         /** Who sat where, for callers outside this module that need it without a viewer. */
         seatsOf: async (matchId: string): Promise<MatchSeatRow[]> => await seatsOf(db, matchId),
 
-        due: async (limit: number): Promise<string[]> =>
-            (await db.getRepository(Match)
-                .createQueryBuilder('m')
-                .select('m.id', 'id')
-                .where('m.finished_at is null and m.deadline_at < now()')
-                .orderBy('m.deadline_at', 'ASC')
-                .limit(limit)
-                .setLock('pessimistic_write')
-                .setOnLocked('skip_locked')
-                .getRawMany<{ id: string }>()).map((row) => row.id),
+        expireNext: async (): Promise<Expired | null> =>
+        {
+            let picked: Match | null = null;
 
-        expire: async (matchId: string): Promise<boolean> =>
-            await db.transaction(async (tx): Promise<boolean> =>
+            try
             {
-                const match = await tx.getRepository(Match).findOne({
-                    where: { id: matchId, finishedAt: IsNull(), deadlineAt: LessThan(new Date()) },
-                    lock: { mode: 'pessimistic_write' }
+                return await db.transaction(async (tx): Promise<Expired | null> =>
+                {
+                    const match = await tx.getRepository(Match)
+                        .createQueryBuilder('m')
+                        .where('m.finished_at is null and m.deadline_at < now()')
+                        .orderBy('m.deadline_at', 'ASC')
+                        .limit(1)
+                        .setLock('pessimistic_write')
+                        .setOnLocked('skip_locked')
+                        .getOne();
+
+                    if (match === null)
+                    {
+                        return null;
+                    }
+
+                    picked = match;
+
+                    const mode = await modeOf(tx, match.tableId);
+
+                    const stuck = async (reason: string): Promise<Expired> =>
+                    {
+                        await postpone(tx, match.id, mode);
+
+                        return { matchId: match.id, game: match.game, played: false, reason };
+                    };
+
+                    const engine = engineFor(match.game);
+
+                    if (engine === null)
+                    {
+                        return await stuck('no-engine');
+                    }
+
+                    const state = stateOf(match);
+                    const seat = engine.turnOf(state);
+
+                    if (seat === null)
+                    {
+                        return await stuck('no-turn');
+                    }
+
+                    const chair = await tx.getRepository(MatchPlayer).findOne({
+                        select: { timeouts: true },
+                        where: { matchId: match.id, seat }
+                    });
+
+                    const forfeiting = (chair?.timeouts ?? 0) + 1 >= MAX_TIMEOUTS;
+
+                    const action = forfeiting
+                        ? engine.forfeit(seat, 'timeout')
+                        : engine.autoplay(state, seat, draws);
+
+                    if (action === null)
+                    {
+                        return await stuck('no-autoplay');
+                    }
+
+                    const outcome = engine.apply(state, action, draws);
+
+                    if (!outcome.ok)
+                    {
+                        return await stuck(`refused:${ outcome.reason }`);
+                    }
+
+                    await tx.getRepository(MatchPlayer).increment({ matchId: match.id, seat }, 'timeouts', 1);
+
+                    await commit(tx, match, engine, outcome.state, outcome.events, {
+                        seat,
+                        userId: null,
+                        kind: forfeiting ? 'forfeit' : 'play',
+                        payload: { verb: forfeiting ? 'timeout' : 'auto' },
+                        key: null
+                    }, mode);
+
+                    return { matchId: match.id, game: match.game, played: true };
                 });
+            }
+            catch (error: unknown)
+            {
+                const failed = picked as Match | null;
 
-                if (match === null)
+                if (failed === null)
                 {
-                    return false;
+                    throw error;
                 }
 
-                const engine = engineFor(match.game);
+                await db.transaction(async (tx) => await postpone(tx, failed.id, await modeOf(tx, failed.tableId)));
 
-                if (engine === null)
-                {
-                    return false;
-                }
-
-                const state = stateOf(match);
-                const seat = engine.turnOf(state);
-
-                if (seat === null)
-                {
-                    return false;
-                }
-
-                const mode = await modeOf(tx, match.tableId);
-
-                const bumped = await tx.getRepository(MatchPlayer)
-                    .createQueryBuilder()
-                    .update(MatchPlayer)
-                    .set({ timeouts: () => 'timeouts + 1' })
-                    .where('match_id = :matchId and seat = :seat', { matchId, seat })
-                    .returning('timeouts')
-                    .execute();
-
-                const misses = (bumped.raw as { timeouts: number }[])[0]?.timeouts ?? 0;
-
-                /**
-                 * `autoplay` is the engine's own answer to "what would this seat do if it were
-                 * here", and it was written for exactly this and never called: the sweep built a
-                 * roll or the lowest legal token by hand, out of ludo's own vocabulary, beside an
-                 * engine method that already said it.
-                 */
-                const forfeiting = misses >= MAX_TIMEOUTS;
-
-                const action = forfeiting
-                    ? engine.forfeit(seat, 'timeout')
-                    : engine.autoplay(state, seat, draws);
-
-                if (action === null)
-                {
-                    return false;
-                }
-
-                const outcome = engine.apply(state, action, draws);
-
-                if (!outcome.ok)
-                {
-                    return false;
-                }
-
-                await commit(tx, match, engine, outcome.state, outcome.events, {
-                    seat,
-                    userId: null,
-                    kind: forfeiting ? 'forfeit' : 'play',
-                    payload: { verb: forfeiting ? 'timeout' : 'auto' },
-                    key: null
-                }, mode);
-
-                return true;
-            })
+                return {
+                    matchId: failed.id,
+                    game: failed.game,
+                    played: false,
+                    reason: `threw:${ error instanceof Error ? error.message : String(error) }`
+                };
+            }
+        }
     };
 }
 

@@ -11,6 +11,9 @@ import TableChat from '../src/components/games/table-chat.component.azeroth';
 import TableDock from '../src/components/games/table-dock.component.azeroth';
 import TableMenu from '../src/components/games/table-menu.component.azeroth';
 import TurnClock from '../src/components/games/turn-clock.component.azeroth';
+import WatchBoard from '../src/components/games/watch-board.component.azeroth';
+import { BOARDS } from '../src/components/games/boards.ts';
+import type { MatchWatch } from '../src/api.ts';
 import ChatPage from '../src/pages/app/chat.page.azeroth';
 import PlayPage from '../src/pages/app/play.page.azeroth';
 import { gameArt, gameIcon } from '../src/components/games/art.ts';
@@ -242,8 +245,7 @@ describe('TurnClock', () =>
     it('says its sentence in the reader’s own direction rather than forcing it left to right', () =>
     {
         useLocale().setLocale('fa');
-        const deadline = new Date(Date.now() + 23 * 3600 * 1000).toISOString();
-        const { container } = renderTest(() => TurnClock({ deadline, over: false }) as Rendered);
+        const { container } = renderTest(() => TurnClock({ remainingMs: 23 * 3600 * 1000, over: false }) as Rendered);
         const said = container.querySelector('span > span:last-child');
 
         expect(said?.textContent).toContain('ساعت');
@@ -251,9 +253,23 @@ describe('TurnClock', () =>
         useLocale().setLocale('en');
     });
 
+    it('says the turn is being played for them once the time is up, rather than showing a zero', () =>
+    {
+        const { container } = renderTest(() => TurnClock({ remainingMs: 0, over: false }) as Rendered);
+
+        expect(container.textContent).toContain('Playing for them');
+    });
+
+    it('counts from when the answer arrived, not from the device clock', () =>
+    {
+        const { container } = renderTest(() => TurnClock({ remainingMs: 20_000, over: false }) as Rendered);
+
+        expect(container.textContent).toContain('20');
+    });
+
     it('draws nothing once the game is over', () =>
     {
-        const { container } = renderTest(() => TurnClock({ deadline: new Date().toISOString(), over: true }) as Rendered);
+        const { container } = renderTest(() => TurnClock({ remainingMs: 0, over: true }) as Rendered);
 
         expect(container.textContent?.trim()).toBe('');
     });
@@ -347,6 +363,69 @@ describe('PlayPage', () =>
         {
             delete matches.view;
         }
+    });
+
+    it('says a game it has no board for cannot be drawn here, rather than drawing an empty ludo plate', async () =>
+    {
+        const lobby = useLobby();
+        const id = await lobby.host('ludo', defaultTable('ludo'), []);
+        server.tables.find((one) => one.id === id)!.matchId = 'match-2';
+        const matches = client.matches as unknown as Record<string, unknown>;
+        matches.view = async () => ({
+            id: 'match-2',
+            tableId: id,
+            game: 'chess',
+            rev: 1,
+            seats: 2,
+            players: [],
+            turn: 0,
+            mine: 0,
+            startedAt: new Date(400_000).toISOString(),
+            view: { kind: 'ludo' }
+        });
+        const asked = chunk.asked;
+
+        try
+        {
+            const table: Route[] = [{ path: '/app/play/:id', component: (): HTMLElement => PlayPage() as HTMLElement }];
+            const router = createRouter({ routes: table, history: createMemoryHistory(`/app/play/${ id }`), scroll: false });
+            const { container } = renderTest(() => RouterProvider({ router, children: () => Routes({}) }) as Rendered);
+
+            await vi.waitFor(() => expect(container.textContent).toContain(useLocale().t('match.cannotDraw')), { timeout: 4000 });
+
+            expect(chunk.asked).toBe(asked);
+            expect(container.querySelector('[aria-busy="true"]')).toBeNull();
+        }
+        finally
+        {
+            delete matches.view;
+        }
+    });
+
+    it('draws a spectated game with its own board, and one it cannot draw as exactly that', () =>
+    {
+        const watching = (game: string): MatchWatch => ({
+            match: {
+                id: 'watched',
+                tableId: 'somewhere',
+                game,
+                rev: 3,
+                seats: 2,
+                players: [],
+                turn: 0,
+                startedAt: new Date(400_000).toISOString(),
+                view: { kind: 'ludo', moves: [], seats: [] }
+            },
+            behind: 30,
+            delay: 30,
+            live: true
+        } as MatchWatch);
+
+        const { container } = renderTest(() => WatchBoard({ watch: watching('chess') }) as Rendered);
+
+        expect(container.textContent).toContain(useLocale().t('match.cannotDraw'));
+        expect(container.textContent).toContain(useLocale().t('watch.title'));
+        expect(Object.keys(BOARDS).sort()).toEqual(['hokm', 'ludo']);
     });
 
     it('is the same for a conversation replaced by another one while it leaves', async () =>

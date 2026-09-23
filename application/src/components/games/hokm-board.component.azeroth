@@ -350,7 +350,7 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
         <section class="hokm-play flex min-w-0 flex-col gap-3">
             <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
                 <p class="min-w-0 flex-1 basis-[10rem] text-ui-lg font-semibold text-text" aria-live="polite">{ says }</p>
-                <TurnClock deadline={ game.deadline } over={ over } />
+                <TurnClock remainingMs={ game.remainingMs } over={ over } />
                 <Show when={ (view?.hand.length ?? 0) > 1 }>
                     { () =>
                         <Button variant="secondary" size="sm" leading="sort" pressed={ sorted } onClick={ () => sorted = !sorted }>

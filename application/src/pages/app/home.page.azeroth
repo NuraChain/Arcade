@@ -45,7 +45,7 @@ export default component HomePage()
     derived totals = catalogue.totals();
 
     derived games = [...catalogue.games].sort((a: Game, b: Game) =>
-        Number(catalogue.status(b.id) === 'available') - Number(catalogue.status(a.id) === 'available'));
+        Number(catalogue.playable(b.id)) - Number(catalogue.playable(a.id)));
 
     derived seated = lobby.seated();
 

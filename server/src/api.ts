@@ -522,7 +522,7 @@ export function buildApi(ports: Ports)
         tables: feature('/tables', [session], (routes) => ({
             /** Open public tables with a chair going. The lobby's whole search. */
             open: routes.get('/', { output: tableList, query: openQuery }, async (context) => ({
-                tables: await ports.table.open(context.principal.userId, context.query.game, 24)
+                tables: await ports.table.open(context.principal.userId, context.query, 24)
             })),
 
             /** Where this account is already sitting. Survives a reload and a second device. */

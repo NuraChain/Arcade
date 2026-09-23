@@ -203,7 +203,7 @@ export interface GroupPort
 export interface TablePort
 {
     /** Open public tables this viewer could sit at, optionally for one game. */
-    open(me: string, game: string | undefined, limit: number): Promise<TableSummary[]>;
+    open(me: string, filter: { game?: string; mode?: TableSummary['mode'] }, limit: number): Promise<TableSummary[]>;
 
     /** The tables this account is sitting at. */
     mine(me: string): Promise<TableSummary[]>;

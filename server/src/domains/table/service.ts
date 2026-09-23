@@ -145,8 +145,8 @@ const tableQuery = (db: DataSource, me: string) => db.getRepository(Table)
     /**
      * Derived, never stored. A closed table is a decision somebody made and lives in the column;
      * everything else is a fact about the world right now, and a stored copy of one is a copy that
-     * goes stale the first time it moves down a path that forgot to update it. Playing has three
-     * such paths already - a win, a timeout cascade and the host closing the table.
+     * goes stale the first time it moves down a path that forgot to update it. Playing has two
+     * such paths already - a win and a timeout cascade.
      */
     .addSelect(
         `case
@@ -278,7 +278,7 @@ export function createTableService(db: DataSource, social: SocialService, achiev
         byCode,
 
         /**
-         * Every open table this viewer could walk up to, newest first.
+         * Every open table this viewer could walk up to, the nearest to starting first.
          *
          * `public` and `friends` and deliberately not the other two. This is the GLOBAL list -
          * finding a table among strangers - and an invite and a room are the opposite of that:
@@ -290,7 +290,7 @@ export function createTableService(db: DataSource, social: SocialService, achiev
          * everybody else - the setting did precisely nothing and told the person who picked it
          * that their friends could find the table.
          */
-        async open(me: string, game: string | null, limit: number): Promise<TableRow[]>
+        async open(me: string, filter: { game: string | null; mode: TableMode | null }, limit: number): Promise<TableRow[]>
         {
             return await tableQuery(db, me)
                 .where(`t.status = 'open'`)
@@ -298,7 +298,9 @@ export function createTableService(db: DataSource, social: SocialService, achiev
                             or (t.privacy = 'friends'
                                 and exists (select 1 from friendships f
                                              where f.user_id = :me and f.friend_id = t.host_id)))`)
-                .andWhere('(cast(:game as varchar) is null or t.game = :game)', { game })
+                .andWhere('(cast(:game as varchar) is null or t.game = :game)', { game: filter.game })
+                .andWhere('(cast(:mode as varchar) is null or t.mode = :mode)', { mode: filter.mode })
+                .andWhere('not exists (select 1 from matches m where m.table_id = t.id and m.finished_at is null)')
                 .andWhere(
                     `exists (select 1 from table_seats s
                               where s.table_id = t.id and s.user_id is null
@@ -309,7 +311,8 @@ export function createTableService(db: DataSource, social: SocialService, achiev
                 .andWhere(`not exists (select 1 from blocks b
                                         where (b.user_id = :me and b.blocked_id = t.host_id)
                                            or (b.user_id = t.host_id and b.blocked_id = :me))`)
-                .orderBy('t.created_at', 'DESC')
+                .orderBy('(select count(*) from table_seats s where s.table_id = t.id and s.user_id is null)', 'ASC')
+                .addOrderBy('t.created_at', 'ASC')
                 .limit(limit)
                 .getRawMany<TableRow>();
         },
@@ -879,10 +882,18 @@ export function createTableService(db: DataSource, social: SocialService, achiev
                 throw new ForbiddenError('Only the host can close a table.');
             }
 
-            await db.getRepository(Table).update(
-                { id: tableId, status: Not('closed'), hostId: me },
-                { status: 'closed', closedAt: () => 'now()' }
-            );
+            const closed = await db.getRepository(Table)
+                .createQueryBuilder()
+                .update(Table)
+                .set({ status: 'closed', closedAt: () => 'now()' })
+                .where('id = :tableId and status <> \'closed\' and host_id = :me', { tableId, me })
+                .andWhere('not exists (select 1 from matches m where m.table_id = :tableId and m.finished_at is null)')
+                .execute();
+
+            if (closed.affected === 0 && await db.getRepository(Match).existsBy({ tableId, finishedAt: IsNull() }))
+            {
+                throw new ConflictError('Finish or resign the game first.');
+            }
         },
 
         /** Everybody sitting at it, as uuids. What the realtime layer needs to ring the doorbell. */

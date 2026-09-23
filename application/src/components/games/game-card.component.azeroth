@@ -28,7 +28,7 @@ export default component GameCard(props: {
 
     derived known = !catalogue.loading();
 
-    derived playable = known && catalogue.status(props.game.id) === 'available';
+    derived playable = known && catalogue.playable(props.game.id);
 
     derived live = playable && stats.playersOnline > 0;
 

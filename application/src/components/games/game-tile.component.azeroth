@@ -13,7 +13,7 @@ export default component GameTile(props: { game: Game })
 
     derived name = locale.t(props.game.nameKey);
 
-    derived soon = !catalogue.loading() && catalogue.status(props.game.id) !== 'available';
+    derived soon = !catalogue.loading() && !catalogue.playable(props.game.id);
 
     <Link
         to={ `/app/games/${ props.game.slug }` }

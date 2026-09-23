@@ -12,6 +12,8 @@ import { createTableService } from '../src/domains/table/service.ts';
 import { syncSchema } from '../src/db/schema.ts';
 import { rowsOf } from '../src/lib/rows.ts';
 import { legalMoves } from '../src/domains/match/ludo/engine.ts';
+import { ludoEngine } from '../src/domains/match/engines/ludo.ts';
+import type { Draws, Engine } from '../src/domains/match/engine.ts';
 import type { LudoState } from '../src/domains/match/ludo/state.ts';
 
 /**
@@ -409,16 +411,23 @@ describe.skipIf(!active)('a match, against a real database', () =>
             await db.query(`update matches set deadline_at = now() - interval '1 second' where id = $1`, [matchId]);
         };
 
+        const deadlineOf = async (matchId: string): Promise<boolean> =>
+            rowsOf<{ future: boolean }>(await db.query(
+                `select deadline_at > now() as future from matches where id = $1`,
+                [matchId]
+            ))[0].future;
+
         it('is found by Postgres time rather than this process clock', async () =>
         {
             const { tableId, players } = await seatedTable(2);
             const load = await matches.start(players[0], tableId);
 
-            expect(await matches.due(10)).toEqual([]);
+            expect(await matches.expireNext()).toBeNull();
 
             await expireNow(load.match.id);
 
-            expect(await matches.due(10)).toEqual([load.match.id]);
+            expect(await matches.expireNext()).toEqual({ matchId: load.match.id, game: 'ludo', played: true });
+            expect(await matches.expireNext()).toBeNull();
         });
 
         it('plays the turn rather than ending the game', async () =>
@@ -428,12 +437,13 @@ describe.skipIf(!active)('a match, against a real database', () =>
 
             await expireNow(load.match.id);
 
-            expect(await matches.expire(load.match.id)).toBe(true);
+            expect((await matches.expireNext())?.played).toBe(true);
 
             const after = await matches.view(players[0], load.match.id);
 
             expect(after!.match.rev).toBeGreaterThan(0);
             expect(after!.match.finishedAt).toBeNull();
+            expect(await deadlineOf(load.match.id)).toBe(true);
 
             const acted = rowsOf<{ user_id: string | null }>(await db.query(
                 `select user_id from match_actions where match_id = $1 order by rev desc limit 1`,
@@ -455,7 +465,7 @@ describe.skipIf(!active)('a match, against a real database', () =>
             );
             await expireNow(load.match.id);
 
-            expect(await matches.expire(load.match.id)).toBe(true);
+            expect((await matches.expireNext())?.played).toBe(true);
 
             const after = await matches.view(players[0], load.match.id);
 
@@ -470,6 +480,29 @@ describe.skipIf(!active)('a match, against a real database', () =>
             expect(results.find((row) => row.seat === seat)!.result).toBe('abandoned');
         });
 
+        it('counts misses IN A ROW, so acting clears them', async () =>
+        {
+            const { tableId, players } = await seatedTable(2);
+            const load = await matches.start(players[0], tableId);
+            const state = load.state as LudoState;
+            const seat = state.players[state.turn].seat;
+            const mover = load.players.find((one) => one.seat === seat)!.user_id;
+
+            await db.query(
+                `update match_players set timeouts = 2 where match_id = $1 and seat = $2`,
+                [load.match.id, seat]
+            );
+
+            await matches.act(mover, load.match.id, { play: ROLL, key: 'clears-misses' });
+
+            const misses = rowsOf<{ timeouts: number }>(await db.query(
+                `select timeouts from match_players where match_id = $1 and seat = $2`,
+                [load.match.id, seat]
+            ))[0].timeouts;
+
+            expect(misses).toBe(0);
+        });
+
         it('is handed to exactly one sweep when two run at once', async () =>
         {
             const { tableId, players } = await seatedTable(2);
@@ -477,13 +510,71 @@ describe.skipIf(!active)('a match, against a real database', () =>
 
             await expireNow(load.match.id);
 
-            const both = await Promise.all([
-                matches.expire(load.match.id),
-                matches.expire(load.match.id)
-            ]);
+            const both = await Promise.all([matches.expireNext(), matches.expireNext()]);
 
-            expect(both.filter(Boolean)).toHaveLength(1);
+            expect(both.filter((one) => one !== null)).toHaveLength(1);
             expect(await countActions(load.match.id)).toBe(1);
+        });
+
+        /**
+         * The two ways a sweep used to stall for good. An engine that names nobody left the match
+         * due and first in line on every tick, and one that threw took the whole tick with it - so a
+         * single bad match stopped every turn on the deployment. Either way the deadline moves now,
+         * nobody is charged a miss for it, and the match behind it is reached.
+         */
+        it('moves the deadline of a match it cannot play, and charges nobody', async () =>
+        {
+            const blind = { ...ludoEngine, turnOf: () => null } as Engine;
+            const sweeper = createMatchService(db, createAchieveService(db), [blind]);
+            const { tableId, players } = await seatedTable(2);
+            const load = await matches.start(players[0], tableId);
+
+            await expireNow(load.match.id);
+
+            expect(await sweeper.expireNext()).toEqual({ matchId: load.match.id, game: 'ludo', played: false, reason: 'no-turn' });
+            expect(await deadlineOf(load.match.id)).toBe(true);
+            expect(await countActions(load.match.id)).toBe(0);
+
+            const misses = rowsOf<{ total: number }>(await db.query(
+                `select sum(timeouts)::int as total from match_players where match_id = $1`,
+                [load.match.id]
+            ))[0].total;
+
+            expect(misses).toBe(0);
+        });
+
+        it('reaches the next due match past one whose engine throws', async () =>
+        {
+            const fragile = {
+                ...ludoEngine,
+                autoplay: (state: LudoState, seat: number, draws: Draws) =>
+                {
+                    if (state.players.length === 3)
+                    {
+                        throw new Error('poisoned');
+                    }
+
+                    return ludoEngine.autoplay(state, seat, draws);
+                }
+            } as Engine;
+            const sweeper = createMatchService(db, createAchieveService(db), [fragile]);
+
+            const poisoned = await seatedTable(3);
+            const poisonedMatch = await matches.start(poisoned.players[0], poisoned.tableId);
+            const healthy = await seatedTable(2);
+            const healthyMatch = await matches.start(healthy.players[0], healthy.tableId);
+
+            await db.query(`update matches set deadline_at = now() - interval '2 seconds' where id = $1`, [poisonedMatch.match.id]);
+            await expireNow(healthyMatch.match.id);
+
+            const first = await sweeper.expireNext();
+
+            expect(first).toMatchObject({ matchId: poisonedMatch.match.id, played: false });
+            expect(first?.played === false ? first.reason : '').toContain('poisoned');
+            expect(await deadlineOf(poisonedMatch.match.id)).toBe(true);
+
+            expect(await sweeper.expireNext()).toEqual({ matchId: healthyMatch.match.id, game: 'ludo', played: true });
+            expect(await sweeper.expireNext()).toBeNull();
         });
     });
 
@@ -502,6 +593,57 @@ describe.skipIf(!active)('a match, against a real database', () =>
             );
 
             expect(await matches.liveFor(tableId)).toBeNull();
+        });
+
+        it('is offered to quick play fullest first, and never with a game already running', async () =>
+        {
+            const looker = await makeUser();
+            const quiet = await tables.create(await makeUser(), {
+                game: 'ludo', seats: 4, mode: 'live', privacy: 'public', target: 0, cube: false, blinds: 'low', chat: true, voice: false, invitees: []
+            });
+            const busy = await tables.create(await makeUser(), {
+                game: 'ludo', seats: 4, mode: 'live', privacy: 'public', target: 0, cube: false, blinds: 'low', chat: true, voice: false, invitees: []
+            });
+            const slow = await tables.create(await makeUser(), {
+                game: 'ludo', seats: 4, mode: 'turns', privacy: 'public', target: 0, cube: false, blinds: 'low', chat: true, voice: false, invitees: []
+            });
+
+            await tables.claimSeat(await makeUser(), busy.id);
+            await tables.claimSeat(await makeUser(), busy.id);
+
+            const listed = (await tables.open(looker, { game: 'ludo', mode: 'live' }, 20)).map((row) => row.id);
+
+            expect(listed).toEqual([busy.id, quiet.id]);
+            expect(listed).not.toContain(slow.id);
+
+            const { tableId } = await seatedTable(3);
+
+            await db.query(`update tables set seats = 4 where id = $1`, [tableId]);
+            await db.query(`insert into table_seats (table_id, seat) values ($1, 3)`, [tableId]);
+            await db.query(
+                `insert into matches (table_id, game, variant, seats, state, rev, deadline_at)
+                 values ($1, 'ludo', 'standard', 3, '{"rev":0}'::jsonb, 0, now() + interval '1 hour')`,
+                [tableId]
+            );
+
+            expect((await tables.open(looker, { game: 'ludo', mode: null }, 20)).map((row) => row.id)).not.toContain(tableId);
+        });
+
+        it('cannot be closed under a game somebody is still playing', async () =>
+        {
+            const { tableId, players } = await seatedTable(2);
+            const load = await matches.start(players[0], tableId);
+
+            await expect(tables.close(players[0], tableId)).rejects.toThrow('Finish or resign the game first.');
+
+            const status = rowsOf<{ status: string }>(await db.query(`select status from tables where id = $1`, [tableId]))[0].status;
+
+            expect(status).not.toBe('closed');
+
+            await matches.act(players[0], load.match.id, { play: null, key: 'resign-then-close' });
+            await tables.close(players[0], tableId);
+
+            expect(rowsOf<{ status: string }>(await db.query(`select status from tables where id = $1`, [tableId]))[0].status).toBe('closed');
         });
 
         it('refuses a second live match even with the index asked directly', async () =>

@@ -3,6 +3,9 @@ import { describe, expect, it } from 'vitest';
 
 import type { Draws, Engine } from '../src/domains/match/engine.ts';
 import { ENGINES } from '../src/domains/match/service.ts';
+import type { REFUSALS } from '../src/domains/match/service.ts';
+import type { HokmRefusal } from '../src/domains/match/hokm/state.ts';
+import type { RefusalReason } from '../src/domains/match/ludo/state.ts';
 import { GAME_SEEDS } from '../src/db/seed-reference.ts';
 import { matchBoard, matchLog } from '../src/schemas.ts';
 
@@ -26,6 +29,24 @@ function seeded(seed: number): { draws: Draws; next: () => number }
 }
 
 const revOf = (state: unknown): number => (state as { rev: number }).rev;
+
+/**
+ * Every reason an engine can refuse with has words of its own. An unlisted one still answers - as
+ * "That move is not allowed." - but hokm's reasons were unlisted for a whole release and every one
+ * of them told a card player their TOKEN could not move there. Checked by the compiler, because the
+ * reasons are type unions and nothing about them exists at runtime to iterate.
+ */
+type Unworded = Exclude<RefusalReason | HokmRefusal, keyof typeof REFUSALS>;
+
+describe('the refusals', () =>
+{
+    it('have words for every reason an engine gives', () =>
+    {
+        const everyReasonWorded: [Unworded] extends [never] ? true : false = true;
+
+        expect(everyReasonWorded).toBe(true);
+    });
+});
 
 describe.each(ENGINES.map((engine) => [engine.id, engine] as const))('the %s engine keeps the contract', (_id, engine: Engine) =>
 {

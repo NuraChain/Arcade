@@ -1055,7 +1055,7 @@ export const tableCreateInput = object({
 
 export const readyInput = object({ ready: boolean() });
 
-export const openQuery = object({ game: string().optional() });
+export const openQuery = object({ game: string().optional(), mode: tableMode.optional() });
 
 /** What a seat claim answers: the chair, or nothing when there was none to be had. */
 export const seatResult = object({
@@ -1229,7 +1229,7 @@ export const matchView = object({
     /** What this viewer may see of the board, and nothing they may not. */
     view: matchBoard,
 
-    deadline: string().optional(),
+    remainingMs: number({ int: true, min: 0 }).optional(),
     winner: number().optional(),
     outcome: enumOf(['won', 'abandoned', 'closed']).optional(),
     startedAt: string(),

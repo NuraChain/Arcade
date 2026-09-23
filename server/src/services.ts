@@ -67,11 +67,16 @@ export interface WriteListener
  * program follows - so a sweep that only the server runs does not belong in it. It belongs here,
  * where `main.ts` already reaches, and the api still takes the narrower thing.
  */
+export interface TurnSweep
+{
+    played: number;
+    stuck: { matchId: string; game: string; reason: string }[];
+}
+
 export interface Services extends Ports
 {
     jobs: {
-        /** Plays the turns whose deadline has passed. Answers how many it played. */
-        sweepTurns(limit: number): Promise<number>;
+        sweepTurns(forMs: number): Promise<TurnSweep>;
     };
 }
 
@@ -643,7 +648,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
 
         if (load.match.deadlineAt !== null)
         {
-            view.deadline = load.match.deadlineAt.toISOString();
+            view.remainingMs = Math.max(0, load.match.deadlineAt.getTime() - Date.now());
         }
         if (load.match.winnerSeat !== null)
         {
@@ -729,7 +734,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
      * the same table already uses - and one key shared by two kinds is two different things
      * collapsing into one row that says neither.
      */
-    const nudgeTurn = async (load: MatchLoad): Promise<void> =>
+    const nudgeTurn = async (load: MatchLoad, actor: string | null): Promise<void> =>
     {
         if (load.match.finishedAt !== null)
         {
@@ -746,7 +751,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         const seat = match.turnOf(load.match.game, load.state);
         const next = load.players.find((one) => one.seat === seat);
 
-        if (next === undefined)
+        if (next === undefined || next.user_id === actor)
         {
             return;
         }
@@ -777,7 +782,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
 
             if (answer.load.match.finishedAt === null)
             {
-                await courtesy('turn notice', () => nudgeTurn(answer.load));
+                await courtesy('turn notice', () => nudgeTurn(answer.load, me));
             }
             else
             {
@@ -791,34 +796,31 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         return { match: asMatch(answer.load), applied: answer.applied, events: since === null ? [] : logged(since.events) };
     };
 
-    /**
-     * Plays the turns that ran out, and is the FIRST caller `match.due`/`match.expire` have ever had.
-     *
-     * Both were written, tested against a real Postgres and wired to nothing - so a turn that
-     * expired was never played, no seat was ever forfeited, and a table somebody walked away from
-     * sat on its deadline forever while this file's own notes described the sweep in the present
-     * tense.
-     *
-     * `skip locked` inside `due` is what makes two ticks safe: a match another pass already holds is
-     * one this pass should look past, which is the exact opposite of the `for update` an action
-     * takes. Each expiry is rung and declared on its own rather than in a batch, because one that
-     * throws must not take the rest of the tick with it.
-     */
-    const sweepTurns = async (limit: number): Promise<number> =>
+    const sweepTurns = async (forMs: number): Promise<TurnSweep> =>
     {
-        let swept = 0;
+        const until = Date.now() + forMs;
+        const stuck: TurnSweep['stuck'] = [];
+        let played = 0;
 
-        for (const matchId of await match.due(limit))
+        while (Date.now() < until)
         {
-            if (!await match.expire(matchId))
+            const expired = await match.expireNext();
+
+            if (expired === null)
             {
+                break;
+            }
+
+            if (!expired.played)
+            {
+                stuck.push({ matchId: expired.matchId, game: expired.game, reason: expired.reason });
                 continue;
             }
 
-            swept += 1;
-            await ringMatch(matchId);
+            played += 1;
+            await courtesy('turn ring', () => ringMatch(expired.matchId));
 
-            const load = await match.peek(matchId);
+            const load = await match.peek(expired.matchId);
 
             if (load === null)
             {
@@ -827,16 +829,16 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
 
             if (load.match.finishedAt === null)
             {
-                await courtesy('turn notice', () => nudgeTurn(load));
+                await courtesy('turn notice', () => nudgeTurn(load, null));
             }
             else
             {
-                await courtesy('result line', () => declareResult(matchId));
-                live?.socialChanged(...await match.playersOf(matchId));
+                await courtesy('result line', () => declareResult(expired.matchId));
+                live?.socialChanged(...await match.playersOf(expired.matchId));
             }
         }
 
-        return swept;
+        return { played, stuck };
     };
 
     const peers = createPeerDevices(db);
@@ -1539,9 +1541,9 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         },
 
         table: {
-            async open(me, game, limit)
+            async open(me, filter, limit)
             {
-                return (await table.open(me, game ?? null, limit)).map(asTable);
+                return (await table.open(me, { game: filter.game ?? null, mode: filter.mode ?? null }, limit)).map(asTable);
             },
 
             async mine(me)
@@ -1775,7 +1777,11 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                     return null;
                 }
 
-                return { match: asMatch(found.load), behind: found.behind, delay: WATCH_DELAY_MS / 1000, live: found.live };
+                const shown = asMatch(found.load);
+
+                delete shown.remainingMs;
+
+                return { match: shown, behind: found.behind, delay: WATCH_DELAY_MS / 1000, live: found.live };
             },
 
             async watchable(me, game)
