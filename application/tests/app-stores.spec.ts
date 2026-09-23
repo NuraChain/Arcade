@@ -4,10 +4,10 @@ import { manualClock, type ManualClock } from '../src/lib/clock.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import { requireAnonymous, requireSession, safeNext } from '../src/lib/guards.ts';
 import { RESTORED_MS, useConnection } from '../src/stores/connection.store.ts';
-import { postureFor, useDevice } from '../src/stores/device.store.ts';
+import { bareFor, postureFor, useDevice } from '../src/stores/device.store.ts';
 import { OVERLAY_SETTLE, useOverlay } from '../src/stores/overlay.store.ts';
 import { useAccount } from '../src/stores/account.store.ts';
-import { useRealtime } from '../src/stores/realtime.store.ts';
+import { onBack, useRealtime } from '../src/stores/realtime.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
 import { defaultSettings, useSettings } from '../src/stores/settings.store.ts';
 import { useShell } from '../src/stores/shell.store.ts';
@@ -64,6 +64,16 @@ afterEach(() =>
 
 describe('device posture', () =>
 {
+    it('gives a game the whole screen on a phone, and on any screen too short to spare a bar', () =>
+    {
+        expect(bareFor(true, 'phone', 844)).toBe(true);
+        expect(bareFor(true, 'rail', 390)).toBe(true);
+        expect(bareFor(true, 'sidebar', 500)).toBe(true);
+        expect(bareFor(true, 'rail', 1024)).toBe(false);
+        expect(bareFor(true, 'sidebar', 900)).toBe(false);
+        expect(bareFor(false, 'phone', 390)).toBe(false);
+    });
+
     it('draws the three postures at the documented widths', () =>
     {
         expect(postureFor(320)).toBe('phone');
@@ -450,6 +460,50 @@ describe('connection', () =>
         // what the socket is, which is up.
         expect(connection.state()).toBe('online');
         live.stop();
+    });
+});
+
+describe('coming back after a drop', () =>
+{
+    it('asks again once the socket is back after being down, and not on the first connect', () =>
+    {
+        const live = useRealtime();
+        const asked = vi.fn();
+        const off = onBack(live, asked);
+
+        live.start();
+        socket.accept();
+        expect(asked).not.toHaveBeenCalled();
+
+        socket.drop();
+        expect(asked).not.toHaveBeenCalled();
+
+        clock.advance(1100);
+        socket.accept();
+        expect(asked).toHaveBeenCalledTimes(1);
+
+        socket.drop();
+        clock.advance(2200);
+        socket.accept();
+        expect(asked).toHaveBeenCalledTimes(2);
+
+        off();
+    });
+
+    it('heals a page that loaded while the server was away', () =>
+    {
+        const live = useRealtime();
+        const asked = vi.fn();
+        const off = onBack(live, asked);
+
+        live.start();
+        socket.drop();
+        clock.advance(1100);
+        socket.accept();
+
+        expect(asked).toHaveBeenCalledTimes(1);
+
+        off();
     });
 });
 

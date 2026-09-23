@@ -5,7 +5,7 @@ import { ludoOf } from '../data/match.ts';
 import { useAccount } from './account.store.ts';
 import { runtime } from '../lib/runtime.ts';
 import { useLocale } from './locale.store.ts';
-import { useRealtime } from './realtime.store.ts';
+import { onBack, useRealtime } from './realtime.store.ts';
 import { useToasts } from './toasts.store.ts';
 
 /**
@@ -244,13 +244,27 @@ export const useBoard = createStore((): BoardApi =>
          */
         start()
         {
-            return useRealtime().onNudge((scope, id) =>
+            const live = useRealtime();
+            const offBack = onBack(live, () =>
+            {
+                if (untrack(openId) !== '')
+                {
+                    void revalidate().catch(() => undefined);
+                }
+            });
+            const offNudge = live.onNudge((scope, id) =>
             {
                 if (scope === 'game' && (id === undefined || id === untrack(openId)))
                 {
                     void revalidate().catch(() => undefined);
                 }
             });
+
+            return () =>
+            {
+                offNudge();
+                offBack();
+            };
         },
 
         stop: () => undefined,

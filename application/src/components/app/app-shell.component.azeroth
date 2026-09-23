@@ -11,7 +11,7 @@ import { useGroups } from '../../stores/groups.store.ts';
 import { useLobby } from '../../stores/lobby.store.ts';
 import { useBoard } from '../../stores/match.store.ts';
 import { useWatch } from '../../stores/watch.store.ts';
-import { useDevice } from '../../stores/device.store.ts';
+import { bareFor, useDevice } from '../../stores/device.store.ts';
 import { useDevices } from '../../stores/devices.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useOverlay } from '../../stores/overlay.store.ts';
@@ -31,6 +31,7 @@ import SocialPanel from './social-panel.component.azeroth';
 import ToastHost from './toast-host.component.azeroth';
 import { useToasts } from '../../stores/toasts.store.ts';
 import TopBar from './top-bar.component.azeroth';
+
 
 export default component AppShell(props: { children?: MountNode })
 {
@@ -113,6 +114,10 @@ export default component AppShell(props: { children?: MountNode })
 
     derived showSocial = posture === 'sidebar' && device.social() && !immersive;
 
+    derived bare = bareFor(immersive, posture, device.height());
+
+    derived compact = !bare && (posture === 'rail' || (posture === 'sidebar' && immersive));
+
     <div class="contents">
         <div
             id="app-shell"
@@ -120,16 +125,16 @@ export default component AppShell(props: { children?: MountNode })
             inert={ overlay.blocking() }
             class={ () => [
                 'grid h-dvh min-h-0 bg-void text-text',
-                posture === 'phone' ? 'grid-cols-1' : (posture === 'rail' ? 'grid-cols-[var(--rail-w)_minmax(0,1fr)]' : 'grid-cols-[var(--sidebar-w)_minmax(0,1fr)]')
+                posture === 'phone' || bare ? 'grid-cols-1' : (compact ? 'grid-cols-[var(--rail-w)_minmax(0,1fr)]' : 'grid-cols-[var(--sidebar-w)_minmax(0,1fr)]')
             ].join(' ') }
         >
-            <Show when={ posture === 'rail' }>{ () => <NavRail /> }</Show>
-            <Show when={ posture === 'sidebar' }>{ () => <Sidebar /> }</Show>
+            <Show when={ compact }>{ () => <NavRail /> }</Show>
+            <Show when={ posture === 'sidebar' && !compact && !bare }>{ () => <Sidebar /> }</Show>
 
             <div class="flex h-dvh min-h-0 min-w-0 flex-col">
-                <Show when={ !immersive || posture !== 'phone' }>{ () => <TopBar /> }</Show>
+                <Show when={ !bare }>{ () => <TopBar /> }</Show>
                 <ConnectionBanner />
-                <KeysBanner />
+                <Show when={ !immersive }>{ () => <KeysBanner /> }</Show>
                 <div class="flex min-h-0 flex-1">
                     <main id="app-main" class="relative min-h-0 min-w-0 flex-1 overflow-hidden">
                         <Outlet children={ props.children } />

@@ -15,6 +15,13 @@ export function postureFor(width: number): Posture
     return width < SIDEBAR_MIN ? 'rail' : 'sidebar';
 }
 
+export const SHORT_MAX = 540;
+
+export function bareFor(immersive: boolean, posture: Posture, height: number): boolean
+{
+    return immersive && (posture === 'phone' || height <= SHORT_MAX);
+}
+
 export interface DeviceApi
 {
     width: Getter<number>;
@@ -27,6 +34,7 @@ export interface DeviceApi
     standalone: Getter<boolean>;
     keyboardOpen: Getter<boolean>;
     override(posture: Posture | null): void;
+    overrideCoarse(coarse: boolean | null): void;
 
     /**
      * Begins watching the window, and hands back the way to stop.
@@ -63,6 +71,7 @@ export const useDevice = createStore((): DeviceApi =>
     const [standalone] = createSignal(media('(display-mode: standalone)'));
     const [keyboardOpen, setKeyboardOpen] = createSignal(false);
     const [forced, setForced] = createSignal<Posture | null>(null);
+    const [forcedCoarse, setForcedCoarse] = createSignal<boolean | null>(null);
 
     const measure = (): void =>
     {
@@ -126,11 +135,12 @@ export const useDevice = createStore((): DeviceApi =>
         posture: () => forced() ?? postureFor(width()),
         social: () => (forced() ?? postureFor(width())) === 'sidebar' && width() >= SOCIAL_MIN,
         landscape: () => width() > height(),
-        coarse,
+        coarse: () => forcedCoarse() ?? coarse(),
         reducedMotion,
         standalone,
         keyboardOpen,
         override: (posture) => setForced(posture),
+        overrideCoarse: (value) => setForcedCoarse(value),
         start,
         stop
     };

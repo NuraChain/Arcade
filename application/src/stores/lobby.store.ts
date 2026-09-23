@@ -5,7 +5,7 @@ import type { GameId } from '../data/games.ts';
 import type { TableConfig } from '../data/tables.ts';
 import { useAccount } from './account.store.ts';
 import { useCatalogue } from './catalogue.store.ts';
-import { useRealtime } from './realtime.store.ts';
+import { onBack, useRealtime } from './realtime.store.ts';
 
 export interface LobbyApi
 {
@@ -252,7 +252,9 @@ export const useLobby = createStore((): LobbyApi =>
         /** A chair changing hands is a social change: it moves who is sitting where. */
         start()
         {
-            return useRealtime().onNudge((scope) =>
+            const live = useRealtime();
+            const offBack = onBack(live, () => void revalidate().catch(() => undefined));
+            const offNudge = live.onNudge((scope) =>
             {
                 if (scope === 'social')
                 {
@@ -264,6 +266,12 @@ export const useLobby = createStore((): LobbyApi =>
                     void seated.refetch();
                 }
             });
+
+            return () =>
+            {
+                offNudge();
+                offBack();
+            };
         },
 
         stop: () => undefined,
