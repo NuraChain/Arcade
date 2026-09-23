@@ -394,6 +394,41 @@ describe('a trick is taken by the rules', () =>
 
         throw new Error('no hand ever ended');
     });
+
+    it('counts the hands, starting at one, and every deal is the next', () =>
+    {
+        const deal = seeded(4);
+
+        let state = create(4, 7, deal);
+
+        expect(state.round).toBe(1);
+
+        let deals = 0;
+
+        for (let step = 0; step < 4000 && state.winner === null; step += 1)
+        {
+            const move = autoplay(state, state.phase === 'trump' ? state.hakem : state.turn, deal);
+
+            if (move === null)
+            {
+                break;
+            }
+
+            const outcome = apply(state, move, deal);
+
+            if (!outcome.ok)
+            {
+                break;
+            }
+
+            deals += outcome.events.filter((event) => event.e === 'deal').length;
+            state = outcome.state;
+
+            expect(state.round).toBe(1 + deals);
+        }
+
+        expect(deals).toBeGreaterThan(0);
+    });
 });
 
 describe('refusing what is not a move', () =>

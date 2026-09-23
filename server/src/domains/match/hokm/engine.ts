@@ -77,6 +77,7 @@ function dealHand(state: HokmState, deal: Deal): HokmState
 
     return {
         ...state,
+        round: state.round + 1,
         phase: 'trump',
         trump: null,
         hands,
@@ -130,6 +131,7 @@ export function create(seats: number, target: number, deal: Deal): HokmState
         rev: 0,
         seats,
         target,
+        round: 0,
         hakem,
         phase: 'trump',
         trump: null,

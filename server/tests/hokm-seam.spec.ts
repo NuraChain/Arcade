@@ -248,6 +248,7 @@ describe('the hokm wire', () =>
             seats: [{ seat: 0, side: 0, held: 13, tricks: 0, out: false, hand: [1, 2, 3] }],
             points: [0, 0],
             target: 7,
+            round: 1,
             needed: 7
         });
 

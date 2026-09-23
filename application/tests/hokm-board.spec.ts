@@ -35,6 +35,7 @@ const match = (view: Partial<Hokm>, mine = 1): MatchView => ({
         seats: [0, 1, 2, 3].map((seat) => ({ seat, side: seat % 2, held: seat === 0 ? 5 : 0, tricks: 0, out: false })),
         points: [0, 0],
         target: 7,
+        round: 1,
         needed: 7,
         ...view
     }
@@ -71,6 +72,13 @@ describe('HokmBoard', () =>
 
         expect(container.querySelectorAll('.hokm-hand').length).toBe(1);
         expect(container.querySelectorAll('.hokm-hand .card-hold').length).toBe(3);
+    });
+
+    it('says which hand of the match is being played beside the score', () =>
+    {
+        const { container } = renderTest(() => HokmBoard({ match: match({ round: 4 }) }) as Rendered);
+
+        expect(container.querySelector('.hokm-side')?.textContent).toContain('Hand 4');
     });
 
     it('gives the sentence in the middle of the table the page direction, because the table itself is forced left to right', () =>

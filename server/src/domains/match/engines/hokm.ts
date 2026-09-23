@@ -132,6 +132,7 @@ export const hokmEngine: Engine<HokmState, HokmAction> = {
             })),
             points: [...state.points],
             target: state.target,
+            round: state.round,
             needed: state.seats === 3 ? trickCount(3) : winningTricks(state.seats)
         };
 

@@ -50,6 +50,8 @@ export interface HokmState
     /** Points that win the match. Seven is the canonical game; the catalogue also offers thirteen. */
     target: number;
 
+    round: number;
+
     /**
      * The seat that names trump, receives the first cards and leads the first trick.
      *

@@ -1200,6 +1200,7 @@ export const hokmBoard = object({
 
     /** Points that win the match, and tricks that win a hand - both from the deck and the table. */
     target: number(),
+    round: number(),
     needed: number()
 });
 

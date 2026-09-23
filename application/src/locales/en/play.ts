@@ -235,6 +235,7 @@ export const play = {
     'hokm.summary': 'Trump, score and the last trick',
     'hokm.trump.none': 'Not named yet',
     'hokm.score': 'Score',
+    'hokm.round': 'Hand {n}',
     'hokm.lastTrick': 'Last trick',
     'hokm.lastTrick.none': 'No trick has been taken yet.',
     'hokm.sort': 'Sort',

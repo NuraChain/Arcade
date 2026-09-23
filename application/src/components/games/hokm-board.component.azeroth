@@ -384,7 +384,10 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
                 </section>
 
                 <section class="hokm-tile">
-                    <h3 class="label text-ui-2xs text-faint">{ locale.t('hokm.score') }</h3>
+                    <div class="flex items-baseline justify-between gap-2">
+                        <h3 class="label text-ui-2xs text-faint">{ locale.t('hokm.score') }</h3>
+                        <span class="text-ui-2xs font-semibold text-muted">{ locale.t('hokm.round', { n: locale.n(view!.round) }) }</span>
+                    </div>
                     <dl class="flex flex-col gap-2">
                         <For each={ sides } key={ (side) => side.index } let={ side }>
                             <div class="flex min-w-0 items-baseline justify-between gap-2">
