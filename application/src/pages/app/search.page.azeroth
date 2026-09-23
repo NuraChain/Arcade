@@ -36,7 +36,8 @@ const NOWHERE: Conversation = {
     game: null,
     title: null,
     pinned: false,
-    lastReadAt: 0
+    lastReadAt: 0,
+    quiet: false
 };
 
 export default component SearchPage()

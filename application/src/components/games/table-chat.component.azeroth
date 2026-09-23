@@ -5,6 +5,7 @@ import { sendBlockOf } from '../../lib/seal-state.ts';
 import { haptic } from '../../lib/haptics.ts';
 import { sealSentenceOf } from '../chat/chat-title.ts';
 import SealNotice from '../chat/seal-notice.component.azeroth';
+import QuietNote from '../chat/quiet-note.component.azeroth';
 import DayDivider from '../chat/day-divider.component.azeroth';
 import MessageBubble from '../chat/message-bubble.component.azeroth';
 import { ludoOf } from '../../data/match.ts';
@@ -164,6 +165,8 @@ export default component TableChat(props: {
 
     derived table = lobby.table();
 
+    derived quiet = table?.chat === false;
+
     derived match = board.match();
 
     derived live = match !== null && match.tableId === table?.id ? match : null;
@@ -238,10 +241,10 @@ export default component TableChat(props: {
                             { () =>
                                 <li class="m-auto flex max-w-[16rem] flex-col items-center gap-2 px-2 py-8 text-center">
                                     <span class="flex h-11 w-11 items-center justify-center rounded-full bg-accent/12 text-accent">
-                                        <Icon name="chats" size={ 20 } />
+                                        <Icon name={ quiet ? 'chat-off' : 'chats' } size={ 20 } />
                                     </span>
-                                    <p class="text-ui-sm font-semibold text-text">{ locale.t('chat.empty') }</p>
-                                    <p class="text-ui-xs text-muted">{ locale.t('play.table.chatLead') }</p>
+                                    <p class="text-ui-sm font-semibold text-text">{ locale.t(quiet ? 'play.table.quiet' : 'chat.empty') }</p>
+                                    <p class="text-ui-xs text-muted">{ locale.t(quiet ? 'play.table.quietLead' : 'play.table.chatLead') }</p>
                                 </li>
                             }
                         </Show>
@@ -255,7 +258,7 @@ export default component TableChat(props: {
                         </For>
                     </ul>
 
-                    <Show when={ !seal.loading() && stop !== null }>
+                    <Show when={ !quiet && !seal.loading() && stop !== null }>
                         { () =>
                             <div class="shrink-0 border-t border-line px-3 pt-2">
                                 <SealNotice
@@ -274,7 +277,15 @@ export default component TableChat(props: {
                         }
                     </Show>
 
-                    <div class="shrink-0 border-t border-line px-3 pb-3 pt-2.5">
+                    <Show when={ quiet && messages.length > 0 }>
+                        { () =>
+                            <div class="shrink-0 border-t border-line p-3">
+                                <QuietNote />
+                            </div>
+                        }
+                    </Show>
+
+                    <div class={ () => quiet ? 'hidden' : 'shrink-0 border-t border-line px-3 pb-3 pt-2.5' }>
                         <Show when={ stop === null }>
                             { () =>
                                 <ul class="rail-x -mx-3 mb-2 flex gap-1.5 px-3" aria-label={ locale.t('play.quick.label') }>

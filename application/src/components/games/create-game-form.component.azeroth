@@ -38,11 +38,12 @@ export default component CreateGameForm(props: { game: Game; onCreated: (tableId
     state target = defaults.target;
     state cube = defaults.cube;
     state blinds = defaults.blinds as Blinds;
+    state chat = defaults.chat;
     state invitees = [] as string[];
     state query = '';
     state pending = false;
 
-    derived config = { game: props.game.id, seats, mode, privacy, target, cube, blinds, quick: false } as TableConfig;
+    derived config = { game: props.game.id, seats, mode, privacy, target, cube, blinds, chat, quick: false } as TableConfig;
 
     derived tooMany = invitees.length > seats - 1;
 
@@ -181,6 +182,8 @@ export default component CreateGameForm(props: { game: Game; onCreated: (tableId
                 <p class="text-ui-xs text-faint">{ locale.t('games.stakes.playMoneyHint') }</p>
             </fieldset>
         </Show>
+
+        <Toggle checked={ chat } label={ locale.t('create.chat') } description={ locale.t('create.chatHint') } onChange={ (checked) => chat = checked } />
 
         <fieldset class="flex flex-col gap-3">
             <legend class="label mb-2 flex w-full items-center justify-between text-ui-sm text-muted">

@@ -319,7 +319,7 @@ console.log('\n[6] the server decides what a table may be');
              * that has nothing to do with the config being checked. Pointing the legal case at a
              * game the server will not open is how this check came to assert 422 and pass.
              */
-            const legal = { game: 'ludo', seats: 4, mode: 'live', privacy: 'invite', target: 0, cube: false, blinds: 'low', invitees: [] };
+            const legal = { game: 'ludo', seats: 4, mode: 'live', privacy: 'invite', target: 0, cube: false, blinds: 'low', chat: true, invitees: [] };
             return {
                 badSeats: await post({ ...legal, seats: 5 }),
                 badMode: await post({ ...legal, mode: 'nonsense' }),
@@ -342,7 +342,7 @@ console.log('\n[6] the server decides what a table may be');
                 const r = await fetch('/api/tables', {
                     method: 'POST',
                     headers: { 'content-type': 'application/json' },
-                    body: JSON.stringify({ game, seats, mode: 'live', privacy: 'invite', target: 0, cube: false, blinds: 'low', invitees: [] })
+                    body: JSON.stringify({ game, seats, mode: 'live', privacy: 'invite', target: 0, cube: false, blinds: 'low', chat: true, invitees: [] })
                 });
                 return r.status;
             };

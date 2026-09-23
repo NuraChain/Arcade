@@ -80,6 +80,7 @@ interface TableWire
     target: number;
     cube: boolean;
     blinds: string;
+    chat: boolean;
     status: 'open' | 'ready' | 'closed';
     host?: string;
     chairs: SeatWire[];
@@ -1263,6 +1264,7 @@ export const client =
             target: number;
             cube: boolean;
             blinds: string;
+            chat: boolean;
             invitees: string[];
         } })
         {
@@ -1279,6 +1281,7 @@ export const client =
                 target: input.target,
                 cube: input.cube,
                 blinds: input.blinds,
+                chat: input.chat,
                 status: 'open',
                 host: server.me,
                 chairs: Array.from({ length: input.seats }, (_, seat) => ({

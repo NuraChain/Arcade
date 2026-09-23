@@ -1,0 +1,17 @@
+import { useLocale } from '../../stores/locale.store.ts';
+import Icon from '../../icons/icon.component.azeroth';
+
+export default component QuietNote(props: { class?: string })
+{
+    const locale = useLocale();
+
+    <div class={ () => [ 'flex items-start gap-3 rounded-tile border border-line bg-sunk px-3 py-2.5', props.class ?? '' ].filter(Boolean).join(' ') } role="status">
+        <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-raised text-muted">
+            <Icon name="chat-off" size={ 16 } />
+        </span>
+        <span class="flex min-w-0 flex-col gap-0.5">
+            <span class="text-ui-sm font-semibold text-text">{ locale.t('play.table.quiet') }</span>
+            <span class="text-ui-xs text-muted">{ locale.t('play.table.quietLead') }</span>
+        </span>
+    </div>
+}

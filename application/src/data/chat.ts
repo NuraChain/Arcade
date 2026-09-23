@@ -29,6 +29,7 @@ export interface Conversation
     title: string | null;
     pinned: boolean;
     lastReadAt: number;
+    quiet: boolean;
 }
 
 export type MessageKind = 'text' | 'system' | 'invite' | 'result';

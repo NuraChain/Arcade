@@ -12,6 +12,7 @@ import Composer from '../../components/chat/composer.component.azeroth';
 import DayDivider from '../../components/chat/day-divider.component.azeroth';
 import MessageBubble from '../../components/chat/message-bubble.component.azeroth';
 import SealNotice from '../../components/chat/seal-notice.component.azeroth';
+import QuietNote from '../../components/chat/quiet-note.component.azeroth';
 import GroupCrest from '../../components/social/group-crest.component.azeroth';
 import OpenHereSheet from '../../components/games/open-here-sheet.component.azeroth';
 import PersonActions from '../../components/social/person-actions.component.azeroth';
@@ -69,6 +70,8 @@ export default component ChatPage()
     const opened = untrack(() => params().id ?? '');
 
     derived conversation = chat.conversation(id) ?? null;
+
+    derived quiet = conversation?.quiet === true;
 
     derived here = conversation !== null;
 
@@ -398,7 +401,7 @@ export default component ChatPage()
                                                     { () => <GroupCrest crest={ group!.crest } hue={ group!.hue } size="lg" /> }
                                                 </Show>
                                                 <p class="text-ui-lg font-semibold text-text" dir="auto">{ title }</p>
-                                                <p class="max-w-xs text-ui-sm text-muted">{ locale.t('chat.empty') }</p>
+                                                <p class="max-w-xs text-ui-sm text-muted">{ locale.t(quiet ? 'chat.emptyQuiet' : 'chat.empty') }</p>
                                                 <Show when={ stop === null && !seal.loading() }>
                                                     { () =>
                                                         <div class="mt-1 max-w-md rounded-tile border border-line bg-field/80 text-start">
@@ -425,7 +428,15 @@ export default component ChatPage()
                                 </div>
                             </div>
 
-                            <Show when={ !seal.loading() && stop !== null }>
+                            <Show when={ quiet }>
+                                { () =>
+                                    <div class="border-t border-line bg-void px-3 py-3">
+                                        <QuietNote class="mx-auto w-full max-w-[48rem]" />
+                                    </div>
+                                }
+                            </Show>
+
+                            <Show when={ !quiet && !seal.loading() && stop !== null }>
                                 { () =>
                                     <div class="border-t border-line bg-void px-3 pt-2">
                                         <div class="mx-auto w-full max-w-[48rem]">
@@ -446,13 +457,17 @@ export default component ChatPage()
                                 }
                             </Show>
 
-                            <Composer
-                                value={ chat.draft(id) }
-                                disabled={ stop !== null }
-                                onInput={ (value) => chat.setDraft(id, value) }
-                                onSend={ send }
-                                onGame={ startGame }
-                            />
+                            <Show when={ !quiet }>
+                                { () =>
+                                    <Composer
+                                        value={ chat.draft(id) }
+                                        disabled={ stop !== null }
+                                        onInput={ (value) => chat.setDraft(id, value) }
+                                        onSend={ send }
+                                        onGame={ startGame }
+                                    />
+                                }
+                            </Show>
                         </div>
                     }
                 </Show>

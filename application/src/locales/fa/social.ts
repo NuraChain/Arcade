@@ -133,6 +133,7 @@ export const social: Pick<Dictionary, keyof typeof reference> = {
     'chat.openGroup': 'باز کردن گروه',
     'chat.viewProfile': 'دیدن پروفایل',
     'chat.empty': 'هنوز پیامی نیست. چیزی بگو.',
+    'chat.emptyQuiet': 'هنوز پیامی نیست.',
     'chat.loadFailed': 'این گفتگو بارگذاری نشد.',
     'level.short': 'سطح',
     'level.title': 'سطح {level}',

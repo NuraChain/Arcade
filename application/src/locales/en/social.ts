@@ -130,6 +130,7 @@ export const social = {
     'chat.openGroup': 'Open group',
     'chat.viewProfile': 'View profile',
     'chat.empty': 'No messages yet. Say something.',
+    'chat.emptyQuiet': 'No messages yet.',
     'chat.loadFailed': 'Could not load this conversation.',
     'level.short': 'LVL',
     'level.title': 'Level {level}',

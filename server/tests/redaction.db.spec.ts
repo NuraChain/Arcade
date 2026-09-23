@@ -124,8 +124,8 @@ const secretMatch = async (): Promise<{ matchId: string; players: string[] }> =>
     const state = stateFor();
 
     const tableId = rowsOf<{ id: string }>(await db.query(
-        `insert into tables (game, code, host_id, seats, mode, privacy, target, cube, blinds)
-         values ('ludo', $2, $1, 2, 'live', 'public', 0, false, 'low')
+        `insert into tables (game, code, host_id, seats, mode, privacy, target, cube, blinds, chat)
+         values ('ludo', $2, $1, 2, 'live', 'public', 0, false, 'low', true)
          returning id`,
         [players[0], `s${ seq }${ Math.floor(Math.random() * 1000000) }`]
     ))[0].id;

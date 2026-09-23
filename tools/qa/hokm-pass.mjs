@@ -122,6 +122,7 @@ const run = async () =>
             target: 7,
             cube: false,
             blinds: 'low',
+            chat: true,
             invitees: []
         });
 

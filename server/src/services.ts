@@ -303,6 +303,10 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         {
             summary.expireAfter = row.expire_after;
         }
+        if (row.quiet)
+        {
+            summary.quiet = true;
+        }
         if (row.last_id !== null && row.last_at !== null && row.last_kind !== null)
         {
             summary.last = asMessage({
@@ -442,6 +446,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             target: row.target,
             cube: row.cube,
             blinds: row.blinds,
+            chat: row.chat,
             status: row.status,
             chairs: row.chairs.map((chair) => ({
                 seat: chair.seat,

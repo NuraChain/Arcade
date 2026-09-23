@@ -65,6 +65,7 @@ const seatedTable = async (seats: number): Promise<{ tableId: string; players: s
         target: 0,
         cube: false,
         blinds: 'low',
+        chat: true,
         invitees: []
     });
 
@@ -208,7 +209,7 @@ describe.skipIf(!active)('a match, against a real database', () =>
             const host = await makeUser();
             const table = await tables.create(host, {
                 game: 'ludo', seats: 2, mode: 'live', privacy: 'public',
-                target: 0, cube: false, blinds: 'low', invitees: []
+                target: 0, cube: false, blinds: 'low', chat: true, invitees: []
             });
 
             await tables.setReady(host, table.id, true);
@@ -256,7 +257,7 @@ describe.skipIf(!active)('a match, against a real database', () =>
             const other = await makeUser();
             const table = await tables.create(host, {
                 game: 'engineless', seats: 2, mode: 'live', privacy: 'public',
-                target: 0, cube: false, blinds: 'low', invitees: []
+                target: 0, cube: false, blinds: 'low', chat: true, invitees: []
             });
 
             await tables.claimSeat(other, table.id);
@@ -528,7 +529,7 @@ describe.skipIf(!active)('a match, against a real database', () =>
 
             const table = await tables.create(players[0], {
                 game: 'hokm', seats: 4, mode: 'live', privacy: 'public',
-                target: 7, cube: false, blinds: 'low', invitees: []
+                target: 7, cube: false, blinds: 'low', chat: true, invitees: []
             });
 
             for (const player of players.slice(1))

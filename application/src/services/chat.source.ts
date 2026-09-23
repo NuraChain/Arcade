@@ -248,6 +248,7 @@ export function createApiSource(): ChatSource
         tableId?: string;
         pinned: boolean;
         expireAfter?: number;
+        quiet?: true;
     }): Conversation => ({
         id: wire.id,
         kind: wire.kind as Conversation['kind'],
@@ -258,7 +259,8 @@ export function createApiSource(): ChatSource
         title: null,
         pinned: wire.pinned,
         lastReadAt: 0,
-        expireAfter: wire.expireAfter ?? null
+        expireAfter: wire.expireAfter ?? null,
+        quiet: wire.quiet === true
     });
 
     const source: ChatSource = {

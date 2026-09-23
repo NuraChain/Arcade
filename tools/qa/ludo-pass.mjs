@@ -123,6 +123,7 @@ const run = async () =>
             target: 0,
             cube: false,
             blinds: 'low',
+            chat: true,
             invitees: []
         });
 

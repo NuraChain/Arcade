@@ -56,6 +56,7 @@ const openTable = async (
         target: 7,
         cube: false,
         blinds: 'low',
+        chat: true,
         invitees: options.invitees ?? [],
         ...(options.roomId === undefined ? {} : { roomId: options.roomId })
     })).id;
@@ -121,7 +122,7 @@ describe.skipIf(!active)('claiming a seat, against a real database', () =>
     {
         const host = await makeUser();
         const table = await tables.create(host, {
-            game: 'seat-fixture', seats: 4, mode: 'live', privacy: 'public', target: 7, cube: false, blinds: 'low', invitees: []
+            game: 'seat-fixture', seats: 4, mode: 'live', privacy: 'public', target: 7, cube: false, blinds: 'low', chat: true, invitees: []
         });
 
         expect(table.chairs.length).toBe(4);
@@ -306,7 +307,7 @@ describe.skipIf(!active)('claiming a seat, against a real database', () =>
     {
         const host = await makeUser();
         const table = await tables.create(host, {
-            game: 'seat-fixture', seats: 4, mode: 'live', privacy: 'invite', target: 7, cube: false, blinds: 'low', invitees: []
+            game: 'seat-fixture', seats: 4, mode: 'live', privacy: 'invite', target: 7, cube: false, blinds: 'low', chat: true, invitees: []
         });
 
         const found = await tables.byCode(host, table.code.toUpperCase());
@@ -338,6 +339,7 @@ describe.skipIf(!active)('claiming a seat, against a real database', () =>
                 target: 7,
                 cube: false,
                 blinds: 'low',
+                chat: true,
                 invitees: [],
                 ...patch
             } as Parameters<typeof tables.create>[1]);

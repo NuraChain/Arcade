@@ -180,6 +180,7 @@ describe('PlayHeader', () =>
         target: 7,
         cube: false,
         blinds: 'low',
+        chat: true,
         status: 'playing',
         chairs: [],
         taken: 4,

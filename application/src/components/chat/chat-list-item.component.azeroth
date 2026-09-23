@@ -69,7 +69,7 @@ export default component ChatListItem(props: { conversation: Conversation; me: s
         }
         if (last === undefined)
         {
-            return locale.t('chat.empty');
+            return locale.t(props.conversation.quiet ? 'chat.emptyQuiet' : 'chat.empty');
         }
         if (last.kind !== 'text')
         {

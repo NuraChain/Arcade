@@ -82,8 +82,8 @@ const finished = async (
     }
 
     const tableId = rowsOf<{ id: string }>(await db.query(
-        `insert into tables (game, code, host_id, seats, mode, privacy, target, cube, blinds)
-         values ('ludo', $3, $1, $2, 'live', 'public', 0, false, 'low')
+        `insert into tables (game, code, host_id, seats, mode, privacy, target, cube, blinds, chat)
+         values ('ludo', $3, $1, $2, 'live', 'public', 0, false, 'low', true)
          returning id`,
         [players[0], state.players.length, `t${ seq }${ Math.floor(Math.random() * 1000000) }`]
     ))[0].id;

@@ -312,4 +312,37 @@ describe.skipIf(!active)('chat, against a real database', () =>
         expect(Array.isArray(row.members)).toBe(true);
         expect(row.members.length).toBe(2);
     });
+
+    it('refuses a line at a table whose host turned the chat off, and says so on the list row', async () =>
+    {
+        const [a, b] = [await makeUser(), await makeUser()];
+        const room = async (chatOn: boolean): Promise<string> =>
+        {
+            const table = rowsOf<{ id: string }>(await db.query(
+                `insert into tables (game, code, host_id, seats, mode, privacy, target, cube, blinds, chat)
+                 values ('ludo', $2, $1, 2, 'live', 'public', 0, false, 'low', $3)
+                 returning id`,
+                [a, `q${ Math.floor(Math.random() * 1000000) }`, chatOn]
+            ))[0].id;
+            const conversation = rowsOf<{ id: string }>(await db.query(
+                `insert into conversations (kind, table_id, game) values ('game', $1, 'ludo') returning id`,
+                [table]
+            ))[0].id;
+            await db.query(
+                'insert into conversation_members (conversation_id, user_id) values ($1, $2), ($1, $3)',
+                [conversation, a, b]
+            );
+            return conversation;
+        };
+
+        const quiet = await room(false);
+        const talking = await room(true);
+
+        await expect(say(b, quiet, 'hello')).rejects.toThrow('Chat is off at this table.');
+        await expect(say(b, talking, 'hello')).resolves.toBeDefined();
+
+        const rows = await chat.list(a);
+        expect(rows.find((row) => row.id === quiet)?.quiet).toBe(true);
+        expect(rows.find((row) => row.id === talking)?.quiet).toBe(false);
+    });
 });

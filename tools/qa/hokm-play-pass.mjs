@@ -207,7 +207,7 @@ try
         const made = await dana.request.post(`${ BASE }/api/tables/`, {
             data: {
                 game: 'hokm', seats: 2, mode: 'turns', privacy: 'public',
-                target: 7, cube: false, blinds: 'low', invitees: []
+                target: 7, cube: false, blinds: 'low', chat: true, invitees: []
             }
         });
 

@@ -994,6 +994,7 @@ export const tableSummary = object({
     target: number(),
     cube: boolean(),
     blinds: string(),
+    chat: boolean(),
     status: tableStatus,
     host: string().optional(),
     chairs: array(tableSeat),
@@ -1034,6 +1035,7 @@ export const tableCreateInput = object({
     target: number({ int: true, min: 0, max: 9999 }),
     cube: boolean(),
     blinds: tableBlinds,
+    chat: boolean(),
 
     /** Handles. Each one holds a chair until they take it or the host gives it away. */
     invitees: array(string({ max: 32 })),
@@ -1610,7 +1612,8 @@ export const conversationSummary = object({
     last: chatMessage.optional(),
 
     /** How long a message in this room lasts, in seconds. Absent when it lasts. */
-    expireAfter: number().optional()
+    expireAfter: number().optional(),
+    quiet: literal(true).optional()
 });
 
 export type ConversationSummary = Infer<typeof conversationSummary>;

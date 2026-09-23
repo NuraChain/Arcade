@@ -63,6 +63,7 @@ export interface TableRow
     target: number;
     cube: boolean;
     blinds: string;
+    chat: boolean;
     status: TableStatus;
     host: string | null;
     created_at: Date;
@@ -135,6 +136,7 @@ const tableQuery = (db: DataSource, me: string) => db.getRepository(Table)
     .addSelect('t.target', 'target')
     .addSelect('t.cube', 'cube')
     .addSelect('t.blinds', 'blinds')
+    .addSelect('t.chat', 'chat')
     .addSelect('t.room_id', 'room_id')
     .addSelect('t.created_at', 'created_at')
 
@@ -425,6 +427,7 @@ export function createTableService(db: DataSource, social: SocialService, achiev
             target: number;
             cube: boolean;
             blinds: string;
+            chat: boolean;
             invitees: string[];
             roomId?: string | null;
         }): Promise<TableRow>
@@ -572,6 +575,7 @@ export function createTableService(db: DataSource, social: SocialService, achiev
                             target: input.target,
                             cube,
                             blinds,
+                            chat: input.chat,
                             hostId: me,
                             roomId
                         });

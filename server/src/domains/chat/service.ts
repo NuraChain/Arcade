@@ -6,6 +6,7 @@ import type { Franking } from './franking.ts';
 import { affectedBy, firstRow, rowsOf } from '../../lib/rows.ts';
 import { ConversationMember } from '../../entities/conversation-member.entity.ts';
 import { Conversation } from '../../entities/conversation.entity.ts';
+import { Table } from '../../entities/table.entity.ts';
 import type { MessageKind } from '../../entities/message.entity.ts';
 import { User } from '../../entities/user.entity.ts';
 import type { SocialService } from '../social/service.ts';
@@ -43,6 +44,7 @@ export interface ConversationRow
 
     /** How long a message in this room lasts, in seconds. Null is off. */
     expire_after: number | null;
+    quiet: boolean;
 }
 
 export interface MessageRow
@@ -251,6 +253,7 @@ export function createChatService(db: DataSource, social: SocialService, frankin
             const rows = await db.query(
                 `select c.id, c.kind, c.table_id, c.game, c.title, c.expire_after,
                         (select g.slug::text from groups g where g.id = c.group_id)      as group_slug,
+                        coalesce((select not t.chat from tables t where t.id = c.table_id), false) as quiet,
                         m.pinned, m.last_read_at,
                         -- The cast is load-bearing. handle is citext, and array_agg over it
                         -- yields citext[], whose OID node-pg does not recognise - so the driver
@@ -369,6 +372,18 @@ export function createChatService(db: DataSource, social: SocialService, frankin
         async send(me: string, conversationId: string, deviceId: string | null, input: SealedInput): Promise<MessageRow>
         {
             await mustBeMember(me, conversationId);
+
+            const quiet = await db.getRepository(Conversation)
+                .createQueryBuilder('c')
+                .innerJoin(Table, 't', 't.id = c.table_id')
+                .where('c.id = :conversationId', { conversationId })
+                .andWhere('t.chat = false')
+                .getExists();
+
+            if (quiet)
+            {
+                throw new ForbiddenError('Chat is off at this table.');
+            }
 
             // The device has to be THIS ACCOUNT's, confirmed and unrevoked. It used to have to be
             // the one bound to this session, which sounds stricter and was in practice a lockout:
