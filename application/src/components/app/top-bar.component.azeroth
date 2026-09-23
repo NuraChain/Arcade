@@ -33,7 +33,7 @@ export default component TopBar()
 
     derived unread = notifications.unread();
 
-    derived collapsible = device.posture() === 'sidebar' && meta.immersive !== true;
+    derived collapsible = device.posture() === 'sidebar' && (meta.immersive !== true || meta.messenger === true);
 
     derived open = settings.settings().sidebarOpen;
 

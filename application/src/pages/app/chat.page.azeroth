@@ -6,7 +6,10 @@ import { gameNameOf, groupNameOf, othersOf, sealSentenceOf, titleOf } from '../.
 import { sendBlockOf } from '../../lib/seal-state.ts';
 import { attachStick } from '../../lib/stick.ts';
 import { haptic } from '../../lib/haptics.ts';
+import { threadRows } from '../../lib/thread.ts';
+import ChatList from '../../components/chat/chat-list.component.azeroth';
 import Composer from '../../components/chat/composer.component.azeroth';
+import DayDivider from '../../components/chat/day-divider.component.azeroth';
 import MessageBubble from '../../components/chat/message-bubble.component.azeroth';
 import SealNotice from '../../components/chat/seal-notice.component.azeroth';
 import GroupCrest from '../../components/social/group-crest.component.azeroth';
@@ -103,6 +106,8 @@ export default component ChatPage()
     derived shown = messages.slice(Math.max(0, messages.length - visible));
 
     derived hidden = messages.length - shown.length;
+
+    derived rows = threadRows(shown);
 
     derived typing = chat.typing(id);
 
@@ -223,185 +228,235 @@ export default component ChatPage()
 
     derived phone = device.posture() === 'phone';
 
-    <Page padded={ false } fill label={ title } class="flex flex-col">
-        <Show
-            when={ here }
-            fallback={
+    derived split = device.posture() === 'sidebar';
+
+    derived crowd = group !== null || others.length > 1 || conversation?.kind === 'game';
+
+    <Page padded={ false } fill label={ title } class="flex">
+        <div class="flex h-full min-h-0 w-full">
+            <Show when={ split }>
+                { () =>
+                    <aside class="flex w-[22rem] shrink-0 flex-col border-e border-line bg-void" aria-label={ locale.t('app.nav.chats') }>
+                        <h2 class="shrink-0 px-5 pb-3 pt-5 text-ui-2xl font-bold text-text">{ locale.t('app.nav.chats') }</h2>
+                        <ChatList pane active={ id } class="min-h-0 flex-1" />
+                    </aside>
+                }
+            </Show>
+
+            <section class="@container flex min-w-0 flex-1 flex-col">
                 <Show
-                    when={ missing }
+                    when={ here }
                     fallback={
-                        <p class="m-auto px-4 py-10 text-center text-ui-base text-muted">
-                            { locale.t('common.loading') }
-                        </p>
+                        <Show
+                            when={ missing }
+                            fallback={
+                                <p class="m-auto px-4 py-10 text-center text-ui-base text-muted">
+                                    { locale.t('common.loading') }
+                                </p>
+                            }
+                        >
+                            { () =>
+                                <div class="px-4 py-10">
+                                    <EmptyState icon="chats" title={ locale.t('chat.notFound') } action={ locale.t('app.nav.chats') } to="/app/chats" />
+                                </div>
+                            }
+                        </Show>
                     }
                 >
                     { () =>
-                        <div class="px-4 py-10">
-                            <EmptyState icon="chats" title={ locale.t('chat.notFound') } action={ locale.t('app.nav.chats') } to="/app/chats" />
-                        </div>
-                    }
-                </Show>
-            }
-        >
-            { () =>
-                <div class="flex h-full min-h-0 flex-col">
-                    <header class="safe-t z-topbar sticky top-0 flex min-h-16 items-center gap-2 border-b border-line bg-void/85 px-2 py-2 backdrop-blur-md sm:px-4">
-                        <Show when={ phone }>
-                            { () => <IconButton icon="back" label={ locale.t('app.nav.back') } flip to="/app/chats" /> }
-                        </Show>
-                        <Show
-                            when={ group !== null }
-                            fallback={
-                                <Show when={ others.length === 1 } fallback={ <AvatarGroup people={ others } size="sm" max={ 2 } class="w-9 shrink-0" /> }>
+                        <div class="flex h-full min-h-0 flex-col">
+                            <header class="safe-t z-topbar sticky top-0 flex min-h-16 items-center gap-2 border-b border-line bg-void/90 px-2 py-2 backdrop-blur-md sm:px-4">
+                                <Show when={ phone }>
+                                    { () => <IconButton icon="back" label={ locale.t('app.nav.back') } flip to="/app/chats" /> }
+                                </Show>
+                                <Show
+                                    when={ group !== null }
+                                    fallback={
+                                        <Show when={ others.length === 1 } fallback={ <AvatarGroup people={ others } size="sm" max={ 2 } class="w-9 shrink-0" /> }>
+                                            { () =>
+                                                <Link to={ `/app/people/${ others[0].handle }` } class="flex h-11 w-10 shrink-0 items-center justify-center">
+                                                    <Avatar person={ others[0] } size="sm" presence={ presence.dot(others[0].id) } />
+                                                </Link>
+                                            }
+                                        </Show>
+                                    }
+                                >
                                     { () =>
-                                        <Link to={ `/app/people/${ others[0].handle }` } class="flex h-11 w-10 shrink-0 items-center justify-center">
-                                            <Avatar person={ others[0] } size="sm" presence={ presence.dot(others[0].id) } />
+                                        <Link to={ `/app/groups/${ group!.id }` } class="flex h-11 w-10 shrink-0 items-center justify-center" aria-label={ locale.t('chat.openGroup') }>
+                                            <GroupCrest crest={ group!.crest } hue={ group!.hue } size="sm" />
                                         </Link>
                                     }
                                 </Show>
-                            }
-                        >
-                            { () =>
-                                <Link to={ `/app/groups/${ group!.id }` } class="flex h-11 w-10 shrink-0 items-center justify-center" aria-label={ locale.t('chat.openGroup') }>
-                                    <GroupCrest crest={ group!.crest } hue={ group!.hue } size="sm" />
-                                </Link>
-                            }
-                        </Show>
-                        <span class="flex min-w-0 flex-1 flex-col">
-                            <h1 class="truncate text-ui-md font-semibold text-text" dir="auto">{ title }</h1>
-                            <span class={ () => [ 'truncate text-ui-xs', typing.length > 0 ? 'text-live' : 'text-muted' ].join(' ') }>{ subtitle }</span>
-                        </span>
-                        <IconButton
-                            icon={ muted ? 'sound-off' : 'sound' }
-                            label={ locale.t(muted ? 'chat.unmute' : 'chat.mute') }
-                            variant="ghost"
-                            pressed={ muted }
-                            onClick={ () => void social.toggleMute('conversation', id) }
-                        />
-                        <Show when={ others.length === 1 }>
-                            { () =>
+                                <span class="flex min-w-0 flex-1 flex-col">
+                                    <h1 class="truncate text-ui-md font-semibold text-text" dir="auto">{ title }</h1>
+                                    <span class={ () => [ 'truncate text-ui-xs', typing.length > 0 ? 'text-live' : 'text-muted' ].join(' ') } dir="auto">{ subtitle }</span>
+                                </span>
+                                <IconButton icon="dice" label={ locale.t('chat.gameMenu') } variant="ghost" onClick={ startGame } class="hidden @md:inline-flex" />
                                 <IconButton
-                                    icon="more"
-                                    label={ locale.t('actions.title') }
+                                    icon={ muted ? 'sound-off' : 'sound' }
+                                    label={ locale.t(muted ? 'chat.unmute' : 'chat.mute') }
                                     variant="ghost"
-                                    onClick={ () => overlay.open(PersonActions, { personId: others[0].id }, { label: locale.t('actions.title') }) }
+                                    pressed={ muted }
+                                    onClick={ () => void social.toggleMute('conversation', id) }
                                 />
-                            }
-                        </Show>
-                    </header>
-
-                    <div ref={ (element) => list = element } class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-4">
-                        <div class="mt-auto"></div>
-
-                        <Show when={ hidden > 0 }>
-                            { () =>
-                                <div class="flex justify-center pb-2">
-                                    <Button variant="ghost" size="sm" leading="history" onClick={ showEarlier }>
-                                        { locale.t('chat.earlier', { count: locale.n(hidden) }) }
-                                    </Button>
-                                </div>
-                            }
-                        </Show>
-                        <Switch
-                            fallback={
-                                <For each={ shown } key={ (message) => message.id } let={ message } index={ index }>
-                                    <div>
-                                        <MessageBubble
-                                            message={ message }
-                                            me={ me }
-                                            showAuthor={ index === 0 || shown[index - 1].from !== message.from }
-                                            onHold={ (held) => overlay.open(
-                                                PersonActions,
-                                                {
-                                                    personId: held.from,
-
-                                                    ...(held.frankingKey === undefined ? {} : {
-                                                        disclose: {
-                                                            conversationId: held.conversationId,
-                                                            messageId: held.id,
-                                                            text: held.text,
-                                                            frankingKey: held.frankingKey
-                                                        }
-                                                    })
-                                                },
-                                                { label: locale.t('actions.title') }
-                                            ) }
+                                <Show when={ others.length === 1 }>
+                                    { () =>
+                                        <IconButton
+                                            icon="more"
+                                            label={ locale.t('actions.title') }
+                                            variant="ghost"
+                                            onClick={ () => overlay.open(PersonActions, { personId: others[0].id }, { label: locale.t('actions.title') }) }
                                         />
-                                    </div>
-                                </For>
-                            }
-                        >
-                            <Match when={ loading }>
-                                <div class="flex w-full flex-col gap-4 p-4" aria-hidden="true">
-                                    <div class="flex animate-pulse items-end gap-2 motion-reduce:animate-none">
-                                        <span class="h-8 w-8 shrink-0 rounded-full bg-raised"></span>
-                                        <div class="flex flex-col gap-1.5">
-                                            <span class="block h-10 w-44 rounded-panel bg-raised"></span>
-                                            <span class="block h-10 w-28 rounded-panel bg-raised"></span>
-                                        </div>
-                                    </div>
-                                    <div class="flex animate-pulse items-end justify-end gap-2 motion-reduce:animate-none">
-                                        <div class="flex flex-col items-end gap-1.5">
-                                            <span class="block h-10 w-52 rounded-panel bg-accent/15"></span>
-                                            <span class="block h-10 w-24 rounded-panel bg-accent/15"></span>
-                                        </div>
-                                    </div>
-                                    <div class="flex animate-pulse items-end gap-2 motion-reduce:animate-none">
-                                        <span class="h-8 w-8 shrink-0 rounded-full bg-raised"></span>
-                                        <span class="block h-10 w-36 rounded-panel bg-raised"></span>
-                                    </div>
-                                </div>
-                            </Match>
-                            <Match when={ failed && messages.length === 0 }>
-                                <div class="m-auto flex flex-col items-center gap-3 text-center">
-                                    <p class="text-ui-base text-muted">{ locale.t('chat.loadFailed') }</p>
-                                    <Button variant="outline" size="sm" leading="refresh" onClick={ () => void chat.refresh() }>
-                                        { locale.t('common.retry') }
-                                    </Button>
-                                </div>
-                            </Match>
-                            <Match when={ messages.length === 0 }>
-                                <p class="m-auto text-center text-ui-base text-muted">{ locale.t('chat.empty') }</p>
-                            </Match>
-                        </Switch>
-                        <Show when={ typing.length > 0 }>
-                            { () =>
-                                <p class="flex items-center gap-2 ps-10 text-ui-xs text-live">
-                                    <span class="live-dot h-1.5 w-1.5 rounded-full animate-pulse motion-reduce:animate-none" aria-hidden="true"></span>
-                                    { locale.text(people.byHandle(typing[0])?.displayName ?? { en: '', fa: '' }) } { locale.t('chats.typing') }
-                                </p>
-                            }
-                        </Show>
-                    </div>
+                                    }
+                                </Show>
+                            </header>
 
-                    <Show when={ !seal.loading() }>
-                        { () =>
-                            <div class="px-3 pb-2">
-                                <SealNotice
-                                    stop={ stop }
-                                    action={ stop?.reason !== 'browser' || stop.readiness === 'unsupported'
-                                        ? undefined
-                                        : (stop.readiness === 'absent'
-                                            ? <Button variant="primary" size="sm" leading="key" loading={ devices.busy() } onClick={ () => void enrolment.give() }>
-                                                { locale.t('devices.enrol') }
-                                            </Button>
-                                            : <Button variant="outline" size="sm" leading="key" to="/app/me/devices">
-                                                { locale.t('devices.title') }
-                                            </Button>) }
-                                />
+                            <div ref={ (element) => list = element } class="chat-well flex min-h-0 flex-1 flex-col overflow-y-auto px-3 sm:px-6">
+                                <div class="mx-auto mt-auto flex w-full max-w-[48rem] flex-col pb-3 pt-4">
+                                    <Show when={ hidden === 0 && stop === null && !seal.loading() && messages.length > 0 }>
+                                        { () =>
+                                            <div class="mx-auto mb-2 max-w-md rounded-tile border border-line bg-field/80">
+                                                <SealNotice stop={ null } />
+                                            </div>
+                                        }
+                                    </Show>
+
+                                    <Show when={ hidden > 0 }>
+                                        { () =>
+                                            <div class="flex justify-center pb-2">
+                                                <Button variant="ghost" size="sm" leading="history" onClick={ showEarlier }>
+                                                    { locale.t('chat.earlier', { count: locale.n(hidden) }) }
+                                                </Button>
+                                            </div>
+                                        }
+                                    </Show>
+
+                                    <Switch
+                                        fallback={
+                                            <For each={ rows } key={ (row) => row.message.id } let={ row }>
+                                                <div class={ () => row.first ? 'pt-3' : 'pt-0.5' }>
+                                                    <Show when={ row.day }>
+                                                        { () => <DayDivider at={ row.message.at } /> }
+                                                    </Show>
+                                                    <MessageBubble
+                                                        message={ row.message }
+                                                        me={ me }
+                                                        first={ row.first }
+                                                        last={ row.last }
+                                                        avatar={ crowd }
+                                                        onHold={ (held) => overlay.open(
+                                                            PersonActions,
+                                                            {
+                                                                personId: held.from,
+
+                                                                ...(held.frankingKey === undefined ? {} : {
+                                                                    disclose: {
+                                                                        conversationId: held.conversationId,
+                                                                        messageId: held.id,
+                                                                        text: held.text,
+                                                                        frankingKey: held.frankingKey
+                                                                    }
+                                                                })
+                                                            },
+                                                            { label: locale.t('actions.title') }
+                                                        ) }
+                                                    />
+                                                </div>
+                                            </For>
+                                        }
+                                    >
+                                        <Match when={ loading }>
+                                            <div class="flex w-full flex-col gap-4 py-4" aria-hidden="true">
+                                                <div class="flex animate-pulse flex-col items-start gap-1.5 motion-reduce:animate-none">
+                                                    <span class="block h-10 w-44 rounded-[1.125rem] bg-field"></span>
+                                                    <span class="block h-10 w-28 rounded-[1.125rem] bg-field"></span>
+                                                </div>
+                                                <div class="flex animate-pulse flex-col items-end gap-1.5 motion-reduce:animate-none">
+                                                    <span class="block h-10 w-52 rounded-[1.125rem] bg-accent-fill/25"></span>
+                                                    <span class="block h-10 w-24 rounded-[1.125rem] bg-accent-fill/25"></span>
+                                                </div>
+                                            </div>
+                                        </Match>
+                                        <Match when={ failed && messages.length === 0 }>
+                                            <div class="flex flex-col items-center gap-3 py-16 text-center">
+                                                <p class="text-ui-base text-muted">{ locale.t('chat.loadFailed') }</p>
+                                                <Button variant="outline" size="sm" leading="refresh" onClick={ () => void chat.refresh() }>
+                                                    { locale.t('common.retry') }
+                                                </Button>
+                                            </div>
+                                        </Match>
+                                        <Match when={ messages.length === 0 }>
+                                            <div class="flex flex-col items-center gap-3 py-16 text-center">
+                                                <Show
+                                                    when={ group !== null }
+                                                    fallback={
+                                                        <Show when={ others.length === 1 } fallback={ <AvatarGroup people={ others } size="md" max={ 3 } /> }>
+                                                            { () => <Avatar person={ others[0] } size="xl" /> }
+                                                        </Show>
+                                                    }
+                                                >
+                                                    { () => <GroupCrest crest={ group!.crest } hue={ group!.hue } size="lg" /> }
+                                                </Show>
+                                                <p class="text-ui-lg font-semibold text-text" dir="auto">{ title }</p>
+                                                <p class="max-w-xs text-ui-sm text-muted">{ locale.t('chat.empty') }</p>
+                                                <Show when={ stop === null && !seal.loading() }>
+                                                    { () =>
+                                                        <div class="mt-1 max-w-md rounded-tile border border-line bg-field/80 text-start">
+                                                            <SealNotice stop={ null } />
+                                                        </div>
+                                                    }
+                                                </Show>
+                                            </div>
+                                        </Match>
+                                    </Switch>
+
+                                    <Show when={ typing.length > 0 }>
+                                        { () =>
+                                            <div class="flex items-end gap-2 pt-3">
+                                                <span class="typing flex items-center gap-1 rounded-[1.125rem] rounded-es-[0.3rem] border border-line bg-field px-3.5 py-3" aria-hidden="true">
+                                                    <span></span>
+                                                    <span></span>
+                                                    <span></span>
+                                                </span>
+                                                <span class="sr-only">{ locale.text(people.byHandle(typing[0])?.displayName ?? { en: typing[0], fa: typing[0] }) } { locale.t('chats.typing') }</span>
+                                            </div>
+                                        }
+                                    </Show>
+                                </div>
                             </div>
-                        }
-                    </Show>
 
-                    <Composer
-                        value={ chat.draft(id) }
-                        disabled={ stop !== null }
-                        onInput={ (value) => chat.setDraft(id, value) }
-                        onSend={ send }
-                        onGame={ startGame }
-                    />
-                </div>
-            }
-        </Show>
+                            <Show when={ !seal.loading() && stop !== null }>
+                                { () =>
+                                    <div class="border-t border-line bg-void px-3 pt-2">
+                                        <div class="mx-auto w-full max-w-[48rem]">
+                                            <SealNotice
+                                                stop={ stop }
+                                                action={ stop?.reason !== 'browser' || stop.readiness === 'unsupported'
+                                                    ? undefined
+                                                    : (stop.readiness === 'absent'
+                                                        ? <Button variant="primary" size="sm" leading="key" loading={ devices.busy() } onClick={ () => void enrolment.give() }>
+                                                            { locale.t('devices.enrol') }
+                                                        </Button>
+                                                        : <Button variant="outline" size="sm" leading="key" to="/app/me/devices">
+                                                            { locale.t('devices.title') }
+                                                        </Button>) }
+                                            />
+                                        </div>
+                                    </div>
+                                }
+                            </Show>
+
+                            <Composer
+                                value={ chat.draft(id) }
+                                disabled={ stop !== null }
+                                onInput={ (value) => chat.setDraft(id, value) }
+                                onSend={ send }
+                                onGame={ startGame }
+                            />
+                        </div>
+                    }
+                </Show>
+            </section>
+        </div>
     </Page>
 }

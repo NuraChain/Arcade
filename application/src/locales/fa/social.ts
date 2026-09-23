@@ -91,6 +91,10 @@ export const social: Pick<Dictionary, keyof typeof reference> = {
     'search.in': 'در {where}',
 
     'chats.lead': 'سر هر میزی حرف هست.',
+    'chats.pick': 'یک گفت‌وگو انتخاب کن',
+    'chats.pickLead': 'یکی را از فهرست انتخاب کن، یا از هر گفت‌وگو یک بازی شروع کن.',
+    'chat.day.today': 'امروز',
+    'chat.day.yesterday': 'دیروز',
     'chats.tab.all': 'همه',
     'chats.tab.direct': 'خصوصی',
     'chats.tab.groups': 'گروه‌ها',

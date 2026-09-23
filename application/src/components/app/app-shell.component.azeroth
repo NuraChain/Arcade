@@ -110,13 +110,15 @@ export default component AppShell(props: { children?: MountNode })
 
     derived immersive = routeMeta(match()).immersive === true;
 
+    derived messenger = routeMeta(match()).messenger === true;
+
     derived showBottomNav = posture === 'phone' && !device.keyboardOpen() && !immersive;
 
-    derived showSocial = posture === 'sidebar' && device.social() && !immersive;
+    derived showSocial = posture === 'sidebar' && device.social() && !immersive && !messenger;
 
     derived bare = bareFor(immersive, posture, device.height());
 
-    derived compact = !bare && (posture === 'rail' || (posture === 'sidebar' && (immersive || !settings.settings().sidebarOpen)));
+    derived compact = !bare && (posture === 'rail' || (posture === 'sidebar' && ((immersive && !messenger) || !settings.settings().sidebarOpen)));
 
     <div class="contents">
         <div

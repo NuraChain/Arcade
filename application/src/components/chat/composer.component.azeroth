@@ -12,9 +12,9 @@ export default component Composer(props: {
 {
     const locale = useLocale();
 
-    <div class="safe-b border-t border-line bg-void/92 backdrop-blur-md">
+    <div class="safe-b border-t border-line bg-void/95 backdrop-blur-md">
         <form
-            class="flex items-end gap-1.5 px-2 py-2"
+            class="mx-auto flex w-full max-w-[48rem] items-end gap-2 px-3 py-2.5"
             onSubmit={ (event) =>
             {
                 event.preventDefault();
@@ -24,7 +24,8 @@ export default component Composer(props: {
             <IconButton
                 icon="add"
                 label={ locale.t('chat.gameMenu') }
-                variant="secondary"
+                variant="ghost"
+                class="rounded-full!"
                 onClick={ () => props.onGame() }
             />
             <TextArea
@@ -35,7 +36,7 @@ export default component Composer(props: {
                 disabled={ props.disabled === true }
                 enterkeyhint="send"
                 maxlength={ 500 }
-                class="min-w-0 flex-1"
+                class="min-w-0 flex-1 rounded-3xl! bg-sunk! ps-4!"
                 onEnter={ () => props.onSend() }
             />
             <IconButton
@@ -43,6 +44,7 @@ export default component Composer(props: {
                 label={ locale.t('chat.send') }
                 variant="primary"
                 flip
+                class="rounded-full!"
                 disabled={ props.disabled === true || props.value.trim() === '' }
                 onClick={ () => props.onSend() }
             />

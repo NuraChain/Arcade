@@ -1816,6 +1816,37 @@ resolving `@azerothjs/testing` through its junction, and `npm run test:shuffle` 
 three or six FILES at a time with `Failed to resolve import` — a resolution error that looks
 nothing like the isolation bug the gate is meant to catch. Import at the top of the file.
 
+## The messenger
+
+**On a desktop the list stays beside the thread.** At the `sidebar` posture both chat routes are two
+panes - `ChatList` in a 22rem pane, then the thread or a "pick a conversation" well - because a
+desktop messenger that throws the list away to open a thread is a phone layout on a big screen. Both
+routes carry `messenger` in their meta: it hides the social panel and, unlike `immersive`, does NOT
+fold the sidebar, so moving from the list to a thread changes nothing but the right-hand pane. A phone
+keeps the two pages it always had, pull-to-refresh and all, which is why the split is a posture and
+not a container query: `Page` owns the scroll, and a list pane has to own its own.
+
+A route with a new parameter is a NEW page here - `chats/:id` remounts on every switch - so the pane
+is rebuilt each time somebody opens a conversation. The desktop has no transition, so nothing flashes;
+what would be lost is the reader's place, and the pane keeps its tab and its scroll position in module
+memory for exactly that. It deliberately does not keep the search text: a query over message previews
+is a fragment of what was said, and module memory outlives a sign-out.
+
+**One bubble, one grouping rule, two places.** `MessageBubble` draws the chat page AND the table's
+panel, and `lib/thread.ts` decides both: a run is one sender's `text` lines no more than five minutes
+apart on one day, a server line never joins a run, and a day divider leads the first line of every
+day. The table panel used to lay out its own rows, which is how it came to look like a different
+product from the chat page beside it. The time sits INSIDE the bubble, reserved by an invisible copy
+of itself at the end of the text so the last line never runs under it - a relative "3 seconds ago"
+under every line was the noisiest thing on the screen.
+
+**A bubble's words follow their own direction and everything else follows the page.** The bubble is
+`dir="auto"` so an English line on a Persian page reads left to right - which means a logical
+corner class on it follows the WORDS: an English run joined its corners on the far side of a Persian
+page. The joined corners are physical and chosen from the page direction and whose line it is, and
+the time carries `dir={ locale.dir() }` because it is interface text, not the message ("PM 1:58"
+under a Persian line on an English page otherwise). The tooltip's rule, met again.
+
 ## The chat wire format — `nura-e2ee/v1`
 
 Written down before any of it is implemented, because a wire format decided while coding is a

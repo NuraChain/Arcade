@@ -1,0 +1,177 @@
+import type { GameId } from '../../data/games.ts';
+
+import ChatActions from './chat-actions.component.azeroth';
+import ChatListItem from './chat-list-item.component.azeroth';
+import { gameNameOf, groupNameOf, titleOf } from './chat-title.ts';
+import EmptyState from '../ui/empty-state.component.azeroth';
+import SearchInput from '../ui/search-input.component.azeroth';
+import Skeleton from '../ui/skeleton.component.azeroth';
+import Tabs from '../ui/tabs.component.azeroth';
+import type { Conversation } from '../../data/chat.ts';
+import { fold } from '../../services/search.service.ts';
+import { usePeople } from '../../stores/people.store.ts';
+import { useChat } from '../../stores/chat.store.ts';
+import { useCatalogue } from '../../stores/catalogue.store.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import { useOverlay } from '../../stores/overlay.store.ts';
+import { useGroups } from '../../stores/groups.store.ts';
+
+const kept = { tab: 'all', scroll: 0 };
+
+export default component ChatList(props: { active?: string; pane?: boolean; class?: string })
+{
+    const locale = useLocale();
+    const catalogue = useCatalogue();
+    const chat = useChat();
+    const overlay = useOverlay();
+    const groups = useGroups();
+    const people = usePeople();
+
+    const gameName = (game: GameId): string => locale.t(catalogue.byId(game).nameKey);
+
+    derived pane = props.pane === true;
+
+    state tab = props.pane === true ? kept.tab : 'all';
+    state query = '';
+
+    let scroller: HTMLElement | null = null;
+
+    const hold = (): void =>
+    {
+        kept.scroll = scroller?.scrollTop ?? kept.scroll;
+    };
+
+    mount
+    {
+        if (scroller === null)
+        {
+            return;
+        }
+        scroller.scrollTop = kept.scroll;
+        scroller.addEventListener('scroll', hold, { passive: true });
+        return () => scroller?.removeEventListener('scroll', hold);
+    }
+
+    const choose = (id: string): void =>
+    {
+        tab = id;
+        if (pane)
+        {
+            kept.tab = id;
+        }
+    };
+
+    derived all = chat.conversations();
+
+    derived loading = chat.listLoading() && all.length === 0;
+
+    derived failed = chat.listError() !== null;
+
+    derived mine = chat.me();
+
+    derived filtered = ((): Conversation[] =>
+    {
+        const needle = fold(query);
+        const byTab = all.filter((conversation) => tab === 'all'
+            || (tab === 'direct' && conversation.kind === 'direct')
+            || (tab === 'groups' && conversation.kind === 'group')
+            || (tab === 'games' && conversation.kind === 'game'));
+        const matched = needle === ''
+            ? byTab
+            : byTab.filter((conversation) =>
+            {
+                const last = chat.lastOf(conversation.id);
+                return fold(locale.text(titleOf(conversation, mine, people.byHandle, { group: groupNameOf(conversation, groups.byId), game: gameNameOf(conversation, gameName) }))).includes(needle)
+                    || (last !== undefined && fold(locale.text(last.text)).includes(needle));
+            });
+        return [...matched].sort((a, b) =>
+        {
+            const pinA = chat.pinned(a.id);
+            const pinB = chat.pinned(b.id);
+            if (pinA !== pinB)
+            {
+                return pinA ? -1 : 1;
+            }
+            return (chat.lastOf(b.id)?.at ?? 0) - (chat.lastOf(a.id)?.at ?? 0);
+        });
+    })();
+
+    derived items = [
+        { id: 'all', label: locale.t('chats.tab.all'), count: chat.totalUnread() },
+        { id: 'direct', label: locale.t('chats.tab.direct') },
+        { id: 'groups', label: locale.t('chats.tab.groups') },
+        { id: 'games', label: locale.t('chats.tab.games') }
+    ];
+
+    <div class={ () => [ 'flex min-h-0 flex-col', props.class ?? '' ].filter(Boolean).join(' ') }>
+        <div class={ () => pane ? 'shrink-0 px-3' : '' }>
+            <SearchInput
+                value={ query }
+                onInput={ (value) => query = value }
+                placeholder={ locale.t('chats.search') }
+                label={ locale.t('chats.search') }
+                class="mb-3"
+            />
+
+            <Tabs items={ items } value={ tab } label={ locale.t('app.nav.chats') } class="mb-3" onChange={ choose } />
+        </div>
+
+        <div ref={ (element) => scroller = pane ? element : null } class={ () => pane ? 'min-h-0 flex-1 overflow-y-auto px-2 pb-3' : '' }>
+            <Switch
+                fallback={
+                    <ul
+                        class={ () => pane
+                            ? 'flex flex-col gap-0.5'
+                            : 'flex flex-col divide-y divide-line rounded-panel border border-line bg-field px-1.5' }
+                        aria-label={ locale.t('app.nav.chats') }
+                    >
+                        <For each={ filtered } key={ (conversation) => conversation.id } let={ conversation }>
+                            <li>
+                                <ChatListItem
+                                    conversation={ conversation }
+                                    me={ mine }
+                                    active={ conversation.id === props.active }
+                                    onHold={ () => overlay.open(ChatActions, { conversationId: conversation.id }, { label: locale.t('chats.actions') }) }
+                                />
+                            </li>
+                        </For>
+                    </ul>
+                }
+            >
+                <Match when={ loading }>
+                    <ul class="flex flex-col gap-0.5" aria-label={ locale.t('common.loading') } aria-busy="true">
+                        <For each={ [0, 1, 2, 3, 4] } key={ (row) => row } let={ row }>
+                            <li class="flex items-center gap-3 rounded-tile px-3 py-3">
+                                <Skeleton class="h-11 w-11 shrink-0 rounded-full" />
+                                <span class="flex min-w-0 flex-1 flex-col gap-2">
+                                    <Skeleton class="h-3.5 w-32" />
+                                    <Skeleton class={ row % 2 === 0 ? 'h-3 w-56' : 'h-3 w-40' } />
+                                </span>
+                            </li>
+                        </For>
+                    </ul>
+                </Match>
+                <Match when={ failed && all.length === 0 }>
+                    <EmptyState
+                        icon="refresh"
+                        title={ locale.t('chats.loadFailed') }
+                        lead={ locale.t('chats.loadFailedLead') }
+                        action={ locale.t('common.retry') }
+                        onAction={ () => void chat.refresh() }
+                        class="py-10"
+                    />
+                </Match>
+                <Match when={ filtered.length === 0 }>
+                    <EmptyState
+                        icon="chats"
+                        title={ locale.t(all.length === 0 ? 'chats.empty' : 'chats.emptyFiltered') }
+                        lead={ all.length === 0 ? locale.t('chats.emptyLead') : undefined }
+                        action={ locale.t('app.nav.friends') }
+                        to="/app/friends"
+                        class="py-10"
+                    />
+                </Match>
+            </Switch>
+        </div>
+    </div>
+}

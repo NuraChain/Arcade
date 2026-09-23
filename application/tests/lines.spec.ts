@@ -24,7 +24,7 @@ type Rendered = HTMLElement;
 const inRouter = (message: Message): Rendered =>
 {
     const router = createRouter({ routes, history: createMemoryHistory('/app/chats/c-1'), scroll: false });
-    return RouterProvider({ router, children: () => MessageBubble({ message, me: 'alex', showAuthor: true }) }) as Rendered;
+    return RouterProvider({ router, children: () => MessageBubble({ message, me: 'alex' }) }) as Rendered;
 };
 
 /**

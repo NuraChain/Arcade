@@ -10,6 +10,7 @@ export interface RouteMeta
     tab?: Tab;
     parent?: string;
     immersive?: boolean;
+    messenger?: boolean;
 }
 
 export function routeMeta(match: RouteMatch | null): RouteMeta

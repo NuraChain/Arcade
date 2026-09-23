@@ -88,6 +88,10 @@ export const social = {
     'search.in': 'in {where}',
 
     'chats.lead': 'Every table talks.',
+    'chats.pick': 'Pick a conversation',
+    'chats.pickLead': 'Choose somebody on the left, or start a game from any thread.',
+    'chat.day.today': 'Today',
+    'chat.day.yesterday': 'Yesterday',
     'chats.tab.all': 'All',
     'chats.tab.direct': 'Direct',
     'chats.tab.groups': 'Groups',

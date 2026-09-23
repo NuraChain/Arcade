@@ -23,7 +23,19 @@ const LOCKED: Record<MessageLock, MessageKey> = {
 
 const ALARMING: MessageLock[] = ['bad-signature', 'tampered'];
 
-export default component MessageBubble(props: { message: Message; me: string; showAuthor: boolean; onHold?: (message: Message) => void })
+const JOINED = {
+    right: { top: 'rounded-tr-md', bottom: 'rounded-br-md', tail: 'rounded-br-[0.3rem]' },
+    left: { top: 'rounded-tl-md', bottom: 'rounded-bl-md', tail: 'rounded-bl-[0.3rem]' }
+};
+
+export default component MessageBubble(props: {
+    message: Message;
+    me: string;
+    first?: boolean;
+    last?: boolean;
+    avatar?: boolean;
+    onHold?: (message: Message) => void;
+})
 {
     const locale = useLocale();
     const catalogue = useCatalogue();
@@ -32,6 +44,18 @@ export default component MessageBubble(props: { message: Message; me: string; sh
     const { navigate } = useNavigate();
 
     derived mine = props.message.from === props.me;
+
+    derived first = props.first !== false;
+
+    derived last = props.last !== false;
+
+    derived crowd = props.avatar === true && !mine;
+
+    derived joined = JOINED[mine === (locale.dir() === 'rtl') ? 'left' : 'right'];
+
+    derived corners = [ first ? '' : joined.top, last ? joined.tail : joined.bottom ].filter(Boolean).join(' ');
+
+    derived time = locale.date(props.message.at, { hour: 'numeric', minute: '2-digit' });
 
     let bubble: HTMLElement | null = null;
 
@@ -136,16 +160,24 @@ export default component MessageBubble(props: { message: Message; me: string; sh
     >
         { () =>
             <div class={ () => [ 'flex w-full items-end gap-2', mine ? 'flex-row-reverse' : '' ].filter(Boolean).join(' ') }>
-                <Show when={ !mine && props.showAuthor } fallback={ <span class="w-8 shrink-0" aria-hidden="true"></span> }>
+                <Show when={ crowd }>
                     { () =>
-                        <Link to={ `/app/people/${ person?.handle ?? props.message.from }` } data-inline class="shrink-0">
-                            <Avatar person={ person } size="sm" />
-                        </Link>
+                        <span class="flex w-8 shrink-0 self-end">
+                            <Show when={ last }>
+                                { () =>
+                                    <Link to={ `/app/people/${ person?.handle ?? props.message.from }` } data-inline class="shrink-0" aria-label={ person === null ? props.message.from : locale.text(person.displayName) }>
+                                        <Avatar person={ person } size="sm" />
+                                    </Link>
+                                }
+                            </Show>
+                        </span>
                     }
                 </Show>
-                <div class={ () => [ 'flex max-w-[min(30rem,78%)] flex-col gap-0.5', mine ? 'items-end' : 'items-start' ].join(' ') }>
-                    <Show when={ !mine && props.showAuthor }>
-                        { () => <span class="px-1 text-ui-2xs font-semibold text-muted" dir="auto">{ firstName }</span> }
+                <div class={ () => [ 'flex min-w-0 max-w-[min(34rem,80%)] flex-col', mine ? 'items-end' : 'items-start' ].join(' ') }>
+                    <Show when={ crowd && first }>
+                        { () =>
+                            <span class="mb-1 px-3 text-ui-2xs font-semibold" style={ `color: hsl(${ person?.hue ?? 210 } 72% 72%)` } dir="auto">{ firstName }</span>
+                        }
                     </Show>
                     <Show
                         when={ locked === null }
@@ -167,15 +199,23 @@ export default component MessageBubble(props: { message: Message; me: string; sh
                                 ref={ (element) => bubble = element }
                                 dir="auto"
                                 class={ () => [
-                                    'rounded-panel px-3.5 py-2 text-ui-base leading-snug shadow-1',
-                                    mine ? 'rounded-ee-md bg-accent-fill text-accent-ink' : 'rounded-es-md border border-line bg-field text-text'
+                                    'bubble relative max-w-full rounded-[1.125rem] px-3 pb-1.5 pt-1.5 text-ui-base leading-snug',
+                                    mine ? 'bg-accent-fill text-accent-ink' : 'border border-line bg-field text-text',
+                                    corners
                                 ].join(' ') }
                             >
-                                { said }
+                                <span class="whitespace-pre-wrap break-words">{ said }</span>
+                                <span class="invisible ms-2 inline-block text-ui-2xs" dir={ locale.dir() } aria-hidden="true">{ time }</span>
+                                <time
+                                    class={ () => [ 'absolute bottom-1 end-3 text-ui-2xs leading-none', mine ? 'text-accent-ink/70' : 'text-faint' ].join(' ') }
+                                    datetime={ new Date(props.message.at).toISOString() }
+                                    dir={ locale.dir() }
+                                >
+                                    { time }
+                                </time>
                             </span>
                         }
                     </Show>
-                    <span class="px-1 text-ui-2xs text-faint">{ locale.relative(props.message.at) }</span>
                 </div>
             </div>
         }

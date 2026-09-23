@@ -1427,6 +1427,17 @@ export const client =
             return { handle: params.handle, games: [], achievements: server.achievements };
         },
 
+        async person({ params }: { params: { handle: string } })
+        {
+            server.calls.push('social.person');
+            if (!reachable(params.handle) || !PEOPLE_FIXTURES.some((one) => one.handle === params.handle))
+            {
+                throw new ApiError(404, 'not-found', 'No such person.', undefined);
+            }
+            const relation = server.friends.includes(params.handle) ? 'friend' as const : 'none' as const;
+            return { person: personWire(params.handle), relation, mutual: 0 };
+        },
+
         async people()
         {
             server.calls.push('social.people');

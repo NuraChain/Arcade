@@ -1,10 +1,12 @@
 import { untrack } from 'azerothjs';
-import { isLineKey, namedParams } from '../../lib/lines.ts';
 import { attachStick } from '../../lib/stick.ts';
+import { threadRows } from '../../lib/thread.ts';
 import { sendBlockOf } from '../../lib/seal-state.ts';
 import { haptic } from '../../lib/haptics.ts';
 import { sealSentenceOf } from '../chat/chat-title.ts';
 import SealNotice from '../chat/seal-notice.component.azeroth';
+import DayDivider from '../chat/day-divider.component.azeroth';
+import MessageBubble from '../chat/message-bubble.component.azeroth';
 import { ludoOf } from '../../data/match.ts';
 import { usePeople } from '../../stores/people.store.ts';
 import { useAccount } from '../../stores/account.store.ts';
@@ -25,8 +27,6 @@ import Segmented from '../ui/segmented.component.azeroth';
 import TextArea from '../ui/text-area.component.azeroth';
 
 const QUICK: readonly MessageKey[] = ['play.quick.luck', 'play.quick.nice', 'play.quick.gg', 'play.quick.go'];
-
-const GROUP_MS = 3 * 60 * 1000;
 
 export default component TableChat(props: {
     conversationId: string;
@@ -99,17 +99,7 @@ export default component TableChat(props: {
 
     derived messages = chat.messages();
 
-    derived rows = messages.map((message, index) =>
-    {
-        const before = messages[index - 1];
-        const first = before === undefined
-            || before.kind !== 'text'
-            || message.kind !== 'text'
-            || before.from !== message.from
-            || message.at - before.at > GROUP_MS;
-
-        return { message, first };
-    });
+    derived rows = threadRows(messages);
 
     effect
     {
@@ -170,18 +160,6 @@ export default component TableChat(props: {
         const person = people.byHandle(handle);
 
         return person === null ? handle : locale.text(person.displayName);
-    };
-
-    const said = (message: { text: { en: string; fa: string } | string; line?: { key: string; params: Record<string, string> } }): string =>
-    {
-        const line = message.line;
-        if (line === undefined)
-        {
-            return locale.text(message.text);
-        }
-        return isLineKey(line.key)
-            ? locale.t(line.key, namedParams(line.params, nameOf))
-            : '';
     };
 
     derived table = lobby.table();
@@ -255,7 +233,7 @@ export default component TableChat(props: {
         <Show when={ tab === 'chat' }>
             { () =>
                 <div class="flex min-h-0 flex-1 flex-col">
-                    <ul ref={ (element) => watch(element) } class="flex min-h-0 flex-1 flex-col overflow-y-auto px-3 py-3" aria-live="polite">
+                    <ul ref={ (element) => watch(element) } class="chat-well flex min-h-0 flex-1 flex-col overflow-y-auto px-3 py-3 [&>li:first-child]:mt-auto" aria-live="polite">
                         <Show when={ messages.length === 0 && !chat.threadLoading() }>
                             { () =>
                                 <li class="m-auto flex max-w-[16rem] flex-col items-center gap-2 px-2 py-8 text-center">
@@ -268,37 +246,11 @@ export default component TableChat(props: {
                             }
                         </Show>
                         <For each={ rows } key={ (row) => row.message.id } let={ row }>
-                            <li class={ () => row.message.kind !== 'text' ? 'flex justify-center py-1.5' : (row.first ? 'flex gap-2.5 pt-3 first:pt-0' : 'flex gap-2.5 pt-0.5') }>
-                                <Show
-                                    when={ row.message.kind === 'text' }
-                                    fallback={ <span class="rounded-full bg-raised/70 px-3 py-1 text-ui-2xs text-muted">{ said(row.message) }</span> }
-                                >
-                                    { () =>
-                                        <>
-                                            <span class="w-8 shrink-0">
-                                                <Show when={ row.first }>
-                                                    { () => <Avatar person={ people.byHandle(row.message.from) ?? null } size="sm" /> }
-                                                </Show>
-                                            </span>
-                                            <span class="flex min-w-0 flex-1 flex-col">
-                                                <Show when={ row.first }>
-                                                    { () =>
-                                                        <span class="flex min-w-0 items-baseline gap-2">
-                                                            <span
-                                                                class={ () => [ 'truncate text-ui-sm font-semibold', row.message.from === lobby.me() ? 'text-accent' : 'text-text' ].join(' ') }
-                                                                dir="auto"
-                                                            >
-                                                                { nameOf(row.message.from) }
-                                                            </span>
-                                                            <time class="tally shrink-0 text-ui-2xs text-faint">{ locale.date(row.message.at, { hour: '2-digit', minute: '2-digit' }) }</time>
-                                                        </span>
-                                                    }
-                                                </Show>
-                                                <span class="break-words text-ui-sm leading-snug text-text/90" dir="auto">{ said(row.message) }</span>
-                                            </span>
-                                        </>
-                                    }
+                            <li class={ () => row.first ? 'pt-3 first:pt-0' : 'pt-0.5' }>
+                                <Show when={ row.day }>
+                                    { () => <DayDivider at={ row.message.at } /> }
                                 </Show>
+                                <MessageBubble message={ row.message } me={ lobby.me() } first={ row.first } last={ row.last } avatar />
                             </li>
                         </For>
                     </ul>

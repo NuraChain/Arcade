@@ -411,6 +411,64 @@ describe('TableChat', () =>
     });
 });
 
+describe('the messenger', () =>
+{
+    const settle = async (): Promise<void> =>
+    {
+        for (let step = 0; step < 10; step += 1)
+        {
+            await Promise.resolve();
+        }
+        await new Promise((resolve) => setTimeout(resolve, 30));
+    };
+
+    afterEach(() =>
+    {
+        useDevice().override(null);
+        useChat().closeThread();
+    });
+
+    let router: ReturnType<typeof createRouter>;
+
+    const open = async (posture: 'phone' | 'sidebar'): Promise<HTMLElement> =>
+    {
+        useDevice().override(posture);
+        const table: Route[] = [{ path: '/app/chats/:id', component: (): HTMLElement => ChatPage() as HTMLElement }];
+        router = createRouter({ routes: table, history: createMemoryHistory('/app/chats/conv-a'), scroll: false });
+        const { container } = renderTest(() => RouterProvider({ router, children: () => Routes({}) }) as Rendered);
+        await settle();
+        return container;
+    };
+
+    it('keeps the conversation list beside the open thread on a desktop, with the open one marked', async () =>
+    {
+        const container = await open('sidebar');
+        const pane = container.querySelector('aside[aria-label="Chats"]');
+
+        expect(pane).not.toBeNull();
+        await vi.waitFor(() => expect(pane!.querySelectorAll('li a').length).toBeGreaterThan(0), { timeout: 4000 });
+
+        fire([...pane!.querySelectorAll('button')].find((one) => one.textContent?.trim() === 'Direct')!, 'click');
+        await settle();
+        const target = pane!.querySelector('li a')!.getAttribute('href')!;
+        router.navigate(target);
+        await settle();
+
+        const after = container.querySelector('aside[aria-label="Chats"]')!;
+        const chosen = [...after.querySelectorAll('[aria-selected="true"]')].map((one) => one.textContent?.trim());
+
+        expect(chosen).toContain('Direct');
+        expect(after.querySelector('a.bg-raised')?.getAttribute('href')).toBe(target);
+    });
+
+    it('gives a phone the thread alone', async () =>
+    {
+        const container = await open('phone');
+
+        expect(container.querySelector('aside[aria-label="Chats"]')).toBeNull();
+    });
+});
+
 describe('the table’s chat and its controls', () =>
 {
     const settle = async (): Promise<void> =>
