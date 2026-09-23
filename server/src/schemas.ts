@@ -1208,7 +1208,27 @@ export const hokmBoard = object({
     needed: number()
 });
 
-export const matchBoard = union([ludoBoard, hokmBoard]);
+export const backgammonBoard = object({
+    kind: literal('backgammon'),
+    phase: enumOf(['roll', 'move', 'double']),
+    turn: number({ int: true, min: 0, max: 1 }),
+    dice: array(number({ int: true, min: 1, max: 6 }), { max: 2 }),
+    seats: array(object({
+        seat: number({ int: true, min: 0, max: 1 }),
+        checkers: array(number({ int: true, min: 0, max: 15 }), { min: 26, max: 26 }),
+        pips: number({ int: true, min: 0, max: 375 }),
+        score: number({ int: true, min: 0, max: 999 })
+    }), { min: 2, max: 2 }),
+    cubed: boolean(),
+    cube: number({ int: true, min: 1, max: 64 }),
+    owner: number({ int: true, min: 0, max: 1 }).optional(),
+    doubling: boolean(),
+    crawford: boolean(),
+    target: number({ int: true, min: 1, max: 99 }),
+    round: number({ int: true, min: 1, max: 999 })
+});
+
+export const matchBoard = union([ludoBoard, hokmBoard, backgammonBoard]);
 
 export type MatchBoard = Infer<typeof matchBoard>;
 
@@ -1306,7 +1326,26 @@ export const hokmLog = object({
     moves: array(hokmMove)
 });
 
-export const matchLog = union([ludoLog, hokmLog]);
+export const backgammonMove = object({
+    e: enumOf(['opening', 'roll', 'move', 'pass', 'double', 'take', 'drop', 'game', 'forfeit', 'finish']),
+    seat: number({ int: true, min: 0, max: 1 }).optional(),
+    dice: array(number({ int: true, min: 1, max: 6 }), { max: 2 }).optional(),
+    from: number({ int: true, min: 0, max: 25 }).optional(),
+    to: number({ int: true, min: 0, max: 25 }).optional(),
+    die: number({ int: true, min: 1, max: 6 }).optional(),
+    hit: boolean().optional(),
+    cube: number({ int: true, min: 1, max: 64 }).optional(),
+    how: enumOf(['single', 'gammon', 'backgammon']).optional(),
+    points: number({ int: true, min: 1, max: 192 }).optional(),
+    reason: string({ max: 16 }).optional()
+});
+
+export const backgammonLog = object({
+    kind: literal('backgammon'),
+    moves: array(backgammonMove)
+});
+
+export const matchLog = union([ludoLog, hokmLog, backgammonLog]);
 
 export type MatchLog = Infer<typeof matchLog>;
 
@@ -1381,7 +1420,18 @@ export const hokmPlay = object({
     card: number({ int: true, min: 0, max: 51 }).optional()
 });
 
-export const matchPlay = union([ludoPlay, hokmPlay]);
+export const backgammonHop = object({
+    from: number({ int: true, min: 0, max: 25 }),
+    to: number({ int: true, min: 0, max: 25 })
+});
+
+export const backgammonPlay = object({
+    kind: literal('backgammon'),
+    verb: enumOf(['roll', 'move', 'double', 'take', 'drop']),
+    hops: array(backgammonHop, { min: 1, max: 4 }).optional()
+});
+
+export const matchPlay = union([ludoPlay, hokmPlay, backgammonPlay]);
 
 export type MatchPlay = Infer<typeof matchPlay>;
 

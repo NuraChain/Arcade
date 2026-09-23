@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import type { Draws, Engine } from '../src/domains/match/engine.ts';
 import { ENGINES } from '../src/domains/match/service.ts';
 import type { REFUSALS } from '../src/domains/match/service.ts';
+import type { BackgammonRefusal } from '../src/domains/match/backgammon/state.ts';
 import type { HokmRefusal } from '../src/domains/match/hokm/state.ts';
 import type { RefusalReason } from '../src/domains/match/ludo/state.ts';
 import { GAME_SEEDS } from '../src/db/seed-reference.ts';
@@ -36,7 +37,7 @@ const revOf = (state: unknown): number => (state as { rev: number }).rev;
  * of them told a card player their TOKEN could not move there. Checked by the compiler, because the
  * reasons are type unions and nothing about them exists at runtime to iterate.
  */
-type Unworded = Exclude<RefusalReason | HokmRefusal, keyof typeof REFUSALS>;
+type Unworded = Exclude<RefusalReason | HokmRefusal | BackgammonRefusal, keyof typeof REFUSALS>;
 
 describe('the refusals', () =>
 {

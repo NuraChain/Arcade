@@ -10,6 +10,7 @@ import { pickBelow } from '../../lib/crypto.ts';
 import type { AchieveService } from '../achieve/service.ts';
 import { firstRow } from '../../lib/rows.ts';
 import { createRecorder } from './record.ts';
+import { backgammonEngine } from './engines/backgammon.ts';
 import { hokmEngine } from './engines/hokm.ts';
 import { ludoEngine } from './engines/ludo.ts';
 import type { MatchBoard, MatchLog } from '../../schemas.ts';
@@ -144,7 +145,10 @@ export const REFUSALS = {
     'game-over': 'conflict',
     'trump-already-set': 'conflict',
     'must-follow-suit': 'conflict',
-    'no-such-card': 'conflict'
+    'no-such-card': 'conflict',
+    'cannot-double': 'conflict',
+    'no-double': 'conflict',
+    'double-pending': 'conflict'
 } as const satisfies Record<string, 'forbidden' | 'conflict'>;
 
 const SAYS: Record<keyof typeof REFUSALS, string> = {
@@ -157,7 +161,10 @@ const SAYS: Record<keyof typeof REFUSALS, string> = {
     'game-over': 'This game has finished.',
     'trump-already-set': 'Trump has already been named.',
     'must-follow-suit': 'You have to follow suit.',
-    'no-such-card': 'That card is not in your hand.'
+    'no-such-card': 'That card is not in your hand.',
+    'cannot-double': 'You cannot offer a double now.',
+    'no-double': 'Nobody has offered a double.',
+    'double-pending': 'Answer the double first.'
 };
 
 function refuse(reason: string): never
@@ -194,7 +201,7 @@ function stateOf(match: Match): unknown
     return match.state;
 }
 
-export const ENGINES: readonly Engine[] = [ludoEngine, hokmEngine];
+export const ENGINES: readonly Engine[] = [ludoEngine, hokmEngine, backgammonEngine];
 
 export function createMatchService(db: DataSource, achieve: AchieveService, engines: readonly Engine[] = ENGINES)
 {

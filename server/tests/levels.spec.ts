@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 
 import { levelOf, xpFor, xpToReach, XP_FINISH, XP_WIN } from '../src/domains/match/levels.ts';
+import { backgammonEngine } from '../src/domains/match/engines/backgammon.ts';
 import { ludoEngine } from '../src/domains/match/engines/ludo.ts';
 
 describe('what a game is worth', () =>
@@ -22,6 +23,16 @@ describe('what a game is worth', () =>
 
         expect(bonus).toBeGreaterThan(0);
         expect(xpFor({ walked: false, won: false, bonus })).toBe(XP_FINISH + bonus);
+    });
+
+    it('pays a backgammon match three a game and three a gammon, and never more than twenty-five on top', () =>
+    {
+        expect(backgammonEngine.points({ games: 3, gammons: 1, hits: 12, borneOff: 45 })).toBe(12);
+
+        const bonus = backgammonEngine.points({ games: 5, gammons: 5, backgammons: 5, hits: 30, borneOff: 75 });
+
+        expect(bonus).toBe(25);
+        expect(xpFor({ walked: false, won: true, bonus })).toBe(XP_FINISH + XP_WIN + 25);
     });
 
     it('never pays a negative bonus, whatever an engine says', () =>
