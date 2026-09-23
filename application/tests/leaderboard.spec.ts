@@ -92,6 +92,14 @@ describe('the leaderboard page', () =>
         expect(server.calls.filter((call) => call === 'catalogue.leaderboard').length).toBeGreaterThan(before);
     });
 
+    it('says a board nobody is on yet is empty, not that it failed to load', async () =>
+    {
+        const container = await show();
+
+        expect(container.textContent).toContain('Nobody has finished a game here yet in this stretch.');
+        expect(container.textContent).not.toContain('Could not load the leaderboard.');
+    });
+
     it('points every sidebar destination at a route that exists', () =>
     {
         const declared = routes.flatMap((route) => (route.children ?? []).map((child) => `${ route.path }${ child.path === '' ? '' : `/${ child.path }` }`));

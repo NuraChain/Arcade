@@ -66,7 +66,7 @@ export const useRecord = createStore((): RecordApi =>
     return {
         record: () => record.data() ?? null,
         loading: () => record.loading(),
-        failed: () => record.error() !== undefined,
+        failed: () => record.error() !== null,
 
         history,
         historyLoading: reading,

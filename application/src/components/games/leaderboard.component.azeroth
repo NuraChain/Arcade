@@ -88,7 +88,7 @@ export default component Leaderboard(props: { game: GameId; titled?: boolean })
 
     derived showing = board.data()?.window ?? window;
 
-    derived failed = board.error() !== undefined && standings.length === 0;
+    derived failed = board.error() !== null && standings.length === 0;
 
     derived empty = locale.t(showing === 'all' ? 'board.empty' : 'board.emptyWindow');
 
