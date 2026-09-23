@@ -64,6 +64,8 @@ export const me: Pick<Dictionary, keyof typeof reference> = {
     'me.keepSeat.lead': 'صندلی مهمان کیف پولی پشتش ندارد، پس نه چیزی اینجا مهروموم می‌شود و نه چیزی روی دستگاه دیگری دنبالت می‌آید. بعد از خروج هیچ راهی به حساب مهمان برنمی‌گردد — و ورود با کیف پول یک حساب تازه می‌سازد، نه اینکه این یکی را جابه‌جا کند.',
 
     'settings.title': 'تنظیمات',
+    'settings.lead': 'حسابت، اینکه چه کسی می‌تواند به تو برسد، و رفتار این دستگاه.',
+    'settings.sections': 'بخش‌های تنظیمات',
     'settings.account': 'حساب',
     'settings.safety': 'حریم خصوصی و ایمنی',
     'settings.notifications': 'اعلان‌ها',
@@ -102,8 +104,6 @@ export const me: Pick<Dictionary, keyof typeof reference> = {
     'settings.notifications.hapticsHint': 'یک لرزش کوتاه وقتی میز آماده می‌شود، دستی برده می‌شود یا حرکتی می‌نشیند.',
 
     'settings.appearance.language': 'زبان',
-    'settings.appearance.rail': 'عرض گفت‌وگوی میز',
-    'settings.appearance.railHint': 'چقدر از میز عریض را ریل گفت‌وگو بگیرد. بقیه همیشه برای میز می‌ماند.',
     'settings.appearance.motion': 'دستگاهت حرکت کمتری خواسته — ما گوش می‌دهیم.',
 
     'settings.premium.title': 'نورا ویژه',

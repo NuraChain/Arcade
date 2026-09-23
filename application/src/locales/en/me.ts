@@ -61,6 +61,8 @@ export const me = {
     'me.keepSeat.lead': 'A guest seat has no wallet behind it, so nothing here can be sealed and nothing follows you to another device. There is no way back into a guest account once you sign out — and signing in with a wallet starts a new account rather than moving this one.',
 
     'settings.title': 'Settings',
+    'settings.lead': 'Your account, who can reach you, and how this device behaves.',
+    'settings.sections': 'Settings sections',
     'settings.account': 'Account',
     'settings.safety': 'Privacy & safety',
     'settings.notifications': 'Notifications',
@@ -99,8 +101,6 @@ export const me = {
     'settings.notifications.hapticsHint': 'A short buzz when a table is ready, a hand is won, or a gesture lands.',
 
     'settings.appearance.language': 'Language',
-    'settings.appearance.rail': 'Table chat width',
-    'settings.appearance.railHint': 'How much of a wide table the chat rail takes. The table always keeps the rest.',
     'settings.appearance.motion': 'Your device asks for less motion — we listen.',
 
     'settings.premium.title': 'Nura Premium',

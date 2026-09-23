@@ -7,11 +7,11 @@ import Panel from '../../components/ui/panel.component.azeroth';
 import Button from '../../components/ui/button.component.azeroth';
 import Pagination from '../../components/ui/pagination.component.azeroth';
 import SectionHeading from '../../components/ui/section-heading.component.azeroth';
-import Slider from '../../components/ui/slider.component.azeroth';
 import Toggle from '../../components/ui/switch.component.azeroth';
 import { NURA_CHAIN } from '../../data/chain.ts';
 import type { Person } from '../../data/person.ts';
 import Icon from '../../icons/icon.component.azeroth';
+import type { IconName } from '../../icons/registry.ts';
 import PushToggle from '../../components/app/push-toggle.component.azeroth';
 import { shortAddress } from '../../lib/wallet.ts';
 import { usePeople } from '../../stores/people.store.ts';
@@ -28,6 +28,14 @@ import type { MessageKey } from '../../locales/en.ts';
 const PREMIUM: MessageKey[] = ['settings.premium.item.tables', 'settings.premium.item.frames', 'settings.premium.item.emotes', 'settings.premium.item.stats'];
 
 const SAFETY_PAGE = 5;
+
+const SECTIONS: readonly { id: string; icon: IconName; key: MessageKey }[] = [
+    { id: 'settings-account', icon: 'me', key: 'settings.account' },
+    { id: 'settings-appearance', icon: 'palette', key: 'settings.appearance' },
+    { id: 'settings-safety', icon: 'shield', key: 'settings.safety' },
+    { id: 'settings-notifications', icon: 'bell', key: 'settings.notifications' },
+    { id: 'settings-premium', icon: 'sparkles', key: 'settings.premium' }
+];
 
 export default component SettingsPage()
 {
@@ -93,273 +101,342 @@ export default component SettingsPage()
         navigate('/sign-in', { replace: true });
     };
 
-    <Page width="narrow" label={ locale.t('settings.title') }>
-        <header class="pb-5">
+    state active = SECTIONS[0].id;
+
+    let body: HTMLElement | null = null;
+
+    let nav: HTMLElement | null = null;
+
+    effect
+    {
+        const id = active;
+
+        nav?.querySelector(`[data-section="${ id }"]`)?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    }
+
+    const go = (id: string): void =>
+    {
+        active = id;
+        document.getElementById(id)?.scrollIntoView({ block: 'start', behavior: device.reducedMotion() ? 'auto' : 'smooth' });
+    };
+
+    mount
+    {
+        if (body === null || typeof IntersectionObserver === 'undefined')
+        {
+            return;
+        }
+
+        const spy = new IntersectionObserver((entries) =>
+        {
+            const seen = entries.filter((entry) => entry.isIntersecting).map((entry) => entry.target.id);
+
+            if (seen.length > 0)
+            {
+                active = seen[0];
+            }
+        }, { rootMargin: '-15% 0px -70% 0px' });
+
+        for (const section of body.querySelectorAll('section[id]'))
+        {
+            spy.observe(section);
+        }
+
+        return () => spy.disconnect();
+    }
+
+    <Page label={ locale.t('settings.title') }>
+        <header class="flex flex-col gap-1 pb-5">
             <h1 class="title text-ui-3xl">{ locale.t('settings.title') }</h1>
+            <p class="text-ui-base text-muted">{ locale.t('settings.lead') }</p>
         </header>
 
-        <div class="flex flex-col gap-8">
-            <section aria-labelledby="settings-account">
-                <SectionHeading id="settings-account" title={ locale.t('settings.account') } />
-                <Panel stack="sm">
-                    <Show
-                        when={ account.isWallet() }
-                        fallback={
-                            <div class="flex items-start gap-3">
-                                <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-raised text-muted">
-                                    <Icon name="people" size={ 18 } />
-                                </span>
-                                <span class="flex min-w-0 flex-1 flex-col">
-                                    <span class="text-ui-md font-semibold text-text">{ locale.t('settings.account.demo') }</span>
-                                    <span class="text-ui-sm text-muted">{ locale.t('settings.account.demoLead') }</span>
-                                </span>
-                            </div>
-                        }
-                    >
-                        { () =>
-                            <div class="flex items-start gap-3">
-                                <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-live/15 text-live">
-                                    <Icon name="key" size={ 18 } />
-                                </span>
-                                <span class="flex min-w-0 flex-1 flex-col">
-                                    <span class="text-ui-md font-semibold text-text">{ locale.t('settings.account.wallet', { wallet: wallet.name() }) }</span>
-                                    <code class="tally truncate text-ui-sm text-muted">{ shortAddress(account.address() ?? '') }</code>
-                                    <span class="mt-1 text-ui-xs text-faint">{ locale.t('settings.account.network') }: { NURA_CHAIN.name }</span>
-                                </span>
-                            </div>
-                        }
-                    </Show>
-                    <Button variant="outline" block leading="key" to="/app/me/devices">
-                        { locale.t('devices.title') }
-                    </Button>
-                    <Button variant="outline" block leading="sign-out" onClick={ leave }>
-                        { account.isWallet() ? locale.t('settings.account.disconnect') : locale.t('settings.account.signOut') }
-                    </Button>
-                </Panel>
-            </section>
-
-            <section aria-labelledby="settings-safety">
-                <SectionHeading id="settings-safety" title={ locale.t('settings.safety') } />
-                <Panel stack="md">
-                    <Toggle
-                        checked={ privacy.allowStrangerMessages }
-                        disabled={ privacy.isMinor }
-                        label={ locale.t('settings.safety.strangers') }
-                        description={ privacy.isMinor ? locale.t('settings.safety.strangersLocked') : locale.t('settings.safety.strangersHint') }
-                        onChange={ (checked) => void save({ allowStrangerMessages: checked }) }
-                    />
-                    <Toggle
-                        checked={ privacy.showOnline }
-                        label={ locale.t('settings.safety.online') }
-                        description={ locale.t('settings.safety.onlineHint') }
-                        onChange={ (checked) => void save({ showOnline: checked }) }
-                    />
-
-                    <div>
-                        <p class="label text-ui-sm text-text">{ locale.t('settings.safety.blocked') }</p>
-                        <p class="mt-1 text-ui-xs text-muted">{ locale.t('settings.safety.blockedLead') }</p>
-                        <Show
-                            when={ allBlocked.length > 0 }
-                            fallback={ <p class="mt-2 text-ui-sm text-faint">{ locale.t('settings.safety.blockedEmpty') }</p> }
+        <div class="@container">
+            <div class="flex flex-col gap-6 @4xl:grid @4xl:grid-cols-[13rem_minmax(0,1fr)] @4xl:items-start @4xl:gap-8">
+                <nav ref={ (element) => nav = element } class="rail-x sticky top-0 z-10 -mx-4 flex gap-1.5 border-b border-line bg-void/90 px-4 py-2 backdrop-blur-md @4xl:mx-0 @4xl:flex-col @4xl:gap-0.5 @4xl:overflow-visible @4xl:border-0 @4xl:bg-transparent @4xl:px-0 @4xl:py-0 @4xl:backdrop-blur-none" aria-label={ locale.t('settings.sections') }>
+                    <For each={ [...SECTIONS] } key={ (section) => section.id } let={ section }>
+                        <button
+                            type="button"
+                            class={ () => [
+                                'flex min-h-10 shrink-0 cursor-pointer items-center gap-2.5 rounded-full border px-3.5 text-ui-sm font-semibold transition-colors duration-150 coarse:min-h-11 @4xl:rounded-tile @4xl:border-transparent @4xl:px-3',
+                                active === section.id
+                                    ? 'border-accent/50 bg-accent/12 text-text @4xl:bg-raised'
+                                    : 'border-line text-muted hover:text-text @4xl:hover:bg-raised/60'
+                            ].join(' ') }
+                            data-section={ section.id }
+                            aria-current={ active === section.id ? 'true' : undefined }
+                            onClick={ () => go(section.id) }
                         >
-                            { () =>
-                                <ul class="mt-2 flex flex-col gap-0.5" aria-label={ locale.t('settings.safety.blocked') }>
-                                    <For each={ blocked } key={ (person) => person.id } let={ person }>
-                                        <li>
-                                            <FriendRow
-                                                person={ person }
-                                                subtitle={ `@${ person.handle }` }
-                                                actions={
-                                                    <Button variant="ghost" size="sm" class="whitespace-nowrap" onClick={ () => social.unblock(person.id) }>
-                                                        { locale.t('actions.unblock', { name: person.displayName.split(' ')[0] }) }
-                                                    </Button>
-                                                }
-                                            />
-                                        </li>
-                                    </For>
-                                </ul>
-                            }
-                        </Show>
-                        <Pagination
-                            total={ allBlocked.length }
-                            size={ SAFETY_PAGE }
-                            page={ blockedPage }
-                            mode="more"
-                            label={ locale.t('settings.safety.blocked') }
-                            onPage={ (page) => blockedPage = page }
-                        />
-                    </div>
-
-                    <div>
-                        <p class="label text-ui-sm text-text">{ locale.t('settings.safety.muted') }</p>
-                        <p class="mt-1 text-ui-xs text-muted">{ locale.t('settings.safety.mutedLead') }</p>
-                        <Show
-                            when={ allMuted.length > 0 }
-                            fallback={ <p class="mt-2 text-ui-sm text-faint">{ locale.t('settings.safety.mutedEmpty') }</p> }
-                        >
-                            { () =>
-                                <ul class="mt-2 flex flex-col gap-0.5" aria-label={ locale.t('settings.safety.muted') }>
-                                    <For each={ muted } key={ (person) => person.id } let={ person }>
-                                        <li>
-                                            <FriendRow
-                                                person={ person }
-                                                subtitle={ `@${ person.handle }` }
-                                                actions={
-                                                    <Button variant="ghost" size="sm" class="whitespace-nowrap" onClick={ () => void social.toggleMute('person', person.id) }>
-                                                        { locale.t('actions.unmute', { name: person.displayName.split(' ')[0] }) }
-                                                    </Button>
-                                                }
-                                            />
-                                        </li>
-                                    </For>
-                                </ul>
-                            }
-                        </Show>
-                        <Pagination
-                            total={ allMuted.length }
-                            size={ SAFETY_PAGE }
-                            page={ mutedPage }
-                            mode="more"
-                            label={ locale.t('settings.safety.muted') }
-                            onPage={ (page) => mutedPage = page }
-                        />
-                    </div>
-
-                    <div>
-                        <p class="label text-ui-sm text-text">{ locale.t('settings.safety.reports') }</p>
-                        <p class="mt-1 text-ui-xs text-muted">{ locale.t('settings.safety.reportsLead') }</p>
-                        <Show
-                            when={ allReports.length > 0 }
-                            fallback={ <p class="mt-2 text-ui-sm text-faint">{ locale.t('report.empty') }</p> }
-                        >
-                            { () =>
-                                <ul class="mt-2 flex flex-col gap-1" aria-label={ locale.t('settings.safety.reports') }>
-                                    <For each={ reports } key={ (report) => report.id } let={ report }>
-                                        <li class="flex items-center gap-3 rounded-tile bg-raised/50 px-3 py-2">
-                                            <Icon name="report" size={ 15 } class="shrink-0 text-danger" />
-                                            <span class="flex min-w-0 flex-1 flex-col">
-                                                <span class="truncate text-ui-sm text-text">
-                                                    { locale.text(people.byHandle(report.against)?.displayName ?? { en: report.against, fa: report.against }) }
-                                                    <span class="mx-1.5 inline-block h-1 w-1 rounded-full bg-faint align-middle" aria-hidden="true"></span>
-                                                    { locale.t(`report.category.${ report.category }`) }
-                                                </span>
-                                                <span class="text-ui-2xs text-faint">{ locale.relative(report.at) }</span>
-                                            </span>
-                                            <span class={ () => [
-                                                'shrink-0 rounded-full px-2 py-0.5 text-ui-2xs font-semibold',
-                                                report.status === 'actioned' ? 'bg-win/15 text-win' : (report.status === 'reviewed' ? 'bg-live/15 text-live' : 'bg-raised text-muted')
-                                            ].join(' ') }>
-                                                { locale.t(`report.status.${ report.status }`) }
-                                            </span>
-                                        </li>
-                                    </For>
-                                </ul>
-                            }
-                        </Show>
-                        <Pagination
-                            total={ allReports.length }
-                            size={ SAFETY_PAGE }
-                            page={ reportsPage }
-                            mode="more"
-                            label={ locale.t('settings.safety.reports') }
-                            onPage={ (page) => reportsPage = page }
-                        />
-                    </div>
-                </Panel>
-            </section>
-
-            <section aria-labelledby="settings-notifications">
-                <SectionHeading id="settings-notifications" title={ locale.t('settings.notifications') } />
-                <div class="mb-3">
-                    <PushToggle />
-                </div>
-                <Panel stack="md">
-                    <For each={ NOTIFICATION_CATEGORIES } key={ (category) => category } let={ category }>
-                        <div>
-                            <Toggle
-                                checked={ current.notifications[category] }
-                                label={ locale.t(`settings.notifications.${ category }`) }
-                                onChange={ (checked) => settings.update({ notifications: { ...current.notifications, [category]: checked } }) }
-                            />
-                        </div>
+                            <Icon name={ section.icon } size={ 16 } class={ active === section.id ? 'text-accent' : '' } />
+                            { locale.t(section.key) }
+                        </button>
                     </For>
-                    <Toggle
-                        checked={ current.sound }
-                        label={ locale.t('settings.notifications.sound') }
-                        onChange={ (checked) => settings.update({ sound: checked }) }
-                    />
-                    <Show when={ device.coarse() }>
-                        { () =>
-                            <Toggle
-                                checked={ current.haptics }
-                                label={ locale.t('settings.notifications.haptics') }
-                                description={ locale.t('settings.notifications.hapticsHint') }
-                                onChange={ (checked) => settings.update({ haptics: checked }) }
-                            />
-                        }
-                    </Show>
-                </Panel>
-            </section>
+                </nav>
 
-            <section aria-labelledby="settings-appearance">
-                <SectionHeading id="settings-appearance" title={ locale.t('settings.appearance') } />
-                <Panel stack="md">
-                    <div class="flex flex-wrap items-center justify-between gap-3">
-                        <span class="text-ui-md font-semibold text-text">{ locale.t('settings.appearance.language') }</span>
-                        <LanguageSwitch />
+                <div ref={ (element) => body = element } class="flex min-w-0 flex-col gap-8">
+                    <div class="grid gap-8 @6xl:grid-cols-2">
+                        <section id="settings-account" class="scroll-mt-16 @4xl:scroll-mt-4" aria-labelledby="settings-account-title">
+                            <SectionHeading id="settings-account-title" title={ locale.t('settings.account') } />
+                            <Panel stack="sm">
+                                <Show
+                                    when={ account.isWallet() }
+                                    fallback={
+                                        <div class="flex items-start gap-3">
+                                            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-raised text-muted">
+                                                <Icon name="people" size={ 18 } />
+                                            </span>
+                                            <span class="flex min-w-0 flex-1 flex-col">
+                                                <span class="text-ui-md font-semibold text-text">{ locale.t('settings.account.demo') }</span>
+                                                <span class="text-ui-sm text-muted">{ locale.t('settings.account.demoLead') }</span>
+                                            </span>
+                                        </div>
+                                    }
+                                >
+                                    { () =>
+                                        <div class="flex items-start gap-3">
+                                            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-live/15 text-live">
+                                                <Icon name="key" size={ 18 } />
+                                            </span>
+                                            <span class="flex min-w-0 flex-1 flex-col">
+                                                <span class="text-ui-md font-semibold text-text">{ locale.t('settings.account.wallet', { wallet: wallet.name() }) }</span>
+                                                <code class="tally truncate text-ui-sm text-muted">{ shortAddress(account.address() ?? '') }</code>
+                                                <span class="mt-1 text-ui-xs text-faint">{ locale.t('settings.account.network') }: { NURA_CHAIN.name }</span>
+                                            </span>
+                                        </div>
+                                    }
+                                </Show>
+                                <div class="grid gap-2 @xl:grid-cols-2">
+                                    <Button variant="outline" block leading="key" to="/app/me/devices">
+                                        { locale.t('devices.title') }
+                                    </Button>
+                                    <Button variant="outline" block leading="sign-out" onClick={ leave }>
+                                        { account.isWallet() ? locale.t('settings.account.disconnect') : locale.t('settings.account.signOut') }
+                                    </Button>
+                                </div>
+                            </Panel>
+                        </section>
+
+                        <section id="settings-appearance" class="scroll-mt-16 @4xl:scroll-mt-4" aria-labelledby="settings-appearance-title">
+                            <SectionHeading id="settings-appearance-title" title={ locale.t('settings.appearance') } />
+                            <Panel stack="md">
+                                <div class="flex flex-wrap items-center justify-between gap-3">
+                                    <span class="text-ui-md font-semibold text-text">{ locale.t('settings.appearance.language') }</span>
+                                    <LanguageSwitch />
+                                </div>
+                                <Show when={ device.reducedMotion() }>
+                                    { () =>
+                                        <p class="flex items-center gap-2 text-ui-xs text-muted">
+                                            <Icon name="info" size={ 13 } />
+                                            { locale.t('settings.appearance.motion') }
+                                        </p>
+                                    }
+                                </Show>
+                            </Panel>
+                        </section>
                     </div>
-                    <Slider
-                        value={ current.railWidth }
-                        min={ 0.22 }
-                        max={ 0.45 }
-                        step={ 0.01 }
-                        ticks={ [0.22, 0.3, 0.38, 0.45] }
-                        label={ locale.t('settings.appearance.rail') }
-                        hint={ locale.t('settings.appearance.railHint') }
-                        valueText={ locale.n(current.railWidth, { style: 'percent' }) }
-                        onChange={ (value) => settings.update({ railWidth: value }) }
-                    />
-                    <Show when={ device.reducedMotion() }>
-                        { () =>
-                            <p class="flex items-center gap-2 text-ui-xs text-muted">
-                                <Icon name="info" size={ 13 } />
-                                { locale.t('settings.appearance.motion') }
-                            </p>
-                        }
-                    </Show>
-                </Panel>
-            </section>
 
-            <section aria-labelledby="settings-premium">
-                <SectionHeading id="settings-premium" title={ locale.t('settings.premium') } />
-                <Panel tone="accent">
-                    <h3 class="flex items-center gap-2 title text-ui-lg text-text">
-                        <Icon name="sparkles" size={ 18 } class="text-accent" />
-                        { locale.t('settings.premium.title') }
-                    </h3>
-                    <p class="mt-1 text-ui-base text-muted">{ locale.t('settings.premium.lead') }</p>
-                    <p class="mt-3 title text-ui-2xl text-text">
-                        { locale.t('settings.premium.price', { price: locale.n(4, { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }) }) }
-                    </p>
-                    <p class="mt-1 text-ui-xs text-muted">{ locale.t('settings.premium.currency') }</p>
-                    <p class="label mt-4 text-ui-xs text-faint">{ locale.t('settings.premium.includes') }</p>
-                    <ul class="mt-2 flex flex-col gap-1.5">
-                        <For each={ PREMIUM } key={ (item) => item } let={ item }>
-                            <li class="flex items-center gap-2 text-ui-sm text-text">
-                                <Icon name="check-circle" size={ 14 } class="shrink-0 text-accent" />
-                                { locale.t(item) }
-                            </li>
-                        </For>
-                    </ul>
-                    <p class="mt-3 text-ui-xs text-muted">{ locale.t('settings.premium.refund') }</p>
-                    <Button variant="outline" block class="mt-4" disabled>{ locale.t('settings.premium.subscribe') }</Button>
-                    <p class="mt-3 flex items-start gap-2 text-ui-xs text-live">
-                        <Icon name="shield" size={ 13 } class="mt-0.5 shrink-0" />
-                        { locale.t('settings.premium.never') }
-                    </p>
-                </Panel>
-            </section>
+                    <section id="settings-safety" class="scroll-mt-16 @4xl:scroll-mt-4" aria-labelledby="settings-safety-title">
+                        <SectionHeading id="settings-safety-title" title={ locale.t('settings.safety') } />
+                        <Panel stack="md">
+                            <div class="grid gap-4 @3xl:grid-cols-2 @3xl:gap-6">
+                                <Toggle
+                                    checked={ privacy.allowStrangerMessages }
+                                    disabled={ privacy.isMinor }
+                                    label={ locale.t('settings.safety.strangers') }
+                                    description={ privacy.isMinor ? locale.t('settings.safety.strangersLocked') : locale.t('settings.safety.strangersHint') }
+                                    onChange={ (checked) => void save({ allowStrangerMessages: checked }) }
+                                />
+                                <Toggle
+                                    checked={ privacy.showOnline }
+                                    label={ locale.t('settings.safety.online') }
+                                    description={ locale.t('settings.safety.onlineHint') }
+                                    onChange={ (checked) => void save({ showOnline: checked }) }
+                                />
+                            </div>
 
+                            <div class="grid gap-6 border-t border-line pt-4 @3xl:grid-cols-2 @6xl:grid-cols-3">
+                                <div>
+                                    <p class="label text-ui-sm text-text">{ locale.t('settings.safety.blocked') }</p>
+                                    <p class="mt-1 text-ui-xs text-muted">{ locale.t('settings.safety.blockedLead') }</p>
+                                    <Show
+                                        when={ allBlocked.length > 0 }
+                                        fallback={ <p class="mt-2 text-ui-sm text-faint">{ locale.t('settings.safety.blockedEmpty') }</p> }
+                                    >
+                                        { () =>
+                                            <ul class="mt-2 flex flex-col gap-0.5" aria-label={ locale.t('settings.safety.blocked') }>
+                                                <For each={ blocked } key={ (person) => person.id } let={ person }>
+                                                    <li>
+                                                        <FriendRow
+                                                            person={ person }
+                                                            subtitle={ `@${ person.handle }` }
+                                                            actions={
+                                                                <Button variant="ghost" size="sm" class="whitespace-nowrap" onClick={ () => social.unblock(person.id) }>
+                                                                    { locale.t('actions.unblock', { name: person.displayName.split(' ')[0] }) }
+                                                                </Button>
+                                                            }
+                                                        />
+                                                    </li>
+                                                </For>
+                                            </ul>
+                                        }
+                                    </Show>
+                                    <Pagination
+                                        total={ allBlocked.length }
+                                        size={ SAFETY_PAGE }
+                                        page={ blockedPage }
+                                        mode="more"
+                                        label={ locale.t('settings.safety.blocked') }
+                                        onPage={ (page) => blockedPage = page }
+                                    />
+                                </div>
+
+                                <div>
+                                    <p class="label text-ui-sm text-text">{ locale.t('settings.safety.muted') }</p>
+                                    <p class="mt-1 text-ui-xs text-muted">{ locale.t('settings.safety.mutedLead') }</p>
+                                    <Show
+                                        when={ allMuted.length > 0 }
+                                        fallback={ <p class="mt-2 text-ui-sm text-faint">{ locale.t('settings.safety.mutedEmpty') }</p> }
+                                    >
+                                        { () =>
+                                            <ul class="mt-2 flex flex-col gap-0.5" aria-label={ locale.t('settings.safety.muted') }>
+                                                <For each={ muted } key={ (person) => person.id } let={ person }>
+                                                    <li>
+                                                        <FriendRow
+                                                            person={ person }
+                                                            subtitle={ `@${ person.handle }` }
+                                                            actions={
+                                                                <Button variant="ghost" size="sm" class="whitespace-nowrap" onClick={ () => void social.toggleMute('person', person.id) }>
+                                                                    { locale.t('actions.unmute', { name: person.displayName.split(' ')[0] }) }
+                                                                </Button>
+                                                            }
+                                                        />
+                                                    </li>
+                                                </For>
+                                            </ul>
+                                        }
+                                    </Show>
+                                    <Pagination
+                                        total={ allMuted.length }
+                                        size={ SAFETY_PAGE }
+                                        page={ mutedPage }
+                                        mode="more"
+                                        label={ locale.t('settings.safety.muted') }
+                                        onPage={ (page) => mutedPage = page }
+                                    />
+                                </div>
+
+                                <div>
+                                    <p class="label text-ui-sm text-text">{ locale.t('settings.safety.reports') }</p>
+                                    <p class="mt-1 text-ui-xs text-muted">{ locale.t('settings.safety.reportsLead') }</p>
+                                    <Show
+                                        when={ allReports.length > 0 }
+                                        fallback={ <p class="mt-2 text-ui-sm text-faint">{ locale.t('report.empty') }</p> }
+                                    >
+                                        { () =>
+                                            <ul class="mt-2 flex flex-col gap-1" aria-label={ locale.t('settings.safety.reports') }>
+                                                <For each={ reports } key={ (report) => report.id } let={ report }>
+                                                    <li class="flex items-center gap-3 rounded-tile bg-raised/50 px-3 py-2">
+                                                        <Icon name="report" size={ 15 } class="shrink-0 text-danger" />
+                                                        <span class="flex min-w-0 flex-1 flex-col">
+                                                            <span class="truncate text-ui-sm text-text">
+                                                                { locale.text(people.byHandle(report.against)?.displayName ?? { en: report.against, fa: report.against }) }
+                                                                <span class="mx-1.5 inline-block h-1 w-1 rounded-full bg-faint align-middle" aria-hidden="true"></span>
+                                                                { locale.t(`report.category.${ report.category }`) }
+                                                            </span>
+                                                            <span class="text-ui-2xs text-faint">{ locale.relative(report.at) }</span>
+                                                        </span>
+                                                        <span class={ () => [
+                                                            'shrink-0 rounded-full px-2 py-0.5 text-ui-2xs font-semibold',
+                                                            report.status === 'actioned' ? 'bg-win/15 text-win' : (report.status === 'reviewed' ? 'bg-live/15 text-live' : 'bg-raised text-muted')
+                                                        ].join(' ') }>
+                                                            { locale.t(`report.status.${ report.status }`) }
+                                                        </span>
+                                                    </li>
+                                                </For>
+                                            </ul>
+                                        }
+                                    </Show>
+                                    <Pagination
+                                        total={ allReports.length }
+                                        size={ SAFETY_PAGE }
+                                        page={ reportsPage }
+                                        mode="more"
+                                        label={ locale.t('settings.safety.reports') }
+                                        onPage={ (page) => reportsPage = page }
+                                    />
+                                </div>
+                            </div>
+                        </Panel>
+                    </section>
+
+                    <div class="grid gap-8 @6xl:grid-cols-2">
+                        <section id="settings-notifications" class="scroll-mt-16 @4xl:scroll-mt-4" aria-labelledby="settings-notifications-title">
+                            <SectionHeading id="settings-notifications-title" title={ locale.t('settings.notifications') } />
+                            <div class="mb-3">
+                                <PushToggle />
+                            </div>
+                            <Panel>
+                                <div class="grid gap-5 @3xl:grid-cols-2 @3xl:gap-x-8">
+                                    <For each={ NOTIFICATION_CATEGORIES } key={ (category) => category } let={ category }>
+                                        <div>
+                                            <Toggle
+                                                checked={ current.notifications[category] }
+                                                label={ locale.t(`settings.notifications.${ category }`) }
+                                                onChange={ (checked) => settings.update({ notifications: { ...current.notifications, [category]: checked } }) }
+                                            />
+                                        </div>
+                                    </For>
+                                    <Toggle
+                                        checked={ current.sound }
+                                        label={ locale.t('settings.notifications.sound') }
+                                        onChange={ (checked) => settings.update({ sound: checked }) }
+                                    />
+                                    <Show when={ device.coarse() }>
+                                        { () =>
+                                            <Toggle
+                                                checked={ current.haptics }
+                                                label={ locale.t('settings.notifications.haptics') }
+                                                description={ locale.t('settings.notifications.hapticsHint') }
+                                                onChange={ (checked) => settings.update({ haptics: checked }) }
+                                            />
+                                        }
+                                    </Show>
+                                </div>
+                            </Panel>
+                        </section>
+
+                        <section id="settings-premium" class="scroll-mt-16 @4xl:scroll-mt-4" aria-labelledby="settings-premium-title">
+                            <SectionHeading id="settings-premium-title" title={ locale.t('settings.premium') } />
+                            <Panel tone="accent">
+                                <h3 class="flex items-center gap-2 title text-ui-lg text-text">
+                                    <Icon name="sparkles" size={ 18 } class="text-accent" />
+                                    { locale.t('settings.premium.title') }
+                                </h3>
+                                <p class="mt-1 text-ui-base text-muted">{ locale.t('settings.premium.lead') }</p>
+                                <p class="mt-3 title text-ui-2xl text-text">
+                                    { locale.t('settings.premium.price', { price: locale.n(4, { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }) }) }
+                                </p>
+                                <p class="mt-1 text-ui-xs text-muted">{ locale.t('settings.premium.currency') }</p>
+                                <p class="label mt-4 text-ui-xs text-faint">{ locale.t('settings.premium.includes') }</p>
+                                <ul class="mt-2 flex flex-col gap-1.5">
+                                    <For each={ PREMIUM } key={ (item) => item } let={ item }>
+                                        <li class="flex items-center gap-2 text-ui-sm text-text">
+                                            <Icon name="check-circle" size={ 14 } class="shrink-0 text-accent" />
+                                            { locale.t(item) }
+                                        </li>
+                                    </For>
+                                </ul>
+                                <p class="mt-3 text-ui-xs text-muted">{ locale.t('settings.premium.refund') }</p>
+                                <Button variant="outline" block class="mt-4" disabled>{ locale.t('settings.premium.subscribe') }</Button>
+                                <p class="mt-3 flex items-start gap-2 text-ui-xs text-live">
+                                    <Icon name="shield" size={ 13 } class="mt-0.5 shrink-0" />
+                                    { locale.t('settings.premium.never') }
+                                </p>
+                            </Panel>
+                        </section>
+                    </div>
+                </div>
+            </div>
         </div>
     </Page>
 }

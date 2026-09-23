@@ -57,6 +57,7 @@ import {
     PanelLeftOpen,
     PanelRightClose,
     PanelRightOpen,
+    Palette,
     Pencil,
     Play,
     Plus,
@@ -185,7 +186,8 @@ export const ICONS = {
     'hash': Hash,
     'flag': Flag,
     'reply': Reply,
-    'trash': Trash
+    'trash': Trash,
+    'palette': Palette
 } satisfies Record<string, IconNode>;
 
 export type IconName = keyof typeof ICONS;

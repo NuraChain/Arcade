@@ -18,7 +18,6 @@ export interface Settings
 {
     sound: boolean;
     haptics: boolean;
-    railWidth: number;
     railOpen: boolean;
     sidebarOpen: boolean;
     recentEmoji: string[];
@@ -32,7 +31,6 @@ export function defaultSettings(): Settings
     return {
         sound: true,
         haptics: true,
-        railWidth: 0.3,
         railOpen: false,
         sidebarOpen: true,
         recentEmoji: [],
