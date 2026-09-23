@@ -9,6 +9,7 @@ import { createChatService, PAGE, pairKeyOf } from '../src/domains/chat/service.
 import { createSocialService } from '../src/domains/social/service.ts';
 import { rowsOf } from '../src/lib/rows.ts';
 import { syncSchema } from '../src/db/schema.ts';
+import { seedReference } from '../src/db/seed-reference.ts';
 
 /**
  * The chat claims only Postgres can settle: the keyset, the exclusive-or, the pair race, and
@@ -110,6 +111,7 @@ describe.skipIf(!active)('chat, against a real database', () =>
         db = new DataSource({ type: 'postgres', uuidExtension: 'pgcrypto', url, entities, synchronize: false, logging: ['error'] });
         await db.initialize();
         await syncSchema(db);
+        await seedReference(db);
     }, 60_000);
 
     afterAll(async () =>
@@ -320,8 +322,8 @@ describe.skipIf(!active)('chat, against a real database', () =>
         const room = async (chatOn: boolean): Promise<string> =>
         {
             const table = rowsOf<{ id: string }>(await db.query(
-                `insert into tables (game, code, host_id, seats, mode, privacy, target, cube, blinds, chat)
-                 values ('ludo', $2, $1, 2, 'live', 'public', 0, false, 'low', $3)
+                `insert into tables (game, code, host_id, seats, mode, privacy, target, cube, blinds, chat, voice)
+                 values ('ludo', $2, $1, 2, 'live', 'public', 0, false, 'low', $3, false)
                  returning id`,
                 [a, `q${ Math.floor(Math.random() * 1000000) }`, chatOn]
             ))[0].id;
