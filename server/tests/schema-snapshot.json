@@ -299,7 +299,7 @@
         "wallets.user_id uuid NO -"
     ],
     "checks": [
-        "achievements_tier_known :: CHECK (((tier)::text = ANY ((ARRAY['bronze'::character varying, 'silver'::character varying, 'gold'::character varying])::text[])))",
+        "achievements_tier_known :: CHECK (((tier)::text = ANY ((ARRAY['bronze'::character varying, 'silver'::character varying, 'gold'::character varying, 'platinum'::character varying, 'diamond'::character varying])::text[])))",
         "achievements_translated :: CHECK (((length(btrim(name_en)) > 0) AND (length(btrim(name_fa)) > 0) AND (length(btrim(blurb_en)) > 0) AND (length(btrim(blurb_fa)) > 0)))",
         "blocks_not_self :: CHECK ((user_id <> blocked_id))",
         "conversation_epochs_has_recipients :: CHECK ((recipients <> ''::text))",
