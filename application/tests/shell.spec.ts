@@ -514,7 +514,14 @@ describe('the page nobody asked for', () =>
         const router = createRouter({ routes: table, history: createMemoryHistory('/app'), scroll: false });
         const { container } = renderTest(() => RouterProvider({
             router,
-            children: () => Routes({ fallback: () => NotFoundPage({ get holding() { return router.pending(); } }) })
+            children: () => Routes({
+                fallback: () => NotFoundPage({
+                    get holding()
+                    {
+                        return router.pending();
+                    }
+                })
+            })
         }) as HTMLElement);
 
         await Promise.resolve();
