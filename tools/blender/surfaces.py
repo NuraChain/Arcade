@@ -316,19 +316,25 @@ def felt_table(key, pixels_w, pixels_h, colour, rim_ratio=0.045):
 
 BAIZE = (0.022, 0.12, 0.065)
 
-LUDO_FELT = (0.01, 0.034, 0.13)
 
 
 def hokm_table(key, pixels_w, pixels_h):
     felt_table(key, pixels_w, pixels_h, BAIZE)
 
 
-def ludo_felt():
-    felt_table('ludo-table', 1200, 1200, LUDO_FELT, rim_ratio=0.042)
+def ludo_table():
+    width, height = 1.6, 1.2
+    scene = reset(1600, 1200)
+    top = wood_material('tabletop', 'wood_table_001', 1.0, rotate=math.pi / 2, coat=0.0, tint=(1.0, 0.92, 0.86))
+    plane('tabletop', width, height, top)
+    lamp('lamp', (0.0, 0.5, 1.25), 1.6, 75.0, (1.0, 0.8, 0.58), aim=(0.0, -0.05, 0.0))
+    lamp('fill', (0.0, 0.0, 2.6), 3.0, 8.0, (0.75, 0.82, 1.0))
+    camera(scene, width)
+    save(scene, 'ludo-table.webp')
 
 
 SURFACES = {
-    'ludo-table': ludo_felt,
+    'ludo-table': ludo_table,
     'hokm-table-wide': lambda: hokm_table('hokm-table-wide', 1600, 1000),
     'hokm-table-tall': lambda: hokm_table('hokm-table-tall', 1000, 1200)
 }

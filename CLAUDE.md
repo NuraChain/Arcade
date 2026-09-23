@@ -2242,14 +2242,14 @@ turned sideways is 844 wide, which is rail posture, and the top bar plus the rai
 390px-tall screen. The keys banner is not drawn on a game route either: it is about reading
 messages, and the table's chat already says the same thing where it applies.
 
-**Everything needed to play is on the table, and most of it is on the board.** Ludo sits on the
-same kind of table as hokm - a bevelled walnut rim with a brass inlay around deep blue felt - rendered
-by the same `felt_table` in `tools/blender/surfaces.py`, because the user judged the hokm table right
-and the first ludo tabletop, a planked wood photograph, not. The ludo table changes shape with the
-screen, tall on a phone and wide beside the strip on a desktop, so it is drawn as a 9-slice
-`border-image` over one square render: the rim and its rounded corners stay the width they were drawn
-at whatever the proportion, and only the felt stretches. The board's own frame is walnut with a brass
-line to match; it was a pale maple that read as a second, cheaper wood beside the rim.
+**Everything needed to play is on the table, and most of it is on the board.** Ludo sits on a
+real wooden tabletop: `ludo-table.webp` is rendered by `tools/blender/surfaces.py` in Cycles from
+Poly Haven's CC0 `wood_table_001`, lit evenly from off-axis, with the specular turned down because an
+orthographic camera looking straight down sees every overhead lamp as a white disc. The lamp pool and
+the vignette are CSS gradients over it, because the photo is cover-cropped to a phone's tall table
+and a desktop's wide one and a baked pool would sit in the wrong place on both. A felt table like
+hokm's was tried here and taken back the same day: the user liked this tabletop and wanted the BOARD
+on it improved, which is a different thing.
 Each player is drawn INSIDE their own yard - `YardBadge`: the avatar in the
 yard's outer corner, a name pill with the four home dots along its outer edge, and the die they rolled
 beside the avatar - so there is no row of cards above and below the board taking height from it, and
