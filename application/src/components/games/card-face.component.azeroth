@@ -1,29 +1,5 @@
 import { RANKS } from '../../data/cards.ts';
 
-/**
- * One playing card, cut from the deck this product already prints.
- *
- * `tools/blender/deck.py` renders all fifty-two faces from `lib/atlas.py`'s own `draw_card_face` -
- * the same function that prints the deck lying on the card table in the night market - so the card
- * somebody presses here and the card standing in the 3D scene are one drawing rather than two that
- * agree until somebody edits a pip. It is the argument the ludo plate and the felt table both make,
- * and it is why this is a sprite and not a rank in a box: a hand-drawn CSS card would have been a
- * third deck.
- *
- * **The sheet's grid IS the card number.** A card is numbered suit-major with the ranks ascending,
- * so the column is `card % 13` and the row is `card / 13` and there is no packing for this file to
- * know. A sheet laid out to fit its pixels would be a second fact that has to agree with a constant
- * in the renderer, which is the shape of mistake this repository keeps writing down.
- *
- * **It is `aria-hidden` and always has a sentence beside it.** This is a picture of a card; what a
- * screen reader gets is the button's own label or the `sr-only` line under the trick, in words and
- * in the reader's own language - `J` is not a rank in Persian and a lone Latin initial is a glyph
- * nobody can say out loud.
- *
- * **The size comes from `--card-w`**, so the felt can lay a bigger card than the hand holds without
- * this component growing a prop with two values and a branch nothing looks at.
- */
-
 export default component CardFace(props: { card: number })
 {
     derived rank = props.card % RANKS.length;

@@ -3,7 +3,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { CELL, MARGIN, RIM } from '../../application/src/game/layout.ts';
-import { ENTRY, HOME_CELLS, RING_CELLS, RING_STEPS, SAFE } from '../../server/src/domains/match/ludo/board.ts';
+import { ENTRY, HOME_CELLS, RING, RING_CELLS, RING_STEPS, SAFE, ringIndex } from '../../server/src/domains/match/ludo/board.ts';
 
 const OUT = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'application', 'public', 'board');
 const S = 1024;
@@ -38,13 +38,6 @@ const ARM = (col, row) =>
     }
 
     return col < 6 ? 'red' : 'yellow';
-};
-
-const ARROW = {
-    red: { at: [0, 7], turn: 0 },
-    green: { at: [7, 0], turn: 90 },
-    yellow: { at: [14, 7], turn: 180 },
-    blue: { at: [7, 14], turn: 270 }
 };
 
 const at = (col, row) => [round(G + col * C), round(G + row * C)];
@@ -146,8 +139,10 @@ function star(col, row, fill, stroke)
 
 function arrow(colour)
 {
-    const { at: [col, row], turn } = ARROW[colour];
-    const [x, y] = at(col, row);
+    const last = RING_CELLS[ringIndex(colour, RING_STEPS - 1)];
+    const first = HOME_CELLS[colour][0];
+    const turn = round((Math.atan2(first.row - last.row, first.col - last.col) * 180 / Math.PI + 360) % 360);
+    const [x, y] = at(last.col, last.row);
     const u = C / 100;
     const path = `M${ round(-30 * u) } ${ round(-8 * u) }H${ round(4 * u) }V${ round(-22 * u) }L${ round(32 * u) } 0L${ round(4 * u) } ${ round(22 * u) }V${ round(8 * u) }H${ round(-30 * u) }Z`;
 
@@ -337,6 +332,11 @@ ${ corners.map(([x, y, turn]) => `<use href="#flourish" transform="translate(${ 
 `;
 }
 
+if (RING_CELLS.length !== RING)
+{
+    throw new Error(`the ring has ${ RING_CELLS.length } cells`);
+}
+
 writeFileSync(join(OUT, 'hokm-table-wide.svg'), hokmTable(1600, 1000));
 console.log('board hokm-table-wide.svg');
 writeFileSync(join(OUT, 'hokm-table-tall.svg'), hokmTable(1000, 1200));
@@ -349,9 +349,4 @@ for (const colour of COLOURS)
 {
     writeFileSync(join(OUT, `pawn-${ colour }.svg`), pawn(colour));
     console.log(`board pawn-${ colour }.svg`);
-}
-
-if (RING_CELLS.length !== RING_STEPS + 1)
-{
-    throw new Error(`the ring has ${ RING_CELLS.length } cells`);
 }

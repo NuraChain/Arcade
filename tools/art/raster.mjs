@@ -34,7 +34,9 @@ const page = await browser.newPage({ deviceScaleFactor: 1 });
 
 for (const [name, size] of [['favicon-16.png', 16], ['favicon-32.png', 32], ['apple-touch-icon.png', 180], ['icon-512.png', 512]])
 {
-    const rounded = name === 'apple-touch-icon.png' ? ICON.replace('rx="8"', 'rx="0"') : ICON;
+    const rounded = name === 'apple-touch-icon.png'
+        ? ICON.replace('rx="8"', 'rx="0"').replace('M8 0H24A8 8 0 0 1 32 8V13C22 17.5 10 17.5 0 11V8A8 8 0 0 1 8 0Z', 'M0 0H32V13C22 17.5 10 17.5 0 11Z')
+        : ICON;
 
     await page.setViewportSize({ width: size, height: size });
     await page.setContent(`<body style="margin:0;background:transparent"><img id="icon" src="${ dataUrl(rounded) }" style="display:block;width:${ size }px;height:${ size }px"></body>`);

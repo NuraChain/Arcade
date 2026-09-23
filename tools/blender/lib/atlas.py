@@ -111,17 +111,10 @@ def _fonts():
 
 
 class Canvas:
-    # `height` and `scale` are what let the deck sheet share this drawing code.
-    #
-    # The atlas is one square texture whose coordinates are a virtual 2048 grid, so `k` is the ratio
-    # between the two and everything is written in atlas units. A sprite sheet is neither square nor
-    # a texture - it is thirteen cards across and four down at whatever pixel size a screen needs -
-    # so it states both directly and keeps drawing in the same units, rather than being a second
-    # copy of `draw_card_face` that agrees with this one until somebody edits a pip.
-    def __init__(self, size, height=None, scale=None):
+    def __init__(self, size):
         self.size = size
-        self.height = size if height is None else height
-        self.k = (size / SIZE) if scale is None else scale
+        self.height = size
+        self.k = size / SIZE
         self.img = np.zeros((self.height, size, 3), np.float32)
         self.fonts = None
 

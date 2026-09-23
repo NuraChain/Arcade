@@ -16,15 +16,6 @@ import type { EarnedAchievement } from '../../api.ts';
  * a blank square. Nothing here renders a glyph the OS draws.
  */
 
-/**
- * Three tiers, out of tokens that already mean something.
- *
- * `gold` is the design system's reward colour and the gold tier is exactly that. There is no bronze
- * token and there should not be one: the first reach was `madder`, which is FUNCTIONAL in this
- * product - it means a table is playing for something - and borrowing it for a tier would make the
- * one colour that carries a meaning carry two. Bronze and silver are the neutral surfaces at two
- * weights instead, which reads as a ladder without inventing a hue.
- */
 export default component AchievementTile(props: { achievement: EarnedAchievement })
 {
     const locale = useLocale();

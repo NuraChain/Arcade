@@ -1,17 +1,3 @@
-/**
- * Where the fifteen-by-fifteen grid sits inside the rendered plate.
- *
- * `tools/blender/assets/set-ludo.py` builds the board as BOARD = 0.380 with a RIM of 0.016 on every
- * side, and `tools/blender/board.py` frames its camera to the board exactly - so the printed field
- * is 0.348 / 0.380 of the image, starting one rim in. Every number here is that division and
- * nothing else, which is what lets a token be placed by grid coordinate with nothing measured at
- * run time. `styles/app.css` carries the same two fractions for the DOM fallback; `game.spec.ts`
- * holds them equal.
- *
- * Imports nothing, on purpose: this is the one piece of board maths both the canvas and a test with
- * no GPU need to agree on.
- */
-
 export const GRID = 15;
 
 /** The walnut rim: `RIM / BOARD` from `set-ludo.py`, so the paper starts this far in. */
