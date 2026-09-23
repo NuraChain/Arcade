@@ -494,34 +494,22 @@
  ],
  "ink": {
   "red": {
-   "light": "#FF7A6B",
    "base": "#E5392F",
-   "dark": "#AD1F1B",
-   "deep": "#7A1411",
    "shade": "#B01A14",
    "keyline": "#4A0806"
   },
   "green": {
-   "light": "#5BD98A",
    "base": "#1FA24C",
-   "dark": "#137535",
-   "deep": "#0B5023",
    "shade": "#0E7A36",
    "keyline": "#033317"
   },
   "yellow": {
-   "light": "#FFE070",
    "base": "#F7B814",
-   "dark": "#C98A00",
-   "deep": "#8F6100",
    "shade": "#D48A0C",
    "keyline": "#6B3C02"
   },
   "blue": {
-   "light": "#6AAEFF",
    "base": "#2270E6",
-   "dark": "#1550B3",
-   "deep": "#0C367D",
    "shade": "#0A4DB0",
    "keyline": "#041D4D"
   }

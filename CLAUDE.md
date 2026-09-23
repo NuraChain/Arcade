@@ -1464,18 +1464,21 @@ renders the pieces (`NURA_SURFACE=ludo-pieces`): four `pawn-<colour>.webp`, `paw
 `ludo-dice.webp`. So a start square, a star or an arrow cannot sit anywhere the rules do not put one,
 and the generator throws if the ring stops being 52 cells.
 
-The board has been a Blender photograph, this vector board, a satin render and this vector board
-again. The owner put the three side by side and chose the vector board with its wooden frame - it
-sits on the walnut the way the Hokm table does - and the complaint that started all of it was the
-PAWNS, which is what the renders replaced. The next direction the owner has asked for is a cartoon
-board that feels like childhood; that is its own spec when it happens, not a tweak to this one.
+The board has been a Blender photograph, a glossy vector board, a satin render and the vector board
+again, and it is now a **cartoon**: the owner asked for one that feels like childhood, "because it is
+just ludo". The spec is `docs/superpowers/specs/2026-09-23-ludo-cartoon-board-design.md`. One indigo
+ink line (`#2A1E5C`) on every shape, flat colours a shade brighter than the pieces, sticker shading
+(a lighter band across the top, a darker lip under the bottom, never a gradient), cream card inside a
+toy-wood frame, round yard houses whose four seats are recessed rings, chunky outlined stars, and a
+gold star at the centre. The complaint that started all of it was the PAWNS, which the renders
+replaced; the glossy plastic peg is the childhood piece, so they stay.
 
 **What is drawn, and where it comes from.** A starred START square in the owner's colour on
 `ENTRY`; a star in the arm's colour on every other `SAFE` index; an arrow in the owner's colour on
 the last ring cell before each home run, pointing into it; the home runs as coloured tiles; the
-centre as four pyramids. Colours are `LUDO_INK` in the generator (`light`, `base`, `dark`, `deep` for
-the board; `shade`, `keyline` for the renders), `--ludo-*` in `tokens.css`, and `TONE` in
-`ludo-board.ts`, kept equal by hand.
+centre as four triangles. The board paints from `PAINT` in the generator; the pieces take `base`,
+`shade` and `keyline` from `LUDO_INK` through the geometry file, which match `--ludo-*` in `tokens.css`
+and `TONE` in `ludo-board.ts` - kept equal by hand.
 
 **The pawn is a peg seen from thirty degrees above**: a lathed plinth, bell and ball head, 0.82 of a
 square wide and 1.25 tall, with an inverted-hull keyline in the colour's own darkest ink so a red
