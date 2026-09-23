@@ -1,8 +1,7 @@
 # Poker — No-Limit Texas Hold'em, played as a Sit & Go
 
-**Status:** the rules engine is built and behind the seam. `games.status` stays `coming-soon`: there
-is no board component, no `poker-pass.mjs` and no browser pass yet, and a status is a claim about a
-mechanism a person can reach.
+**Status:** playable. The engine, the table, `tools/qa/poker-pass.mjs` and the matrix route are
+built, and `games.status` is `available`.
 
 Free to play. Chips are virtual and have no monetary value. No deposits, no withdrawals, no
 cash-out, no wagering. Nothing here creates any of those.
@@ -152,8 +151,33 @@ A play is `{ kind: 'poker', verb: 'fold' | 'check' | 'call' | 'raise' | 'allin',
 - `poker-seam.spec.ts` — the forgery on `view` and `log`, spectators, folded hands never shown.
 - `engine-contract.spec.ts` plays random matches at 2, 6 and 9 inside its 20,000-action bound.
 
+## The table
+
+`application/src/components/games/poker-board.component.azeroth`: an oval felt with the seats placed
+round it from the reader's chair, clockwise - the next player to act after the reader sits to their
+LEFT, which is the opposite of hokm's rotation and the direction a real poker table deals. Each bet is
+drawn between its seat and the pot, the button is a "D" on its seat, and the community cards and the
+pot sit in the middle. The action bar offers only what the engine accepts: Check when there is nothing
+to call, otherwise Fold and "Call 40"; a raise is a slider over the server's `minRaiseTo`..`maxRaiseTo`
+with Min, Half pot and Pot presets and a button that says "Raise to 120" ("Bet" when nobody has bet
+this street, "All in" at the top). A spectator gets the table and nothing to press.
+
+**The view names a side pot only at an all-in.** The engine settles pots with `layers`, which splits
+at every distinct contribution - right at showdown, when every live player has matched, and wrong in
+the middle of a street, where the blinds alone made "main pot 20 and side pot 10" before the flop.
+`standing` splits only at an all-in player's total, and `poker-rules.spec.ts` pins that it agrees
+with `layers` once the betting is complete.
+
+**A player who folds stops being sent their cards.** `hole` is empty for a folded or busted reader:
+they gave the cards up, and a server that sends what the reader no longer holds is the pattern this
+product refuses everywhere else. `poker-pass.mjs` found it.
+
+`tools/qa/poker-pass.mjs` plays whole Sit & Gos at 2, 6 and 9 over the real api and checks, at every
+turn, that every chip is accounted for, that no card is ever in two places at once, and that nobody
+holds a card after folding or busting.
+
 ## What is left
 
-The board component, the action bar (presets over a server-validated amount; buttons that say
-"Call 40" and "Raise to 120"), a `poker-pass.mjs` over the real api, a browser pass, and then the
-flip to `available`. Cash tables, rebuys, PLO, hand replay and a dead-button rule are not built.
+Cash tables, rebuys, PLO, hand replay and a dead-button rule are not built. A two-browser play pass
+through the interface, like `play-pass.mjs` for ludo, is not written yet; the moves were played by
+hand in the browser at 390 (Persian and English), 844x390 and 1280.

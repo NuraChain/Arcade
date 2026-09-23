@@ -80,7 +80,7 @@ export const GAME_SEEDS: GameSeed[] = [
         category: 'cards',
         minPlayers: 2,
         maxPlayers: 9,
-        status: 'coming-soon',
+        status: 'available',
         seats: [2, 6, 9],
         modes: ['live'],
         targets: [],

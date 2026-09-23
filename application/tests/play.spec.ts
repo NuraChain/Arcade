@@ -425,7 +425,7 @@ describe('PlayPage', () =>
 
         expect(container.textContent).toContain(useLocale().t('match.cannotDraw'));
         expect(container.textContent).toContain(useLocale().t('watch.title'));
-        expect(Object.keys(BOARDS).sort()).toEqual(['backgammon', 'hokm', 'ludo']);
+        expect(Object.keys(BOARDS).sort()).toEqual(['backgammon', 'hokm', 'ludo', 'poker']);
     });
 
     it('is the same for a conversation replaced by another one while it leaves', async () =>

@@ -187,6 +187,10 @@
     --nard-light-rim: #B9A889;
     --nard-dark: #2A1D17;
     --nard-dark-rim: #7A5A45;
+
+    --poker-felt: #1F6B52;
+    --poker-felt-edge: #0E3A2C;
+    --poker-rail: #3A2416;
 }
 
 @theme inline

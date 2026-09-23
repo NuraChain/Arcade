@@ -1608,6 +1608,30 @@ api, answering doubles both ways, and asserts at every turn that both players re
 (nothing is hidden), fifteen checkers a side and never two colours on one point, and that the winner
 really reached the target.
 
+## Poker
+
+The fourth engine: No-Limit Texas Hold'em played as a Sit & Go, at 2, 6 or 9 seats, everybody on 1,500
+chips, the blinds rising every ten hands from the level the table was opened at, the last player with
+chips the winner. `docs/games/03-poker.md` is the rulebook and the list of decisions - the TDA rule
+for short all-ins, the full big blind owed by a short one, no raise when nobody could answer it - and
+`poker-rules.spec.ts`, `poker-engine.spec.ts` and `poker-seam.spec.ts` hold them.
+
+**There is no deck in the state.** Each card is drawn from what is left when it is dealt, through the
+`Draws` the engine is handed, so no snapshot anywhere holds a card nobody has seen yet - the same
+structural answer hokm's deal pause gives, taken further. The ledger keeps a private `hole` event per
+seat as an audit trail and `log` drops it; the seam spec forges other seats' holes in the state AND
+in the events and requires every reader's view and log to be byte-identical.
+
+**The table passes to the LEFT.** Hokm is dealt counter-clockwise and poker clockwise, so the table
+places the next seat to the reader's left; `poker-board.spec.ts` pins it. See
+`docs/games/03-poker.md`, *The table*, for the pot split the view shows and why a folded player is
+sent no cards.
+
+**Poker only runs live, so the matrix keeps a game going.** Its heads-up QA table is opened live and
+the sweep can finish it mid-run, so before each poker cell the matrix restarts the game on the same
+table - the chairs and the readiness survive a finished match, so that is one request - rather than
+touring a lobby for the rest of the run.
+
 ## Drawing the board
 
 The Ludo board and its pieces are **vector art drawn from the rules' own geometry**, all of it by
@@ -1726,7 +1750,7 @@ behind. It tours a ludo board AND a backgammon board now, each found by GAME: it
 whichever live match the account had, so which board the gate toured depended on what the last
 hand-run pass happened to leave behind. Both are opened as `turns` tables, because a live table's
 sweep forfeits two absent players within a few minutes and the rest of the run would tour a lobby.
-The matrix is 760 cells.
+It tours a heads-up poker table too, kept dealing as *Poker* describes. The matrix is 800 cells.
 
 **A move is drawn over time, and the renderer decides only that.** A token walks the squares it
 really crossed - `game/board/path.ts` asks the SERVER's own `ludo/board.ts` which ones those are,
@@ -2368,6 +2392,15 @@ wrong browser at the wrong moment is a different failure from a broken build. It
 DEAL first, and at two players the deal pauses with cards in the Hâkem's hand and nowhere else - so
 it passed or failed on which fixture happened to be Hâkem. It is asked after trump is called now, of
 the browser that did not call it.
+
+**`backgammon-play-pass.mjs` and `poker-play-pass.mjs` are the other two games' siblings**, and share
+`tools/qa/seats.mjs` - the browser, the wallet sign-in and the recorder the first two each wrote out
+for themselves. Backgammon plays eight turns by pressing Roll, Double, Take and the move list, poker
+eight actions through Check, Call and a raise from the slider's presets with one browser on a phone,
+and both finish over the api and assert the result in both browsers. What "the other browser saw it"
+means had to be the BOARD rather than the status line: after a roll it is still the roller's turn,
+so the opponent's "Dana is playing" is rightly unchanged, and the first version of the pass called
+that a defect.
 
 ## The table, and the cards on it
 
@@ -4129,7 +4162,9 @@ cover what they walk through.
 
 `npm run check` · `npm test` · `npm run test:shuffle` · `npm run build` · `npm run qa` ·
 `node tools/qa/regression-pass.mjs` · `node tools/qa/ludo-pass.mjs` · `node tools/qa/hokm-pass.mjs` ·
-`node tools/qa/play-pass.mjs` · `node tools/qa/hokm-play-pass.mjs` · `node tools/qa/voice-pass.mjs`,
+`node tools/qa/play-pass.mjs` · `node tools/qa/hokm-play-pass.mjs` · `node tools/qa/voice-pass.mjs` ·
+`node tools/qa/backgammon-pass.mjs` · `node tools/qa/poker-pass.mjs` · `node tools/qa/backgammon-play-pass.mjs` ·
+`node tools/qa/poker-play-pass.mjs`,
 then a browser pass: every route at
 390, 1280 and 1440 in both languages, a screenshot of every screen judged against
 `design.jpg`, console clean, and

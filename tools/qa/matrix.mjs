@@ -51,6 +51,7 @@ const ROUTES = [
     { id: 'group', path: '/app/groups/balcony-backgammon' },
     { id: 'play', path: '/app/play/:ludo' },
     { id: 'play-backgammon', path: '/app/play/:backgammon' },
+    { id: 'play-poker', path: '/app/play/:poker' },
     { id: 'leaderboard', path: '/app/leaderboard' },
     { id: 'discover', path: '/app/discover' },
     { id: 'search', path: '/app/search' },
@@ -140,7 +141,7 @@ async function playableTable(browser, storageState, game)
         data: {
             game,
             seats: 2,
-            mode: 'turns',
+            mode: game === 'poker' ? 'live' : 'turns',
             privacy: 'public',
             target: game === 'backgammon' ? 1 : 0,
             cube: false,
@@ -300,7 +301,21 @@ async function main()
     }
     const conversation = conversations[0].id;
 
-    const tables = { ludo: await playableTable(browser, storageState, 'ludo'), backgammon: await playableTable(browser, storageState, 'backgammon') };
+    const tables = {
+        ludo: await playableTable(browser, storageState, 'ludo'),
+        backgammon: await playableTable(browser, storageState, 'backgammon'),
+        poker: await playableTable(browser, storageState, 'poker')
+    };
+
+    const keepDealing = async (page) =>
+    {
+        const seen = await page.request.get(`${ BASE }/api/tables/${ tables.poker }`);
+
+        if (seen.ok() && (await seen.json()).matchId === undefined)
+        {
+            await page.request.post(`${ BASE }/api/tables/${ tables.poker }/start`);
+        }
+    };
     const failures = [];
     const rows = [];
     let cells = 0;
@@ -347,10 +362,16 @@ async function main()
                     const label = `${ locale }-${ width }${ landscape ? 'l' : 'p' }-${ route.id }`;
                     cells += 1;
 
+                    if (route.id === 'play-poker')
+                    {
+                        await keepDealing(page);
+                    }
+
                     const target = route.path
                         .replace(':conversation', conversation)
                         .replace(':ludo', tables.ludo)
-                        .replace(':backgammon', tables.backgammon);
+                        .replace(':backgammon', tables.backgammon)
+                        .replace(':poker', tables.poker);
                     await page.goto(`${ BASE }${ target }`, { waitUntil: 'networkidle' }).catch(() => undefined);
                     await page.waitForTimeout(120);
 

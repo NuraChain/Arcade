@@ -27,7 +27,7 @@ function applied(state: PokerState, action: PokerAction, seed = 1): { state: Pok
 
 describe('the catalogue and the engine agree', () =>
 {
-    it('seats two, six and nine, and keeps poker coming soon until its table lands', () =>
+    it('seats two, six and nine, live only, and is open to play', () =>
     {
         const seed = GAME_SEEDS.find((game) => game.id === 'poker');
 
@@ -36,7 +36,7 @@ describe('the catalogue and the engine agree', () =>
         expect(seed?.maxPlayers).toBe(9);
         expect(seed?.modes).toEqual(['live']);
         expect(seed?.targets).toEqual([]);
-        expect(seed?.status).toBe('coming-soon');
+        expect(seed?.status).toBe('available');
     });
 
     it('gives everybody fifteen hundred chips', () =>
