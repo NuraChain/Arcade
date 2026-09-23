@@ -1588,12 +1588,16 @@ switching tables never has to unlock audio again. The spec is
   is rebuilt, because WebKit's can get stuck there.
 - **Recorded foley, synthesised interface.** Cards, dice, wood and the two jingles are CC0 recordings
   from Kenney (`tools/art/sound-src/`, with their licence), trimmed and encoded to 96 kbps mono MP3 by
-  `npm run sound`, imported through `new URL(..., import.meta.url)` so they land hashed in `/assets/`
-  and are cached as immutable - a file in `public/` is revalidated on every visit. The turn, the ticks,
+  `npm run sound` and packed into ONE file, `game/sound/table.cues` - an `NCUE` header, a JSON index
+  and the takes back to back - imported through `new URL(..., import.meta.url)` so it lands hashed in
+  `/assets/` and is cached as immutable. One file is one request instead of seventeen, and the neutral
+  extension is load-bearing: a download manager (IDM and its kind, common among Persian users)
+  intercepts any `.mp3` a page fetches and hands the page an empty 204, which is how the first build of
+  this was silent on the owner's own machine while curl got a perfect 200. The turn, the ticks,
   trump, trick, bonus, pass and deny are synthesised. A recording that failed to load falls back to its
   synthesised voice or to silence and never throws, which keeps "nothing can 404 halfway through a game"
-  true in behaviour. Vite would inline the smallest MP3s as base64, so `assetsInlineLimit` refuses
-  audio, and `tools/budgets.mjs` requires all seventeen files in `dist/assets`, 16 KB each, 160 KB in all.
+  true in behaviour. `assetsInlineLimit` refuses to inline the pack, and `tools/budgets.mjs` requires
+  exactly one pack in `dist/assets`, at most 160 KB, and no file there with a media extension at all.
 - **Mixed like a game, not like a web page.** Three buses (foley 0.9, interface 0.45, jingles 0.6) into
   a 0.7 master and a limiter; each play varies its rate by up to 10% and its level by 1.5 dB, rotates
   through the takes, is panned by where it happens, and the same cue is not started more than three
@@ -2238,15 +2242,15 @@ turned sideways is 844 wide, which is rail posture, and the top bar plus the rai
 390px-tall screen. The keys banner is not drawn on a game route either: it is about reading
 messages, and the table's chat already says the same thing where it applies.
 
-**Everything needed to play is on the table, and most of it is on the board.** Ludo sits on a
-real wooden tabletop: `ludo-table.webp` is rendered by `tools/blender/surfaces.py` in Cycles from
-Poly Haven's CC0 `wood_table_001` (colour, roughness and normal maps, fetched into the git-ignored
-`tools/blender/scratch/`), lit evenly from off-axis, with the specular turned down because an
-orthographic camera looking straight down sees every overhead lamp as a white disc. The lamp pool and
-the vignette are CSS gradients over it rather than baked in, because the photo is cover-cropped to a
-phone's tall table and a desktop's wide one and a baked pool would sit in the wrong place on both.
-`npm run assets` renders it with the atlas and holds it to a byte budget; the committed WebP means
-nothing else ever needs Blender. Each player is drawn INSIDE their own yard - `YardBadge`: the avatar in the
+**Everything needed to play is on the table, and most of it is on the board.** Ludo sits on the
+same kind of table as hokm - a bevelled walnut rim with a brass inlay around deep blue felt - rendered
+by the same `felt_table` in `tools/blender/surfaces.py`, because the user judged the hokm table right
+and the first ludo tabletop, a planked wood photograph, not. The ludo table changes shape with the
+screen, tall on a phone and wide beside the strip on a desktop, so it is drawn as a 9-slice
+`border-image` over one square render: the rim and its rounded corners stay the width they were drawn
+at whatever the proportion, and only the felt stretches. The board's own frame is walnut with a brass
+line to match; it was a pale maple that read as a second, cheaper wood beside the rim.
+Each player is drawn INSIDE their own yard - `YardBadge`: the avatar in the
 yard's outer corner, a name pill with the four home dots along its outer edge, and the die they rolled
 beside the avatar - so there is no row of cards above and below the board taking height from it, and
 the board is the full width of the phone. Whose turn it is is the whole yard breathing in its colour.
