@@ -62,7 +62,7 @@ describe.skipIf(!active)('syncSchema settles', () =>
             await base.query(`drop database if exists ${ PROBE }`);
             await base.destroy();
         }
-    });
+    }, 60_000);
 
     it('has nothing to change on a second pass beyond the two known wrinkles', async () =>
     {

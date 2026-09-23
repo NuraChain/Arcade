@@ -391,7 +391,7 @@ describe('the move generator agrees with a naive enumerator written here', () =>
         }
 
         expect(checked).toBeGreaterThan(2000);
-    });
+    }, 30_000);
 });
 
 describe('staging a turn one hop at a time, which is how the board lets somebody play it', () =>
@@ -409,28 +409,46 @@ describe('staging a turn one hop at a time, which is how the board lets somebody
         let side: Side = { me: [...START], them: [...START] };
         let checked = 0;
 
-        for (let ply = 0; ply < 80; ply += 1)
+        for (let ply = 0; ply < 150; ply += 1)
         {
             const roll = [1 + Math.floor(random() * 6), 1 + Math.floor(random() * 6)];
             const oracle = naive(side, roll);
+            const prefixes = new Map<string, { hops: Hop[]; next: Set<string>; end: Side | null }>();
 
             for (const line of oracle)
             {
                 for (let index = 0; index <= line.hops.length; index += 1)
                 {
-                    const staged = stage(side, roll, line.hops.slice(0, index));
-                    const prefix = named(line.hops.slice(0, index));
-                    const expected = new Set(oracle
-                        .filter((other) => other.hops.length > index && named(other.hops.slice(0, index)) === prefix)
-                        .map((other) => named([other.hops[index]])));
+                    const hops = line.hops.slice(0, index);
+                    const entry = prefixes.get(named(hops)) ?? { hops, next: new Set<string>(), end: null };
 
-                    expect(staged).not.toBeNull();
-                    expect(new Set(staged!.next.map((hop) => named([hop])))).toEqual(expected);
-                    expect(staged!.done).toBe(index === line.hops.length);
-                    checked += 1;
+                    if (index < line.hops.length)
+                    {
+                        entry.next.add(named([line.hops[index]]));
+                    }
+                    else
+                    {
+                        entry.end = line.side;
+                    }
+
+                    prefixes.set(named(hops), entry);
+                }
+            }
+
+            for (const entry of prefixes.values())
+            {
+                const staged = stage(side, roll, entry.hops);
+
+                expect(staged).not.toBeNull();
+                expect(new Set(staged!.next.map((hop) => named([hop])))).toEqual(entry.next);
+                expect(staged!.done).toBe(entry.end !== null);
+
+                if (entry.end !== null)
+                {
+                    expect(finalOf(staged!.at)).toBe(finalOf(entry.end));
                 }
 
-                expect(finalOf(stage(side, roll, line.hops)!.at)).toBe(finalOf(line.side));
+                checked += 1;
             }
 
             const offered = turns(side, roll);
@@ -444,7 +462,7 @@ describe('staging a turn one hop at a time, which is how the board lets somebody
         }
 
         expect(checked).toBeGreaterThan(2000);
-    });
+    }, 30_000);
 
     it('refuses a hop no legal turn begins with, and a turn longer than the dice allow', () =>
     {
