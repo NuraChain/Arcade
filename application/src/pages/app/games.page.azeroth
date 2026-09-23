@@ -1,6 +1,7 @@
 import { useHead, useNavigate } from 'azerothjs';
 
 import Page from '../../components/app/page.component.azeroth';
+import PageHeader from '../../components/app/page-header.component.azeroth';
 import GameGrid from '../../components/games/game-grid.component.azeroth';
 import FilterBar from '../../components/ui/filter-bar.component.azeroth';
 import type { GameCategory, GameId } from '../../data/games.ts';
@@ -30,20 +31,20 @@ export default component GamesPage()
     };
 
     <Page label={ locale.t('app.nav.games') } onRefresh={ () => catalogue.refresh() }>
-        <header class="flex flex-col gap-3 pb-5 @2xl:flex-row @2xl:items-end @2xl:justify-between">
-            <div class="flex flex-col gap-1.5">
-                <h1 class="title text-ui-3xl">{ locale.t('app.nav.games') }</h1>
-                <p class="text-ui-md text-muted">{ locale.t('games.lead') }</p>
-            </div>
-            <p class="flex flex-wrap items-center gap-x-3 gap-y-1 text-ui-sm text-muted">
-                <span class="flex items-center gap-2">
-                    <span class="live-dot h-2 w-2" aria-hidden="true"></span>
-                    <span><span class="tally font-semibold text-text">{ locale.n(totals.playersOnline) }</span> { locale.plural('games.live.playingLabel', totals.playersOnline) }</span>
-                </span>
-                <span class="h-1 w-1 rounded-full bg-faint" aria-hidden="true"></span>
-                <span><span class="tally font-semibold text-text">{ locale.n(totals.tablesOpen) }</span> { locale.plural('games.live.tablesLabel', totals.tablesOpen) }</span>
-            </p>
-        </header>
+        <PageHeader
+            title={ locale.t('app.nav.games') }
+            lead={ locale.t('games.lead') }
+            actions={
+                <p class="flex flex-wrap items-center gap-x-3 gap-y-1 text-ui-sm text-muted">
+                    <span class="flex items-center gap-2">
+                        <span class="live-dot h-2 w-2" aria-hidden="true"></span>
+                        <span><span class="tally font-semibold text-text">{ locale.n(totals.playersOnline) }</span> { locale.plural('games.live.playingLabel', totals.playersOnline) }</span>
+                    </span>
+                    <span class="h-1 w-1 rounded-full bg-faint" aria-hidden="true"></span>
+                    <span><span class="tally font-semibold text-text">{ locale.n(totals.tablesOpen) }</span> { locale.plural('games.live.tablesLabel', totals.tablesOpen) }</span>
+                </p>
+            }
+        />
 
         <FilterBar
             label={ locale.t('games.filter.all') }

@@ -506,10 +506,21 @@ is deliberately lighter than slate-500, which is 3.73:1 on a card and fails for 
 **Type is Inter**, for UI and display alike (`@fontsource-variable/inter`); Persian stays Vazirmatn.
 Every heading is the bold sans; Fraunces and Hanken Grotesk are gone. The scale is a scale, not
 arbitrary values: `text-ui-2xs` (11) through `text-ui-4xl` (38), `text-ui-input` (16, the iOS zoom
-guard, for `Input` only) and four display clamps. Do not add `text-[Npx]` or `text-[Nrem]`. Page
-titles are `title text-ui-3xl`; section headings are `SectionHeading`, sentence case at
-`text-ui-lg`, with the blue "See all" beside them and a 44px row whether or not they have one, so
+guard, for `Input` only) and four display clamps. Do not add `text-[Npx]` or `text-[Nrem]`. A
+page's title is `PageHeader` - `title text-ui-3xl`, an 8px gap to a `text-ui-md` lead, 24px below,
+an optional eyebrow and actions - and nine pages used to spell that nine ways, with gaps of 4, 6 and
+8px, two lead sizes and three bottom margins, including a 40px display title on the create page.
+Only a hero or a profile card stands in for it. Section headings are `SectionHeading`, sentence case
+at `text-ui-lg`, with the blue "See all" beside them and a 44px row whether or not they have one, so
 two headings side by side line up.
+
+**One gutter, on every side.** `--page-pad` is 16px on a phone, 24 from 640 and 32 from 1024, and
+`Page` pads its top by the same amount as its sides - it was 16px at the top under 32px sides on a
+desktop, so every page began closer to the top bar than to the sidebar. The social panel starts at
+24px so its first heading lines up with the page title beside it. Anything that bleeds to the edge
+uses `bleed bleed-pad`, which read the gutter; the settings nav hard-coded `-mx-4` and stopped 16px
+short of the edge on a desktop. `tools/qa` measures none of this, so it was measured by hand: every
+route at 390 and 1280, the first content's inset and the title's box.
 
 **Shape is crisp**: `rounded-control` (8px) for buttons, chips, icon buttons and inputs,
 `rounded-tile` (10px) for rows and tiles, `rounded-panel` (14px) for cards, `rounded-hero` (16px)

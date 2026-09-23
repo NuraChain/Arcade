@@ -1,6 +1,7 @@
 import { useHead, useNavigate } from 'azerothjs';
 
 import Page from '../../components/app/page.component.azeroth';
+import PageHeader from '../../components/app/page-header.component.azeroth';
 import FriendRow from '../../components/social/friend-row.component.azeroth';
 import GroupCard from '../../components/social/group-card.component.azeroth';
 import GroupForm from '../../components/social/group-form.component.azeroth';
@@ -121,10 +122,7 @@ export default component FriendsPage()
             presence.refresh();
         } }
     >
-        <header class="pb-4">
-            <h1 class="title text-ui-3xl">{ locale.t('app.nav.friends') }</h1>
-            <p class="mt-2 text-ui-md text-muted">{ locale.t('friends.lead') }</p>
-        </header>
+        <PageHeader title={ locale.t('app.nav.friends') } lead={ locale.t('friends.lead') } />
 
         <Tabs
             items={ items }

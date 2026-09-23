@@ -1,6 +1,7 @@
 import { useHead, useNavigate } from 'azerothjs';
 
 import Page from '../../components/app/page.component.azeroth';
+import PageHeader from '../../components/app/page-header.component.azeroth';
 import FriendRow from '../../components/social/friend-row.component.azeroth';
 import LanguageSwitch from '../../components/layout/language-switch.component.azeroth';
 import Panel from '../../components/ui/panel.component.azeroth';
@@ -150,14 +151,11 @@ export default component SettingsPage()
     }
 
     <Page label={ locale.t('settings.title') }>
-        <header class="flex flex-col gap-1 pb-5">
-            <h1 class="title text-ui-3xl">{ locale.t('settings.title') }</h1>
-            <p class="text-ui-base text-muted">{ locale.t('settings.lead') }</p>
-        </header>
+        <PageHeader title={ locale.t('settings.title') } lead={ locale.t('settings.lead') } />
 
         <div class="@container">
             <div class="flex flex-col gap-6 @4xl:grid @4xl:grid-cols-[13rem_minmax(0,1fr)] @4xl:items-start @4xl:gap-8">
-                <nav ref={ (element) => nav = element } class="rail-x sticky top-0 z-10 -mx-4 flex gap-1.5 border-b border-line bg-void/90 px-4 py-2 backdrop-blur-md @4xl:mx-0 @4xl:flex-col @4xl:gap-0.5 @4xl:overflow-visible @4xl:border-0 @4xl:bg-transparent @4xl:px-0 @4xl:py-0 @4xl:backdrop-blur-none" aria-label={ locale.t('settings.sections') }>
+                <nav ref={ (element) => nav = element } class="rail-x bleed bleed-pad sticky top-0 z-10 flex gap-1.5 border-b border-line bg-void/90 py-2 backdrop-blur-md @4xl:mx-0 @4xl:flex-col @4xl:gap-0.5 @4xl:overflow-visible @4xl:border-0 @4xl:bg-transparent @4xl:px-0 @4xl:py-0 @4xl:backdrop-blur-none" aria-label={ locale.t('settings.sections') }>
                     <For each={ [...SECTIONS] } key={ (section) => section.id } let={ section }>
                         <button
                             type="button"

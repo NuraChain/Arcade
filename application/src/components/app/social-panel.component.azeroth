@@ -46,7 +46,7 @@ export default component SocialPanel()
         }
     };
 
-    <aside class="flex min-h-0 w-[var(--social-w)] shrink-0 flex-col gap-7 overflow-y-auto border-s border-line bg-void px-4 py-5" aria-label={ locale.t('shell.panel') }>
+    <aside class="flex min-h-0 w-[var(--social-w)] shrink-0 flex-col gap-7 overflow-y-auto border-s border-line bg-void px-4 py-6" aria-label={ locale.t('shell.panel') }>
         <section aria-labelledby="panel-activity">
             <SectionHeading id="panel-activity" title={ locale.t('shell.activity') } more={ locale.t('common.seeAll') } to="/app/notifications" class="mb-1" />
             <Show

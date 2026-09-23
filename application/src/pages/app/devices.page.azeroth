@@ -3,6 +3,7 @@ import { useHead } from 'azerothjs';
 import DeviceRow from '../../components/app/device-row.component.azeroth';
 import KeyNotice from '../../components/app/key-notice.component.azeroth';
 import Page from '../../components/app/page.component.azeroth';
+import PageHeader from '../../components/app/page-header.component.azeroth';
 import RecoveryPanel from '../../components/app/recovery-panel.component.azeroth';
 import Button from '../../components/ui/button.component.azeroth';
 import EmptyState from '../../components/ui/empty-state.component.azeroth';
@@ -53,10 +54,7 @@ export default component DevicesPage()
     }
 
     <Page width="narrow" label={ locale.t('devices.title') } onRefresh={ () => void devices.refresh() }>
-        <header class="pb-4">
-            <h1 class="title text-ui-3xl">{ locale.t('devices.title') }</h1>
-            <p class="mt-2 text-ui-md text-muted">{ locale.t('devices.lead') }</p>
-        </header>
+        <PageHeader title={ locale.t('devices.title') } lead={ locale.t('devices.lead') } />
 
         <div class="flex flex-col gap-6">
             <KeyNotice state={ devices.readiness() }>

@@ -1,6 +1,7 @@
 import { useHead, useNavigate } from 'azerothjs';
 
 import Page from '../../components/app/page.component.azeroth';
+import PageHeader from '../../components/app/page-header.component.azeroth';
 import GameGrid from '../../components/games/game-grid.component.azeroth';
 import GroupCard from '../../components/social/group-card.component.azeroth';
 import EmptyState from '../../components/ui/empty-state.component.azeroth';
@@ -56,10 +57,7 @@ export default component DiscoverPage()
             catalogue.refresh();
         } }
     >
-        <header class="pb-5">
-            <h1 class="title text-ui-3xl">{ locale.t('app.nav.discover') }</h1>
-            <p class="mt-2 text-ui-md text-muted">{ locale.t('discover.lead') }</p>
-        </header>
+        <PageHeader title={ locale.t('app.nav.discover') } lead={ locale.t('discover.lead') } />
 
         <div class="flex flex-col gap-8">
             <section>

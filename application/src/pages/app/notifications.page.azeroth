@@ -2,6 +2,7 @@ import LoadMore from '../../components/ui/load-more.component.azeroth';
 import { useHead, useNavigate } from 'azerothjs';
 
 import Page from '../../components/app/page.component.azeroth';
+import PageHeader from '../../components/app/page-header.component.azeroth';
 import NotificationRow from '../../components/social/notification-row.component.azeroth';
 import Button from '../../components/ui/button.component.azeroth';
 import EmptyState from '../../components/ui/empty-state.component.azeroth';
@@ -46,15 +47,13 @@ export default component NotificationsPage()
     };
 
     <Page label={ locale.t('app.nav.notifications') } onRefresh={ () => presence.refresh() }>
-        <header class="flex flex-wrap items-end justify-between gap-3 pb-4">
-            <div>
-                <h1 class="title text-ui-3xl">{ locale.t('app.nav.notifications') }</h1>
-                <p class="mt-2 text-ui-md text-muted">{ locale.t('notifications.lead') }</p>
-            </div>
-            <Show when={ notifications.unread() > 0 }>
-                { () => <Button variant="ghost" size="sm" leading="check-circle" onClick={ () => void notifications.markAllRead() }>{ locale.t('notifications.markAll') }</Button> }
-            </Show>
-        </header>
+        <PageHeader
+            title={ locale.t('app.nav.notifications') }
+            lead={ locale.t('notifications.lead') }
+            actions={ notifications.unread() > 0
+                ? <Button variant="ghost" size="sm" leading="check-circle" onClick={ () => void notifications.markAllRead() }>{ locale.t('notifications.markAll') }</Button>
+                : undefined }
+        />
 
         <Show
             when={ items.length > 0 }

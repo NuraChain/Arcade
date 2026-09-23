@@ -1,6 +1,7 @@
 import { useHead } from 'azerothjs';
 
 import Page from '../../components/app/page.component.azeroth';
+import PageHeader from '../../components/app/page-header.component.azeroth';
 import ChatList from '../../components/chat/chat-list.component.azeroth';
 import Icon from '../../icons/icon.component.azeroth';
 import { useChat } from '../../stores/chat.store.ts';
@@ -30,10 +31,7 @@ export default component ChatsPage()
                     presence.refresh();
                 } }
             >
-                <header class="pb-4">
-                    <h1 class="title text-ui-3xl">{ locale.t('app.nav.chats') }</h1>
-                    <p class="mt-2 text-ui-md text-muted">{ locale.t('chats.lead') }</p>
-                </header>
+                <PageHeader title={ locale.t('app.nav.chats') } lead={ locale.t('chats.lead') } />
                 <ChatList />
             </Page>
         }
