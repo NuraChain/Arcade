@@ -271,6 +271,7 @@
         "tables.seats smallint NO -",
         "tables.status character varying NO 'open'::character varying",
         "tables.target smallint NO '0'::smallint",
+        "tables.voice boolean NO -",
         "user_achievements.achievement_id character varying NO -",
         "user_achievements.earned_at timestamp with time zone NO now()",
         "user_achievements.match_id uuid YES -",

@@ -71,6 +71,9 @@ export class Table
     @Column({ type: 'boolean' })
     chat!: boolean;
 
+    @Column({ type: 'boolean' })
+    voice!: boolean;
+
     @Column({ type: 'varchar', length: 16, default: 'open' })
     status!: TableStatus;
 
