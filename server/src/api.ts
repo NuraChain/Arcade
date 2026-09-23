@@ -4,12 +4,13 @@ import { feature, reply } from '@azerothjs/http/api';
 import { clearSessionCookie, requireSession, sessionCookie } from './http/auth.ts';
 import type { Ports } from './ports.ts';
 import {
-    achievementList,
+    achievementLadder,
     leaderboard,
     leaderboardQuery,
     liveCounts,
     matchHistory,
     personRecord,
+    ladderQuery,
     ack,
     answerInput,
     chatMessage,
@@ -142,12 +143,6 @@ export function buildApi(ports: Ports)
              * too, and nothing here is anyone's private data.
              */
             games: routes.get('/games', { output: gameList }, () => ports.catalogue.games()),
-
-            achievements: routes.get(
-                '/achievements',
-                { output: achievementList },
-                () => ports.catalogue.achievements()
-            ),
 
             /** What is actually being played. Counted from open tables, never simulated. */
             live: routes.get('/live', { output: liveCounts }, () => ports.catalogue.live()),
@@ -368,6 +363,18 @@ export function buildApi(ports: Ports)
                 if (found === null)
                 {
                     throw new NotFoundError('No account with that name.');
+                }
+
+                return found;
+            }),
+
+            ladder: routes.get('/people/:handle/achievements/:family', { output: achievementLadder, query: ladderQuery }, async (context) =>
+            {
+                const found = await ports.match.ladder(context.params.handle, context.query.game ?? null, context.params.family);
+
+                if (found === null)
+                {
+                    throw new NotFoundError('No such achievements.');
                 }
 
                 return found;

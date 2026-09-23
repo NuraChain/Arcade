@@ -94,7 +94,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
     const chat = createChatService(db, social, franking);
     const group = createGroupService(db, social);
     const achieve = createAchieveService(db);
-    const table = createTableService(db, social, achieve);
+    const table = createTableService(db, social);
     const notify = createNotifyService(db, social);
 
     /**
@@ -1742,6 +1742,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             history: (me, cursor) => match.history(me, cursor),
 
             record: (handle) => achieve.recordOf(handle),
+            ladder: (handle, game, family) => achieve.ladderOf(handle, game, family),
 
             leaderboard: (game, window, after) => achieve.leaderboardOf(game, window, after),
 

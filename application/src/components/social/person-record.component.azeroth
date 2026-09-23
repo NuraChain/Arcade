@@ -1,8 +1,9 @@
 import LoadMore from '../ui/load-more.component.azeroth';
+import AchievementFamilyCard from './achievement-family.component.azeroth';
 import AchievementTile from './achievement-tile.component.azeroth';
-import GameIcon from '../games/game-icon.component.azeroth';
-import Icon from '../../icons/icon.component.azeroth';
+import FilterBar from '../ui/filter-bar.component.azeroth';
 import type { GameId } from '../../data/games.ts';
+import type { AchievementFamily } from '../../api.ts';
 import RecordStrip from './record-strip.component.azeroth';
 import Button from '../ui/button.component.azeroth';
 import EmptyState from '../ui/empty-state.component.azeroth';
@@ -12,6 +13,7 @@ import SectionHeading from '../ui/section-heading.component.azeroth';
 import Skeleton from '../ui/skeleton.component.azeroth';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
+import { useOverlay } from '../../stores/overlay.store.ts';
 import { usePeople } from '../../stores/people.store.ts';
 import { useRecord } from '../../stores/record.store.ts';
 
@@ -23,6 +25,7 @@ export default component PersonRecord(props: { handle: string; history?: boolean
     const record = useRecord();
     const people = usePeople();
     const catalogue = useCatalogue();
+    const overlay = useOverlay();
 
     mount
     {
@@ -44,18 +47,36 @@ export default component PersonRecord(props: { handle: string; history?: boolean
 
     derived games = (held?.games ?? []).filter((row) => props.game === undefined || row.game === props.game);
 
-    derived achievements = (held?.achievements ?? []).filter((one) => props.game === undefined || one.game === props.game);
+    derived summary = held?.achievements ?? null;
 
-    derived groups = ((): { game: string; items: typeof achievements }[] =>
+    state picked = 'all';
+
+    derived scope = props.game ?? picked;
+
+    derived families = (summary?.families ?? []).filter((one) => (one.game ?? 'all') === scope);
+
+    derived scopes = (summary?.scopes ?? []).filter((one) => props.game === undefined || one.game === props.game);
+
+    derived earned = scopes.reduce((total, one) => total + one.earned, 0);
+
+    derived total = scopes.reduce((sum, one) => sum + one.total, 0);
+
+    derived recent = props.game === undefined ? (summary?.recent ?? []).slice(0, 6) : [];
+
+    derived choices = (summary?.scopes ?? []).map((one) => ({
+        id: one.game ?? 'all',
+        label: one.game === undefined ? locale.t('achievements.everywhere') : locale.t(catalogue.byId(one.game as GameId).nameKey),
+        count: one.earned
+    }));
+
+    const openLadder = (family: AchievementFamily): void =>
     {
-        const order = ['', ...new Set(achievements.flatMap((one) => one.game === undefined ? [] : [one.game]))];
-
-        return order
-            .map((game) => ({ game, items: achievements.filter((one) => (one.game ?? '') === game) }))
-            .filter((group) => group.items.length > 0);
-    })();
-
-    derived earned = achievements.filter((one) => one.earnedAt !== undefined).length;
+        void import('./achievement-ladder-sheet.component.azeroth').then((module) => overlay.open(
+            module.default,
+            { handle: props.handle, family },
+            { label: locale.text(family.name) }
+        ));
+    };
 
     const nameOf = (handle: string): string =>
     {
@@ -100,33 +121,34 @@ export default component PersonRecord(props: { handle: string; history?: boolean
             </section>
         </Show>
 
-        <Show when={ achievements.length > 0 && parts.includes('achievements') }>
+        <Show when={ summary !== null && parts.includes('achievements') }>
             { () =>
                 <section>
                     <SectionHeading
                         title={ locale.t('achievements.title') }
-                        actions={ <span class="text-ui-xs text-muted"><span class="tally font-semibold text-text">{ locale.n(earned) }</span> { locale.plural('achievements.earned', earned) }</span> }
+                        actions={ <span class="text-ui-xs text-muted"><span class="tally font-semibold text-text">{ locale.n(earned) }</span> { locale.t('achievements.of', { total: locale.n(total) }) }</span> }
                     />
                     <div class="flex flex-col gap-4">
-                        <For each={ groups } key={ (group) => group.game } let={ group }>
-                            <div class="flex flex-col gap-2">
-                                <Show when={ props.game === undefined }>
-                                    { () =>
-                                        <p class="flex items-center gap-2 text-ui-xs font-semibold text-muted">
-                                            <Show when={ group.game !== '' } fallback={ <Icon name="sparkles" size={ 14 } class="text-accent" /> }>
-                                                { () => <GameIcon game={ group.game as GameId } class="h-5 w-5" /> }
-                                            </Show>
-                                            <span>{ group.game === '' ? locale.t('achievements.everywhere') : locale.t(catalogue.byId(group.game as GameId).nameKey) }</span>
-                                        </p>
-                                    }
-                                </Show>
-                                <ul class={ props.game === undefined ? 'grid gap-2 @xl:grid-cols-2 @4xl:grid-cols-3' : 'grid gap-2' }>
-                                    <For each={ group.items } key={ (one) => one.id } let={ one }>
-                                        <li class="min-w-0"><AchievementTile achievement={ one } /></li>
-                                    </For>
-                                </ul>
-                            </div>
-                        </For>
+                        <Show when={ recent.length > 0 }>
+                            { () =>
+                                <div class="flex flex-col gap-2">
+                                    <p class="text-ui-xs font-semibold text-muted">{ locale.t('achievements.recent') }</p>
+                                    <ul class="divide-y divide-line rounded-panel border border-line bg-field">
+                                        <For each={ recent } key={ (one) => one.id } let={ one }>
+                                            <li class="min-w-0"><AchievementTile achievement={ one } /></li>
+                                        </For>
+                                    </ul>
+                                </div>
+                            }
+                        </Show>
+                        <Show when={ props.game === undefined }>
+                            { () => <FilterBar items={ choices } value={ picked } label={ locale.t('achievements.scopes') } onChange={ (id) => picked = id } /> }
+                        </Show>
+                        <ul class="grid gap-2 @xl:grid-cols-2 @4xl:grid-cols-3">
+                            <For each={ families } key={ (one) => `${ one.game ?? 'all' }-${ one.id }` } let={ one }>
+                                <li class="min-w-0"><AchievementFamilyCard family={ one } onOpen={ openLadder } /></li>
+                            </For>
+                        </ul>
                     </div>
                 </section>
             }

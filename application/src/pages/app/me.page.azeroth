@@ -89,7 +89,7 @@ export default component MePage()
     derived stats = [
         { label: locale.t('profile.stat.friends'), value: social.friends().length },
         { label: locale.t('profile.stat.games'), value: (held?.games ?? []).reduce((sum, one) => sum + one.played, 0) },
-        { label: locale.t('profile.stat.achievements'), value: (held?.achievements ?? []).filter((one) => one.earnedAt !== undefined).length }
+        { label: locale.t('profile.stat.achievements'), value: (held?.achievements.scopes ?? []).reduce((total, one) => total + one.earned, 0) }
     ];
 
     derived connected = live.status() === 'connected';

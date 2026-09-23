@@ -1,34 +1,25 @@
 import Icon from '../../icons/icon.component.azeroth';
 import type { IconName } from '../../icons/registry.ts';
 import { useLocale } from '../../stores/locale.store.ts';
-import type { EarnedAchievement } from '../../api.ts';
+import type { AchievementTier } from '../../api.ts';
+import type { LocalizedText } from '../../lib/text.ts';
 
-/**
- * One achievement, earned or not.
- *
- * The unearned ones are shown, deliberately: an achievement nobody can see is one nobody can play
- * towards, and a grid that holds only what has been won makes a new account's empty profile look
- * identical to a request that failed. They are dimmed rather than hidden, and the blurb - which is
- * the instruction - stays legible either way.
- *
- * The icon is a name in the CLIENT's registry, exactly like a group crest: the server sends a
- * string, `Icon` takes an `IconName`, and a value from a newer server draws something rather than
- * a blank square. Nothing here renders a glyph the OS draws.
- */
+export interface Medal
+{
+    name: LocalizedText;
+    blurb: LocalizedText;
+    icon: string;
+    tier: AchievementTier;
+    earnedAt?: string;
+}
 
-export default component AchievementTile(props: { achievement: EarnedAchievement })
+export default component AchievementTile(props: { achievement: Medal; class?: string })
 {
     const locale = useLocale();
 
     derived earned = props.achievement.earnedAt !== undefined;
 
-    <div
-        class={ () => [
-            'flex items-center gap-3 rounded-tile border p-3',
-            earned ? 'border-line bg-field' : 'border-line/70 bg-field/50'
-        ].join(' ') }
-        aria-label={ locale.text(props.achievement.name) }
-    >
+    <div class={ [ 'flex items-center gap-3 p-3', props.class ?? '' ].join(' ') }>
         <span class="medal" data-tier={ earned ? props.achievement.tier : 'locked' } aria-hidden="true">
             <Icon name={ props.achievement.icon as IconName } size={ 20 } />
         </span>
@@ -38,23 +29,6 @@ export default component AchievementTile(props: { achievement: EarnedAchievement
                 { locale.text(props.achievement.name) }
             </p>
             <p class="text-ui-2xs text-muted">{ locale.text(props.achievement.blurb) }</p>
-            <Show when={ !earned && props.achievement.progress !== undefined }>
-                { () =>
-                    <div class="mt-2 flex items-center gap-2">
-                        <span
-                            class="h-1.5 flex-1 overflow-hidden rounded-full bg-sunk"
-                            role="progressbar"
-                            aria-valuemin={ 0 }
-                            aria-valuemax={ props.achievement.progress!.need }
-                            aria-valuenow={ props.achievement.progress!.have }
-                            aria-label={ locale.text(props.achievement.name) }
-                        >
-                            <span class="block h-full rounded-full bg-accent" style={ `width: ${ (props.achievement.progress!.have / props.achievement.progress!.need) * 100 }%` }></span>
-                        </span>
-                        <span class="tally shrink-0 text-ui-2xs font-semibold text-muted">{ locale.n(props.achievement.progress!.have) }/{ locale.n(props.achievement.progress!.need) }</span>
-                    </div>
-                }
-            </Show>
         </div>
 
         <Show
@@ -67,9 +41,12 @@ export default component AchievementTile(props: { achievement: EarnedAchievement
             }
         >
             { () =>
-                <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-live/15 text-live">
-                    <Icon name="selected" size={ 14 } />
-                    <span class="sr-only">{ locale.t('achievements.earnedOne') }</span>
+                <span class="flex shrink-0 flex-col items-end gap-1">
+                    <span class="flex h-7 w-7 items-center justify-center rounded-full bg-live/15 text-live">
+                        <Icon name="selected" size={ 14 } />
+                        <span class="sr-only">{ locale.t('achievements.earnedOne') }</span>
+                    </span>
+                    <span class="text-ui-2xs text-faint">{ locale.date(new Date(props.achievement.earnedAt!), { dateStyle: 'medium' }) }</span>
                 </span>
             }
         </Show>

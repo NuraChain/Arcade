@@ -1,6 +1,6 @@
 import type { Principal } from './http/auth.ts';
 import type {
-    AchievementList,
+    AchievementLadder,
     VoiceIce,
     Leaderboard,
     MatchWatch,
@@ -72,7 +72,6 @@ export interface CataloguePort
     games(): Promise<GameList>;
 
     /** Every achievement definition, in display order. Who has earned what is a different port. */
-    achievements(): Promise<AchievementList>;
 
     /**
      * How many people are at a table of each game right now, counted.
@@ -483,6 +482,7 @@ export interface MatchPort
 
     /** A person's record and their standing against every achievement. */
     record(handle: string): Promise<PersonRecord | null>;
+    ladder(handle: string, game: string | null, family: string): Promise<AchievementLadder | null>;
 
     /** The best ratings at one game, among people who have played enough games to have one. */
     /** `after` is the last rank already shown, so a page continues the numbering rather than restarting. */

@@ -192,6 +192,12 @@ export const ludoEngine: Engine<LudoState, EngineAction> = {
             const tally = bySeat.get(seat) ?? {};
 
             tally[name] = (tally[name] ?? 0) + 1;
+
+            if (event.e === 'roll' && event.die === 6)
+            {
+                tally.sixes = (tally.sixes ?? 0) + 1;
+            }
+
             bySeat.set(seat, tally);
         }
 
@@ -217,6 +223,7 @@ const XP_HOME = 3;
  */
 const NAMED: Partial<Record<GameEvent['e'], string>> = {
     roll: 'rolls',
+    enter: 'enters',
     capture: 'captures',
     home: 'home'
 };

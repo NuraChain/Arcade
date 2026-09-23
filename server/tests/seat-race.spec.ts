@@ -1,5 +1,4 @@
 import { seedReference } from '../src/db/seed-reference.ts';
-import { createAchieveService } from '../src/domains/achieve/service.ts';
 import 'reflect-metadata';
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -83,10 +82,8 @@ describe.skipIf(!active)('claiming a seat, against a real database', () =>
         /**
          * Reference data, seeded the way a real database has it.
          *
-         * `first-seat` is awarded inside the seat claim, and `user_achievements.achievement_id` is
-         * a foreign key - so a database with no definitions in it refuses every claim with a 23503
-         * that looks nothing like a seating bug. A real one runs this on every boot; a test one
-         * that does not is a test database shaped differently from the thing it is standing in for.
+         * A real database runs this on every boot, and a test one that does not is a test
+         * database shaped differently from the thing it is standing in for.
          */
         await seedReference(db);
 
@@ -116,7 +113,7 @@ describe.skipIf(!active)('claiming a seat, against a real database', () =>
         await db.query('truncate conversations cascade');
         await db.query('delete from users');
         social = createSocialService(db);
-        tables = createTableService(db, social, createAchieveService(db));
+        tables = createTableService(db, social);
     });
 
     it('seats the host in chair zero and leaves the rest empty', async () =>

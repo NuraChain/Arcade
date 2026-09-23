@@ -170,7 +170,8 @@ export const server =
      */
     live: [] as { game: string; playing: number; tables: number }[],
     games: [] as unknown[],
-    achievements: [] as unknown[],
+    achievements: { scopes: [], families: [], recent: [] } as unknown,
+    ladders: {} as Record<string, unknown>,
 
     /** A game's leaderboard. Empty by default, which is what a game nobody has played looks like. */
     standings: [] as { handle: string; rating: number; played: number; won: number }[],
@@ -334,7 +335,8 @@ export const server =
     reset(): void
     {
         server.games = [];
-        server.achievements = [];
+        server.achievements = { scopes: [], families: [], recent: [] };
+        server.ladders = {};
         server.groups = GROUP_FIXTURES.map((group) => ({
             id: group.slug,
             slug: group.slug,
@@ -603,11 +605,6 @@ export const client =
         {
             server.calls.push('catalogue.games');
             return { games: server.games };
-        },
-        async achievements()
-        {
-            server.calls.push('catalogue.achievements');
-            return { achievements: [] };
         },
         async live()
         {
@@ -1485,6 +1482,19 @@ export const client =
         {
             server.calls.push('social.record');
             return { handle: params.handle, games: [], achievements: server.achievements };
+        },
+
+        async ladder({ params, query }: { params: { handle: string; family: string }; query: { game?: string } })
+        {
+            server.calls.push('social.ladder');
+            const found = server.ladders[`${ query.game ?? 'all' }-${ params.family }`];
+
+            if (found === undefined)
+            {
+                throw new ApiError(404, 'not-found', 'No such achievements.', undefined);
+            }
+
+            return found;
         },
 
         async person({ params }: { params: { handle: string } })

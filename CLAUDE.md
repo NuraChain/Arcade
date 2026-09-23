@@ -1338,13 +1338,13 @@ make sense within one game; `Engine.tally(events)` folds the ledger, which also 
 the engine's own tests with no Postgres near it.
 
 **Achievements read tallies BY NAME, so an engine's tally keys are a contract with
-`achieve/rules.ts`.** `ludo-hunter` reads `captures`, `ludo-homecoming` reads `home`, and hokm's
-three read `tricks`, `hands` and `kots`. Renaming a counter means changing both files in one commit,
-because a rename made on one side leaves a tile at 0/40 for everybody and nothing throws.
-`rating.spec.ts` folds REAL engine events through `Engine.tally` and then through the rules, which is
-what fails when the two disagree; a fixture of literal `{ captures, home }` agrees with the rules
-whatever the engine calls them. The rating never reads a tally, and XP reads one only through the
-engine's own `points`.
+`achieve/families.ts`.** A tally family names its counter - ludo's `rolls sixes captures home
+enters`, hokm's `hands tricks kots trumps`, backgammon's `games gammons backgammons hits borneOff`,
+poker's `hands pots showdowns knockouts` - and renaming one on either side leaves a whole ladder at
+zero for everybody with nothing throwing. `ladders.spec.ts` plays every engine to the end thirty
+times per seat count with random legal moves and fails if a family names a counter the engine never
+produced; a fixture of literal counters would agree with the families whatever the engine calls
+them. The rating never reads a tally, and XP reads one only through the engine's own `points`.
 
 **A jsonb counter cannot be incremented the way an integer one can**, and this is the trap. Postgres
 has no operator that adds two jsonb objects of numbers: `||` REPLACES a key, so two games finishing
@@ -2627,44 +2627,52 @@ write Postgres refuses after a match has finished strands the match rather than 
 Taking it from the new rating alone recorded a personal best of 1184 for a player who had never been
 below 1200 in their life.
 
-**Nine achievements, and three were deleted for the reason every unproduced thing here is deleted.**
-`hokm-trump`, `gammon` and `cube-taker` describe naming trump, bearing off and taking a double -
-mechanics of games this product does not have - so nothing could ever award them. They were tiles
-somebody would have spent a season trying to earn. `achieve/rules.ts` is pure and `rating.spec.ts`
-fails if the seed and the rule set ever name different things; `seed-reference.ts` now DELETES any
-definition it no longer carries, because reference content that can only be added to is how a
-database ends up holding a tile nobody remembers writing.
+**Five thousand achievements, and every one of them is a threshold over something a finished match
+records.** A thousand per game and a thousand across every game, because the owner asked for them -
+and a thousand invented sentences would break the rule every unproduced tile here was deleted for.
+So they are LADDERS: `achieve/families.ts` declares families (played, won, XP, peak rating, best
+streak, distinct days, played and won at each seat count and each pace, and each engine's tallies;
+across games, the same plus level, tables hosted to the end, distinct opponents, wins at four or more,
+turn-based, live and two-player wins), and `ladders.ts` turns each into steps - one by one to twenty,
+then by round numbers - so a scope sums to exactly 1,000 and `ladders.spec.ts` holds the count. A
+family that could never be climbed at a game is not generated for it: no four-player backgammon, no
+turn-based poker, and the spec compares every seat count and pace against the game's seed. Tiers
+follow position in a ladder - bronze, silver, gold, platinum, diamond - and `.medal` has all five
+metals. An id is `<game|all>-<family>-<step>`, stable while a ladder only grows at the end.
 
-**Every game has achievements of its own, and a rule says which game rather than a column.**
-Seventeen now: the nine every game shares, and four each for Ludo (a first win, twenty-five captures,
-forty tokens home, twenty-five wins) and Hokm (a first hand, a kot, a hundred tricks, twenty-five
-wins). Hokm's kot is the sweep `hokm-trump` described, back now that there is a hokm engine whose
-tally counts it. Which game an achievement belongs to is the RULE's knowledge - it is the thing that
-reads that game's tallies - so `ACHIEVEMENT_GAME` is derived from the rules and travels on the wire
-as `game`; a column beside it would be a second copy free to disagree with the rule that awards it.
+**The seventeen hand-written achievements are gone, and so is `first-seat`.** Each of the rest is a
+rung now (a first win is `won 1`), and "sat down at a table" had nothing to count once a seat is
+taken and left - and it was the only thing awarded outside a finish, so the table service no longer
+knows achievements exist. Friends and groups are not counted either: a public record that published
+how many friends somebody has would be a second copy of the social graph, the thing E2EE already
+cannot hide.
 
-**A rule answers progress, and earned is progress reaching its need.** `progressOf` feeds the bar
-on an unearned tile ("12/25") and `earnedBy` is the same arithmetic asked a yes-or-no question, so
-the bar cannot say full while the tile says locked. A flag - seated, hosted, crew - is a need of one
-and draws no bar. The facts are read back from `player_stats` inside the transaction that finished
-the match, after the counters were added, and `played`, `won` and `abandoned` are totals across
-every game: "a hundred games played" meant a hundred of one game for as long as the facts were the
-row of the game that just ended.
+**The definitions are GENERATED, and the table exists for the foreign key.** `seed-reference.ts`
+upserts all five thousand in one `insert ... select unnest(...)` per boot and deletes any id no
+longer generated, because reference content that can only be added to is how a database ends up
+holding a tile nobody remembers writing. Everything a read needs - scope, family, step, need - comes
+from the same generated list in memory rather than from columns that could disagree with it. Names
+and blurbs are stored as text in both languages, and `achievements_translated` refuses a blank one:
+a half-translated medal would put an English sentence inside a Persian page.
 
-**Awarding re-evaluates everything and lets the primary key dedupe.** `earnedBy` answers what the
-record deserves rather than what has changed, so a retried action, a replayed idempotency key and a
-reconnect all converge on the same `on conflict do nothing` rows. A "what is new since last time"
-version would have to be right about last time.
+**Awarding re-evaluates everything and lets the primary key dedupe.** At a finish, `record` reads the
+facts for the game that ended and for everywhere, works out every rung they reach, and inserts them
+with `on conflict do nothing`. It answers what the record deserves rather than what has changed, so a
+retried action, a replayed idempotency key and a reconnect converge on the same rows. Every fact only
+grows, so what is held and what the facts reach agree between finishes, and a family's bar cannot say
+full while its next rung says locked.
 
-**`first-seat` is earned by sitting down**, in the table domain, inside the transaction that seats
-somebody. Awarding it at the end of a match would mean a person who took a chair and never got to
-play had not, according to the product, ever sat at a table.
+**Four facts are questions rather than counters.** Played and won by seat count and pace, distinct
+days, distinct opponents and tables hosted to the end are asked of `match_players`, `matches` and
+`tables` at the finish - once per game - through QueryBuilders; `grouping sets ((m.game), ())`
+answers each game's days and everywhere's in one read. A `distinct days` column would be a number that
+has to be right on every write forever; this is right by construction every time it is asked.
 
-**Three facts are questions rather than counters.** "Seven different days", "a private table you
-filled" and "the same three people ten times" are questions about the shape of a history, answered
-by one FROM-less select of correlated sub-queries at the end of a match - which happens once per
-game. A `distinct days` column would be a number that has to be right on every write forever; this
-is right by construction every time it is asked.
+**Five thousand tiles is not a page, so the wire speaks FAMILIES.** A person's record carries each
+scope's earned and total, each family's counter, rungs earned, top tier and next rung, and the twelve
+most recent medals; `GET /social/people/:handle/achievements/:family?game=` is one family's whole
+ladder, fetched when its card is opened. The profile shows the recent medals and a chip per scope
+over the family cards; a game page shows that game's families and nothing else.
 
 **A RECORD is anybody's to read and a HISTORY is your own.** The aggregate is what a profile has
 always shown. A list of the games somebody sat at, with who else was there and when, is a

@@ -184,6 +184,11 @@ export const hokmEngine: Engine<HokmState, HokmAction> = {
                 bump(event.seat, 'tricks');
             }
 
+            if (event.e === 'trump')
+            {
+                bump(event.seat, 'trumps');
+            }
+
             if (event.e === 'hand')
             {
                 for (const seat of event.seats)

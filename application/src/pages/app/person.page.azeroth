@@ -67,7 +67,7 @@ export default component PersonPage()
     derived stats = [
         { label: locale.t('profile.stat.games'), value: (held?.games ?? []).reduce((sum, one) => sum + one.played, 0) },
         { label: locale.t('profile.stat.wins'), value: (held?.games ?? []).reduce((sum, one) => sum + one.won, 0) },
-        { label: locale.t('profile.stat.achievements'), value: (held?.achievements ?? []).filter((one) => one.earnedAt !== undefined).length }
+        { label: locale.t('profile.stat.achievements'), value: (held?.achievements.scopes ?? []).reduce((total, one) => total + one.earned, 0) }
     ];
 
     const play = (): void =>

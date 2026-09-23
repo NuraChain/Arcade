@@ -1,66 +1,224 @@
-import type { DataSource, EntityManager } from 'typeorm';
+import { In, type DataSource, type EntityManager } from 'typeorm';
 
-import { Achievement, Match, MatchPlayer, PlayerStats, User, UserAchievement } from '../../entities/index.ts';
-import type { Leaderboard, LeaderboardWindow, PersonRecord, Standing } from '../../schemas.ts';
-import { ACHIEVEMENT_GAME, earnedBy, progressOf, type AchievementFacts } from './rules.ts';
+import { Match, MatchPlayer, PlayerStats, Table, User, UserAchievement } from '../../entities/index.ts';
+import type { AchievementFamily, AchievementLadder, AchievementSummary, EarnedAchievement, Leaderboard, LeaderboardWindow, PersonRecord, Standing } from '../../schemas.ts';
+import { GAME_FAMILIES, RUNGS, familiesOf } from './families.ts';
+import { measure, reached, rungId, scopeOf, type Family, type GlobalFacts, type LadderFacts, type Pace, type Rung } from './ladders.ts';
 import { levelOf } from '../match/levels.ts';
 
-/**
- * Awarding, and the three facts a rule needs that a stats row cannot hold.
- *
- * Everything in `player_stats` is a running total something already maintains. These are not:
- * "seven different days", "a private table you filled" and "the same three people ten times" are
- * questions about the shape of a history, and the honest way to answer them is to ask the history.
- * One query per player at the end of a match - the FROM-less select of correlated sub-queries this
- * server already uses elsewhere, so three truths arrive as one row rather than three round trips.
- *
- * It runs on a FINISH, which is once per game. That is the whole reason it can afford to be a
- * question rather than a counter: a counter for "distinct days" would be a column that has to be
- * right on every write forever, and this is right by construction every time it is asked.
- */
-
-interface HistoryFacts
+interface Facts
 {
-    days: number;
-    hosted: boolean;
-    crew: boolean;
+    games: ReadonlyMap<string, LadderFacts>;
+    global: GlobalFacts;
 }
 
-const HISTORY = `
-    select
-        (select count(distinct ((m.finished_at at time zone 'utc')::date))::int
-           from match_players p
-           join matches m on m.id = p.match_id
-          where p.user_id = $1 and p.result is not null)                            as days,
-
-        exists(select 1
-                 from tables t
-                 join matches m on m.table_id = t.id
-                where t.host_id = $1 and t.privacy <> 'public')                     as hosted,
-
-        exists(select 1
-                 from (select array_agg(o.user_id order by o.user_id) as mates
-                         from match_players mine
-                         join matches m on m.id = mine.match_id
-                         join match_players o
-                           on o.match_id = mine.match_id and o.user_id <> mine.user_id
-                        where mine.user_id = $1 and m.seats = 4 and mine.result is not null
-                        group by mine.match_id) grouped
-                group by grouped.mates
-               having count(*) >= 10)                                               as crew
-`;
-
-
-interface StandingRow
+interface SplitRow
 {
-    id: string;
-    name_en: string;
-    name_fa: string;
-    blurb_en: string;
-    blurb_fa: string;
-    icon: string;
-    tier: 'bronze' | 'silver' | 'gold';
-    earned_at: Date | null;
+    game: string;
+    seats: number;
+    mode: Pace;
+    played: number;
+    won: number;
+}
+
+interface DaysRow
+{
+    game: string | null;
+    days: number;
+}
+
+interface HeldRow
+{
+    achievementId: string;
+    earnedAt: Date;
+}
+
+const RUNG_BY_ID: ReadonlyMap<string, Rung> = new Map(RUNGS.map((rung) => [rung.id, rung]));
+
+const SCOPES: readonly (string | null)[] = [null, ...Object.keys(GAME_FAMILIES)];
+
+const RECENT = 12;
+
+const FINISHED = 'p.user_id = :userId and p.result is not null and m.finished_at is not null';
+
+const blank = (): LadderFacts => ({
+    played: 0,
+    won: 0,
+    xp: 0,
+    days: 0,
+    peak: 0,
+    streak: 0,
+    tallies: {},
+    seats: {},
+    pace: { live: { played: 0, won: 0 }, turns: { played: 0, won: 0 } }
+});
+
+async function factsOf(runner: EntityManager, userId: string): Promise<Facts>
+{
+    const stats = await runner.getRepository(PlayerStats).find({ where: { userId } });
+
+    const split = await runner.getRepository(MatchPlayer)
+        .createQueryBuilder('p')
+        .innerJoin(Match, 'm', 'm.id = p.match_id')
+        .innerJoin(Table, 't', 't.id = m.table_id')
+        .select('m.game', 'game')
+        .addSelect('m.seats', 'seats')
+        .addSelect('t.mode', 'mode')
+        .addSelect('count(*)::int', 'played')
+        .addSelect(`count(*) filter (where p.result = 'won' and m.outcome = 'won')::int`, 'won')
+        .where(FINISHED, { userId })
+        .groupBy('m.game')
+        .addGroupBy('m.seats')
+        .addGroupBy('t.mode')
+        .getRawMany<SplitRow>();
+
+    const days = await runner.getRepository(MatchPlayer)
+        .createQueryBuilder('p')
+        .innerJoin(Match, 'm', 'm.id = p.match_id')
+        .select('m.game', 'game')
+        .addSelect(`count(distinct ((m.finished_at at time zone 'utc')::date))::int`, 'days')
+        .where(FINISHED, { userId })
+        .groupBy('grouping sets ((m.game), ())')
+        .getRawMany<DaysRow>();
+
+    const opponents = await runner.getRepository(MatchPlayer)
+        .createQueryBuilder('p')
+        .innerJoin(Match, 'm', 'm.id = p.match_id')
+        .innerJoin(MatchPlayer, 'o', 'o.match_id = p.match_id and o.user_id <> p.user_id')
+        .select('count(distinct o.user_id)::int', 'count')
+        .where(FINISHED, { userId })
+        .getRawOne<{ count: number }>();
+
+    const hosted = await runner.getRepository(Table)
+        .createQueryBuilder('t')
+        .innerJoin(Match, 'm', 'm.table_id = t.id')
+        .select('count(distinct t.id)::int', 'count')
+        .where(`t.host_id = :userId and m.outcome = 'won'`, { userId })
+        .getRawOne<{ count: number }>();
+
+    const games = new Map<string, LadderFacts>();
+    const of = (game: string): LadderFacts =>
+    {
+        const found = games.get(game) ?? blank();
+
+        games.set(game, found);
+
+        return found;
+    };
+
+    for (const row of stats)
+    {
+        Object.assign(of(row.game), {
+            played: row.played,
+            won: row.won,
+            xp: row.xp,
+            peak: row.peakRating,
+            streak: row.bestStreak,
+            tallies: Object.fromEntries(Object.entries(row.tallies ?? {}).map(([name, value]) => [name, Number(value)]))
+        });
+    }
+
+    for (const row of split)
+    {
+        const facts = of(row.game);
+        const seats = facts.seats as Record<number, { played: number; won: number }>;
+        const at = seats[row.seats] ?? { played: 0, won: 0 };
+
+        seats[row.seats] = { played: at.played + row.played, won: at.won + row.won };
+        facts.pace[row.mode].played += row.played;
+        facts.pace[row.mode].won += row.won;
+    }
+
+    for (const row of days)
+    {
+        if (row.game !== null)
+        {
+            of(row.game).days = row.days;
+        }
+    }
+
+    const wins = (keep: (row: SplitRow) => boolean): number => split.filter(keep).reduce((total, row) => total + row.won, 0);
+    const xp = stats.reduce((total, row) => total + row.xp, 0);
+
+    return {
+        games,
+        global: {
+            played: stats.reduce((total, row) => total + row.played, 0),
+            won: stats.reduce((total, row) => total + row.won, 0),
+            xp,
+            level: levelOf(xp).level,
+            days: days.find((row) => row.game === null)?.days ?? 0,
+            hosted: hosted?.count ?? 0,
+            opponents: opponents?.count ?? 0,
+            peak: Math.max(0, ...stats.map((row) => row.peakRating)),
+            streak: Math.max(0, ...stats.map((row) => row.bestStreak)),
+            wonFull: wins((row) => row.seats >= 4),
+            wonTurns: wins((row) => row.mode === 'turns'),
+            wonLive: wins((row) => row.mode === 'live'),
+            wonDuel: wins((row) => row.seats === 2)
+        }
+    };
+}
+
+const valueOf = (facts: Facts, game: string | null, family: Family): number =>
+    measure((game === null ? undefined : facts.games.get(game)) ?? blank(), facts.global, family.metric);
+
+const reachedIn = (facts: Facts, game: string | null): string[] =>
+    familiesOf(game).flatMap((family) =>
+        Array.from({ length: reached(family.steps, valueOf(facts, game, family)) }, (_, index) => rungId(game, family.id, index + 1)));
+
+function summaryOf(facts: Facts, game: string | null, family: Family, held: ReadonlyMap<string, Date>): AchievementFamily
+{
+    const rungs = family.steps.map((_, index) => RUNG_BY_ID.get(rungId(game, family.id, index + 1))!);
+    const earned = rungs.filter((rung) => held.has(rung.id));
+    const top = earned.at(-1);
+    const next = rungs.find((rung) => !held.has(rung.id));
+
+    return {
+        id: family.id,
+        ...(game === null ? {} : { game }),
+        icon: family.icon,
+        name: family.title,
+        have: valueOf(facts, game, family),
+        earned: earned.length,
+        total: rungs.length,
+        ...(top === undefined ? {} : { tier: top.tier }),
+        ...(next === undefined ? {} : { next: { step: next.step, need: next.need, tier: next.tier, blurb: { en: next.blurbEn, fa: next.blurbFa } } })
+    };
+}
+
+const asEarned = (rung: Rung, earnedAt: Date): EarnedAchievement => ({
+    id: rung.id,
+    name: { en: rung.nameEn, fa: rung.nameFa },
+    blurb: { en: rung.blurbEn, fa: rung.blurbFa },
+    icon: rung.icon,
+    tier: rung.tier,
+    ...(rung.game === null ? {} : { game: rung.game }),
+    earnedAt: new Date(earnedAt).toISOString()
+});
+
+function summarise(facts: Facts, held: readonly HeldRow[]): AchievementSummary
+{
+    const when = new Map(held.map((row) => [row.achievementId, row.earnedAt]));
+    const known = held.filter((row) => RUNG_BY_ID.has(row.achievementId));
+
+    return {
+        scopes: SCOPES.map((game) =>
+        {
+            const prefix = `${ scopeOf(game) }-`;
+
+            return {
+                ...(game === null ? {} : { game }),
+                earned: known.filter((row) => row.achievementId.startsWith(prefix)).length,
+                total: RUNGS.filter((rung) => rung.game === game).length
+            };
+        }),
+        families: SCOPES.flatMap((game) => familiesOf(game).map((family) => summaryOf(facts, game, family, when))),
+        recent: [...known]
+            .sort((a, b) => new Date(b.earnedAt).getTime() - new Date(a.earnedAt).getTime() || b.achievementId.localeCompare(a.achievementId))
+            .slice(0, RECENT)
+            .map((row) => asEarned(RUNG_BY_ID.get(row.achievementId)!, row.earnedAt))
+    };
 }
 
 interface BoardRow
@@ -175,71 +333,59 @@ const SPANS: Record<Exclude<LeaderboardWindow, 'all'>, string> = {
 
 export function createAchieveService(db: DataSource)
 {
-    const history = async (tx: EntityManager, userId: string): Promise<HistoryFacts> =>
-    {
-        const [row] = await tx.query(HISTORY, [userId]) as { days: number; hosted: boolean; crew: boolean }[];
+    const userOf = (handle: string): Promise<User | null> =>
+        db.getRepository(User).findOne({ select: { id: true, handle: true }, where: { handle } });
 
-        return { days: row?.days ?? 0, hosted: row?.hosted === true, crew: row?.crew === true };
-    };
-
-    /**
-     * Awarded with `on conflict do nothing`, which is what lets the whole rule set be re-evaluated
-     * from scratch at the end of every match. `earnedBy` answers what the record deserves, not what
-     * has changed, so a retried action and a reconnect write the same rows twice and mean it once.
-     */
-    const factsFor = async (tx: EntityManager, userId: string, streak: number | null, seated: boolean): Promise<AchievementFacts> =>
-    {
-        const rows = await tx.getRepository(PlayerStats).find({ where: { userId } });
-        const found = await history(tx, userId);
-        const total = (pick: (row: PlayerStats) => number): number => rows.reduce((sum, row) => sum + pick(row), 0);
-
-        return {
-            played: total((row) => row.played),
-            won: total((row) => row.won),
-            abandoned: total((row) => row.abandoned),
-            streak: streak ?? Math.max(0, ...rows.map((row) => row.streak)),
-            distinctDays: found.days,
-            seated,
-            hostedFull: found.hosted,
-            crewTen: found.crew,
-            games: Object.fromEntries(rows.map((row) => [row.game, {
-                played: row.played,
-                won: row.won,
-                tallies: Object.fromEntries(Object.entries(row.tallies ?? {}).map(([name, value]) => [name, Number(value)]))
-            }]))
-        };
-    };
-
-    const grant = async (tx: EntityManager, userId: string, matchId: string | null, ids: readonly string[]): Promise<void> =>
-    {
-        if (ids.length === 0)
-        {
-            return;
-        }
-
-        await tx.getRepository(UserAchievement)
-            .createQueryBuilder()
-            .insert()
-            .values(ids.map((achievementId) => ({ userId, achievementId, matchId })))
-            .orIgnore()
-            .execute();
-    };
+    const heldBy = (userId: string, ids?: readonly string[]): Promise<HeldRow[]> =>
+        db.getRepository(UserAchievement).find({
+            select: { achievementId: true, earnedAt: true },
+            where: ids === undefined ? { userId } : { userId, achievementId: In([...ids]) }
+        });
 
     return {
-        /** Everything a finished match has to say about one player's achievements. */
-        async record(tx: EntityManager, userId: string, matchId: string, streak: number): Promise<void>
+        async record(tx: EntityManager, userId: string, matchId: string, game: string): Promise<void>
         {
-            await grant(tx, userId, matchId, earnedBy(await factsFor(tx, userId, streak, true)));
+            const facts = await factsOf(tx, userId);
+            const ids = [...reachedIn(facts, null), ...reachedIn(facts, game)];
+
+            if (ids.length === 0)
+            {
+                return;
+            }
+
+            await tx.getRepository(UserAchievement)
+                .createQueryBuilder()
+                .insert()
+                .values(ids.map((achievementId) => ({ userId, achievementId, matchId })))
+                .orIgnore()
+                .execute();
         },
 
-        /**
-         * `first-seat` says "Sat down at a table", so it is earned by sitting down. Awarding it at
-         * the end of a match instead would mean somebody who took a chair and never finished a game
-         * had not, according to the product, ever sat at one.
-         */
-        async seated(tx: EntityManager, userId: string): Promise<void>
+        async ladderOf(handle: string, game: string | null, id: string): Promise<AchievementLadder | null>
         {
-            await grant(tx, userId, null, ['first-seat']);
+            const family = familiesOf(game).find((one) => one.id === id);
+            const who = family === undefined ? null : await userOf(handle);
+
+            if (family === undefined || who === null)
+            {
+                return null;
+            }
+
+            const rungs = family.steps.map((_, index) => RUNG_BY_ID.get(rungId(game, family.id, index + 1))!);
+            const held = await heldBy(who.id, rungs.map((rung) => rung.id));
+            const when = new Map(held.map((row) => [row.achievementId, row.earnedAt]));
+
+            return {
+                family: summaryOf(await factsOf(db.manager, who.id), game, family, when),
+                rungs: rungs.map((rung) => ({
+                    step: rung.step,
+                    need: rung.need,
+                    tier: rung.tier,
+                    name: { en: rung.nameEn, fa: rung.nameFa },
+                    blurb: { en: rung.blurbEn, fa: rung.blurbFa },
+                    ...(when.has(rung.id) ? { earnedAt: new Date(when.get(rung.id)!).toISOString() } : {})
+                }))
+            };
         },
 
         /**
@@ -329,13 +475,9 @@ export function createAchieveService(db: DataSource)
             return page(game, window, rows);
         },
 
-        /** A person's record at every game, and where they stand against every achievement. */
         async recordOf(handle: string): Promise<PersonRecord | null>
         {
-            const who = await db.getRepository(User).findOne({
-                select: { id: true, handle: true },
-                where: { handle }
-            });
+            const who = await userOf(handle);
 
             if (who === null)
             {
@@ -347,41 +489,9 @@ export function createAchieveService(db: DataSource)
                 order: { played: 'DESC', game: 'ASC' }
             });
 
-            /**
-             * A LEFT JOIN rather than a filtered read, because an achievement nobody can see is one
-             * nobody can play towards - and sending only what has been earned makes a new account's
-             * empty profile indistinguishable from a request that failed. It is the one read here
-             * that a repository cannot say: `find` cannot left-join a table this entity has no
-             * relation to, and adding one would put an inverse side on the entity graph the whole
-             * schema is kept acyclic to avoid.
-             */
-            const standing = await db.getRepository(Achievement)
-                .createQueryBuilder('a')
-                .leftJoin(UserAchievement, 'ua', 'ua.achievement_id = a.id and ua.user_id = :who', { who: who.id })
-                .select('a.id', 'id')
-                .addSelect('a.name_en', 'name_en')
-                .addSelect('a.name_fa', 'name_fa')
-                .addSelect('a.blurb_en', 'blurb_en')
-                .addSelect('a.blurb_fa', 'blurb_fa')
-                .addSelect('a.icon', 'icon')
-                .addSelect('a.tier', 'tier')
-                .addSelect('ua.earned_at', 'earned_at')
-                .orderBy('a.sort_order', 'ASC')
-                .getRawMany<StandingRow>();
-
-            const seated = standing.some((row) => row.id === 'first-seat' && row.earned_at !== null);
-            const progress = progressOf(await factsFor(db.manager, who.id, null, seated));
-
             return {
                 handle: who.handle,
-
-                /*
-                 * Summed here rather than stored. Six rows on a profile read is not a cost worth a
-                 * second source of truth, and a stored account total is one more number that can
-                 * disagree with the rows it came from.
-                 */
                 progress: levelOf(games.reduce((total, row) => total + row.xp, 0)),
-
                 games: games.map((row) => ({
                     game: row.game,
                     rating: row.rating,
@@ -394,16 +504,7 @@ export function createAchieveService(db: DataSource)
                     tallies: row.tallies,
                     xp: row.xp
                 })),
-                achievements: standing.map((row) => ({
-                    id: row.id,
-                    name: { en: row.name_en, fa: row.name_fa },
-                    blurb: { en: row.blurb_en, fa: row.blurb_fa },
-                    icon: row.icon,
-                    tier: row.tier,
-                    ...(ACHIEVEMENT_GAME[row.id] === undefined ? {} : { game: ACHIEVEMENT_GAME[row.id] }),
-                    ...(row.earned_at === null ? {} : { earnedAt: new Date(row.earned_at).toISOString() }),
-                    ...(row.earned_at === null && (progress.get(row.id)?.need ?? 1) > 1 ? { progress: progress.get(row.id)! } : {})
-                }))
+                achievements: summarise(await factsOf(db.manager, who.id), await heldBy(who.id))
             };
         }
     };

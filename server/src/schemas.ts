@@ -66,42 +66,18 @@ export const gameList = object({ games: array(gameSummary) });
 
 export type GameList = Infer<typeof gameList>;
 
-export const achievement = object({
-    id: string(),
-    name: localizedText,
-    blurb: localizedText,
+export const achievementTier = enumOf(['bronze', 'silver', 'gold', 'platinum', 'diamond']);
 
-    /** A name in `application/src/icons/registry.ts`. The server never ships an image. */
-    icon: string(),
-    tier: enumOf(['bronze', 'silver', 'gold'])
-});
+export type AchievementTier = Infer<typeof achievementTier>;
 
-export type AchievementDefinition = Infer<typeof achievement>;
-
-export const achievementList = object({ achievements: array(achievement) });
-
-export type AchievementList = Infer<typeof achievementList>;
-
-/**
- * A definition with this person's standing against it.
- *
- * The whole list travels, earned or not, because an achievement nobody can see is one nobody can
- * play towards - and the alternative, sending only what has been won, makes an empty profile
- * indistinguishable from a profile the request failed for.
- */
 export const earnedAchievement = object({
     id: string(),
     name: localizedText,
     blurb: localizedText,
     icon: string(),
-    tier: enumOf(['bronze', 'silver', 'gold']),
-
+    tier: achievementTier,
     game: string().optional(),
-
-    /** When it was earned, absent while it has not been. */
-    earnedAt: string().optional(),
-
-    progress: object({ have: number(), need: number() }).optional()
+    earnedAt: string()
 });
 
 export type EarnedAchievement = Infer<typeof earnedAchievement>;
@@ -160,11 +136,62 @@ export const progress = object({
 
 export type Progress = Infer<typeof progress>;
 
+export const achievementFamily = object({
+    id: string(),
+    game: string().optional(),
+    icon: string(),
+    name: localizedText,
+    have: number(),
+    earned: number(),
+    total: number(),
+    tier: achievementTier.optional(),
+    next: object({
+        step: number(),
+        need: number(),
+        tier: achievementTier,
+        blurb: localizedText
+    }).optional()
+});
+
+export type AchievementFamily = Infer<typeof achievementFamily>;
+
+export const achievementScope = object({
+    game: string().optional(),
+    earned: number(),
+    total: number()
+});
+
+export const achievementSummary = object({
+    scopes: array(achievementScope),
+    families: array(achievementFamily),
+    recent: array(earnedAchievement)
+});
+
+export type AchievementSummary = Infer<typeof achievementSummary>;
+
+export const achievementRung = object({
+    step: number(),
+    need: number(),
+    tier: achievementTier,
+    name: localizedText,
+    blurb: localizedText,
+    earnedAt: string().optional()
+});
+
+export const achievementLadder = object({
+    family: achievementFamily,
+    rungs: array(achievementRung)
+});
+
+export type AchievementLadder = Infer<typeof achievementLadder>;
+
+export const ladderQuery = object({ game: string({ max: 32 }).optional() });
+
 export const personRecord = object({
     handle: string(),
     progress,
     games: array(playerRecord),
-    achievements: array(earnedAchievement)
+    achievements: achievementSummary
 });
 
 export type PersonRecord = Infer<typeof personRecord>;

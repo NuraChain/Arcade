@@ -3,7 +3,7 @@ import type { DataSource } from 'typeorm';
 import { Game, Table, TableSeat } from '../../entities/index.ts';
 
 import type { CataloguePort } from '../../ports.ts';
-import type { AchievementList, GameList, LiveCounts } from '../../schemas.ts';
+import type { GameList, LiveCounts } from '../../schemas.ts';
 
 /**
  * Row shapes. Deliberately snake_case and local to this file: the database's names are the
@@ -29,17 +29,6 @@ interface GameRow
     has_blinds: boolean;
 }
 
-interface AchievementRow
-{
-    id: string;
-    name_en: string;
-    name_fa: string;
-    blurb_en: string;
-    blurb_fa: string;
-    icon: string;
-    tier: 'bronze' | 'silver' | 'gold';
-}
-
 /**
  * One query, one join. `Game` carries no inverse relation to `GameRule` - two entity modules
  * importing each other is a TDZ error at load - so the join is written here, where it is visible.
@@ -55,12 +44,6 @@ const GAMES_SQL = `
     from games g
     join game_rules r on r.game_id = g.id
     order by g.sort_order
-`;
-
-const ACHIEVEMENTS_SQL = `
-    select id, name_en, name_fa, blurb_en, blurb_fa, icon, tier
-    from achievements
-    order by sort_order
 `;
 
 /**
@@ -109,20 +92,6 @@ export function createCatalogueService(db: DataSource): CataloguePort
                         hasCube: row.has_cube,
                         hasBlinds: row.has_blinds
                     }
-                }))
-            };
-        },
-
-        async achievements(): Promise<AchievementList>
-        {
-            const rows = await db.query(ACHIEVEMENTS_SQL) as AchievementRow[];
-            return {
-                achievements: rows.map((row) => ({
-                    id: row.id,
-                    name: { en: row.name_en, fa: row.name_fa },
-                    blurb: { en: row.blurb_en, fa: row.blurb_fa },
-                    icon: row.icon,
-                    tier: row.tier
                 }))
             };
         },

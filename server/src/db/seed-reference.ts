@@ -1,4 +1,5 @@
 import type { DataSource } from 'typeorm';
+import { RUNGS } from '../domains/achieve/families.ts';
 
 /**
  * The reference catalogue.
@@ -121,49 +122,6 @@ export const GAME_SEEDS: GameSeed[] = [
     }
 ];
 
-interface AchievementSeed
-{
-    id: string;
-    nameEn: string;
-    nameFa: string;
-    blurbEn: string;
-    blurbFa: string;
-    icon: string;
-    tier: 'bronze' | 'silver' | 'gold';
-}
-
-/**
- * The achievements, and every one of them is reachable.
- *
- * Three are gone: `hokm-trump` ("Named trump and took all seven"), `gammon` ("Won before your
- * opponent bore off a single checker") and `cube-taker` ("Accepted a double and won"). Each
- * described a mechanic of a game this product does not have, so nothing could ever award them -
- * which is the same dead weight as a message key with no producer, printed on a tile somebody
- * would have spent a season trying to earn. They come back with their games.
- *
- * `domains/achieve/rules.ts` is what awards the rest, and `tests/achievements.spec.ts` fails if
- * this list and that rule set ever name different things.
- */
-export const ACHIEVEMENT_SEEDS: AchievementSeed[] = [
-    { id: 'first-seat', nameEn: 'First seat', nameFa: 'اولین صندلی', blurbEn: 'Sat down at a table.', blurbFa: 'سر یک میز نشستی.', icon: 'seat', tier: 'bronze' },
-    { id: 'first-win', nameEn: 'First win', nameFa: 'اولین برد', blurbEn: 'Won a game, any game.', blurbFa: 'یک بازی را بردی، هر بازی‌ای.', icon: 'trophy', tier: 'bronze' },
-    { id: 'regular', nameEn: 'Regular', nameFa: 'پای ثابت', blurbEn: 'Played on seven different days.', blurbFa: 'در هفت روز متفاوت بازی کردی.', icon: 'history', tier: 'bronze' },
-    { id: 'host', nameEn: 'Host', nameFa: 'میزبان', blurbEn: 'Opened a private table and filled it.', blurbFa: 'یک میز خصوصی باز کردی و پرش کردی.', icon: 'invite', tier: 'bronze' },
-    { id: 'streak-3', nameEn: 'On a roll', nameFa: 'روی دور', blurbEn: 'Three wins in a row.', blurbFa: 'سه برد پشت سر هم.', icon: 'flame', tier: 'silver' },
-    { id: 'crew', nameEn: 'Crew', nameFa: 'اکیپ', blurbEn: 'Played with the same three people ten times.', blurbFa: 'ده بار با همان سه نفر بازی کردی.', icon: 'people', tier: 'silver' },
-    { id: 'streak-7', nameEn: 'Unstoppable', nameFa: 'توقف‌ناپذیر', blurbEn: 'Seven wins in a row.', blurbFa: 'هفت برد پشت سر هم.', icon: 'zap', tier: 'gold' },
-    { id: 'centurion', nameEn: 'Hundred hands', nameFa: 'صد بازی', blurbEn: 'A hundred games played.', blurbFa: 'صد بازی انجام شده.', icon: 'medal', tier: 'gold' },
-    { id: 'fair', nameEn: 'Good sport', nameFa: 'بازیکن منصف', blurbEn: 'Fifty games without a single walkout.', blurbFa: 'پنجاه بازی بدون حتی یک ترک میز.', icon: 'shield', tier: 'gold' },
-    { id: 'ludo-first-win', nameEn: 'First home', nameFa: 'اولین خانه', blurbEn: 'Won a game of Ludo.', blurbFa: 'یک بازی منچ را بردی.', icon: 'dice', tier: 'bronze' },
-    { id: 'ludo-hunter', nameEn: 'Hunter', nameFa: 'شکارچی', blurbEn: 'Sent twenty-five tokens back to their yard in Ludo.', blurbFa: 'در منچ بیست‌وپنج مهره را به خانه‌شان برگرداندی.', icon: 'target', tier: 'silver' },
-    { id: 'ludo-homecoming', nameEn: 'Homecoming', nameFa: 'بازگشت به خانه', blurbEn: 'Brought forty tokens home in Ludo.', blurbFa: 'در منچ چهل مهره را به خانه رساندی.', icon: 'home', tier: 'silver' },
-    { id: 'ludo-master', nameEn: 'Ludo master', nameFa: 'استاد منچ', blurbEn: 'Won twenty-five games of Ludo.', blurbFa: 'بیست‌وپنج بازی منچ را بردی.', icon: 'crest-crown', tier: 'gold' },
-    { id: 'hokm-first-hand', nameEn: 'First hand', nameFa: 'اولین حکم', blurbEn: 'Took a hand of Hokm.', blurbFa: 'یک حکم را بردی.', icon: 'cards', tier: 'bronze' },
-    { id: 'hokm-kot', nameEn: 'Kot', nameFa: 'کُت', blurbEn: 'Took every trick of a Hokm hand.', blurbFa: 'همهٔ دست‌های یک حکم را گرفتی.', icon: 'sparkles', tier: 'silver' },
-    { id: 'hokm-tricks', nameEn: 'Trick taker', nameFa: 'دست‌گیر', blurbEn: 'Took a hundred tricks in Hokm.', blurbFa: 'در حکم صد دست گرفتی.', icon: 'medal', tier: 'silver' },
-    { id: 'hokm-master', nameEn: 'Hokm master', nameFa: 'استاد حکم', blurbEn: 'Won twenty-five games of Hokm.', blurbFa: 'بیست‌وپنج بازی حکم را بردی.', icon: 'trophy', tier: 'gold' }
-];
-
 /**
  * Upserts the catalogue.
  *
@@ -235,46 +193,29 @@ export async function seedReference(db: DataSource): Promise<void>
             );
         }
 
-        for (const [index, achievement] of ACHIEVEMENT_SEEDS.entries())
-        {
-            await tx.query(
-                `insert into achievements
-                    (id, name_en, name_fa, blurb_en, blurb_fa, icon, tier, sort_order)
-                 values ($1, $2, $3, $4, $5, $6, $7, $8)
-                 on conflict (id) do update set
-                    name_en = excluded.name_en,
-                    name_fa = excluded.name_fa,
-                    blurb_en = excluded.blurb_en,
-                    blurb_fa = excluded.blurb_fa,
-                    icon = excluded.icon,
-                    tier = excluded.tier,
-                    sort_order = excluded.sort_order`,
-                [
-                    achievement.id,
-                    achievement.nameEn,
-                    achievement.nameFa,
-                    achievement.blurbEn,
-                    achievement.blurbFa,
-                    achievement.icon,
-                    achievement.tier,
-                    index
-                ]
-            );
-        }
-
-        /**
-         * The seed OWNS this table, so a definition it no longer carries is removed rather than
-         * left behind. Reference content that can only ever be added to is how a database ends up
-         * holding a tile nobody can earn and nobody remembers writing - and the three that were
-         * just deleted are exactly that, already sitting in every development database.
-         *
-         * `user_achievements.achievement_id` cascades, which is the honest consequence: removing a
-         * definition removes the awards of it, because an award of something that no longer exists
-         * renders as a blank square.
-         */
         await tx.query(
-            `delete from achievements where id <> all($1::text[])`,
-            [ACHIEVEMENT_SEEDS.map((achievement) => achievement.id)]
+            `insert into achievements (id, name_en, name_fa, blurb_en, blurb_fa, icon, tier, sort_order)
+             select * from unnest($1::text[], $2::text[], $3::text[], $4::text[], $5::text[], $6::text[], $7::text[], $8::smallint[])
+             on conflict (id) do update set
+                name_en = excluded.name_en,
+                name_fa = excluded.name_fa,
+                blurb_en = excluded.blurb_en,
+                blurb_fa = excluded.blurb_fa,
+                icon = excluded.icon,
+                tier = excluded.tier,
+                sort_order = excluded.sort_order`,
+            [
+                RUNGS.map((rung) => rung.id),
+                RUNGS.map((rung) => rung.nameEn),
+                RUNGS.map((rung) => rung.nameFa),
+                RUNGS.map((rung) => rung.blurbEn),
+                RUNGS.map((rung) => rung.blurbFa),
+                RUNGS.map((rung) => rung.icon),
+                RUNGS.map((rung) => rung.tier),
+                RUNGS.map((_, index) => index)
+            ]
         );
+
+        await tx.query(`delete from achievements where id <> all($1::text[])`, [RUNGS.map((rung) => rung.id)]);
     });
 }

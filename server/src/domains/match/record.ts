@@ -227,7 +227,7 @@ export function createRecorder(achieve: AchieveService): Recorder
                         : { xp: earned, ratingBefore: move.before, ratingAfter: move.after }
                 );
 
-                await achieve.record(tx, player.userId, matchId, streak);
+                await achieve.record(tx, player.userId, matchId, game);
             }
         }
     };

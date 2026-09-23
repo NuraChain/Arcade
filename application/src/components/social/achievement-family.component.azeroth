@@ -1,0 +1,46 @@
+import Icon from '../../icons/icon.component.azeroth';
+import type { IconName } from '../../icons/registry.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import type { AchievementFamily as Family } from '../../api.ts';
+
+export default component AchievementFamily(props: { family: Family; onOpen: (family: Family) => void })
+{
+    const locale = useLocale();
+
+    derived next = props.family.next ?? null;
+
+    derived share = next === null ? 1 : Math.min(1, props.family.have / next.need);
+
+    <button
+        type="button"
+        class="flex w-full min-w-0 items-center gap-3 rounded-tile border border-line bg-field p-3 text-start transition-colors hover:bg-raised"
+        onClick={ () => props.onOpen(props.family) }
+    >
+        <span class="medal" data-tier={ props.family.tier ?? 'locked' } aria-hidden="true">
+            <Icon name={ props.family.icon as IconName } size={ 20 } />
+        </span>
+
+        <span class="flex min-w-0 flex-1 flex-col gap-1">
+            <span class="flex items-baseline justify-between gap-2">
+                <span class="truncate text-ui-sm font-semibold text-text">{ locale.text(props.family.name) }</span>
+                <span class="tally shrink-0 text-ui-2xs font-semibold text-muted">{ locale.n(props.family.earned) }/{ locale.n(props.family.total) }</span>
+            </span>
+            <span class="text-ui-2xs text-muted">
+                { next === null ? locale.t('achievements.complete') : locale.text(next!.blurb) }
+            </span>
+            <span class="flex items-center gap-2" aria-hidden="true">
+                <span class="h-1.5 flex-1 overflow-hidden rounded-full bg-sunk">
+                    <span
+                        class={ () => [ 'block h-full rounded-full', next === null ? 'bg-gold' : 'bg-accent' ].join(' ') }
+                        style={ () => `width: ${ share * 100 }%` }
+                    ></span>
+                </span>
+                <Show when={ next !== null }>
+                    { () => <span class="tally shrink-0 text-ui-2xs text-faint">{ locale.n(Math.min(props.family.have, next!.need)) }/{ locale.n(next!.need) }</span> }
+                </Show>
+            </span>
+        </span>
+
+        <Icon name="chevron-right" size={ 16 } class="icon-flip shrink-0 text-faint" />
+    </button>
+}

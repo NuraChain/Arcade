@@ -29,8 +29,11 @@ export const me = {
     'record.emptyLead': 'Take a chair at a table and this fills itself in.',
 
     'achievements.title': 'Achievements',
-    'achievements.earned': { one: 'earned', other: 'earned' },
-    'achievements.everywhere': 'Across every game',
+    'achievements.of': 'of {total}',
+    'achievements.everywhere': 'Everywhere',
+    'achievements.complete': 'Every rung climbed.',
+    'achievements.recent': 'Recently earned',
+    'achievements.scopes': 'Achievements by game',
     'achievements.locked': 'Not earned yet',
     'achievements.earnedOne': 'Earned',
 

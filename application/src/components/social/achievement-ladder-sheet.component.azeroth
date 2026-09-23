@@ -1,0 +1,60 @@
+import { createResource } from 'azerothjs';
+
+import AchievementTile from './achievement-tile.component.azeroth';
+import ErrorState from '../ui/error-state.component.azeroth';
+import IconButton from '../ui/icon-button.component.azeroth';
+import Skeleton from '../ui/skeleton.component.azeroth';
+import Icon from '../../icons/icon.component.azeroth';
+import type { IconName } from '../../icons/registry.ts';
+import { client } from '../../api.ts';
+import type { AchievementFamily } from '../../api.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import type { OverlayProps } from '../../stores/overlay.store.ts';
+
+export default component AchievementLadderSheet(props: OverlayProps & { handle: string; family: AchievementFamily })
+{
+    const locale = useLocale();
+
+    const ladder = createResource(
+        () => ({ handle: props.handle, family: props.family.id, game: props.family.game }),
+        (key) => client.social.ladder({ params: { handle: key.handle, family: key.family }, query: key.game === undefined ? {} : { game: key.game } }),
+        { name: 'record.ladder' }
+    );
+
+    derived rungs = ladder.data()?.rungs ?? [];
+
+    derived summary = ladder.data()?.family ?? props.family;
+
+    <div class="flex flex-col gap-4 p-5">
+        <header class="flex items-start gap-3">
+            <span class="medal" data-tier={ summary.tier ?? 'locked' } aria-hidden="true">
+                <Icon name={ summary.icon as IconName } size={ 20 } />
+            </span>
+            <div class="min-w-0 flex-1">
+                <h2 class="title text-ui-xl text-text">{ locale.text(summary.name) }</h2>
+                <p class="mt-1 text-ui-sm text-muted">
+                    <span class="tally font-semibold text-text">{ locale.n(summary.earned) }</span> { locale.t('achievements.of', { total: locale.n(summary.total) }) }
+                </p>
+            </div>
+            <IconButton icon="close" label={ locale.t('common.close') } variant="ghost" onClick={ () => props.close() } />
+        </header>
+
+        <Show when={ ladder.loading() && rungs.length === 0 }>
+            { () => <Skeleton class="h-64 w-full rounded-panel" /> }
+        </Show>
+
+        <Show when={ ladder.error() !== null && rungs.length === 0 }>
+            { () => <ErrorState onRetry={ () => void ladder.refetch() } /> }
+        </Show>
+
+        <Show when={ rungs.length > 0 }>
+            { () =>
+                <ol class="divide-y divide-line rounded-panel border border-line bg-field">
+                    <For each={ rungs } key={ (rung) => rung.step } let={ rung }>
+                        <li><AchievementTile achievement={ { ...rung, icon: summary.icon } } /></li>
+                    </For>
+                </ol>
+            }
+        </Show>
+    </div>
+}

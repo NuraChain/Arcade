@@ -4,7 +4,8 @@ import { describe, expect, it } from 'vitest';
 
 import '../src/entities/index.ts';
 
-import { ACHIEVEMENT_SEEDS, GAME_SEEDS } from '../src/db/seed-reference.ts';
+import { GAME_SEEDS } from '../src/db/seed-reference.ts';
+import { RUNGS } from '../src/domains/achieve/families.ts';
 import { GAMES } from '../../application/src/data/games.ts';
 import { TABLE_RULES } from '../../application/src/data/tables.ts';
 
@@ -98,12 +99,12 @@ describe('achievements: the server definitions hold together', () =>
 {
     it('gives every one a distinct id', () =>
     {
-        expect(new Set(ACHIEVEMENT_SEEDS.map((one) => one.id)).size).toBe(ACHIEVEMENT_SEEDS.length);
+        expect(new Set(RUNGS.map((one) => one.id)).size).toBe(RUNGS.length);
     });
 
     it('never ships an untranslated string, which the CHECK constraint also refuses', () =>
     {
-        for (const seed of ACHIEVEMENT_SEEDS)
+        for (const seed of RUNGS)
         {
             for (const text of [seed.nameEn, seed.nameFa, seed.blurbEn, seed.blurbFa])
             {
@@ -113,7 +114,7 @@ describe('achievements: the server definitions hold together', () =>
 
         // And the two languages must actually differ - a Persian field holding the English string
         // is the failure `tests/data.spec.ts` already guards on the client side.
-        for (const seed of ACHIEVEMENT_SEEDS)
+        for (const seed of RUNGS)
         {
             expect(seed.nameFa).not.toBe(seed.nameEn);
             expect(seed.blurbFa).not.toBe(seed.blurbEn);

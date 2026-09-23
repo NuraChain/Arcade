@@ -234,20 +234,72 @@ describe.skipIf(!active)('a record, against a real database', () =>
 
             const winner = await statsOf(players[0]);
 
-            expect(winner?.tallies).toEqual({ rolls: 1, captures: 1, home: 1 });
+            expect(winner?.tallies).toEqual({ rolls: 1, sixes: 1, captures: 1, home: 1 });
             expect((await statsOf(players[1]))?.tallies).toEqual({ rolls: 1 });
         });
 
-        it('awards a first win, and the same award twice is one row', async () =>
+        it('awards the first rung of every ladder the game climbed, and the same award twice is one row', async () =>
         {
             const state = board([HOME, [12, YARD, YARD, YARD]], 0);
             const { matchId, players } = await finished(state, ['won', 'lost'], 'won');
 
             await db.transaction((tx) => recorder().finish(tx, matchId, ludoEngine, state));
+
+            const once = await heldBy(players[0]);
+
             await db.transaction((tx) => recorder().finish(tx, matchId, ludoEngine, state));
 
-            expect(await heldBy(players[0])).toContain('first-win');
-            expect(await heldBy(players[1])).not.toContain('first-win');
+            expect(once).toEqual(expect.arrayContaining([
+                'all-won-1', 'all-played-1', 'all-days-1', 'all-hosted-1', 'all-opponents-1', 'all-won-live-1', 'all-won-duel-1',
+                'ludo-won-1', 'ludo-played-1', 'ludo-won-2-1', 'ludo-played-2-1', 'ludo-won-live-1', 'ludo-played-live-1', 'ludo-days-1'
+            ]));
+            expect(once).not.toContain('ludo-won-turns-1');
+            expect(once).not.toContain('all-won-full-1');
+            expect(await heldBy(players[1])).not.toContain('ludo-won-1');
+            expect(await heldBy(players[1])).toContain('ludo-played-1');
+
+            const twice = await heldBy(players[0]);
+
+            expect(new Set(twice).size).toBe(twice.length);
+            expect(twice).toContain('ludo-played-2');
+        });
+
+        it('reads back as families, scopes and a ladder that agree with what was awarded', async () =>
+        {
+            const state = board([HOME, [12, YARD, YARD, YARD]], 0);
+            const { matchId, players } = await finished(state, ['won', 'lost'], 'won');
+
+            await db.transaction((tx) => recorder().finish(tx, matchId, ludoEngine, state));
+
+            const [{ handle }] = rowsOf<{ handle: string }>(await db.query('select handle::text from users where id = $1', [players[0]]));
+            const achieve = createAchieveService(db);
+            const record = await achieve.recordOf(handle);
+            const held = await heldBy(players[0]);
+
+            expect(record?.achievements.scopes).toEqual([
+                { earned: held.filter((id) => id.startsWith('all-')).length, total: 1000 },
+                { game: 'ludo', earned: held.filter((id) => id.startsWith('ludo-')).length, total: 1000 },
+                { game: 'hokm', earned: 0, total: 1000 },
+                { game: 'backgammon', earned: 0, total: 1000 },
+                { game: 'poker', earned: 0, total: 1000 }
+            ]);
+            expect(record?.achievements.recent).toHaveLength(12);
+            expect(record?.achievements.recent.every((one) => held.includes(one.id))).toBe(true);
+
+            const won = record?.achievements.families.find((one) => one.game === 'ludo' && one.id === 'won');
+
+            expect(won).toMatchObject({ have: 1, earned: 1, total: 70, tier: 'bronze', next: { step: 2, need: 2, tier: 'bronze' } });
+            expect(won?.next?.blurb.en).toBe('Win 2 games of Ludo.');
+
+            const ladder = await achieve.ladderOf(handle, 'ludo', 'won');
+
+            expect(ladder?.rungs).toHaveLength(70);
+            expect(ladder?.rungs[0].earnedAt).toBeDefined();
+            expect(ladder?.rungs[1].earnedAt).toBeUndefined();
+            expect(ladder?.rungs.at(-1)?.tier).toBe('diamond');
+            expect(await achieve.ladderOf(handle, 'ludo', 'friends')).toBeNull();
+            expect(await achieve.ladderOf(handle, 'chess', 'won')).toBeNull();
+            expect(await achieve.ladderOf('nobody-here', null, 'won')).toBeNull();
         });
     });
 
@@ -288,7 +340,9 @@ describe.skipIf(!active)('a record, against a real database', () =>
 
             await db.transaction((tx) => recorder().finish(tx, matchId, ludoEngine, state));
 
-            expect(await heldBy(players[0])).not.toContain('first-win');
+            expect(await heldBy(players[0])).not.toContain('ludo-won-1');
+            expect(await heldBy(players[0])).not.toContain('all-won-1');
+            expect(await heldBy(players[0])).not.toContain('all-hosted-1');
         });
     });
 
