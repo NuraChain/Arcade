@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { deckFor, rankOf, suitOf } from '../src/domains/match/hokm/cards.ts';
+import { rankOf, suitOf } from '../src/domains/match/cards/cards.ts';
+import { deckFor } from '../src/domains/match/hokm/cards.ts';
 import { SEATS, apply, autoplay, create, dealerSeat, legalMoves } from '../src/domains/match/hokm/engine.ts';
 import { GAME_SEEDS } from '../src/db/seed-reference.ts';
 import { trickCount } from '../src/domains/match/hokm/scoring.ts';

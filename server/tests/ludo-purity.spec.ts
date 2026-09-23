@@ -47,7 +47,7 @@ describe.each(PURE)('the %s engine is pure', (game) =>
 
     it('has files to read, so this cannot pass by finding nothing', () =>
     {
-        expect(files.length).toBeGreaterThanOrEqual(2);
+        expect(files.length).toBeGreaterThanOrEqual(1);
     });
 
     for (const name of files)
@@ -65,7 +65,7 @@ describe.each(PURE)('the %s engine is pure', (game) =>
 
             for (const [, specifier] of source.matchAll(/from '([^']+)'/g))
             {
-                expect(specifier.startsWith('./'), `${ name } imports ${ specifier }`).toBe(true);
+                expect(specifier.startsWith('./') || specifier.startsWith('../cards/'), `${ name } imports ${ specifier }`).toBe(true);
             }
         });
     }

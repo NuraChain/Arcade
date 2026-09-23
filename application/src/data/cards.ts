@@ -5,7 +5,7 @@ import type { IconName } from '../icons/registry.ts';
  *
  * The server encodes a card as 0 to 51, suit-major with the rank ascending, and sends that number -
  * so this is the decoding, and it is deliberately a SECOND copy of four lines rather than an import
- * from `server/src/domains/match/hokm/cards.ts`. That file is reached by the web typecheck program
+ * from `server/src/domains/match/cards/cards.ts`. That file is reached by the web typecheck program
  * only through the client-safe triangle, and nothing in `domains/` is client-safe; pulling it across
  * would drag a whole engine into the browser's program for two arrays.
  *

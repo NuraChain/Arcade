@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { DECK, RANKS, SUITS, cardOf, deckFor, legalCards, nameOf, rankOf, suitOf, trickWinner } from '../src/domains/match/hokm/cards.ts';
+import { DECK, RANKS, SUITS, cardOf, nameOf, rankOf, suitOf } from '../src/domains/match/cards/cards.ts';
+import { deckFor, legalCards, trickWinner } from '../src/domains/match/hokm/cards.ts';
 import { dealerOf, duelResult, matchWinner, nextHakem, teamOf, trickCount, tripleResult, winningTricks } from '../src/domains/match/hokm/scoring.ts';
 
 /**

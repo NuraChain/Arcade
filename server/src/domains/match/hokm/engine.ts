@@ -1,4 +1,5 @@
-import { deckFor, legalCards, suitOf, trickWinner, SUITS, type Suit } from './cards.ts';
+import { SUITS, suitOf, type Suit } from '../cards/cards.ts';
+import { deckFor, legalCards, trickWinner } from './cards.ts';
 import { dealerOf, duelResult, matchWinner, nextHakem, trickCount, tripleResult, winningTricks } from './scoring.ts';
 import { sideCount, sideOf, seatsOfSide, type HokmAction, type HokmEvent, type HokmRefusal, type HokmState } from './state.ts';
 

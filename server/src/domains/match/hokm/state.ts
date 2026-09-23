@@ -1,4 +1,4 @@
-import type { Suit } from './cards.ts';
+import type { Suit } from '../cards/cards.ts';
 
 /**
  * One hokm match, which is a SEQUENCE of hands rather than a single game.

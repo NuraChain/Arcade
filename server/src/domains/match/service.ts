@@ -13,6 +13,7 @@ import { createRecorder } from './record.ts';
 import { backgammonEngine } from './engines/backgammon.ts';
 import { hokmEngine } from './engines/hokm.ts';
 import { ludoEngine } from './engines/ludo.ts';
+import { pokerEngine } from './engines/poker.ts';
 import type { MatchBoard, MatchLog } from '../../schemas.ts';
 import type { MatchHistory } from '../../schemas.ts';
 import type { Draws, Engine, TableConfig } from './engine.ts';
@@ -148,7 +149,12 @@ export const REFUSALS = {
     'no-such-card': 'conflict',
     'cannot-double': 'conflict',
     'no-double': 'conflict',
-    'double-pending': 'conflict'
+    'double-pending': 'conflict',
+    'cannot-check': 'conflict',
+    'nothing-to-call': 'conflict',
+    'cannot-raise': 'conflict',
+    'raise-too-small': 'conflict',
+    'raise-too-large': 'conflict'
 } as const satisfies Record<string, 'forbidden' | 'conflict'>;
 
 const SAYS: Record<keyof typeof REFUSALS, string> = {
@@ -164,7 +170,12 @@ const SAYS: Record<keyof typeof REFUSALS, string> = {
     'no-such-card': 'That card is not in your hand.',
     'cannot-double': 'You cannot offer a double now.',
     'no-double': 'Nobody has offered a double.',
-    'double-pending': 'Answer the double first.'
+    'double-pending': 'Answer the double first.',
+    'cannot-check': 'There is a bet to call, so you cannot check.',
+    'nothing-to-call': 'There is nothing to call.',
+    'cannot-raise': 'You cannot raise now.',
+    'raise-too-small': 'That raise is below the minimum.',
+    'raise-too-large': 'You do not have that many chips.'
 };
 
 function refuse(reason: string): never
@@ -201,7 +212,7 @@ function stateOf(match: Match): unknown
     return match.state;
 }
 
-export const ENGINES: readonly Engine[] = [ludoEngine, hokmEngine, backgammonEngine];
+export const ENGINES: readonly Engine[] = [ludoEngine, hokmEngine, backgammonEngine, pokerEngine];
 
 export function createMatchService(db: DataSource, achieve: AchieveService, engines: readonly Engine[] = ENGINES)
 {

@@ -24,6 +24,8 @@ export type HokmBoard = Extract<MatchView['view'], { kind: 'hokm' }>;
 
 export type BackgammonBoard = Extract<MatchView['view'], { kind: 'backgammon' }>;
 
+export type PokerBoard = Extract<MatchView['view'], { kind: 'poker' }>;
+
 export type LudoSeat = LudoBoard['seats'][number];
 
 /** One chair, with both halves of it: who is sitting there and what their colour is doing. */
@@ -48,6 +50,11 @@ export function backgammonOf(match: Pick<MatchView, 'view'>): BackgammonBoard | 
     return match.view.kind === 'backgammon' ? match.view : null;
 }
 
+export function pokerOf(match: Pick<MatchView, 'view'>): PokerBoard | null
+{
+    return match.view.kind === 'poker' ? match.view : null;
+}
+
 /**
  * The one number a result row puts beside a name, and what it MEANS is the game's business.
  *
@@ -65,6 +72,11 @@ export function scoreOf(match: Pick<MatchView, 'view'>, seat: number): number
     if (match.view.kind === 'backgammon')
     {
         return match.view.seats.find((row) => row.seat === seat)?.score ?? 0;
+    }
+
+    if (match.view.kind === 'poker')
+    {
+        return match.view.seats.find((row) => row.seat === seat)?.stack ?? 0;
     }
 
     const side = match.view.seats.find((row) => row.seat === seat)?.side;

@@ -1,187 +1,159 @@
-# Poker — No-Limit Texas Hold'em
+# Poker — No-Limit Texas Hold'em, played as a Sit & Go
 
-**Status:** planned, not started. Blocked on `00-engine-seam.md`. **The hardest of the three.**
+**Status:** the rules engine is built and behind the seam. `games.status` stays `coming-soon`: there
+is no board component, no `poker-pass.mjs` and no browser pass yet, and a status is a claim about a
+mechanism a person can reach.
 
 Free to play. Chips are virtual and have no monetary value. No deposits, no withdrawals, no
-cash-out, no wagering. Nothing in this plan creates any of those.
+cash-out, no wagering. Nothing here creates any of those.
 
 ---
 
-## What the repository already claims, and where it disagrees
+## The format, and why it is a Sit & Go
 
-`seed-reference.ts:64-77` seeds Poker as **available**. Same as the other two: a table opens, people
-sit, Start answers 422.
+A cash table plays hand after hand until people leave, so it has no end, no winner and no
+placements — everything the platform records (`finished_at`, `winner_seat`, one rating move per
+match, one history row) assumes a match finishes. A **Sit & Go** does finish, and it produces a real
+result: the last player with chips wins and everybody else is placed in the order they went out. So
+a match is one Sit & Go, the hands are events in the ledger, and poker gets a rating like every
+other game.
 
-| | repo today | this spec | resolution |
-|---|---|---|---|
-| seats | `[2, 4, 6, 8]`, max 8 | **2–10, every count** | widen to `[2,3,4,5,6,7,8,9,10]`, max 10 |
-| targets | `[]` | none | correct — a cash table has no target |
-| stakes | `play-money` | free-to-play | correct, and the one game where it is true |
-| hasBlinds | `true` | SB/BB amounts + starting stack | true, but **nothing reads it**, and `tables.blinds` is a three-level enum (`low`/`mid`/`high`) — it cannot express 5/10 or a 1000 stack |
-
-**`matches_seats_range` is `between 2 and 4` and `match_players_colour_range` is `0..3`.** Poker is
-the game that forces those open.
-
----
-
-## Why this is the hardest, stated plainly
-
-The other two are bounded rule problems. Poker breaks four platform assumptions at once:
-
-1. **A match has no end.** A cash table plays hand after hand until people leave. Everything
-   downstream — `finished_at`, `winner_seat`, one rating move per match, one history row — assumes a
-   match finishes with a winner.
-2. **Hidden state with a live adversary.** Hokm hides hands; Poker hides hands *and* the undealt
-   deck, and a single leak through the spectator snapshot or the event feed is not a bug, it is
-   cheating.
-3. **There is no natural rating.** The spec says so itself, and it is right: *"do NOT automatically
-   equate largest stack at table with game winner"* and *"do not invent a broken ranking
-   calculation."*
-4. **Money-like arithmetic.** Side pots, odd chips, uncalled bets. Chips must be conserved exactly —
-   an integer division that loses one chip is a real defect, and the spec demands a test that total
-   in equals total out.
-
-### The decisions those force
-
-**A match is a SESSION at the table**, not a hand. `finished_at` when the table closes. Each hand is
-a ledger event. This gives the one history row the spec asks for ("Poker Session / Hands / Starting
-Stack / Ending Stack") and keeps `tables.status = 'playing'` stable instead of flickering between
-`ready` and `playing` after every hand.
-
-**Poker gets statistics, not rating.** The existing `rating.ts` is Elo over a field with placements,
-and a cash table produces no placements. Following the spec's own instruction, Poker records
-`player_stats` (hands, wins, showdowns, chips, biggest pot) and **does not touch `rating`** until a
-mode exists that has a real result — a Sit & Go, or heads-up match play. That is a deliberate,
-documented gap, not an oversight, and it is the same judgement this codebase already made when it
-deleted `game_rules.fairness`.
-
-**XP needs care.** Both leaderboards rank on XP (`achieve/service.ts`), and `xpFor` currently pays
-in Ludo nouns. A cash table that pays XP per hand would put a Poker grinder at the top of every
-board by volume. *Proposed: Poker pays XP per SESSION, scaled by hands played and capped, not per
-hand. Confirm before building.*
-
----
+| | |
+|---|---|
+| seats | 2, 6 or 9 (`game_rules.seats`, `Engine.seats`) |
+| stack | 1,500 each, no antes, no rebuys |
+| blinds | rise every 10 hands: 10/20, 15/30, 25/50, 50/100, 75/150, 100/200, 150/300, 200/400, 300/600, 400/800, 600/1200, 800/1600, 1000/2000, then doubling (capped at 1,000,000 so every number stays inside the wire's bounds) |
+| opening level | `tables.blinds`: `low` 10/20, `mid` 25/50, `high` 50/100 |
+| modes | `live` only; `targets` is empty |
+| end | the last player with chips wins |
+| placement | elimination order; two players busted in one hand are placed by the stack they started that hand with, and an exact tie shares a place |
 
 ## Domain
 
-`server/src/domains/match/poker/`, pure and import-free.
+`server/src/domains/match/poker/`, pure: it imports only itself and `../cards/`, with no clock and
+no randomness except the `Die` it is handed. `ludo-purity.spec.ts` reads every directory under
+`match/` and allows exactly those two import prefixes.
 
 ```
-cards.ts      shared with Hokm — Card, Suit, Rank, a 52 deck
-evaluator.ts  7 cards -> best 5, category, comparable score
-betting.ts    legal actions, min-raise, the reopening rule
-pots.ts       side pots, eligibility, odd chips
-state.ts      PokerState, streets, seats, stacks, button
-table.ts      button/blind positions, action order, heads-up
-engine.ts     create / apply / legal / view / autoplay / finish / standings / tally
+cards/cards.ts   shared with hokm: a card is a number 0..51, suit-major, rank ascending
+evaluator.ts     best five of seven, a category and one comparable integer score
+pots.ts          the uncalled-bet refund, side-pot layers, the odd-chip split
+betting.ts       who must act, what they owe, whether they may raise
+state.ts         PokerState, the blind schedule, events, the closed PokerRefusal union
+engine.ts        create / apply / legalMoves / autoplay / standings
+engines/poker.ts the adapter behind the Engine seam: parse, view, log, tally, finish
 ```
 
-`evaluator.ts` and `pots.ts` are the two that must be perfect, and both are pure functions with no
-excuse for being anything else.
+### Dealing
 
-### The three rules that are usually got wrong
+**There is no deck in the state.** Each card is drawn at the moment it is dealt, uniformly from the
+52 minus every card already dealt this hand, through `draws.die(remaining.length)`. No state ever
+holds a future board card, so no snapshot, spectator view or ledger row can leak one — the same
+argument hokm's trump pause makes, taken one step further. The hole cards live in the state because
+they have to, and `view` never builds another seat's.
 
-**Min-raise and reopening.** A raise must be at least the size of the previous full bet or raise. An
-all-in *short* of a full raise does **not** reopen betting to players who have already acted. The
-spec spells this out and it is the single most common bug in amateur poker engines.
+Hole cards go out two rounds, starting left of the button. The first button is drawn from `draws`.
 
-**Side pots.** Each pot carries its own eligible set. A player all-in for less may win the main pot
-and cannot win a side pot they did not contribute to. A player may lose the main pot and win a side
-pot. The test the spec demands is the right one: **chips in == chips out**, for every scenario.
+### Betting
 
-**Heads-up is a different branch, not a special case of three-handed.** The button posts the small
-blind, acts **first** pre-flop and **last** on every street after. Reusing the generic order here is
-wrong and produces a subtly broken game nobody notices for weeks.
+- **Minimum raise** is the last full raise; a bet is at least the big blind.
+- **A short all-in does not reopen the betting** to a player who has already acted. The test is the
+  TDA's: a seat may raise again only if what it faces now, over what it last matched, is at least a
+  full raise — so two short all-ins that add up to a full raise DO reopen it. `faced[seat]` is the
+  bet level the seat matched when it last acted, and it is the whole mechanism.
+- **Heads-up is its own branch**: the button posts the small blind and acts first preflop, last on
+  every later street.
+- **The big blind is owed in full** even when the player in the big blind is all-in for less; the
+  excess comes back as an uncalled bet.
+- **Nobody may raise into a table that cannot answer.** With every other player all-in, the choices
+  are fold or call.
+- **An uncalled bet is returned** to the player who made it, and never to somebody who folded: a
+  player who resigns after raising leaves those chips in the pot.
+- **Side pots** are layered by the contenders' commitment levels; dead chips from folded players
+  above the top live level join the last pot. `tests/poker-rules.spec.ts` asserts chips in equal
+  chips out after every action of random games at every table size.
+- **The odd chip** goes to the first winner left of the button.
+- **An all-in runout resolves inside one `apply`**, and when a hand ends the next is dealt inside
+  the same `apply`. A client never sees a state waiting on nobody.
 
-### Hidden state
+### Showdown
 
-This is where the seam earns its keep. Per viewer:
+A hand that reaches showdown shows every hand still contesting it; a folded hand is never shown.
+The evaluator covers every category, the wheel (A-2-3-4-5, below 6-high), kickers, full houses by
+trips first, quads by kicker, two pair high-then-low-then-kicker, and a board that plays for
+everybody.
 
-- your own hole cards, always
-- other seats' hole cards, **never** — until showdown makes specific ones public
-- the undealt deck, **never, to anyone** — it is shoe state and lives outside the view entirely
-- future board cards, **never**
-- folded hole cards, never unless the showdown rules make them public
+### Walkouts, and what counts as a win
 
-And the two paths the audit flagged that would leak all of it today:
+A forfeit busts only that seat: it folds, it is placed below everybody still alive, and its stack
+leaves the table with it (`gone`, which the conservation check counts). The game continues while two
+or more players have chips.
 
-- `match_actions.state` snapshots the whole state per action, and `watch.ts` serves it to spectators
-  **with no seat parameter**. A 30-second delay does not help — it is still a live hand.
-- `since` returns every action's events to every player, unredacted.
+| | outcome |
+|---|---|
+| heads-up, busted by chips | `won` |
+| heads-up, a forfeit after both seats took at least two actions | `won` for the other |
+| heads-up, a forfeit before that | `abandoned` |
+| three or more, any opponent out by chips, by resigning or by leaving | `won` |
+| three or more, every opponent out by a timeout forfeit | `abandoned` |
 
-Both have to go through `view()` before a single card is dealt.
+The platform's third forfeit reason, `left`, counts with `resign`: it is somebody choosing to go.
 
-### Timers
+### The clock
 
-Server-authoritative, 30 s per action plus a small bank, both configuration. On timeout: **check if
-legal, otherwise fold** — never call. Browser timers are display only.
+`autoplay` checks if it can and folds otherwise. It never calls.
 
----
+## Hidden state
 
-## Client
+- `view(state, seat)`: the reader's own hole cards only. Others' cards appear only in `last`, and
+  only for a hand that reached showdown. `view(state, null)` shows no hole cards at all.
+- `log(events, seat)`: no hole card outside a `show` event — not even the reader's own, which the
+  view already gives them. The ledger keeps a `hole` event per seat as an audit trail; `log` drops it.
+- `tests/poker-seam.spec.ts` uses hokm's FORGERY technique on both: replace another seat's hole
+  cards with different cards of the same length, in the state for `view` and in the events for
+  `log`, and require the output to be byte-identical — for every reader and for `null`, after
+  every few actions of whole matches at 2, 6 and 9 seats. It also proves the forgery catches a
+  deliberate leak, so it cannot pass by comparing nothing.
 
-`application/src/game/poker/`, Phaser scene in the registry.
+## The wire
 
-Seats arranged for 2 through 10 from one layout function, not ten layouts. Local player at the
-bottom with hole cards, stack, and the action bar.
+`pokerBoard`, `pokerLog` and `pokerPlay` in `schemas.ts`, every number bounded (chips 0..1,000,000,
+cards 0..51, seats 0..8).
 
-**The betting control is the fiddly bit on a phone.** Presets (½ pot, pot, 2×, all-in) plus an
-explicit amount, and every one of them is a UI shortcut over a server-validated command — a preset
-can never bypass the min-raise rule.
+A board carries `street`, `hand`, `button`, `turn` (absent when nobody is to act), `board`, `pot`,
+`pots` with their eligible seats, `seats: [{ seat, stack, bet, folded, allIn, out }]`,
+`blinds: { small, big, level, next }` (`next` is hands until the level rises), the reader's `hole`,
+`last`, and `winner` once there is one. `toCall`, `minRaiseTo` and `maxRaiseTo` are present only for
+the reader whose turn it is, and the raise pair only when that reader may raise — their absence is
+the answer to "can I raise".
 
-**Accessibility**: the action bar is real buttons with the amounts in their labels ("Call 40",
-"Raise to 120"), the pot and the amount-to-call are text, the active player is not indicated by
-colour alone, and the whole hand is playable without pointing at the canvas.
+A play is `{ kind: 'poker', verb: 'fold' | 'check' | 'call' | 'raise' | 'allin', amount? }`, with
+`amount` required on a raise (the raise-TO total) and refused anywhere else.
 
----
+## Refusals
 
-## Assets
+`game-over`, `not-playing` and `not-your-turn` are shared with the other games; poker adds
+`cannot-check`, `nothing-to-call`, `cannot-raise`, `raise-too-small` and `raise-too-large`, each a
+409 with its own sentence in `SAYS`.
 
-Shares the card sheet with Hokm — the single strongest reason to build Hokm first.
+## What a game leaves behind
 
-| asset | tool | note |
-|---|---|---|
-| `cards-2048.webp` | `tools/blender/lib/cards.py` | **shared with Hokm.** Build once |
-| `felt-poker-1024.webp` | `board.py`, parameterised | `set-poker.glb` has Cards, Chips, Deck, DealerButton — **no felt**. The felt is in `table-poker.py` |
-| chips | `atlas.py` **already draws** 5 denominations + edges | reuse; stack rendering is the client's |
-| dealer button | `atlas.py` **already draws** it | reuse |
+`tally` counts `hands` (dealt in and finished), `pots` (won, including split shares and side pots),
+`showdowns` and `knockouts` (credited to the winners of the last pot a busted player was in).
+`points(tally) = min(25, pots + 3 * knockouts)`.
 
-Note `set-poker.glb` is 559,468 bytes against a 600 KB per-set budget — little headroom if it is
-ever re-exported with more in it.
+## Tests
 
----
+- `poker-rules.spec.ts` — every category and the wheel, ties and kickers, the pot maths, side pots
+  with conservation after every action, the short all-in (alone, behind a full raise, and summed),
+  heads-up order, the odd chip, the blind schedule, and placements.
+- `poker-engine.spec.ts` — the catalogue, parsing and wire bounds, every refusal, autoplay, the next
+  hand dealt inside `apply`, the all-in runout, walkouts, the outcome table, tally and points.
+- `poker-seam.spec.ts` — the forgery on `view` and `log`, spectators, folded hands never shown.
+- `engine-contract.spec.ts` plays random matches at 2, 6 and 9 inside its 20,000-action bound.
 
-## Testing
+## What is left
 
-Everything in spec §70–§77. The ones that are non-negotiable:
-
-- **Evaluator**: every category, the wheel (A-2-3-4-5 below 2-3-4-5-6), kickers, full-house
-  comparison by trips first, quads by kicker, two-pair lexicographic, board-plays-the-best-hand,
-  exact ties.
-- **Side pots**: multiple all-ins, folded players' contributions, ties in main and side, different
-  winners per pot, odd chips. **Chips in == chips out, asserted every time.**
-- **Min-raise and reopening**, including the short all-in that must not reopen.
-- **Heads-up order**, pre-flop and post-flop, and button rotation.
-- **Hidden state on the bytes**: no view, snapshot or event ever contains another seat's hole cards
-  or any undealt card.
-
-Plus `tools/qa/poker-pass.mjs` over the real API and browser sessions at 2, 6 and a full table.
-
----
-
-## Order
-
-1. `evaluator.ts` pure, exhaustively tested. Nothing else starts until it is right.
-2. `pots.ts` pure, with conservation asserted.
-3. `betting.ts` + `table.ts`, including heads-up.
-4. Engine behind the seam; session-as-match; `poker-pass.mjs` green.
-5. **Review checkpoint** — evaluator, side pots, min-raise, heads-up, hidden state, concurrency.
-6. Felt, scene, action bar, bet control.
-7. Statistics, achievements, history. **No rating**, by decision.
-
----
-
-## What is deliberately out of scope
-
-Tournaments, Sit & Go, blind levels, rebuys, PLO, spectator hole-card reveal, hand replay,
-leaderboards by winnings. Each is named in the spec as future work and none is built now.
+The board component, the action bar (presets over a server-validated amount; buttons that say
+"Call 40" and "Raise to 120"), a `poker-pass.mjs` over the real api, a browser pass, and then the
+flip to `available`. Cash tables, rebuys, PLO, hand replay and a dead-button rule are not built.

@@ -122,7 +122,7 @@ export const GAMES: Game[] = [
         categoryKey: 'games.category.cards',
         category: 'cards',
         minPlayers: 2,
-        maxPlayers: 8,
+        maxPlayers: 9,
         table: 'table-poker',
         set: 'set-poker',
         anchor: [-3.4, -0.5, -1.8],

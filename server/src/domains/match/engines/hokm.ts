@@ -1,4 +1,5 @@
-import { legalCards, suitOf, type Suit } from '../hokm/cards.ts';
+import { suitOf, type Suit } from '../cards/cards.ts';
+import { legalCards } from '../hokm/cards.ts';
 import { apply, autoplay, create, dealerSeat, legalMoves, SEATS } from '../hokm/engine.ts';
 import { trickCount, winningTricks } from '../hokm/scoring.ts';
 import { sideCount, sideOf, type HokmAction, type HokmEvent, type HokmState } from '../hokm/state.ts';

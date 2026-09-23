@@ -11,7 +11,7 @@ import { seatsFor } from '../src/components/games/seats.ts';
 import { aroundTable } from '../src/components/games/table-seats.ts';
 import type { MatchView } from '../src/api.ts';
 import { RANKS as CLIENT_RANKS, SUITS as CLIENT_SUITS, SUIT_ICON, arrangeHand, rankOf as clientRank, suitOf as clientSuit } from '../src/data/cards.ts';
-import { RANKS as SERVER_RANKS, SUITS as SERVER_SUITS, rankOf as serverRank, suitOf as serverSuit } from '../../server/src/domains/match/hokm/cards.ts';
+import { RANKS as SERVER_RANKS, SUITS as SERVER_SUITS, rankOf as serverRank, suitOf as serverSuit } from '../../server/src/domains/match/cards/cards.ts';
 
 /**
  * The board, from the three angles a rendering test cannot reach.
@@ -620,7 +620,7 @@ describe('the two halves of a chair', () =>
 describe('the browser reads a card the way the server wrote it', () =>
 {
     /**
-     * `data/cards.ts` is a second copy of four lines from the server's own `hokm/cards.ts`, and it is
+     * `data/cards.ts` is a second copy of four lines from the server's own `cards/cards.ts`, and it is
      * a copy on purpose: nothing under `domains/` is client-safe, so importing it would drag a whole
      * engine into the web typecheck program for two arrays. A copy needs a test, which is the same
      * arrangement `handleFromName` has with the browser's fake api.

@@ -1228,7 +1228,62 @@ export const backgammonBoard = object({
     round: number({ int: true, min: 1, max: 999 })
 });
 
-export const matchBoard = union([ludoBoard, hokmBoard, backgammonBoard]);
+const pokerSeat = number({ int: true, min: 0, max: 8 });
+
+const pokerChips = number({ int: true, min: 0, max: 1_000_000 });
+
+const pokerCard = number({ int: true, min: 0, max: 51 });
+
+const pokerStreet = enumOf(['preflop', 'flop', 'turn', 'river']);
+
+const pokerCategory = enumOf(['high-card', 'pair', 'two-pair', 'trips', 'straight', 'flush', 'full-house', 'quads', 'straight-flush']);
+
+export const pokerBoard = object({
+    kind: literal('poker'),
+    street: pokerStreet,
+    hand: number({ int: true, min: 1, max: 1_000_000 }),
+    button: pokerSeat,
+    turn: pokerSeat.optional(),
+    board: array(pokerCard, { max: 5 }),
+    pot: pokerChips,
+    pots: array(object({
+        amount: pokerChips,
+        eligible: array(pokerSeat, { max: 9 })
+    }), { max: 9 }),
+    seats: array(object({
+        seat: pokerSeat,
+        stack: pokerChips,
+        bet: pokerChips,
+        folded: boolean(),
+        allIn: boolean(),
+        out: boolean()
+    }), { min: 2, max: 9 }),
+    blinds: object({
+        small: pokerChips,
+        big: pokerChips,
+        level: number({ int: true, min: 1, max: 1000 }),
+        next: number({ int: true, min: 1, max: 10 })
+    }),
+    hole: array(pokerCard, { max: 2 }),
+    toCall: pokerChips.optional(),
+    minRaiseTo: pokerChips.optional(),
+    maxRaiseTo: pokerChips.optional(),
+    last: object({
+        board: array(pokerCard, { max: 5 }),
+        shown: array(object({
+            seat: pokerSeat,
+            cards: array(pokerCard, { min: 2, max: 2 }),
+            category: pokerCategory
+        }), { max: 9 }),
+        pots: array(object({
+            amount: pokerChips,
+            winners: array(pokerSeat, { min: 1, max: 9 })
+        }), { max: 9 })
+    }).optional(),
+    winner: pokerSeat.optional()
+});
+
+export const matchBoard = union([ludoBoard, hokmBoard, backgammonBoard, pokerBoard]);
 
 export type MatchBoard = Infer<typeof matchBoard>;
 
@@ -1345,7 +1400,30 @@ export const backgammonLog = object({
     moves: array(backgammonMove)
 });
 
-export const matchLog = union([ludoLog, hokmLog, backgammonLog]);
+export const pokerMove = object({
+    e: enumOf(['deal', 'blind', 'fold', 'check', 'call', 'raise', 'allin', 'board', 'refund', 'show', 'pot', 'end', 'bust', 'forfeit', 'finish']),
+    seat: pokerSeat.optional(),
+    hand: number({ int: true, min: 1, max: 1_000_000 }).optional(),
+    button: pokerSeat.optional(),
+    small: pokerChips.optional(),
+    big: pokerChips.optional(),
+    amount: pokerChips.optional(),
+    street: pokerStreet.optional(),
+    cards: array(pokerCard, { max: 5 }).optional(),
+    category: pokerCategory.optional(),
+    winners: array(pokerSeat, { max: 9 }).optional(),
+    dealt: array(pokerSeat, { max: 9 }).optional(),
+    by: array(pokerSeat, { max: 9 }).optional(),
+    place: number({ int: true, min: 1, max: 9 }).optional(),
+    reason: string({ max: 16 }).optional()
+});
+
+export const pokerLog = object({
+    kind: literal('poker'),
+    moves: array(pokerMove)
+});
+
+export const matchLog = union([ludoLog, hokmLog, backgammonLog, pokerLog]);
 
 export type MatchLog = Infer<typeof matchLog>;
 
@@ -1431,7 +1509,13 @@ export const backgammonPlay = object({
     hops: array(backgammonHop, { min: 1, max: 4 }).optional()
 });
 
-export const matchPlay = union([ludoPlay, hokmPlay, backgammonPlay]);
+export const pokerPlay = object({
+    kind: literal('poker'),
+    verb: enumOf(['fold', 'check', 'call', 'raise', 'allin']),
+    amount: number({ int: true, min: 0, max: 1_000_000 }).optional()
+});
+
+export const matchPlay = union([ludoPlay, hokmPlay, backgammonPlay, pokerPlay]);
 
 export type MatchPlay = Infer<typeof matchPlay>;
 

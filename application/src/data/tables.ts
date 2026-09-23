@@ -54,7 +54,7 @@ export interface TableRules
 
 export const TABLE_RULES: Record<GameId, TableRules> = {
     hokm: { seats: [2, 3, 4], modes: ['live', 'turns'], targets: [7, 13], stakes: 'none', partners: true },
-    poker: { seats: [2, 4, 6, 8], modes: ['live'], targets: [], stakes: 'play-money', partners: false },
+    poker: { seats: [2, 6, 9], modes: ['live'], targets: [], stakes: 'play-money', partners: false },
     backgammon: { seats: [2], modes: ['live', 'turns'], targets: [1, 3, 5], stakes: 'none', partners: false },
     ludo: { seats: [2, 3, 4], modes: ['live', 'turns'], targets: [], stakes: 'none', partners: false }
 };
