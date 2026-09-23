@@ -54,6 +54,7 @@ export default component PlayHeader(props: { table: TableSummary; others: TableS
                                 >
                                     <GameIcon game={ table.game as GameId } class="h-8 w-8" />
                                     <span class="max-w-[9rem] truncate">{ nameOf(table.game) }</span>
+                                    <span class="shrink-0 text-ui-xs font-normal opacity-70">{ table.code }</span>
                                     <Show when={ table.yourTurn === true }>
                                         { () => <Badge dot text={ locale.t('card.yourTurn') } tone="live" /> }
                                     </Show>

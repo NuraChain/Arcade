@@ -106,7 +106,7 @@ export default component PlayerCard(props: {
         aria-current={ props.active && !props.finished ? 'true' : undefined }
     >
         <span class="relative shrink-0">
-            <Avatar person={ person } size="md" ringOn="void" />
+            <Avatar person={ person } size="sm" ringOn="void" />
             <span
                 class="absolute -bottom-1 -end-1 flex h-4 w-4 items-center justify-center rounded-full text-ui-2xs font-bold leading-none text-white ring-2 ring-void"
                 style={ `background: var(--ludo-${ props.seat.colour })` }
@@ -116,7 +116,7 @@ export default component PlayerCard(props: {
             </span>
         </span>
 
-        <span class="flex min-w-0 flex-1 flex-col gap-1">
+        <span class="flex min-w-14 flex-1 flex-col gap-1">
             <span class="flex min-w-0 flex-col leading-tight">
                 <span class="truncate text-ui-sm font-semibold text-text" dir="auto">{ name }</span>
                 <span
@@ -129,7 +129,7 @@ export default component PlayerCard(props: {
                 </span>
             </span>
 
-            <span class="flex items-center gap-1.5" role="img" aria-label={ locale.plural('match.tokens', props.seat.home) }>
+            <span class="flex items-center gap-1" role="img" aria-label={ locale.plural('match.tokens', props.seat.home) }>
                 <For each={ PIPS } key={ (pip) => pip } let={ pip }>
                     <span
                         class="ludo-pip"
@@ -141,7 +141,11 @@ export default component PlayerCard(props: {
         </span>
 
         <Show when={ props.die !== undefined && props.active && !props.finished }>
-            { () => <DieFace value={ props.die! } size="md" label={ locale.t('match.turn.rolled', { die: locale.n(props.die!) }) } /> }
+            { () =>
+                <span class="absolute -end-2.5 -top-2.5 z-10 drop-shadow-md">
+                    <DieFace value={ props.die! } size="sm" label={ locale.t('match.turn.rolled', { die: locale.n(props.die!) }) } />
+                </span>
+            }
         </Show>
     </div>
 }

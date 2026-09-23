@@ -58,11 +58,12 @@ export function arrangeHand(cards: readonly number[], trump?: Suit): number[]
     const present = SUITS.filter((suit) => cards.some((card) => suitOf(card) === suit));
     const rest = present.filter((suit) => suit !== trump);
     const order: Suit[] = trump !== undefined && present.includes(trump) ? [trump] : [];
+    const redFirst = rest.filter((suit) => RED.has(suit)).length * 2 > rest.length;
 
     while (rest.length > 0)
     {
         const last = order.at(-1);
-        const next = rest.findIndex((suit) => last === undefined || RED.has(suit) !== RED.has(last));
+        const next = rest.findIndex((suit) => (last === undefined ? RED.has(suit) === redFirst : RED.has(suit) !== RED.has(last)));
 
         order.push(...rest.splice(Math.max(0, next), 1));
     }

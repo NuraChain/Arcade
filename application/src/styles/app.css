@@ -595,6 +595,7 @@
 
 .ludo-seat
 {
+    position: relative;
     display: flex;
     min-inline-size: 0;
     align-items: center;
@@ -615,6 +616,7 @@
 
 .ludo-pip
 {
+    flex: none;
     inline-size: 0.7rem;
     block-size: 0.7rem;
     border-radius: 999px;
@@ -630,6 +632,7 @@
 
 .board-arena
 {
+    direction: ltr;
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     grid-template-areas: 'top-left top-right' 'stage stage' 'bottom-left bottom-right';
@@ -651,12 +654,18 @@
 .board-seat[data-corner='bottom-left']  { grid-area: bottom-left; }
 .board-seat[data-corner='bottom-right'] { grid-area: bottom-right; }
 
+[dir='rtl'] .board-arena > .board-seat
+{
+    direction: rtl;
+}
+
 @container (min-width: 46rem)
 {
     .board-arena
     {
-        grid-template-columns: minmax(8rem, 10.5rem) minmax(0, 1fr) minmax(8rem, 10.5rem);
+        grid-template-columns: minmax(8rem, 10.5rem) minmax(0, 34rem) minmax(8rem, 10.5rem);
         grid-template-rows: auto 1fr auto;
+        justify-content: center;
         grid-template-areas:
             'top-left stage top-right'
             '. stage .'
@@ -668,47 +677,6 @@
     {
         align-self: end;
     }
-
-    .board-seat .ludo-seat
-    {
-        flex-wrap: wrap;
-    }
-}
-
-.board-stage
-{
-    grid-column: 1 / -1;
-}
-
-.board-seat
-{
-    min-inline-size: 0;
-}
-
-@container (min-width: 60rem)
-{
-    .board-arena
-    {
-        display: block;
-    }
-
-    .board-arena
-    {
-        inline-size: min(100%, 62rem);
-        margin-inline: auto;
-    }
-
-    .board-seat
-    {
-        position: absolute;
-        z-index: 1;
-        inline-size: 13rem;
-    }
-
-    .board-seat[data-corner='top-left']     { top: 0;    left: 0; }
-    .board-seat[data-corner='top-right']    { top: 0;    right: 0; }
-    .board-seat[data-corner='bottom-left']  { bottom: 0; left: 0; }
-    .board-seat[data-corner='bottom-right'] { bottom: 0; right: 0; }
 }
 
 .board-stage
@@ -828,12 +796,6 @@
     {
         grid-column: auto;
     }
-
-    .hokm-seat[data-side='left'],
-    .hokm-seat[data-side='right']
-    {
-        top: 50%;
-    }
 }
 
 @container (min-width: 44rem)
@@ -920,6 +882,15 @@
 .hokm-seat[data-side='top-right']
 {
     top: 17%;
+}
+
+@container (orientation: landscape)
+{
+    .hokm-seat[data-side='left'],
+    .hokm-seat[data-side='right']
+    {
+        top: 50%;
+    }
 }
 
 .hokm-plate

@@ -1124,11 +1124,17 @@ The play page's header lists the reader's OTHER tables as links, green where one
 them, and the Games item in every navigation counts the tables waiting. The lobby store refetches
 the list on any `game` doorbell, which is how a move at one table lights up the chip on another.
 
-**The play page opens its table from an effect over the pathname, not in `mount`.** A switch
-between tables is the same route with a different id, so the page is never remounted; opening once
-at mount left the switch changing the url and nothing else. The chat page answered the same thing
-the same way. `TableChat` follows its `conversationId` prop for the same reason - the rail is not
-rebuilt either, and it would have gone on showing the last table's thread.
+**A switch between tables REMOUNTS the play page, so its teardown closes only what it still owns.**
+`<Routes>` keys a segment on its route AND that route's own params, so `/app/play/A` to
+`/app/play/B` builds a new page. On a phone the old one plays its 260ms leave first and is disposed
+AFTER the new one has opened B, so an unconditional `lobby.close()` in its teardown left the new page
+on "No such table" until a reload - and only on a phone, because with no transition the old page is
+torn down before the new one is built. Each page therefore captures the id it was built for under
+`untrack` and closes the lobby, the board and the watch only while the lobby still holds that id or
+nothing. `chat.page` guards `closeThread` by its own conversation the same way, and `TableChat` by
+the thread it last opened; `play.spec.ts` drives play-to-play and chat-to-chat with a transition
+playing. The table still opens from an effect over the pathname rather than in `mount`, and the
+leaving page's copy of that effect opening the NEW id is harmless.
 
 ## Playing a game
 
@@ -3381,7 +3387,12 @@ point lights.
 **The unprefixed utilities ARE the phone layout.** `sm:`/`md:`/`lg:`/`@3xl:` only ever ADD to it for
 bigger screens; a layout written wide and then patched down with overrides is the defect. The shape
 to copy is `.board-arena`, where two cards above and two below the board is the DEFAULT and the
-floating-into-corners arrangement is what a `@container (min-width: 60rem)` earns.
+three-column grid, a seat card beside each corner of the board, is what a `@container (min-width:
+46rem)` earns. The arena is `direction: ltr` because the board is a printed object that never
+mirrors, and each card sets `direction: rtl` back on a Persian page so its own text still reads right
+to left. The die sits on the active card's corner like a badge rather than in the row, so a roll never
+changes a card's size and nothing under it jumps as a player reaches for a token - at 320px a card
+has 111px inside, which holds an avatar, a name and four home dots and nothing more.
 
 Prefer a `@container` variant over a viewport one wherever the column is narrower than the screen,
 which in this shell is most places: a rail or sidebar takes up to 16rem on the left and the social

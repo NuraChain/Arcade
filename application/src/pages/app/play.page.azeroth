@@ -1,4 +1,4 @@
-import { Dynamic, type MountNode, useHead, useNavigate, useParams, useRoute } from 'azerothjs';
+import { Dynamic, type MountNode, untrack, useHead, useNavigate, useParams, useRoute } from 'azerothjs';
 
 import ConfirmSheet from '../../components/app/confirm-sheet.component.azeroth';
 import Page from '../../components/app/page.component.azeroth';
@@ -39,6 +39,8 @@ export default component PlayPage()
     const toasts = useToasts();
     const params = useParams();
     const { navigate } = useNavigate();
+
+    const mine = untrack(() => params().id ?? '');
 
     state chatOpen = false;
 
@@ -82,7 +84,15 @@ export default component PlayPage()
         return () =>
         {
             release();
-            lobby.close();
+
+            const held = untrack(lobby.openId);
+
+            if (held === mine || held === '')
+            {
+                lobby.close();
+                board.close();
+                watch.close();
+            }
         };
     }
 
@@ -114,14 +124,13 @@ export default component PlayPage()
 
     derived playing = showing ? (board.match()?.game ?? '') : '';
 
-    effect
-    {
-        const want = playing;
+    state boardFailed = false;
 
-        if (want === '' || want === drawn)
-        {
-            return;
-        }
+    let failures = 0;
+
+    const draw = (want: string): void =>
+    {
+        boardFailed = false;
 
         const load = want === 'hokm'
             ? import('../../components/games/hokm-board.component.azeroth')
@@ -136,7 +145,38 @@ export default component PlayPage()
 
             Board = module.default;
             drawn = want;
+        }).catch(() =>
+        {
+            failures += 1;
+
+            if (playing === want)
+            {
+                boardFailed = true;
+            }
         });
+    };
+
+    const redraw = (): void =>
+    {
+        if (failures > 1)
+        {
+            window.location.reload();
+            return;
+        }
+
+        draw(playing);
+    };
+
+    effect
+    {
+        const want = playing;
+
+        if (want === '' || want === drawn)
+        {
+            return;
+        }
+
+        draw(want);
     }
 
     const boardProps = (): { match: MatchView; starting: boolean; onAgain?: () => void } => ({
@@ -179,15 +219,6 @@ export default component PlayPage()
         {
             watch.close();
         }
-    }
-
-    mount
-    {
-        return () =>
-        {
-            watch.close();
-            board.close();
-        };
     }
 
     const begin = async (): Promise<void> =>
@@ -350,7 +381,11 @@ export default component PlayPage()
                             { () => <Dynamic component={ Board! } props={ boardProps } /> }
                         </Show>
 
-                        <Show when={ playing !== '' && drawn !== playing }>
+                        <Show when={ playing !== '' && drawn !== playing && boardFailed }>
+                            { () => <ErrorState title={ locale.t('state.errorTitle') } lead={ locale.t('state.errorLead') } onRetry={ redraw } class="py-12" /> }
+                        </Show>
+
+                        <Show when={ playing !== '' && drawn !== playing && !boardFailed }>
                             { () =>
                                 <div class="flex flex-col gap-3" aria-busy="true">
                                     <Skeleton class="aspect-[16/10] w-full rounded-hero" />

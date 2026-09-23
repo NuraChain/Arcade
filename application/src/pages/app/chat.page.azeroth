@@ -63,6 +63,8 @@ export default component ChatPage()
 
     derived id = params().id ?? '';
 
+    const opened = untrack(() => params().id ?? '');
+
     derived conversation = chat.conversation(id) ?? null;
 
     derived here = conversation !== null;
@@ -141,7 +143,11 @@ export default component ChatPage()
         {
             unstick?.();
             release();
-            chat.closeThread();
+
+            if (untrack(chat.openId) === opened)
+            {
+                chat.closeThread();
+            }
         };
     }
 

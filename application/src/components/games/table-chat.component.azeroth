@@ -51,12 +51,15 @@ export default component TableChat(props: { conversationId: string; onClose?: ()
 
     let list: HTMLElement | null = null;
 
+    let opened = '';
+
     effect
     {
         const id = props.conversationId;
 
         if (id !== '')
         {
+            opened = id;
             chat.openThread(id);
         }
     }
@@ -67,7 +70,11 @@ export default component TableChat(props: { conversationId: string; onClose?: ()
         return () =>
         {
             unstick?.();
-            chat.closeThread();
+
+            if (untrack(chat.openId) === opened)
+            {
+                chat.closeThread();
+            }
         };
     }
 

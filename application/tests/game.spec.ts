@@ -465,11 +465,20 @@ describe('a hand arranged the way a person holds it', () =>
         expect(arrangeHand(hand, 'hearts')).toEqual([card(2, 0), card(0, 10), card(0, 3), card(1, 12), card(3, 11), card(3, 9)]);
     });
 
-    it('alternates from the first suit present when there is no trump yet', () =>
+    it('alternates the colours when there is no trump yet', () =>
     {
         const hand = [card(1, 2), card(2, 5), card(3, 1)];
 
         expect(arrangeHand(hand)).toEqual([card(1, 2), card(3, 1), card(2, 5)]);
+    });
+
+    it('starts from the colour with more suits, so two reds are never side by side when a black could part them', () =>
+    {
+        const hand = [card(0, 3), card(1, 2), card(2, 5)];
+        const parted = [card(1, 2), card(0, 3), card(2, 5)];
+
+        expect(arrangeHand(hand)).toEqual(parted);
+        expect(arrangeHand(hand, 'spades')).toEqual(parted);
     });
 
     it('keeps every card and invents none', () =>

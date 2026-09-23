@@ -29,10 +29,9 @@ export default component Button(props: {
         'relative inline-flex select-none items-center justify-center rounded-control font-semibold',
         'transition duration-150 ease-[var(--ease-ui)] active:scale-[0.985]',
         'disabled:cursor-not-allowed disabled:opacity-50',
-        BUTTON_VARIANT[props.variant ?? 'outline'],
+        props.pressed === true ? 'border border-accent/60 bg-accent/15 text-accent' : BUTTON_VARIANT[props.variant ?? 'outline'],
         BUTTON_SIZE[props.size ?? 'md'],
         props.block === true ? 'w-full' : '',
-        props.pressed === true ? 'border-accent/60 bg-accent/15 text-accent' : '',
         inert ? '' : 'cursor-pointer',
         props.class ?? ''
     ].filter(Boolean).join(' ');

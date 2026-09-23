@@ -162,9 +162,9 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
 
     derived hand = view === null ? [] : (sorted ? arrangeHand(view.hand, view.trump) : [...view.hand]);
 
-    derived rows = hand.length > ROW_LIMIT
-        ? [hand.slice(0, Math.ceil(hand.length / 2)), hand.slice(Math.ceil(hand.length / 2))]
-        : [hand];
+    derived rows = hand.length === 0
+        ? []
+        : (hand.length > ROW_LIMIT ? [hand.slice(0, Math.ceil(hand.length / 2)), hand.slice(Math.ceil(hand.length / 2))] : [hand]);
 
     derived handTricks = view === null ? [] : view.points.map((_, side) =>
         view!.seats.filter((row) => row.side === side).reduce((sum, row) => sum + row.tricks, 0));
@@ -259,7 +259,7 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
 
                 <Show when={ laid.cards.length === 0 && !over }>
                     { () =>
-                        <div class="hokm-centre" aria-hidden="true">
+                        <div class="hokm-centre" dir={ locale.dir() } aria-hidden="true">
                             <Icon name="crest-crown" size={ 18 } class="text-gold" />
                             <span class="font-display text-ui-lg font-bold">{ locale.t('games.hokm.name') }</span>
                             <Show when={ view?.trump !== undefined }>
@@ -377,7 +377,7 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
                     </Show>
                     <p class="flex min-w-0 items-center gap-1.5 text-ui-2xs text-muted">
                         <Icon name="crest-crown" size={ 12 } class="shrink-0 text-gold" />
-                        <span class="truncate" dir="auto">
+                        <span class="truncate">
                             { view!.hakem === mine ? locale.t('hokm.hakem.you') : locale.t('hokm.hakem', { name: nameOf(view!.hakem) }) }
                         </span>
                     </p>
@@ -411,7 +411,7 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
                                         <li><CardFace card={ card } /></li>
                                     </For>
                                 </ul>
-                                <p class="truncate text-ui-2xs text-muted" dir="auto">{ locale.t('hokm.table.took', { name: nameOf(view!.took!.seat) }) }</p>
+                                <p class="truncate text-ui-2xs text-muted">{ locale.t('hokm.table.took', { name: nameOf(view!.took!.seat) }) }</p>
                             </div>
                         }
                     </Show>

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { RouterProvider, createMemoryHistory, createRouter } from 'azerothjs';
+import { RouterProvider, createMemoryHistory, createRouter, createSignal } from 'azerothjs';
 import { cleanup, fire, renderTest } from '@azerothjs/testing';
 
 import BrandMark from '../src/components/layout/brand-mark.component.azeroth';
@@ -90,6 +90,45 @@ describe('Button', () =>
         expect(button.className).toContain('bg-accent-fill');
         expect(button.className).toContain('text-accent-ink');
         expect(button.className).not.toMatch(/\bbg-accent(?!-)/);
+    });
+
+    it('paints the pressed state INSTEAD of its variant, because two utilities on one property are decided by stylesheet order', () =>
+    {
+        const { container } = renderTest(() => Button({ variant: 'secondary', pressed: true, children: 'Sort' }) as Rendered);
+        const button = container.querySelector('button')!;
+        const classes = button.className.split(' ');
+        expect(button.getAttribute('aria-pressed')).toBe('true');
+        expect(classes).toContain('bg-accent/15');
+        expect(classes).toContain('text-accent');
+        expect(classes).toContain('border');
+        expect(classes).not.toContain('bg-raised');
+        expect(classes).not.toContain('text-text');
+    });
+
+    it('swaps between its variant and the pressed look as the toggle moves', async () =>
+    {
+        const [pressed, setPressed] = createSignal(false);
+        const { container } = renderTest(() => Button({
+            variant: 'secondary',
+            get pressed()
+            {
+                return pressed();
+            },
+            children: 'Sort'
+        }) as Rendered);
+        const button = container.querySelector('button')!;
+        expect(button.className.split(' ')).toContain('bg-raised');
+        expect(button.className.split(' ')).not.toContain('bg-accent/15');
+
+        setPressed(true);
+        for (let turn = 0; turn < 4; turn += 1)
+        {
+            await Promise.resolve();
+        }
+
+        expect(button.getAttribute('aria-pressed')).toBe('true');
+        expect(button.className.split(' ')).toContain('bg-accent/15');
+        expect(button.className.split(' ')).not.toContain('bg-raised');
     });
 });
 
