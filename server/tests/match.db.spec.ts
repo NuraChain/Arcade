@@ -515,24 +515,109 @@ describe.skipIf(!active)('a match, against a real database', () =>
         });
     });
 
+    describe('a side that wins together', () =>
+    {
+        it('pays both partners the win, not only the first seat of the side', async () =>
+        {
+            const players: string[] = [];
+
+            for (let index = 0; index < 4; index += 1)
+            {
+                players.push(await makeUser());
+            }
+
+            const table = await tables.create(players[0], {
+                game: 'hokm', seats: 4, mode: 'live', privacy: 'public',
+                target: 7, cube: false, blinds: 'low', invitees: []
+            });
+
+            for (const player of players.slice(1))
+            {
+                await tables.claimSeat(player, table.id);
+            }
+
+            for (const player of players)
+            {
+                await tables.setReady(player, table.id, true);
+            }
+
+            const load = await matches.start(players[0], table.id);
+            const lastTrick = {
+                ...(load.state as Record<string, unknown>),
+                phase: 'tricks',
+                trump: 'spades',
+                hakem: 0,
+                turn: 0,
+                lead: 0,
+                trick: [],
+                took: null,
+                hands: [[51], [0], [13], [26]],
+                tricks: [3, 3, 3, 3],
+                points: [6, 0]
+            };
+
+            await db.query(`update matches set state = $2::jsonb where id = $1`, [load.match.id, JSON.stringify(lastTrick)]);
+
+            const userAt = new Map(rowsOf<{ seat: number; user_id: string }>(await db.query(
+                `select seat, user_id from match_players where match_id = $1`,
+                [load.match.id]
+            )).map((row) => [row.seat, row.user_id]));
+
+            for (const [seat, card] of [[0, 51], [1, 0], [2, 13], [3, 26]])
+            {
+                await matches.act(userAt.get(seat)!, load.match.id, { play: { kind: 'hokm', verb: 'card', card }, key: `c${ seat }` });
+            }
+
+            const rows = rowsOf<{ seat: number; result: string; won: number; streak: number }>(await db.query(
+                `select p.seat, p.result, s.won, s.streak
+                   from match_players p
+                   join player_stats s on s.user_id = p.user_id and s.game = 'hokm'
+                  where p.match_id = $1
+                  order by p.seat`,
+                [load.match.id]
+            ));
+
+            expect(rows.map((row) => row.result)).toEqual(['won', 'lost', 'won', 'lost']);
+            expect(rows.map((row) => row.won)).toEqual([1, 0, 1, 0]);
+            expect(rows.map((row) => row.streak)).toEqual([1, 0, 1, 0]);
+        });
+    });
+
     describe('whose turn it is, across every table somebody sits at', () =>
     {
-        it('answers the seat on the move for a live match, and nothing for one that is over or unknown', async () =>
+        it('answers each viewer about their own seat, and nothing for a match that is over or unknown', async () =>
         {
             const first = await seatedTable(2);
             const second = await seatedTable(2);
             const live = await matches.start(first.players[0], first.tableId);
             const over = await matches.start(second.players[0], second.tableId);
             const nowhere = '00000000-0000-4000-8000-000000000000';
+            const due = matches.turnOf('ludo', live.state)!;
 
             await matches.act(second.players[1], over.match.id, { play: null, key: 'walk' });
 
-            const turns = await matches.turnsAt([live.match.id, over.match.id, nowhere]);
+            const onTurn = await matches.turnsAt(first.players[due], [live.match.id, over.match.id, nowhere]);
 
-            expect(turns.get(live.match.id)).toBe(matches.turnOf('ludo', live.state));
-            expect(turns.has(over.match.id)).toBe(false);
-            expect(turns.has(nowhere)).toBe(false);
-            expect((await matches.turnsAt([])).size).toBe(0);
+            expect(onTurn.get(live.match.id)).toBe(true);
+            expect(onTurn.has(over.match.id)).toBe(false);
+            expect(onTurn.has(nowhere)).toBe(false);
+            expect((await matches.turnsAt(first.players[1 - due], [live.match.id])).get(live.match.id)).toBe(false);
+            expect((await matches.turnsAt(second.players[0], [over.match.id])).has(over.match.id)).toBe(false);
+            expect((await matches.turnsAt(first.players[0], [])).size).toBe(0);
+        });
+
+        it('says nothing to somebody sitting in a chair the match never dealt them', async () =>
+        {
+            const { tableId, players } = await seatedTable(3);
+            const live = await matches.start(players[0], tableId);
+            const due = matches.turnOf('ludo', live.state)!;
+
+            await tables.leave(players[due], tableId);
+
+            const newcomer = await makeUser();
+
+            expect(await tables.claimSeat(newcomer, tableId), 'the newcomer landed in some other chair').toBe(due);
+            expect((await matches.turnsAt(newcomer, [live.match.id])).has(live.match.id)).toBe(false);
         });
     });
 });

@@ -1113,8 +1113,10 @@ a table, not a promise about a random number.
 
 Somebody can sit at as many tables as they like, and a turn-based game is only pleasant if they
 can. `GET /tables/mine` answers `yourTurn` on every seated table with a live match, and the ENGINE
-answers it: `match.turnsAt` loads the live matches in one repository read and asks each game's
-`turnOf`, because no SQL can know how hokm's trump pause or ludo's six decides whose go it is. A
+answers it: `match.turnsAt` loads the live matches in one read and asks each game's `turnOf`,
+because no SQL can know how hokm's trump pause or ludo's six decides whose go it is. The reader's
+seat comes from `match_players`, never from the table chair: a chair can change hands mid-match,
+and whoever sits in it then holds no seat in the game and has no go to be told about. A
 table with no match, or a finished one, has no `yourTurn` at all rather than a `false` - there is
 no go to be had there.
 
@@ -1249,9 +1251,16 @@ a game is over.
 **`player_stats.tallies` is jsonb because `captures`, `rolls` and `tokens_home` were ludo's words on
 a table every game shares.** The row is keyed `(user_id, game)`, so a counter's name only has to
 make sense within one game; `Engine.tally(events)` folds the ledger, which also moves the fold into
-the engine's own tests with no Postgres near it. Nothing DECIDES anything by a tally - no
-achievement, rating or level reads one - which is what makes an open record safe on the wire and
-lets an engine name its counters whatever its game calls them.
+the engine's own tests with no Postgres near it.
+
+**Achievements read tallies BY NAME, so an engine's tally keys are a contract with
+`achieve/rules.ts`.** `ludo-hunter` reads `captures`, `ludo-homecoming` reads `home`, and hokm's
+three read `tricks`, `hands` and `kots`. Renaming a counter means changing both files in one commit,
+because a rename made on one side leaves a tile at 0/40 for everybody and nothing throws.
+`rating.spec.ts` folds REAL engine events through `Engine.tally` and then through the rules, which is
+what fails when the two disagree; a fixture of literal `{ captures, home }` agrees with the rules
+whatever the engine calls them. The rating never reads a tally, and XP reads one only through the
+engine's own `points`.
 
 **A jsonb counter cannot be incremented the way an integer one can**, and this is the trap. Postgres
 has no operator that adds two jsonb objects of numbers: `||` REPLACES a key, so two games finishing

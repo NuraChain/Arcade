@@ -152,14 +152,14 @@ export const ACHIEVEMENT_SEEDS: AchievementSeed[] = [
     { id: 'streak-3', nameEn: 'On a roll', nameFa: 'روی دور', blurbEn: 'Three wins in a row.', blurbFa: 'سه برد پشت سر هم.', icon: 'flame', tier: 'silver' },
     { id: 'crew', nameEn: 'Crew', nameFa: 'اکیپ', blurbEn: 'Played with the same three people ten times.', blurbFa: 'ده بار با همان سه نفر بازی کردی.', icon: 'people', tier: 'silver' },
     { id: 'streak-7', nameEn: 'Unstoppable', nameFa: 'توقف‌ناپذیر', blurbEn: 'Seven wins in a row.', blurbFa: 'هفت برد پشت سر هم.', icon: 'zap', tier: 'gold' },
-    { id: 'centurion', nameEn: 'Hundred hands', nameFa: 'صد دست', blurbEn: 'A hundred games played.', blurbFa: 'صد بازی انجام شده.', icon: 'medal', tier: 'gold' },
+    { id: 'centurion', nameEn: 'Hundred hands', nameFa: 'صد بازی', blurbEn: 'A hundred games played.', blurbFa: 'صد بازی انجام شده.', icon: 'medal', tier: 'gold' },
     { id: 'fair', nameEn: 'Good sport', nameFa: 'بازیکن منصف', blurbEn: 'Fifty games without a single walkout.', blurbFa: 'پنجاه بازی بدون حتی یک ترک میز.', icon: 'shield', tier: 'gold' },
     { id: 'ludo-first-win', nameEn: 'First home', nameFa: 'اولین خانه', blurbEn: 'Won a game of Ludo.', blurbFa: 'یک بازی منچ را بردی.', icon: 'dice', tier: 'bronze' },
     { id: 'ludo-hunter', nameEn: 'Hunter', nameFa: 'شکارچی', blurbEn: 'Sent twenty-five tokens back to their yard in Ludo.', blurbFa: 'در منچ بیست‌وپنج مهره را به خانه‌شان برگرداندی.', icon: 'target', tier: 'silver' },
     { id: 'ludo-homecoming', nameEn: 'Homecoming', nameFa: 'بازگشت به خانه', blurbEn: 'Brought forty tokens home in Ludo.', blurbFa: 'در منچ چهل مهره را به خانه رساندی.', icon: 'home', tier: 'silver' },
     { id: 'ludo-master', nameEn: 'Ludo master', nameFa: 'استاد منچ', blurbEn: 'Won twenty-five games of Ludo.', blurbFa: 'بیست‌وپنج بازی منچ را بردی.', icon: 'crest-crown', tier: 'gold' },
-    { id: 'hokm-first-hand', nameEn: 'First hand', nameFa: 'اولین دست', blurbEn: 'Took a hand of Hokm.', blurbFa: 'یک دست حکم را بردی.', icon: 'cards', tier: 'bronze' },
-    { id: 'hokm-kot', nameEn: 'Kot', nameFa: 'کُت', blurbEn: 'Took every trick of a Hokm hand.', blurbFa: 'همهٔ دست‌های یک دور حکم را گرفتی.', icon: 'sparkles', tier: 'silver' },
+    { id: 'hokm-first-hand', nameEn: 'First hand', nameFa: 'اولین حکم', blurbEn: 'Took a hand of Hokm.', blurbFa: 'یک حکم را بردی.', icon: 'cards', tier: 'bronze' },
+    { id: 'hokm-kot', nameEn: 'Kot', nameFa: 'کُت', blurbEn: 'Took every trick of a Hokm hand.', blurbFa: 'همهٔ دست‌های یک حکم را گرفتی.', icon: 'sparkles', tier: 'silver' },
     { id: 'hokm-tricks', nameEn: 'Trick taker', nameFa: 'دست‌گیر', blurbEn: 'Took a hundred tricks in Hokm.', blurbFa: 'در حکم صد دست گرفتی.', icon: 'medal', tier: 'silver' },
     { id: 'hokm-master', nameEn: 'Hokm master', nameFa: 'استاد حکم', blurbEn: 'Won twenty-five games of Hokm.', blurbFa: 'بیست‌وپنج بازی حکم را بردی.', icon: 'trophy', tier: 'gold' }
 ];

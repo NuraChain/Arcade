@@ -2,11 +2,13 @@ import { describe, expect, it } from 'vitest';
 
 import { ACHIEVEMENT_SEEDS } from '../src/db/seed-reference.ts';
 import { ACHIEVEMENT_GAME, ACHIEVEMENT_IDS, earnedBy, progressOf, type AchievementFacts } from '../src/domains/achieve/rules.ts';
+import { hokmEngine } from '../src/domains/match/engines/hokm.ts';
 import { ludoEngine } from '../src/domains/match/engines/ludo.ts';
+import type { HokmState } from '../src/domains/match/hokm/state.ts';
 import { placementsOf } from '../src/domains/match/ludo/standings.ts';
 import { rateField, type Standing } from '../src/domains/match/rating.ts';
 import { FINISHED, YARD } from '../src/domains/match/ludo/board.ts';
-import type { LudoState } from '../src/domains/match/ludo/state.ts';
+import type { GameEvent, LudoState } from '../src/domains/match/ludo/state.ts';
 
 /**
  * The numbers a profile shows, from the three angles each of them can be quietly wrong.
@@ -278,5 +280,65 @@ describe('achievements a game of its own awards', () =>
         expect(progress.get('ludo-hunter')).toEqual({ have: 12, need: 25 });
         expect(progress.get('ludo-homecoming')).toEqual({ have: 40, need: 40 });
         expect(progress.get('ludo-master')).toEqual({ have: 3, need: 25 });
+    });
+});
+
+describe('achievements read the tallies an engine really keeps', () =>
+{
+    const inGame = (game: string, tallies: Record<string, number> = {}): AchievementFacts =>
+        facts({ games: { [game]: { played: 1, won: 0, tallies } } });
+
+    it('finds a ludo capture and a token home under the names the rules ask for', () =>
+    {
+        const events: GameEvent[] = [
+            { e: 'roll', seat: 0, die: 6 },
+            { e: 'capture', seat: 0, piece: 1, victim: 1, victimPiece: 0 },
+            { e: 'home', seat: 0, piece: 2 }
+        ];
+        const progress = progressOf(inGame('ludo', ludoEngine.tally(events).get(0)));
+
+        expect(progress.get('ludo-hunter')?.have).toBe(1);
+        expect(progress.get('ludo-homecoming')?.have).toBe(1);
+    });
+
+    it('finds a hokm trick, a hand and a kot under the names the rules ask for, for both partners', () =>
+    {
+        const draws = { die: (): number => 1 };
+        let state: HokmState = {
+            ...hokmEngine.create([0, 1, 2, 3], draws, 7),
+            phase: 'tricks',
+            trump: 'spades',
+            hakem: 0,
+            turn: 0,
+            lead: 0,
+            trick: [],
+            took: null,
+            hands: [[51], [0], [13], [26]],
+            tricks: [3, 0, 3, 0]
+        };
+        const events: unknown[] = [];
+
+        for (const [seat, card] of [[0, 51], [1, 0], [2, 13], [3, 26]])
+        {
+            const applied = hokmEngine.apply(state, { kind: 'card', seat, card }, draws);
+
+            if (!applied.ok)
+            {
+                throw new Error(applied.reason);
+            }
+
+            state = applied.state;
+            events.push(...applied.events);
+        }
+
+        const tallies = hokmEngine.tally(events);
+        const leader = progressOf(inGame('hokm', tallies.get(0)));
+        const partner = progressOf(inGame('hokm', tallies.get(2)));
+
+        expect(leader.get('hokm-tricks')?.have).toBe(1);
+        expect(leader.get('hokm-first-hand')?.have).toBe(1);
+        expect(leader.get('hokm-kot')?.have).toBe(1);
+        expect(earnedBy(inGame('hokm', tallies.get(2)))).toEqual(expect.arrayContaining(['hokm-first-hand', 'hokm-kot']));
+        expect(partner.get('hokm-tricks')?.have).toBe(0);
     });
 });

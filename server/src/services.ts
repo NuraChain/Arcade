@@ -1473,14 +1473,14 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             async mine(me)
             {
                 const rows = await table.mine(me);
-                const turns = await match.turnsAt(rows.flatMap((row) => row.match_id === null ? [] : [row.match_id]));
+                const turns = await match.turnsAt(me, rows.flatMap((row) => row.match_id === null ? [] : [row.match_id]));
 
                 return rows.map((row) =>
                 {
                     const summary = asTable(row);
-                    const turn = row.match_id === null ? undefined : turns.get(row.match_id);
+                    const yourTurn = row.match_id === null ? undefined : turns.get(row.match_id);
 
-                    return turn === undefined || row.mine === null ? summary : { ...summary, yourTurn: turn === row.mine };
+                    return yourTurn === undefined ? summary : { ...summary, yourTurn };
                 });
             },
 
