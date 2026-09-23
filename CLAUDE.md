@@ -543,8 +543,9 @@ gradient inside a copy of the logo that is `display: none` (the sidebar on a pho
 in every other copy on the page. `public/favicon.svg` is the same drawing, and `tools/art/raster.mjs`
 renders it to the PNG sizes, draws `share.jpg` (the 1200x630 link preview) from the logo and the
 four game scenes, and writes `site.webmanifest`. It needs Chrome, so it takes `QA_CHROME` the way
-the matrix does. `og:image` is a relative url: a deployment behind a real origin should make it
-absolute, which is configuration this repository does not have yet.
+the matrix does. `og:image` is written absolute by the build when `VITE_PUBLIC_ORIGIN` is set in
+the root `.env`, because a link preview needs one; left empty it stays relative, which is right for
+localhost and wrong for a share.
 
 **Achievements are medals and empty states are illustrations, both in CSS.** `.medal[data-tier]`
 is a metal gradient per tier with the icon engraved in it, and a locked one is a sunk well - so a

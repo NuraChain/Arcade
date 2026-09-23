@@ -1,9 +1,25 @@
 import { azeroth } from '@azerothjs/compiler';
 import tailwindcss from '@tailwindcss/vite';
+import type { Plugin } from 'vite';
 import { defineConfig } from 'vitest/config';
 
+const shareOrigin = (): Plugin =>
+{
+    let origin = '';
+
+    return {
+        name: 'nura-share-origin',
+        configResolved: (config) =>
+        {
+            origin = String(config.env.VITE_PUBLIC_ORIGIN ?? '').replace(/\/+$/, '');
+        },
+        transformIndexHtml: (html) =>
+            origin === '' ? html : html.replaceAll('content="/share.jpg"', `content="${ origin }/share.jpg"`)
+    };
+};
+
 export default defineConfig({
-    plugins: [azeroth(), tailwindcss()],
+    plugins: [azeroth(), tailwindcss(), shareOrigin()],
 
     resolve:
     {
