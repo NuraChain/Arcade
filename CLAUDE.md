@@ -691,11 +691,18 @@ Postgres, because neither is a claim about TypeScript.
 payload the viewer may not have it for - not null, not flagged. A client cannot render what it was
 never given, and a filter it is trusted to apply is a filter one component forgets.
 
-**One mute, three kinds of subject.** `mutes (user_id, subject_kind, subject_id)` holds people,
-conversations and games. The product used to keep a muted-people list in `social.store.ts` and
-muted conversations and games in `settings.store.ts` - three spellings of one idea, and every
-feature had to remember all three. `settings.store.ts` is now only what this DEVICE prefers:
-sound, haptics, the rail, notification categories. Nothing in it belongs to the account.
+**One mute, four kinds of subject.** `mutes (user_id, subject_kind, subject_id)` holds people,
+conversations, games and kinds of notification. The product used to keep a muted-people list in
+`social.store.ts` and muted conversations and games in `settings.store.ts` - three spellings of one
+idea, and every feature had to remember all three. `settings.store.ts` is now only what this DEVICE
+prefers: sound, haptics, the rail and the sidebar, the voice defaults and the game helpers. Nothing in
+it belongs to the account.
+
+**A person is muted by HANDLE at the edge and by uuid underneath.** `setMute` resolves the handle
+and `graph` turns the stored uuid back into one, because the client names everybody by handle and
+the notification writer compares `actorId`, which is a uuid. For one release the edge passed the
+handle straight through: the row stored a string no notification's actor could ever equal, so muting
+a person silenced nothing, and `mutes.db.spec.ts` is what says so now.
 
 **The whole graph is the server's now.** `social.store.ts` reads friends, both request
 directions, blocks, the directory, suggestions, mutes, privacy and my own reports from the API,
@@ -3392,9 +3399,19 @@ twelve rows to swipe away. The producer composes the key — `chat:<conversation
 `friend:<actorId>`, `group:<groupId>`, `table:<tableId>` — and choosing it is the only
 interesting decision in writing one.
 
-**Five kinds, each with a producer**, the same rule `LINE_KEYS` follows: `friend-request`,
-`friend-accepted`, `group-added`, `table-invite`, `message`. A kind with nothing writing it is
-filler copy standing in for something nobody has built.
+**Six kinds, each with a producer**, the same rule `LINE_KEYS` follows: `friend-request`,
+`friend-accepted`, `group-added`, `table-invite`, `message`, `turn`. A kind with nothing writing
+it is filler copy standing in for something nobody has built.
+
+**What somebody wants to be told about is a MUTE, and it belongs to the account.** The settings page
+used to offer five switches kept in `localStorage` that nothing ever read - "Game results" and
+"Achievements" for two kinds no producer writes, and three more whose off position changed nothing,
+since the server writes the row and pushes the wake-up. A preference the writer never sees is a
+switch with nothing behind it. The categories are `NOTICES` in `domains/notify/notices.ts`, a
+zero-import module the settings page reads too, and `NOTICE_OF` maps each kind onto one; turning a
+category off is a `notice` mute, which `tell` checks in the same `exists` as the actor and the
+conversation. `mutes_notice_known` is a CHECK, so a category with no kinds behind it cannot be
+stored, and `reference-parity.spec.ts` holds every kind to exactly one category.
 
 **The mute is checked when the row is WRITTEN**, not when it is rendered. A notification that
 exists and is hidden is still a badge somebody has to clear. Same for a block, and for your own

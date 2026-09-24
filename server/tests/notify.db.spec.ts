@@ -6,6 +6,8 @@ import { DataSource } from 'typeorm';
 import { entities } from '../src/entities/index.ts';
 import { createNotifyService, PAGE } from '../src/domains/notify/service.ts';
 import { createSocialService } from '../src/domains/social/service.ts';
+import { NOTICES, NOTICE_OF } from '../src/domains/notify/notices.ts';
+import type { NotificationKind } from '../src/entities/notification.entity.ts';
 import { rowsOf } from '../src/lib/rows.ts';
 import { syncSchema } from '../src/db/schema.ts';
 
@@ -189,6 +191,39 @@ describe.skipIf(!active)('notifications, against a real database', () =>
 
             expect(await notify.tell({ userId: reader, kind: 'message', actorId: noisy, ref: {}, dedupeKey: 'chat:c-1' })).toBe(false);
             expect(await notify.unread(reader)).toBe(0);
+        });
+
+        it('says nothing of a kind this account has switched off, and still says the rest', async () =>
+        {
+            const reader = await makeUser();
+            const writer = await makeUser();
+
+            await social.setMute(reader, 'notice', 'messages', true);
+
+            expect(await notify.tell({ userId: reader, kind: 'message', actorId: writer, ref: {}, dedupeKey: 'chat:c-9' })).toBe(false);
+            expect(await notify.tell({ userId: reader, kind: 'friend-request', actorId: writer, ref: {}, dedupeKey: `friend:${ writer }` })).toBe(true);
+            expect(await notify.unread(reader)).toBe(1);
+
+            await social.setMute(reader, 'notice', 'messages', false);
+
+            expect(await notify.tell({ userId: reader, kind: 'message', actorId: writer, ref: {}, dedupeKey: 'chat:c-9' })).toBe(true);
+        });
+
+        it('switches off every kind of notice it names, and refuses one it does not know', async () =>
+        {
+            const reader = await makeUser();
+
+            for (const notice of NOTICES)
+            {
+                await social.setMute(reader, 'notice', notice, true);
+            }
+
+            for (const kind of Object.keys(NOTICE_OF) as NotificationKind[])
+            {
+                expect(await notify.tell({ userId: reader, kind, actorId: null, ref: {}, dedupeKey: `k:${ kind }` }), kind).toBe(false);
+            }
+
+            await expect(social.setMute(reader, 'notice', 'results', true)).rejects.toThrow();
         });
 
         it('says nothing about a muted conversation, however many people are in it', async () =>

@@ -1,7 +1,9 @@
 import { IsNull, type DataSource } from 'typeorm';
 
 import type { NotificationKind } from '../../entities/notification.entity.ts';
-import { firstRow, rowsOf } from '../../lib/rows.ts';
+import { rowsOf } from '../../lib/rows.ts';
+import { Mute } from '../../entities/mute.entity.ts';
+import { NOTICE_OF } from './notices.ts';
 import { Notification } from '../../entities/notification.entity.ts';
 import { PushSubscription } from '../../entities/push-subscription.entity.ts';
 import type { SocialService } from '../social/service.ts';
@@ -90,15 +92,13 @@ export function createNotifyService(db: DataSource, social: SocialService)
                 return false;
             }
 
-            const muted = await db.query(
-                `select 1 from mutes
-                  where user_id = $1
-                    and ((subject_kind = 'person'       and subject_id = $2)
-                      or (subject_kind = 'conversation' and subject_id = $3))
-                  limit 1`,
-                [input.userId, input.actorId, input.ref.conversationId ?? null]
-            );
-            if (firstRow(muted) !== null)
+            const subjects = [
+                ...(input.actorId === null ? [] : [{ userId: input.userId, subjectKind: 'person' as const, subjectId: input.actorId }]),
+                ...(input.ref.conversationId === undefined ? [] : [{ userId: input.userId, subjectKind: 'conversation' as const, subjectId: input.ref.conversationId }]),
+                { userId: input.userId, subjectKind: 'notice' as const, subjectId: NOTICE_OF[input.kind] }
+            ];
+
+            if (await db.getRepository(Mute).exists({ where: subjects }))
             {
                 return false;
             }

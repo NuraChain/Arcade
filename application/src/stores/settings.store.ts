@@ -2,18 +2,6 @@ import { createStore, createSignal, type Getter } from 'azerothjs';
 
 import { forget, recallJson, rememberJson } from '../lib/storage.ts';
 
-export type NotificationCategory = 'invites' | 'requests' | 'results' | 'messages' | 'achievements';
-
-export const NOTIFICATION_CATEGORIES: NotificationCategory[] = ['invites', 'requests', 'results', 'messages', 'achievements'];
-
-/**
- * What this DEVICE prefers. Nothing here is privacy and nothing here is social.
- *
- * Mutes moved to `social.store.ts` and the privacy switches moved to the server, because both
- * belong to the account rather than the browser: a mute that only exists in one browser's
- * localStorage is a mute the other device keeps notifying you through, and a privacy switch the
- * client holds is a privacy switch the client can turn off.
- */
 export interface Settings
 {
     sound: boolean;
@@ -27,7 +15,6 @@ export interface Settings
     hintMoves: boolean;
     hintOutcome: boolean;
     hintRules: boolean;
-    notifications: Record<NotificationCategory, boolean>;
 }
 
 const STORAGE_KEY = 'nura-games.settings';
@@ -45,8 +32,7 @@ export function defaultSettings(): Settings
         voiceVolume: 1,
         hintMoves: true,
         hintOutcome: true,
-        hintRules: true,
-        notifications: { invites: true, requests: true, results: true, messages: true, achievements: true }
+        hintRules: true
     };
 }
 

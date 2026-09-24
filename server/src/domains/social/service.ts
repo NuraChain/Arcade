@@ -6,6 +6,7 @@ import { Block } from '../../entities/block.entity.ts';
 import { FriendRequest } from '../../entities/friend-request.entity.ts';
 import { Friendship } from '../../entities/friendship.entity.ts';
 import { Mute, type MuteSubject } from '../../entities/mute.entity.ts';
+import { isNotice } from '../notify/notices.ts';
 import { Report, type ReportCategory } from '../../entities/report.entity.ts';
 import { clampPrivacy, mayDiscover, mayMessage, maySeeOnline, maySendRequest, type Party, type Relation } from './policy.ts';
 
@@ -540,6 +541,11 @@ export function createSocialService(db: DataSource)
 
         async setMute(me: string, kind: MuteSubject, subjectId: string, muted: boolean): Promise<void>
         {
+            if (kind === 'notice' && !isNotice(subjectId))
+            {
+                throw new BadRequestError('No such kind of notification.');
+            }
+
             if (muted)
             {
                 await db.query(

@@ -99,9 +99,9 @@ export const me: Pick<Dictionary, keyof typeof reference> = {
 
     'settings.notifications.invites': 'دعوت به میز',
     'settings.notifications.requests': 'درخواست دوستی',
-    'settings.notifications.results': 'نتیجهٔ بازی',
     'settings.notifications.messages': 'پیام‌ها',
-    'settings.notifications.achievements': 'نشان‌ها',
+    'settings.notifications.groups': 'اضافه شدن به گروه',
+    'settings.notifications.turns': 'نوبتت در بازی نوبتی',
     'settings.notifications.sound': 'صدا سر میز',
     'settings.notifications.haptics': 'لرزش',
     'settings.notifications.hapticsHint': 'یک لرزش کوتاه وقتی میز آماده می‌شود، دستی برده می‌شود یا حرکتی می‌نشیند.',

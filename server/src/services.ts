@@ -1132,7 +1132,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                     ...requests.incoming.flatMap((row) => [row.from_user, row.to_user]),
                     ...requests.outgoing.flatMap((row) => [row.from_user, row.to_user])
                 ];
-                const handles = await social.handlesOf(parties);
+                const handles = await social.handlesOf([...parties, ...mutes.filter((one) => one.kind === 'person').map((one) => one.id)]);
 
                 // And the PERSON travels too, because the browser renders the row out of a cache of
                 // what this server has sent it. Sending only handles made a request from somebody
@@ -1146,7 +1146,17 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                     incoming: requests.incoming.map((row) => asRequest(row, handles, viewer, others, 'incoming')),
                     outgoing: requests.outgoing.map((row) => asRequest(row, handles, viewer, others, 'outgoing')),
                     blocked: blocked.map((row) => seenBy(viewer, row, 'blocked')),
-                    mutes
+                    mutes: mutes.flatMap((one) =>
+                    {
+                        if (one.kind !== 'person')
+                        {
+                            return [one];
+                        }
+
+                        const handle = handles.get(one.id);
+
+                        return handle === undefined ? [] : [{ kind: one.kind, id: handle }];
+                    })
                 };
             },
 
@@ -1264,7 +1274,23 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 await social.unblock(me, other);
                 live?.socialChanged(me, other);
             },
-            setMute: (me, kind, subjectId, muted) => social.setMute(me, kind, subjectId, muted),
+            async setMute(me, kind, subjectId, muted)
+            {
+                if (kind !== 'person')
+                {
+                    await social.setMute(me, kind, subjectId, muted);
+                    return;
+                }
+
+                const person = await social.personByHandle(subjectId);
+
+                if (person === null)
+                {
+                    throw new NotFoundError('That account does not exist.');
+                }
+
+                await social.setMute(me, kind, person.id, muted);
+            },
 
             /**
              * Files a report, and CHECKS the disclosure before writing it.

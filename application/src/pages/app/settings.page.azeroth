@@ -21,12 +21,13 @@ import { useAccount } from '../../stores/account.store.ts';
 import { useDevice } from '../../stores/device.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useSession } from '../../stores/session.store.ts';
-import { NOTIFICATION_CATEGORIES, useSettings } from '../../stores/settings.store.ts';
+import { useSettings } from '../../stores/settings.store.ts';
 import { useSocial } from '../../stores/social.store.ts';
 import { useToasts } from '../../stores/toasts.store.ts';
 import { useWallet } from '../../stores/wallet.store.ts';
 import { useVoice } from '../../stores/voice.store.ts';
 import type { MessageKey } from '../../locales/en.ts';
+import { NOTICES, type Notice } from '../../../../server/src/domains/notify/notices.ts';
 
 const PREMIUM: MessageKey[] = ['settings.premium.item.tables', 'settings.premium.item.frames', 'settings.premium.item.emotes', 'settings.premium.item.stats'];
 
@@ -71,6 +72,18 @@ export default component SettingsPage()
     };
 
     derived current = settings.settings();
+
+    const hear = async (notice: Notice): Promise<void> =>
+    {
+        try
+        {
+            await social.toggleMute('notice', notice);
+        }
+        catch
+        {
+            toasts.show({ kind: 'error', text: locale.t('settings.safety.saveFailed') });
+        }
+    };
 
     state blockedPage = 1;
     state mutedPage = 1;
@@ -380,12 +393,12 @@ export default component SettingsPage()
                             </div>
                             <Panel>
                                 <div class="grid gap-5 @3xl:grid-cols-2 @3xl:gap-x-8">
-                                    <For each={ NOTIFICATION_CATEGORIES } key={ (category) => category } let={ category }>
+                                    <For each={ [...NOTICES] } key={ (notice) => notice } let={ notice }>
                                         <div>
                                             <Toggle
-                                                checked={ current.notifications[category] }
-                                                label={ locale.t(`settings.notifications.${ category }`) }
-                                                onChange={ (checked) => settings.update({ notifications: { ...current.notifications, [category]: checked } }) }
+                                                checked={ !social.isMuted('notice', notice) }
+                                                label={ locale.t(`settings.notifications.${ notice }`) }
+                                                onChange={ () => void hear(notice) }
                                             />
                                         </div>
                                     </For>

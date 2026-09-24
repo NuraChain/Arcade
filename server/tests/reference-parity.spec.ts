@@ -6,6 +6,7 @@ import '../src/entities/index.ts';
 
 import { GAME_SEEDS } from '../src/db/seed-reference.ts';
 import { RUNGS } from '../src/domains/achieve/families.ts';
+import { NOTICES, NOTICE_OF } from '../src/domains/notify/notices.ts';
 import { GAMES } from '../../application/src/data/games.ts';
 import { TABLE_RULES } from '../../application/src/data/tables.ts';
 
@@ -139,5 +140,22 @@ describe('achievements: the server definitions hold together', () =>
                 }
             }
         }
+    });
+});
+
+describe('notices: the kinds a person can switch off hold together', () =>
+{
+    const listed = (name: string): string[] =>
+        [...(getMetadataArgsStorage().checks.find((one) => one.name === name)?.expression ?? '').matchAll(/'([a-z-]+)'/g)].map((match) => match[1]);
+
+    it('names in the CHECK exactly the notices the service knows', () =>
+    {
+        expect(listed('mutes_notice_known').filter((one) => one !== 'notice').sort()).toEqual([...NOTICES].sort());
+    });
+
+    it('files every kind of notification under a notice somebody can switch off', () =>
+    {
+        expect(Object.keys(NOTICE_OF).sort()).toEqual(listed('notifications_kind_known').sort());
+        expect(new Set(Object.values(NOTICE_OF))).toEqual(new Set(NOTICES));
     });
 });

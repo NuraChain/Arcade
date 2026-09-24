@@ -608,7 +608,7 @@ export const relation = enumOf(['me', 'friend', 'incoming', 'outgoing', 'blocked
 
 export type Relation = Infer<typeof relation>;
 
-export const muteSubject = enumOf(['person', 'conversation', 'game']);
+export const muteSubject = enumOf(['person', 'conversation', 'game', 'notice']);
 
 export type MuteSubject = Infer<typeof muteSubject>;
 

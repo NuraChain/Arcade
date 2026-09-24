@@ -181,3 +181,26 @@ describe('the profile sheet', () =>
         expect(closedWith).toBeNull();
     });
 });
+
+describe('the notification switches', () =>
+{
+    it('read the account\'s own mutes and write through the server, so every device agrees', async () =>
+    {
+        server.mutes = [{ kind: 'notice', id: 'turns' }];
+        await useAccount().signIn('Alex');
+        const container = await show(SettingsPage as unknown as () => HTMLElement, '/app/me/settings');
+        const switchFor = (label: string): HTMLElement =>
+            [...container.querySelectorAll<HTMLElement>('[role="switch"]')].find((one) => one.querySelector('span span')?.textContent === label)!;
+
+        expect(switchFor('Your turn in a turn-based game').getAttribute('aria-checked')).toBe('false');
+        expect(switchFor('Messages').getAttribute('aria-checked')).toBe('true');
+
+        switchFor('Messages').click();
+        await settle();
+
+        expect(server.calls).toContain('social.mute');
+        expect(server.mutes).toContainEqual({ kind: 'notice', id: 'messages' });
+        expect(switchFor('Messages').getAttribute('aria-checked')).toBe('false');
+        expect(switchFor('Messages').querySelector('[aria-hidden]')?.className).toContain('bg-line');
+    });
+});
