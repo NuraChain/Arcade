@@ -63,6 +63,9 @@ export class Match
     @Column({ type: 'integer', default: 0 })
     rev!: number;
 
+    @Column({ type: 'jsonb', nullable: true })
+    opening!: unknown;
+
     @Column({ name: 'deadline_at', type: 'timestamptz', nullable: true })
     deadlineAt!: Date | null;
 

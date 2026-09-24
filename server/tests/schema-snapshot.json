@@ -154,6 +154,7 @@
         "matches.finished_at timestamp with time zone YES -",
         "matches.game character varying NO -",
         "matches.id uuid NO gen_random_uuid()",
+        "matches.opening jsonb YES -",
         "matches.outcome character varying YES -",
         "matches.rev integer NO 0",
         "matches.seats smallint NO -",
