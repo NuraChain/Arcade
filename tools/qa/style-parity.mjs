@@ -51,7 +51,7 @@ const snapshot = ({ props, pseudo }) =>
 
     for (const element of document.body.querySelectorAll('*'))
     {
-        if (element.closest('svg') !== null && element.tagName.toLowerCase() !== 'svg')
+        if (element.tagName.toLowerCase() === 'canvas' || (element.closest('svg') !== null && element.tagName.toLowerCase() !== 'svg'))
         {
             continue;
         }
