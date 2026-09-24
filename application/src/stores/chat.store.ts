@@ -4,6 +4,7 @@ import { client } from '../api.ts';
 import type { Conversation, Message } from '../data/chat.ts';
 import { runtime } from '../lib/runtime.ts';
 import { createApiSource, type ChatScope, type ChatSource, type ConversationRow } from '../services/chat.source.ts';
+import { THREAD_PAGE } from '../../../server/src/domains/chat/pages.ts';
 import { useAccount } from './account.store.ts';
 import { useGroups } from './groups.store.ts';
 import { usePeople } from './people.store.ts';
@@ -50,6 +51,9 @@ export interface ChatApi
     messages: Getter<Message[]>;
     threadLoading: Getter<boolean>;
     threadError: Getter<unknown>;
+    hasEarlier: Getter<boolean>;
+    earlierLoading: Getter<boolean>;
+    earlier(): void;
 
     lastOf(id: string): Message | undefined;
     unread(id: string): number;
@@ -116,6 +120,7 @@ export const useChat = createStore((): ChatApi =>
     };
 
     const [openId, setOpenId] = createSignal('');
+    const [depth, setDepth] = createSignal(THREAD_PAGE);
     const [seen, setSeen] = createSignal<Record<string, number>>({});
     const [typists, setTypists] = createSignal<Record<string, Typist[]>>({});
     const [drafts, setDrafts] = createSignal<Record<string, string>>({});
@@ -133,8 +138,8 @@ export const useChat = createStore((): ChatApi =>
     );
 
     const thread = createResource(
-        () => (openId() === '' ? null : { id: openId(), scope: scope() }),
-        (current, signal) => active.thread(current.id, current.scope, signal),
+        () => (openId() === '' ? null : { id: openId(), scope: scope(), depth: depth() }),
+        (current, signal) => active.thread(current.id, current.scope, signal, current.depth),
         { name: 'chat.thread' }
     );
 
@@ -181,7 +186,9 @@ export const useChat = createStore((): ChatApi =>
 
     const conversations = (): Conversation[] => rows().map((row) => row.conversation);
 
-    const messages = (): Message[] => thread.data() ?? [];
+    const messages = (): Message[] => thread.data()?.messages ?? [];
+
+    const hasEarlier = (): boolean => thread.data()?.earlier === true;
 
     const lastOf = (id: string): Message | undefined => rowOf(id)?.last ?? undefined;
 
@@ -305,18 +312,33 @@ export const useChat = createStore((): ChatApi =>
 
         openThread(id)
         {
+            if (id !== untrack(openId))
+            {
+                setDepth(THREAD_PAGE);
+            }
             setOpenId(id);
         },
 
         closeThread()
         {
             setOpenId('');
+            setDepth(THREAD_PAGE);
         },
 
         openId,
         messages,
         threadLoading: () => thread.loading(),
         threadError: () => thread.error(),
+        hasEarlier,
+        earlierLoading: () => thread.loading() && messages().length > 0 && depth() > messages().length,
+
+        earlier()
+        {
+            if (hasEarlier())
+            {
+                setDepth((current) => current + THREAD_PAGE);
+            }
+        },
 
         lastOf,
         unread,
@@ -532,6 +554,7 @@ export const useChat = createStore((): ChatApi =>
             sweep = null;
             announced.clear();
             setOpenId('');
+            setDepth(THREAD_PAGE);
             setSeen({});
             setTypists({});
             setDrafts({});

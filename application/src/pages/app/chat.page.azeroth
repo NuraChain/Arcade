@@ -25,6 +25,7 @@ import AvatarGroup from '../../components/ui/avatar-group.component.azeroth';
 import Button from '../../components/ui/button.component.azeroth';
 import EmptyState from '../../components/ui/empty-state.component.azeroth';
 import IconButton from '../../components/ui/icon-button.component.azeroth';
+import LoadMore from '../../components/ui/load-more.component.azeroth';
 import { CHAT_WELL } from '../../components/ui/variants.ts';
 import { usePeople } from '../../stores/people.store.ts';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
@@ -44,7 +45,6 @@ import { useToasts } from '../../stores/toasts.store.ts';
 
 const CHATS = '/app/chats';
 
-const WINDOW = 40;
 
 export default component ChatPage()
 {
@@ -63,8 +63,6 @@ export default component ChatPage()
     const device = useDevice();
     const params = useParams();
     const route = useRoute();
-
-    state visible = WINDOW;
 
     let list: HTMLElement | null = null;
 
@@ -113,11 +111,7 @@ export default component ChatPage()
 
     derived failed = chat.threadError() !== null;
 
-    derived shown = messages.slice(Math.max(0, messages.length - visible));
-
-    derived hidden = messages.length - shown.length;
-
-    derived rows = threadRows(shown);
+    derived rows = threadRows(messages);
 
     derived typing = chat.typing(id);
 
@@ -179,12 +173,6 @@ export default component ChatPage()
 
     effect
     {
-        params();
-        visible = WINDOW;
-    }
-
-    effect
-    {
         const here = route().pathname;
         const mine = id;
 
@@ -194,18 +182,34 @@ export default component ChatPage()
         }
     }
 
+    let anchor: { first: string; from: number } | null = null;
+
     const showEarlier = (): void =>
     {
-        const anchor = list === null ? 0 : list.scrollHeight - list.scrollTop;
-        visible += WINDOW;
-        requestAnimationFrame(() =>
+        if (list !== null)
         {
-            if (list !== null)
-            {
-                list.scrollTop = list.scrollHeight - anchor;
-            }
-        });
+            anchor = { first: messages[0]?.id ?? '', from: list.scrollHeight - list.scrollTop };
+        }
+        chat.earlier();
     };
+
+    effect
+    {
+        const first = messages[0]?.id ?? '';
+        const held = anchor;
+
+        if (held !== null && first !== held.first)
+        {
+            anchor = null;
+            requestAnimationFrame(() =>
+            {
+                if (list !== null)
+                {
+                    list.scrollTop = list.scrollHeight - held.from;
+                }
+            });
+        }
+    }
 
     derived readable = conversation === null ? '' : id;
 
@@ -284,11 +288,6 @@ export default component ChatPage()
         {
             toasts.show({ kind: 'info', text: locale.t(quoteOf(quoted)?.kind === 'deleted' ? 'chat.quoteDeleted' : 'chat.quoteMissing'), dedupe: 'chat-jump' });
             return;
-        }
-
-        if (index < messages.length - visible)
-        {
-            visible = messages.length - index + 4;
         }
 
         requestAnimationFrame(() =>
@@ -445,7 +444,7 @@ export default component ChatPage()
 
                             <div ref={ (element) => list = element } class={ [ CHAT_WELL, '@container/thread flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden px-3 sm:px-5' ].join(' ') }>
                                 <div class="mx-auto mt-auto flex w-full max-w-[48rem] flex-col pb-3 pt-4">
-                                    <Show when={ hidden === 0 && stop === null && !seal.loading() && messages.length > 0 }>
+                                    <Show when={ !chat.hasEarlier() && stop === null && !seal.loading() && messages.length > 0 }>
                                         { () =>
                                             <div class="mx-auto mb-2 max-w-md rounded-tile border border-line bg-field/80">
                                                 <SealNotice stop={ null } />
@@ -453,14 +452,8 @@ export default component ChatPage()
                                         }
                                     </Show>
 
-                                    <Show when={ hidden > 0 }>
-                                        { () =>
-                                            <div class="flex justify-center pb-2">
-                                                <Button variant="ghost" size="sm" leading="history" onClick={ showEarlier }>
-                                                    { locale.t('chat.earlier', { count: locale.n(hidden) }) }
-                                                </Button>
-                                            </div>
-                                        }
+                                    <Show when={ chat.hasEarlier() }>
+                                        { () => <LoadMore label={ locale.t('chat.earlier') } icon="history" loading={ chat.earlierLoading() } class="pb-2" onMore={ showEarlier } /> }
                                     </Show>
 
                                     <Switch

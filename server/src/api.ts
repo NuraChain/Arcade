@@ -28,6 +28,7 @@ import {
     conversationList,
     conversationRef,
     cursorQuery,
+    threadQuery,
     chainProfileState,
     chainPublish,
     challenge,
@@ -890,8 +891,8 @@ export function buildApi(ports: Ports)
 
             messages: routes.get(
                 '/:id/messages',
-                { output: messagePage, query: cursorQuery },
-                (context) => ports.chat.messages(context.principal.userId, context.params.id, context.query.cursor)
+                { output: messagePage, query: threadQuery },
+                (context) => ports.chat.messages(context.principal.userId, context.params.id, context.query.cursor, context.query.limit)
             ),
 
             send: routes.post(

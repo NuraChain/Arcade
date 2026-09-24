@@ -283,6 +283,28 @@ describe.skipIf(!active)('chat, against a real database', () =>
         expect(seen[seen.length - 1]).toBe(`line ${ total - 1 }`);
     });
 
+    it('answers as much history as the reader has already scrolled through, in one read', async () =>
+    {
+        const [a, b] = [await makeUser(), await makeUser()];
+        const conversation = await chat.openDirect(a, b);
+
+        const total = PAGE + 15;
+        for (let index = 0; index < total; index += 1)
+        {
+            await say(a, conversation, `line ${ index }`);
+        }
+
+        const deeper = await chat.messages(a, conversation, null, PAGE + 10);
+        expect(deeper.messages.length).toBe(PAGE + 10);
+        expect(deeper.hasMore).toBe(true);
+        expect(deeper.messages[deeper.messages.length - 1].body).toBe(`line ${ total - 1 }`);
+
+        const everything = await chat.messages(a, conversation, null, total);
+        expect(everything.messages.length).toBe(total);
+        expect(everything.hasMore).toBe(false);
+        expect(everything.messages[0].body).toBe('line 0');
+    });
+
     it('keeps a page stable while the other end is being written to', async () =>
     {
         const [a, b] = [await makeUser(), await makeUser()];

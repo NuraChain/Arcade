@@ -107,7 +107,7 @@ export const social: Pick<Dictionary, keyof typeof reference> = {
     'chats.loadFailedLead': 'ارتباط قطع شده، یا سرور حالش خوش نیست.',
     'chats.you': 'تو: ',
     'chats.typing': 'در حال نوشتن…',
-    'chat.earlier': 'نمایش {count} پیام قبلی',
+    'chat.earlier': 'نمایش پیام‌های قبلی',
     'chats.pin': 'سنجاق به بالا',
     'chats.unpin': 'برداشتن سنجاق',
     'chats.markRead': 'علامت زدن به‌عنوان خوانده‌شده',

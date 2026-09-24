@@ -5,6 +5,7 @@ import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import { fold, rank, ranked } from '../src/services/search.service.ts';
 import { mutualCount } from '../src/services/social.service.ts';
 import { setChatSource, useChat } from '../src/stores/chat.store.ts';
+import { THREAD_PAGE } from '../../server/src/domains/chat/pages.ts';
 import { createApiSource, type ChatSource } from '../src/services/chat.source.ts';
 import { server } from './fake-api.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
@@ -318,6 +319,46 @@ describe('chat store', () =>
         // The id and the time are the SERVER's. The client asked with neither.
         expect(last.id).not.toBe('');
         expect(chat.lastOf('c-reza')?.id).toBe(last.id);
+    });
+
+    it('reaches history older than the first page, and keeps it while the room goes on talking', async () =>
+    {
+        const chat = useChat();
+        const template = server.messages.find((one) => one.conversationId === 'c-reza')!;
+        server.messages.unshift(...Array.from({ length: THREAD_PAGE + 5 }, (_, index) => ({ ...template, id: `older-${ index }` })));
+        const total = server.messages.filter((one) => one.conversationId === 'c-reza').length;
+
+        chat.openThread('c-reza');
+        await chat.refresh();
+        expect(chat.messages().length).toBe(THREAD_PAGE);
+        expect(chat.hasEarlier()).toBe(true);
+
+        chat.earlier();
+        await chat.refresh();
+        expect(chat.messages().length).toBe(total);
+        expect(chat.hasEarlier()).toBe(false);
+
+        await chat.send('c-reza', 'Still here.');
+        await chat.refresh();
+        expect(chat.messages().length).toBe(total + 1);
+        expect(chat.messages()[0].id).toBe('older-0');
+    });
+
+    it('starts a thread it opens again at its newest page', async () =>
+    {
+        const chat = useChat();
+        const template = server.messages.find((one) => one.conversationId === 'c-reza')!;
+        server.messages.unshift(...Array.from({ length: THREAD_PAGE + 5 }, (_, index) => ({ ...template, id: `older-${ index }` })));
+
+        chat.openThread('c-reza');
+        await chat.refresh();
+        chat.earlier();
+        await chat.refresh();
+        chat.closeThread();
+
+        chat.openThread('c-reza');
+        await chat.refresh();
+        expect(chat.messages().length).toBe(THREAD_PAGE);
     });
 
     it('nothing invents a message any more', async () =>

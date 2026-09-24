@@ -104,7 +104,7 @@ export const social = {
     'chats.loadFailedLead': 'The connection dropped, or the server is having a moment.',
     'chats.you': 'You: ',
     'chats.typing': 'typing…',
-    'chat.earlier': 'Show {count} earlier',
+    'chat.earlier': 'Show earlier messages',
     'chats.pin': 'Pin to the top',
     'chats.unpin': 'Unpin',
     'chats.markRead': 'Mark as read',

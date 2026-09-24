@@ -390,7 +390,7 @@ export interface ChatPort
         keys: { deviceId: string; ephemeralKey: string; wrapped: string }[];
     }): Promise<{ minted: boolean; epoch: number }>;
 
-    messages(me: string, conversationId: string, cursor: string | undefined): Promise<MessagePage>;
+    messages(me: string, conversationId: string, cursor: string | undefined, limit?: string): Promise<MessagePage>;
 
     /**
      * Stores a sealed message: an envelope this server can read and a body it cannot.

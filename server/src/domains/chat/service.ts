@@ -2,6 +2,7 @@ import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '@
 import type { DataSource } from 'typeorm';
 
 import type { Franking } from './franking.ts';
+import { THREAD_PAGE } from './pages.ts';
 
 import { affectedBy, firstRow, rowsOf } from '../../lib/rows.ts';
 import { ConversationMember } from '../../entities/conversation-member.entity.ts';
@@ -95,7 +96,7 @@ export interface SealedInput
 }
 
 /** How many messages one page of history carries. */
-export const PAGE = 40;
+export const PAGE = THREAD_PAGE;
 
 /**
  * How far a message's signed expiry may sit from the room's rule.
@@ -331,7 +332,7 @@ export function createChatService(db: DataSource, social: SocialService, frankin
          * other end while somebody scrolls up, and an OFFSET page silently repeats or skips a
          * message every time one arrives. The cursor is the last row of the previous page.
          */
-        async messages(me: string, conversationId: string, cursor: { at: Date; id: string } | null): Promise<{ messages: MessageRow[]; hasMore: boolean; reactions: MessageRow[] }>
+        async messages(me: string, conversationId: string, cursor: { at: Date; id: string } | null, size: number = PAGE): Promise<{ messages: MessageRow[]; hasMore: boolean; reactions: MessageRow[] }>
         {
             await mustBeMember(me, conversationId);
 
@@ -350,12 +351,12 @@ export function createChatService(db: DataSource, social: SocialService, frankin
                    and ($2::timestamptz is null or (x.created_at, x.id) < ($2::timestamptz, $3::uuid))
                  order by x.created_at desc, x.id desc
                  limit $4`,
-                [conversationId, cursor?.at ?? null, cursor?.id ?? null, PAGE + 1]
+                [conversationId, cursor?.at ?? null, cursor?.id ?? null, size + 1]
             );
 
             const page = rowsOf<MessageRow>(rows);
-            const hasMore = page.length > PAGE;
-            const shown = page.slice(0, PAGE).reverse();
+            const hasMore = page.length > size;
+            const shown = page.slice(0, size).reverse();
             const texts = shown.filter((row) => row.kind === 'text').map((row) => row.id);
 
             const reactions = texts.length === 0 ? [] : await db.getRepository(Message)

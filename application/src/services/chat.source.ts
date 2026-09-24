@@ -15,6 +15,7 @@ import {
     type MessageFailure
 } from '../lib/sealing.ts';
 import type { MemberSeal } from '../lib/seal-state.ts';
+import { THREAD_MOST, THREAD_PAGE } from '../../../server/src/domains/chat/pages.ts';
 
 export interface ChatScope
 {
@@ -64,10 +65,16 @@ export interface ConversationRow
  * because a source that had to guess who it was serving would be a source that could serve the
  * wrong person.
  */
+export interface ThreadPage
+{
+    messages: Message[];
+    earlier: boolean;
+}
+
 export interface ChatSource
 {
     conversations(scope: ChatScope, signal: AbortSignal): Promise<ConversationRow[]>;
-    thread(id: string, scope: ChatScope, signal: AbortSignal): Promise<Message[]>;
+    thread(id: string, scope: ChatScope, signal: AbortSignal, wanted?: number): Promise<ThreadPage>;
     /**
      * Seals and sends. `expiresAt` is epoch milliseconds, or 0 for a message that lasts.
      *
@@ -374,15 +381,31 @@ export function createApiSource(): ChatSource
             })));
         },
 
-        async thread(id, scope)
+        async thread(id, scope, _signal, wanted = THREAD_PAGE)
         {
             openedFor = scope.me;
 
-            const [page, secrets, mine] = await Promise.all([
-                client.chat.messages({ params: { id }, query: {} }),
-                keyStore().secrets(),
-                keyStore().load()
-            ]);
+            const walk = async (): Promise<{ wires: ChatMessage[]; earlier: boolean }> =>
+            {
+                const wires: ChatMessage[] = [];
+                let cursor: string | undefined;
+                let earlier = false;
+
+                do
+                {
+                    const limit = String(Math.min(wanted - wires.length, THREAD_MOST));
+                    const page = await client.chat.messages({ params: { id }, query: cursor === undefined ? { limit } : { limit, cursor } });
+
+                    wires.unshift(...page.messages);
+                    earlier = page.hasMore;
+                    cursor = page.hasMore ? page.cursor : undefined;
+                }
+                while (cursor !== undefined && wires.length < wanted);
+
+                return { wires, earlier };
+            };
+
+            const [page, secrets, mine] = await Promise.all([walk(), keyStore().secrets(), keyStore().load()]);
 
             // One key per epoch for the whole page. A thread that spans a rotation touches two, and
             // fetching one per message would ask the server for the same wrap forty times.
@@ -404,7 +427,7 @@ export function createApiSource(): ChatSource
                 return fetching;
             };
 
-            return Promise.all(page.messages.map((wire) => openOne(wire, keyFor)));
+            return { messages: await Promise.all(page.wires.map((wire) => openOne(wire, keyFor))), earlier: page.earlier };
         },
 
         /**

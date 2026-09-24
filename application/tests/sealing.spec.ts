@@ -117,7 +117,7 @@ describe('sealing a thread for the first time', () =>
         expect(stored.senderDeviceId).toBe(mine.id);
         expect(stored.senderAccountId).toBe('u-alex');
 
-        const thread = await source.thread(THREAD, scope, new AbortController().signal);
+        const thread = (await source.thread(THREAD, scope, new AbortController().signal)).messages;
         expect(thread).toHaveLength(1);
         expect(thread[0].text).toBe('one more before bed?');
         expect(thread[0].locked).toBeUndefined();
@@ -197,7 +197,7 @@ describe('what the client refuses from the server', () =>
         server.messages[0].senderDeviceId = stranger.id;
         forgetSigners();
 
-        const thread = await source.thread(THREAD, scope, new AbortController().signal);
+        const thread = (await source.thread(THREAD, scope, new AbortController().signal)).messages;
 
         expect(thread[0].locked).toBe('unknown-sender');
         expect(thread[0].text).toBe('');
@@ -214,7 +214,7 @@ describe('what the client refuses from the server', () =>
         server.messages[0].from = 'sara.k';
         forgetSigners();
 
-        const thread = await source.thread(THREAD, scope, new AbortController().signal);
+        const thread = (await source.thread(THREAD, scope, new AbortController().signal)).messages;
 
         expect(thread[0].locked).toBeUndefined();
         expect(thread[0].from).toBe('alex');
@@ -232,7 +232,7 @@ describe('what the client refuses from the server', () =>
         server.messages[0].at = new Date(1_600_000_000_000).toISOString();
         forgetSigners();
 
-        const thread = await source.thread(THREAD, scope, new AbortController().signal);
+        const thread = (await source.thread(THREAD, scope, new AbortController().signal)).messages;
 
         expect(thread[0].locked).toBeUndefined();
         expect(thread[0].at).toBe(signed);
@@ -248,7 +248,7 @@ describe('what the client refuses from the server', () =>
         server.messages[0].senderAccountId = 'u-sara.k';
         forgetSigners();
 
-        const thread = await source.thread(THREAD, scope, new AbortController().signal);
+        const thread = (await source.thread(THREAD, scope, new AbortController().signal)).messages;
         expect(thread[0].locked).toBe('unknown-sender');
     });
 
@@ -261,7 +261,7 @@ describe('what the client refuses from the server', () =>
         server.messages[0].body = `${ body.slice(0, -2) }${ body.endsWith('AA') ? 'BB' : 'AA' }`;
         forgetSigners();
 
-        const thread = await source.thread(THREAD, scope, new AbortController().signal);
+        const thread = (await source.thread(THREAD, scope, new AbortController().signal)).messages;
         expect(thread[0].locked).toBe('bad-signature');
     });
 
@@ -273,7 +273,7 @@ describe('what the client refuses from the server', () =>
         server.messages[0].clientAt = new Date(1_600_000_000_000).toISOString();
         forgetSigners();
 
-        const thread = await source.thread(THREAD, scope, new AbortController().signal);
+        const thread = (await source.thread(THREAD, scope, new AbortController().signal)).messages;
         expect(thread[0].locked).toBe('bad-signature');
     });
 
@@ -287,7 +287,7 @@ describe('what the client refuses from the server', () =>
         delete server.epochs[THREAD][0].keys[mine.id];
         forgetSigners();
 
-        const thread = await createApiSource().thread(THREAD, scope, new AbortController().signal);
+        const thread = (await createApiSource().thread(THREAD, scope, new AbortController().signal)).messages;
         expect(thread[0].locked).toBe('no-epoch-key');
     });
 });
@@ -299,7 +299,7 @@ describe('what leaves the browser when somebody signs out', () =>
         const source = createApiSource();
 
         await source.post(said('something private'));
-        await source.thread(THREAD, scope, new AbortController().signal);
+        (await source.thread(THREAD, scope, new AbortController().signal)).messages;
 
         expect(source.archive(scope).map((one) => one.text)).toContain('something private');
 
@@ -318,7 +318,7 @@ describe('what leaves the browser when somebody signs out', () =>
         const source = createApiSource();
 
         await source.post(said('for alex only'));
-        await source.thread(THREAD, scope, new AbortController().signal);
+        (await source.thread(THREAD, scope, new AbortController().signal)).messages;
 
         // Belt to `forgetArchive`'s braces. If a source somehow outlives the account it was filled
         // for, it answers nothing rather than handing one person's messages to another.
@@ -331,7 +331,7 @@ describe('what leaves the browser when somebody signs out', () =>
         const source = createApiSource();
 
         await source.post(said('not for long'));
-        await source.thread(THREAD, scope, new AbortController().signal);
+        (await source.thread(THREAD, scope, new AbortController().signal)).messages;
 
         expect(source.archive(scope)).toHaveLength(1);
 
@@ -341,7 +341,7 @@ describe('what leaves the browser when somebody signs out', () =>
         server.messages[0].expiresAt = new Date(1_600_000_000_000).toISOString();
         forgetSigners();
 
-        await source.thread(THREAD, scope, new AbortController().signal);
+        (await source.thread(THREAD, scope, new AbortController().signal)).messages;
         expect(source.archive(scope)).toEqual([]);
     });
 });
@@ -363,7 +363,7 @@ describe('rotation', () =>
         expect(server.epochs[THREAD]).toHaveLength(2);
         expect(server.epochs[THREAD][1].recipients).toBe(recipientList([mine.id, theirs.id, theirSecond.id]));
 
-        const thread = await source.thread(THREAD, scope, new AbortController().signal);
+        const thread = (await source.thread(THREAD, scope, new AbortController().signal)).messages;
 
         expect(thread.map((one) => one.text)).toEqual(['under one', 'under two']);
         expect(thread.every((one) => one.locked === undefined)).toBe(true);
@@ -419,7 +419,7 @@ describe('replies, reactions and deletions, all inside the seal', () =>
         const stored = server.messages[1];
         expect(stored.body).not.toContain(first);
 
-        const thread = await source.thread(THREAD, scope, new AbortController().signal);
+        const thread = (await source.thread(THREAD, scope, new AbortController().signal)).messages;
         expect(thread[1].text).toBe('second');
         expect(thread[1].reply).toBe(first);
         expect(thread[1].forwarded).toBe(true);
@@ -435,7 +435,7 @@ describe('replies, reactions and deletions, all inside the seal', () =>
 
         await source.react(THREAD, 'alex', one.id, '👍', 1_700_000_000_500, 0);
 
-        const reacted = await source.thread(THREAD, scope, new AbortController().signal);
+        const reacted = (await source.thread(THREAD, scope, new AbortController().signal)).messages;
         expect(reacted[0].reactions).toEqual([{ id: expect.any(String), from: 'alex', emoji: '👍' }]);
 
         const moved = one.reactions!.map((reaction) => ({ ...reaction, target: two.id }));
@@ -443,7 +443,7 @@ describe('replies, reactions and deletions, all inside the seal', () =>
         two.reactions = moved;
         forgetSigners();
 
-        const after = await source.thread(THREAD, scope, new AbortController().signal);
+        const after = (await source.thread(THREAD, scope, new AbortController().signal)).messages;
         expect(after[0].reactions).toBeUndefined();
         expect(after[1].reactions).toBeUndefined();
     });
@@ -454,12 +454,12 @@ describe('replies, reactions and deletions, all inside the seal', () =>
         await source.post(said('regrettable'));
         const id = server.messages[0].id;
 
-        await source.thread(THREAD, scope, new AbortController().signal);
+        (await source.thread(THREAD, scope, new AbortController().signal)).messages;
         expect(source.archive(scope).map((message) => message.text)).toContain('regrettable');
 
         await source.remove(THREAD, id);
 
-        const thread = await source.thread(THREAD, scope, new AbortController().signal);
+        const thread = (await source.thread(THREAD, scope, new AbortController().signal)).messages;
         expect(thread.map((message) => message.kind)).toEqual(['deleted']);
         expect(source.archive(scope).map((message) => message.text)).not.toContain('regrettable');
     });

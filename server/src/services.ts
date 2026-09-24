@@ -6,6 +6,7 @@ import { createCatalogueService } from './domains/catalogue/service.ts';
 import { createChatService, type ConversationRow, type MessageRow } from './domains/chat/service.ts';
 import { createFranking, discloses } from './domains/chat/franking.ts';
 import { createEpochService } from './domains/chat/epochs.ts';
+import { threadSize } from './domains/chat/pages.ts';
 import { createPeerDevices, type PeerDeviceRow } from './domains/device/peers.ts';
 import { createRecoveryService } from './domains/device/recovery-service.ts';
 import { createDeviceService, type DeviceRow } from './domains/device/service.ts';
@@ -2220,9 +2221,9 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 return { minted, epoch: input.epoch };
             },
 
-            async messages(me, conversationId, cursor)
+            async messages(me, conversationId, cursor, limit)
             {
-                const page = await chat.messages(me, conversationId, decodeCursor(cursor));
+                const page = await chat.messages(me, conversationId, decodeCursor(cursor), threadSize(limit));
                 const oldest = page.messages[0];
                 const reactions = asReactions(page.reactions);
                 return {

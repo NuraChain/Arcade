@@ -1,5 +1,6 @@
 import { ApiError, applyFieldErrors } from '@azerothjs/http/api/shared';
 
+import { threadSize } from '../../server/src/domains/chat/pages.ts';
 import { candidatesFor, handleFromAddress, handleFromName } from '../../server/src/domains/identity/handle.ts';
 import type {
     Account,
@@ -735,7 +736,7 @@ export const client =
             return { minted: true, epoch: input.epoch };
         },
 
-        async messages({ params }: { params: { id: string } })
+        async messages({ params, query }: { params: { id: string }; query?: { cursor?: string; limit?: string } })
         {
             server.calls.push('chat.messages');
             const found = server.conversations.some((row) => row.id === params.id);
@@ -743,9 +744,14 @@ export const client =
             {
                 throw new ApiError(404, 'not-found', 'No conversation with that id.', undefined);
             }
+            const thread = server.messages.filter((one) => one.conversationId === params.id);
+            const end = query?.cursor === undefined ? thread.length : thread.findIndex((one) => one.id === query.cursor);
+            const start = Math.max(0, end - threadSize(query?.limit));
+            const page = thread.slice(start, end);
             return {
-                messages: server.messages.filter((one) => one.conversationId === params.id),
-                hasMore: false
+                messages: page,
+                hasMore: start > 0,
+                ...(start > 0 ? { cursor: page[0].id } : {})
             };
         },
 
