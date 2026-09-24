@@ -381,9 +381,13 @@ try
 
             record('the gathered trick says who took it', caption.length > 0, caption.slice(0, 50));
 
-            const still = await table(dana.page);
+            const kept = await dana.page.evaluate(() => document.querySelectorAll('main .hokm-last .card-face').length);
 
-            record('and is still face up', still.length === laid.view.took.cards.length, `${ still.length } cards`);
+            record('and is still face up in the last-trick tile', kept === laid.view.took.cards.length, `${ kept } cards`);
+
+            await dana.page.waitForTimeout(1600);
+
+            record('and has been gathered off the felt', (await table(dana.page)).length === 0, `${ (await table(dana.page)).length } left`);
         }
     }
 

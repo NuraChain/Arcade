@@ -249,6 +249,7 @@ export const play = {
     'hokm.table.took': '{name} took the trick',
     'hokm.table.empty': 'Nobody has led yet.',
     'hokm.tricks': { one: '{count} trick', other: '{count} tricks' },
+    'hokm.kot': 'Kot! Every trick',
     'hokm.held': { one: '{count} card', other: '{count} cards' },
     'hokm.hand': 'Your hand',
     'hokm.card': '{rank} of {suit}',

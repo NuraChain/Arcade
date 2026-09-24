@@ -252,6 +252,7 @@ export const play: Pick<Dictionary, keyof typeof reference> = {
     'hokm.table.took': 'این دست را {name} برد',
     'hokm.table.empty': 'هنوز کسی کارت نینداخته.',
     'hokm.tricks': { one: '{count} دست', other: '{count} دست' },
+    'hokm.kot': 'کُت! همهٔ دست‌ها',
     'hokm.held': { one: '{count} کارت', other: '{count} کارت' },
     'hokm.hand': 'کارت‌های تو',
     'hokm.card': '{rank} {suit}',

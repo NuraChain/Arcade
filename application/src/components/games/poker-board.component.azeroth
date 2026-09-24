@@ -1,3 +1,5 @@
+import { untrack } from 'azerothjs';
+
 import CardFace from './card-face.component.azeroth';
 import MatchResult from './match-result.component.azeroth';
 import TurnClock from './turn-clock.component.azeroth';
@@ -8,6 +10,9 @@ import Icon from '../../icons/icon.component.azeroth';
 import { FACE_KEY, rankOf, suitOf } from '../../data/cards.ts';
 import { pokerOf } from '../../data/match.ts';
 import { useBoard } from '../../stores/match.store.ts';
+import { useSettings } from '../../stores/settings.store.ts';
+import { haptic } from '../../lib/haptics.ts';
+import { pokerBeats, tableCues } from './table-cues.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { usePeople } from '../../stores/people.store.ts';
 import { useVoice } from '../../stores/voice.store.ts';
@@ -60,6 +65,41 @@ export default component PokerBoard(props: { match: MatchView; starting?: boolea
     derived chips = (value: number): string => locale.n(value);
 
     derived myTurn = view !== null && !over && mine !== undefined && view.turn === mine;
+
+    const settings = useSettings();
+
+    const cues = tableCues({
+        enabled: untrack(() => settings.settings().sound),
+        seq: untrack(() => board.events().seq),
+        match: untrack(() => ({ id: props.match.id, rev: props.match.rev })),
+        beats: (events) => pokerBeats(events.flatMap((one) => (one.log.kind === 'poker' ? one.log.moves : [])), { mine: props.match.mine ?? null, seats: props.match.seats })
+    });
+
+    effect
+    {
+        const batch = board.events();
+
+        untrack(() => cues.hear(batch, { id: props.match.id, rev: props.match.rev }));
+    }
+
+    effect
+    {
+        const yours = myTurn;
+
+        untrack(() => cues.turn(yours && props.match.mine !== undefined));
+    }
+
+    effect
+    {
+        const on = settings.settings().sound;
+
+        untrack(() => cues.setEnabled(on));
+    }
+
+    mount
+    {
+        return () => cues.dispose();
+    }
 
     derived toCall = view?.toCall ?? 0;
 
@@ -177,11 +217,14 @@ export default component PokerBoard(props: { match: MatchView; starting?: boolea
 
     const act = async (verb: 'fold' | 'check' | 'call' | 'allin'): Promise<void> =>
     {
+        haptic('select');
         await board.play({ kind: 'poker', verb });
     };
 
     const raise = async (): Promise<void> =>
     {
+        haptic('select');
+
         if (chosen >= high)
         {
             await board.play({ kind: 'poker', verb: 'allin' });
@@ -296,7 +339,7 @@ export default component PokerBoard(props: { match: MatchView; starting?: boolea
                             { () =>
                                 <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
                                     <p class="min-w-0 flex-1 basis-[10rem] text-ui-lg font-semibold text-text" aria-live="polite">{ says }</p>
-                                    <TurnClock remainingMs={ game.remainingMs } over={ over } />
+                                    <TurnClock remainingMs={ game.remainingMs } over={ over } yours={ myTurn } />
                                 </div>
                             }
                         </Show>

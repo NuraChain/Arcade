@@ -26,7 +26,10 @@ export const SOUNDS = [
     ['token-capture', 'impactWood_heavy_001.ogg', 0.35],
     ['token-yard', 'impactSoft_medium_001.ogg', 0.25],
     ['win', 'jingles_PIZZI01.ogg', 1.0],
-    ['hand-won', 'jingles_PIZZI16.ogg', 0.46]
+    ['hand-won', 'jingles_PIZZI16.ogg', 0.46],
+    ['chip-lay', 'chip-lay-1.ogg', 0.3],
+    ['chip-lay', 'chip-lay-3.ogg', 0.3],
+    ['chips-stack', 'chips-stack-2.ogg', 0.5]
 ];
 
 const scratch = mkdtempSync(join(tmpdir(), 'nura-sound-'));

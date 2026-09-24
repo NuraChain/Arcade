@@ -1,13 +1,15 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { cleanup, fire, renderTest } from '@azerothjs/testing';
+import { createSignal } from 'azerothjs';
 
 import HokmBoard from '../src/components/games/hokm-board.component.azeroth';
-import { manualClock } from '../src/lib/clock.ts';
-import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
+import { TIMING } from '../src/game/motion.ts';
+import { manualClock, type ManualClock } from '../src/lib/clock.ts';
+import { resetRuntime, runtime, setRuntime } from '../src/lib/runtime.ts';
 import '../src/locales/app-catalogue.ts';
 import { useDevice } from '../src/stores/device.store.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
-import { useBoard } from '../src/stores/match.store.ts';
+import { useBoard, type EventBatch, type MatchEvent } from '../src/stores/match.store.ts';
 import type { MatchView } from '../src/api.ts';
 
 type Rendered = HTMLElement;
@@ -119,6 +121,173 @@ describe('HokmBoard', () =>
         {
             expect(names.getAttribute('dir'), names.textContent ?? '').toBeNull();
         }
+    });
+});
+
+describe('the table in motion', () =>
+{
+    const clock = (): ManualClock => runtime().clock as ManualClock;
+
+    const playing = (): MatchView => match({ phase: 'tricks', trump: 'spades', turn: 1, lead: 1, hand: [40, 41], plays: [] }, 0);
+
+    const card = (rev: number, seat: number, at: number): MatchEvent => ({ rev, seat, at: '', log: { kind: 'hokm', moves: [{ e: 'card', seat, card: at }] } });
+
+    const drive = (): ((events: MatchEvent[]) => void) =>
+    {
+        const [batch, setBatch] = createSignal<EventBatch>({ seq: 0, events: [] });
+
+        vi.spyOn(useBoard(), 'events').mockImplementation(batch);
+
+        return (events) => setBatch((held) => ({ seq: held.seq + 1, events }));
+    };
+
+    it('flies a card in from the seat that played it, and shows the real card only once it lands', () =>
+    {
+        const send = drive();
+        const animate = vi.spyOn(Element.prototype, 'animate');
+        const { container } = renderTest(() => HokmBoard({ match: playing() }) as Rendered);
+
+        send([card(4, 1, 12)]);
+        clock().advance(0);
+
+        const real = container.querySelector('.hokm-trick[data-card="12"]');
+
+        expect(real?.getAttribute('data-landing')).toBe('true');
+        expect(animate).toHaveBeenCalledTimes(1);
+        expect(JSON.stringify(animate.mock.calls[0][0])).toContain('translate');
+
+        clock().advance(TIMING.FLY_THEIRS);
+
+        expect(container.querySelector('.hokm-trick[data-card="12"]')?.getAttribute('data-landing')).toBeNull();
+    });
+
+    it('only fades a card in at its place under reduced motion', () =>
+    {
+        const send = drive();
+        const animate = vi.spyOn(Element.prototype, 'animate');
+
+        vi.spyOn(useDevice(), 'reducedMotion').mockReturnValue(true);
+        renderTest(() => HokmBoard({ match: playing() }) as Rendered);
+
+        send([card(4, 1, 12)]);
+        clock().advance(0);
+
+        const frames = JSON.stringify(animate.mock.calls[0][0]);
+
+        expect(frames).toContain('opacity');
+        expect(frames).not.toContain('translate');
+    });
+
+    it('holds a finished trick where everybody can read it, then gathers it to the winner', () =>
+    {
+        const send = drive();
+        const { container } = renderTest(() => HokmBoard({ match: playing() }) as Rendered);
+
+        send([
+            card(4, 1, 1),
+            card(5, 2, 2),
+            card(6, 3, 3),
+            { rev: 7, seat: 0, at: '', log: { kind: 'hokm', moves: [{ e: 'card', seat: 0, card: 4 }, { e: 'trick', seat: 2 }] } }
+        ]);
+
+        const took = 3 * TIMING.SEQ_GAP + TIMING.FLY + TIMING.SETTLE;
+
+        clock().advance(took);
+
+        expect(container.querySelector('.hokm-trick[data-took="true"]')?.getAttribute('data-card')).toBe('2');
+
+        clock().advance(TIMING.HOLD - 1);
+
+        expect(container.querySelectorAll('.hokm-trick').length).toBe(4);
+
+        clock().advance(1);
+
+        expect(container.querySelectorAll('.hokm-trick').length).toBe(0);
+    });
+
+    it('shows a card at its place after only the fade under reduced motion', () =>
+    {
+        const send = drive();
+
+        vi.spyOn(useDevice(), 'reducedMotion').mockReturnValue(true);
+
+        const { container } = renderTest(() => HokmBoard({ match: playing() }) as Rendered);
+
+        send([card(4, 1, 12)]);
+        clock().advance(0);
+        clock().advance(TIMING.FADE);
+
+        expect(container.querySelector('.hokm-trick[data-card="12"]')?.getAttribute('data-landing')).toBeNull();
+    });
+
+    it('gathers a held trick after the short hold when the next lead arrives in a later batch', () =>
+    {
+        const send = drive();
+        const { container } = renderTest(() => HokmBoard({ match: playing() }) as Rendered);
+
+        send([
+            card(4, 1, 1),
+            card(5, 2, 2),
+            card(6, 3, 3),
+            { rev: 7, seat: 0, at: '', log: { kind: 'hokm', moves: [{ e: 'card', seat: 0, card: 4 }, { e: 'trick', seat: 2 }] } }
+        ]);
+
+        const took = 3 * TIMING.SEQ_GAP + TIMING.FLY + TIMING.SETTLE;
+
+        clock().advance(took);
+        send([card(8, 2, 30)]);
+        clock().advance(TIMING.HOLD_MIN);
+
+        expect(container.querySelectorAll('.hokm-trick:not([data-card="30"])').length).toBe(0);
+    });
+
+    it('animates a rematch at the same table from its first card', () =>
+    {
+        const send = drive();
+        const [current, setCurrent] = createSignal(match({ phase: 'tricks', trump: 'spades', turn: 1, lead: 1, hand: [40, 41], plays: [] }, 0));
+        const animate = vi.spyOn(Element.prototype, 'animate');
+        const props = {
+            get match(): MatchView
+            {
+                return current();
+            }
+        };
+        const { container } = renderTest(() => HokmBoard(props) as Rendered);
+
+        setCurrent({ ...current(), id: 'match-2', rev: 0 });
+        send([card(1, 1, 12)]);
+        clock().advance(0);
+
+        expect(animate).toHaveBeenCalledTimes(1);
+        expect(container.querySelector('.hokm-trick[data-card="12"]')).not.toBeNull();
+    });
+
+    it('never replays the batch that was already there when the board mounted', () =>
+    {
+        const [batch] = createSignal<EventBatch>({ seq: 7, events: [card(3, 1, 12)] });
+
+        vi.spyOn(useBoard(), 'events').mockImplementation(batch);
+
+        const animate = vi.spyOn(Element.prototype, 'animate');
+        const { container } = renderTest(() => HokmBoard({ match: playing() }) as Rendered);
+
+        clock().advance(2000);
+
+        expect(animate).not.toHaveBeenCalled();
+        expect(container.querySelector('.hokm-trick')).toBeNull();
+    });
+
+    it('jumps straight to the board when the log has a gap in it', () =>
+    {
+        const send = drive();
+        const animate = vi.spyOn(Element.prototype, 'animate');
+        const { container } = renderTest(() => HokmBoard({ match: playing() }) as Rendered);
+
+        send([card(9, 1, 12)]);
+        clock().advance(2000);
+
+        expect(animate).not.toHaveBeenCalled();
+        expect(container.querySelector('.hokm-trick')).toBeNull();
     });
 });
 

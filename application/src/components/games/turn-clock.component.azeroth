@@ -1,6 +1,11 @@
+import { untrack } from 'azerothjs';
+
 import Icon from '../../icons/icon.component.azeroth';
+import { createSound, type SoundHandle } from '../../game/sound.ts';
+import { haptic } from '../../lib/haptics.ts';
 import { runtime } from '../../lib/runtime.ts';
 import { useLocale } from '../../stores/locale.store.ts';
+import { useSettings } from '../../stores/settings.store.ts';
 
 const URGENT_AT = 10;
 
@@ -8,9 +13,22 @@ const MINUTE = 60;
 
 const HOUR = 60 * MINUTE;
 
-export default component TurnClock(props: { remainingMs?: number; over: boolean; class?: string })
+const TICK_FROM = 5;
+
+const HIGH_FROM = 2;
+
+export default component TurnClock(props: { remainingMs?: number; over: boolean; yours?: boolean; class?: string })
 {
     const locale = useLocale();
+    const settings = useSettings();
+
+    let sound: SoundHandle | null = null;
+
+    let told: number | null = null;
+
+    let counted: number | undefined = untrack(() => props.remainingMs);
+
+    let counting = untrack(() => props.yours === true);
 
     state now = runtime().clock.now();
 
@@ -18,7 +36,23 @@ export default component TurnClock(props: { remainingMs?: number; over: boolean;
 
     mount
     {
-        return runtime().clock.every(1000, () => now = runtime().clock.now());
+        sound = createSound(untrack(() => settings.settings().sound));
+
+        const stop = runtime().clock.every(1000, () => now = runtime().clock.now());
+
+        return () =>
+        {
+            stop();
+            sound?.dispose();
+            sound = null;
+        };
+    }
+
+    effect
+    {
+        const on = settings.settings().sound;
+
+        untrack(() => sound?.setEnabled(on));
     }
 
     effect
@@ -33,6 +67,43 @@ export default component TurnClock(props: { remainingMs?: number; over: boolean;
     derived secondsLeft = props.over || endsAt === null
         ? null
         : Math.max(0, Math.round((endsAt - now) / 1000));
+
+    effect
+    {
+        const left = secondsLeft;
+        const yours = props.yours === true;
+        const given = props.remainingMs;
+
+        untrack(() =>
+        {
+            if (given !== counted || yours !== counting)
+            {
+                counted = given;
+                counting = yours;
+                told = null;
+                return;
+            }
+
+            if (!yours || left === null || left > TICK_FROM)
+            {
+                told = null;
+                return;
+            }
+
+            if (left < 1 || left === told)
+            {
+                return;
+            }
+
+            told = left;
+            sound?.play(left <= HIGH_FROM ? 'tick-hi' : 'tick', { urgent: true });
+
+            if (left === TICK_FROM)
+            {
+                haptic('warn');
+            }
+        });
+    }
 
     derived says = ((): string | null =>
     {

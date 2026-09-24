@@ -1831,6 +1831,50 @@ switching tables never has to unlock audio again. The spec is
   `ambient`, so the silent switch mutes it and it mixes with the player's music.
 - **Sound is on by default**, because a native game starts with sound; nothing plays before the first
   tap, and the dock and the table menu turn it off in one press.
+- **Every table sounds like its own pieces, from the server's log.** Hokm has its own queue (below);
+  backgammon and poker go through `components/games/table-cues.ts`, which maps a batch of their
+  events to timed cues and haptics and plays nothing for a batch that was on screen at mount, that
+  has a gap in it, or that arrives in a hidden tab. Poker's chips are two more Kenney recordings,
+  `chip-lay` for a bet and `chips-stack` for a pot, which is why the pack is 20 takes of 14 cues.
+  `TurnClock` takes `yours` and ticks at five, four and three seconds and higher at two and one, for
+  every game, with one `warn` buzz at five.
+
+**Hokm is played in motion, and the table runs a little behind the server on purpose.** The spec is
+`docs/superpowers/specs/2026-09-23-table-motion-sound-design.md` §3.2. A card flies from the seat that
+played it - from the exact spot in the reader's own hand, recorded before the request - and the real
+card on the felt stays hidden (`data-landing`) until its copy lands; a finished trick is held 900ms
+(450 when the next lead is already queued), the winning card glows, and the four are gathered to the
+winner's plate; a hand ends on a "+n" banner or a kot; the deal throws backs from the dealer.
+`game/hokm-beats.ts` turns log events into that timeline and is pure, so every timing is a test in
+`hokm-beats.spec.ts`; `game/motion.ts` flies copies with the Web Animations API in a clipped
+`.board-flight` layer, so nothing in flight can widen a page the matrix measures.
+
+- **The felt reads the queue; everything else reads the view.** While beats are playing, `laid` comes
+  from `shown`, which the queue owns; the controls, the live region, the hand and the turn read the
+  current view, so nobody waits for an animation to be allowed to act. When the queue drains, `shown`
+  goes back to null and the felt follows the view again, which is also what reconciles it.
+- **A finished trick no longer sits on the felt until the next lead.** It is gathered, and the
+  last-trick tile keeps it readable. A table opened mid-hand shows only the trick in progress.
+- **Pacing is the clock's, never an animation's `finished`**, so a throttled tab cannot strand the
+  queue. More than 1.5s behind plays at double speed - flights included, or the real card lands
+  while its copy is only halfway - and more than 3s behind, a gap in the log, a hidden tab, or a
+  catch-up of more than twelve actions or more than one hand jumps straight to the board, because a
+  reconnect replaying half a hand at full pace is a table showing the past beside controls showing
+  the present. Under reduced motion every flight is a 140ms fade at its destination, the real card
+  shows after the fade rather than after the flight it no longer has, and the sound and the haptics
+  stay - the gather and the deal play their foley with no copies flying.
+- **A trick that ends a batch is HELD, not scheduled away.** The timeline leaves it on the felt and
+  the board gathers it after 900ms itself; a next lead arriving in a later batch cancels that and
+  gathers after 450ms counted from when the trick was taken. Scheduled up front, the gather sat in
+  the queue and every lead waited the full hold behind it.
+- **The watermark belongs to a MATCH.** A rematch at the same table can reuse the board instance,
+  so the board resets its revision, its felt and its event cursor when `props.match.id` changes, and
+  `table-cues` resets the same way - otherwise every event of the new match sits below the old one's
+  last revision and the whole rematch plays in silence. `hokm-board.spec.ts` fails without it.
+- **The Hâkem is the one ACTING during the trump call**, so they get the turn chime and the
+  countdown ticks then; `acting` is that, and `myTurn` stays what decides which cards can be played.
+- **`mount` runs in a microtask**, so a spec that renders a component and advances the manual clock
+  in the same tick advances it before the component's timers exist. `turn-clock.spec.ts` awaits one.
 
 **The board does not mirror, and `.board-plate` and `.ludo-frame` declare `direction: ltr` to say
 so.** Everything else in this product is authored in logical properties precisely so it flips with

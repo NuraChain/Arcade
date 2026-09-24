@@ -1,3 +1,5 @@
+import { untrack } from 'azerothjs';
+
 import MatchResult from './match-result.component.azeroth';
 import TurnClock from './turn-clock.component.azeroth';
 import DieFace from './die-face.component.azeroth';
@@ -6,6 +8,9 @@ import Button from '../ui/button.component.azeroth';
 import Icon from '../../icons/icon.component.azeroth';
 import { backgammonOf } from '../../data/match.ts';
 import { useBoard } from '../../stores/match.store.ts';
+import { useSettings } from '../../stores/settings.store.ts';
+import { haptic } from '../../lib/haptics.ts';
+import { backgammonBeats, tableCues } from './table-cues.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { usePeople } from '../../stores/people.store.ts';
 import { useVoice } from '../../stores/voice.store.ts';
@@ -142,6 +147,41 @@ export default component BackgammonBoard(props: { match: MatchView; starting?: b
     };
 
     derived myTurn = view !== null && !over && mine !== undefined && view.turn === mine;
+
+    const settings = useSettings();
+
+    const cues = tableCues({
+        enabled: untrack(() => settings.settings().sound),
+        seq: untrack(() => board.events().seq),
+        match: untrack(() => ({ id: props.match.id, rev: props.match.rev })),
+        beats: (events) => backgammonBeats(events.flatMap((one) => (one.log.kind === 'backgammon' ? one.log.moves : [])), { mine: props.match.mine ?? null, seats: props.match.seats })
+    });
+
+    effect
+    {
+        const batch = board.events();
+
+        untrack(() => cues.hear(batch, { id: props.match.id, rev: props.match.rev }));
+    }
+
+    effect
+    {
+        const yours = myTurn;
+
+        untrack(() => cues.turn(yours && props.match.mine !== undefined));
+    }
+
+    effect
+    {
+        const on = settings.settings().sound;
+
+        untrack(() => cues.setEnabled(on));
+    }
+
+    mount
+    {
+        return () => cues.dispose();
+    }
 
     derived plan = myTurn && view!.phase === 'move' && view!.dice.length === 2
         ? stage({ me: [...rowOf(viewer)], them: [...rowOf(1 - viewer)] }, view!.dice, staged)
@@ -366,6 +406,7 @@ export default component BackgammonBoard(props: { match: MatchView; starting?: b
     {
         staged = [...staged, hop];
         picked = null;
+        haptic('tick');
     };
 
     const undo = (): void =>
@@ -424,6 +465,7 @@ export default component BackgammonBoard(props: { match: MatchView; starting?: b
 
     const play = async (verb: 'roll' | 'double' | 'take' | 'drop'): Promise<void> =>
     {
+        haptic('select');
         await board.play({ kind: 'backgammon', verb });
     };
 
@@ -434,6 +476,7 @@ export default component BackgammonBoard(props: { match: MatchView; starting?: b
             return;
         }
 
+        haptic('select');
         await board.play({ kind: 'backgammon', verb: 'move', hops: [...staged] });
     };
 
@@ -635,7 +678,7 @@ export default component BackgammonBoard(props: { match: MatchView; starting?: b
                             <section class="mx-auto flex w-full min-w-0 max-w-[max(18rem,calc((100dvh-24rem)*1.22))] flex-col gap-3 [grid-area:side] @4xl:max-w-none sideways:max-w-none">
                                 <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
                                     <p class="min-w-0 flex-1 basis-[10rem] text-ui-lg font-semibold text-text" aria-live="polite">{ says }</p>
-                                    <TurnClock remainingMs={ game.remainingMs } over={ over } />
+                                    <TurnClock remainingMs={ game.remainingMs } over={ over } yours={ myTurn } />
                                 </div>
 
                                 <Show when={ myTurn && view!.phase === 'roll' }>
