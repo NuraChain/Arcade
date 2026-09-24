@@ -493,6 +493,200 @@ console.log('\n[9] the landing offers the way BACK to somebody already signed in
     }
 }
 
+console.log('\n[10] the landing asks the server for nothing, rests when nothing moves, and stays readable');
+{
+    const fresh = await open({ locale: 'en', width: 390, height: 844 });
+    const asked = [];
+    fresh.page.on('request', (request) =>
+    {
+        const path = new URL(request.url()).pathname;
+        if (path.startsWith('/api') || path.startsWith('/ws'))
+        {
+            asked.push(path);
+        }
+    });
+    try
+    {
+        await fresh.page.goto(`${ BASE }/`, { waitUntil: 'networkidle' });
+        const shape = await fresh.page.evaluate(() => ({
+            h1: document.querySelectorAll('h1').length,
+            beats: [...document.querySelectorAll('[data-beat]')].map((element) => element.dataset.beat)
+        }));
+        record('the landing has one h1', shape.h1 === 1, `${ shape.h1 }`);
+        record('the landing carries its five beats in order', shape.beats.join(',') === 'arrival,games,together,compete,finale', shape.beats.join(','));
+        record('signed out, the arrival offers a button that opens the chooser',
+            await fresh.page.locator('main').getByRole('button', { name: 'Start playing', exact: true }).count() > 0, '');
+
+        for (let step = 0; step < 8; step += 1)
+        {
+            await fresh.page.mouse.wheel(0, 700);
+            await fresh.page.waitForTimeout(150);
+        }
+        await fresh.page.evaluate(() => window.scrollTo(0, 0));
+
+        await fresh.page.getByRole('button', { name: 'Menu', exact: true }).click();
+        await fresh.page.waitForSelector('dialog.site-drawer[open]', { timeout: 5000 });
+        record('the menu opens a drawer', true, '');
+        await fresh.page.keyboard.press('Escape');
+        await fresh.page.waitForTimeout(400);
+        await fresh.page.getByRole('button', { name: 'Menu', exact: true }).click();
+        await fresh.page.waitForSelector('dialog.site-drawer[open]', { timeout: 5000 });
+        await fresh.page.locator('dialog.site-drawer').getByRole('radio', { name: 'فارسی' }).or(fresh.page.locator('dialog.site-drawer').getByRole('button', { name: 'فارسی' })).first().click();
+        await fresh.page.waitForFunction(() => document.documentElement.lang === 'fa', null, { timeout: 5000 });
+        await fresh.page.waitForTimeout(600);
+        const title = await fresh.page.locator('h1').innerText();
+        record('the language switch turns the page Persian in place', title.includes('بازی‌های همیشگی'), title.replace(/\s+/g, ' ').slice(0, 60));
+        record('the landing made no request to the api or the socket', asked.length === 0, asked.slice(0, 4).join(' '));
+        record('console clean on the landing', fresh.errors.length === 0, fresh.errors.slice(0, 3).join(' ; '));
+    }
+    catch (e)
+    {
+        record('landing tour', false, String(e.message).slice(0, 140));
+    }
+    await fresh.context.close();
+
+    for (const [label, headers] of [['a cookie', { cookie: 'locale=fa' }], ['Accept-Language', { 'accept-language': 'fa-IR,fa;q=0.9' }]])
+    {
+        const html = await (await fetch(`${ BASE }/`, { headers })).text();
+        record(`with no JavaScript, ${ label } gets the Persian page`,
+            /<html[^>]*lang="fa"/.test(html) && /<html[^>]*dir="rtl"/.test(html) && html.includes('بازی‌های همیشگی') && !html.includes('Classic games'), '');
+    }
+
+    const gpu = await chromium.launch({
+        ...(executablePath === undefined ? {} : { executablePath }),
+        headless: false,
+        args: ['--use-angle=d3d11', '--window-position=-2400,0']
+    });
+
+    const luminance = async (png, boxes) =>
+    {
+        const page = await gpu.newPage();
+        const result = await page.evaluate(async ({ source, boxes }) =>
+        {
+            const image = new Image();
+            image.src = source;
+            await image.decode();
+            const canvas = document.createElement('canvas');
+            canvas.width = image.naturalWidth;
+            canvas.height = image.naturalHeight;
+            const context = canvas.getContext('2d');
+            context.drawImage(image, 0, 0);
+            const linear = (value) =>
+            {
+                const channel = value / 255;
+                return channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+            };
+            const of = (r, g, b) => 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b);
+            return boxes.map((box) =>
+            {
+                const x = Math.max(0, Math.floor(box.x));
+                const y = Math.max(0, Math.floor(box.y));
+                const width = Math.min(canvas.width - x, Math.ceil(box.width));
+                const height = Math.min(canvas.height - y, Math.ceil(box.height));
+                if (width <= 0 || height <= 0)
+                {
+                    return null;
+                }
+                const data = context.getImageData(x, y, width, height).data;
+                let brightest = 0;
+                for (let index = 0; index < data.length; index += 4)
+                {
+                    brightest = Math.max(brightest, of(data[index], data[index + 1], data[index + 2]));
+                }
+                const [r, g, b] = box.colour;
+                const ink = of(r, g, b);
+                return (Math.max(ink, brightest) + 0.05) / (Math.min(ink, brightest) + 0.05);
+            });
+        }, { source: `data:image/png;base64,${ png.toString('base64') }`, boxes });
+        await page.close();
+        return result;
+    };
+
+    for (const [locale, width, height] of [['en', 1440, 900], ['fa', 1440, 900], ['en', 390, 844]])
+    {
+        const context = await gpu.newContext({ viewport: { width, height } });
+        await context.addCookies([{ name: 'locale', value: locale, url: BASE }]);
+        await context.addInitScript(() =>
+        {
+            const original = window.requestAnimationFrame.bind(window);
+            window.__frames = 0;
+            window.requestAnimationFrame = (callback) =>
+            {
+                window.__frames += 1;
+                return original(callback);
+            };
+        });
+        const page = await context.newPage();
+        const cell = `[${ locale } ${ width }]`;
+        try
+        {
+            await page.goto(`${ BASE }/`, { waitUntil: 'networkidle' });
+            const live = await page.waitForSelector('.world-canvas.is-live', { timeout: 30000 }).then(() => true).catch(() => false);
+            record(`${ cell } the world goes live on a real GPU`, live, '');
+            await page.waitForTimeout(1500);
+            await page.evaluate(() => { window.__frames = 0; });
+            await page.waitForTimeout(3000);
+            const frames = await page.evaluate(() => window.__frames);
+            record(`${ cell } no frame is drawn while nothing moves`, frames === 0, `${ frames } in 3s`);
+
+            const arrivals = await page.evaluate(() =>
+            {
+                const stage = document.querySelector('.stage').clientHeight;
+                return [...document.querySelectorAll('[data-beat]')].map((element, index) =>
+                {
+                    const box = element.getBoundingClientRect();
+                    return index === 0 ? 0 : Math.max(0, Math.round(box.top + window.scrollY + (box.height - stage) / 2));
+                });
+            });
+            const beats = ['arrival', 'games', 'together', 'compete', 'finale'];
+            let worst = Infinity;
+            let where = '';
+            for (const [index, at] of arrivals.entries())
+            {
+                await page.evaluate((y) => window.scrollTo(0, y), at);
+                await page.waitForTimeout(2600);
+                const boxes = await page.evaluate(() =>
+                {
+                    const found = [];
+                    for (const element of document.querySelectorAll('.scene-column :is(h1 > span, h2, h3, p)'))
+                    {
+                        const box = element.getBoundingClientRect();
+                        if (box.bottom <= 0 || box.top >= window.innerHeight || box.width === 0)
+                        {
+                            continue;
+                        }
+                        const colour = getComputedStyle(element).color.match(/[\d.]+/g).slice(0, 3).map(Number);
+                        found.push({ x: box.left, y: box.top, width: box.width, height: box.height, colour, text: element.textContent.trim().slice(0, 40) });
+                    }
+                    const style = document.createElement('style');
+                    style.id = 'qa-ink';
+                    style.textContent = '.scene-overlay *, .site-header * { color: transparent !important; } .scene-overlay svg, .scene-overlay img, .scene-overlay [aria-hidden="true"] { visibility: hidden !important; }';
+                    document.head.append(style);
+                    return found;
+                });
+                const png = await page.screenshot();
+                await page.evaluate(() => document.getElementById('qa-ink')?.remove());
+                const ratios = await luminance(png, boxes);
+                ratios.forEach((ratio, at) =>
+                {
+                    if (ratio !== null && ratio < worst)
+                    {
+                        worst = ratio;
+                        where = `${ beats[index] }: ${ boxes[at].text }`;
+                    }
+                });
+            }
+            record(`${ cell } every line of copy clears 4.5:1 against the brightest pixel behind it`, worst >= 4.5, `${ worst.toFixed(2) }:1 at ${ where }`);
+        }
+        catch (e)
+        {
+            record(`${ cell } landing on a GPU`, false, String(e.message).slice(0, 140));
+        }
+        await context.close();
+    }
+    await gpu.close();
+}
+
 await browser.close();
 
 const failed = results.filter((r) => !r.ok);

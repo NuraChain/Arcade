@@ -40,6 +40,8 @@ function cachedChromium()
 const WIDTHS = [320, 360, 375, 390, 412, 430, 768, 834, 1024, 1280, 1440, 1920];
 
 const ROUTES = [
+    { id: 'landing', path: '/', here: false },
+    { id: 'landing-back', path: '/', here: true },
     { id: 'home', path: '/app' },
     { id: 'games', path: '/app/games' },
     { id: 'game', path: '/app/games/backgammon' },
@@ -253,7 +255,7 @@ async function audit(page)
                 continue;
             }
             const box = control.getBoundingClientRect();
-            if (box.width === 0 || box.height === 0)
+            if (box.width <= 1 || box.height <= 1)
             {
                 continue;
             }
@@ -362,6 +364,15 @@ async function main()
                     if (route.id === 'play-poker')
                     {
                         await keepDealing(page);
+                    }
+
+                    if (route.here !== undefined)
+                    {
+                        await context.clearCookies({ name: 'nura.here' });
+                        if (route.here)
+                        {
+                            await context.addCookies([{ name: 'nura.here', value: '1', url: BASE }]);
+                        }
                     }
 
                     const target = route.path

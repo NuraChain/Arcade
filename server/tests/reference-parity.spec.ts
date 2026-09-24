@@ -26,7 +26,7 @@ import { TABLE_RULES } from '../../application/src/data/tables.ts';
  * arrays go with it and these assertions get pointed at the api response instead.
  */
 
-describe('games: the server and the 3D market agree', () =>
+describe('games: the server and the landing agree', () =>
 {
     it('knows the same four games, in the same order', () =>
     {
@@ -45,6 +45,11 @@ describe('games: the server and the 3D market agree', () =>
             expect(seed.minPlayers).toBe(client!.minPlayers);
             expect(seed.maxPlayers).toBe(client!.maxPlayers);
         }
+    });
+
+    it('seeds every game the landing prints as live as available', () =>
+    {
+        expect(GAME_SEEDS.filter((seed) => seed.status !== 'available').map((seed) => seed.id)).toEqual([]);
     });
 
     it('derives the message keys the locale catalogues actually publish', () =>
