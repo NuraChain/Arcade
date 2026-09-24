@@ -581,7 +581,8 @@ html:has(.site-drawer[open])
     }
 }
 
-.rail[data-dragging='true'] > .rail-x
+[data-dragging='true'],
+.rail > .rail-x[data-dragging='true']
 {
     cursor: grabbing;
     scroll-snap-type: none;

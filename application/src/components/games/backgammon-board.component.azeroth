@@ -1,5 +1,6 @@
 import { untrack } from 'azerothjs';
 
+import Rail from '../ui/rail.component.azeroth';
 import TableResult from './table-result.component.azeroth';
 import TurnClock from './turn-clock.component.azeroth';
 import DieFace from './die-face.component.azeroth';
@@ -780,7 +781,8 @@ export default component BackgammonBoard(props: { match: MatchView; starting?: b
                                         { () =>
                                             <div class="flex min-w-0 flex-col gap-1">
                                                 <p class="bg-info text-ui-xs text-muted">{ locale.t('backgammon.pick') }</p>
-                                                <ul class="rail-x -mx-1 flex gap-1.5 px-1 py-0.5" aria-label={ locale.t('backgammon.moves') }>
+                                                <Rail class="-mx-1" inner="px-1 py-0.5">
+                                                <ul class="flex shrink-0 gap-1.5" aria-label={ locale.t('backgammon.moves') }>
                                                     <For each={ options } key={ (hop) => `${ hop.from }/${ hop.to }` } let={ hop }>
                                                         <li class="flex shrink-0">
                                                             <button
@@ -803,6 +805,7 @@ export default component BackgammonBoard(props: { match: MatchView; starting?: b
                                                         </li>
                                                     </For>
                                                 </ul>
+                                                </Rail>
                                             </div>
                                         }
                                     </Show>

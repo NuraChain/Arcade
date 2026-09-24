@@ -1,4 +1,5 @@
 import { EMOJI_GROUPS, searchEmoji, type EmojiGroup } from '../../data/emoji.ts';
+import { dragScroll } from '../../lib/drag-scroll.ts';
 import { isEmoji } from '../../lib/body.ts';
 import type { IconName } from '../../icons/registry.ts';
 import type { MessageKey } from '../../locales/en.ts';
@@ -92,7 +93,7 @@ export default component EmojiPicker(props: { onPick: (emoji: string) => void; f
 
         <Show when={ query.trim() === '' }>
             { () =>
-                <nav class="rail-x flex shrink-0 gap-0.5 border-b border-line px-1.5 py-1" aria-label={ locale.t('emoji.groups') }>
+                <nav ref={ (element) => void dragScroll(element) } class="rail-x flex shrink-0 gap-0.5 border-b border-line px-1.5 py-1" aria-label={ locale.t('emoji.groups') }>
                     <For each={ sections } key={ (group) => group.id } let={ group }>
                         <span class="flex">
                             <IconButton

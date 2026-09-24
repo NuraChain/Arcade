@@ -1,4 +1,5 @@
 import { untrack } from 'azerothjs';
+import Rail from '../ui/rail.component.azeroth';
 import { attachStick } from '../../lib/stick.ts';
 import { threadRows } from '../../lib/thread.ts';
 import { sendBlockOf } from '../../lib/seal-state.ts';
@@ -417,7 +418,8 @@ export default component TableChat(props: {
                     <div class={ () => quiet ? 'hidden' : 'shrink-0 border-t border-line px-3 pb-3 pt-2.5' }>
                         <Show when={ stop === null }>
                             { () =>
-                                <ul class="rail-x -mx-3 mb-2 flex gap-1.5 px-3" aria-label={ locale.t('play.quick.label') }>
+                                <Rail class="-mx-3 mb-2" inner="px-3">
+                                <ul class="flex shrink-0 gap-1.5" aria-label={ locale.t('play.quick.label') }>
                                     <For each={ [...QUICK] } key={ (key) => key } let={ key }>
                                         <li class="shrink-0">
                                             <button
@@ -430,6 +432,7 @@ export default component TableChat(props: {
                                         </li>
                                     </For>
                                 </ul>
+                                </Rail>
                             }
                         </Show>
                         <Composer

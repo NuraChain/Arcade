@@ -4017,6 +4017,15 @@ icon-only control has a visible name on a mouse and a long-press name on a finge
 `Slider` is pointer-captured and keyboard-driven. `lib/anchor.ts` is the shared placement maths
 (flip, shift, RTL) and `lib/swipe.ts` the two-axis drag with axis lock.
 
+**Anything a phone scrolls sideways, a mouse can drag.** `lib/drag-scroll.ts` is the one copy of the
+behaviour: a mouse press that moves more than four pixels scrolls the strip, the click that ends a
+drag is swallowed so it cannot press whatever the pointer stopped over, and a finger is left to the
+browser, which already scrolls natively. `Rail` uses it and adds the arrows and the fades; `Tabs`
+and the emoji groups use it alone. `Rail`'s `label` is optional: without one the scroller carries no
+role, so a list inside it keeps its own label and nothing is announced twice. The landing's game
+cards do not use it - they are a grid from 640px, and the landing's initial script has no room for
+a component it would only need on a phone that swipes anyway.
+
 **`Select` is ours, and there is no native `<select>` in the product.** The native one draws the
 operating system's list over a dark page - white on a phone, the wrong font, a dropdown arrow that
 matches nothing else - and cannot be themed. `Select` is the select-only combobox from the ARIA

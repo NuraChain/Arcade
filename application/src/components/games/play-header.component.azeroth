@@ -1,5 +1,6 @@
 import { Link, type Child } from 'azerothjs';
 
+import Rail from '../ui/rail.component.azeroth';
 import GameIcon from './game-icon.component.azeroth';
 import Badge from '../ui/badge.component.azeroth';
 import IconButton from '../ui/icon-button.component.azeroth';
@@ -74,7 +75,8 @@ export default component PlayHeader(props: { table: TableSummary; others: TableS
                                 { () => <span>, <span class="tally">{ locale.n(waiting) }</span> { locale.plural('play.tables.waiting', waiting) }</span> }
                             </Show>
                         </p>
-                        <ul class="rail-x -mx-1 flex max-w-full gap-2 px-1">
+                        <Rail class="-mx-1 max-w-full" inner="px-1">
+                        <ul class="flex shrink-0 gap-2">
                             <For each={ props.others } key={ (table) => table.id } let={ table }>
                                 <li class="shrink-0">
                                     <Link
@@ -96,6 +98,7 @@ export default component PlayHeader(props: { table: TableSummary; others: TableS
                                 </li>
                             </For>
                         </ul>
+                        </Rail>
                     </nav>
                 }
             </Show>

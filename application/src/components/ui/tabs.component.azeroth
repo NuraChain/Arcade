@@ -1,3 +1,4 @@
+import { dragScroll } from '../../lib/drag-scroll.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 
 export interface TabItem
@@ -44,6 +45,11 @@ export default component Tabs(props: {
         {
             reveal(selected);
         }
+    }
+
+    mount
+    {
+        return list === null ? undefined : dragScroll(list);
     }
 
     const move = (from: string, step: number): void =>
