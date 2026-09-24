@@ -1,29 +1,59 @@
 import { describe, it, expect, vi } from 'vitest';
 
-import { damping, sampleShots, type Shot } from '../src/world/camera/path.ts';
-import { DESKTOP_SHOTS, MOBILE_SHOTS, SCENE_MARKS, TABLE_BEATS, offsetShots } from '../src/world/camera/shots.ts';
-import { createGovernor } from '../src/world/quality/governor.ts';
-import { createRig } from '../src/world/camera/rig.ts';
-import { TIERS, TIER_ORDER, pickTier, type DeviceProfile } from '../src/world/quality/tiers.ts';
 import { GAMES } from '../src/data/games.ts';
+import { damping, lens, progressAt, sampleShots, type Shot } from '../src/world/camera/path.ts';
+import { createRig } from '../src/world/camera/rig.ts';
+import { FOCUS, SHOTS } from '../src/world/camera/shots.ts';
+import { refused, type Conditions } from '../src/world/gate.ts';
+import { createGovernor } from '../src/world/quality/governor.ts';
+import { PIXEL_BUDGET, TIER_ORDER, pickTier, pixelRatioFor } from '../src/world/quality/tiers.ts';
+import studio from '../src/world/render/studio.json';
 
-const profile = (over: Partial<DeviceProfile> = {}): DeviceProfile => ({
-    webgl: true,
-    cores: 8,
-    pixelRatio: 2,
-    width: 1440,
-    memory: 8,
-    reducedMotion: false,
-    ...over
+const BEATS = ['arrival', 'games', 'together', 'compete', 'finale'];
+
+const PATH: Shot[] = BEATS.map((name, index) => ({ at: index / (BEATS.length - 1), ...SHOTS[name] }));
+
+const tan = (degrees: number): number => Math.tan((degrees * Math.PI) / 360);
+
+describe('the shot list', () =>
+{
+    it('has a shot for every beat the page declares, and a close-up of every game', () =>
+    {
+        for (const name of BEATS)
+        {
+            expect(SHOTS[name], name).toBeDefined();
+        }
+        for (const game of GAMES)
+        {
+            const shot = FOCUS[game.id];
+            expect(shot.target[0]).toBeCloseTo(game.anchor[0], 6);
+            expect(shot.target[2]).toBeCloseTo(game.anchor[2], 6);
+            expect(shot.position[1], `${ game.id } is shot from below the plinth`).toBeGreaterThan(shot.target[1]);
+        }
+    });
+
+    it('gives each game a solo beat', () =>
+    {
+        const solos = ['arrival', 'together', 'compete', 'finale'].map((name) => SHOTS[name]);
+        expect(new Set(solos.map((shot) => shot.target[0])).size).toBe(GAMES.length);
+    });
+
+    it('lets two neighbouring floor pools meet without overlapping', () =>
+    {
+        for (let index = 1; index < GAMES.length; index += 1)
+        {
+            expect(GAMES[index].anchor[0] - GAMES[index - 1].anchor[0]).toBeCloseTo(studio.floor.size, 6);
+        }
+    });
 });
 
 describe('camera path', () =>
 {
-    it('passes exactly through each keyframe', () =>
+    it('passes exactly through each beat', () =>
     {
-        for (const shot of DESKTOP_SHOTS)
+        for (const shot of PATH)
         {
-            const frame = sampleShots(DESKTOP_SHOTS, shot.at);
+            const frame = sampleShots(PATH, shot.at);
             expect(frame.position[0]).toBeCloseTo(shot.position[0], 4);
             expect(frame.position[1]).toBeCloseTo(shot.position[1], 4);
             expect(frame.position[2]).toBeCloseTo(shot.position[2], 4);
@@ -33,122 +63,115 @@ describe('camera path', () =>
 
     it('clamps beyond both ends instead of extrapolating', () =>
     {
-        const before = sampleShots(DESKTOP_SHOTS, -0.5);
-        const start = sampleShots(DESKTOP_SHOTS, 0);
-        expect(before.position).toEqual(start.position);
-
-        const after = sampleShots(DESKTOP_SHOTS, 1.7);
-        const end = sampleShots(DESKTOP_SHOTS, 1);
-        expect(after.position).toEqual(end.position);
+        expect(sampleShots(PATH, -0.5).position).toEqual(sampleShots(PATH, 0).position);
+        expect(sampleShots(PATH, 1.7).position).toEqual(sampleShots(PATH, 1).position);
     });
 
-    it('never lets the field of view overshoot its neighbours', () =>
-    {
-        for (let index = 0; index < DESKTOP_SHOTS.length - 1; index += 1)
-        {
-            const a = DESKTOP_SHOTS[index];
-            const b = DESKTOP_SHOTS[index + 1];
-            const low = Math.min(a.fov, b.fov);
-            const high = Math.max(a.fov, b.fov);
-
-            for (let step = 0; step <= 10; step += 1)
-            {
-                const t = a.at + (b.at - a.at) * (step / 10);
-                const { fov } = sampleShots(DESKTOP_SHOTS, t);
-                expect(fov).toBeGreaterThanOrEqual(low - 0.001);
-                expect(fov).toBeLessThanOrEqual(high + 0.001);
-            }
-        }
-    });
-
-    it('moves continuously - no jump between segments', () =>
-    {
-        let previous = sampleShots(DESKTOP_SHOTS, 0).position;
-        for (let step = 1; step <= 400; step += 1)
-        {
-            const current = sampleShots(DESKTOP_SHOTS, step / 400).position;
-            const jump = Math.hypot(
-                current[0] - previous[0],
-                current[1] - previous[1],
-                current[2] - previous[2]
-            );
-            expect(jump, `jump at ${ step / 400 }`).toBeLessThan(1.2);
-            previous = current;
-        }
-    });
-
-    it('keeps the camera above the market floor for the whole journey', () =>
+    it('stays above the floor for the whole journey', () =>
     {
         for (let step = 0; step <= 400; step += 1)
         {
-            const { position } = sampleShots(DESKTOP_SHOTS, step / 400);
-            expect(position[1], `height at ${ step / 400 }`).toBeGreaterThan(0.6);
+            expect(sampleShots(PATH, step / 400).position[1]).toBeGreaterThan(0.3);
         }
     });
 
-    it('looks at each game table during the games sequence', () =>
+    it('holds a single shot still', () =>
     {
-        for (const game of GAMES)
-        {
-            const aimed = DESKTOP_SHOTS.some((shot) =>
-                Math.abs(shot.target[0] - game.anchor[0]) < 0.01 &&
-                Math.abs(shot.target[2] - game.anchor[2]) < 0.01);
+        const single = [{ at: 0, ...SHOTS.arrival }];
+        expect(sampleShots(single, 0.7).position).toEqual(sampleShots(single, 0).position);
+    });
+});
 
-            expect(aimed, `no shot aims at ${ game.id }`).toBe(true);
+describe('progressAt', () =>
+{
+    const arrivals = [0, 800, 1600, 2400, 3200];
+
+    it('reads zero at the top and one past the last arrival', () =>
+    {
+        expect(progressAt(0, arrivals)).toBe(0);
+        expect(progressAt(-50, arrivals)).toBe(0);
+        expect(progressAt(3200, arrivals)).toBe(1);
+        expect(progressAt(9000, arrivals)).toBe(1);
+    });
+
+    it('lands exactly on a beat when its section arrives', () =>
+    {
+        arrivals.forEach((at, index) =>
+        {
+            expect(progressAt(at, arrivals)).toBeCloseTo(index / (arrivals.length - 1), 6);
+        });
+    });
+
+    it('eases into each beat, so the camera rests while its section is read', () =>
+    {
+        const quarter = 1 / (arrivals.length - 1);
+        const near = progressAt(820, arrivals) - quarter;
+        const middle = progressAt(1200, arrivals) - progressAt(1180, arrivals);
+        expect(near).toBeLessThan(middle);
+    });
+
+    it('never moves backwards as the page scrolls down', () =>
+    {
+        let previous = 0;
+        for (let y = 0; y <= 3400; y += 7)
+        {
+            const now = progressAt(y, [0, 500, 900, 2400, 2500]);
+            expect(now).toBeGreaterThanOrEqual(previous);
+            previous = now;
         }
     });
 
-    it('holds the mobile edit to the same beats as the desktop one', () =>
+    it('survives two sections arriving at the same scroll', () =>
     {
-        expect(MOBILE_SHOTS.map((shot) => shot.at)).toEqual(DESKTOP_SHOTS.map((shot) => shot.at));
+        expect(Number.isFinite(progressAt(500, [0, 500, 500, 900]))).toBe(true);
     });
 
-    it('keeps every scene mark on an ascending, in-range scroll position', () =>
+    it('holds still when there is nothing to scroll between', () =>
     {
-        const marks = SCENE_MARKS.map((mark) => mark.at);
-        expect(marks).toEqual([...marks].sort((a, b) => a - b));
-        expect(marks[0]).toBe(0);
-        expect(marks[marks.length - 1]).toBeLessThan(1);
+        expect(progressAt(400, [0])).toBe(0);
+        expect(progressAt(400, [])).toBe(0);
+    });
+});
+
+describe('lens', () =>
+{
+    it('leaves a centred subject on a square screen alone', () =>
+    {
+        const view = lens(30, 1, 0.5, 0.5);
+        expect(view.fov).toBeCloseTo(30, 6);
+        expect(view.x).toBe(0);
+        expect(view.y).toBe(0);
     });
 
-    it('slides only the table beats sideways, by the same amount for camera and target', () =>
+    it('shifts the frustum so the subject lands where the layout leaves room', () =>
     {
-        const shifted = offsetShots(DESKTOP_SHOTS, 0.55);
-        shifted.forEach((shot, index) =>
-        {
-            const base = DESKTOP_SHOTS[index];
-            const inside = shot.at >= TABLE_BEATS[0] && shot.at <= TABLE_BEATS[1];
-            const moved = Math.hypot(shot.position[0] - base.position[0], shot.position[2] - base.position[2]);
-            const aimed = Math.hypot(shot.target[0] - base.target[0], shot.target[2] - base.target[2]);
-            expect(moved).toBeCloseTo(inside ? 0.55 : 0, 6);
-            expect(aimed).toBeCloseTo(moved, 6);
-            expect(shot.position[1]).toBe(base.position[1]);
-        });
+        const wide = lens(30, 16 / 9, 0.66, 0.5);
+        expect(wide.x).toBeCloseTo(-0.16, 6);
+        const tall = lens(30, 390 / 844, 0.5, 0.3);
+        expect(tall.y).toBeCloseTo(0.2, 6);
     });
 
-    it('mirrors the sideways slide for the other reading direction', () =>
+    it('widens on a portrait phone so the subject still fits across', () =>
     {
-        const left = offsetShots(DESKTOP_SHOTS, -0.55);
-        const right = offsetShots(DESKTOP_SHOTS, 0.55);
-        left.forEach((shot, index) =>
-        {
-            const base = DESKTOP_SHOTS[index];
-            expect(shot.position[0] + right[index].position[0]).toBeCloseTo(2 * base.position[0], 6);
-            expect(shot.position[2] + right[index].position[2]).toBeCloseTo(2 * base.position[2], 6);
-        });
-        expect(offsetShots(DESKTOP_SHOTS, 0)).toBe(DESKTOP_SHOTS);
+        const tall = lens(30, 390 / 844, 0.5, 0.3);
+        expect(tan(tall.fov) * (390 / 844)).toBeCloseTo(tan(30), 4);
     });
 
-    it('holds rather than dividing by zero when two keyframes share a position', () =>
+    it('keeps the subject the same size on every wide screen', () =>
     {
-        const degenerate: Shot[] = [
-            { at: 0, position: [0, 1, 0], target: [0, 0, 0], fov: 40 },
-            { at: 0.5, position: [1, 1, 0], target: [0, 0, 0], fov: 40 },
-            { at: 0.5, position: [2, 1, 0], target: [0, 0, 0], fov: 40 },
-            { at: 1, position: [3, 1, 0], target: [0, 0, 0], fov: 40 }
-        ];
-        expect(() => sampleShots(degenerate, 0.5)).not.toThrow();
-        expect(Number.isFinite(sampleShots(degenerate, 0.5).position[0])).toBe(true);
+        expect(lens(30, 16 / 9, 0.66, 0.5).fov).toBeCloseTo(30, 6);
+        expect(lens(30, 21 / 9, 0.66, 0.5).fov).toBeCloseTo(30, 6);
+    });
+
+    it('mirrors for a right-to-left page', () =>
+    {
+        expect(lens(30, 1.6, 0.34, 0.5).x).toBeCloseTo(-lens(30, 1.6, 0.66, 0.5).x, 6);
+        expect(lens(30, 1.6, 0.34, 0.5).fov).toBeCloseTo(lens(30, 1.6, 0.66, 0.5).fov, 6);
+    });
+
+    it('never opens wider than a sane lens', () =>
+    {
+        expect(lens(30, 0.1, 0.5, 0.05).fov).toBeLessThanOrEqual(75);
     });
 });
 
@@ -159,7 +182,7 @@ describe('damping', () =>
         expect(damping(0.1, 1000 / 60)).toBeCloseTo(0.1, 6);
     });
 
-    it('covers the same ground per SECOND regardless of refresh rate', () =>
+    it('covers the same ground per second regardless of refresh rate', () =>
     {
         const sixty = 1 - (1 - damping(0.1, 1000 / 60)) ** 60;
         const oneTwenty = 1 - (1 - damping(0.1, 1000 / 120)) ** 120;
@@ -174,51 +197,76 @@ describe('damping', () =>
 
 describe('quality tiers', () =>
 {
-    it('treats a narrow viewport as a phone whatever it claims about cores', () =>
+    const desktop = { cores: 8, memory: 8, width: 1440, height: 900 };
+
+    it('gives a phone the phone scene at medium, whatever it claims about cores', () =>
     {
-        expect(pickTier(profile({ width: 390, cores: 8, pixelRatio: 3 }))).toBe('medium');
-        expect(pickTier(profile({ width: 390, cores: 4 }))).toBe('low');
+        expect(pickTier({ ...desktop, width: 390, height: 844, cores: 2 })).toEqual({ tier: 'medium', set: 'phone' });
+        expect(pickTier({ ...desktop, width: 844, height: 390 })).toEqual({ tier: 'medium', set: 'phone' });
     });
 
-    it('drops to low on a memory-constrained device', () =>
+    it('drops a weak desktop to low', () =>
     {
-        expect(pickTier(profile({ memory: 4 }))).toBe('low');
+        expect(pickTier({ ...desktop, memory: 4 }).tier).toBe('low');
+        expect(pickTier({ ...desktop, cores: 2 }).tier).toBe('low');
     });
 
     it('does not punish a browser that reports nothing', () =>
     {
-        expect(pickTier(profile({ cores: 0, memory: 0 }))).toBe('medium');
+        expect(pickTier({ ...desktop, cores: 0, memory: 0 }).tier).toBe('medium');
     });
 
-    it('reserves high for a wide viewport on a many-core machine', () =>
+    it('reserves high for a many-core machine', () =>
     {
-        expect(pickTier(profile({ cores: 12, width: 1920 }))).toBe('high');
-        expect(pickTier(profile({ cores: 4, width: 1920 }))).toBe('medium');
+        expect(pickTier(desktop)).toEqual({ tier: 'high', set: 'desktop' });
+        expect(pickTier({ ...desktop, cores: 6 }).tier).toBe('medium');
     });
 
     it('orders the tiers by cost, so the governor can step down by index', () =>
     {
         expect(TIER_ORDER).toEqual(['low', 'medium', 'high']);
-        for (let index = 1; index < TIER_ORDER.length; index += 1)
-        {
-            const cheaper = TIERS[TIER_ORDER[index - 1]];
-            const richer = TIERS[TIER_ORDER[index]];
-            expect(cheaper.pixelRatio).toBeLessThanOrEqual(richer.pixelRatio);
-            expect(cheaper.realLights).toBeLessThanOrEqual(richer.realLights);
-            expect(cheaper.dust).toBeLessThanOrEqual(richer.dust);
-        }
+        expect(PIXEL_BUDGET.low).toBeLessThan(PIXEL_BUDGET.medium);
+        expect(PIXEL_BUDGET.medium).toBeLessThan(PIXEL_BUDGET.high);
     });
 
-    it('turns shadows and the grade pass off entirely at the floor', () =>
+    it('spends at most the tier budget in pixels, and never more than 2x', () =>
     {
-        expect(TIERS.low.shadowMap).toBe(0);
-        expect(TIERS.low.grade).toBe(false);
+        for (const tier of TIER_ORDER)
+        {
+            for (const [width, height, dpr] of [[390, 844, 3], [1440, 900, 2], [2560, 1440, 1.5], [1280, 720, 1]])
+            {
+                const ratio = pixelRatioFor(tier, dpr, width, height);
+                expect(ratio).toBeLessThanOrEqual(Math.min(dpr, 2) + 1e-9);
+                expect(width * height * ratio * ratio).toBeLessThanOrEqual(PIXEL_BUDGET[tier] + 1);
+            }
+        }
+    });
+});
+
+describe('the gate', () =>
+{
+    const fine: Conditions = { reducedMotion: false, saveData: false, effectiveType: '4g', memory: 8 };
+
+    it('lets an ordinary device through', () =>
+    {
+        expect(refused(fine)).toBe(false);
+        expect(refused({ ...fine, effectiveType: '', memory: 0 })).toBe(false);
+    });
+
+    it('refuses reduced motion, Save-Data, a slow network and a small device', () =>
+    {
+        expect(refused({ ...fine, reducedMotion: true })).toBe(true);
+        expect(refused({ ...fine, saveData: true })).toBe(true);
+        for (const slow of ['slow-2g', '2g', '3g'])
+        {
+            expect(refused({ ...fine, effectiveType: slow })).toBe(true);
+        }
+        expect(refused({ ...fine, memory: 2 })).toBe(true);
     });
 });
 
 describe('governor', () =>
 {
-
     const run = (governor: ReturnType<typeof createGovernor>, ms: number, frames: number): void =>
     {
         for (let index = 0; index < frames; index += 1)
@@ -227,33 +275,32 @@ describe('governor', () =>
         }
     };
 
-    it('leaves a device that keeps up alone', () =>
+    it('leaves a device holding 30fps alone', () =>
     {
         const onDowngrade = vi.fn();
-        const governor = createGovernor({ tier: 'high', onDowngrade });
-        run(governor, 16, 600);
+        const governor = createGovernor({ tier: 'high', onDowngrade, onExhausted: vi.fn() });
+        run(governor, 33, 600);
         expect(onDowngrade).not.toHaveBeenCalled();
-        expect(governor.tier()).toBe('high');
     });
 
     it('waits before acting, so one slow moment does not cost a tier', () =>
     {
         let clock = 0;
         const onDowngrade = vi.fn();
-        const governor = createGovernor({ tier: 'high', onDowngrade, now: () => clock });
+        const governor = createGovernor({ tier: 'high', onDowngrade, onExhausted: vi.fn(), now: () => clock });
 
-        run(governor, 40, 120);
+        run(governor, 50, 120);
         expect(onDowngrade).not.toHaveBeenCalled();
 
         clock += 2500;
-        run(governor, 40, 60);
+        run(governor, 50, 60);
         expect(onDowngrade).toHaveBeenCalledWith('medium');
     });
 
     it('ignores a single enormous frame', () =>
     {
         const onDowngrade = vi.fn();
-        const governor = createGovernor({ tier: 'high', onDowngrade });
+        const governor = createGovernor({ tier: 'high', onDowngrade, onExhausted: vi.fn() });
         for (let index = 0; index < 600; index += 1)
         {
             governor.sample(index % 100 === 0 ? 4000 : 14);
@@ -261,15 +308,12 @@ describe('governor', () =>
         expect(onDowngrade).not.toHaveBeenCalled();
     });
 
-    it('never steps below the floor, and never steps back up', () =>
+    it('steps down to the floor, then gives up once, and never steps back up', () =>
     {
         let clock = 0;
         const seen: string[] = [];
-        const governor = createGovernor({
-            tier: 'high',
-            onDowngrade: (tier) => seen.push(tier),
-            now: () => clock
-        });
+        const onExhausted = vi.fn();
+        const governor = createGovernor({ tier: 'high', onDowngrade: (tier) => seen.push(tier), onExhausted, now: () => clock });
 
         for (let round = 0; round < 8; round += 1)
         {
@@ -278,105 +322,77 @@ describe('governor', () =>
             run(governor, 60, 120);
         }
 
-        expect(governor.tier()).toBe('low');
         expect(seen).toEqual(['medium', 'low']);
-    });
-
-    it('recovers its footing after a downgrade before judging again', () =>
-    {
-        let clock = 0;
-        const seen: string[] = [];
-        const governor = createGovernor({
-            tier: 'high',
-            onDowngrade: (tier) => seen.push(tier),
-            now: () => clock
-        });
-
-        run(governor, 60, 120);
-        clock += 2500;
-        run(governor, 60, 60);
-        expect(seen).toEqual(['medium']);
-
-        run(governor, 15, 600);
-        clock += 10000;
-        run(governor, 15, 600);
-        expect(seen).toEqual(['medium']);
+        expect(governor.tier()).toBe('low');
+        expect(onExhausted).toHaveBeenCalledTimes(1);
     });
 });
 
 describe('camera rig', () =>
 {
-    const distance = (rig: ReturnType<typeof createRig>, target: readonly number[]): number =>
-        Math.hypot(
-            rig.camera.position.x - target[0],
-            rig.camera.position.y - target[1],
-            rig.camera.position.z - target[2]
-        );
-
-    it('starts already framed on the first shot', () =>
+    const settle = (rig: ReturnType<typeof createRig>, frames = 600): boolean =>
     {
-        const rig = createRig(DESKTOP_SHOTS, 1.6);
-        expect(distance(rig, DESKTOP_SHOTS[0].position)).toBeLessThan(0.001);
-    });
-
-    it('eases toward a new progress rather than jumping to it', () =>
-    {
-        const rig = createRig(DESKTOP_SHOTS, 1.6);
-        rig.setProgress(1);
-
-        rig.update(16, 16);
-        const afterOne = distance(rig, DESKTOP_SHOTS[DESKTOP_SHOTS.length - 1].position);
-
-        for (let frame = 0; frame < 200; frame += 1)
+        let moving = true;
+        for (let frame = 0; frame < frames && moving; frame += 1)
         {
-            rig.update(16 * frame, 16);
+            moving = rig.update(16);
         }
-        const afterMany = distance(rig, DESKTOP_SHOTS[DESKTOP_SHOTS.length - 1].position);
+        return moving;
+    };
 
-        expect(afterOne).toBeGreaterThan(1);
-        expect(afterMany).toBeLessThan(afterOne);
+    const near = (rig: ReturnType<typeof createRig>, point: readonly number[]): number =>
+        Math.hypot(rig.camera.position.x - point[0], rig.camera.position.y - point[1], rig.camera.position.z - point[2]);
+
+    it('starts already framed on the first beat, and at rest', () =>
+    {
+        const rig = createRig(PATH);
+        rig.resize(1440, 900);
+        rig.snap();
+        expect(near(rig, SHOTS.arrival.position)).toBeLessThan(0.001);
+        expect(rig.update(16)).toBe(false);
     });
 
-    it('places the camera exactly on the path when motion is reduced', () =>
+    it('glides to a new beat rather than jumping, and then stops asking for frames', () =>
     {
-        const rig = createRig(DESKTOP_SHOTS, 1.6);
-        rig.setReducedMotion(true);
-        rig.setPointer(1, 1);
+        const rig = createRig(PATH);
         rig.setProgress(1);
-        rig.update(16, 16);
-
-        const last = DESKTOP_SHOTS[DESKTOP_SHOTS.length - 1].position;
-        expect(distance(rig, last)).toBeLessThan(0.001);
+        expect(rig.update(16)).toBe(true);
+        expect(near(rig, SHOTS.finale.position)).toBeGreaterThan(0.5);
+        expect(settle(rig)).toBe(false);
+        expect(near(rig, SHOTS.finale.position)).toBeLessThan(0.01);
     });
 
-    it('applies no pointer parallax at all when motion is reduced', () =>
+    it('turns to a game while its card is focused, and back when it is not', () =>
     {
-        const still = createRig(DESKTOP_SHOTS, 1.6);
-        still.setReducedMotion(true);
-        still.setProgress(0.5);
-        still.update(16, 16);
-        const without = still.camera.position.clone();
-
-        still.setPointer(1, -1);
-        still.update(32, 16);
-        expect(still.camera.position.distanceTo(without)).toBeLessThan(0.001);
+        const rig = createRig(PATH);
+        rig.setProgress(0.25);
+        settle(rig);
+        rig.focus(FOCUS.backgammon);
+        settle(rig);
+        expect(near(rig, FOCUS.backgammon.position)).toBeLessThan(0.01);
+        rig.focus(null);
+        settle(rig);
+        expect(near(rig, SHOTS.games.position)).toBeLessThan(0.01);
     });
 
-    it('does move with the pointer when motion is not reduced', () =>
+    it('sways a few centimetres with the mouse and no more', () =>
     {
-        const rig = createRig(DESKTOP_SHOTS, 1.6);
-        rig.setProgress(0);
-        for (let frame = 0; frame < 120; frame += 1)
-        {
-            rig.update(16 * frame, 16);
-        }
-        const settled = rig.camera.position.clone();
-
+        const rig = createRig(PATH);
+        const rest = rig.camera.position.clone();
         rig.setPointer(1, -1);
-        for (let frame = 0; frame < 120; frame += 1)
-        {
-            rig.update(16 * (frame + 120), 16);
-        }
-        expect(rig.camera.position.distanceTo(settled)).toBeGreaterThan(0.05);
+        settle(rig);
+        const moved = rig.camera.position.distanceTo(rest);
+        expect(moved).toBeGreaterThan(0.02);
+        expect(moved).toBeLessThan(0.05);
+    });
+
+    it('frames the subject where the layout asks', () =>
+    {
+        const rig = createRig(PATH);
+        rig.resize(1440, 900);
+        rig.setFrame(0.66, 0.5);
+        rig.snap();
+        expect(rig.camera.view?.offsetX).toBeCloseTo(-0.16 * 1440, 4);
+        expect(rig.camera.aspect).toBeCloseTo(1.6, 6);
     });
 });

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-import { GAMES, SEAT_GAP, TABLE_OVAL, TABLE_RADIUS, gameBySlug, seatAround } from '../src/data/games.ts';
+import { GAMES, gameBySlug } from '../src/data/games.ts';
 import { en, type Dictionary } from '../src/locales/en.ts';
 import { fa } from '../src/locales/fa.ts';
 import { messageText } from '../src/locales/format.ts';
@@ -25,21 +25,15 @@ describe('games catalogue', () =>
         }
     });
 
-    it('gives every table a distinct spot in the world', () =>
+    it('stands the four games in one row, in catalogue order, a plinth apart', () =>
     {
-        const anchors = GAMES.map((game) => game.anchor.join(','));
-        expect(new Set(anchors).size).toBe(GAMES.length);
-    });
-
-    it('keeps every table inside the camera path the keyframes sweep', () =>
-    {
-        for (const game of GAMES)
+        const xs = GAMES.map((game) => game.anchor[0]);
+        expect(GAMES.every((game) => game.anchor[1] === 0 && game.anchor[2] === 0)).toBe(true);
+        for (let index = 1; index < xs.length; index += 1)
         {
-            const [x, y, z] = game.anchor;
-            expect(Math.abs(x), `${ game.id } is outside the dolly's reach`).toBeLessThanOrEqual(16);
-            expect(Math.abs(y), `${ game.id } floats too far off the market's plane`).toBeLessThanOrEqual(3);
-            expect(z, `${ game.id } sits behind the camera`).toBeLessThanOrEqual(2);
+            expect(xs[index] - xs[index - 1]).toBeCloseTo(2.4, 6);
         }
+        expect(xs[0] + xs[xs.length - 1]).toBeCloseTo(0, 6);
     });
 
     it('states a seat range that reads in the right order', () =>
@@ -60,46 +54,6 @@ describe('games catalogue', () =>
     it('carries exactly the four games the product supports', () =>
     {
         expect(GAMES.map((game) => game.id)).toEqual(['hokm', 'poker', 'backgammon', 'ludo']);
-    });
-
-    it('lays a physical set on every table', () =>
-    {
-        expect(GAMES.every((game) => game.set !== undefined)).toBe(true);
-    });
-});
-
-describe('seating', () =>
-{
-    it('keeps a round table seat one gap outside the rim, facing away from the centre', () =>
-    {
-        const seat = seatAround('table-card', 0.7, 0.3);
-        expect(Math.hypot(seat.x, seat.z)).toBeCloseTo(TABLE_RADIUS['table-card'] + SEAT_GAP, 6);
-        expect(seat.facing).toBeCloseTo(0.7, 6);
-    });
-
-    it('offsets an oval seat along the rail normal instead of a circle', () =>
-    {
-        const [a, b] = TABLE_OVAL['table-poker'] ?? [0, 0];
-        const end = seatAround('table-poker', 0, 0);
-        expect(end.x).toBeCloseTo(a + SEAT_GAP, 6);
-        expect(end.z).toBeCloseTo(0, 6);
-
-        const side = seatAround('table-poker', Math.PI / 2, 0);
-        expect(side.z).toBeCloseTo(b + SEAT_GAP, 6);
-
-        const corner = seatAround('table-poker', Math.PI / 4, 0);
-        const px = Math.cos(Math.PI / 4) * a;
-        const pz = Math.sin(Math.PI / 4) * b;
-        expect(Math.hypot(corner.x - px, corner.z - pz)).toBeCloseTo(SEAT_GAP, 6);
-        expect(corner.facing).toBeGreaterThan(Math.PI / 4);
-    });
-
-    it('turns the oval with the table', () =>
-    {
-        const rotated = seatAround('table-poker', 0.5, 0.5);
-        const [a] = TABLE_OVAL['table-poker'] ?? [0, 0];
-        expect(Math.hypot(rotated.x, rotated.z)).toBeCloseTo(a + SEAT_GAP, 6);
-        expect(rotated.facing).toBeCloseTo(0.5, 6);
     });
 });
 

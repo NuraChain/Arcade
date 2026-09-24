@@ -1,8 +1,6 @@
-import type { Color } from 'three';
 import {
-    BackSide,
-    BoxGeometry,
-    CircleGeometry,
+    Color,
+    DoubleSide,
     Mesh,
     MeshBasicMaterial,
     PMREMGenerator,
@@ -12,74 +10,52 @@ import {
     type WebGLRenderer
 } from 'three';
 
+import studio from './studio.json';
+
 export interface Environment
 {
     texture: Texture;
+
     dispose(): void;
 }
 
-export interface EnvironmentOptions
-{
-    sky: Color;
-    lamp: Color;
-    fill: Color;
-    rim: Color;
-}
+export const STUDIO = studio;
 
-export function createEnvironment(renderer: WebGLRenderer, options: EnvironmentOptions): Environment
+export function createEnvironment(renderer: WebGLRenderer): Environment
 {
     const scene = new Scene();
+    scene.background = new Color(0, 0, 0);
 
-    const room = new Mesh(
-        new BoxGeometry(12, 8, 12),
-        new MeshBasicMaterial({ color: options.sky.clone().multiplyScalar(0.6), side: BackSide })
-    );
-    scene.add(room);
+    const geometry = new PlaneGeometry(1, 1);
+    const materials: MeshBasicMaterial[] = [];
 
-    const lamp = new Mesh(
-        new CircleGeometry(1.6, 32),
-        new MeshBasicMaterial({ color: options.lamp.clone().multiplyScalar(6) })
-    );
-    lamp.position.set(0.4, 3.9, 0.2);
-    lamp.rotation.x = Math.PI / 2;
-    scene.add(lamp);
+    for (const panel of studio.panels)
+    {
+        const material = new MeshBasicMaterial({
+            color: new Color(panel.colour).multiplyScalar(panel.strength),
+            side: DoubleSide
+        });
+        materials.push(material);
 
-    const halo = new Mesh(
-        new CircleGeometry(3.2, 32),
-        new MeshBasicMaterial({ color: options.lamp.clone().multiplyScalar(0.8) })
-    );
-    halo.position.set(0.4, 3.95, 0.2);
-    halo.rotation.x = Math.PI / 2;
-    scene.add(halo);
-
-    const cool = new Mesh(
-        new PlaneGeometry(6, 3),
-        new MeshBasicMaterial({ color: options.rim.clone().multiplyScalar(1.4) })
-    );
-    cool.position.set(0, 1.5, -5.9);
-    scene.add(cool);
-
-    const bounce = new Mesh(
-        new PlaneGeometry(10, 10),
-        new MeshBasicMaterial({ color: options.fill.clone().multiplyScalar(0.7) })
-    );
-    bounce.position.set(0, -3.9, 0);
-    bounce.rotation.x = -Math.PI / 2;
-    scene.add(bounce);
+        const mesh = new Mesh(geometry, material);
+        mesh.position.set(panel.position[0], panel.position[1], panel.position[2]);
+        mesh.scale.set(panel.size[0], panel.size[1], 1);
+        mesh.lookAt(0, 0, 0);
+        scene.add(mesh);
+    }
 
     const generator = new PMREMGenerator(renderer);
-    generator.compileEquirectangularShader();
-    const target = generator.fromScene(scene, 0.04);
+    const target = generator.fromScene(scene, 0, 0.1, 20, { size: 256 });
     generator.dispose();
-
-    for (const mesh of [room, lamp, halo, cool, bounce])
+    geometry.dispose();
+    for (const material of materials)
     {
-        mesh.geometry.dispose();
-        (mesh.material as MeshBasicMaterial).dispose();
+        material.dispose();
     }
 
     return {
         texture: target.texture,
+
         dispose()
         {
             target.dispose();

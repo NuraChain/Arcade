@@ -1,157 +1,105 @@
 import {
-    ClampToEdgeWrapping,
-    LinearFilter,
-    LinearMipmapLinearFilter,
+    Material,
     Mesh,
-    NoColorSpace,
-    RepeatWrapping,
-    SRGBColorSpace,
-    TextureLoader,
+    MeshBasicMaterial,
+    Texture,
     type BufferGeometry,
     type Group,
-    type Object3D,
-    type Texture
+    type Object3D
 } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 
-import { GAMES, type SetAsset, type TableAsset } from '../../data/games.ts';
-import type { MaterialSet } from '../render/materials.ts';
-import type { QualitySettings } from '../quality/tiers.ts';
+import { GAMES } from '../../data/games.ts';
+import type { SceneSet } from '../quality/tiers.ts';
 
-export const AVATARS = ['avatar-a', 'avatar-b', 'avatar-c'] as const;
-
-export type AvatarAsset = typeof AVATARS[number];
-
-export const FURNITURE = [
-    'lamp-pendant',
-    'table-round',
-    'stool',
-    'trophy',
-    ...AVATARS
-] as const;
-
-export type FurnitureAsset = typeof FURNITURE[number];
-
-export type AssetName = FurnitureAsset | TableAsset | SetAsset;
-
-export type AssetLibrary = Partial<Record<AssetName, Group>>;
-
-export interface LoadedAssets
+export interface Showcase
 {
-    library: AssetLibrary;
-    atlas: Texture;
-    wood: Texture;
-    woodNormal: Texture;
-    get(name: AssetName): Group;
+    root: Group;
+
+    textures: Texture[];
+
     dispose(): void;
 }
 
-export function requiredAssets(): AssetName[]
+function texturesOf(material: Material): Texture[]
 {
-    const names = new Set<AssetName>(FURNITURE);
-    for (const game of GAMES)
-    {
-        names.add(game.table);
-        if (game.set !== undefined)
-        {
-            names.add(game.set);
-        }
-    }
-    return [...names];
+    return Object.values(material).filter((value): value is Texture => value instanceof Texture);
 }
 
-export async function loadAssets(
-    base: string,
-    materials: MaterialSet,
-    settings: QualitySettings,
-    signal?: AbortSignal
-): Promise<LoadedAssets>
+function decal(material: Material): MeshBasicMaterial
+{
+    const source = material as Material & { map?: Texture | null };
+    return new MeshBasicMaterial({
+        name: material.name,
+        map: source.map ?? null,
+        transparent: true,
+        depthWrite: false,
+        toneMapped: false
+    });
+}
+
+export async function loadShowcase(base: string, set: SceneSet, anisotropy: number): Promise<Showcase>
 {
     const loader = new GLTFLoader();
     loader.setMeshoptDecoder(MeshoptDecoder);
-    const geometries = new Set<BufferGeometry>();
-    const textures = new TextureLoader();
+    const gltf = await loader.loadAsync(`${ base }/showcase-${ set }.glb`);
+    const root = gltf.scene;
 
-    const image = async (file: string, colour: boolean, repeat: boolean): Promise<Texture> =>
+    for (const game of GAMES)
     {
-        const texture = await textures.loadAsync(`${ base }/${ file }`);
-        texture.flipY = false;
-        texture.colorSpace = colour ? SRGBColorSpace : NoColorSpace;
-        texture.wrapS = repeat ? RepeatWrapping : ClampToEdgeWrapping;
-        texture.wrapT = repeat ? RepeatWrapping : ClampToEdgeWrapping;
-        texture.minFilter = LinearMipmapLinearFilter;
-        texture.magFilter = LinearFilter;
-        texture.anisotropy = settings.anisotropy;
-        texture.generateMipmaps = true;
-        texture.needsUpdate = true;
-        return texture;
-    };
-
-    const one = async (name: AssetName): Promise<[AssetName, Group]> =>
-    {
-        const gltf = await loader.loadAsync(`${ base }/${ name }.glb`);
-
-        gltf.scene.traverse((node: Object3D) =>
-        {
-            if (!(node instanceof Mesh))
-            {
-                return;
-            }
-
-            const family = Array.isArray(node.material)
-                ? node.material[0]?.name
-                : node.material?.name;
-
-            node.material = materials.get(family ?? 'wood');
-            node.castShadow = true;
-            node.receiveShadow = true;
-            node.matrixAutoUpdate = false;
-
-            geometries.add(node.geometry);
-        });
-
-        return [name, gltf.scene];
-    };
-
-    const [loaded, atlas, wood, woodNormal] = await Promise.all([
-        Promise.all(requiredAssets().map((name) => one(name))),
-        image(`atlas-${ settings.atlas }.webp`, true, false),
-        image('wood-512.webp', true, true),
-        image('wood-normal-512.webp', false, true)
-    ]);
-
-    if (signal?.aborted === true)
-    {
-        for (const geometry of geometries)
-        {
-            geometry.dispose();
-        }
-        atlas.dispose();
-        wood.dispose();
-        woodNormal.dispose();
-        throw new DOMException('Aborted', 'AbortError');
+        root.getObjectByName(game.id)?.position.set(...game.anchor);
     }
 
-    materials.setAtlas(atlas);
-    materials.setWood(wood, woodNormal);
-    const library = Object.fromEntries(loaded) as AssetLibrary;
+    const geometries = new Set<BufferGeometry>();
+    const materials = new Set<Material>();
+    const replaced = new Map<Material, MeshBasicMaterial>();
+
+    root.traverse((node: Object3D) =>
+    {
+        if (!(node instanceof Mesh))
+        {
+            return;
+        }
+        geometries.add(node.geometry);
+
+        const own = (material: Material): Material =>
+        {
+            if (!material.name.startsWith('decal'))
+            {
+                materials.add(material);
+                return material;
+            }
+            let swapped = replaced.get(material);
+            if (swapped === undefined)
+            {
+                swapped = decal(material);
+                replaced.set(material, swapped);
+                materials.add(swapped);
+                material.dispose();
+            }
+            return swapped;
+        };
+
+        node.material = Array.isArray(node.material) ? node.material.map(own) : own(node.material);
+    });
+
+    root.updateMatrixWorld(true);
+    root.traverse((node: Object3D) =>
+    {
+        node.matrixAutoUpdate = false;
+        node.matrixWorldAutoUpdate = false;
+    });
+
+    const textures = [...new Set([...materials].flatMap(texturesOf))];
+    for (const texture of textures)
+    {
+        texture.anisotropy = anisotropy;
+    }
 
     return {
-        library,
-        atlas,
-        wood,
-        woodNormal,
-
-        get(name)
-        {
-            const group = library[name];
-            if (group === undefined)
-            {
-                throw new Error(`world: asset "${ name }" was not loaded`);
-            }
-            return group;
-        },
+        root,
+        textures,
 
         dispose()
         {
@@ -159,7 +107,14 @@ export async function loadAssets(
             {
                 geometry.dispose();
             }
-            geometries.clear();
+            for (const material of materials)
+            {
+                material.dispose();
+            }
+            for (const texture of textures)
+            {
+                texture.dispose();
+            }
         }
     };
 }

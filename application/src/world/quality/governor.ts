@@ -2,7 +2,7 @@ import { TIER_ORDER, type QualityTier } from './tiers.ts';
 
 const WINDOW = 60;
 
-const SLOW_MS = 22;
+const SLOW_MS = 36;
 
 const PATIENCE_MS = 2000;
 
@@ -10,6 +10,8 @@ export interface GovernorOptions
 {
     tier: QualityTier;
     onDowngrade(tier: QualityTier): void;
+
+    onExhausted(): void;
 
     now?(): number;
 }
@@ -29,6 +31,7 @@ export function createGovernor(options: GovernorOptions): Governor
     let cursor = 0;
     let slowSince = -1;
     let current = options.tier;
+    let exhausted = false;
     const now = options.now ?? ((): number => performance.now());
 
     const median = (): number =>
@@ -43,7 +46,7 @@ export function createGovernor(options: GovernorOptions): Governor
     return {
         sample(deltaMs)
         {
-            if (deltaMs > 200)
+            if (exhausted || deltaMs > 200)
             {
                 slowSince = -1;
                 return;
@@ -78,7 +81,8 @@ export function createGovernor(options: GovernorOptions): Governor
             const index = TIER_ORDER.indexOf(current);
             if (index <= 0)
             {
-                slowSince = now();
+                exhausted = true;
+                options.onExhausted();
                 return;
             }
 

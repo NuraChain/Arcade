@@ -8,7 +8,7 @@ def _art(name):
 
 
 def plinth():
-    return kit.material('plinth', base='#141D2E', roughness=0.34, coat=1.0, coat_roughness=0.06)
+    return kit.material('plinth', base='#101828', roughness=0.62, coat=0.12, coat_roughness=0.4)
 
 
 def plinth_band():

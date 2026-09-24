@@ -210,7 +210,7 @@ def bake_contact(game, label, root, surface_z, size, casters, hidden, resolution
     out = np.zeros((resolution, resolution, 4), dtype=np.float32)
     out[:, :, 3] = np.clip(1.0 - lit / full, 0.0, 1.0) * 0.92
     path = _write_png(out, os.path.join(BAKES, '%s-%s.png' % (game, label)))
-    return _decal_plane('decal-%s-%s' % (label, game), size, surface_z + 0.0004, path, root)
+    return _decal_plane('decal-%s-%s' % (label, game), size, surface_z + 0.0001, path, root)
 
 
 def preview(path, look_at, position, fov=32.0, width=1600, height=1000, samples=192):

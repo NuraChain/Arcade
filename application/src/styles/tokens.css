@@ -163,17 +163,6 @@
     --glass: color-mix(in oklab, var(--void) 82%, transparent);
     --scrim: color-mix(in oklab, var(--void) 70%, transparent);
 
-    --world-sky: #0B1220;
-    --world-fog: #131C2E;
-    --world-key: #FFC46A;
-    --world-fill: #22324D;
-    --world-rim: #7FA6D6;
-    --world-lamp: #FFB43D;
-    --world-stone: #2A3852;
-    --world-lamp-intensity: 1;
-    --world-fog-density: 1;
-    --world-env: 0.35;
-
     --ludo-red: #FF5A4E;
     --ludo-green: #2FC262;
     --ludo-yellow: #FFC72C;

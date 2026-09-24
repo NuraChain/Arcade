@@ -1,67 +1,99 @@
 import { PerspectiveCamera, Vector3 } from 'three';
 
-import { damping, sampleShots, type Shot } from './path.ts';
+import { damping, lens, sampleShots, type Frame, type Shot } from './path.ts';
 
-const POSITION_RATE = 0.075;
-const TARGET_RATE = 0.09;
-const FOV_RATE = 0.06;
+const POSITION_RATE = 0.1;
+const TARGET_RATE = 0.12;
+const FOV_RATE = 0.1;
+const POINTER_RATE = 0.08;
 
-const PARALLAX = 0.42;
-const PARALLAX_RATE = 0.05;
+const PARALLAX = 0.03;
 
-const DRIFT = 0.05;
+const SETTLED = 0.0004;
+
+const UP = new Vector3(0, 1, 0);
 
 export interface Rig
 {
     camera: PerspectiveCamera;
-    target: Vector3;
-    progress(): number;
+
+    setPath(shots: Shot[]): void;
+
     setProgress(value: number): void;
+
     setPointer(x: number, y: number): void;
-    setShots(shots: Shot[]): void;
-    setReducedMotion(on: boolean): void;
+
+    focus(frame: Frame | null): void;
+
+    setFrame(subjectX: number, subjectY: number): void;
+
     resize(width: number, height: number): void;
-    update(time: number, deltaMs: number): void;
+
+    snap(): void;
+
+    update(deltaMs: number): boolean;
 }
 
-export function createRig(shots: Shot[], aspect: number): Rig
+export function createRig(shots: Shot[]): Rig
 {
-    const camera = new PerspectiveCamera(40, aspect, 0.1, 220);
+    const camera = new PerspectiveCamera(30, 1, 0.05, 60);
 
     let path = shots;
     let progress = 0;
-    let reduced = false;
+    let focused: Frame | null = null;
+
+    let width = 1;
+    let height = 1;
+    let subjectX = 0.5;
+    let subjectY = 0.5;
 
     const position = new Vector3();
     const target = new Vector3();
-    let fov = 40;
-
-    const pointer = { x: 0, y: 0 };
-    const smoothedPointer = { x: 0, y: 0 };
+    let fov = 30;
 
     const desiredPosition = new Vector3();
     const desiredTarget = new Vector3();
-    const offset = new Vector3();
+    let desiredFov = 30;
+
+    const pointer = { x: 0, y: 0 };
+    const smoothed = { x: 0, y: 0 };
+
     const forward = new Vector3();
     const right = new Vector3();
-    const up = new Vector3(0, 1, 0);
+    const lift = new Vector3();
 
-    const first = sampleShots(path, 0);
-    position.set(...first.position);
-    target.set(...first.target);
-    fov = first.fov;
-    camera.position.copy(position);
-    camera.lookAt(target);
-    camera.fov = fov;
-    camera.updateProjectionMatrix();
+    const desire = (): void =>
+    {
+        const frame = focused ?? sampleShots(path, progress);
+        desiredPosition.set(...frame.position);
+        desiredTarget.set(...frame.target);
+        desiredFov = frame.fov;
+    };
 
-    return {
+    const apply = (): void =>
+    {
+        forward.subVectors(target, position).normalize();
+        right.crossVectors(forward, UP).normalize();
+        lift.crossVectors(right, forward).normalize();
+
+        camera.position.copy(position)
+            .addScaledVector(right, smoothed.x * PARALLAX)
+            .addScaledVector(lift, smoothed.y * PARALLAX);
+        camera.lookAt(target);
+
+        const view = lens(fov, width / height, subjectX, subjectY);
+        camera.fov = view.fov;
+        camera.aspect = width / height;
+        camera.setViewOffset(width, height, view.x * width, view.y * height, width, height);
+        camera.updateProjectionMatrix();
+    };
+
+    const rig: Rig = {
         camera,
-        target,
 
-        progress()
+        setPath(next)
         {
-            return progress;
+            path = next;
         },
 
         setProgress(value)
@@ -75,72 +107,56 @@ export function createRig(shots: Shot[], aspect: number): Rig
             pointer.y = y;
         },
 
-        setShots(next)
+        focus(frame)
         {
-            path = next;
+            focused = frame;
         },
 
-        setReducedMotion(on)
+        setFrame(x, y)
         {
-            reduced = on;
-            if (on)
-            {
-                smoothedPointer.x = 0;
-                smoothedPointer.y = 0;
-            }
+            subjectX = x;
+            subjectY = y;
         },
 
-        resize(width, height)
+        resize(nextWidth, nextHeight)
         {
-            camera.aspect = width / Math.max(height, 1);
-            camera.updateProjectionMatrix();
+            width = Math.max(nextWidth, 1);
+            height = Math.max(nextHeight, 1);
         },
 
-        update(time, deltaMs)
+        snap()
         {
-            const frame = sampleShots(path, progress);
-            desiredPosition.set(...frame.position);
-            desiredTarget.set(...frame.target);
+            desire();
+            position.copy(desiredPosition);
+            target.copy(desiredTarget);
+            fov = desiredFov;
+            smoothed.x = pointer.x;
+            smoothed.y = pointer.y;
+            apply();
+        },
 
-            if (reduced)
-            {
-                position.copy(desiredPosition);
-                target.copy(desiredTarget);
-                fov = frame.fov;
-            }
-            else
-            {
-                position.lerp(desiredPosition, damping(POSITION_RATE, deltaMs));
-                target.lerp(desiredTarget, damping(TARGET_RATE, deltaMs));
-                fov += (frame.fov - fov) * damping(FOV_RATE, deltaMs);
+        update(deltaMs)
+        {
+            desire();
 
-                const settle = damping(PARALLAX_RATE, deltaMs);
-                smoothedPointer.x += (pointer.x - smoothedPointer.x) * settle;
-                smoothedPointer.y += (pointer.y - smoothedPointer.y) * settle;
-            }
+            position.lerp(desiredPosition, damping(POSITION_RATE, deltaMs));
+            target.lerp(desiredTarget, damping(TARGET_RATE, deltaMs));
+            fov += (desiredFov - fov) * damping(FOV_RATE, deltaMs);
 
-            offset.set(0, 0, 0);
+            const settle = damping(POINTER_RATE, deltaMs);
+            smoothed.x += (pointer.x - smoothed.x) * settle;
+            smoothed.y += (pointer.y - smoothed.y) * settle;
 
-            if (!reduced)
-            {
-                forward.subVectors(desiredTarget, desiredPosition).normalize();
-                right.crossVectors(forward, up).normalize();
+            apply();
 
-                offset.addScaledVector(right, smoothedPointer.x * PARALLAX);
-                offset.addScaledVector(up, -smoothedPointer.y * PARALLAX);
-
-                offset.x += Math.sin(time * 0.00021) * DRIFT;
-                offset.y += Math.sin(time * 0.00013 + 1.7) * DRIFT * 0.6;
-            }
-
-            camera.position.copy(position).add(offset);
-            camera.lookAt(target);
-
-            if (Math.abs(camera.fov - fov) > 0.01)
-            {
-                camera.fov = fov;
-                camera.updateProjectionMatrix();
-            }
+            return position.distanceTo(desiredPosition) > SETTLED
+                || target.distanceTo(desiredTarget) > SETTLED
+                || Math.abs(desiredFov - fov) > 0.01
+                || Math.abs(pointer.x - smoothed.x) > 0.002
+                || Math.abs(pointer.y - smoothed.y) > 0.002;
         }
     };
+
+    rig.snap();
+    return rig;
 }

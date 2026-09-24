@@ -1,6 +1,8 @@
-import type { WorldHandle } from '../../world/bridge.ts';
+import type { Beat, WorldHandle } from '../../world/bridge.ts';
 import { useFocus } from '../../stores/focus.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
+
+const FADE_MS = 400;
 
 export default component WorldCanvas()
 {
@@ -10,18 +12,27 @@ export default component WorldCanvas()
     let host: HTMLDivElement | null = null;
     let canvas: HTMLCanvasElement | null = null;
 
-    state ready = false;
+    state live = false;
 
     let world: WorldHandle | null = null;
+    let reframe: (() => void) | null = null;
 
     mount
     {
-        ready = true;
-
-        const reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
-
         let disposed = false;
+        let broken = false;
         let detach: (() => void) | null = null;
+
+        const retire = (): void =>
+        {
+            broken = true;
+            live = false;
+            detach?.();
+            detach = null;
+            const handle = world;
+            world = null;
+            window.setTimeout(() => handle?.dispose(), FADE_MS);
+        };
 
         const start = async (): Promise<void> =>
         {
@@ -30,78 +41,83 @@ export default component WorldCanvas()
                 return;
             }
 
-            const { createWorld } = await import('../../world/world.ts');
+            const { openWorld } = await import('../../world/gate.ts');
+            const opened = disposed ? null : openWorld(canvas);
+            if (opened === null)
+            {
+                return;
+            }
 
+            const { createWorld } = await import('../../world/world.ts');
             if (disposed)
             {
+                opened.context.getExtension('WEBGL_lose_context')?.loseContext();
                 return;
             }
 
             const handle = await createWorld({
                 canvas,
-                host,
+                context: opened.context,
+                choice: opened.choice,
                 assetBase: '/world',
-                reducedMotion: reduce.matches,
                 callbacks:
                 {
-                    onHover: (id) => focus.focus(id),
-                    onFailed: (reason) => console.warn(`[world] ${ reason }; keeping the static page.`)
+                    onReady: () =>
+                    {
+                        if (!broken)
+                        {
+                            live = true;
+                        }
+                    },
+                    onFailed: () => retire()
                 }
             });
 
-            if (disposed)
+            if (disposed || broken)
             {
                 handle.dispose();
                 return;
             }
 
             world = handle;
+            const page = host.parentElement ?? document.body;
 
-            const container = host.parentElement;
-
-            const readProgress = (): void =>
+            const measure = (): void =>
             {
-                if (container === null)
-                {
-                    return;
-                }
-                const total = container.offsetHeight - window.innerHeight;
-                if (total <= 0)
-                {
-                    return;
-                }
-                const passed = -container.getBoundingClientRect().top;
-                handle.setProgress(Math.min(Math.max(passed / total, 0), 1));
+                const middle = host!.clientHeight / 2;
+                const beats: Beat[] = [...page.querySelectorAll<HTMLElement>('[data-beat]')].map((element, index) => ({
+                    name: element.dataset.beat ?? '',
+                    at: index === 0 ? 0 : Math.max(0, element.getBoundingClientRect().top + window.scrollY - middle)
+                }));
+                handle.measure(beats);
             };
 
-            let queued = false;
-            const onScroll = (): void =>
+            const frame = (): void =>
             {
-                if (!queued)
-                {
-                    queued = true;
-                    requestAnimationFrame(() =>
-                    {
-                        queued = false;
-                        readProgress();
-                    });
-                }
+                const style = getComputedStyle(host!);
+                const x = Number.parseFloat(style.getPropertyValue('--subject-x'));
+                const y = Number.parseFloat(style.getPropertyValue('--subject-y'));
+                handle.setFrame(Number.isFinite(x) ? x : 0.5, Number.isFinite(y) ? y : 0.5);
             };
+
+            const onScroll = (): void => handle.setScroll(window.scrollY);
 
             const onPointer = (event: PointerEvent): void =>
             {
-                const rect = canvas!.getBoundingClientRect();
-                handle.setPointer(
-                    ((event.clientX - rect.left) / rect.width) * 2 - 1,
-                    -(((event.clientY - rect.top) / rect.height) * 2 - 1)
-                );
+                if (event.pointerType === 'mouse')
+                {
+                    handle.setPointer((event.clientX / window.innerWidth) * 2 - 1, (event.clientY / window.innerHeight) * -2 + 1);
+                }
             };
 
-            const onLeave = (): void =>
+            const onResize = (): void =>
             {
-                handle.setPointer(0, 0);
-                focus.focus(null);
+                frame();
+                measure();
             };
+
+            const layout = new ResizeObserver(() => measure());
+            layout.observe(page);
 
             const visibility = new IntersectionObserver((entries) =>
             {
@@ -113,35 +129,37 @@ export default component WorldCanvas()
                 {
                     handle.pause();
                 }
-            }, { threshold: 0 });
+            });
             visibility.observe(host);
 
-            const onMotionChange = (): void => handle.setReducedMotion(reduce.matches);
-
             window.addEventListener('scroll', onScroll, { passive: true });
-            window.addEventListener('resize', onScroll, { passive: true });
-            canvas.addEventListener('pointermove', onPointer, { passive: true });
-            canvas.addEventListener('pointerleave', onLeave, { passive: true });
-            reduce.addEventListener('change', onMotionChange);
+            window.addEventListener('resize', onResize, { passive: true });
+            window.addEventListener('pointermove', onPointer, { passive: true });
 
-            readProgress();
-            handle.setDirection(locale.dir());
+            reframe = frame;
+            frame();
+            measure();
+            onScroll();
+            void document.fonts?.ready.then(() =>
+            {
+                if (world === handle)
+                {
+                    measure();
+                }
+            });
 
             detach = (): void =>
             {
                 window.removeEventListener('scroll', onScroll);
-                window.removeEventListener('resize', onScroll);
-                canvas?.removeEventListener('pointermove', onPointer);
-                canvas?.removeEventListener('pointerleave', onLeave);
-                reduce.removeEventListener('change', onMotionChange);
+                window.removeEventListener('resize', onResize);
+                window.removeEventListener('pointermove', onPointer);
+                layout.disconnect();
                 visibility.disconnect();
+                reframe = null;
             };
         };
 
-        void start().catch((error) =>
-        {
-            console.warn('[world] the market did not start; keeping the static page.', error);
-        });
+        void start().catch(() => retire());
 
         return () =>
         {
@@ -155,33 +173,24 @@ export default component WorldCanvas()
     effect
     {
         const id = focus.game();
-        world?.focusTable(id);
+        world?.focus(id);
     }
 
     effect
     {
-        const direction = locale.dir();
-        world?.setDirection(direction);
+        locale.dir();
+        const again = reframe;
+        if (again !== null)
+        {
+            requestAnimationFrame(() => again());
+        }
     }
 
-    <div
-        ref={ (element) => host = element }
-        class="stage bg-void"
-        role="img"
-        aria-label={ locale.t('a11y.scene') }
-    >
-        <Show when={ ready }>
-            { () =>
-                <canvas
-                    ref={ (element) => canvas = element }
-                    class="block h-full w-full"
-                    aria-hidden="true"
-                ></canvas>
-            }
-        </Show>
-
-        <Show when={ ready }>
-            { () => <div class="scrim"></div> }
-        </Show>
+    <div ref={ (element) => host = element } class="stage bg-void" aria-hidden="true">
+        <canvas
+            ref={ (element) => canvas = element }
+            class={ () => ['world-canvas', live ? 'is-live' : ''].join(' ') }
+        ></canvas>
+        <div class="scrim"></div>
     </div>
 }

@@ -47,7 +47,7 @@ def triangle(name, point, material):
     half = COLUMN * 0.46
     bm = bmesh.new()
     z0 = FIELD_TOP
-    z1 = FIELD_TOP + 0.0005
+    z1 = FIELD_TOP + 0.0004
     corners = [(x - half, base_y), (x + half, base_y), (x, tip_y)]
     low = [bm.verts.new((cx, cy, z0)) for cx, cy in corners]
     high = [bm.verts.new((cx, cy, z1)) for cx, cy in corners]
@@ -83,7 +83,7 @@ def build():
 
     fields = []
     for side in (-1, 1):
-        field = kit.box('backgammon-field-%s' % ('left' if side < 0 else 'right'), size=(HALF, EDGE * 2, 0.002), location=(side * (BAR + HALF / 2), 0.0, FIELD_TOP - 0.001), bevel_width=0)
+        field = kit.box('backgammon-field-%s' % ('left' if side < 0 else 'right'), size=(HALF, EDGE * 2, 0.002), location=(side * (BAR + HALF / 2), 0.0, FIELD_TOP - 0.0008), bevel_width=0)
         kit.assign(field, looks.nard_field())
         fields.append(field)
 
@@ -135,7 +135,7 @@ def build():
         'surfaces': [board] + fields,
         'raised': [lip, bar] + inlays,
         'pieces': points + placed + dice + cube,
-        'surface_z': FIELD_TOP,
+        'surface_z': FIELD_TOP + 0.0004,
         'surface_size': 0.44,
         'hero': {'look_at': (0.0, 0.0, 0.15), 'position': (-0.3, -0.62, 0.5), 'fov': 30.0}
     }
