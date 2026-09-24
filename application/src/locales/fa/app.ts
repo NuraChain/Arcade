@@ -6,6 +6,7 @@ export const app: Pick<Dictionary, keyof typeof reference> = {
 
     'app.nav.home': 'خانه',
     'app.nav.games': 'بازی‌ها',
+    'app.nav.watch': 'تماشا',
     'app.nav.friends': 'دوستان',
     'app.nav.chats': 'گفت‌وگوها',
     'app.nav.profile': 'پروفایل',

@@ -6,7 +6,7 @@ import { routeMeta } from '../../lib/route-meta.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import Badge from '../ui/badge.component.azeroth';
 import { useNavCounts } from './nav-counts.ts';
-import { NAV } from './nav-items.ts';
+import { NAV, lit } from './nav-items.ts';
 import type { NavItem } from './nav-items.ts';
 
 export default component BottomNav()
@@ -16,6 +16,7 @@ export default component BottomNav()
     const match = useMatch();
     const { navigate } = useNavigate();
 
+    derived tab = routeMeta(match()).tab;
 
     const press = (item: NavItem): ((event: MouseEvent) => void) =>
     {
@@ -23,15 +24,16 @@ export default component BottomNav()
         {
             haptic('select');
 
-            if (routeMeta(match()).tab !== item.tab)
+            const meta = routeMeta(match());
+
+            if (!lit(item, meta.tab))
             {
                 return;
             }
 
             event.preventDefault();
 
-            const parent = routeMeta(match()).parent;
-            if (parent !== undefined)
+            if (meta.tab !== item.tab || meta.parent !== undefined)
             {
                 void navigate(item.to);
                 return;
@@ -45,7 +47,7 @@ export default component BottomNav()
         <ul class="mx-auto grid h-[var(--nav-h)] w-full max-w-[40rem] grid-cols-5">
             <For each={ NAV } key={ (item) => item.tab } let={ item }>
                 <li class="flex">
-                    <Link to={ item.to } end={ item.end } activeClass="is-active" prefetch="hover" onClick={ press(item) } class="[&.is-active]:text-accent flex flex-1 flex-col items-center justify-center gap-1 rounded-tile text-ui-2xs font-semibold text-muted transition-colors duration-150">
+                    <Link to={ item.to } prefetch="hover" onClick={ press(item) } aria-current={ lit(item, tab) ? 'page' : undefined } class={ () => [ '[&.is-active]:text-accent flex flex-1 flex-col items-center justify-center gap-1 rounded-tile text-ui-2xs font-semibold text-muted transition-colors duration-150', lit(item, tab) ? 'is-active' : '' ].join(' ') }>
                         <span class="nav-pill relative flex h-6 w-10 items-center justify-center">
                             <Icon name={ item.icon } size={ 22 } />
                             <Show when={ countOf(item) > 0 }>

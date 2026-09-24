@@ -51,6 +51,7 @@ import {
     Menu,
     Mic,
     MicOff,
+    Eye,
     Headphones,
     HeadphoneOff,
     Minimize2,
@@ -199,6 +200,7 @@ export const ALL_ICONS = {
     'hang-up': PhoneOff,
     'listen': Headphones,
     'deafen': HeadphoneOff,
+    'watch': Eye,
     'undo': Undo2
 } satisfies Record<string, IconNode>;
 

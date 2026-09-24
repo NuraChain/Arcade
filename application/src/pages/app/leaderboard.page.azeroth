@@ -1,4 +1,4 @@
-import { useHead } from 'azerothjs';
+import { untrack, useHead, useQuery } from 'azerothjs';
 
 import Rail from '../../components/ui/rail.component.azeroth';
 import Page from '../../components/app/page.component.azeroth';
@@ -17,7 +17,13 @@ export default component LeaderboardPage()
 
     useHead({ title: () => locale.t('app.nav.leaderboard') });
 
-    state picked = null as GameId | null;
+    const query = useQuery();
+
+    state picked = ((): GameId | null =>
+    {
+        const asked = untrack(query).game;
+        return typeof asked === 'string' ? asked as GameId : null;
+    })();
 
     derived games = catalogue.games.filter((game) => catalogue.status(game.id) === 'available');
 

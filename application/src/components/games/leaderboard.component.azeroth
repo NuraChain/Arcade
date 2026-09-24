@@ -20,7 +20,7 @@ const WINDOWS: { id: LeaderboardWindow; key: 'board.today' | 'board.month' | 'bo
     { id: 'all', key: 'board.all' }
 ];
 
-export default component Leaderboard(props: { game: GameId; titled?: boolean })
+export default component Leaderboard(props: { game: GameId; titled?: boolean; seeAll?: boolean })
 {
     const locale = useLocale();
 
@@ -97,7 +97,7 @@ export default component Leaderboard(props: { game: GameId; titled?: boolean })
 
     <section aria-labelledby="game-board">
         <Show when={ props.titled !== false }>
-            <SectionHeading id="game-board" title={ locale.t('board.title') } />
+            <SectionHeading id="game-board" title={ locale.t('board.title') } { ...(props.seeAll === true ? { more: locale.t('common.seeAll'), to: `/app/leaderboard?game=${ props.game }` } : {}) } />
         </Show>
 
         <div class="mb-3">

@@ -2,7 +2,7 @@ import type { RouteMatch } from 'azerothjs';
 
 import type { MessageKey } from '../locales/en.ts';
 
-export type Tab = 'home' | 'games' | 'friends' | 'chats' | 'me' | 'discover' | 'search' | 'leaderboard' | 'notifications';
+export type Tab = 'home' | 'games' | 'watch' | 'friends' | 'chats' | 'me' | 'settings' | 'discover' | 'search' | 'leaderboard' | 'notifications';
 
 export interface RouteMeta
 {

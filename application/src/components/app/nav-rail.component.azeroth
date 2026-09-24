@@ -1,7 +1,8 @@
 import BrandLogo from '../layout/brand-logo.component.azeroth';
-import { Link } from 'azerothjs';
+import { Link, useMatch } from 'azerothjs';
 
 import Icon from '../../icons/icon.component.azeroth';
+import { routeMeta } from '../../lib/route-meta.ts';
 import { useAccount } from '../../stores/account.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useRealtime } from '../../stores/realtime.store.ts';
@@ -9,7 +10,7 @@ import Avatar from '../ui/avatar.component.azeroth';
 import Badge from '../ui/badge.component.azeroth';
 import Tooltip from '../ui/tooltip.component.azeroth';
 import { useNavCounts } from './nav-counts.ts';
-import { ACTIVE_ROW, RAIL } from './nav-items.ts';
+import { ACTIVE_ROW, RAIL, lit } from './nav-items.ts';
 
 export default component NavRail()
 {
@@ -17,6 +18,9 @@ export default component NavRail()
     const account = useAccount();
     const { countOf, labelOf, toneOf } = useNavCounts();
     const live = useRealtime();
+    const match = useMatch();
+
+    derived tab = routeMeta(match()).tab;
 
     derived user = account.user();
 
@@ -30,7 +34,7 @@ export default component NavRail()
             <For each={ RAIL } key={ (item) => item.to } let={ item }>
                 <li class="shrink-0">
                     <Tooltip label={ locale.t(item.labelKey) } side="end">
-                        <Link to={ item.to } end={ item.end } activeClass="is-active" prefetch="hover" class={ `nav-row ${ ACTIVE_ROW } relative flex h-11 w-11 items-center justify-center rounded-tile text-muted transition-colors duration-150 hover:bg-raised hover:text-text` } aria-label={ locale.t(item.labelKey) }>
+                        <Link to={ item.to } prefetch="hover" aria-current={ lit(item, tab) ? 'page' : undefined } class={ () => [ 'nav-row', ACTIVE_ROW, 'relative flex h-11 w-11 items-center justify-center rounded-tile text-muted transition-colors duration-150 hover:bg-raised hover:text-text', lit(item, tab) ? 'is-active' : '' ].join(' ') } aria-label={ locale.t(item.labelKey) }>
                             <Icon name={ item.icon } size={ 20 } />
                             <Show when={ countOf(item) > 0 }>
                                 { () => <Badge count={ countOf(item) } size="sm" tone={ toneOf(item) } anchor label={ labelOf(item) } /> }
@@ -42,7 +46,7 @@ export default component NavRail()
         </ul>
         <div class="shrink-0 py-3">
             <Tooltip label={ locale.t('app.nav.profile') } side="end">
-                <Link to="/app/me" class="flex h-11 w-11 items-center justify-center rounded-full" aria-label={ locale.t('app.nav.profile') }>
+                <Link to="/app/me" aria-current={ tab === 'me' ? 'page' : undefined } class="flex h-11 w-11 items-center justify-center rounded-full ring-accent ring-offset-2 ring-offset-void aria-[current=page]:ring-2" aria-label={ locale.t('app.nav.profile') }>
                     <Avatar person={ user } size="sm" presence={ user !== null && live.status() === 'connected' ? 'online' : null } ringOn="void" />
                 </Link>
             </Tooltip>

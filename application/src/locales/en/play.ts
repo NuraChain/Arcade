@@ -145,7 +145,7 @@ export const play = {
     'watch.none': 'No games are being played right now.',
     'watch.live': 'Games in progress',
     'watch.join': 'Watch',
-    'watch.page.title': 'Live now',
+    'watch.page.title': 'Watch live games',
     'watch.page.lead': 'Games being played right now, at tables anyone may watch.',
     'watch.page.all': 'All games',
     'watch.page.filter': 'Which game',

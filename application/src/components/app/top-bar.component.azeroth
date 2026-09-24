@@ -90,7 +90,7 @@ export default component TopBar()
             <Show
                 when={ phone }
                 fallback={
-                    <div class="flex min-w-0 flex-1 justify-center">
+                    <div class={ () => [ 'flex min-w-0 flex-1 justify-center', meta.tab === 'search' ? 'invisible' : '' ].join(' ') }>
                         <Link to="/app/search" class="flex h-10 w-full max-w-[30rem] items-center gap-2.5 rounded-full border border-line bg-sunk px-4 text-ui-sm text-faint transition-colors duration-150 hover:border-line-strong hover:text-muted coarse:h-11">
                             <Icon name="search" size={ 16 } class="shrink-0" />
                             <span class="min-w-0 flex-1 truncate">{ locale.t('app.search.placeholder') }</span>
@@ -110,7 +110,7 @@ export default component TopBar()
             </Show>
 
             <Show when={ phone }>
-                { () => <IconButton icon="search" label={ locale.t('app.nav.search') } to="/app/search" /> }
+                { () => <IconButton icon="search" label={ locale.t('app.nav.search') } to="/app/search" current={ meta.tab === 'search' } /> }
             </Show>
             <Show when={ !phone }>
                 { () =>
@@ -119,8 +119,8 @@ export default component TopBar()
                     </span>
                 }
             </Show>
-            <IconButton icon="bell" label={ locale.t('app.nav.notifications') } to="/app/notifications" count={ unread } />
-            <Link to="/app/me" class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full" aria-label={ locale.t('app.nav.profile') }>
+            <IconButton icon="bell" label={ locale.t('app.nav.notifications') } to="/app/notifications" count={ unread } current={ meta.tab === 'notifications' } />
+            <Link to="/app/me" aria-current={ meta.tab === 'me' ? 'page' : undefined } class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full ring-accent ring-offset-2 ring-offset-void aria-[current=page]:ring-2" aria-label={ locale.t('app.nav.profile') }>
                 <Avatar person={ account.user() } size="sm" />
             </Link>
         </div>

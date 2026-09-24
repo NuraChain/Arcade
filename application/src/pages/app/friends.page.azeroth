@@ -121,7 +121,11 @@ export default component FriendsPage()
             presence.refresh();
         } }
     >
-        <PageHeader title={ locale.t('app.nav.friends') } lead={ locale.t('friends.lead') } />
+        <PageHeader
+            title={ locale.t('app.nav.friends') }
+            lead={ locale.t('friends.lead') }
+            actions={ <Button variant="outline" size="sm" leading="discover" to="/app/discover">{ locale.t('friends.discover') }</Button> }
+        />
 
         <Tabs
             items={ items }

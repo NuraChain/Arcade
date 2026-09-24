@@ -1,5 +1,6 @@
 export const social = {
     'friends.lead': 'The people you actually play with.',
+    'friends.discover': 'Find people',
     'friends.tab.all': 'All',
     'friends.tab.online': 'Online',
     'friends.tab.requests': 'Requests',

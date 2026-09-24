@@ -15,7 +15,7 @@ export default component IconButton(props: {
     size?: ButtonSize;
     count?: number;
     tone?: 'accent' | 'danger';
-    active?: boolean;
+    current?: boolean;
     disabled?: boolean;
     flip?: boolean;
     pressed?: boolean;
@@ -30,7 +30,7 @@ export default component IconButton(props: {
         'relative inline-flex shrink-0 select-none items-center justify-center rounded-control',
         'transition duration-150 ease-[var(--ease-ui)] active:scale-95',
         'disabled:cursor-not-allowed disabled:opacity-50',
-        props.active === true ? 'text-accent' : '',
+        'aria-[current=page]:bg-raised aria-[current=page]:text-accent',
         BUTTON_VARIANT[props.variant ?? 'ghost'],
         ICON_BUTTON_SIZE[props.size ?? 'md'],
         props.disabled === true ? '' : 'cursor-pointer',
@@ -62,7 +62,7 @@ export default component IconButton(props: {
             }
         >
             { () =>
-                <Link to={ props.to! } class={ shell } aria-label={ props.label }>
+                <Link to={ props.to! } class={ shell } aria-label={ props.label } aria-current={ props.current === true ? 'page' : undefined }>
                     <Icon name={ props.icon } size={ iconSize } class={ props.flip === true ? 'icon-flip' : '' } />
                     <Show when={ counted }>
                         { () => <Badge count={ props.count! } tone={ props.tone ?? 'danger' } size="sm" anchor label={ props.label } /> }

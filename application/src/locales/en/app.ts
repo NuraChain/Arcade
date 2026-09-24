@@ -3,6 +3,7 @@ export const app = {
 
     'app.nav.home': 'Home',
     'app.nav.games': 'Games',
+    'app.nav.watch': 'Watch',
     'app.nav.friends': 'Friends',
     'app.nav.chats': 'Chats',
     'app.nav.profile': 'Profile',

@@ -78,7 +78,7 @@ export default component GamePage()
 
                             <WatchableList game={ game!.id } />
 
-                            <Leaderboard game={ game!.id } />
+                            <Leaderboard game={ game!.id } seeAll />
                         </div>
 
                         <aside class="flex flex-col gap-6">

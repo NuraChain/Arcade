@@ -1,7 +1,8 @@
 import BrandLogo from '../layout/brand-logo.component.azeroth';
-import { Link } from 'azerothjs';
+import { Link, useMatch } from 'azerothjs';
 
 import Icon from '../../icons/icon.component.azeroth';
+import { routeMeta } from '../../lib/route-meta.ts';
 import { useAccount } from '../../stores/account.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useRealtime } from '../../stores/realtime.store.ts';
@@ -9,7 +10,7 @@ import BrandMark from '../layout/brand-mark.component.azeroth';
 import Avatar from '../ui/avatar.component.azeroth';
 import Badge from '../ui/badge.component.azeroth';
 import { useNavCounts } from './nav-counts.ts';
-import { ACTIVE_ROW, RAIL } from './nav-items.ts';
+import { ACTIVE_ROW, RAIL, lit } from './nav-items.ts';
 
 export default component Sidebar()
 {
@@ -17,6 +18,9 @@ export default component Sidebar()
     const account = useAccount();
     const { countOf, labelOf, toneOf } = useNavCounts();
     const live = useRealtime();
+    const match = useMatch();
+
+    derived tab = routeMeta(match()).tab;
 
     derived user = account.user();
 
@@ -33,7 +37,7 @@ export default component Sidebar()
         <ul class="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-3 pt-3">
             <For each={ RAIL } key={ (item) => item.to } let={ item }>
                 <li>
-                    <Link to={ item.to } end={ item.end } activeClass="is-active" prefetch="hover" class={ `nav-row ${ ACTIVE_ROW } flex h-11 items-center gap-3 rounded-tile px-3 text-ui-md font-semibold text-muted transition-colors duration-150 hover:bg-raised hover:text-text` }>
+                    <Link to={ item.to } prefetch="hover" aria-current={ lit(item, tab) ? 'page' : undefined } class={ () => [ 'nav-row', ACTIVE_ROW, 'flex h-11 items-center gap-3 rounded-tile px-3 text-ui-md font-semibold text-muted transition-colors duration-150 hover:bg-raised hover:text-text', lit(item, tab) ? 'is-active' : '' ].join(' ') }>
                         <Icon name={ item.icon } size={ 20 } />
                         <span class="min-w-0 flex-1 truncate">{ locale.t(item.labelKey) }</span>
                         <Show when={ countOf(item) > 0 }>
@@ -46,7 +50,7 @@ export default component Sidebar()
 
         <Show when={ user !== null }>
             { () =>
-                <Link to="/app/me" class="m-3 flex min-h-14 shrink-0 items-center gap-3 rounded-tile border border-line bg-field px-3 py-2 transition-colors hover:border-line-strong hover:bg-raised">
+                <Link to="/app/me" aria-current={ tab === 'me' ? 'page' : undefined } class="m-3 flex min-h-14 shrink-0 items-center gap-3 rounded-tile border border-line bg-field px-3 py-2 transition-colors hover:border-line-strong hover:bg-raised aria-[current=page]:border-accent/60 aria-[current=page]:bg-raised">
                     <Avatar person={ user } size="md" presence={ dot } />
                     <span class="flex min-w-0 flex-1 flex-col">
                         <span class="truncate text-ui-sm font-semibold text-text" dir="auto">{ user?.displayName ?? '' }</span>

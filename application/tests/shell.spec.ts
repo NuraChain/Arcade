@@ -3,7 +3,8 @@ import { cleanup, fire, renderTest } from '@azerothjs/testing';
 import { RouterProvider, Routes, createMemoryHistory, createRouter, createSignal, type Route } from 'azerothjs';
 
 import BottomNav from '../src/components/app/bottom-nav.component.azeroth';
-import { RAIL } from '../src/components/app/nav-items.ts';
+import { NAV, RAIL, lit } from '../src/components/app/nav-items.ts';
+import { routeMeta } from '../src/lib/route-meta.ts';
 import Sidebar from '../src/components/app/sidebar.component.azeroth';
 import SocialPanel from '../src/components/app/social-panel.component.azeroth';
 import OverlayHost from '../src/components/app/overlay-host.component.azeroth';
@@ -269,14 +270,9 @@ describe('ToastHost', () =>
 describe('BottomNav', () =>
 {
     const Stub = (): HTMLElement => document.createElement('div');
+    const app = routes.find((route) => route.path === '/app')!;
     const table: Route[] = [
-        { path: '/app', component: Stub, children: [
-            { path: '', component: Stub },
-            { path: 'games', component: Stub },
-            { path: 'friends', component: Stub },
-            { path: 'chats', component: Stub },
-            { path: 'me', component: Stub }
-        ] }
+        { path: '/app', component: Stub, children: (app.children ?? []).map((child) => ({ path: child.path, component: Stub, meta: child.meta })) }
     ];
 
     it('marks exactly the current tab with aria-current and keeps Home exact', async () =>
@@ -300,13 +296,71 @@ describe('BottomNav', () =>
         await settle();
         expect(container.querySelector('[aria-current="page"]')?.getAttribute('href')).toBe('/app');
     });
+
+    it('keeps the section lit on every page inside it, not only on its own address', async () =>
+    {
+        const router = createRouter({ routes: table, history: createMemoryHistory('/app/people/mina'), scroll: false });
+        const { container } = renderTest(() => RouterProvider({ router, children: () => BottomNav({}) }) as Rendered);
+        const lit = async (path: string): Promise<string | null | undefined> =>
+        {
+            router.navigate(path);
+            await settle();
+            const current = container.querySelectorAll('[aria-current="page"]');
+            expect(current.length).toBeLessThanOrEqual(1);
+            return current[0]?.getAttribute('href');
+        };
+
+        expect(await lit('/app/people/mina')).toBe('/app/friends');
+        expect(await lit('/app/groups/friday-night')).toBe('/app/friends');
+        expect(await lit('/app/discover')).toBe('/app/friends');
+        expect(await lit('/app/watch')).toBe('/app/games');
+        expect(await lit('/app/leaderboard')).toBe('/app/games');
+        expect(await lit('/app/games/ludo/create')).toBe('/app/games');
+        expect(await lit('/app/me/settings')).toBe('/app/me');
+        expect(await lit('/app/me/devices')).toBe('/app/me');
+        expect(await lit('/app/search')).toBeUndefined();
+    });
+});
+
+describe('which destination every page belongs to', () =>
+{
+    const app = routes.find((route) => route.path === '/app')!;
+    const tabOf = (path: string) => routeMeta({ route: (app.children ?? []).find((child) => child.path === path)! } as never).tab;
+    const railFor = (path: string): string | undefined => RAIL.find((item) => lit(item, tabOf(path)))?.to;
+    const phoneFor = (path: string): string | undefined => NAV.find((item) => lit(item, tabOf(path)))?.to;
+
+    it('lights one rail item for every page the rail can reach, and the page itself for the rest', () =>
+    {
+        expect(railFor('watch')).toBe('/app/watch');
+        expect(railFor('games/:slug')).toBe('/app/games');
+        expect(railFor('play/:id')).toBe('/app/games');
+        expect(railFor('people/:handle')).toBe('/app/friends');
+        expect(railFor('groups/:id')).toBe('/app/friends');
+        expect(railFor('chats/:id')).toBe('/app/chats');
+        expect(railFor('me/settings')).toBe('/app/me/settings');
+        expect(railFor('me/devices')).toBe('/app/me/settings');
+        expect(railFor('me')).toBeUndefined();
+        expect(railFor('search')).toBeUndefined();
+    });
+
+    it('gives every page but search a phone tab, so nobody is lost on a phone', () =>
+    {
+        for (const child of app.children ?? [])
+        {
+            if (child.path === 'search' || child.path === 'notifications')
+            {
+                continue;
+            }
+            expect(phoneFor(child.path), child.path).toBeDefined();
+        }
+    });
 });
 
 describe('the shell’s destinations', () =>
 {
     it('lists the design’s seven in the sidebar, plus notifications,, Tournaments not among them', () =>
     {
-        expect(RAIL.map((item) => item.to)).toEqual(['/app', '/app/games', '/app/friends', '/app/chats', '/app/notifications', '/app/leaderboard', '/app/discover', '/app/me/settings']);
+        expect(RAIL.map((item) => item.to)).toEqual(['/app', '/app/games', '/app/watch', '/app/friends', '/app/chats', '/app/notifications', '/app/leaderboard', '/app/discover', '/app/me/settings']);
     });
 
     it('calls the fifth phone tab Profile', async () =>

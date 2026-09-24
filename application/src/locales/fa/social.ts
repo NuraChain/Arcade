@@ -3,6 +3,7 @@ import type { social as reference } from '../en/social.ts';
 
 export const social: Pick<Dictionary, keyof typeof reference> = {
     'friends.lead': 'کسانی که واقعاً باهاشان بازی می‌کنی.',
+    'friends.discover': 'پیدا کردن آدم‌ها',
     'friends.tab.all': 'همه',
     'friends.tab.online': 'آنلاین',
     'friends.tab.requests': 'درخواست‌ها',

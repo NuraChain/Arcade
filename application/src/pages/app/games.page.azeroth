@@ -43,7 +43,8 @@ export default component GamesPage()
                     </span>
                     <span class="h-1 w-1 rounded-full bg-faint" aria-hidden="true"></span>
                     <span><span class="tally font-semibold text-text">{ locale.n(totals.tablesOpen) }</span> { locale.plural('games.live.tablesLabel', totals.tablesOpen) }</span>
-                    <Button variant="outline" size="sm" leading="activity" to="/app/watch">{ locale.t('watch.page.link') }</Button>
+                    <Button variant="outline" size="sm" leading="watch" to="/app/watch">{ locale.t('watch.page.link') }</Button>
+                    <Button variant="outline" size="sm" leading="trophy" to="/app/leaderboard">{ locale.t('app.nav.leaderboard') }</Button>
                 </p>
             }
         />

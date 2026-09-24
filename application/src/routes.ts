@@ -28,7 +28,7 @@ export const routes: PageRoute[] = [
         children: [
             { path: '', lazy: () => import('./pages/app/home.page.azeroth'), meta: defineMeta({ title: 'app.nav.home', tab: 'home' }) },
             { path: 'games', lazy: () => import('./pages/app/games.page.azeroth'), meta: defineMeta({ title: 'app.nav.games', tab: 'games' }) },
-            { path: 'watch', lazy: () => import('./pages/app/watch.page.azeroth'), meta: defineMeta({ title: 'watch.page.title', tab: 'games', parent: '/app/games' }) },
+            { path: 'watch', lazy: () => import('./pages/app/watch.page.azeroth'), meta: defineMeta({ title: 'watch.page.title', tab: 'watch', parent: '/app/games' }) },
             { path: 'games/:slug', lazy: () => import('./pages/app/game.page.azeroth'), meta: defineMeta({ tab: 'games', parent: '/app/games' }) },
             { path: 'games/:slug/create', lazy: () => import('./pages/app/create-game.page.azeroth'), meta: defineMeta({ title: 'create.title', tab: 'games', parent: '/app/games' }) },
             { path: 'play/:id', lazy: () => import('./pages/app/play.page.azeroth'), meta: defineMeta({ tab: 'games', parent: '/app/games', immersive: true }) },
@@ -42,8 +42,8 @@ export const routes: PageRoute[] = [
             { path: 'search', lazy: () => import('./pages/app/search.page.azeroth'), meta: defineMeta({ title: 'app.nav.search', tab: 'search' }) },
             { path: 'notifications', lazy: () => import('./pages/app/notifications.page.azeroth'), meta: defineMeta({ title: 'app.nav.notifications', tab: 'notifications', parent: '/app' }) },
             { path: 'me', lazy: () => import('./pages/app/me.page.azeroth'), meta: defineMeta({ title: 'app.nav.profile', tab: 'me' }) },
-            { path: 'me/settings', lazy: () => import('./pages/app/settings.page.azeroth'), meta: defineMeta({ title: 'app.nav.settings', tab: 'me', parent: '/app/me' }) },
-            { path: 'me/devices', lazy: () => import('./pages/app/devices.page.azeroth'), meta: defineMeta({ title: 'devices.title', tab: 'me', parent: '/app/me/settings' }) }
+            { path: 'me/settings', lazy: () => import('./pages/app/settings.page.azeroth'), meta: defineMeta({ title: 'app.nav.settings', tab: 'settings', parent: '/app/me' }) },
+            { path: 'me/devices', lazy: () => import('./pages/app/devices.page.azeroth'), meta: defineMeta({ title: 'devices.title', tab: 'settings', parent: '/app/me/settings' }) }
         ]
     }
 ];

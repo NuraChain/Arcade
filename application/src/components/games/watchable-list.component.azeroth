@@ -50,7 +50,7 @@ export default component WatchableList(props: { game: GameId })
                     id="game-watch"
                     title={ locale.t('watch.live') }
                     more={ locale.t('watch.page.more') }
-                    to="/app/watch"
+                    to={ `/app/watch?game=${ props.game }` }
                 />
                 <ul class="flex flex-col gap-2">
                     <For each={ rows } key={ (row) => row.id } let={ row }>

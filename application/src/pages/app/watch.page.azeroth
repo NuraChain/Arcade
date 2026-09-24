@@ -1,4 +1,4 @@
-import { createResource, useHead } from 'azerothjs';
+import { createResource, untrack, useHead, useQuery } from 'azerothjs';
 
 import Page from '../../components/app/page.component.azeroth';
 import PageHeader from '../../components/app/page-header.component.azeroth';
@@ -24,7 +24,13 @@ export default component WatchPage()
     const people = usePeople();
     const catalogue = useCatalogue();
 
-    state picked = 'all';
+    const query = useQuery();
+
+    state picked = ((): string =>
+    {
+        const asked = untrack(query).game;
+        return typeof asked === 'string' && GAMES.some((game) => game.id === asked) ? asked : 'all';
+    })();
 
     const tables = createResource(
         () => picked,

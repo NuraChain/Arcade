@@ -148,7 +148,7 @@ export const play: Pick<Dictionary, keyof typeof reference> = {
     'watch.none': 'الان هیچ بازی‌ای در جریان نیست.',
     'watch.live': 'بازی‌های در جریان',
     'watch.join': 'تماشا',
-    'watch.page.title': 'در حال بازی',
+    'watch.page.title': 'تماشای بازی‌های زنده',
     'watch.page.lead': 'بازی‌هایی که همین حالا سر میزهایی جریان دارند که هر کسی می‌تواند تماشایشان کند.',
     'watch.page.all': 'همه‌ی بازی‌ها',
     'watch.page.filter': 'کدام بازی',
