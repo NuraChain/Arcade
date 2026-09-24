@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1250" width="1000" height="1250">
+<g fill="none" stroke="#D9B45A">
+    <g stroke-opacity="0.36" stroke-width="2.5"><rect x="225" y="225" width="550" height="800" rx="275"/></g>
+    <g stroke-opacity="0.14" stroke-width="1.5"><rect x="234" y="234" width="532" height="782" rx="266"/></g>
+</g>
+<g transform="translate(500 625)">
+    <circle r="130" fill="#062E28" fill-opacity="0.18" stroke="#D9B45A" stroke-opacity="0.26" stroke-width="2.5"/>
+    <circle r="114.4" fill="none" stroke="#D9B45A" stroke-opacity="0.14" stroke-width="1.5" stroke-dasharray="3 7"/>
+    <g fill="#D9B45A" fill-opacity="0.05" stroke="#D9B45A" stroke-opacity="0.12" stroke-width="1.2"><path d="M0 -15C-1.2 -12.6-12 -5.8-12 1.6C-12 6-8.8 8.6-5.4 8.6C-3.4 8.6-1.8 7.7-0.9 6.4C-1.1 9.6-2.4 12.2-4.6 14H4.6C2.4 12.2 1.1 9.6 0.9 6.4C1.8 7.7 3.4 8.6 5.4 8.6C8.8 8.6 12 6 12 1.6C12 -5.8 1.2 -12.6 0 -15Z" transform="translate(0 -80.6) scale(2.17)"/><path d="M0 7.5C-1.2 6.4-12 -1.1-12 -7.6C-12 -12-8.6-15-5-15C-2.6-15-0.8-13.7 0-12C0.8-13.7 2.6-15 5-15C8.6-15 12-12 12-7.6C12-1.1 1.2 6.4 0 7.5Z" transform="translate(80.6 0) scale(2.17)"/><path d="M0 -15A6.2 6.2 0 0 1 5.4 -5.8A6.2 6.2 0 1 1 1.6 5.2C1.9 8.6 3.1 11.6 5 14H-5C-3.1 11.6-1.9 8.6-1.6 5.2A6.2 6.2 0 1 1-5.4 -5.8A6.2 6.2 0 0 1 0 -15Z" transform="translate(0 80.6) scale(2.17)"/><path d="M0 -15L10.5 0L0 15L-10.5 0Z" transform="translate(-80.6 0) scale(2.17)"/></g>
+</g>
+</svg>

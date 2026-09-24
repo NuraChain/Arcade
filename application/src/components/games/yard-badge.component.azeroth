@@ -1,14 +1,12 @@
 import DieFace from './die-face.component.azeroth';
-import Avatar from '../ui/avatar.component.azeroth';
-import { useVoice } from '../../stores/voice.store.ts';
+import TablePlate from './table-plate.component.azeroth';
+import { MISSES_ALLOWED, type PlateTone } from './plate-tag.ts';
 import { INITIAL } from './seats.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { usePeople } from '../../stores/people.store.ts';
 import type { LudoSeat, MatchPlayer } from '../../data/match.ts';
 
 const PIPS = [0, 1, 2, 3];
-
-const MISSES_ALLOWED = 3;
 
 export default component YardBadge(props: {
     player: MatchPlayer;
@@ -19,11 +17,12 @@ export default component YardBadge(props: {
     die?: number;
     finished: boolean;
     bubble?: string;
+    remainingMs?: number;
+    turnMs?: number;
 })
 {
     const locale = useLocale();
     const people = usePeople();
-    const voice = useVoice();
 
     derived person = people.byHandle(props.player.who);
 
@@ -71,43 +70,51 @@ export default component YardBadge(props: {
         return mine ? locale.t('card.yourTurn') : locale.t('card.turn');
     })();
 
-    <div
-        class={ () => [
-            'yard-badge',
-            turn ? 'is-turn' : '',
-            props.seat.out ? 'is-out' : ''
-        ].filter(Boolean).join(' ') }
-        data-corner={ props.corner }
-        style={ `--ink: var(--ludo-${ props.seat.colour })` }
-        aria-current={ turn ? 'true' : undefined }
-    >
-        <span class={ () => [ 'yard-avatar rounded-full transition-shadow duration-150', voice.speaking(props.player.who) ? 'ring-3 ring-live ring-offset-2 ring-offset-void' : '' ].filter(Boolean).join(' ') }>
-            <Avatar person={ person } ringOn="void" />
-            <span class="yard-initial" aria-hidden="true">{ INITIAL[props.seat.colour] }</span>
-        </span>
+    derived tone = ((): PlateTone =>
+    {
+        if (warned)
+        {
+            return 'danger';
+        }
 
-        <span class="yard-name">
-            <span class="yard-who" dir="auto">{ name }</span>
-            <span class="yard-state">
-                <span class="yard-pips" role="img" aria-label={ locale.plural('match.tokens', props.seat.home) }>
-                    <For each={ PIPS } key={ (pip) => pip } let={ pip }>
-                        <span class="ludo-pip" data-home={ pip < props.seat.home ? 'true' : 'false' } aria-hidden="true"></span>
-                    </For>
-                </span>
-                <span class={ () => routine ? 'sr-only' : (warned ? 'yard-says text-danger' : 'yard-says') }>{ says }</span>
-            </span>
-        </span>
+        if (props.player.result === 'won')
+        {
+            return 'live';
+        }
 
-        <Show when={ props.bubble !== undefined }>
-            { () => <span class="yard-bubble" dir="auto" role="status">{ props.bubble }</span> }
-        </Show>
+        return props.player.timeouts > 0 && !props.finished ? 'gold' : 'neutral';
+    })();
 
-        <Show when={ props.die !== undefined && turn }>
-            { () =>
-                <span class="yard-die">
-                    <DieFace value={ props.die! } size="fill" label={ locale.t('match.turn.rolled', { die: locale.n(props.die!) }) } />
+    <div class="yard-badge" data-corner={ props.corner } style={ `--ink: var(--ludo-${ props.seat.colour })` }>
+        <TablePlate
+            who={ props.player.who }
+            name={ name }
+            turn={ turn }
+            remainingMs={ props.remainingMs }
+            turnMs={ props.turnMs }
+            ink={ `var(--ludo-${ props.seat.colour })` }
+            dim={ props.seat.out }
+            tag={ routine ? undefined : says }
+            tone={ tone }
+            bubble={ props.bubble }
+            below={ props.corner.startsWith('top') }
+            anchor={ props.corner.endsWith('right') ? 'end' : 'start' }
+            marker={ <span class="yard-initial" aria-hidden="true">{ INITIAL[props.seat.colour] }</span> }
+            facts={
+                <span class="contents">
+                    <span class="yard-pips" role="img" aria-label={ locale.plural('match.tokens', props.seat.home) }>
+                        <For each={ PIPS } key={ (pip) => pip } let={ pip }>
+                            <span class="ludo-pip" data-home={ pip < props.seat.home ? 'true' : 'false' } aria-hidden="true"></span>
+                        </For>
+                    </span>
+                    <Show when={ routine }>
+                        { () => <span class="sr-only">{ says }</span> }
+                    </Show>
                 </span>
             }
-        </Show>
+            trail={ props.die !== undefined && turn
+                ? <span class="yard-die"><DieFace value={ props.die! } size="fill" label={ locale.t('match.turn.rolled', { die: locale.n(props.die!) }) } /></span>
+                : undefined }
+        />
     </div>
 }

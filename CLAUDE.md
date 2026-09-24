@@ -1691,10 +1691,12 @@ Take and Drop to the player who had just doubled and "waiting" to the one being 
 whoever the board names is refused with a 403. `backgammon-seam.spec.ts` now pins the equality over a
 whole match with doubles in it.
 
-**The board is capped by the viewport's height, not only by its column.** A 16:13 board as wide as a
-750px column is 615px tall, which on a laptop put Roll and "Play the move" below the fold - the
-board fitted and the game did not. The single column caps the board at `(100dvh - 24rem) * 1.22`;
-from `@4xl` of container the controls move into a column beside it and the cap relaxes.
+**The board is sized from both axes of the stage, never from the viewport.** A 16:13 board as wide as
+a 750px column was 615px tall, which on a laptop put Roll and "Play the move" below the fold. It is a
+`.table-surface` in the fit cell now - see *One stage, never a scroll* - with the two plates hugging
+it above and below on an upright screen and moving into the side column beside the bar on a wide or
+sideways one. The plates are rendered in both places and CSS shows one set, because the two positions
+are in different grid cells and a size container is a containing block nothing can escape.
 
 **`tools/qa/backgammon-pass.mjs`** plays whole matches at one, three and five points over the real
 api, answering doubles both ways, and asserts at every turn that both players read the same board
@@ -2541,8 +2543,9 @@ that a defect.
 
 ## The table, and the cards on it
 
-Hokm is played on `hokm-table-wide` (16:10) or `hokm-table-tall` (5:6), chosen by the board's
-container width, and dealt from `deck.svg` with `card-back.svg` for everybody else's hand.
+Hokm is played on `hokm-table-wide` (16:10) or `hokm-table-tall` (5:6), chosen by the SHAPE of the
+fit cell (`@container fit (min-aspect-ratio: 15 / 13)`, where the wide table starts to be the larger
+of the two), and dealt from `deck.svg` with `card-back.svg` for everybody else's hand.
 
 **A table is two layers: a photograph of the object and a drawing of its ornament.** The felt, the
 bevelled walnut rim, the brass inlay and the dark groove are rendered by `tools/blender/surfaces.py`
@@ -2553,7 +2556,18 @@ its wood is mapped in OBJECT space; mapped by UV it sampled one pixel and came o
 gold lines, corner flourishes and medallion stay vector in `hokm-ornaments-*.svg` from
 `tools/art/boards.mjs`, laid over the render as a second background, because a thin gold line is the
 one thing a photo softens and a vector keeps sharp at any size. Each render is about 25 KB, since
-smooth cloth compresses well. The deck comes from `tools/art/deck.mjs`, and the suits from
+smooth cloth compresses well.
+
+**Poker has a table of its own at the same standard**, because the owner asked for one: a stadium with
+a padded black leather rail (Poly Haven's CC0 `brown_leather` normals under a near-black tint), a
+walnut racetrack with a brass inlay and a deep emerald felt, rendered by `tools/blender/poker-table.py`
+into `poker-table-{wide,tall}.webp` (1600x1000 and 1000x1250), with the betting line and a faint
+four-suit medallion as vector in `poker-ornaments-*.svg` from `tools/art/poker.mjs`. It is a separate
+script on purpose: `surfaces.py` renders the hokm and ludo tables, the owner does not want those
+re-rendered, and the helpers both use moved to `tools/blender/lib/tables.py` unchanged. Run it with
+`blender -b --factory-startup --python tools/blender/poker-table.py` (`NURA_SURFACE` picks one,
+`NURA_SAMPLES` sets quality); the two numbers the SVG needs - rail, track and groove as fractions of the
+short side - are written in both files and have to agree. The deck comes from `tools/art/deck.mjs`, and the suits from
 `tools/art/suits.mjs`, which the game illustrations use too, so a spade on a card and a spade in the
 hero art are one path.
 
@@ -2610,6 +2624,47 @@ inside a Persian tile is clipped at the line's end, which in an RTL line is the 
 and the accessible name is perfect. It is fixed on the hokm board; **every other place this product
 renders a display name still has it**, because nothing else passes `dir="auto"` to a name.
 
+## One stage, never a scroll
+
+The owner's rule, in their words: nobody scrolls during a game - not down for the cards and back up
+for the table. So every board is one **stage** that never scrolls, and `tools/qa/fit-pass.mjs` fails
+the moment anything a player needs is below the fold.
+
+- `.table-stage` is a size container named `stage`, filling what the play page leaves under its
+  header (`<Page fill class="page-table">`, overflow hidden while a stage exists). Inside it
+  `.table-grid` has four areas - `top`, `fit`, `hand`, `bar` - because a container query cannot
+  restyle the container itself, only what is inside it.
+- `.table-fit` is a size container named `fit`, and `.table-surface` inside it is
+  `min(100cqw, 100cqh * var(--ratio))` wide - the board is sized from BOTH axes of the room it has, so
+  a tall phone and a short laptop each get the largest board that fits. A game that has two drawings
+  of its table picks one by the fit cell's aspect, not by the screen's.
+- A wide stage (`@container stage (min-width: 44rem) and (min-aspect-ratio: 3 / 2)`) puts the bar in
+  a side column; backgammon and ludo put the whole side column beside the board instead.
+- `TablePlate` is the one seat plate for all four games: avatar with the speaking ring and a turn ring
+  that runs from `remainingMs` over the turn's full length, a marker (crown, dealer, checker colour,
+  seat initial), the game's facts, a one-line tag for what is unusual (`plate-tag.ts`), a trailing
+  slot (the ludo die) and the chat bubble. The turn length is `turnMs(mode)` from
+  `server/src/domains/match/turns.ts`, a zero-import module the server's deadline and the browser's
+  ring both read. A watcher is sent no `remainingMs`, so a watcher sees no ring.
+- Hokm decides one row of cards or two from the stage's measured size (`room`), because two rows are
+  only worth their height when one row would squeeze each card below a readable strip.
+- `MatchResult` overlays the stage rather than pushing it down.
+- Poker's raise is a toggle that opens the slider over the table, so the bar is one row of actions;
+  the last hand is a `<details>` chip on the felt, which keeps a spectator's page free of buttons.
+
+**The gate is `tools/qa/fit-pass.mjs`.** It opens a live hokm-2, hokm-4, poker-2, poker-6, backgammon
+and ludo-4 table over the api (dana.w plus guests), advances each to a state with the most controls,
+and opens every page as the seat whose turn it is at 360x740, 390x844, 768x1024, 1024x768, 1280x720,
+1280x800, 1440x900, 1920x1080, 740x360 and 844x390, with the chat closed and open, then as a stranger
+watching. It fails on a scrolling page, a plate, the surface or any button outside the viewport, and
+a button whose centre hits something else. Two exceptions are deliberate: a button in a horizontally
+scrolling rail is judged by its rail, and a phone held sideways lets the open chat overlay the bar,
+because there the chat has nowhere else to be and closing it brings the controls back. It removes
+`#azeroth-devtools` first, which only exists under vite. `--only`, `--sizes`, `--shots` and `--keep`
+narrow a run; every run writes its screenshots to a folder of its own under `out/fit`, because
+Windows refuses to overwrite a PNG something else still has open. `npm run qa` reports `scroll` and
+`fold` on any page with a stage too, and tours a hokm table as well now.
+
 ## The game screen gives the table everything
 
 A game is the one screen in this product somebody looks at for twenty minutes without scrolling, so
@@ -2656,11 +2711,9 @@ and it frees the bottom of the screen, which is where the thumb is. Giving up as
 (`match.resign.*`, which had copy and no caller): it used to be a bare ghost button that ended the
 game on one tap.
 
-**A rotated phone gets a real landscape layout.** Ludo's table becomes two columns - the board sized
-by the screen's HEIGHT, the strip beside it - which is also what a container of 44rem or more gets on a
-desktop. Hokm uses the wide table, capped by height, with the hand overlapping its bottom rim. Both are
-`@media (orientation: landscape) and (max-height: 540px) and (min-aspect-ratio: 4/3)`, the same
-threshold as `bareFor`, and `device.landscape()` asks the same 4:3. "Wider than tall" alone is not
+**A rotated phone gets a real landscape layout.** Every stage puts its bar in a column beside the
+table under `@media (orientation: landscape) and (max-height: 540px) and (min-aspect-ratio: 4/3)`, the
+same threshold as `bareFor`, and `device.landscape()` asks the same 4:3. "Wider than tall" alone is not
 landscape: 375x360 is wider than tall, and two columns there need a 228px board, a gap and a 13rem
 strip - 452px on a 375px screen, eight overflowing matrix cells. A near-square window is laid out
 upright, which is also what it looks like.
@@ -2672,9 +2725,11 @@ it says so: "Ludo plays best upright" in the strip. Full screen from a ludo tabl
 `screen.orientation.lock('portrait')`, which Android grants in full screen and everything else
 refuses quietly. Hokm keeps a real landscape layout, because a card table is wide.
 
-**The felt carries the two numbers somebody glances at.** On a table narrower than 36rem the trump,
-the round and the score sit in two chips in the felt's top corners, because on a phone the tiles that
-hold them are below the hand; on a wider table the side column shows them and the chips go.
+**The felt carries the two numbers somebody glances at.** The trump, the round and the score are two
+chips in the felt's top corners at every size, and the last trick is a tile in its bottom-left; the
+full sentences they abbreviate are the `.hokm-side` summary, which is screen-reader only. On a stage
+24rem tall or less - a phone sideways, or upright with the chat open - the chips, the centre caption and
+the last trick would sit on top of the plates, so they leave the felt and the chips move into the bar.
 
 **The table's chat floats, and the board keeps the width.** It used to be a full-height column docked
 beside the game, and the owner called the whole thing ugly: a third of the screen for a thread that
@@ -2682,7 +2737,8 @@ is quiet most of a game, reading as a second app. The spec is
 `docs/superpowers/specs/2026-09-23-play-screen-chat-design.md`. At sidebar width, and on any screen
 turned sideways (landscape at rail width, or any landscape 540px tall or less), it is a card
 anchored to the bottom-right corner, 23rem by at most 34rem, 30rem and the full height on "bigger";
-closed, it is a pill in the same corner with the unread count and the last line said. It starts
+closed, it is a pill in the HEADER beside the dock with the unread count and the last line said - it
+used to be fixed in the bottom-right corner, which is exactly where a wide stage puts its bar. It starts
 closed - `settings.railOpen` keeps its old name and now means "the card is open" - and whenever it is
 open the table makes room for it, so it never covers the board or the bottom-right player's plate.
 Everywhere else - a phone held upright, and an upright tablet - it is the bottom sheet, half the

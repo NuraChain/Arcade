@@ -1,6 +1,6 @@
 import BoardCanvas from './board-canvas.component.azeroth';
 import CoachLine from './coach-line.component.azeroth';
-import MatchResult from './match-result.component.azeroth';
+import TableResult from './table-result.component.azeroth';
 import DieFace from './die-face.component.azeroth';
 import TurnClock from './turn-clock.component.azeroth';
 import YardBadge from './yard-badge.component.azeroth';
@@ -20,32 +20,8 @@ import { coachOf, outcomeOf } from '../../game/helpers/ludo.ts';
 
 const STAGE = `--cell-cq: ${ (CELL * 100).toFixed(4) }cqi; --margin-cq: ${ (MARGIN * 100).toFixed(4) }cqi`;
 
-/**
- * The board, and the controls that are the real interface to it.
- *
- * Every move is takeable without ever pointing at the grid: the die is a button, each legal move is
- * a button that says what it would do, and the turn is a live region. That is what makes the game
- * playable with a keyboard and readable by a screen reader, and it is also what gives `npm run qa`
- * something to hit-test - a drawn board is invisible to both.
- *
- * Colour is never the only signal. Every seat carries its colour's initial beside the swatch, so a
- * player who cannot tell red from green still knows whose token is whose.
- *
- * **The board owns the column and the controls sit under it.** They used to share a row, which gave
- * the board whatever was left after a 20rem panel and a chat rail - 320px of board at 1280. A game
- * is the thing somebody is looking at, so it gets the width, and the roll button, the moves and the
- * clock go beneath it where they are still a thumb's reach away on a phone and a glance away on a
- * monitor.
- *
- * **The clock and the misses are both shown, and neither was before.** `matches.deadline_at` and
- * `match_players.timeouts` have been on the wire since the domain was written and no screen read
- * either - so a live turn ran out after thirty seconds with no warning, and a seat could be one
- * miss from ending with nobody at the table aware of it. A clock a player cannot see only ever
- * surprises them, and a rule that ends somebody's game silently is a rule they will believe was a
- * bug.
- */
 
-export default component MatchBoard(props: { match: MatchView; starting?: boolean; onAgain?: () => void; speech?: Record<string, string> })
+export default component MatchBoard(props: { match: MatchView; starting?: boolean; onAgain?: () => void; speech?: Record<string, string>; turnMs?: number })
 {
     const locale = useLocale();
     const board = useBoard();
@@ -57,14 +33,6 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
 
     derived help = settings.settings();
 
-    /**
-     * The board, as the engine composed it for whoever is reading.
-     *
-     * Asked once and carried, rather than narrowed again in each of the seven places below. The
-     * fallback is an empty ludo board rather than a branch: this component is what draws a ludo
-     * match and `play.page` is where a game nobody can draw is decided, so a second "we cannot
-     * render this" screen here would be a state that exists twice and is reachable from neither.
-     */
     derived ludo = ludoOf(game) ?? { kind: 'ludo' as const, die: undefined, moves: [], seats: [] };
 
     derived chairs = chairsOf(game);
@@ -124,12 +92,6 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
         yellow: 'bottom-right'
     };
 
-    /**
-     * Two players sit opposite, which is where the engine seats them - twenty-six squares apart, so
-     * neither starts a walk behind the other. With no card in the other two corners the board looks
-     * lopsided, so a two-player table puts its cards on one diagonal and leaves the rest empty
-     * rather than inventing seats to fill them.
-     */
     derived seatCards = chairs.map((chair) => ({
         player: chair.player,
         seat: chair.seat,
@@ -155,15 +117,6 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
 
     derived tip = over ? null : coachOf(ludo, mine, game.turn, board.events().events.flatMap((event) => event.log.kind === 'ludo' ? event.log.moves : []));
 
-    /**
-     * What the renderer is given, as one value.
-     *
-     * The die, the turn and the winner travel with the tokens rather than as three more props,
-     * because the board reads all four together: it tumbles the die only when the number CHANGED,
-     * walks a token only when its square changed, and celebrates only on the edge where nobody had
-     * won and now somebody has. Four separate props would arrive in four separate effects and every
-     * one of those edges would be a race.
-     */
     derived beats = ((): LudoBeat[] =>
     {
         const colourOf = (seat: number | undefined): string | null =>
@@ -184,10 +137,6 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
         beats
     }))();
 
-    /**
-     * Pointing at a token is a shortcut to the move list, never a second way to decide a move.
-     * The server said which tokens are legal; a tap on anything else does nothing at all.
-     */
     const pick = async (key: string): Promise<void> =>
     {
         const [seat, piece] = key.split('-').map(Number);
@@ -228,50 +177,54 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
         return locale.t('match.move.step', { token, die: locale.n(ludo.die ?? 0) });
     };
 
-    <div class="@container my-auto flex min-w-0 flex-col gap-4">
-        <div class="ludo-table">
-            <div class="ludo-frame">
-                <For each={ seatCards } key={ (entry) => entry.player.seat } let={ entry }>
-                    <div class="contents">
-                        <YardBadge
-                            player={ entry.player }
-                            seat={ entry.seat }
-                            corner={ entry.corner }
-                            mine={ mine }
-                            active={ entry.player.seat === game.turn }
-                            die={ entry.player.seat === game.turn ? ludo.die : undefined }
-                            finished={ over }
-                            bubble={ props.speech?.[entry.player.who] }
-                        />
+    <div class="table-stage ludo-stage">
+        <div class="table-grid ludo-grid">
+            <div class="table-fit">
+                <div class="ludo-frame">
+                    <For each={ seatCards } key={ (entry) => entry.player.seat } let={ entry }>
+                        <div class="contents">
+                            <YardBadge
+                                player={ entry.player }
+                                seat={ entry.seat }
+                                corner={ entry.corner }
+                                mine={ mine }
+                                active={ entry.player.seat === game.turn }
+                                die={ entry.player.seat === game.turn ? ludo.die : undefined }
+                                finished={ over }
+                                bubble={ props.speech?.[entry.player.who] }
+                                remainingMs={ game.remainingMs }
+                                turnMs={ props.turnMs }
+                            />
+                        </div>
+                    </For>
+
+                    <div class="board-stage table-surface" style={ STAGE }>
+                        <BoardCanvas game={ game.game } view={ view } onPick={ (key) => void pick(key) } />
+
+                        <Show when={ board.canRoll() }>
+                            { () =>
+                                <button
+                                    type="button"
+                                    class="board-roll"
+                                    aria-label={ locale.t('match.roll') }
+                                    disabled={ board.busy() }
+                                    onClick={ () => void board.roll() }
+                                >
+                                    <span class="board-roll-die" aria-hidden="true">
+                                        <DieFace value={ 5 } size="fill" label={ locale.t('match.roll') } />
+                                    </span>
+                                </button>
+                            }
+                        </Show>
                     </div>
-                </For>
-
-                <div class="board-stage" style={ STAGE }>
-                    <BoardCanvas game={ game.game } view={ view } onPick={ (key) => void pick(key) } />
-
-                    <Show when={ board.canRoll() }>
-                        { () =>
-                            <button
-                                type="button"
-                                class="board-roll"
-                                aria-label={ locale.t('match.roll') }
-                                disabled={ board.busy() }
-                                onClick={ () => void board.roll() }
-                            >
-                                <span class="board-roll-die" aria-hidden="true">
-                                    <DieFace value={ 5 } size="fill" label={ locale.t('match.roll') } />
-                                </span>
-                            </button>
-                        }
-                    </Show>
                 </div>
             </div>
 
             <Show when={ !over }>
                 { () =>
-                    <div class="table-actions">
+                    <section class="table-bar ludo-bar">
                         <div class="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
-                            <div class="flex min-w-0 flex-1 basis-[9rem] flex-col gap-0.5">
+                            <div class="flex min-w-0 flex-[1_1_9rem] flex-col gap-0.5">
                                 <p class="text-ui-base font-semibold text-white" aria-live="polite">{ says }</p>
                                 <Show when={ hint !== '' }>
                                     { () => <p class="text-ui-xs text-muted">{ hint }</p> }
@@ -308,21 +261,14 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
                                 </ul>
                             }
                         </Show>
-                    </div>
+                    </section>
                 }
             </Show>
         </div>
 
         <Show when={ over }>
             { () =>
-                <div class="mx-auto flex w-full min-w-0 max-w-[34rem] flex-col gap-3">
-                    <MatchResult
-                        match={ game }
-                        mine={ mine }
-                        busy={ props.starting === true }
-                        onAgain={ props.onAgain }
-                    />
-                </div>
+                <TableResult match={ game } mine={ mine } busy={ props.starting === true } onAgain={ props.onAgain } />
             }
         </Show>
     </div>

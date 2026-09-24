@@ -1,0 +1,29 @@
+import MatchResult from './match-result.component.azeroth';
+import Button from '../ui/button.component.azeroth';
+import { useLocale } from '../../stores/locale.store.ts';
+import type { MatchView } from '../../api.ts';
+
+export default component TableResult(props: { match: MatchView; mine?: number; busy?: boolean; onAgain?: () => void })
+{
+    const locale = useLocale();
+
+    state folded = false;
+
+    <Show
+        when={ !folded }
+        fallback={
+            <div class="table-result-tab">
+                <Button variant="secondary" size="md" leading="trophy" onClick={ () => folded = false }>{ locale.t('match.result.show') }</Button>
+            </div>
+        }
+    >
+        { () =>
+            <div class="table-result">
+                <div class="flex flex-col gap-2">
+                    <MatchResult match={ props.match } mine={ props.mine } busy={ props.busy === true } onAgain={ props.onAgain } />
+                    <Button variant="ghost" size="sm" class="self-center" onClick={ () => folded = true }>{ locale.t('match.result.board') }</Button>
+                </div>
+            </div>
+        }
+    </Show>
+}

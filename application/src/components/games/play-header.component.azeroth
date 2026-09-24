@@ -58,7 +58,7 @@ export default component PlayHeader(props: { table: TableSummary; others: TableS
 
             <Show when={ props.others.length > 0 }>
                 { () =>
-                    <nav class="order-3 flex min-w-0 basis-full items-center @2xl:order-2 @2xl:max-w-[45%] @2xl:shrink-0 @2xl:basis-auto" aria-label={ locale.t('play.tables') }>
+                    <nav class="play-others order-3 flex min-w-0 basis-full items-center @2xl:order-2 @2xl:max-w-[45%] @2xl:shrink-0 @2xl:basis-auto" aria-label={ locale.t('play.tables') }>
                         <p class="sr-only">
                             { locale.t('play.tables') }
                             <Show when={ waiting > 0 }>

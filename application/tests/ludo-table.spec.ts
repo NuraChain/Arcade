@@ -82,9 +82,9 @@ describe('the ludo table', () =>
         const badges = [...container.querySelectorAll<HTMLElement>('.yard-badge')];
 
         expect(badges.map((badge) => badge.dataset.corner)).toEqual(['top-left', 'bottom-right']);
-        expect(badges[0].getAttribute('aria-current')).toBe('true');
-        expect(badges[1].getAttribute('aria-current')).toBeNull();
-        expect(badges[0].querySelector('.yard-who')?.textContent).toBe('You');
+        expect(badges[0].querySelector('.table-plate')!.getAttribute('aria-current')).toBe('true');
+        expect(badges[1].querySelector('.table-plate')!.getAttribute('aria-current')).toBeNull();
+        expect(badges[0].querySelector('.table-plate-name')?.textContent).toBe('You');
     });
 
     it('puts the die in the middle of the board when the reader can roll, and rolls when it is tapped', async () =>
@@ -122,6 +122,6 @@ describe('the ludo table', () =>
         const [mine, theirs] = [...container.querySelectorAll<HTMLElement>('.yard-badge')];
 
         expect(mine.querySelector('.sr-only')?.textContent).toBe('Your go');
-        expect(theirs.querySelector('.yard-says')?.textContent).toBe(useLocale().t('card.lastChance'));
+        expect(theirs.querySelector('.table-plate-tag')?.textContent).toBe(useLocale().t('card.lastChance'));
     });
 });

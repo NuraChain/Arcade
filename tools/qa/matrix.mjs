@@ -54,6 +54,7 @@ const ROUTES = [
     { id: 'play', path: '/app/play/:ludo' },
     { id: 'play-backgammon', path: '/app/play/:backgammon' },
     { id: 'play-poker', path: '/app/play/:poker' },
+    { id: 'play-hokm', path: '/app/play/:hokm' },
     { id: 'leaderboard', path: '/app/leaderboard' },
     { id: 'discover', path: '/app/discover' },
     { id: 'search', path: '/app/search' },
@@ -145,7 +146,7 @@ async function playableTable(browser, storageState, game)
             seats: 2,
             mode: game === 'poker' ? 'live' : 'turns',
             privacy: 'public',
-            target: game === 'backgammon' ? 1 : 0,
+            target: { backgammon: 1, hokm: 7 }[game] ?? 0,
             cube: false,
             blinds: 'low',
             chat: true,
@@ -278,6 +279,26 @@ async function audit(page)
             problems.push({ kind: 'landmark', detail: 'no main landmark' });
         }
 
+        if (document.querySelector('.table-stage') !== null)
+        {
+            const page = document.querySelector('.page');
+
+            if (page !== null && page.scrollHeight > page.clientHeight + 1)
+            {
+                problems.push({ kind: 'scroll', detail: `a game page scrolls ${ page.scrollHeight - page.clientHeight }px` });
+            }
+
+            const folded = [...document.querySelectorAll('.table-stage button, .table-stage .table-plate')]
+                .filter((element) => element.getBoundingClientRect().height > 1 && element.closest('.sr-only, .hidden, [hidden]') === null)
+                .filter((element) => element.getBoundingClientRect().bottom > window.innerHeight + 1)
+                .map((element) => element.getAttribute('aria-label') ?? element.textContent.trim().slice(0, 30));
+
+            if (folded.length > 0)
+            {
+                problems.push({ kind: 'fold', detail: folded.slice(0, 3).join(' · ') });
+            }
+        }
+
         return problems;
     });
 }
@@ -306,7 +327,8 @@ async function main()
     const tables = {
         ludo: await playableTable(browser, storageState, 'ludo'),
         backgammon: await playableTable(browser, storageState, 'backgammon'),
-        poker: await playableTable(browser, storageState, 'poker')
+        poker: await playableTable(browser, storageState, 'poker'),
+        hokm: await playableTable(browser, storageState, 'hokm')
     };
 
     const keepDealing = async (page) =>
@@ -379,7 +401,8 @@ async function main()
                         .replace(':conversation', conversation)
                         .replace(':ludo', tables.ludo)
                         .replace(':backgammon', tables.backgammon)
-                        .replace(':poker', tables.poker);
+                        .replace(':poker', tables.poker)
+                        .replace(':hokm', tables.hokm);
                     await page.goto(`${ BASE }${ target }`, { waitUntil: 'networkidle' }).catch(() => undefined);
                     await page.waitForTimeout(120);
 

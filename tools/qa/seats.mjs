@@ -126,6 +126,53 @@ export async function seat(browser, handle, viewport = { width: 1280, height: 90
     return { handle, context, page, errors, api };
 }
 
+async function open(browser, viewport, signIn)
+{
+    const context = await browser.newContext({ viewport, locale: 'en-US' });
+
+    await context.addCookies([{ name: 'locale', value: 'en', url: BASE }]);
+
+    const signedIn = await signIn(context);
+
+    const page = await context.newPage();
+    const errors = [];
+
+    page.on('console', (event) =>
+    {
+        if ((event.type() === 'error' || event.type() === 'warning') && !event.text().includes('favicon'))
+        {
+            errors.push(`${ signedIn }: ${ event.text().slice(0, 160) }`);
+        }
+    });
+    page.on('pageerror', (error) => errors.push(`${ signedIn }: ${ String(error).slice(0, 160) }`));
+
+    const api = async (method, path, data) =>
+    {
+        const response = method === 'GET'
+            ? await context.request.get(`${ BASE }/api${ path }`)
+            : await context.request.post(`${ BASE }/api${ path }`, data === undefined ? {} : { data });
+
+        return { ok: response.ok(), status: response.status(), body: await response.json().catch(() => null) };
+    };
+
+    return { handle: signedIn, context, page, errors, api };
+}
+
+export async function guestSeat(browser, name, viewport = { width: 1280, height: 900 })
+{
+    return await open(browser, viewport, async (context) =>
+    {
+        const answer = await context.request.post(`${ BASE }/api/auth/guest`, { data: { name } });
+
+        if (!answer.ok())
+        {
+            throw new Error(`could not sign in a guest called ${ name } (${ answer.status() })`);
+        }
+
+        return (await answer.json()).account.handle;
+    });
+}
+
 export async function clearTables(...players)
 {
     for (const player of players)

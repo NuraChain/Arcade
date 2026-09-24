@@ -1,6 +1,5 @@
 import { Dynamic, untrack } from 'azerothjs';
 
-import Panel from '../ui/panel.component.azeroth';
 import EmptyState from '../ui/empty-state.component.azeroth';
 import Skeleton from '../ui/skeleton.component.azeroth';
 import Icon from '../../icons/icon.component.azeroth';
@@ -50,20 +49,18 @@ export default component WatchBoard(props: { watch: MatchWatch })
 
     const boardProps = (): { match: MatchView } => ({ match: props.watch.match });
 
-    <div class="flex flex-col gap-4">
-        <Panel pad="md" stack="sm" tone={ props.watch.live ? 'accent' : 'field' }>
-            <p class="flex items-center gap-2 text-ui-sm font-semibold text-text">
-                <Icon name={ props.watch.live ? 'activity' : 'trophy' } size={ 16 } class="shrink-0 text-accent" />
-                { locale.t(props.watch.live ? 'watch.title' : 'watch.finished') }
-            </p>
+    <div class="flex min-h-0 flex-1 flex-col gap-2">
+        <p class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-ui-xs text-muted">
+            <Icon name={ props.watch.live ? 'activity' : 'trophy' } size={ 14 } class="shrink-0 text-accent" />
+            <span class="font-semibold text-text">{ locale.t(props.watch.live ? 'watch.title' : 'watch.finished') }</span>
             <Show when={ props.watch.live }>
-                { () => <p class="text-ui-xs text-muted">{ behindSays }</p> }
+                { () => <span>{ behindSays }</span> }
             </Show>
             <Show when={ props.watch.live && props.watch.behind > props.watch.delay * 2 }>
-                { () => <p class="text-ui-xs text-muted">{ quietSays }</p> }
+                { () => <span>{ quietSays }</span> }
             </Show>
-            <p class="text-ui-xs text-faint">{ locale.t('watch.why') }</p>
-        </Panel>
+            <span class="sr-only">{ locale.t('watch.why') }</span>
+        </p>
 
         <Show when={ drawn !== '' && drawn === game }>
             { () => <Dynamic component={ Board! } props={ boardProps } /> }

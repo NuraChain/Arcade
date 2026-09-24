@@ -32,6 +32,7 @@ import type { MatchView } from '../../api.ts';
 import { plainOf } from '../../lib/markdown.ts';
 import { holdScreen } from '../../lib/wake-lock.ts';
 import { BOARDS, drawable, type BoardComponent } from '../../components/games/boards.ts';
+import { turnMs } from '../../../../server/src/domains/match/turns.ts';
 
 export default component PlayPage()
 {
@@ -381,11 +382,12 @@ export default component PlayPage()
         draw(want);
     }
 
-    const boardProps = (): { match: MatchView; starting: boolean; onAgain?: () => void; speech: Record<string, string> } => ({
+    const boardProps = (): { match: MatchView; starting: boolean; onAgain?: () => void; speech: Record<string, string>; turnMs: number } => ({
         match: board.match()!,
         starting,
         onAgain: seated ? () => void begin() : undefined,
-        speech
+        speech,
+        turnMs: turnMs(table?.mode ?? 'live')
     });
 
     effect
@@ -533,7 +535,7 @@ export default component PlayPage()
         }
     };
 
-    <Page label={ title } fill>
+    <Page label={ title } fill class="page-table">
         <Show when={ loading }>
             { () =>
                 <div class="flex flex-col gap-4 pt-4">
@@ -583,20 +585,45 @@ export default component PlayPage()
                 <div class="flex min-h-0 flex-1 gap-4">
                     <div
                         ref={ (element) => arena = element }
-                        class={ () => [ 'flex min-w-0 flex-1 flex-col gap-4 bg-void py-2 transition-[padding] duration-200', sheetVisible && !sideways && !chatWide ? 'pb-[48dvh]' : '', cardOpen ? (chatWide ? 'pe-[31.5rem]' : 'pe-[24.5rem]') : '' ].filter(Boolean).join(' ') }
+                        class={ () => [ 'flex min-h-0 min-w-0 flex-1 flex-col gap-2 bg-void transition-[padding] duration-200', sheetVisible && !sideways && !chatWide ? 'pb-[48dvh]' : '', cardOpen ? (chatWide ? 'pe-[31.5rem]' : 'pe-[24.5rem]') : '' ].filter(Boolean).join(' ') }
                     >
                         <PlayHeader
                             table={ table! }
                             others={ lobby.seated().filter((one) => one.id !== table!.id) }
                             tools={
-                                <TableDock
-                                    code={ table!.code }
-                                    target={ arena }
-                                    upright={ playing === 'ludo' }
-                                    onChat={ floating ? undefined : openChat }
-                                    onResign={ resigning ? () => void resign() : undefined }
-                                    voice={ talkable ? table!.id : undefined }
-                                />
+                                <span class="flex items-center gap-2">
+                                    <TableDock
+                                        code={ table!.code }
+                                        target={ arena }
+                                        upright={ playing === 'ludo' }
+                                        onChat={ floating ? undefined : openChat }
+                                        onResign={ resigning ? () => void resign() : undefined }
+                                        voice={ talkable ? table!.id : undefined }
+                                    />
+                                    <Show when={ floating && hasChat && !cardOpen }>
+                                        { () =>
+                                            <button
+                                                type="button"
+                                                class="table-pill flex min-h-11 max-w-[16rem] cursor-pointer items-center gap-2.5 rounded-full border border-line-strong bg-lifted py-1 ps-1 pe-4 text-start"
+                                                aria-label={ locale.t('play.table.chatShow') }
+                                                onClick={ () => openChat?.() }
+                                            >
+                                                <span class="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent-fill text-accent-ink">
+                                                    <Icon name="chats" size={ 18 } />
+                                                    <Show when={ unread > 0 }>
+                                                        { () => <span class="tally absolute -end-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-danger-fill px-1 text-ui-2xs font-bold text-accent-ink ring-2 ring-lifted">{ locale.n(unread) }</span> }
+                                                    </Show>
+                                                </span>
+                                                <span class="flex min-w-0 flex-col">
+                                                    <span class="text-ui-sm font-semibold text-text">{ locale.t('play.tab.chat') }</span>
+                                                    <Show when={ preview !== '' }>
+                                                        { () => <span class="truncate text-ui-xs text-muted" dir="auto">{ preview }</span> }
+                                                    </Show>
+                                                </span>
+                                            </button>
+                                        }
+                                    </Show>
+                                </span>
                             }
                         />
 
@@ -643,7 +670,7 @@ export default component PlayPage()
 
                         <Show when={ !seated && table?.matchId !== undefined }>
                             { () =>
-                                <div class="flex flex-col gap-3">
+                                <div class="flex min-h-0 flex-1 flex-col gap-3">
                                     <Show when={ watch.view() !== null }>
                                         { () => <WatchBoard watch={ watch.view()! } /> }
                                     </Show>
@@ -660,7 +687,7 @@ export default component PlayPage()
 
                         <Show
                             when={ !showing && seated }
-                            fallback={ table === null || showing ? null :
+                            fallback={ table === null || showing || table.matchId !== undefined ? null :
                                 <Panel pad="lg" stack="md" class="items-center text-center">
                                     <p class="text-ui-lg text-text">{ locale.t('play.table.watching') }</p>
                                     <p class="max-w-[44ch] text-ui-base text-muted">
@@ -738,30 +765,6 @@ export default component PlayPage()
                                     }
                                 </Show>
                             </div>
-                        }
-                    </Show>
-
-                    <Show when={ floating && hasChat && !cardOpen }>
-                        { () =>
-                            <button
-                                type="button"
-                                class="table-pill fixed bottom-5 end-5 z-30 flex min-h-12 max-w-[min(21rem,calc(100vw-2.5rem))] cursor-pointer items-center gap-3 rounded-full border border-line-strong bg-lifted py-2 ps-3 pe-5 text-start"
-                                aria-label={ locale.t('play.table.chatShow') }
-                                onClick={ () => openChat?.() }
-                            >
-                                <span class="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent-fill text-accent-ink">
-                                    <Icon name="chats" size={ 18 } />
-                                    <Show when={ unread > 0 }>
-                                        { () => <span class="tally absolute -end-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-danger-fill px-1 text-ui-2xs font-bold text-accent-ink ring-2 ring-lifted">{ locale.n(unread) }</span> }
-                                    </Show>
-                                </span>
-                                <span class="flex min-w-0 flex-col">
-                                    <span class="text-ui-sm font-semibold text-text">{ locale.t('play.tab.chat') }</span>
-                                    <Show when={ preview !== '' }>
-                                        { () => <span class="truncate text-ui-xs text-muted" dir="auto">{ preview }</span> }
-                                    </Show>
-                                </span>
-                            </button>
                         }
                     </Show>
                 </div>

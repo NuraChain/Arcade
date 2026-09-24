@@ -47,8 +47,8 @@ const button = (container: HTMLElement, label: string): HTMLButtonElement | unde
 
 const place = (container: HTMLElement, name: string): { x: number; y: number } =>
 {
-    const plate = [...container.querySelectorAll<HTMLElement>('[style*="left:"]')]
-        .find((element) => element.textContent?.includes(name) && element.className.includes('w-[5.25rem]'))!;
+    const plate = [...container.querySelectorAll<HTMLElement>('.poker-seat')]
+        .find((element) => element.querySelector('.table-plate-name')?.textContent === name)!;
 
     return { x: parseFloat(plate.style.left), y: parseFloat(plate.style.top) };
 };
@@ -112,7 +112,9 @@ describe('PokerBoard', () =>
             match: match({ toCall: 20, minRaiseTo: 40, maxRaiseTo: 1500, pot: 50, seats: Array.from({ length: 6 }, (_, seat) => ({ seat, stack: 1500, bet: seat === 4 ? 20 : 0, folded: false, allIn: false, out: false })) })
         }) as Rendered);
 
+        fire(button(container, 'Raise')!, 'click');
         fire(button(container, 'Raise to 40')!, 'click');
+        fire(button(container, 'Raise')!, 'click');
         fire(button(container, 'Pot')!, 'click');
         fire(button(container, 'Raise to 90')!, 'click');
 
@@ -212,7 +214,7 @@ describe('PokerBoard', () =>
 
         expect(button(container, 'Fold')).toBeDefined();
         expect(button(container, 'Call 20')).toBeDefined();
-        expect(button(container, 'Raise to 40')).toBeDefined();
+        expect(button(container, 'Raise')).toBeDefined();
     });
 
     it('gives a spectator no tip and no outcome', () =>

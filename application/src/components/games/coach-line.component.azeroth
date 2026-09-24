@@ -8,9 +8,30 @@ export default component CoachLine(props: { tip: Tip | null; class?: string })
     const locale = useLocale();
     const settings = useSettings();
 
+    state open = false;
+
+    const toggle = (): void =>
+    {
+        open = !open;
+    };
+
     <Show when={ props.tip !== null && settings.settings().hintRules }>
         { () =>
-            <p class={ [ 'flex items-start gap-2 rounded-tile border border-line bg-raised/60 px-3 py-2 text-ui-xs text-muted', props.class ?? '' ].filter(Boolean).join(' ') } role="note">
+            <p
+                class={ [ 'coach-line flex cursor-pointer items-start gap-2 coarse:min-h-11 rounded-tile border border-line bg-raised/60 px-3 py-2 text-ui-xs text-muted', props.class ?? '' ].filter(Boolean).join(' ') }
+                role="note"
+                tabindex="0"
+                data-open={ open ? 'true' : undefined }
+                onClick={ toggle }
+                onKeyDown={ (event) =>
+                {
+                    if (event.key === 'Enter' || event.key === ' ')
+                    {
+                        event.preventDefault();
+                        toggle();
+                    }
+                } }
+            >
                 <Icon name="idea" size={ 14 } class="mt-px shrink-0 text-gold" />
                 <span class="sr-only">{ locale.t('helpers.tip') }</span>
                 <span class="min-w-0">{ props.tip === null ? '' : locale.t(props.tip.key, props.tip.params) }</span>

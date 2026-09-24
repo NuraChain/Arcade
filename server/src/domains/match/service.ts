@@ -14,6 +14,7 @@ import { backgammonEngine } from './engines/backgammon.ts';
 import { hokmEngine } from './engines/hokm.ts';
 import { ludoEngine } from './engines/ludo.ts';
 import { pokerEngine } from './engines/poker.ts';
+import { turnMs } from './turns.ts';
 import type { MatchBoard, MatchLog } from '../../schemas.ts';
 import type { MatchHistory } from '../../schemas.ts';
 import type { Draws, Engine, TableConfig } from './engine.ts';
@@ -58,22 +59,6 @@ interface HistoryRow
  * Neither is an error. Losing a race is ordinary, so the answer carries `applied` rather than a
  * status: `now`, `already`, or `stale`.
  */
-
-/**
- * How long a turn may be held before the sweep plays it.
- *
- * Thirty seconds at a live table: long enough to look at the board and decide, short enough that
- * nobody waits on somebody who has walked away. It is also the number the countdown beside the
- * board shows, because a clock a player cannot see is a clock that only ever surprises them - and
- * for a table playing for anything, being surprised by a clock is the worst way to lose a turn.
- *
- * A `turns` table is a day, which is what makes it a correspondence game rather than a slow live
- * one, and is why a turn there is worth a notification and a turn here is not.
- */
-const TURN_MS: Record<string, number> = {
-    live: 30_000,
-    turns: 24 * 60 * 60 * 1000
-};
 
 const UNIQUE_VIOLATION = '23505';
 
@@ -273,8 +258,6 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
 
         return { match, state: stateOf(match), players: await seatsOf(db, matchId), mine: seat.seat };
     };
-
-    const turnMs = (mode: string): number => TURN_MS[mode] ?? TURN_MS.live;
 
     const deadlineFrom = (mode: string): () => string =>
         () => `now() + make_interval(secs => ${ turnMs(mode) / 1000 })`;

@@ -1,11 +1,13 @@
 import { untrack } from 'azerothjs';
 
-import MatchResult from './match-result.component.azeroth';
+import TableResult from './table-result.component.azeroth';
 import TurnClock from './turn-clock.component.azeroth';
 import DieFace from './die-face.component.azeroth';
 import CoachLine from './coach-line.component.azeroth';
-import Avatar from '../ui/avatar.component.azeroth';
+import TablePlate from './table-plate.component.azeroth';
+import { plateTag } from './plate-tag.ts';
 import Button from '../ui/button.component.azeroth';
+import IconButton from '../ui/icon-button.component.azeroth';
 import Icon from '../../icons/icon.component.azeroth';
 import { backgammonOf } from '../../data/match.ts';
 import { useBoard } from '../../stores/match.store.ts';
@@ -14,7 +16,6 @@ import { haptic } from '../../lib/haptics.ts';
 import { backgammonBeats, tableCues } from './table-cues.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { usePeople } from '../../stores/people.store.ts';
-import { useVoice } from '../../stores/voice.store.ts';
 import { diceOf, stage } from '../../../../server/src/domains/match/backgammon/moves.ts';
 import type { Hop } from '../../../../server/src/domains/match/backgammon/board.ts';
 import { coachOf, hits, outcomeOf, type Outcome } from '../../game/helpers/backgammon.ts';
@@ -96,12 +97,11 @@ const GAP = 10;
 
 const centreOf = (point: number): number => columnOf(point).x + POINT_WIDTH / 2;
 
-export default component BackgammonBoard(props: { match: MatchView; starting?: boolean; onAgain?: () => void })
+export default component BackgammonBoard(props: { match: MatchView; starting?: boolean; onAgain?: () => void; speech?: Record<string, string>; turnMs?: number })
 {
     const locale = useLocale();
     const board = useBoard();
     const people = usePeople();
-    const voice = useVoice();
 
     state staged: Hop[] = [];
 
@@ -503,175 +503,209 @@ export default component BackgammonBoard(props: { match: MatchView; starting?: b
         row: view?.seats.find((one) => one.seat === seat)
     }));
 
-    <div class="@container flex min-w-0 flex-col gap-3">
-        <Show when={ view !== null }>
-            { () =>
-                <div class="grid min-w-0 grid-cols-1 gap-3 [grid-template-areas:'players'_'board'_'side'] @4xl:grid-cols-[minmax(0,1fr)_19rem] @4xl:items-start @4xl:gap-x-5 @4xl:[grid-template-areas:'players_side'_'board_side'] sideways:grid-cols-[auto_minmax(0,1fr)] sideways:items-start sideways:gap-x-4 sideways:[grid-template-areas:'board_players'_'board_side']">
-                    <ul class="mx-auto grid w-full max-w-[max(18rem,calc((100dvh-24rem)*1.22))] grid-cols-2 gap-2 [grid-area:players] @4xl:max-w-none sideways:max-w-none" aria-label={ locale.t('backgammon.players') }>
+    <div class="table-stage bg-stage">
+        <div class="table-grid bg-grid">
+            <Show when={ view !== null }>
+                { () =>
+                    <span class="contents">
                         <For each={ plates } key={ (plate) => plate.seat } let={ plate }>
-                            <li
-                                class={ () => [
-                                    'flex min-w-0 items-center gap-2 rounded-tile border bg-field px-2.5 py-2 transition-colors',
-                                    !over && view!.turn === plate.seat ? 'border-accent shadow-[0_0_0_1px_var(--accent)]' : 'border-line'
-                                ].join(' ') }
-                                aria-current={ !over && view!.turn === plate.seat ? 'true' : undefined }
-                            >
-                                <span class={ () => [ 'flex shrink-0 rounded-full transition-shadow duration-150', voice.speaking(whoAt(plate.seat)) ? 'ring-2 ring-live ring-offset-2 ring-offset-void' : '' ].filter(Boolean).join(' ') }>
-                                    <Avatar person={ people.byHandle(whoAt(plate.seat)) } size="sm" ringOn="void" />
-                                </span>
-                                <span class="flex min-w-0 flex-1 flex-col leading-tight">
-                                    <span class="flex min-w-0 items-center gap-1.5">
-                                        <span
-                                            class={ () => [ 'h-3 w-3 shrink-0 rounded-full ring-1', plate.tone === 'light' ? 'bg-[var(--nard-light)] ring-black/30' : 'bg-[var(--nard-dark)] ring-white/30' ].join(' ') }
-                                            aria-hidden="true"
-                                        ></span>
-                                        <span class="truncate text-ui-xs font-semibold text-text" dir="auto">{ nameOf(plate.seat) }</span>
-                                    </span>
-                                    <span class="flex items-center gap-2 text-ui-2xs text-muted">
-                                        <span>{ locale.t('backgammon.score', { score: locale.n(plate.row?.score ?? 0), target: locale.n(view!.target) }) }</span>
-                                        <span>{ locale.plural('backgammon.pips', plate.row?.pips ?? 0) }</span>
-                                    </span>
-                                </span>
-                            </li>
-                        </For>
-                    </ul>
-
-                    <div class="mx-auto flex w-full min-w-0 max-w-[max(18rem,calc((100dvh-24rem)*1.22))] flex-col gap-3 [grid-area:board] @4xl:max-w-[max(18rem,calc((100dvh-15rem)*1.22))] sideways:w-[min(60vw,calc((100dvh-9rem)*1.22))] sideways:max-w-none">
-                        <div class="relative [direction:ltr]">
-                            <svg
-                                viewBox={ `0 0 ${ WIDTH } ${ HEIGHT }` }
-                                class={ () => [ 'block h-auto w-full select-none touch-manipulation rounded-panel', plan !== null ? 'cursor-pointer' : '' ].filter(Boolean).join(' ') }
-                                aria-hidden="true"
-                                onPointerUp={ tap }
-                            >
-                                <rect x="0" y="0" width={ WIDTH } height={ HEIGHT } rx="22" fill="var(--nard-frame)" />
-                                <rect x={ FIELD_LEFT } y={ TOP } width={ FIELD_RIGHT - FIELD_LEFT } height={ BOTTOM - TOP } rx="6" fill="var(--nard-field)" />
-                                <rect x={ BAR_LEFT } y={ TOP - 6 } width={ BAR_WIDTH } height={ BOTTOM - TOP + 12 } fill="var(--nard-frame)" />
-                                <rect
-                                    x={ TRAY_LEFT }
-                                    y={ TOP }
-                                    width={ TRAY }
-                                    height={ BOTTOM - TOP }
-                                    rx="8"
-                                    fill="var(--nard-tray)"
-                                    stroke={ trayLit ? 'var(--accent)' : 'none' }
-                                    stroke-width="6"
+                            <div class={ () => (plate.seat === viewer ? 'table-hand bg-plate bg-plate-out' : 'table-top bg-plate bg-plate-out') }>
+                                <TablePlate
+                                    who={ whoAt(plate.seat) }
+                                    name={ nameOf(plate.seat) }
+                                    turn={ !over && view!.turn === plate.seat }
+                                    remainingMs={ game.remainingMs }
+                                    turnMs={ props.turnMs }
+                                    tag={ plateTag(locale, game.players.find((one) => one.seat === plate.seat), over)?.text }
+                                    tone={ plateTag(locale, game.players.find((one) => one.seat === plate.seat), over)?.tone }
+                                    bubble={ props.speech?.[whoAt(plate.seat)] }
+                                    below={ plate.seat !== viewer }
+                                    anchor={ plate.seat === viewer ? 'end' : 'start' }
+                                    marker={ <span class={ () => (plate.tone === 'light' ? 'bg-checker bg-checker-light' : 'bg-checker bg-checker-dark') } aria-hidden="true"></span> }
+                                    facts={
+                                        <span class="contents">
+                                            <span>{ locale.t('backgammon.score', { score: locale.n(plate.row?.score ?? 0), target: locale.n(view!.target) }) }</span>
+                                            <span>{ locale.plural('backgammon.pips', plate.row?.pips ?? 0) }</span>
+                                        </span>
+                                    }
                                 />
-                                <line x1={ TRAY_LEFT + 8 } y1={ MIDDLE } x2={ TRAY_LEFT + TRAY - 8 } y2={ MIDDLE } stroke="var(--nard-frame)" stroke-width="4" />
+                            </div>
+                        </For>
 
-                                <For each={ [...SPIKES] } key={ (spike) => spike.point } let={ spike }>
-                                    <g>
-                                        <polygon points={ spike.path } fill={ spike.shade === 'a' ? 'var(--nard-point-a)' : 'var(--nard-point-b)' } />
-                                    </g>
-                                </For>
-
-                                <For each={ slabs } key={ (slab) => slab.key } let={ slab }>
-                                    <g>
+                        <div class="table-fit">
+                            <div class="table-surface bg-board">
+                                <div class="relative h-full [direction:ltr]">
+                                    <svg
+                                        viewBox={ `0 0 ${ WIDTH } ${ HEIGHT }` }
+                                        class={ () => [ 'block h-full w-full select-none touch-manipulation rounded-panel', plan !== null ? 'cursor-pointer' : '' ].filter(Boolean).join(' ') }
+                                        aria-hidden="true"
+                                        onPointerUp={ tap }
+                                    >
+                                        <rect x="0" y="0" width={ WIDTH } height={ HEIGHT } rx="22" fill="var(--nard-frame)" />
+                                        <rect x={ FIELD_LEFT } y={ TOP } width={ FIELD_RIGHT - FIELD_LEFT } height={ BOTTOM - TOP } rx="6" fill="var(--nard-field)" />
+                                        <rect x={ BAR_LEFT } y={ TOP - 6 } width={ BAR_WIDTH } height={ BOTTOM - TOP + 12 } fill="var(--nard-frame)" />
                                         <rect
-                                            x={ TRAY_LEFT + 9 }
-                                            y={ slab.y }
-                                            width={ TRAY - 18 }
-                                            height={ SLAB - 2 }
-                                            rx="3"
-                                            fill={ slab.tone === 'light' ? 'var(--nard-light)' : 'var(--nard-dark)' }
-                                            stroke={ slab.tone === 'light' ? 'var(--nard-light-rim)' : 'var(--nard-dark-rim)' }
-                                            stroke-width="2"
+                                            x={ TRAY_LEFT }
+                                            y={ TOP }
+                                            width={ TRAY }
+                                            height={ BOTTOM - TOP }
+                                            rx="8"
+                                            fill="var(--nard-tray)"
+                                            stroke={ trayLit ? 'var(--accent)' : 'none' }
+                                            stroke-width="6"
                                         />
-                                    </g>
-                                </For>
+                                        <line x1={ TRAY_LEFT + 8 } y1={ MIDDLE } x2={ TRAY_LEFT + TRAY - 8 } y2={ MIDDLE } stroke="var(--nard-frame)" stroke-width="4" />
 
-                                <For each={ pieces } key={ (piece) => piece.key } let={ piece }>
-                                    <g>
-                                        <circle
-                                            cx={ piece.x }
-                                            cy={ piece.y }
-                                            r={ RADIUS - 1 }
-                                            fill={ piece.tone === 'light' ? 'var(--nard-light)' : 'var(--nard-dark)' }
-                                            stroke={ piece.lit ? 'var(--accent)' : (piece.tone === 'light' ? 'var(--nard-light-rim)' : 'var(--nard-dark-rim)') }
-                                            stroke-width={ piece.lit ? 7 : 3 }
-                                        />
-                                        <circle
-                                            cx={ piece.x }
-                                            cy={ piece.y }
-                                            r={ RADIUS * 0.6 }
-                                            fill="none"
-                                            stroke={ piece.tone === 'light' ? 'var(--nard-light-rim)' : 'var(--nard-dark-rim)' }
-                                            stroke-width="2"
-                                            opacity="0.6"
-                                        />
-                                        <Show when={ piece.label !== '' }>
+                                        <For each={ [...SPIKES] } key={ (spike) => spike.point } let={ spike }>
+                                            <g>
+                                                <polygon points={ spike.path } fill={ spike.shade === 'a' ? 'var(--nard-point-a)' : 'var(--nard-point-b)' } />
+                                            </g>
+                                        </For>
+
+                                        <For each={ slabs } key={ (slab) => slab.key } let={ slab }>
+                                            <g>
+                                                <rect
+                                                    x={ TRAY_LEFT + 9 }
+                                                    y={ slab.y }
+                                                    width={ TRAY - 18 }
+                                                    height={ SLAB - 2 }
+                                                    rx="3"
+                                                    fill={ slab.tone === 'light' ? 'var(--nard-light)' : 'var(--nard-dark)' }
+                                                    stroke={ slab.tone === 'light' ? 'var(--nard-light-rim)' : 'var(--nard-dark-rim)' }
+                                                    stroke-width="2"
+                                                />
+                                            </g>
+                                        </For>
+
+                                        <For each={ pieces } key={ (piece) => piece.key } let={ piece }>
+                                            <g>
+                                                <circle
+                                                    cx={ piece.x }
+                                                    cy={ piece.y }
+                                                    r={ RADIUS - 1 }
+                                                    fill={ piece.tone === 'light' ? 'var(--nard-light)' : 'var(--nard-dark)' }
+                                                    stroke={ piece.lit ? 'var(--accent)' : (piece.tone === 'light' ? 'var(--nard-light-rim)' : 'var(--nard-dark-rim)') }
+                                                    stroke-width={ piece.lit ? 7 : 3 }
+                                                />
+                                                <circle
+                                                    cx={ piece.x }
+                                                    cy={ piece.y }
+                                                    r={ RADIUS * 0.6 }
+                                                    fill="none"
+                                                    stroke={ piece.tone === 'light' ? 'var(--nard-light-rim)' : 'var(--nard-dark-rim)' }
+                                                    stroke-width="2"
+                                                    opacity="0.6"
+                                                />
+                                                <Show when={ piece.label !== '' }>
+                                                    { () =>
+                                                        <text
+                                                            x={ piece.x }
+                                                            y={ piece.y + 9 }
+                                                            text-anchor="middle"
+                                                            font-size="26"
+                                                            font-weight="700"
+                                                            fill={ piece.tone === 'light' ? 'var(--nard-dark)' : 'var(--nard-light)' }
+                                                        >{ piece.label }</text>
+                                                    }
+                                                </Show>
+                                            </g>
+                                        </For>
+
+                                        <For each={ marks } key={ (mark) => mark.key } let={ mark }>
+                                            <g>
+                                                <circle cx={ mark.x } cy={ mark.y } r={ RADIUS - 4 } fill="var(--accent)" fill-opacity="0.28" stroke="var(--accent)" stroke-width="4" stroke-dasharray="10 7" />
+                                            </g>
+                                        </For>
+
+                                        <Show when={ view!.cubed }>
                                             { () =>
-                                                <text
-                                                    x={ piece.x }
-                                                    y={ piece.y + 9 }
-                                                    text-anchor="middle"
-                                                    font-size="26"
-                                                    font-weight="700"
-                                                    fill={ piece.tone === 'light' ? 'var(--nard-dark)' : 'var(--nard-light)' }
-                                                >{ piece.label }</text>
+                                                <g>
+                                                    <rect
+                                                        x={ BAR_LEFT + BAR_WIDTH / 2 - 24 }
+                                                        y={ cubeY - 24 }
+                                                        width="48"
+                                                        height="48"
+                                                        rx="8"
+                                                        fill="var(--nard-light)"
+                                                        stroke="var(--nard-dark)"
+                                                        stroke-width="3"
+                                                    />
+                                                    <text
+                                                        x={ BAR_LEFT + BAR_WIDTH / 2 }
+                                                        y={ cubeY + 9 }
+                                                        text-anchor="middle"
+                                                        font-size="26"
+                                                        font-weight="800"
+                                                        fill="var(--nard-dark)"
+                                                    >{ String(view!.cube === 1 ? 64 : view!.cube) }</text>
+                                                </g>
                                             }
                                         </Show>
-                                    </g>
-                                </For>
 
-                                <For each={ marks } key={ (mark) => mark.key } let={ mark }>
-                                    <g>
-                                        <circle cx={ mark.x } cy={ mark.y } r={ RADIUS - 4 } fill="var(--accent)" fill-opacity="0.28" stroke="var(--accent)" stroke-width="4" stroke-dasharray="10 7" />
-                                    </g>
-                                </For>
+                                        <rect x={ FRAME / 2 } y={ FRAME / 2 } width={ WIDTH - FRAME } height={ HEIGHT - FRAME } rx="16" fill="none" stroke="var(--nard-inlay)" stroke-width="3" />
+                                    </svg>
 
-                                <Show when={ view!.cubed }>
-                                    { () =>
-                                        <g>
-                                            <rect
-                                                x={ BAR_LEFT + BAR_WIDTH / 2 - 24 }
-                                                y={ cubeY - 24 }
-                                                width="48"
-                                                height="48"
-                                                rx="8"
-                                                fill="var(--nard-light)"
-                                                stroke="var(--nard-dark)"
-                                                stroke-width="3"
-                                            />
-                                            <text
-                                                x={ BAR_LEFT + BAR_WIDTH / 2 }
-                                                y={ cubeY + 9 }
-                                                text-anchor="middle"
-                                                font-size="26"
-                                                font-weight="800"
-                                                fill="var(--nard-dark)"
-                                            >{ String(view!.cube === 1 ? 64 : view!.cube) }</text>
-                                        </g>
-                                    }
-                                </Show>
+                                    <Show when={ faces.length > 0 && !over }>
+                                        { () =>
+                                            <div
+                                                class="pointer-events-none absolute top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center gap-1.5"
+                                                style={ `left: ${ ((BAR_LEFT + BAR_WIDTH + POINT_WIDTH * 3) / WIDTH * 100).toFixed(3) }%` }
+                                                role="img"
+                                                aria-label={ locale.t('backgammon.dice', { dice: locale.list(view!.dice.map((face) => locale.n(face))) }) }
+                                            >
+                                                <For each={ faces } key={ (die) => die.index } let={ die }>
+                                                    <span class={ () => [ 'flex transition-opacity duration-200', die.spent ? 'opacity-35' : '' ].filter(Boolean).join(' ') } aria-hidden="true">
+                                                        <DieFace value={ die.face } size="sm" label="" />
+                                                    </span>
+                                                </For>
+                                            </div>
+                                        }
+                                    </Show>
+                                </div>
 
-                                <rect x={ FRAME / 2 } y={ FRAME / 2 } width={ WIDTH - FRAME } height={ HEIGHT - FRAME } rx="16" fill="none" stroke="var(--nard-inlay)" stroke-width="3" />
-                            </svg>
+                                <div class="sr-only">
+                                    <p>{ stacksSaid(viewer) }</p>
+                                    <p>{ stacksSaid(1 - viewer) }</p>
+                                </div>
+                            </div>
 
-                            <Show when={ faces.length > 0 && !over }>
-                                { () =>
-                                    <div
-                                        class="pointer-events-none absolute top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center gap-1.5"
-                                        style={ `left: ${ ((BAR_LEFT + BAR_WIDTH + POINT_WIDTH * 3) / WIDTH * 100).toFixed(3) }%` }
-                                        role="img"
-                                        aria-label={ locale.t('backgammon.dice', { dice: locale.list(view!.dice.map((face) => locale.n(face))) }) }
-                                    >
-                                        <For each={ faces } key={ (die) => die.index } let={ die }>
-                                            <span class={ () => [ 'flex transition-opacity duration-200', die.spent ? 'opacity-35' : '' ].filter(Boolean).join(' ') } aria-hidden="true">
-                                                <DieFace value={ die.face } size="sm" label="" />
+                            <For each={ plates } key={ (plate) => plate.seat } let={ plate }>
+                                <div class="bg-plate bg-plate-in" data-me={ plate.seat === viewer ? 'true' : undefined }>
+                                    <TablePlate
+                                        who={ whoAt(plate.seat) }
+                                        name={ nameOf(plate.seat) }
+                                        turn={ !over && view!.turn === plate.seat }
+                                        remainingMs={ game.remainingMs }
+                                        turnMs={ props.turnMs }
+                                        tag={ plateTag(locale, game.players.find((one) => one.seat === plate.seat), over)?.text }
+                                        tone={ plateTag(locale, game.players.find((one) => one.seat === plate.seat), over)?.tone }
+                                        bubble={ props.speech?.[whoAt(plate.seat)] }
+                                        below={ plate.seat !== viewer }
+                                    anchor={ plate.seat === viewer ? 'end' : 'start' }
+                                        marker={ <span class={ () => (plate.tone === 'light' ? 'bg-checker bg-checker-light' : 'bg-checker bg-checker-dark') } aria-hidden="true"></span> }
+                                        facts={
+                                            <span class="contents">
+                                                <span>{ locale.t('backgammon.score', { score: locale.n(plate.row?.score ?? 0), target: locale.n(view!.target) }) }</span>
+                                                <span>{ locale.plural('backgammon.pips', plate.row?.pips ?? 0) }</span>
                                             </span>
-                                        </For>
-                                    </div>
-                                }
-                            </Show>
+                                        }
+                                    />
+                                </div>
+                            </For>
+                        </div>
+                    </span>
+                }
+            </Show>
+
+            <Show when={ view !== null && !over }>
+                { () =>
+                    <section class="table-bar bg-bar">
+                        <div class="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+                            <p class="min-w-0 flex-[1_1_8rem] text-ui-base font-semibold text-text" aria-live="polite">{ says }</p>
+                            <TurnClock remainingMs={ game.remainingMs } over={ over } yours={ myTurn } />
                         </div>
 
-                        <div class="sr-only">
-                            <p>{ stacksSaid(viewer) }</p>
-                            <p>{ stacksSaid(1 - viewer) }</p>
-                        </div>
-
-                        <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-ui-2xs text-muted">
+                        <p class="bg-info flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5 text-ui-2xs text-muted">
                             <span>{ locale.t('backgammon.match', { target: locale.n(view!.target), round: locale.n(view!.round) }) }</span>
                             <Show when={ view!.cubed }>
                                 { () =>
@@ -686,115 +720,104 @@ export default component BackgammonBoard(props: { match: MatchView; starting?: b
                             <Show when={ view!.crawford }>
                                 { () => <span class="font-semibold text-gold">{ locale.t('backgammon.crawford') }</span> }
                             </Show>
-                        </div>
+                        </p>
 
-                    </div>
+                        <CoachLine tip={ tip } />
 
-                    <Show when={ !over }>
-                        { () =>
-                            <section class="mx-auto flex w-full min-w-0 max-w-[max(18rem,calc((100dvh-24rem)*1.22))] flex-col gap-3 [grid-area:side] @4xl:max-w-none sideways:max-w-none">
-                                <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
-                                    <p class="min-w-0 flex-1 basis-[10rem] text-ui-lg font-semibold text-text" aria-live="polite">{ says }</p>
-                                    <TurnClock remainingMs={ game.remainingMs } over={ over } yours={ myTurn } />
+                        <Show when={ myTurn && view!.phase === 'roll' }>
+                            { () =>
+                                <div class="flex flex-wrap gap-2">
+                                    <span class="glow-cta flex rounded-control">
+                                        <Button variant="primary" size="lg" leading="dice" loading={ board.busy() } onClick={ () => void play('roll') }>
+                                            { locale.t('backgammon.roll') }
+                                        </Button>
+                                    </span>
+                                    <Show when={ view!.doubling }>
+                                        { () =>
+                                            <Button variant="secondary" size="lg" disabled={ board.busy() } onClick={ () => void play('double') }>
+                                                { locale.t('backgammon.double', { cube: locale.n(view!.cube * 2) }) }
+                                            </Button>
+                                        }
+                                    </Show>
                                 </div>
+                            }
+                        </Show>
 
-                                <CoachLine tip={ tip } />
+                        <Show when={ myTurn && view!.phase === 'double' }>
+                            { () =>
+                                <div class="flex flex-wrap gap-2">
+                                    <Button variant="primary" size="lg" loading={ board.busy() } onClick={ () => void play('take') }>
+                                        { locale.t('backgammon.take', { cube: locale.n(view!.cube * 2) }) }
+                                    </Button>
+                                    <Button variant="destructive" size="lg" disabled={ board.busy() } onClick={ () => void play('drop') }>
+                                        { locale.t('backgammon.drop') }
+                                    </Button>
+                                </div>
+                            }
+                        </Show>
 
-                                <Show when={ myTurn && view!.phase === 'roll' }>
-                                    { () =>
-                                        <div class="flex flex-wrap gap-2">
-                                            <span class="glow-cta flex rounded-control">
-                                                <Button variant="primary" size="lg" leading="dice" loading={ board.busy() } onClick={ () => void play('roll') }>
-                                                    { locale.t('backgammon.roll') }
-                                                </Button>
-                                            </span>
-                                            <Show when={ view!.doubling }>
-                                                { () =>
-                                                    <Button variant="secondary" size="lg" disabled={ board.busy() } onClick={ () => void play('double') }>
-                                                        { locale.t('backgammon.double', { cube: locale.n(view!.cube * 2) }) }
-                                                    </Button>
-                                                }
-                                            </Show>
-                                        </div>
-                                    }
-                                </Show>
-
-                                <Show when={ myTurn && view!.phase === 'double' }>
-                                    { () =>
-                                        <div class="flex flex-wrap gap-2">
-                                            <Button variant="primary" size="lg" loading={ board.busy() } onClick={ () => void play('take') }>
-                                                { locale.t('backgammon.take', { cube: locale.n(view!.cube * 2) }) }
+                        <Show when={ plan !== null }>
+                            { () =>
+                                <div class="flex min-w-0 flex-col gap-2">
+                                    <div class="flex min-w-0 gap-2">
+                                        <IconButton icon="undo" label={ locale.t('backgammon.undo') } variant="secondary" disabled={ staged.length === 0 || board.busy() } onClick={ undo } />
+                                        <span class={ () => [ 'flex min-w-0 flex-1 rounded-control', plan?.done === true && staged.length > 0 ? 'glow-cta' : '' ].filter(Boolean).join(' ') }>
+                                            <Button
+                                                variant="primary"
+                                                size="md"
+                                                block
+                                                leading="selected"
+                                                disabled={ plan?.done !== true || staged.length === 0 }
+                                                loading={ board.busy() }
+                                                onClick={ () => void submit() }
+                                            >
+                                                { locale.t('backgammon.play') }
                                             </Button>
-                                            <Button variant="destructive" size="lg" disabled={ board.busy() } onClick={ () => void play('drop') }>
-                                                { locale.t('backgammon.drop') }
-                                            </Button>
-                                        </div>
-                                    }
-                                </Show>
+                                        </span>
+                                    </div>
 
-                                <Show when={ plan !== null }>
-                                    { () =>
-                                        <div class="flex flex-col gap-3">
-                                            <div class="flex flex-wrap gap-2">
-                                                <Button variant="secondary" size="md" leading="undo" disabled={ staged.length === 0 || board.busy() } onClick={ undo }>
-                                                    { locale.t('backgammon.undo') }
-                                                </Button>
-                                                <span class={ () => [ 'flex rounded-control', plan?.done === true && staged.length > 0 ? 'glow-cta' : '' ].filter(Boolean).join(' ') }>
-                                                    <Button
-                                                        variant="primary"
-                                                        size="md"
-                                                        leading="selected"
-                                                        disabled={ plan?.done !== true || staged.length === 0 }
-                                                        loading={ board.busy() }
-                                                        onClick={ () => void submit() }
-                                                    >
-                                                        { locale.t('backgammon.play') }
-                                                    </Button>
-                                                </span>
+                                    <Show when={ options.length > 0 }>
+                                        { () =>
+                                            <div class="flex min-w-0 flex-col gap-1">
+                                                <p class="bg-info text-ui-xs text-muted">{ locale.t('backgammon.pick') }</p>
+                                                <ul class="rail-x -mx-1 flex gap-1.5 px-1 py-0.5" aria-label={ locale.t('backgammon.moves') }>
+                                                    <For each={ options } key={ (hop) => `${ hop.from }/${ hop.to }` } let={ hop }>
+                                                        <li class="flex shrink-0">
+                                                            <button
+                                                                type="button"
+                                                                class={ () => [
+                                                                    'inline-flex h-9 min-w-11 cursor-pointer items-center justify-center whitespace-nowrap rounded-control border px-2.5 text-ui-sm font-semibold transition-colors coarse:h-11 disabled:cursor-not-allowed disabled:opacity-50',
+                                                                    picked === hop.from ? 'border-accent bg-accent/15 text-text' : 'border-line-strong bg-raised text-text hover:border-accent'
+                                                                ].join(' ') }
+                                                                disabled={ board.busy() }
+                                                                aria-label={ hopSays(hop) }
+                                                                onClick={ () => add(hop) }
+                                                            >
+                                                                { spotSays(hop.from) }
+                                                                <Icon name="chevron-right" size={ 14 } class="icon-flip mx-0.5 text-muted" />
+                                                                { spotSays(hop.to) }
+                                                                <Show when={ hits(outcomeAt(hop)) }>
+                                                                    { () => <span class="ms-1.5 text-ui-2xs font-semibold text-gold">{ locale.t('helpers.backgammon.tag.hit') }</span> }
+                                                                </Show>
+                                                            </button>
+                                                        </li>
+                                                    </For>
+                                                </ul>
                                             </div>
-
-                                            <Show when={ options.length > 0 }>
-                                                { () =>
-                                                    <div class="flex flex-col gap-1.5">
-                                                        <p class="text-ui-xs text-muted">{ locale.t('backgammon.pick') }</p>
-                                                        <ul class="flex flex-wrap gap-1.5" aria-label={ locale.t('backgammon.moves') }>
-                                                            <For each={ options } key={ (hop) => `${ hop.from }/${ hop.to }` } let={ hop }>
-                                                                <li class="flex">
-                                                                    <button
-                                                                        type="button"
-                                                                        class={ () => [
-                                                                            'inline-flex h-9 min-w-11 cursor-pointer items-center justify-center rounded-control border px-2.5 text-ui-sm font-semibold transition-colors coarse:h-11 disabled:cursor-not-allowed disabled:opacity-50',
-                                                                            picked === hop.from ? 'border-accent bg-accent/15 text-text' : 'border-line-strong bg-raised text-text hover:border-accent'
-                                                                        ].join(' ') }
-                                                                        disabled={ board.busy() }
-                                                                        aria-label={ hopSays(hop) }
-                                                                        onClick={ () => add(hop) }
-                                                                    >
-                                                                        { spotSays(hop.from) }
-                                                                        <Icon name="chevron-right" size={ 14 } class="icon-flip mx-0.5 text-muted" />
-                                                                        { spotSays(hop.to) }
-                                                                        <Show when={ hits(outcomeAt(hop)) }>
-                                                                            { () => <span class="ms-1.5 text-ui-2xs font-semibold text-gold">{ locale.t('helpers.backgammon.tag.hit') }</span> }
-                                                                        </Show>
-                                                                    </button>
-                                                                </li>
-                                                            </For>
-                                                        </ul>
-                                                    </div>
-                                                }
-                                            </Show>
-                                        </div>
-                                    }
-                                </Show>
-                            </section>
-                        }
-                    </Show>
-                </div>
-            }
-        </Show>
+                                        }
+                                    </Show>
+                                </div>
+                            }
+                        </Show>
+                    </section>
+                }
+            </Show>
+        </div>
 
         <Show when={ over }>
-            { () => <MatchResult match={ game } mine={ mine } busy={ props.starting === true } onAgain={ props.onAgain } /> }
+            { () =>
+                <TableResult match={ game } mine={ mine } busy={ props.starting === true } onAgain={ props.onAgain } />
+            }
         </Show>
     </div>
 }

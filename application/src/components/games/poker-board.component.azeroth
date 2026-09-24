@@ -2,9 +2,10 @@ import { untrack } from 'azerothjs';
 
 import CardFace from './card-face.component.azeroth';
 import CoachLine from './coach-line.component.azeroth';
-import MatchResult from './match-result.component.azeroth';
+import TableResult from './table-result.component.azeroth';
 import TurnClock from './turn-clock.component.azeroth';
-import Avatar from '../ui/avatar.component.azeroth';
+import TablePlate from './table-plate.component.azeroth';
+import { plateTag, type PlateTag } from './plate-tag.ts';
 import Button from '../ui/button.component.azeroth';
 import Slider from '../ui/slider.component.azeroth';
 import Icon from '../../icons/icon.component.azeroth';
@@ -17,7 +18,6 @@ import { haptic } from '../../lib/haptics.ts';
 import { pokerBeats, tableCues } from './table-cues.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { usePeople } from '../../stores/people.store.ts';
-import { useVoice } from '../../stores/voice.store.ts';
 import type { MatchView } from '../../api.ts';
 
 const RADIUS_X = 41;
@@ -28,14 +28,15 @@ const BET_REACH = 0.5;
 
 const BOARD_SLOTS = [0, 1, 2, 3, 4];
 
-export default component PokerBoard(props: { match: MatchView; starting?: boolean; onAgain?: () => void })
+export default component PokerBoard(props: { match: MatchView; starting?: boolean; onAgain?: () => void; speech?: Record<string, string>; turnMs?: number })
 {
     const locale = useLocale();
     const board = useBoard();
     const people = usePeople();
-    const voice = useVoice();
 
     state amount = 0;
+
+    state raising = false;
 
     derived game = props.match;
 
@@ -152,6 +153,7 @@ export default component PokerBoard(props: { match: MatchView; starting?: boolea
         if (rev >= 0)
         {
             amount = floor;
+            raising = false;
         }
     }
 
@@ -183,6 +185,30 @@ export default component PokerBoard(props: { match: MatchView; starting?: boolea
     });
 
     derived turnSeat = view?.turn;
+
+    derived stateOf = (row: { seat: number; out: boolean; folded: boolean; allIn: boolean }): PlateTag | null =>
+    {
+        if (row.out)
+        {
+            return { text: locale.t('poker.out'), tone: 'neutral' };
+        }
+
+        if (row.allIn)
+        {
+            return { text: locale.t('poker.allIn'), tone: 'madder' };
+        }
+
+        if (row.folded)
+        {
+            return { text: locale.t('poker.folded'), tone: 'neutral' };
+        }
+
+        return plateTag(locale, game.players.find((one) => one.seat === row.seat), over);
+    };
+
+    derived raiseSays = chosen >= high
+        ? locale.t('poker.allin', { chips: chips(high) })
+        : (highest === 0 ? locale.t('poker.betTo', { chips: chips(chosen) }) : locale.t('poker.raiseTo', { chips: chips(chosen) }));
 
     const rankSays = (card: number): string =>
     {
@@ -255,6 +281,7 @@ export default component PokerBoard(props: { match: MatchView; starting?: boolea
     const raise = async (): Promise<void> =>
     {
         haptic('select');
+        raising = false;
 
         if (chosen >= high)
         {
@@ -265,19 +292,65 @@ export default component PokerBoard(props: { match: MatchView; starting?: boolea
         await board.play({ kind: 'poker', verb: 'raise', amount: chosen });
     };
 
-    <div class="@container flex min-w-0 flex-col gap-3">
-        <Show when={ view !== null }>
-            { () =>
-                <div class="grid min-w-0 grid-cols-1 gap-3 [grid-template-areas:'table'_'side'] @4xl:grid-cols-[minmax(0,1fr)_19rem] @4xl:items-start @4xl:gap-x-5 @4xl:[grid-template-areas:'table_side'] sideways:grid-cols-[auto_minmax(0,1fr)] sideways:items-start sideways:gap-x-4 sideways:[grid-template-areas:'table_side']">
-                    <div class="mx-auto w-full [grid-area:table] @2xl:max-w-[max(22rem,calc((100dvh-22rem)*1.6))] @4xl:max-w-[max(22rem,calc((100dvh-13rem)*1.6))] sideways:w-[min(62vw,calc((100dvh-7.5rem)*1.6))] sideways:max-w-none">
-                        <div
-                            class="relative aspect-[4/5] w-full [direction:ltr] @2xl:aspect-[16/10] sideways:aspect-[16/10]"
-                            role="group"
-                            aria-label={ locale.t('poker.table') }
-                        >
-                            <div class="absolute inset-[7%] rounded-[50%] border-[0.6rem] border-[var(--poker-rail)] bg-[radial-gradient(ellipse_at_center,var(--poker-felt)_0%,var(--poker-felt-edge)_100%)] shadow-[inset_0_0_0_2px_rgb(255_255_255/0.08),0_10px_30px_rgb(0_0_0/0.45)]" aria-hidden="true"></div>
+    <div class="table-stage poker-stage">
+        <div class="table-grid">
+            <Show when={ view !== null }>
+                { () =>
+                    <div class="table-fit">
+                        <div class="table-surface poker-table" role="group" aria-label={ locale.t('poker.table') }>
+                            <div class="poker-chips">
+                                <span class="poker-chip">
+                                    <Icon name="coins" size={ 12 } class="shrink-0 text-gold" />
+                                    <span class="tally">{ chips(view!.blinds.small) }/{ chips(view!.blinds.big) }</span>
+                                    <span class="text-white/60">·</span>
+                                    <span>{ locale.t(`poker.street.${ view!.street }` as never) }</span>
+                                    <span class="sr-only">
+                                        { locale.t('poker.blinds') }, { locale.plural('poker.next', view!.blinds.next) }, { locale.t('poker.hand', { n: locale.n(view!.hand) }) }, { locale.t('poker.level', { level: locale.n(view!.blinds.level) }) }
+                                    </span>
+                                </span>
 
-                            <div class="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-2 [--card-w:clamp(1.9rem,8cqi,3.1rem)]">
+                                <details class="poker-last">
+                                    <summary class="poker-chip">
+                                        <Icon name="history" size={ 12 } class="shrink-0 text-gold" />
+                                        <span>{ locale.t('poker.last') }</span>
+                                    </summary>
+                                    <div class="poker-last-panel" dir={ locale.dir() }>
+                                        <Show
+                                            when={ view!.last !== undefined }
+                                            fallback={ <p class="text-ui-xs text-muted">{ locale.t('poker.last.none') }</p> }
+                                        >
+                                            { () =>
+                                                <div class="flex flex-col gap-2">
+                                                    <For each={ lastSays } key={ (line, index) => `${ index }-${ line }` } let={ line }>
+                                                        <p class="text-ui-xs font-semibold text-text">{ line }</p>
+                                                    </For>
+                                                    <Show when={ (view!.last?.shown.length ?? 0) > 0 }>
+                                                        { () =>
+                                                            <ul class="flex flex-col gap-1.5 [--card-w:1.9rem]">
+                                                                <For each={ view!.last!.shown } key={ (row) => row.seat } let={ row }>
+                                                                    <li class="flex min-w-0 items-center gap-2">
+                                                                        <span class="flex gap-0.5" role="img" aria-label={ cardsSay(row.cards) }>
+                                                                            <For each={ row.cards } key={ (card) => card } let={ card }>
+                                                                                <span class="flex">
+                                                                                    <CardFace card={ card } />
+                                                                                </span>
+                                                                            </For>
+                                                                        </span>
+                                                                        <span class="min-w-0 truncate text-ui-2xs text-muted" dir="auto">{ nameOf(row.seat) }</span>
+                                                                        <span class="ms-auto shrink-0 text-ui-2xs font-semibold text-text">{ locale.t(`poker.category.${ row.category }` as never) }</span>
+                                                                    </li>
+                                                                </For>
+                                                            </ul>
+                                                        }
+                                                    </Show>
+                                                </div>
+                                            }
+                                        </Show>
+                                    </div>
+                                </details>
+                            </div>
+
+                            <div class="poker-centre">
                                 <ul class="flex items-center gap-1" aria-label={ locale.t('poker.board') }>
                                     <For each={ BOARD_SLOTS } key={ (slot) => slot } let={ slot }>
                                         <li class="flex">
@@ -311,51 +384,34 @@ export default component PokerBoard(props: { match: MatchView; starting?: boolea
                                 <div class="contents">
                                     <Show when={ plate.row.bet > 0 }>
                                         { () =>
-                                            <span
-                                                class="absolute z-10 flex -translate-x-1/2 -translate-y-1/2 items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 text-ui-2xs font-bold text-white"
-                                                style={ `left: ${ plate.betX.toFixed(2) }%; top: ${ plate.betY.toFixed(2) }%` }
-                                            >
+                                            <span class="poker-bet" style={ `left: ${ plate.betX.toFixed(2) }%; top: ${ plate.betY.toFixed(2) }%` }>
                                                 <span class="h-2.5 w-2.5 rounded-full border-2 border-dashed border-white bg-madder" aria-hidden="true"></span>
                                                 <span class="tally">{ chips(plate.row.bet) }</span>
                                             </span>
                                         }
                                     </Show>
 
-                                    <div
-                                        class={ () => [
-                                            'absolute flex w-[5.25rem] -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-0.5 rounded-tile border bg-void/90 px-1 py-1 text-center transition-[opacity,border-color] duration-200 @xl:w-[6.5rem]',
-                                            !over && turnSeat === plate.row.seat ? 'border-accent shadow-[0_0_0_2px_var(--accent)]' : 'border-line',
-                                            plate.live ? '' : 'opacity-55'
-                                        ].filter(Boolean).join(' ') }
-                                        style={ `left: ${ plate.x.toFixed(2) }%; top: ${ plate.y.toFixed(2) }%` }
-                                        aria-current={ !over && turnSeat === plate.row.seat ? 'true' : undefined }
-                                    >
-                                        <span class="relative flex">
-                                            <span class={ () => [ 'flex rounded-full transition-shadow duration-150', voice.speaking(whoAt(plate.row.seat)) ? 'ring-2 ring-live ring-offset-2 ring-offset-void' : '' ].filter(Boolean).join(' ') }>
-                                                <Avatar person={ people.byHandle(whoAt(plate.row.seat)) } size="sm" ringOn="void" />
-                                            </span>
-                                            <Show when={ view!.button === plate.row.seat }>
-                                                { () =>
-                                                    <span class="absolute -end-2 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-white text-[0.55rem] font-black text-bright-ink shadow" title={ locale.t('poker.dealer') }>D</span>
-                                                }
-                                            </Show>
-                                            <Show when={ plate.live && plate.row.seat !== mine }>
-                                                { () =>
-                                                    <span class="absolute -start-3 top-1 flex [--back-w:0.8rem]" aria-hidden="true">
-                                                        <span class="card-back -rotate-6"></span>
-                                                        <span class="card-back -ms-1.5 rotate-6"></span>
-                                                    </span>
-                                                }
-                                            </Show>
-                                        </span>
-                                        <span class="w-full truncate text-ui-2xs font-semibold text-text" dir="auto">{ nameOf(plate.row.seat) }</span>
-                                        <span class="flex items-center gap-1 text-ui-2xs font-bold text-gold">
-                                            <span class="tally">{ chips(plate.row.stack) }</span>
-                                        </span>
-                                        <Show when={ plate.row.out || plate.row.folded || plate.row.allIn }>
+                                    <div class="poker-seat" data-seat={ plate.row.seat } style={ `left: ${ plate.x.toFixed(2) }%; top: ${ plate.y.toFixed(2) }%` }>
+                                        <TablePlate
+                                            who={ whoAt(plate.row.seat) }
+                                            name={ nameOf(plate.row.seat) }
+                                            turn={ !over && turnSeat === plate.row.seat }
+                                            remainingMs={ game.remainingMs }
+                                            turnMs={ props.turnMs }
+                                            dim={ !plate.live }
+                                            tag={ stateOf(plate.row)?.text }
+                                            tone={ stateOf(plate.row)?.tone }
+                                            bubble={ props.speech?.[whoAt(plate.row.seat)] }
+                                            below={ plate.y < 50 }
+                                            anchor={ plate.x > 60 ? 'end' : (plate.x < 40 ? 'start' : 'centre') }
+                                            marker={ view!.button === plate.row.seat ? <span class="poker-dealer" title={ locale.t('poker.dealer') }>D</span> : undefined }
+                                            facts={ <span class="tally font-bold text-gold">{ chips(plate.row.stack) }</span> }
+                                        />
+                                        <Show when={ plate.live && plate.row.seat !== mine }>
                                             { () =>
-                                                <span class={ () => [ 'rounded-full px-1.5 text-[0.625rem] font-bold uppercase leading-4', plate.row.allIn ? 'bg-madder text-bright-ink' : 'bg-raised text-muted' ].join(' ') }>
-                                                    { plate.row.out ? locale.t('poker.out') : (plate.row.allIn ? locale.t('poker.allIn') : locale.t('poker.folded')) }
+                                                <span class="poker-backs" aria-hidden="true">
+                                                    <span class="card-back -rotate-6"></span>
+                                                    <span class="card-back -ms-1.5 rotate-6"></span>
                                                 </span>
                                             }
                                         </Show>
@@ -364,161 +420,137 @@ export default component PokerBoard(props: { match: MatchView; starting?: boolea
                             </For>
                         </div>
                     </div>
+                }
+            </Show>
 
-                    <section class="mx-auto flex w-full min-w-0 flex-col gap-3 [grid-area:side] @2xl:max-w-[max(22rem,calc((100dvh-22rem)*1.6))] @4xl:max-w-none sideways:max-w-none">
-                        <Show when={ !over }>
+            <Show when={ view !== null && !over && view!.hole.length === 2 }>
+                { () =>
+                    <div class="table-hand poker-hand">
+                        <ul class="flex gap-1.5" aria-label={ locale.t('poker.hole') }>
+                            <For each={ view!.hole } key={ (card) => card } let={ card }>
+                                <li class="flex" role="img" aria-label={ cardSays(card) }>
+                                    <CardFace card={ card } />
+                                </li>
+                            </For>
+                        </ul>
+                        <p class="poker-hand-text flex min-w-0 flex-col text-ui-xs text-muted">
+                            <span class="label text-ui-2xs text-faint">{ locale.t('poker.hole') }</span>
+                            <span class="line-clamp-2">{ cardsSay(view!.hole) }</span>
+                            <Show when={ handSays !== '' }>
+                                { () => <span class="line-clamp-2 font-semibold text-text">{ handSays }</span> }
+                            </Show>
+                        </p>
+                    </div>
+                }
+            </Show>
+
+            <Show when={ view !== null && !over }>
+                { () =>
+                    <section class="table-bar poker-bar">
+                        <Show when={ raising && canRaise }>
                             { () =>
-                                <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
-                                    <p class="min-w-0 flex-1 basis-[10rem] text-ui-lg font-semibold text-text" aria-live="polite">{ says }</p>
-                                    <TurnClock remainingMs={ game.remainingMs } over={ over } yours={ myTurn } />
+                                <div class="poker-raise">
+                                    <Show when={ low < high }>
+                                        { () =>
+                                            <div class="flex flex-col gap-2">
+                                                <Slider
+                                                    value={ chosen }
+                                                    min={ low }
+                                                    max={ high }
+                                                    step={ 1 }
+                                                    label={ locale.t('poker.raise.label') }
+                                                    valueText={ chips(chosen) }
+                                                    onChange={ (value) => amount = Math.round(value) }
+                                                />
+                                                <div class="flex flex-wrap gap-1.5">
+                                                    <Button variant="secondary" size="sm" onClick={ () => amount = low }>{ locale.t('poker.preset.min') }</Button>
+                                                    <Button variant="secondary" size="sm" onClick={ () => amount = potSized(0.5) }>{ locale.t('poker.preset.half') }</Button>
+                                                    <Button variant="secondary" size="sm" onClick={ () => amount = potSized(1) }>{ locale.t('poker.preset.pot') }</Button>
+                                                </div>
+                                            </div>
+                                        }
+                                    </Show>
+                                    <Button variant={ chosen >= high ? 'secondary' : 'primary' } size="lg" block disabled={ board.busy() } onClick={ () => void raise() }>
+                                        { raiseSays }
+                                    </Button>
                                 </div>
                             }
                         </Show>
+
+                        <div class="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+                            <p class="min-w-0 flex-[1_1_8rem] text-ui-base font-semibold text-text" aria-live="polite">{ says }</p>
+                            <span class="poker-bar-facts poker-chip" aria-hidden="true">
+                                <Icon name="coins" size={ 12 } class="shrink-0 text-gold" />
+                                <span class="tally">{ chips(view!.blinds.small) }/{ chips(view!.blinds.big) }</span>
+                                <span class="text-white/60">·</span>
+                                <span>{ locale.t(`poker.street.${ view!.street }` as never) }</span>
+                            </span>
+                            <TurnClock remainingMs={ game.remainingMs } over={ over } yours={ myTurn } />
+                        </div>
 
                         <CoachLine tip={ tip } />
 
-                        <Show when={ !over && view!.hole.length === 2 }>
+                        <Show when={ mine !== undefined && myRow?.out !== true }>
                             { () =>
-                                <div class="flex items-center gap-3 [--card-w:3.4rem]">
-                                    <ul class="flex gap-1.5" aria-label={ locale.t('poker.hole') }>
-                                        <For each={ view!.hole } key={ (card) => card } let={ card }>
-                                            <li class="flex" role="img" aria-label={ cardSays(card) }>
-                                                <CardFace card={ card } />
-                                            </li>
-                                        </For>
-                                    </ul>
-                                    <p class="flex min-w-0 flex-col text-ui-xs text-muted">
-                                        <span class="label text-ui-2xs text-faint">{ locale.t('poker.hole') }</span>
-                                        <span>{ cardsSay(view!.hole) }</span>
-                                        <Show when={ handSays !== '' }>
-                                            { () => <span class="font-semibold text-text">{ handSays }</span> }
-                                        </Show>
-                                    </p>
-                                </div>
-                            }
-                        </Show>
-
-                        <Show when={ myTurn }>
-                            { () =>
-                                <div class="flex flex-col gap-3">
-                                    <Show when={ costSays !== '' }>
-                                        { () => <p class="text-ui-xs text-muted">{ costSays }</p> }
-                                    </Show>
-                                    <div class="grid grid-cols-2 gap-2 @md:flex @md:flex-wrap">
-                                        <Show when={ toCall > 0 }>
-                                            { () =>
-                                                <Button variant="destructive" size="lg" disabled={ board.busy() } onClick={ () => void act('fold') }>
-                                                    { locale.t('poker.fold') }
-                                                </Button>
-                                            }
-                                        </Show>
-                                        <Show
-                                            when={ toCall > 0 }
-                                            fallback={
-                                                <Button variant="primary" size="lg" loading={ board.busy() } onClick={ () => void act('check') }>
-                                                    { locale.t('poker.check') }
-                                                </Button>
-                                            }
-                                        >
-                                            { () =>
-                                                <Button variant="primary" size="lg" loading={ board.busy() } onClick={ () => void act('call') }>
-                                                    { toCall >= (myRow?.stack ?? 0) ? locale.t('poker.callAllIn', { chips: chips(myRow?.stack ?? 0) }) : locale.t('poker.call', { chips: chips(toCall) }) }
-                                                </Button>
-                                            }
-                                        </Show>
-                                    </div>
-
-                                    <Show when={ canRaise }>
+                                <div class="flex min-h-11 min-w-0 flex-col justify-center gap-1.5">
+                                    <Show when={ myTurn }>
                                         { () =>
-                                            <div class="flex flex-col gap-2 rounded-panel border border-line bg-field p-3">
-                                                <Show when={ low < high }>
-                                                    { () =>
-                                                        <div class="flex flex-col gap-2">
-                                                            <Slider
-                                                                value={ chosen }
-                                                                min={ low }
-                                                                max={ high }
-                                                                step={ 1 }
-                                                                label={ locale.t('poker.raise.label') }
-                                                                valueText={ chips(chosen) }
-                                                                onChange={ (value) => amount = Math.round(value) }
-                                                            />
-                                                            <div class="flex flex-wrap gap-1.5">
-                                                                <Button variant="secondary" size="sm" onClick={ () => amount = low }>{ locale.t('poker.preset.min') }</Button>
-                                                                <Button variant="secondary" size="sm" onClick={ () => amount = potSized(0.5) }>{ locale.t('poker.preset.half') }</Button>
-                                                                <Button variant="secondary" size="sm" onClick={ () => amount = potSized(1) }>{ locale.t('poker.preset.pot') }</Button>
-                                                            </div>
-                                                        </div>
-                                                    }
+                                            <div class="flex min-w-0 flex-col gap-1.5">
+                                                <Show when={ costSays !== '' }>
+                                                    { () => <p class="poker-cost text-ui-xs text-muted">{ costSays }</p> }
                                                 </Show>
-                                                <Button variant={ chosen >= high ? 'secondary' : 'primary' } size="lg" block disabled={ board.busy() } onClick={ () => void raise() }>
-                                                    { chosen >= high
-                                                        ? locale.t('poker.allin', { chips: chips(high) })
-                                                        : (highest === 0 ? locale.t('poker.betTo', { chips: chips(chosen) }) : locale.t('poker.raiseTo', { chips: chips(chosen) })) }
-                                                </Button>
+                                                <div class="grid auto-cols-fr grid-flow-col gap-2">
+                                                    <Show when={ toCall > 0 }>
+                                                        { () =>
+                                                            <Button variant="destructive" size="lg" disabled={ board.busy() } onClick={ () => void act('fold') }>
+                                                                { locale.t('poker.fold') }
+                                                            </Button>
+                                                        }
+                                                    </Show>
+                                                    <Show
+                                                        when={ toCall > 0 }
+                                                        fallback={
+                                                            <Button variant="primary" size="lg" loading={ board.busy() } onClick={ () => void act('check') }>
+                                                                { locale.t('poker.check') }
+                                                            </Button>
+                                                        }
+                                                    >
+                                                        { () =>
+                                                            <Button variant="primary" size="lg" loading={ board.busy() } onClick={ () => void act('call') }>
+                                                                { toCall >= (myRow?.stack ?? 0) ? locale.t('poker.callAllIn', { chips: chips(myRow?.stack ?? 0) }) : locale.t('poker.call', { chips: chips(toCall) }) }
+                                                            </Button>
+                                                        }
+                                                    </Show>
+                                                    <Show when={ canRaise && low < high }>
+                                                        { () =>
+                                                            <Button variant="secondary" size="lg" pressed={ raising } disabled={ board.busy() } onClick={ () => raising = !raising }>
+                                                                { highest === 0 ? locale.t('poker.bet') : locale.t('poker.raise') }
+                                                            </Button>
+                                                        }
+                                                    </Show>
+                                                    <Show when={ canRaise && low >= high }>
+                                                        { () =>
+                                                            <Button variant="secondary" size="lg" disabled={ board.busy() } onClick={ () => void raise() }>
+                                                                { locale.t('poker.allin', { chips: chips(high) }) }
+                                                            </Button>
+                                                        }
+                                                    </Show>
+                                                </div>
                                             </div>
                                         }
                                     </Show>
                                 </div>
                             }
                         </Show>
-
-                        <div class="grid grid-cols-2 gap-2">
-                            <section class="flex flex-col gap-1 rounded-tile border border-line bg-field px-3 py-2">
-                                <h3 class="label text-ui-2xs text-faint">{ locale.t('poker.blinds') }</h3>
-                                <p class="text-ui-sm font-bold text-text">
-                                    <span class="tally">{ chips(view!.blinds.small) }/{ chips(view!.blinds.big) }</span>
-                                </p>
-                                <p class="text-ui-2xs text-muted">{ locale.plural('poker.next', view!.blinds.next) }</p>
-                            </section>
-                            <section class="flex flex-col gap-1 rounded-tile border border-line bg-field px-3 py-2">
-                                <h3 class="label text-ui-2xs text-faint">{ locale.t('poker.hand', { n: locale.n(view!.hand) }) }</h3>
-                                <p class="text-ui-sm font-bold text-text">{ locale.t(`poker.street.${ view!.street }` as never) }</p>
-                                <p class="text-ui-2xs text-muted">{ locale.t('poker.level', { level: locale.n(view!.blinds.level) }) }</p>
-                            </section>
-                        </div>
-
-                        <section class="flex flex-col gap-2 rounded-tile border border-line bg-field px-3 py-2">
-                            <h3 class="label text-ui-2xs text-faint">{ locale.t('poker.last') }</h3>
-                            <Show
-                                when={ view!.last !== undefined }
-                                fallback={ <p class="text-ui-xs text-muted">{ locale.t('poker.last.none') }</p> }
-                            >
-                                { () =>
-                                    <div class="flex flex-col gap-2">
-                                        <For each={ lastSays } key={ (line, index) => `${ index }-${ line }` } let={ line }>
-                                            <p class="text-ui-xs font-semibold text-text">{ line }</p>
-                                        </For>
-                                        <Show when={ (view!.last?.shown.length ?? 0) > 0 }>
-                                            { () =>
-                                                <ul class="flex flex-col gap-1.5 [--card-w:1.9rem]">
-                                                    <For each={ view!.last!.shown } key={ (row) => row.seat } let={ row }>
-                                                        <li class="flex min-w-0 items-center gap-2">
-                                                            <span class="flex gap-0.5" role="img" aria-label={ cardsSay(row.cards) }>
-                                                                <For each={ row.cards } key={ (card) => card } let={ card }>
-                                                                    <span class="flex">
-                                                                        <CardFace card={ card } />
-                                                                    </span>
-                                                                </For>
-                                                            </span>
-                                                            <span class="min-w-0 truncate text-ui-2xs text-muted" dir="auto">{ nameOf(row.seat) }</span>
-                                                            <span class="ms-auto shrink-0 text-ui-2xs font-semibold text-text">{ locale.t(`poker.category.${ row.category }` as never) }</span>
-                                                        </li>
-                                                    </For>
-                                                </ul>
-                                            }
-                                        </Show>
-                                    </div>
-                                }
-                            </Show>
-                        </section>
                     </section>
-                </div>
-            }
-        </Show>
+                }
+            </Show>
+        </div>
 
         <Show when={ over }>
-            { () => <MatchResult match={ game } mine={ mine } busy={ props.starting === true } onAgain={ props.onAgain } /> }
+            { () =>
+                <TableResult match={ game } mine={ mine } busy={ props.starting === true } onAgain={ props.onAgain } />
+            }
         </Show>
     </div>
 }

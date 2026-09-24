@@ -80,11 +80,16 @@ try
 
         await mover.page.waitForTimeout(400);
 
-        const minimum = raised ? null : await pressable(mover.page, /^Min$/);
+        const toggle = raised ? null : await pressable(mover.page, /^(Raise|Bet)$/);
 
-        if (minimum !== null)
+        if (toggle !== null)
         {
-            await minimum.click();
+            await toggle.click();
+
+            const minimum = await pressable(mover.page, /^Min$/);
+
+            record(`${ mover.handle } opens the raise and is offered the slider's presets`, minimum !== null);
+            await minimum?.click();
 
             const raise = await pressable(mover.page, /^(Raise to|Bet) /);
 

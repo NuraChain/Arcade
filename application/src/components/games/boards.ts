@@ -8,6 +8,7 @@ export interface BoardProps
     starting?: boolean;
     onAgain?: () => void;
     speech?: Record<string, string>;
+    turnMs?: number;
 }
 
 export type BoardComponent = (props: BoardProps) => MountNode;
