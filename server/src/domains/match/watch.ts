@@ -101,7 +101,24 @@ export function createWatchService(db: DataSource, seatsOf: (matchId: string) =>
 
             if (row === undefined)
             {
-                return null;
+                const moved = await db.getRepository(MatchAction).existsBy({ matchId });
+                const opening = moved ? match.opening : match.state;
+
+                if (opening === null || opening === undefined)
+                {
+                    return null;
+                }
+
+                return {
+                    load: {
+                        match: { ...match, state: opening, rev: (opening as { rev: number }).rev } as Match,
+                        state: opening,
+                        players,
+                        mine: -1
+                    },
+                    behind: Math.max(0, Math.round((Date.now() - match.startedAt.getTime()) / 1000)),
+                    live: true
+                };
             }
 
             /**

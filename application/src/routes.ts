@@ -28,6 +28,7 @@ export const routes: PageRoute[] = [
         children: [
             { path: '', lazy: () => import('./pages/app/home.page.azeroth'), meta: defineMeta({ title: 'app.nav.home', tab: 'home' }) },
             { path: 'games', lazy: () => import('./pages/app/games.page.azeroth'), meta: defineMeta({ title: 'app.nav.games', tab: 'games' }) },
+            { path: 'watch', lazy: () => import('./pages/app/watch.page.azeroth'), meta: defineMeta({ title: 'watch.page.title', tab: 'games', parent: '/app/games' }) },
             { path: 'games/:slug', lazy: () => import('./pages/app/game.page.azeroth'), meta: defineMeta({ tab: 'games', parent: '/app/games' }) },
             { path: 'games/:slug/create', lazy: () => import('./pages/app/create-game.page.azeroth'), meta: defineMeta({ title: 'create.title', tab: 'games', parent: '/app/games' }) },
             { path: 'play/:id', lazy: () => import('./pages/app/play.page.azeroth'), meta: defineMeta({ tab: 'games', parent: '/app/games', immersive: true }) },

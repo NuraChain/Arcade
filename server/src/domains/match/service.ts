@@ -288,6 +288,7 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
             { id: match.id, rev: match.rev },
             {
                 state: next as Record<string, unknown>,
+                ...(match.opening === null ? { opening: match.state as Record<string, unknown> } : {}),
                 rev: revOf(next),
                 deadlineAt: over ? null : deadlineFrom(mode),
                 winnerSeat,
@@ -309,13 +310,6 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
             kind: action.kind,
             payload: action.payload,
             events: events as Record<string, unknown>[],
-
-            /**
-             * The board this action produced, recorded beside it.
-             *
-             * It is what a spectator is shown two minutes later, and storing it is what keeps the
-             * delayed view a READ rather than a fold over the ledger.
-             */
             state: next as Record<string, unknown>,
             idempotencyKey: action.key
         });

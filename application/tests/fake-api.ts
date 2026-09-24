@@ -325,6 +325,8 @@ export const server =
     /** Tables, in memory. Empty until a test opens one - nobody is sitting anywhere on boot. */
     tables: [] as TableWire[],
 
+    watching: [] as { id: string; code: string; game: string; seats: number; players: string[]; startedAt: string }[],
+
     /** The graph, from the same fixtures the development server seeds. */
     friends: [] as string[],
     incoming: [] as { id: string; from: string; to: string; at: string }[],
@@ -334,6 +336,7 @@ export const server =
 
     reset(): void
     {
+        server.watching = [];
         server.games = [];
         server.achievements = { scopes: [], families: [], recent: [] };
         server.ladders = {};
@@ -1273,6 +1276,12 @@ export const client =
                     && table.chairs.some((chair) => chair.who === undefined)
                     && !table.chairs.some((chair) => chair.who === server.me))
             };
+        },
+
+        async watchable({ query }: { query: { game?: string } })
+        {
+            server.calls.push('tables.watchable');
+            return { tables: server.watching.filter((row) => query.game === undefined || row.game === query.game) };
         },
 
         async mine()

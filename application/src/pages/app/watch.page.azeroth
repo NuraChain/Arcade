@@ -1,0 +1,133 @@
+import { createResource, useHead } from 'azerothjs';
+
+import Page from '../../components/app/page.component.azeroth';
+import PageHeader from '../../components/app/page-header.component.azeroth';
+import GameIcon from '../../components/games/game-icon.component.azeroth';
+import AvatarGroup from '../../components/ui/avatar-group.component.azeroth';
+import Button from '../../components/ui/button.component.azeroth';
+import EmptyState from '../../components/ui/empty-state.component.azeroth';
+import ErrorState from '../../components/ui/error-state.component.azeroth';
+import FilterBar from '../../components/ui/filter-bar.component.azeroth';
+import Skeleton from '../../components/ui/skeleton.component.azeroth';
+import { GAMES, type GameId } from '../../data/games.ts';
+import { client } from '../../api.ts';
+import { runtime } from '../../lib/runtime.ts';
+import { useCatalogue } from '../../stores/catalogue.store.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import { usePeople } from '../../stores/people.store.ts';
+
+const REFRESH_MS = 15_000;
+
+export default component WatchPage()
+{
+    const locale = useLocale();
+    const people = usePeople();
+    const catalogue = useCatalogue();
+
+    state picked = 'all';
+
+    const tables = createResource(
+        () => picked,
+        (game) => client.tables.watchable({ query: game === 'all' ? {} : { game } }),
+        { name: 'tables.watching' }
+    );
+
+    derived rows = tables.data()?.tables ?? [];
+
+    derived loading = tables.loading() && tables.data() === undefined;
+
+    derived failed = tables.error() !== null && rows.length === 0;
+
+    effect
+    {
+        const handles = rows.flatMap((row) => row.players);
+
+        if (handles.length > 0)
+        {
+            people.want(handles);
+        }
+    }
+
+    mount
+    {
+        return runtime().clock.every(REFRESH_MS, () => void tables.refetch());
+    }
+
+    derived choices = [
+        { id: 'all', label: locale.t('watch.page.all') },
+        ...GAMES.map((game) => ({ id: game.id, label: locale.t(game.nameKey), icon: undefined }))
+    ];
+
+    const nameOf = (handle: string): string =>
+    {
+        const person = people.byHandle(handle);
+
+        return person === null ? handle : locale.text(person.displayName);
+    };
+
+    useHead({ title: () => locale.t('watch.page.title') });
+
+    <Page label={ locale.t('watch.page.title') }>
+        <PageHeader title={ locale.t('watch.page.title') } lead={ locale.t('watch.page.lead') } />
+
+        <div class="flex flex-col gap-4">
+            <FilterBar items={ choices } value={ picked } label={ locale.t('watch.page.filter') } onChange={ (id) => picked = id } />
+
+            <Show when={ loading }>
+                { () =>
+                    <div class="flex flex-col gap-2" aria-busy="true">
+                        <Skeleton class="h-16 w-full rounded-tile" />
+                        <Skeleton class="h-16 w-full rounded-tile" />
+                        <Skeleton class="h-16 w-full rounded-tile" />
+                    </div>
+                }
+            </Show>
+
+            <Show when={ failed }>
+                { () => <ErrorState title={ locale.t('state.errorTitle') } lead={ locale.t('state.errorLead') } onRetry={ () => void tables.refetch() } class="py-10" /> }
+            </Show>
+
+            <Show when={ !loading && !failed && rows.length === 0 }>
+                { () =>
+                    <EmptyState
+                        icon="activity"
+                        title={ locale.t('watch.page.empty') }
+                        lead={ locale.t('watch.page.emptyLead') }
+                        action={ locale.t('app.nav.games') }
+                        to="/app/games"
+                        class="py-10"
+                    />
+                }
+            </Show>
+
+            <Show when={ rows.length > 0 }>
+                { () =>
+                    <ul class="flex flex-col divide-y divide-line overflow-hidden rounded-panel border border-line bg-field" aria-label={ locale.t('watch.page.title') }>
+                        <For each={ rows } key={ (row) => row.id } let={ row }>
+                            <li class="flex min-w-0 items-center gap-3 px-3 py-2.5">
+                                <GameIcon game={ row.game as GameId } class="h-10 w-10 shrink-0" />
+                                <span class="flex min-w-0 flex-1 flex-col gap-0.5">
+                                    <span class="flex min-w-0 items-center gap-2">
+                                        <span class="truncate text-ui-sm font-semibold text-text">{ locale.t(catalogue.byId(row.game as GameId).nameKey) }</span>
+                                        <span class="shrink-0 text-ui-2xs text-muted">{ locale.t('watch.page.started', { when: locale.relative(new Date(row.startedAt)) }) }</span>
+                                    </span>
+                                    <span class="flex min-w-0 items-center gap-2">
+                                        <AvatarGroup
+                                            people={ row.players.map((handle) => people.byHandle(handle)).filter((one) => one !== null) }
+                                            size="xs"
+                                            max={ 4 }
+                                        />
+                                        <span class="min-w-0 truncate text-ui-xs text-muted" dir="auto">{ row.players.map(nameOf).join(locale.t('list.separator')) }</span>
+                                    </span>
+                                </span>
+                                <Button variant="outline" size="sm" leading="activity" to={ `/app/play/${ row.id }` }>
+                                    { locale.t('watch.join') }
+                                </Button>
+                            </li>
+                        </For>
+                    </ul>
+                }
+            </Show>
+        </div>
+    </Page>
+}

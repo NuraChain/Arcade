@@ -2,6 +2,7 @@ import { useHead, useNavigate } from 'azerothjs';
 
 import Page from '../../components/app/page.component.azeroth';
 import PageHeader from '../../components/app/page-header.component.azeroth';
+import Button from '../../components/ui/button.component.azeroth';
 import GameGrid from '../../components/games/game-grid.component.azeroth';
 import FilterBar from '../../components/ui/filter-bar.component.azeroth';
 import type { GameCategory, GameId } from '../../data/games.ts';
@@ -42,6 +43,7 @@ export default component GamesPage()
                     </span>
                     <span class="h-1 w-1 rounded-full bg-faint" aria-hidden="true"></span>
                     <span><span class="tally font-semibold text-text">{ locale.n(totals.tablesOpen) }</span> { locale.plural('games.live.tablesLabel', totals.tablesOpen) }</span>
+                    <Button variant="outline" size="sm" leading="activity" to="/app/watch">{ locale.t('watch.page.link') }</Button>
                 </p>
             }
         />

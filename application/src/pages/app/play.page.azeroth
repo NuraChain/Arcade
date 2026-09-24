@@ -600,6 +600,13 @@ export default component PlayPage()
                                         onResign={ resigning ? () => void resign() : undefined }
                                         voice={ talkable ? table!.id : undefined }
                                     />
+                                    <Show when={ !seated && table?.matchId !== undefined && (table?.taken ?? 0) < (table?.seats ?? 0) }>
+                                        { () =>
+                                            <Button variant="primary" size="sm" leading="seat" onClick={ () => void sitDown() }>
+                                                { locale.t('play.table.sitDown') }
+                                            </Button>
+                                        }
+                                    </Show>
                                     <Show when={ floating && hasChat && !cardOpen }>
                                         { () =>
                                             <button
@@ -674,12 +681,15 @@ export default component PlayPage()
                                     <Show when={ watch.view() !== null }>
                                         { () => <WatchBoard watch={ watch.view()! } /> }
                                     </Show>
-                                    <Show when={ watch.view() === null && !watch.loading() }>
+                                    <Show when={ watch.view() === null && !watch.loading() && !watch.failed() }>
                                         { () =>
                                             <Panel pad="lg" class="items-center text-center">
                                                 <p class="text-ui-base text-muted">{ locale.t('watch.waiting') }</p>
                                             </Panel>
                                         }
+                                    </Show>
+                                    <Show when={ watch.failed() }>
+                                        { () => <ErrorState title={ locale.t('state.errorTitle') } lead={ locale.t('state.errorLead') } onRetry={ () => watch.retry() } class="py-12" /> }
                                     </Show>
                                 </div>
                             }

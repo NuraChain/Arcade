@@ -4,12 +4,24 @@ import EmptyState from '../ui/empty-state.component.azeroth';
 import Skeleton from '../ui/skeleton.component.azeroth';
 import Icon from '../../icons/icon.component.azeroth';
 import { useLocale } from '../../stores/locale.store.ts';
+import { usePeople } from '../../stores/people.store.ts';
 import { BOARDS, drawable, type BoardComponent } from './boards.ts';
 import type { MatchView, MatchWatch } from '../../api.ts';
 
 export default component WatchBoard(props: { watch: MatchWatch })
 {
     const locale = useLocale();
+    const people = usePeople();
+
+    effect
+    {
+        const handles = props.watch.match.players.map((player) => player.who);
+
+        if (handles.length > 0)
+        {
+            people.want(handles);
+        }
+    }
 
     let Board: BoardComponent | null = null;
 

@@ -33,10 +33,25 @@ export default component WatchableList(props: { game: GameId })
 
     derived rows = tables.data()?.tables ?? [];
 
+    effect
+    {
+        const handles = rows.flatMap((row) => row.players);
+
+        if (handles.length > 0)
+        {
+            people.want(handles);
+        }
+    }
+
     <Show when={ rows.length > 0 }>
         { () =>
             <section aria-labelledby="game-watch">
-                <SectionHeading id="game-watch" title={ locale.t('watch.live') } />
+                <SectionHeading
+                    id="game-watch"
+                    title={ locale.t('watch.live') }
+                    more={ locale.t('watch.page.more') }
+                    to="/app/watch"
+                />
                 <ul class="flex flex-col gap-2">
                     <For each={ rows } key={ (row) => row.id } let={ row }>
                         <li class="flex items-center gap-3 rounded-tile border border-line bg-field px-3 py-2.5">

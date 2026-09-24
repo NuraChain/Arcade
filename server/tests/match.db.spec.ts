@@ -9,6 +9,7 @@ import { entities } from '../src/entities/index.ts';
 import { createMatchService } from '../src/domains/match/service.ts';
 import { createSocialService } from '../src/domains/social/service.ts';
 import { createTableService } from '../src/domains/table/service.ts';
+import { createWatchService } from '../src/domains/match/watch.ts';
 import { syncSchema } from '../src/db/schema.ts';
 import { rowsOf } from '../src/lib/rows.ts';
 import { legalMoves } from '../src/domains/match/ludo/engine.ts';
@@ -762,6 +763,56 @@ describe.skipIf(!active)('a match, against a real database', () =>
 
             expect(await tables.claimSeat(newcomer, tableId), 'the newcomer landed in some other chair').toBe(due);
             expect((await matches.turnsAt(newcomer, [live.match.id])).has(live.match.id)).toBe(false);
+        });
+    });
+
+    describe('watching', () =>
+    {
+        const watchOf = () => createWatchService(db, (matchId) => matches.seatsOf(matchId));
+
+        const firstMove = async (): Promise<{ matchId: string; opening: number }> =>
+        {
+            const { tableId, players } = await seatedTable(2);
+            const load = await matches.start(players[0], tableId);
+            const turn = (load.state as LudoState).players[(load.state as LudoState).turn].seat;
+
+            await matches.act(players[turn], load.match.id, { play: ROLL, key: 'watched' });
+
+            return { matchId: load.match.id, opening: load.match.rev };
+        };
+
+        it('shows a stranger the board a game began with before anybody has moved', async () =>
+        {
+            const { tableId, players } = await seatedTable(2);
+            const load = await matches.start(players[0], tableId);
+            const seen = await watchOf().delayed(load.match.id);
+
+            expect(seen, 'a game nobody has moved in answered as if there were nothing to watch').not.toBeNull();
+            expect(seen!.load.match.rev).toBe(load.match.rev);
+            expect(seen!.live).toBe(true);
+        });
+
+        it('keeps the opening position once somebody moves, and shows it until that move is old enough', async () =>
+        {
+            const { matchId, opening } = await firstMove();
+            const kept = rowsOf<{ rev: number }>(await db.query(`select (opening ->> 'rev')::int as rev from matches where id = $1`, [matchId]));
+
+            expect(kept[0].rev).toBe(opening);
+
+            const seen = await watchOf().delayed(matchId);
+
+            expect(seen!.load.match.rev, 'a move younger than the delay reached a watcher').toBe(opening);
+        });
+
+        it('shows the move itself once it is older than the delay', async () =>
+        {
+            const { matchId, opening } = await firstMove();
+
+            await db.query(`update match_actions set created_at = now() - interval '31 seconds' where match_id = $1`, [matchId]);
+
+            const seen = await watchOf().delayed(matchId);
+
+            expect(seen!.load.match.rev).toBe(opening + 1);
         });
     });
 });
