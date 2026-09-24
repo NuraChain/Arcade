@@ -110,6 +110,21 @@ describe('mutual friends', () =>
 
 describe('social store', () =>
 {
+    it('holds a request in flight so a second press is the same request, not a second one', async () =>
+    {
+        const social = useSocial();
+        await social.refresh();
+        const before = server.calls.filter((call) => call === 'social.request').length;
+
+        const first = social.add('sina.g');
+        expect(social.working('sina.g')).toBe(true);
+        expect(social.add('sina.g')).toBe(first);
+
+        await first;
+        expect(social.working('sina.g')).toBe(false);
+        expect(server.calls.filter((call) => call === 'social.request').length).toBe(before + 1);
+    });
+
     it('sends a request and waits, because nobody answers on a timer', async () =>
     {
         const social = useSocial();

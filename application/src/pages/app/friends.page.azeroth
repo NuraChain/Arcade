@@ -24,8 +24,8 @@ import { useOverlay } from '../../stores/overlay.store.ts';
 import { usePresence } from '../../stores/presence.store.ts';
 import { useDevice } from '../../stores/device.store.ts';
 import { useSocial } from '../../stores/social.store.ts';
-import { useToasts } from '../../stores/toasts.store.ts';
 import { openTable } from '../../lib/open-table.ts';
+import { attempt } from '../../lib/attempt.ts';
 
 const LIST_PAGE = 12;
 const SUGGEST_PAGE = 8;
@@ -41,7 +41,6 @@ export default component FriendsPage()
     const lobby = useLobby();
     const catalogue = useCatalogue();
     const overlay = useOverlay();
-    const toasts = useToasts();
     const people = usePeople();
     const { navigate } = useNavigate();
 
@@ -218,10 +217,10 @@ export default component FriendsPage()
                                                         subtitle={ `${ locale.t('friends.requests.incoming') } · ${ locale.relative(request.at) }` }
                                                         actions={
                                                             <>
-                                                                <Button variant="primary" size="sm" class="whitespace-nowrap" onClick={ () => social.accept(request.id) }>
+                                                                <Button variant="primary" size="sm" class="whitespace-nowrap" loading={ social.working(request.id) } onClick={ () => void attempt(social.accept(request.id)) }>
                                                                     { locale.t('person.accept') }
                                                                 </Button>
-                                                                <Button variant="ghost" size="sm" class="whitespace-nowrap" onClick={ () => social.decline(request.id) }>
+                                                                <Button variant="ghost" size="sm" class="whitespace-nowrap" disabled={ social.working(request.id) } onClick={ () => void attempt(social.decline(request.id)) }>
                                                                     { locale.t('person.decline') }
                                                                 </Button>
                                                             </>
@@ -244,7 +243,7 @@ export default component FriendsPage()
                                                         person={ people.byHandle(request.to)! }
                                                         subtitle={ `${ locale.t('friends.requests.outgoing') } · ${ locale.relative(request.at) }` }
                                                         actions={
-                                                            <Button variant="ghost" size="sm" class="whitespace-nowrap" onClick={ () => social.withdraw(request.to) }>
+                                                            <Button variant="ghost" size="sm" class="whitespace-nowrap" loading={ social.working(request.to) } onClick={ () => void attempt(social.withdraw(request.to)) }>
                                                                 { locale.t('person.withdraw') }
                                                             </Button>
                                                         }
@@ -274,11 +273,7 @@ export default component FriendsPage()
                                     <div class="flex-1">
                                         <UserCard
                                             person={ person }
-                                            onAdd={ (id) =>
-                                            {
-                                                social.add(id);
-                                                toasts.show({ kind: 'success', text: locale.t('person.added') });
-                                            } }
+                                            onAdd={ (id) => void attempt(social.add(id), locale.t('person.added')) }
                                         />
                                     </div>
                                 </li>

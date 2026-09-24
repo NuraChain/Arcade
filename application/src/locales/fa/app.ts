@@ -55,6 +55,8 @@ export const app: Pick<Dictionary, keyof typeof reference> = {
     'common.notices': { one: '{count} اعلان تازه', other: '{count} اعلان تازه' },
     'common.waitingTables': { one: '{count} میز منتظر توست', other: '{count} میز منتظر توست' },
     'common.optional': 'اختیاری',
+    'common.actionFailed': 'انجام نشد. دوباره تلاش کن.',
+    'common.copyFailed': 'این مرورگر کپی نکرد. انتخابش کن و خودت کپی کن.',
     'page.range': '{from} تا {to} از {total}',
     'page.previous': 'صفحهٔ قبل',
     'page.next': 'صفحهٔ بعد',

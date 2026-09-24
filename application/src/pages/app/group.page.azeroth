@@ -28,6 +28,7 @@ import { usePresence } from '../../stores/presence.store.ts';
 import { useShell } from '../../stores/shell.store.ts';
 import { useToasts } from '../../stores/toasts.store.ts';
 import { openTable } from '../../lib/open-table.ts';
+import { attempt } from '../../lib/attempt.ts';
 
 export default component GroupPage()
 {
@@ -119,8 +120,7 @@ export default component GroupPage()
 
     const join = async (one: GroupSummary): Promise<void> =>
     {
-        await groups.join(one.id);
-        toasts.show({ kind: 'success', text: locale.t('groups.joined', { name: one.name }) });
+        await attempt(groups.join(one.id), locale.t('groups.joined', { name: one.name }));
     };
 
     const leave = async (one: GroupSummary): Promise<void> =>
@@ -144,9 +144,10 @@ export default component GroupPage()
             return;
         }
 
-        await groups.leave(one.id);
-        toasts.show({ kind: 'info', text: locale.t('groups.left', { name: one.name }) });
-        navigate('/app/friends');
+        if (await attempt(groups.leave(one.id), { kind: 'info', text: locale.t('groups.left', { name: one.name }) }))
+        {
+            navigate('/app/friends');
+        }
     };
 
     const removeMember = async (one: GroupSummary, person: Person): Promise<void> =>
@@ -165,8 +166,7 @@ export default component GroupPage()
 
         if (yes === true)
         {
-            await groups.remove(one.id, person.id);
-            toasts.show({ kind: 'warning', text: locale.t('groups.removed', { name: who }) });
+            await attempt(groups.remove(one.id, person.id), { kind: 'warning', text: locale.t('groups.removed', { name: who }) });
         }
     };
 
@@ -185,8 +185,7 @@ export default component GroupPage()
 
         if (yes === true)
         {
-            await groups.transfer(one.id, person.id);
-            toasts.show({ kind: 'success', text: locale.t('groups.transferred', { name: who }) });
+            await attempt(groups.transfer(one.id, person.id), locale.t('groups.transferred', { name: who }));
         }
     };
 

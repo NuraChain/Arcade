@@ -2,9 +2,9 @@ import Icon from '../../icons/icon.component.azeroth';
 import IconButton from '../ui/icon-button.component.azeroth';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useSettings } from '../../stores/settings.store.ts';
-import { useToasts } from '../../stores/toasts.store.ts';
 import type { IconName } from '../../icons/registry.ts';
 import type { OverlayProps } from '../../stores/overlay.store.ts';
+import { copyText } from '../../lib/clipboard.ts';
 
 interface Entry
 {
@@ -26,7 +26,6 @@ export default component TableMenu(props: OverlayProps & {
 {
     const locale = useLocale();
     const settings = useSettings();
-    const toasts = useToasts();
 
     derived sound = settings.settings().sound;
 
@@ -34,9 +33,7 @@ export default component TableMenu(props: OverlayProps & {
 
     const copyCode = (): void =>
     {
-        void navigator.clipboard?.writeText(props.code)
-            .then(() => toasts.show({ kind: 'success', text: locale.t('play.dock.codeCopied'), dedupe: 'table-code' }))
-            .catch(() => toasts.show({ kind: 'warning', text: locale.t('play.dock.codeFailed'), dedupe: 'table-code' }));
+        void copyText(props.code, 'play.dock.codeCopied', { dedupe: 'table-code' });
     };
 
     derived entries = ((): Entry[] =>

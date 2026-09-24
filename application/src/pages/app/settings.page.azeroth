@@ -20,6 +20,7 @@ import PushToggle from '../../components/app/push-toggle.component.azeroth';
 import { runtime } from '../../lib/runtime.ts';
 import { RESERVED_KEYS, keyName } from '../../lib/talk-key.ts';
 import { shortAddress } from '../../lib/wallet.ts';
+import { attempt } from '../../lib/attempt.ts';
 import { usePeople } from '../../stores/people.store.ts';
 import { useAccount } from '../../stores/account.store.ts';
 import { useDevice } from '../../stores/device.store.ts';
@@ -369,7 +370,7 @@ export default component SettingsPage()
                                                             person={ person }
                                                             subtitle={ `@${ person.handle }` }
                                                             actions={
-                                                                <Button variant="ghost" size="sm" class="whitespace-nowrap" onClick={ () => social.unblock(person.id) }>
+                                                                <Button variant="ghost" size="sm" class="whitespace-nowrap" loading={ social.working(person.id) } onClick={ () => void attempt(social.unblock(person.id), locale.t('actions.unblocked', { name: person.displayName.split(' ')[0] })) }>
                                                                     { locale.t('actions.unblock', { name: person.displayName.split(' ')[0] }) }
                                                                 </Button>
                                                             }
@@ -404,7 +405,7 @@ export default component SettingsPage()
                                                             person={ person }
                                                             subtitle={ `@${ person.handle }` }
                                                             actions={
-                                                                <Button variant="ghost" size="sm" class="whitespace-nowrap" onClick={ () => void social.toggleMute('person', person.id) }>
+                                                                <Button variant="ghost" size="sm" class="whitespace-nowrap" onClick={ () => void attempt(social.toggleMute('person', person.id), { kind: 'info', text: locale.t('actions.unmuted', { name: person.displayName.split(' ')[0] }) }) }>
                                                                     { locale.t('actions.unmute', { name: person.displayName.split(' ')[0] }) }
                                                                 </Button>
                                                             }

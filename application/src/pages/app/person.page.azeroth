@@ -19,8 +19,8 @@ import { usePresence } from '../../stores/presence.store.ts';
 import { useRecord } from '../../stores/record.store.ts';
 import { useShell } from '../../stores/shell.store.ts';
 import { useSocial } from '../../stores/social.store.ts';
-import { useToasts } from '../../stores/toasts.store.ts';
 import { openTable } from '../../lib/open-table.ts';
+import { attempt } from '../../lib/attempt.ts';
 import Panel from '../../components/ui/panel.component.azeroth';
 
 export default component PersonPage()
@@ -33,7 +33,6 @@ export default component PersonPage()
     const lobby = useLobby();
     const overlay = useOverlay();
     const shell = useShell();
-    const toasts = useToasts();
     const params = useParams();
     const people = usePeople();
     const record = useRecord();
@@ -57,6 +56,8 @@ export default component PersonPage()
     }
 
     derived relation = person === null ? 'none' : social.relation(person.id);
+
+    derived asked = person === null ? '' : social.incoming().find((request) => request.from === person!.id)?.id ?? '';
 
     derived mutual = view.data()?.mutual ?? 0;
 
@@ -126,20 +127,17 @@ export default component PersonPage()
                                                 variant="outline"
                                                 leading="friend-add"
                                                 block
-                                                onClick={ () =>
-                                                {
-                                                    social.add(person!.id);
-                                                    toasts.show({ kind: 'success', text: locale.t('person.added') });
-                                                } }
+                                                loading={ social.working(person!.id) }
+                                                onClick={ () => void attempt(social.add(person!.id), locale.t('person.added')) }
                                             >
                                                 { locale.t('person.add') }
                                             </Button>
                                         </Show>
                                         <Show when={ relation === 'outgoing' }>
-                                            <Button variant="outline" leading="clock" block onClick={ () => social.withdraw(person!.id) }>{ locale.t('person.withdraw') }</Button>
+                                            <Button variant="outline" leading="clock" block loading={ social.working(person!.id) } onClick={ () => void attempt(social.withdraw(person!.id)) }>{ locale.t('person.withdraw') }</Button>
                                         </Show>
                                         <Show when={ relation === 'incoming' }>
-                                            <Button variant="outline" leading="friend-check" block onClick={ () => social.accept(social.incoming().find((request) => request.from === person!.id)?.id ?? '') }>{ locale.t('person.accept') }</Button>
+                                            <Button variant="outline" leading="friend-check" block loading={ social.working(asked) } onClick={ () => void attempt(social.accept(asked)) }>{ locale.t('person.accept') }</Button>
                                         </Show>
                                         <Show when={ relation === 'friend' }>
                                             <Button variant="outline" leading="friend-check" block disabled>{ locale.t('person.friends') }</Button>
@@ -160,11 +158,8 @@ export default component PersonPage()
                                     variant="outline"
                                     size="sm"
                                     class="mt-3"
-                                    onClick={ () =>
-                                    {
-                                        social.unblock(person!.id);
-                                        toasts.show({ kind: 'success', text: locale.t('actions.unblocked', { name: locale.text(person!.displayName).split(' ')[0] }) });
-                                    } }
+                                    loading={ social.working(person!.id) }
+                                    onClick={ () => void attempt(social.unblock(person!.id), locale.t('actions.unblocked', { name: locale.text(person!.displayName).split(' ')[0] })) }
                                 >
                                     { locale.t('actions.unblock', { name: locale.text(person!.displayName).split(' ')[0] }) }
                                 </Button>

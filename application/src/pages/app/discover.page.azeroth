@@ -15,8 +15,8 @@ import { useLobby } from '../../stores/lobby.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { usePresence } from '../../stores/presence.store.ts';
 import { useSocial } from '../../stores/social.store.ts';
-import { useToasts } from '../../stores/toasts.store.ts';
 import { openTable } from '../../lib/open-table.ts';
+import { attempt } from '../../lib/attempt.ts';
 
 export default component DiscoverPage()
 {
@@ -26,7 +26,6 @@ export default component DiscoverPage()
     const groups_ = useGroups();
     const catalogue = useCatalogue();
     const lobby = useLobby();
-    const toasts = useToasts();
     const { navigate } = useNavigate();
 
     useHead({ title: () => locale.t('app.nav.discover') });
@@ -68,11 +67,7 @@ export default component DiscoverPage()
                             <div class="flex-1">
                                 <UserCard
                                     person={ person }
-                                    onAdd={ (id) =>
-                                    {
-                                        social.add(id);
-                                        toasts.show({ kind: 'success', text: locale.t('person.added') });
-                                    } }
+                                    onAdd={ (id) => void attempt(social.add(id), locale.t('person.added')) }
                                 />
                             </div>
                         </li>

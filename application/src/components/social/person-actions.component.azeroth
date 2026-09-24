@@ -9,10 +9,11 @@ import { useLocale } from '../../stores/locale.store.ts';
 import type { OverlayProps } from '../../stores/overlay.store.ts';
 import { useOverlay } from '../../stores/overlay.store.ts';
 import { useSocial } from '../../stores/social.store.ts';
-import { useToasts } from '../../stores/toasts.store.ts';
 import Avatar from '../ui/avatar.component.azeroth';
 import IconButton from '../ui/icon-button.component.azeroth';
 import ReportSheet from './report-sheet.component.azeroth';
+import { copyText } from '../../lib/clipboard.ts';
+import { attempt } from '../../lib/attempt.ts';
 
 interface Action
 {
@@ -38,7 +39,6 @@ export default component PersonActions(props: OverlayProps & {
     const social = useSocial();
     const chat = useChat();
     const overlay = useOverlay();
-    const toasts = useToasts();
     const people = usePeople();
     const { navigate } = useNavigate();
 
@@ -59,23 +59,14 @@ export default component PersonActions(props: OverlayProps & {
         ).closed;
         if (yes === true)
         {
-            social.block(props.personId);
-            toasts.show({ kind: 'warning', text: locale.t('actions.blocked', { name }) });
+            void attempt(social.block(props.personId), { kind: 'warning', text: locale.t('actions.blocked', { name }) });
         }
     };
 
     const copyHandle = async (): Promise<void> =>
     {
         const handle = `@${ person?.handle ?? props.personId }`;
-        try
-        {
-            await navigator.clipboard.writeText(handle);
-            toasts.show({ kind: 'success', text: locale.t('actions.handleCopied') });
-        }
-        catch
-        {
-            toasts.show({ kind: 'info', text: handle });
-        }
+        await copyText(handle, 'actions.handleCopied');
     };
 
     derived actions = ((): Action[] =>
@@ -113,8 +104,7 @@ export default component PersonActions(props: OverlayProps & {
                 label: locale.t(muted ? 'actions.unmute' : 'actions.mute', { name }),
                 run: () =>
                 {
-                    void social.toggleMute('person', props.personId);
-                    toasts.show({ kind: 'info', text: locale.t(muted ? 'actions.unmuted' : 'actions.muted', { name }) });
+                    void attempt(social.toggleMute('person', props.personId), { kind: 'info', text: locale.t(muted ? 'actions.unmuted' : 'actions.muted', { name }) });
                 }
             },
             {
@@ -141,8 +131,7 @@ export default component PersonActions(props: OverlayProps & {
                 label: locale.t('actions.unblock', { name }),
                 run: () =>
                 {
-                    social.unblock(props.personId);
-                    toasts.show({ kind: 'success', text: locale.t('actions.unblocked', { name }) });
+                    void attempt(social.unblock(props.personId), locale.t('actions.unblocked', { name }));
                 }
             }
             : {

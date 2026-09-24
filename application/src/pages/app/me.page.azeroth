@@ -15,6 +15,7 @@ import Tooltip from '../../components/ui/tooltip.component.azeroth';
 import { NURA_CHAIN } from '../../data/chain.ts';
 import Icon from '../../icons/icon.component.azeroth';
 import { shortAddress } from '../../lib/wallet.ts';
+import { copyText } from '../../lib/clipboard.ts';
 import type { MessageKey } from '../../locales/en/index.ts';
 
 import { useAccount } from '../../stores/account.store.ts';
@@ -67,15 +68,7 @@ export default component MePage()
         {
             return;
         }
-        try
-        {
-            await navigator.clipboard.writeText(address);
-            toasts.show({ kind: 'success', text: locale.t('wallet.address.copied'), dedupe: 'wallet.address' });
-        }
-        catch
-        {
-            toasts.show({ kind: 'warning', text: locale.t('state.errorLead'), dedupe: 'wallet.address' });
-        }
+        await copyText(address, 'wallet.address.copied', { dedupe: 'wallet.address' });
     };
 
     useHead({ title: () => locale.t('app.nav.profile') });
@@ -97,15 +90,7 @@ export default component MePage()
     const share = async (): Promise<void> =>
     {
         const link = `${ window.location.origin }/app/people/${ user?.handle ?? '' }`;
-        try
-        {
-            await navigator.clipboard.writeText(link);
-            toasts.show({ kind: 'success', text: locale.t('me.shared') });
-        }
-        catch
-        {
-            toasts.show({ kind: 'info', text: link });
-        }
+        await copyText(link, 'me.shared');
     };
 
     derived showChain = account.isWallet() && (chain.sync() !== 'off' || chain.failed());

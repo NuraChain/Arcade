@@ -3,6 +3,7 @@ import { useChat } from '../../stores/chat.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import type { OverlayProps } from '../../stores/overlay.store.ts';
 import IconButton from '../ui/icon-button.component.azeroth';
+import { attempt } from '../../lib/attempt.ts';
 
 /**
  * How long a message in this room lasts.
@@ -35,8 +36,10 @@ export default component ExpirySheet(props: OverlayProps & { conversationId: str
 
     const choose = async (seconds: number | null): Promise<void> =>
     {
-        await chat.setExpiry(props.conversationId, seconds);
-        props.close(true);
+        if (await attempt(chat.setExpiry(props.conversationId, seconds)))
+        {
+            props.close(true);
+        }
     };
 
     <div class="flex flex-col gap-5 p-5">

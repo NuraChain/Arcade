@@ -30,6 +30,7 @@ export default component ReportSheet(props: OverlayProps & {
 
     state category = 'harassment' as ReportCategory;
     state alsoBlock = false;
+    state sending = false;
 
     derived person = people.byHandle(props.personId);
 
@@ -45,22 +46,28 @@ export default component ReportSheet(props: OverlayProps & {
      */
     const submit = async (): Promise<void> =>
     {
+        if (sending)
+        {
+            return;
+        }
+        sending = true;
+
         try
         {
             await social.report(props.personId, category, props.disclose);
         }
         catch
         {
+            sending = false;
             toasts.show({ kind: 'error', text: locale.t('report.failed') });
             return;
         }
 
-        if (alsoBlock)
-        {
-            await social.block(props.personId).catch(() => undefined);
-        }
+        const blocked = !alsoBlock || await social.block(props.personId).then(() => true, () => false);
 
-        toasts.show({ kind: 'success', text: locale.t('report.sent') });
+        toasts.show(blocked
+            ? { kind: 'success', text: locale.t('report.sent') }
+            : { kind: 'warning', text: locale.t('report.blockFailed') });
         props.close(true);
     };
 
@@ -110,7 +117,7 @@ export default component ReportSheet(props: OverlayProps & {
         <Toggle checked={ alsoBlock } label={ locale.t('report.alsoBlock') } onChange={ (checked) => alsoBlock = checked } />
 
         <div class="flex flex-col gap-2 sm:flex-row-reverse">
-            <Button variant="destructive" block leading="report" onClick={ submit }>{ locale.t('report.submit') }</Button>
+            <Button variant="destructive" block leading="report" loading={ sending } onClick={ submit }>{ locale.t('report.submit') }</Button>
             <Button variant="ghost" block onClick={ () => props.close(false) }>{ locale.t('common.cancel') }</Button>
         </div>
     </div>

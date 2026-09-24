@@ -4064,6 +4064,19 @@ phone and sits over any sheet), arrows, Home and End, Enter and Space to pick, E
 it was, a typed letter to jump, and a press anywhere else or any scroll to close. Options are 44px on
 a coarse pointer.
 
+**An action says how it went only once it has gone.** Blocking, muting, unblocking, adding a friend,
+inviting somebody to a table and the group verbs all used to show their success toast on the same line
+that fired the request, so a refusal read as success followed by the generic unhandled-error toast. They
+go through `lib/attempt.ts` now: it awaits, THEN shows the success sentence, and on a refusal shows one
+localized "that did not go through" and resolves `false` rather than rejecting - server messages are
+English-only, so they are never shown on a page that may be Persian. The social store holds each
+relationship request in flight by its key (`social.working`) and a second press answers with the SAME
+promise, so Accept pressed twice is one request, and the buttons show their pending state from it.
+Copying is `lib/clipboard.ts`: success only when the browser really wrote it, and a refusal hands the
+words back in the toast to be copied by hand - except a `secret`, the recovery phrase, which never goes
+into a toast a screen reader would announce. The wallet dialog is the one copy that stays inline, because
+the public pages have no toast host.
+
 **A toast's countdown stops for a pointer AND for focus, and starts again however the touch ended.**
 Pausing takes the time spent so far out of `remaining` and deliberately leaves `startedAt` where it
 is, because that is what the subtraction was measured from — so `progress` has to read a `paused`

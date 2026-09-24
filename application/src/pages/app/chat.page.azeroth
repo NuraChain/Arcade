@@ -20,6 +20,7 @@ import ConfirmSheet from '../../components/app/confirm-sheet.component.azeroth';
 import ForwardSheet from '../../components/chat/forward-sheet.component.azeroth';
 import type { Message } from '../../data/chat.ts';
 import { plainOf } from '../../lib/markdown.ts';
+import { attempt } from '../../lib/attempt.ts';
 import Avatar from '../../components/ui/avatar.component.azeroth';
 import AvatarGroup from '../../components/ui/avatar-group.component.azeroth';
 import Button from '../../components/ui/button.component.azeroth';
@@ -428,7 +429,7 @@ export default component ChatPage()
                                     label={ locale.t(muted ? 'chat.unmute' : 'chat.mute') }
                                     variant="ghost"
                                     pressed={ muted }
-                                    onClick={ () => void social.toggleMute('conversation', id) }
+                                    onClick={ () => void attempt(social.toggleMute('conversation', id), { kind: 'info', text: locale.t(muted ? 'chat.unmutedDone' : 'chat.mutedDone') }) }
                                 />
                                 <Show when={ others.length === 1 }>
                                     { () =>

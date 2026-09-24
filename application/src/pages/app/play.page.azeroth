@@ -31,6 +31,7 @@ import Panel from '../../components/ui/panel.component.azeroth';
 import type { MatchView } from '../../api.ts';
 import { plainOf } from '../../lib/markdown.ts';
 import { holdScreen } from '../../lib/wake-lock.ts';
+import { copyText } from '../../lib/clipboard.ts';
 import { BOARDS, drawable, type BoardComponent } from '../../components/games/boards.ts';
 import { turnMs } from '../../../../server/src/domains/match/turns.ts';
 
@@ -496,15 +497,7 @@ export default component PlayPage()
         {
             return;
         }
-        try
-        {
-            await navigator.clipboard.writeText(`${ window.location.origin }/app/play/${ table.id }`);
-            toasts.show({ kind: 'success', text: locale.t('play.lobby.copied') });
-        }
-        catch
-        {
-            toasts.show({ kind: 'warning', text: locale.t('state.errorLead') });
-        }
+        await copyText(`${ window.location.origin }/app/play/${ table.id }`, 'play.lobby.copied');
     };
 
     const sitDown = async (): Promise<void> =>

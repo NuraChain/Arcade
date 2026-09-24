@@ -52,6 +52,8 @@ export const app = {
     'common.notices': { one: '{count} new notification', other: '{count} new notifications' },
     'common.waitingTables': { one: '{count} table waiting on you', other: '{count} tables waiting on you' },
     'common.optional': 'Optional',
+    'common.actionFailed': 'That did not go through. Try again.',
+    'common.copyFailed': 'This browser would not copy it. Select it and copy it by hand.',
     'page.range': '{from}–{to} of {total}',
     'page.previous': 'Previous page',
     'page.next': 'Next page',

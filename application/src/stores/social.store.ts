@@ -34,6 +34,7 @@ export interface SocialApi
     visible(ids: readonly string[]): string[];
     people(): Person[];
 
+    working(key: string): boolean;
     add(id: string): Promise<void>;
     accept(requestId: string): Promise<void>;
     decline(requestId: string): Promise<void>;
@@ -232,6 +233,28 @@ export const useSocial = createStore((): SocialApi =>
         await revalidate();
     };
 
+    const [busy, setBusy] = createSignal<Readonly<Record<string, Promise<void>>>>({});
+
+    const once = (key: string, call: () => Promise<unknown>): Promise<void> =>
+    {
+        const running = untrack(busy)[key];
+
+        if (running !== undefined)
+        {
+            return running;
+        }
+
+        const started = write(call).finally(() =>
+        {
+            const next = { ...untrack(busy) };
+            delete next[key];
+            setBusy(next);
+        });
+
+        setBusy({ ...untrack(busy), [key]: started });
+        return started;
+    };
+
     return {
         friends,
         incoming,
@@ -297,13 +320,15 @@ export const useSocial = createStore((): SocialApi =>
 
         people: () => directory.data()?.people ?? [],
 
-        add: (id) => write(() => client.social.request({ input: { id } })),
-        accept: (requestId) => write(() => client.social.answer({ input: { id: requestId, outcome: 'accepted' } })),
-        decline: (requestId) => write(() => client.social.answer({ input: { id: requestId, outcome: 'declined' } })),
-        withdraw: (id) => write(() => client.social.withdraw({ input: { id } })),
-        remove: (id) => write(() => client.social.unfriend({ input: { id } })),
-        block: (id) => write(() => client.social.block({ input: { id } })),
-        unblock: (id) => write(() => client.social.unblock({ input: { id } })),
+        working: (key) => busy()[key] !== undefined,
+
+        add: (id) => once(id, () => client.social.request({ input: { id } })),
+        accept: (requestId) => once(requestId, () => client.social.answer({ input: { id: requestId, outcome: 'accepted' } })),
+        decline: (requestId) => once(requestId, () => client.social.answer({ input: { id: requestId, outcome: 'declined' } })),
+        withdraw: (id) => once(id, () => client.social.withdraw({ input: { id } })),
+        remove: (id) => once(id, () => client.social.unfriend({ input: { id } })),
+        block: (id) => once(id, () => client.social.block({ input: { id } })),
+        unblock: (id) => once(id, () => client.social.unblock({ input: { id } })),
 
         /**
          * Files a report, optionally showing ONE message.

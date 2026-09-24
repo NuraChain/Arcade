@@ -11,6 +11,7 @@ import Avatar from '../ui/avatar.component.azeroth';
 import EmptyState from '../ui/empty-state.component.azeroth';
 import IconButton from '../ui/icon-button.component.azeroth';
 import SearchInput from '../ui/search-input.component.azeroth';
+import { attempt } from '../../lib/attempt.ts';
 
 export default component InviteSheet(props: OverlayProps & { tableId: string })
 {
@@ -63,7 +64,7 @@ export default component InviteSheet(props: OverlayProps & { tableId: string })
                             class="flex min-h-13 coarse:min-h-14 w-full cursor-pointer items-center gap-3 rounded-tile px-2 py-2 text-start transition-colors hover:bg-raised/70"
                             onClick={ () =>
                             {
-                                void lobby.invite(props.tableId, person.id);
+                                void attempt(lobby.invite(props.tableId, person.id), locale.t('play.lobby.inviteSent', { name: person.displayName }));
                                 props.close(person.id);
                             } }
                         >

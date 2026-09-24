@@ -8,19 +8,16 @@ import Icon from '../../icons/icon.component.azeroth';
 import type { GameId } from '../../data/games.ts';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
-import { useToasts } from '../../stores/toasts.store.ts';
 import type { TableSummary } from '../../api.ts';
+import { copyText } from '../../lib/clipboard.ts';
 
 export default component PlayHeader(props: { table: TableSummary; others: TableSummary[]; tools?: Child })
 {
     const locale = useLocale();
-    const toasts = useToasts();
 
     const copyCode = (): void =>
     {
-        void navigator.clipboard?.writeText(props.table.code)
-            .then(() => toasts.show({ kind: 'success', text: locale.t('play.dock.codeCopied'), dedupe: 'table-code' }))
-            .catch(() => toasts.show({ kind: 'warning', text: locale.t('play.dock.codeFailed'), dedupe: 'table-code' }));
+        void copyText(props.table.code, 'play.dock.codeCopied', { dedupe: 'table-code' });
     };
     const catalogue = useCatalogue();
 

@@ -47,7 +47,7 @@ export default component UserCard(props: { person: Person; onAdd: (id: string) =
             }
         >
             { () =>
-                <Button variant="primary" size="sm" block leading="friend-add" class="mt-auto" onClick={ () => props.onAdd(props.person.id) }>
+                <Button variant="primary" size="sm" block leading="friend-add" class="mt-auto" loading={ social.working(props.person.id) } onClick={ () => props.onAdd(props.person.id) }>
                     { locale.t('person.add') }
                 </Button>
             }

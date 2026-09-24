@@ -3,9 +3,9 @@ import { QUICK_REACTIONS } from '../../data/emoji.ts';
 import Icon from '../../icons/icon.component.azeroth';
 import type { IconName } from '../../icons/registry.ts';
 import { plainOf } from '../../lib/markdown.ts';
+import { copyText } from '../../lib/clipboard.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import type { OverlayProps } from '../../stores/overlay.store.ts';
-import { useToasts } from '../../stores/toasts.store.ts';
 import IconButton from '../ui/icon-button.component.azeroth';
 import LazyEmojiPicker from './lazy-emoji-picker.component.azeroth';
 
@@ -30,7 +30,6 @@ export default component MessageActions(props: OverlayProps & {
 })
 {
     const locale = useLocale();
-    const toasts = useToasts();
 
     state picking = props.pick === true;
 
@@ -46,15 +45,7 @@ export default component MessageActions(props: OverlayProps & {
 
     const copy = async (): Promise<void> =>
     {
-        try
-        {
-            await navigator.clipboard.writeText(props.message.text);
-            toasts.show({ kind: 'success', text: locale.t('chat.copied'), dedupe: 'chat-copy' });
-        }
-        catch
-        {
-            toasts.show({ kind: 'error', text: locale.t('chat.copyFailed'), dedupe: 'chat-copy' });
-        }
+        await copyText(props.message.text, 'chat.copied', { dedupe: 'chat-copy' });
     };
 
     derived actions = ((): Action[] =>

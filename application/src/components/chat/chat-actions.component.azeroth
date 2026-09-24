@@ -13,6 +13,7 @@ import { useOverlay, type OverlayProps } from '../../stores/overlay.store.ts';
 import IconButton from '../ui/icon-button.component.azeroth';
 import { gameNameOf, groupNameOf, othersOf, titleOf } from './chat-title.ts';
 import ExpirySheet from './expiry-sheet.component.azeroth';
+import { attempt } from '../../lib/attempt.ts';
 
 interface Action
 {
@@ -60,7 +61,7 @@ export default component ChatActions(props: OverlayProps & { conversationId: str
                 id: 'mute',
                 icon: muted ? 'sound' : 'sound-off',
                 label: locale.t(muted ? 'chat.unmute' : 'chat.mute'),
-                run: () => void social.toggleMute('conversation', props.conversationId)
+                run: () => void attempt(social.toggleMute('conversation', props.conversationId), { kind: 'info', text: locale.t(muted ? 'chat.unmutedDone' : 'chat.mutedDone') })
             },
             {
                 id: 'expiry',

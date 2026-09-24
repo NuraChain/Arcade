@@ -1,5 +1,6 @@
 import type { Notification } from '../../api.ts';
 import { sayOf } from '../../lib/notifications.ts';
+import { attempt } from '../../lib/attempt.ts';
 import { usePeople } from '../../stores/people.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useSocial } from '../../stores/social.store.ts';
@@ -23,8 +24,11 @@ export default component NotificationRow(props: {
 
     derived said = sayOf(props.item, who, locale);
 
-    derived answerable = props.item.kind === 'friend-request'
-        && social.incoming().some((request) => request.from === props.item.actor);
+    derived asked = props.item.kind === 'friend-request'
+        ? social.incoming().find((request) => request.from === props.item.actor)?.id ?? ''
+        : '';
+
+    derived answerable = asked !== '';
 
     <div class={ () => [
         'flex flex-col gap-2 px-3 py-2.5',
@@ -58,12 +62,12 @@ export default component NotificationRow(props: {
                     <Button
                         variant="primary"
                         size="sm"
+                        loading={ asked !== '' && social.working(asked) }
                         onClick={ () =>
                         {
-                            const request = social.incoming().find((entry) => entry.from === props.item.actor);
-                            if (request !== undefined)
+                            if (asked !== '')
                             {
-                                void social.accept(request.id);
+                                void attempt(social.accept(asked));
                             }
                         } }
                     >
@@ -72,12 +76,12 @@ export default component NotificationRow(props: {
                     <Button
                         variant="ghost"
                         size="sm"
+                        disabled={ asked !== '' && social.working(asked) }
                         onClick={ () =>
                         {
-                            const request = social.incoming().find((entry) => entry.from === props.item.actor);
-                            if (request !== undefined)
+                            if (asked !== '')
                             {
-                                void social.decline(request.id);
+                                void attempt(social.decline(asked));
                             }
                         } }
                     >
