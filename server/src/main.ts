@@ -14,7 +14,7 @@ import { dataSource } from './data-source.ts';
 import { seedWalletFixtures } from './db/seed-wallets.ts';
 import { seedReference } from './db/seed-reference.ts';
 import { syncSchema } from './db/schema.ts';
-import { loadServerConfig, servesPages } from './env.ts';
+import { loadServerConfig, servesPages, syncsSchema } from './env.ts';
 import { gzipOnTheWay, precompressed } from './http/compression.ts';
 import { apiRateLimit } from './http/rate-limit.ts';
 import { createServerLogger } from './logger.ts';
@@ -42,9 +42,25 @@ const log = createServerLogger(config);
 await dataSource.initialize();
 log.info('database ready', { pool: config.databasePoolMax });
 
-if (config.databaseSync)
+if (syncsSchema(config))
 {
-    await syncSchema(dataSource);
+    try
+    {
+        await syncSchema(dataSource);
+    }
+    catch (error)
+    {
+        const code = (error as { driverError?: { code?: string } }).driverError?.code ?? '';
+
+        log.error('the schema cannot be built onto this database', {
+            reason: error instanceof Error ? error.message : String(error),
+            ...(code.startsWith('23')
+                ? { fix: 'this database holds rows from before the entities changed, and nothing here migrates them. Rebuild it: psql "$DATABASE_URL" -c "drop schema public cascade; create schema public", then start again' }
+                : {})
+        });
+        process.exit(1);
+    }
+
     log.info('schema synced from the entities');
 }
 

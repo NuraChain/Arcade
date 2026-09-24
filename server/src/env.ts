@@ -15,7 +15,7 @@ export function loadServerConfig()
 
         databaseUrl: str('DATABASE_URL', { secret: true }),
         databasePoolMax: num('DATABASE_POOL_MAX', { default: 10 }),
-        databaseSync: flag('DATABASE_SYNC', { default: true }),
+        databaseSync: flag('DATABASE_SYNC', { default: false }),
 
         /**
          * Signs session cookies and realtime tickets. `serializeCookie` has no `signed` option
@@ -111,6 +111,11 @@ export function loadServerConfig()
  * So production flips the default and an explicit `SERVE_PAGES=false` still wins - a deployment
  * that really does put a CDN or another process in front of the client can still say so.
  */
+export function syncsSchema(config: ServerConfig): boolean
+{
+    return process.env.DATABASE_SYNC === undefined ? config.env === 'development' : config.databaseSync;
+}
+
 export function servesPages(config: ServerConfig): boolean
 {
     return config.servePages || (config.env === 'production' && process.env.SERVE_PAGES === undefined);

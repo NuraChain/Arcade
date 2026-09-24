@@ -91,10 +91,12 @@ carries `DATABASE_URL` and is the one place the name is written down; `tools/qa/
 the browser passes cannot drift from the server the way they once did. There are no migrations.
 `server/src/db/schema.ts` builds the schema with `syncSchema()`: the `citext` and `pgcrypto`
 extensions, then TypeORM's `synchronize()` from the entity metadata, then the indexes no
-decorator can express. `main.ts` runs it on every boot while `DATABASE_SYNC` is on, which is its
-default under `npm run dev` and `npm start` alike, because the owner wants a deployment to follow the
-entities without a separate step. A deployment that would rather sync as a deliberate act sets
-`DATABASE_SYNC=false` and runs `npm run schema:sync --workspace server`, which is the same code.
+decorator can express. `main.ts` runs it on every DEVELOPMENT boot; a production start does not,
+and `npm run schema:sync --workspace server` is the same code as a deliberate act. `DATABASE_SYNC`
+overrides either way when it is set. A sync cannot apply a NOT NULL column or a new CHECK to rows
+that predate it - a VPS database from before `tables.chat` failed exactly that way - so boot names
+the rebuild (`drop schema public cascade; create schema public`) instead of dumping the stack,
+because nothing here migrates rows.
 It is never TypeORM's own `synchronize: true` on the DataSource: that would build the tables and then
 drop the DESC and partial indexes `syncSchema` exists to rebuild, on every start.
 
