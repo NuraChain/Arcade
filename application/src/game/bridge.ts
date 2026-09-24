@@ -49,6 +49,8 @@ export interface BoardView
     /** Set once, when somebody has won. */
     winner: string | null;
 
+    lit?: boolean;
+
     beats?: readonly LudoBeat[];
 }
 

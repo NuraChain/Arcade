@@ -7,6 +7,7 @@ import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import '../src/locales/app-catalogue.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
 import { useBoard } from '../src/stores/match.store.ts';
+import { useSettings } from '../src/stores/settings.store.ts';
 import type { MatchView } from '../src/api.ts';
 
 type Rendered = HTMLElement;
@@ -58,6 +59,7 @@ beforeEach(() =>
     resetRuntime();
     setRuntime({ clock: manualClock(400_000), seed: 3 });
     useLocale().setLocale('en');
+    useSettings().reset();
 });
 
 afterEach(() =>
@@ -167,5 +169,58 @@ describe('PokerBoard', () =>
         }) as Rendered);
 
         expect(container.textContent).toContain('omid.k won 240 with a flush');
+    });
+
+    it('names the best hand the reader holds and prices the call against the pot', () =>
+    {
+        const { container } = renderTest(() => PokerBoard({ match: match({ toCall: 20, pot: 30 }) }) as Rendered);
+
+        expect(container.textContent).toContain('Your best hand so far: a pair of twos.');
+        expect(container.textContent).toContain('Calling costs 20 against a pot of 30.');
+    });
+
+    it('says nothing about the hand or the price with the outcome helper off', () =>
+    {
+        useSettings().update({ hintOutcome: false });
+
+        const { container } = renderTest(() => PokerBoard({ match: match({ toCall: 20, pot: 30 }) }) as Rendered);
+
+        expect(container.textContent).not.toContain('best hand');
+        expect(container.textContent).not.toContain('Calling costs');
+        expect(button(container, 'Call 20')).toBeDefined();
+    });
+
+    it('coaches the rule in play, and goes quiet with the coach off', () =>
+    {
+        const on = renderTest(() => PokerBoard({ match: match({ toCall: 0 }) }) as Rendered);
+
+        expect(on.container.querySelector('[role="note"]')?.textContent).toContain('There is nothing to call, so checking costs you nothing.');
+        on.unmount();
+
+        useSettings().update({ hintRules: false });
+
+        const off = renderTest(() => PokerBoard({ match: match({ toCall: 0 }) }) as Rendered);
+
+        expect(off.container.querySelector('[role="note"]')).toBeNull();
+    });
+
+    it('keeps every action with the move helper off, because the table lights nothing to switch off', () =>
+    {
+        useSettings().update({ hintMoves: false });
+
+        const { container } = renderTest(() => PokerBoard({ match: match({ toCall: 20, minRaiseTo: 40, maxRaiseTo: 1500, seats: Array.from({ length: 6 }, (_, seat) => ({ seat, stack: 1500, bet: seat === 4 ? 20 : 0, folded: false, allIn: false, out: false })) }) }) as Rendered);
+
+        expect(button(container, 'Fold')).toBeDefined();
+        expect(button(container, 'Call 20')).toBeDefined();
+        expect(button(container, 'Raise to 40')).toBeDefined();
+    });
+
+    it('gives a spectator no tip and no outcome', () =>
+    {
+        const { container } = renderTest(() => PokerBoard({ match: match({ toCall: 20 }, null) }) as Rendered);
+
+        expect(container.querySelector('[role="note"]')).toBeNull();
+        expect(container.textContent).not.toContain('best hand');
+        expect(container.textContent).not.toContain('Calling costs');
     });
 });

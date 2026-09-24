@@ -2642,6 +2642,30 @@ restart or a dropped train connection used to leave "Couldn't load this" on scre
 pressed Try again - found by restarting the built server with a game open. The play page also stopped
 drawing its skeleton and its error at the same time: the error waits until nothing is loading.
 
+## Helpers at the table
+
+`docs/superpowers/specs/2026-09-24-game-helpers-design.md` is the design. Three helpers, each a device
+preference that is on by default and can be switched off on the settings page or from the table menu
+without leaving the game: `hintMoves` lights up what can move, `hintOutcome` says what a move does
+before it is made, and `hintRules` is the rules coach - one line, `CoachLine`, under the status.
+
+**Every helper is the SERVER's rules asked a question.** `game/helpers/<game>.ts` is pure, imports
+nothing from AzerothJS, and computes from the same modules the engine runs - ludo's board, hokm's
+`trickWinner`, backgammon's `stage`, poker's evaluator - because a second copy of a rule in the
+browser agrees with the server right up until the position where it matters. Each spec plays whole
+games through the real engine and fails on any sentence the engine would contradict. `coachOf`
+answers null when nothing is worth saying: a tip that is always there is one nobody reads.
+
+**Turning a helper off never removes a way to play.** The move lists beside every board are the
+keyboard and screen-reader path, and they stay whatever `hintMoves` says; what goes is the lighting
+on the board. Hokm's hand says why a card is dimmed with the follow line, which stays when the coach
+is off and gives way to the coach's own words when it is on, so it is never said twice.
+
+**A poker hand is named by its ranks**: "a pair of kings", "sevens full of twos", and "you are playing
+the board" when the five shared cards alone make the hand, because "a pair" is true of a pair that is
+nobody's. `namedHand` reads the ranks out of the evaluator's own score, whose digits after the
+category are the ranks in the order that decides a tie.
+
 ## The game page splits on its container
 
 `lg:grid-cols-[minmax(0,1fr)_22rem]` fires at 1024px of SCREEN, and that column is nothing like the

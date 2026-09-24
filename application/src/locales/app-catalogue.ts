@@ -9,5 +9,15 @@ import { play as playFa } from './fa/play.ts';
 import { social as socialFa } from './fa/social.ts';
 import { me as meFa } from './fa/me.ts';
 import { wallet as walletFa } from './fa/wallet.ts';
+import { helpers as helpersEn } from './en/helpers.ts';
+import { helpersLudo as helpersLudoEn } from './en/helpers-ludo.ts';
+import { helpersHokm as helpersHokmEn } from './en/helpers-hokm.ts';
+import { helpersBackgammon as helpersBackgammonEn } from './en/helpers-backgammon.ts';
+import { helpersPoker as helpersPokerEn } from './en/helpers-poker.ts';
+import { helpers as helpersFa } from './fa/helpers.ts';
+import { helpersLudo as helpersLudoFa } from './fa/helpers-ludo.ts';
+import { helpersHokm as helpersHokmFa } from './fa/helpers-hokm.ts';
+import { helpersBackgammon as helpersBackgammonFa } from './fa/helpers-backgammon.ts';
+import { helpersPoker as helpersPokerFa } from './fa/helpers-poker.ts';
 
-registerCatalogue({ en: { ...appEn, ...playEn, ...socialEn, ...walletEn, ...meEn }, fa: { ...appFa, ...playFa, ...socialFa, ...walletFa, ...meFa } });
+registerCatalogue({ en: { ...appEn, ...playEn, ...socialEn, ...walletEn, ...meEn, ...helpersEn, ...helpersLudoEn, ...helpersHokmEn, ...helpersBackgammonEn, ...helpersPokerEn }, fa: { ...appFa, ...playFa, ...socialFa, ...walletFa, ...meFa, ...helpersFa, ...helpersLudoFa, ...helpersHokmFa, ...helpersBackgammonFa, ...helpersPokerFa } });

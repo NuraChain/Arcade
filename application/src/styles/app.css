@@ -1508,6 +1508,16 @@
     filter: saturate(0.3) brightness(0.6);
 }
 
+.card-hold[data-legal='hidden']
+{
+    cursor: pointer;
+}
+
+.card-hold[data-legal='hidden']:hover .card-face
+{
+    translate: 0 -0.9rem;
+}
+
 @media (prefers-reduced-motion: reduce)
 {
     .hokm-trick

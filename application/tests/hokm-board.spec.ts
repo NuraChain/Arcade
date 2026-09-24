@@ -9,6 +9,7 @@ import { resetRuntime, runtime, setRuntime } from '../src/lib/runtime.ts';
 import '../src/locales/app-catalogue.ts';
 import { useDevice } from '../src/stores/device.store.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
+import { useSettings } from '../src/stores/settings.store.ts';
 import { useBoard, type EventBatch, type MatchEvent } from '../src/stores/match.store.ts';
 import type { MatchView } from '../src/api.ts';
 
@@ -342,5 +343,94 @@ describe('playing a card with a finger', () =>
         fire(cardButton(container, 0), 'click');
 
         expect(play).toHaveBeenCalledWith({ kind: 'hokm', verb: 'card', card: 0 });
+    });
+});
+
+describe('the game helpers', () =>
+{
+    const following = (): MatchView => match({ phase: 'tricks', trump: 'spades', turn: 0, lead: 3, trick: [34], hand: [38, 0, 40], plays: [38] }, 0);
+
+    const watching = (): MatchView => ({ ...match({ phase: 'tricks', trump: 'spades', turn: 0, lead: 3, trick: [34] }), mine: undefined });
+
+    const cardButton = (container: HTMLElement, card: number): HTMLButtonElement =>
+        container.querySelector<HTMLButtonElement>(`.card-hold[data-card="${ card }"]`)!;
+
+    afterEach(() =>
+    {
+        useSettings().reset();
+    });
+
+    it('lights the playable cards, and with the lighting off leaves every card at rest while an illegal one still refuses', () =>
+    {
+        useDevice().overrideCoarse(false);
+        const play = vi.spyOn(useBoard(), 'play').mockResolvedValue(undefined);
+        const { container } = renderTest(() => HokmBoard({ match: following() }) as Rendered);
+
+        expect(cardButton(container, 38).dataset.legal).toBe('true');
+        expect(cardButton(container, 0).dataset.legal).toBe('false');
+
+        useSettings().update({ hintMoves: false });
+
+        expect([38, 0, 40].map((card) => cardButton(container, card).dataset.legal)).toEqual(['hidden', 'hidden', 'hidden']);
+        expect(cardButton(container, 0).disabled).toBe(true);
+
+        fire(cardButton(container, 0), 'click');
+
+        expect(play).not.toHaveBeenCalled();
+    });
+
+    it('says whether the card in hand would take the trick, and stops saying it when the helper is off', () =>
+    {
+        useDevice().overrideCoarse(false);
+        const { container } = renderTest(() => HokmBoard({ match: following() }) as Rendered);
+
+        cardButton(container, 38).focus();
+
+        expect(container.querySelector('.hokm-outcome')?.textContent).toBe('Takes the trick so far.');
+        expect(cardButton(container, 38).getAttribute('aria-label')).toBe('Play the A of Hearts. Takes the trick so far.');
+
+        useSettings().update({ hintOutcome: false });
+
+        expect(container.querySelector('.hokm-outcome')).toBeNull();
+        expect(cardButton(container, 38).getAttribute('aria-label')).toBe('Play the A of Hearts');
+    });
+
+    it('puts the outcome of a lifted card beside the button that plays it', () =>
+    {
+        useDevice().overrideCoarse(true);
+        const { container } = renderTest(() => HokmBoard({ match: following() }) as Rendered);
+
+        fire(cardButton(container, 38), 'click');
+
+        const button = [...container.querySelectorAll('button')].find((one) => one.textContent?.trim().startsWith('Play the'));
+
+        expect(button?.getAttribute('aria-label')).toBe('Play the A of Hearts. Takes the trick so far.');
+        expect(container.querySelector('.hokm-outcome')?.textContent).toBe('Takes the trick so far.');
+    });
+
+    it('coaches the rule that binds this play, and goes quiet when the coach is off', () =>
+    {
+        const { container } = renderTest(() => HokmBoard({ match: following() }) as Rendered);
+
+        expect(container.querySelector('[role="note"]')?.textContent).toContain('You have to follow the suit that was led.');
+
+        useSettings().update({ hintRules: false });
+
+        expect(container.querySelector('[role="note"]')).toBeNull();
+    });
+
+    it('tells the hakem which suit they hold most of while trump is being named', () =>
+    {
+        const { container } = renderTest(() => HokmBoard({ match: match({ hand: [38, 37, 30, 0, 14] }, 0) }) as Rendered);
+
+        expect(container.querySelector('[role="note"]')?.textContent).toContain('You hold more hearts than any other suit.');
+    });
+
+    it('gives somebody watching neither tips nor outcomes', () =>
+    {
+        const { container } = renderTest(() => HokmBoard({ match: watching() }) as Rendered);
+
+        expect(container.querySelector('[role="note"]')).toBeNull();
+        expect(container.querySelector('.hokm-outcome')).toBeNull();
     });
 });

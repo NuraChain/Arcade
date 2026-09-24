@@ -1,0 +1,20 @@
+import Icon from '../../icons/icon.component.azeroth';
+import type { Tip } from '../../game/helpers/tip.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import { useSettings } from '../../stores/settings.store.ts';
+
+export default component CoachLine(props: { tip: Tip | null; class?: string })
+{
+    const locale = useLocale();
+    const settings = useSettings();
+
+    <Show when={ props.tip !== null && settings.settings().hintRules }>
+        { () =>
+            <p class={ [ 'flex items-start gap-2 rounded-tile border border-line bg-raised/60 px-3 py-2 text-ui-xs text-muted', props.class ?? '' ].filter(Boolean).join(' ') } role="note">
+                <Icon name="idea" size={ 14 } class="mt-px shrink-0 text-gold" />
+                <span class="sr-only">{ locale.t('helpers.tip') }</span>
+                <span class="min-w-0">{ props.tip === null ? '' : locale.t(props.tip.key, props.tip.params) }</span>
+            </p>
+        }
+    </Show>
+}

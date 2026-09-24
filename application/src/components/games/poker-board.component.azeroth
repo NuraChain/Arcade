@@ -1,6 +1,7 @@
 import { untrack } from 'azerothjs';
 
 import CardFace from './card-face.component.azeroth';
+import CoachLine from './coach-line.component.azeroth';
 import MatchResult from './match-result.component.azeroth';
 import TurnClock from './turn-clock.component.azeroth';
 import Avatar from '../ui/avatar.component.azeroth';
@@ -9,6 +10,7 @@ import Slider from '../ui/slider.component.azeroth';
 import Icon from '../../icons/icon.component.azeroth';
 import { FACE_KEY, rankOf, suitOf } from '../../data/cards.ts';
 import { pokerOf } from '../../data/match.ts';
+import { coachOf, outcomeOf } from '../../game/helpers/poker.ts';
 import { useBoard } from '../../stores/match.store.ts';
 import { useSettings } from '../../stores/settings.store.ts';
 import { haptic } from '../../lib/haptics.ts';
@@ -112,6 +114,35 @@ export default component PokerBoard(props: { match: MatchView; starting?: boolea
     derived highest = view === null ? 0 : Math.max(0, ...view.seats.map((row) => row.bet));
 
     derived myRow = view?.seats.find((row) => row.seat === viewer);
+
+    derived tip = view === null || over ? null : coachOf(view, mine);
+
+    derived outcome = view === null || over || !settings.settings().hintOutcome ? null : outcomeOf(view, mine);
+
+    derived handSays = ((): string =>
+    {
+        const hand = outcome?.hand;
+
+        if (hand == null)
+        {
+            return '';
+        }
+
+        const named = locale.t(`helpers.poker.hand.${ hand.category }` as never, {
+            top: locale.t(`helpers.poker.rank.one.${ hand.top }` as never),
+            tops: locale.t(`helpers.poker.rank.many.${ hand.top }` as never),
+            seconds: hand.second === null ? '' : locale.t(`helpers.poker.rank.many.${ hand.second }` as never)
+        });
+
+        return locale.t(hand.board ? 'helpers.poker.board' : 'helpers.poker.best', { hand: named });
+    })();
+
+    derived costSays = ((): string =>
+    {
+        const call = outcome?.call;
+
+        return call == null ? '' : locale.t('helpers.poker.cost', { chips: chips(call.chips), pot: chips(call.pot) });
+    })();
 
     effect
     {
@@ -344,6 +375,8 @@ export default component PokerBoard(props: { match: MatchView; starting?: boolea
                             }
                         </Show>
 
+                        <CoachLine tip={ tip } />
+
                         <Show when={ !over && view!.hole.length === 2 }>
                             { () =>
                                 <div class="flex items-center gap-3 [--card-w:3.4rem]">
@@ -357,6 +390,9 @@ export default component PokerBoard(props: { match: MatchView; starting?: boolea
                                     <p class="flex min-w-0 flex-col text-ui-xs text-muted">
                                         <span class="label text-ui-2xs text-faint">{ locale.t('poker.hole') }</span>
                                         <span>{ cardsSay(view!.hole) }</span>
+                                        <Show when={ handSays !== '' }>
+                                            { () => <span class="font-semibold text-text">{ handSays }</span> }
+                                        </Show>
                                     </p>
                                 </div>
                             }
@@ -365,6 +401,9 @@ export default component PokerBoard(props: { match: MatchView; starting?: boolea
                         <Show when={ myTurn }>
                             { () =>
                                 <div class="flex flex-col gap-3">
+                                    <Show when={ costSays !== '' }>
+                                        { () => <p class="text-ui-xs text-muted">{ costSays }</p> }
+                                    </Show>
                                     <div class="grid grid-cols-2 gap-2 @md:flex @md:flex-wrap">
                                         <Show when={ toCall > 0 }>
                                             { () =>

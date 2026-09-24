@@ -744,11 +744,24 @@ describe('the table’s chat and its controls', () =>
         const container = renderTest(() => TableMenu({ overlayId: 'menu', close, code: 'XD6H9N', full: false, onResign: resign }) as Rendered).container;
         const labels = [...container.querySelectorAll('ul button')].map((one) => one.textContent?.trim());
 
-        expect(labels).toEqual(['Turn sound on', 'Copy the table code XD6H9N', 'Give up']);
+        expect(labels).toEqual([
+            'Turn sound on',
+            'Hide what I can play',
+            'Stop saying what a move does',
+            'Turn the rules coach off',
+            'Copy the table code XD6H9N',
+            'Give up'
+        ]);
 
-        fire([...container.querySelectorAll('ul button')][2] as HTMLElement, 'click');
+        fire([...container.querySelectorAll('ul button')][3] as HTMLElement, 'click');
 
+        expect(useSettings().settings().hintRules).toBe(false);
         expect(close).toHaveBeenCalledTimes(1);
+        expect(resign).not.toHaveBeenCalled();
+
+        fire([...container.querySelectorAll('ul button')][5] as HTMLElement, 'click');
+
+        expect(close).toHaveBeenCalledTimes(2);
         expect(resign).toHaveBeenCalledTimes(1);
     });
 

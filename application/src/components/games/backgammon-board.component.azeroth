@@ -3,6 +3,7 @@ import { untrack } from 'azerothjs';
 import MatchResult from './match-result.component.azeroth';
 import TurnClock from './turn-clock.component.azeroth';
 import DieFace from './die-face.component.azeroth';
+import CoachLine from './coach-line.component.azeroth';
 import Avatar from '../ui/avatar.component.azeroth';
 import Button from '../ui/button.component.azeroth';
 import Icon from '../../icons/icon.component.azeroth';
@@ -16,6 +17,7 @@ import { usePeople } from '../../stores/people.store.ts';
 import { useVoice } from '../../stores/voice.store.ts';
 import { diceOf, stage } from '../../../../server/src/domains/match/backgammon/moves.ts';
 import type { Hop } from '../../../../server/src/domains/match/backgammon/board.ts';
+import { coachOf, hits, outcomeOf, type Outcome } from '../../game/helpers/backgammon.ts';
 import {
     BAR_LEFT,
     BAR_WIDTH,
@@ -150,6 +152,10 @@ export default component BackgammonBoard(props: { match: MatchView; starting?: b
 
     const settings = useSettings();
 
+    derived hints = settings.settings().hintMoves;
+
+    derived told = settings.settings().hintOutcome;
+
     const cues = tableCues({
         enabled: untrack(() => settings.settings().sound),
         seq: untrack(() => board.events().seq),
@@ -191,9 +197,9 @@ export default component BackgammonBoard(props: { match: MatchView; starting?: b
 
     derived far = plan?.at.them ?? rowOf(1 - viewer);
 
-    derived sources = new Set(picked === null ? (plan?.next ?? []).map((hop) => hop.from) : []);
+    derived sources = new Set(picked === null && hints ? (plan?.next ?? []).map((hop) => hop.from) : []);
 
-    derived targets = picked === null ? [] : (plan?.next ?? []).filter((hop) => hop.from === picked).map((hop) => hop.to);
+    derived targets = picked === null || !hints ? [] : (plan?.next ?? []).filter((hop) => hop.from === picked).map((hop) => hop.to);
 
     const stack = (key: string, count: number, x: number, row: Row, base: number | undefined, tone: Tone, lit: boolean): Piece[] =>
         Array.from({ length: Math.min(count, STACK_SHOWN) }, (_, index) => ({
@@ -327,7 +333,18 @@ export default component BackgammonBoard(props: { match: MatchView; starting?: b
         return spot === 0 ? locale.t('backgammon.off') : locale.n(spot);
     };
 
-    const hopSays = (hop: Hop): string => locale.t('backgammon.hop', { from: spotSays(hop.from), to: spotSays(hop.to) });
+    const outcomeAt = (hop: Hop): Outcome | null => (told && plan !== null ? outcomeOf(plan.at, hop) : null);
+
+    const hopSays = (hop: Hop): string =>
+    {
+        const said = outcomeAt(hop);
+
+        return locale.t(said === null ? 'backgammon.hop' : `helpers.backgammon.hop.${ said }`, { from: spotSays(hop.from), to: spotSays(hop.to) });
+    };
+
+    derived tip = myTurn
+        ? coachOf({ phase: view!.phase, side: { me: [...rowOf(viewer)], them: [...rowOf(1 - viewer)] }, dice: view!.dice, staged, doubling: view!.doubling, cube: view!.cube })
+        : null;
 
     derived options = [...(plan?.next ?? [])].sort((a, b) => b.from - a.from || b.to - a.to);
 
@@ -681,6 +698,8 @@ export default component BackgammonBoard(props: { match: MatchView; starting?: b
                                     <TurnClock remainingMs={ game.remainingMs } over={ over } yours={ myTurn } />
                                 </div>
 
+                                <CoachLine tip={ tip } />
+
                                 <Show when={ myTurn && view!.phase === 'roll' }>
                                     { () =>
                                         <div class="flex flex-wrap gap-2">
@@ -754,6 +773,9 @@ export default component BackgammonBoard(props: { match: MatchView; starting?: b
                                                                         { spotSays(hop.from) }
                                                                         <Icon name="chevron-right" size={ 14 } class="icon-flip mx-0.5 text-muted" />
                                                                         { spotSays(hop.to) }
+                                                                        <Show when={ hits(outcomeAt(hop)) }>
+                                                                            { () => <span class="ms-1.5 text-ui-2xs font-semibold text-gold">{ locale.t('helpers.backgammon.tag.hit') }</span> }
+                                                                        </Show>
                                                                     </button>
                                                                 </li>
                                                             </For>

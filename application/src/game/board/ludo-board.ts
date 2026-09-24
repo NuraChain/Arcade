@@ -149,7 +149,7 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
     {
         const token = piece.token;
 
-        piece.root.toggleAttribute('data-movable', token.playable);
+        piece.root.toggleAttribute('data-movable', token.playable && view.lit !== false);
         piece.root.toggleAttribute('data-home', token.at === FINISHED);
         piece.root.style.setProperty('--i', String(order(token.key)[1] % 4));
     };

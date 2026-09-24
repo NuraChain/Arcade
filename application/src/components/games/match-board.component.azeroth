@@ -1,4 +1,5 @@
 import BoardCanvas from './board-canvas.component.azeroth';
+import CoachLine from './coach-line.component.azeroth';
 import MatchResult from './match-result.component.azeroth';
 import DieFace from './die-face.component.azeroth';
 import TurnClock from './turn-clock.component.azeroth';
@@ -9,11 +10,13 @@ import { useLocale } from '../../stores/locale.store.ts';
 import { SHORT_MAX, useDevice } from '../../stores/device.store.ts';
 import { useBoard } from '../../stores/match.store.ts';
 import { usePeople } from '../../stores/people.store.ts';
+import { useSettings } from '../../stores/settings.store.ts';
 import type { MatchView } from '../../api.ts';
 import type { BoardView, LudoBeat } from '../../game/bridge.ts';
 import { chairsOf, ludoOf } from '../../data/match.ts';
 import { seatsFor } from './seats.ts';
 import { CELL, MARGIN } from '../../game/layout.ts';
+import { coachOf, outcomeOf } from '../../game/helpers/ludo.ts';
 
 const STAGE = `--cell-cq: ${ (CELL * 100).toFixed(4) }cqi; --margin-cq: ${ (MARGIN * 100).toFixed(4) }cqi`;
 
@@ -48,8 +51,11 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
     const board = useBoard();
     const device = useDevice();
     const people = usePeople();
+    const settings = useSettings();
 
     derived game = props.match;
+
+    derived help = settings.settings();
 
     /**
      * The board, as the engine composed it for whoever is reading.
@@ -71,17 +77,19 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
 
     derived turnSeat = ludo.seats.find((seat) => seat.seat === game.turn);
 
-    derived nameOf = ((): string =>
+    const nameFor = (seat: number | undefined): string =>
     {
-        if (turnOf === undefined)
+        const player = game.players.find((one) => one.seat === seat);
+
+        if (player === undefined)
         {
             return '';
         }
 
-        const person = people.byHandle(turnOf.who);
+        return people.byHandle(player.who)?.displayName ?? player.who;
+    };
 
-        return person === null ? turnOf.who : person.displayName;
-    })();
+    derived nameOf = nameFor(turnOf?.seat);
 
     derived says = ((): string =>
     {
@@ -142,9 +150,10 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
             return locale.t('match.hint.roll');
         }
 
-        return ludo.die !== undefined && board.moves().length > 0 ? locale.t('match.hint.move') : '';
+        return ludo.die !== undefined && board.moves().length > 0 ? locale.t(help.hintMoves ? 'match.hint.move' : 'helpers.ludo.hint.move') : '';
     })();
 
+    derived tip = over ? null : coachOf(ludo, mine, game.turn, board.events().events.flatMap((event) => event.log.kind === 'ludo' ? event.log.moves : []));
 
     /**
      * What the renderer is given, as one value.
@@ -171,6 +180,7 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
         turn: turnSeat?.colour ?? null,
         yours: !over && mine !== undefined && mine === game.turn,
         winner: ludo.seats.find((seat) => seat.seat === game.winner)?.colour ?? null,
+        lit: help.hintMoves,
         beats
     }))();
 
@@ -192,22 +202,30 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
 
     const moveSays = (piece: number): string =>
     {
-        const token = turnSeat?.tokens.find((candidate) => candidate.piece === piece);
-        const label = locale.n(piece + 1);
+        const token = locale.n(piece + 1);
+        const outcome = mine === undefined ? null : outcomeOf(ludo, mine, piece);
 
-        if (token === undefined || ludo.die === undefined)
+        if (outcome?.kind === 'enter')
         {
-            return locale.t('match.move.step', { token: label, die: locale.n(ludo.die ?? 0) });
+            return locale.t('match.move.enter', { token });
         }
 
-        if (token.at < 0)
+        if (help.hintOutcome && outcome?.kind === 'home')
         {
-            return locale.t('match.move.enter', { token: label });
+            return locale.t('match.move.home', { token });
         }
 
-        return token.at + ludo.die >= 56
-            ? locale.t('match.move.home', { token: label })
-            : locale.t('match.move.step', { token: label, die: locale.n(ludo.die) });
+        if (help.hintOutcome && outcome?.kind === 'safe')
+        {
+            return locale.t('helpers.ludo.move.safe', { token });
+        }
+
+        if (help.hintOutcome && outcome?.kind === 'capture')
+        {
+            return locale.plural('helpers.ludo.move.capture', outcome.count, { token, name: nameFor(outcome.victim) });
+        }
+
+        return locale.t('match.move.step', { token, die: locale.n(ludo.die ?? 0) });
     };
 
     <div class="@container my-auto flex min-w-0 flex-col gap-4">
@@ -270,6 +288,8 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
                             <TurnClock remainingMs={ game.remainingMs } over={ over } yours={ !over && mine !== undefined && mine === game.turn } />
                         </div>
 
+                        <CoachLine tip={ tip } />
+
                         <Show when={ mine !== undefined && mine === game.turn && ludo.die !== undefined && board.moves().length > 0 }>
                             { () =>
                                 <ul class="grid grid-cols-2 gap-2" aria-label={ locale.t('match.moves') }>
@@ -277,11 +297,11 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
                                         <li class="min-w-0">
                                             <Button
                                                 variant="secondary"
-                                                class="w-full"
+                                                class="h-auto! min-h-10 w-full py-2 coarse:min-h-11"
                                                 disabled={ board.busy() }
                                                 onClick={ () => void board.move(piece) }
                                             >
-                                                <span class="truncate">{ moveSays(piece) }</span>
+                                                <span class="min-w-0 text-balance leading-snug">{ moveSays(piece) }</span>
                                             </Button>
                                         </li>
                                     </For>

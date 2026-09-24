@@ -38,6 +38,7 @@ const SECTIONS: readonly { id: string; icon: IconName; key: MessageKey }[] = [
     { id: 'settings-safety', icon: 'shield', key: 'settings.safety' },
     { id: 'settings-notifications', icon: 'bell', key: 'settings.notifications' },
     { id: 'settings-voice', icon: 'voice', key: 'voice.settings' },
+    { id: 'settings-helpers', icon: 'idea', key: 'helpers.title' },
     { id: 'settings-premium', icon: 'sparkles', key: 'settings.premium' }
 ];
 
@@ -441,6 +442,31 @@ export default component SettingsPage()
                                     <Icon name="shield" size={ 13 } class="mt-0.5 shrink-0 text-live" />
                                     { locale.t('voice.privacy') }
                                 </p>
+                            </Panel>
+                        </section>
+
+                        <section id="settings-helpers" class="scroll-mt-16 @4xl:scroll-mt-4" aria-labelledby="settings-helpers-title">
+                            <SectionHeading id="settings-helpers-title" title={ locale.t('helpers.title') } />
+                            <Panel stack="md">
+                                <p class="text-ui-sm text-muted">{ locale.t('helpers.lead') }</p>
+                                <Toggle
+                                    checked={ current.hintMoves }
+                                    label={ locale.t('helpers.moves') }
+                                    description={ locale.t('helpers.movesHint') }
+                                    onChange={ (checked) => settings.update({ hintMoves: checked }) }
+                                />
+                                <Toggle
+                                    checked={ current.hintOutcome }
+                                    label={ locale.t('helpers.outcome') }
+                                    description={ locale.t('helpers.outcomeHint') }
+                                    onChange={ (checked) => settings.update({ hintOutcome: checked }) }
+                                />
+                                <Toggle
+                                    checked={ current.hintRules }
+                                    label={ locale.t('helpers.rules') }
+                                    description={ locale.t('helpers.rulesHint') }
+                                    onChange={ (checked) => settings.update({ hintRules: checked }) }
+                                />
                             </Panel>
                         </section>
 

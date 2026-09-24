@@ -24,6 +24,9 @@ export interface Settings
     voiceStartMuted: boolean;
     voiceAutoJoin: boolean;
     voiceVolume: number;
+    hintMoves: boolean;
+    hintOutcome: boolean;
+    hintRules: boolean;
     notifications: Record<NotificationCategory, boolean>;
 }
 
@@ -40,6 +43,9 @@ export function defaultSettings(): Settings
         voiceStartMuted: true,
         voiceAutoJoin: false,
         voiceVolume: 1,
+        hintMoves: true,
+        hintOutcome: true,
+        hintRules: true,
         notifications: { invites: true, requests: true, results: true, messages: true, achievements: true }
     };
 }

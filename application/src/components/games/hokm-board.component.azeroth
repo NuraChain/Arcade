@@ -1,6 +1,7 @@
 import { untrack } from 'azerothjs';
 
 import CardFace from './card-face.component.azeroth';
+import CoachLine from './coach-line.component.azeroth';
 import MatchResult from './match-result.component.azeroth';
 import TurnClock from './turn-clock.component.azeroth';
 import Avatar from '../ui/avatar.component.azeroth';
@@ -9,6 +10,7 @@ import Icon from '../../icons/icon.component.azeroth';
 import { FACE_KEY, SUITS, SUIT_ICON, arrangeHand, rankOf, suitOf, type Suit } from '../../data/cards.ts';
 import { aroundTable, type Chair } from './table-seats.ts';
 import { hokmOf } from '../../data/match.ts';
+import { coachOf, outcomeOf } from '../../game/helpers/hokm.ts';
 import { EMPTY, beatsOf, feltOf, gatherLength, gatherOrder, overflows, scaled, type Beat, type Felt, type HokmMove, type Laid } from '../../game/hokm-beats.ts';
 import { EASE, TIMING, centreOf, fly, land, rectIn, type Rect } from '../../game/motion.ts';
 import { createSound, type SoundHandle } from '../../game/sound.ts';
@@ -87,6 +89,8 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
     state sorted = false;
 
     state picked: number | null = null;
+
+    state aimed: number | null = null;
 
     state shown: Felt | null = null;
 
@@ -197,6 +201,21 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
 
     derived chosen = picked !== null && myTurn && legal.has(picked) ? picked : null;
 
+    derived hints = settings.settings();
+
+    derived outcomeFor = (card: number): string | null =>
+    {
+        const says = hints.hintOutcome && myTurn && legal.has(card) && view !== null ? outcomeOf(card, view, game.seats) : null;
+
+        return says === null ? null : locale.t(says.key);
+    };
+
+    derived aimedAt = chosen ?? aimed;
+
+    derived outcome = aimedAt === null ? null : outcomeFor(aimedAt);
+
+    derived tip = view === null || over ? null : coachOf(view, mine);
+
     derived hand = view === null ? [] : (sorted ? arrangeHand(view.hand, view.trump) : [...view.hand]);
 
     derived rows = hand.length === 0
@@ -231,6 +250,24 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
     const cardSays = (card: number): string =>
         locale.t('hokm.card', { rank: rankSays(card), suit: locale.t(`hokm.suit.${ suitOf(card) }` as never) });
 
+    const cardLabel = (card: number): string =>
+    {
+        const play = locale.t('hokm.play', { card: cardSays(card) });
+        const says = outcomeFor(card);
+
+        return says === null ? play : `${ play }. ${ says }`;
+    };
+
+    const aim = (card: number): void =>
+    {
+        aimed = card;
+    };
+
+    const unaim = (card: number): void =>
+    {
+        aimed = aimed === card ? null : aimed;
+    };
+
     const playCard = async (card: number): Promise<void> =>
     {
         if (!legal.has(card))
@@ -246,6 +283,7 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
         }
 
         picked = null;
+        aimed = null;
         haptic('select');
         await board.play({ kind: 'hokm', verb: 'card', card });
     };
@@ -848,6 +886,8 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
                 </Show>
             </div>
 
+            <CoachLine tip={ tip } />
+
             <Show when={ view?.phase === 'trump' && view.hakem === mine }>
                 { () =>
                     <div class="flex flex-col gap-2">
@@ -881,12 +921,16 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
                                 type="button"
                                 class="card-hold"
                                 data-card={ card }
-                                data-legal={ myTurn && legal.has(card) ? 'true' : (myTurn ? 'false' : 'idle') }
+                                data-legal={ myTurn ? (hints.hintMoves ? (legal.has(card) ? 'true' : 'false') : 'hidden') : 'idle' }
                                 data-picked={ chosen === card ? 'true' : undefined }
                                 disabled={ !legal.has(card) || board.busy() }
-                                aria-label={ locale.t('hokm.play', { card: cardSays(card) }) }
+                                aria-label={ cardLabel(card) }
                                 aria-pressed={ device.coarse() ? chosen === card : undefined }
                                 onClick={ () => touchCard(card) }
+                                onPointerEnter={ (event) => (event.pointerType === 'mouse' ? aim(card) : undefined) }
+                                onPointerLeave={ () => unaim(card) }
+                                onFocus={ () => aim(card) }
+                                onBlur={ () => unaim(card) }
                             >
                                 <CardFace card={ card } />
                             </button>
@@ -898,18 +942,22 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
             <Show when={ chosen !== null }>
                 { () =>
                     <span class="glow-cta mx-auto flex w-full max-w-[22rem] rounded-control">
-                        <Button variant="primary" size="lg" leading="cards" block loading={ board.busy() } onClick={ () => void playCard(chosen!) }>
+                        <Button variant="primary" size="lg" leading="cards" block loading={ board.busy() } label={ cardLabel(chosen!) } onClick={ () => void playCard(chosen!) }>
                             { locale.t('hokm.play', { card: cardSays(chosen!) }) }
                         </Button>
                     </span>
                 }
             </Show>
 
+            <Show when={ hints.hintOutcome && myTurn }>
+                { () => <p class="hokm-outcome min-h-5 text-center text-ui-xs font-semibold text-text" aria-hidden="true">{ outcome ?? '' }</p> }
+            </Show>
+
             <Show when={ chosen === null && myTurn && device.coarse() }>
                 { () => <p class="text-center text-ui-xs text-muted">{ locale.t('hokm.pick') }</p> }
             </Show>
 
-            <Show when={ myTurn && legal.size < (view?.hand.length ?? 0) }>
+            <Show when={ myTurn && legal.size < (view?.hand.length ?? 0) && !(hints.hintRules && tip !== null) }>
                 { () => <p class="text-center text-ui-xs text-muted">{ locale.t('hokm.follow') }</p> }
             </Show>
         </section>

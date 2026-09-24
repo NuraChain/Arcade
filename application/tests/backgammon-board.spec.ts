@@ -20,6 +20,7 @@ import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import '../src/locales/app-catalogue.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
 import { useBoard } from '../src/stores/match.store.ts';
+import { useSettings } from '../src/stores/settings.store.ts';
 import type { MatchView } from '../src/api.ts';
 
 type Rendered = HTMLElement;
@@ -54,6 +55,20 @@ const match = (view: Partial<Backgammon>, mine: number | null = 0): MatchView =>
     }
 });
 
+const row = (points: Record<number, number>): number[] =>
+    Array.from({ length: 26 }, (_, point) => points[point] ?? 0);
+
+const position = (mine: Record<number, number>, theirs: Record<number, number>): Backgammon['seats'] => [
+    { seat: 0, checkers: row(mine), pips: 0, score: 0 },
+    { seat: 1, checkers: row(theirs), pips: 0, score: 0 }
+];
+
+const lit = (container: HTMLElement): number =>
+    container.querySelectorAll('svg circle[stroke="var(--accent)"]').length;
+
+const note = (container: HTMLElement): string | null =>
+    container.querySelector('[role="note"]')?.textContent ?? null;
+
 const button = (container: HTMLElement, label: string): HTMLButtonElement =>
     [...container.querySelectorAll('button')].find((one) => one.getAttribute('aria-label') === label || one.textContent?.trim() === label) as HTMLButtonElement;
 
@@ -63,6 +78,7 @@ beforeEach(() =>
     resetRuntime();
     setRuntime({ clock: manualClock(400_000), seed: 3 });
     useLocale().setLocale('en');
+    useSettings().reset();
 });
 
 afterEach(() =>
@@ -200,5 +216,86 @@ describe('BackgammonBoard', () =>
 
         expect(container.querySelector('svg')?.parentElement?.className).toContain('[direction:ltr]');
         useLocale().setLocale('en');
+    });
+});
+
+describe('the backgammon helpers', () =>
+{
+    const blot = (mine: number | null = 0): MatchView => match({ dice: [5, 3], seats: position({ 13: 1, 1: 14 }, { 17: 1, 6: 14 }) }, mine);
+
+    it('lights the checkers that can move, and stops when the switch is off without taking a move away', () =>
+    {
+        const { container } = renderTest(() => BackgammonBoard({ match: match({}) }) as Rendered);
+
+        expect(lit(container)).toBeGreaterThan(0);
+
+        useSettings().update({ hintMoves: false });
+
+        expect(lit(container)).toBe(0);
+        expect(button(container, 'Move a checker from 13 to 7')).toBeDefined();
+    });
+
+    it('says a hop hits a blot, in its name and on its face, until the switch is off', () =>
+    {
+        const { container } = renderTest(() => BackgammonBoard({ match: blot() }) as Rendered);
+        const hitting = button(container, 'Move a checker from 13 to 8 and hit the blot there');
+
+        expect(hitting).toBeDefined();
+        expect(hitting.textContent).toContain('Hit');
+        expect(button(container, 'Move a checker from 13 to 10')).toBeDefined();
+
+        useSettings().update({ hintOutcome: false });
+
+        const plain = button(container, 'Move a checker from 13 to 8');
+
+        expect(plain).toBeDefined();
+        expect(plain.textContent).not.toContain('Hit');
+        expect(button(container, 'Move a checker from 13 to 8 and hit the blot there')).toBeUndefined();
+    });
+
+    it('says a hop enters from the bar', () =>
+    {
+        const { container } = renderTest(() => BackgammonBoard({ match: match({ dice: [5, 3], seats: position({ 25: 1, 6: 14 }, { 6: 15 }) }) }) as Rendered);
+
+        expect(button(container, 'Enter a checker from the bar on 20')).toBeDefined();
+        expect(note(container)).toContain('comes back in first');
+    });
+
+    it('coaches the rule that matters, and goes quiet when the coach is off', () =>
+    {
+        const { container } = renderTest(() => BackgammonBoard({ match: match({ dice: [3, 3] }) }) as Rendered);
+
+        expect(note(container)).toContain('A double plays four times');
+
+        useSettings().update({ hintRules: false });
+
+        expect(note(container)).toBeNull();
+    });
+
+    it('explains the double to the player it was offered to', () =>
+    {
+        const { container } = renderTest(() => BackgammonBoard({ match: match({ phase: 'double', turn: 0, dice: [], cube: 2 }) }) as Rendered);
+
+        expect(note(container)).toContain('goes on at 4');
+    });
+
+    it('gives the player who doubled no tip while they wait for the answer', () =>
+    {
+        const { container } = renderTest(() => BackgammonBoard({ match: match({ phase: 'double', turn: 1, dice: [], cube: 2 }) }) as Rendered);
+
+        expect(note(container)).toBeNull();
+    });
+
+    it('gives a spectator no tip and no outcome, because they have no move', () =>
+    {
+        const doubles = renderTest(() => BackgammonBoard({ match: match({ dice: [3, 3] }, null) }) as Rendered);
+
+        expect(note(doubles.container)).toBeNull();
+        doubles.unmount();
+
+        const watching = renderTest(() => BackgammonBoard({ match: blot(null) }) as Rendered);
+
+        expect(note(watching.container)).toBeNull();
+        expect(watching.container.textContent).not.toContain('Hit');
     });
 });

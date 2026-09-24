@@ -28,6 +28,8 @@ export default component TableMenu(props: OverlayProps & {
 
     derived sound = settings.settings().sound;
 
+    derived current = settings.settings();
+
     const copyCode = (): void =>
     {
         void navigator.clipboard?.writeText(props.code)
@@ -43,6 +45,24 @@ export default component TableMenu(props: OverlayProps & {
                 icon: sound ? 'sound-off' : 'sound',
                 label: locale.t(sound ? 'play.dock.soundOff' : 'play.dock.soundOn'),
                 run: () => settings.update({ sound: !sound })
+            },
+            {
+                id: 'hint-moves',
+                icon: 'idea',
+                label: locale.t(current.hintMoves ? 'helpers.moves.hide' : 'helpers.moves.show'),
+                run: () => settings.update({ hintMoves: !current.hintMoves })
+            },
+            {
+                id: 'hint-outcome',
+                icon: 'idea',
+                label: locale.t(current.hintOutcome ? 'helpers.outcome.hide' : 'helpers.outcome.show'),
+                run: () => settings.update({ hintOutcome: !current.hintOutcome })
+            },
+            {
+                id: 'hint-rules',
+                icon: 'idea',
+                label: locale.t(current.hintRules ? 'helpers.rules.hide' : 'helpers.rules.show'),
+                run: () => settings.update({ hintRules: !current.hintRules })
             }
         ];
 
