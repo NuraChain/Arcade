@@ -7,6 +7,7 @@ import LanguageSwitch from '../../components/layout/language-switch.component.az
 import Panel from '../../components/ui/panel.component.azeroth';
 import Button from '../../components/ui/button.component.azeroth';
 import Pagination from '../../components/ui/pagination.component.azeroth';
+import Rail from '../../components/ui/rail.component.azeroth';
 import SectionHeading from '../../components/ui/section-heading.component.azeroth';
 import Toggle from '../../components/ui/switch.component.azeroth';
 import Slider from '../../components/ui/slider.component.azeroth';
@@ -15,6 +16,7 @@ import type { Person } from '../../data/person.ts';
 import Icon from '../../icons/icon.component.azeroth';
 import type { IconName } from '../../icons/registry.ts';
 import PushToggle from '../../components/app/push-toggle.component.azeroth';
+import { runtime } from '../../lib/runtime.ts';
 import { shortAddress } from '../../lib/wallet.ts';
 import { usePeople } from '../../stores/people.store.ts';
 import { useAccount } from '../../stores/account.store.ts';
@@ -127,38 +129,48 @@ export default component SettingsPage()
     {
         const id = active;
 
-        nav?.querySelector(`[data-section="${ id }"]`)?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+        nav?.querySelector(`[data-section="${ id }"]`)?.scrollIntoView({ block: 'nearest', inline: 'center' });
     }
+
+    let pinned: (() => void) | null = null;
+
+    const spot = (): void =>
+    {
+        if (body === null || pinned !== null)
+        {
+            return;
+        }
+
+        const page = body.closest('.page');
+        const sections = [...body.querySelectorAll<HTMLElement>('section[id]')];
+        const line = (nav?.getBoundingClientRect().bottom ?? 0) + 32;
+        const bottomed = page !== null && page.scrollTop + page.clientHeight >= page.scrollHeight - 2;
+        const passed = sections.filter((section) => section.getBoundingClientRect().top <= line);
+        const current = bottomed ? sections.at(-1) : passed.at(-1);
+
+        active = current?.id ?? SECTIONS[0].id;
+    };
 
     const go = (id: string): void =>
     {
         active = id;
+        pinned?.();
+        pinned = runtime().clock.after(900, () => pinned = null);
         document.getElementById(id)?.scrollIntoView({ block: 'start', behavior: device.reducedMotion() ? 'auto' : 'smooth' });
     };
 
     mount
     {
-        if (body === null || typeof IntersectionObserver === 'undefined')
+        const page = body?.closest('.page') ?? null;
+
+        page?.addEventListener('scroll', spot, { passive: true });
+        spot();
+
+        return () =>
         {
-            return;
-        }
-
-        const spy = new IntersectionObserver((entries) =>
-        {
-            const seen = entries.filter((entry) => entry.isIntersecting).map((entry) => entry.target.id);
-
-            if (seen.length > 0)
-            {
-                active = seen[0];
-            }
-        }, { rootMargin: '-15% 0px -70% 0px' });
-
-        for (const section of body.querySelectorAll('section[id]'))
-        {
-            spy.observe(section);
-        }
-
-        return () => spy.disconnect();
+            page?.removeEventListener('scroll', spot);
+            pinned?.();
+        };
     }
 
     <Page label={ locale.t('settings.title') }>
@@ -166,24 +178,35 @@ export default component SettingsPage()
 
         <div class="@container">
             <div class="flex flex-col gap-6 @4xl:grid @4xl:grid-cols-[13rem_minmax(0,1fr)] @4xl:items-start @4xl:gap-8">
-                <nav ref={ (element) => nav = element } class="rail-x bleed bleed-pad sticky top-0 z-10 flex gap-1.5 border-b border-line bg-void/90 py-2 backdrop-blur-md @4xl:mx-0 @4xl:flex-col @4xl:gap-0.5 @4xl:overflow-visible @4xl:border-0 @4xl:bg-transparent @4xl:px-0 @4xl:py-0 @4xl:backdrop-blur-none" aria-label={ locale.t('settings.sections') }>
-                    <For each={ [...SECTIONS] } key={ (section) => section.id } let={ section }>
-                        <button
-                            type="button"
-                            class={ () => [
-                                'flex min-h-10 shrink-0 cursor-pointer items-center gap-2.5 rounded-full border px-3.5 text-ui-sm font-semibold transition-colors duration-150 coarse:min-h-11 @4xl:rounded-tile @4xl:border-transparent @4xl:px-3',
-                                active === section.id
-                                    ? 'border-accent/50 bg-accent/12 text-text @4xl:bg-raised'
-                                    : 'border-line text-muted hover:text-text @4xl:hover:bg-raised/60'
-                            ].join(' ') }
-                            data-section={ section.id }
-                            aria-current={ active === section.id ? 'true' : undefined }
-                            onClick={ () => go(section.id) }
-                        >
-                            <Icon name={ section.icon } size={ 16 } class={ active === section.id ? 'text-accent' : '' } />
-                            { locale.t(section.key) }
-                        </button>
-                    </For>
+                <nav
+                    ref={ (element) => nav = element }
+                    class="bleed sticky top-[calc(var(--page-pad)*-1)] z-10 border-b border-line bg-void @4xl:top-0 @4xl:mx-0 @4xl:border-0 @4xl:bg-transparent"
+                    aria-label={ locale.t('settings.sections') }
+                >
+                    <Rail label={ locale.t('settings.sections') } inner="bleed-pad gap-1 @4xl:flex-col @4xl:gap-0.5 @4xl:overflow-visible @4xl:px-0">
+                        <For each={ [...SECTIONS] } key={ (section) => section.id } let={ section }>
+                            <button
+                                type="button"
+                                class={ () => [
+                                    'relative flex h-11 shrink-0 cursor-pointer snap-start items-center gap-2 whitespace-nowrap rounded-control px-3 text-ui-sm font-semibold transition-colors duration-150',
+                                    '@4xl:h-10 @4xl:w-full @4xl:rounded-tile',
+                                    active === section.id
+                                        ? 'text-text @4xl:bg-raised'
+                                        : 'text-muted hover:text-text @4xl:hover:bg-raised/60'
+                                ].join(' ') }
+                                data-section={ section.id }
+                                aria-current={ active === section.id ? 'true' : undefined }
+                                onClick={ () => go(section.id) }
+                            >
+                                <Icon name={ section.icon } size={ 16 } class={ active === section.id ? 'text-accent' : '' } />
+                                { locale.t(section.key) }
+                                <span
+                                    class={ () => [ 'absolute inset-x-3 bottom-0 h-0.5 rounded-full transition-colors duration-200 @4xl:hidden', active === section.id ? 'bg-accent' : 'bg-transparent' ].join(' ') }
+                                    aria-hidden="true"
+                                ></span>
+                            </button>
+                        </For>
+                    </Rail>
                 </nav>
 
                 <div ref={ (element) => body = element } class="flex min-w-0 flex-col gap-8">

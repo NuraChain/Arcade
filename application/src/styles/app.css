@@ -510,29 +510,29 @@ html:has(.site-drawer[open])
 
 :root:not([dir='rtl']) .rail[data-start='false']
 {
-    --fade-left: 2rem;
+    --fade-left: 3.5rem;
 }
 
 :root:not([dir='rtl']) .rail[data-end='false']
 {
-    --fade-right: 2rem;
+    --fade-right: 3.5rem;
 }
 
 :root[dir='rtl'] .rail[data-start='false']
 {
-    --fade-right: 2rem;
+    --fade-right: 3.5rem;
 }
 
 :root[dir='rtl'] .rail[data-end='false']
 {
-    --fade-left: 2rem;
+    --fade-left: 3.5rem;
 }
 
 .rail-arrows
 {
     position: absolute;
     inset-block: 0;
-    inset-inline: 0;
+    inset-inline: 0.5rem;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -544,8 +544,8 @@ html:has(.site-drawer[open])
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    inline-size: 1.75rem;
-    block-size: 1.75rem;
+    inline-size: 2rem;
+    block-size: 2rem;
     border-radius: 999px;
     border: 1px solid var(--line);
     background: var(--lifted);
@@ -571,6 +571,22 @@ html:has(.site-drawer[open])
 .rail-arrow:hover
 {
     border-color: var(--line-strong);
+}
+
+@media (pointer: fine)
+{
+    .rail:not([data-start='true'][data-end='true']) > .rail-x
+    {
+        cursor: grab;
+    }
+}
+
+.rail[data-dragging='true'] > .rail-x
+{
+    cursor: grabbing;
+    scroll-snap-type: none;
+    scroll-behavior: auto;
+    user-select: none;
 }
 
 .rail > .rail-x:focus-visible

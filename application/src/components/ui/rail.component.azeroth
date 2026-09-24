@@ -5,6 +5,8 @@ import { stepAlong } from '../../lib/snap.ts';
 import { useDevice } from '../../stores/device.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 
+const DRAG_FROM = 4;
+
 export default component Rail(props: { children?: Child; label: string; bleed?: boolean; class?: string; inner?: string })
 {
     const device = useDevice();
@@ -15,7 +17,73 @@ export default component Rail(props: { children?: Child; label: string; bleed?: 
 
     derived scrolls = !(atStart && atEnd);
 
+    state dragging = false;
+
     let scroller: HTMLElement | null = null;
+
+    let drag: { id: number; x: number; left: number; moved: boolean } | null = null;
+
+    let swallowUntil = 0;
+
+    const press = (event: PointerEvent): void =>
+    {
+        if (event.pointerType !== 'mouse' || event.button !== 0 || scroller === null || !scrolls)
+        {
+            return;
+        }
+        drag = { id: event.pointerId, x: event.clientX, left: scroller.scrollLeft, moved: false };
+    };
+
+    const slide = (event: PointerEvent): void =>
+    {
+        if (drag === null || scroller === null || event.pointerId !== drag.id)
+        {
+            return;
+        }
+        const dx = event.clientX - drag.x;
+        if (!drag.moved)
+        {
+            if (Math.abs(dx) < DRAG_FROM)
+            {
+                return;
+            }
+            drag.moved = true;
+            dragging = true;
+            scroller.setPointerCapture(event.pointerId);
+        }
+        scroller.scrollLeft = drag.left - dx;
+    };
+
+    const release = (event: PointerEvent): void =>
+    {
+        if (drag === null || event.pointerId !== drag.id)
+        {
+            return;
+        }
+        if (drag.moved)
+        {
+            swallowUntil = performance.now() + 80;
+        }
+        drag = null;
+        dragging = false;
+    };
+
+    const swallow = (event: Event): void =>
+    {
+        if (performance.now() < swallowUntil)
+        {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+    };
+
+    const still = (event: Event): void =>
+    {
+        if (drag !== null)
+        {
+            event.preventDefault();
+        }
+    };
 
     const measure = (): void =>
     {
@@ -48,13 +116,21 @@ export default component Rail(props: { children?: Child; label: string; bleed?: 
         {
             observer.observe(scroller);
         }
-        return () => observer?.disconnect();
+        scroller?.addEventListener('click', swallow, true);
+        scroller?.addEventListener('dragstart', still);
+        return () =>
+        {
+            observer?.disconnect();
+            scroller?.removeEventListener('click', swallow, true);
+            scroller?.removeEventListener('dragstart', still);
+        };
     }
 
     <div
         class={ [ 'rail', props.bleed === true ? 'bleed' : '', props.class ?? '' ].filter(Boolean).join(' ') }
         data-start={ atStart ? 'true' : 'false' }
         data-end={ atEnd ? 'true' : 'false' }
+        data-dragging={ dragging ? 'true' : undefined }
     >
         <div
             ref={ (element) => scroller = element }
@@ -63,6 +139,10 @@ export default component Rail(props: { children?: Child; label: string; bleed?: 
             aria-label={ props.label }
             tabindex={ scrolls ? '0' : undefined }
             onScroll={ measure }
+            onPointerDown={ press }
+            onPointerMove={ slide }
+            onPointerUp={ release }
+            onPointerCancel={ release }
             onKeyDown={ (event) =>
             {
                 const forward = event.key === (locale.dir() === 'rtl' ? 'ArrowLeft' : 'ArrowRight');
