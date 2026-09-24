@@ -42,7 +42,7 @@ const log = createServerLogger(config);
 await dataSource.initialize();
 log.info('database ready', { pool: config.databasePoolMax });
 
-if (config.env === 'development')
+if (config.databaseSync)
 {
     await syncSchema(dataSource);
     log.info('schema synced from the entities');

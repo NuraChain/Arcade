@@ -3,6 +3,7 @@ import 'reflect-metadata';
 import { DataSource } from 'typeorm';
 
 import { entities } from './entities/index.ts';
+import { oneAtATime } from './lib/one-at-a-time.ts';
 
 // The TypeORM CLI never goes through main.ts, so it loads the environment itself. A missing
 // .env is not an error here: the ambient environment is a valid way to configure a deployment.
@@ -35,3 +36,7 @@ export const dataSource = new DataSource({
 
     logging: process.env.NODE_ENV === 'development' ? ['error', 'warn', 'migration'] : ['error']
 });
+
+const createRunner = dataSource.driver.createQueryRunner.bind(dataSource.driver);
+
+dataSource.driver.createQueryRunner = (mode) => oneAtATime(createRunner(mode));

@@ -15,6 +15,7 @@ export function loadServerConfig()
 
         databaseUrl: str('DATABASE_URL', { secret: true }),
         databasePoolMax: num('DATABASE_POOL_MAX', { default: 10 }),
+        databaseSync: flag('DATABASE_SYNC', { default: true }),
 
         /**
          * Signs session cookies and realtime tickets. `serializeCookie` has no `signed` option

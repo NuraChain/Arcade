@@ -17,7 +17,7 @@ npm test               # every suite, both workspaces
 npm run test:shuffle   # every suite in random order — the isolation gate
 npm run qa             # 600-cell Playwright matrix: 12 widths × orientation × locale × route
 npm start              # the built server, serving the api AND the built client on one origin
-npm run schema:sync    # build the schema from the entities (dev does this on every boot)
+npm run schema:sync    # build the schema from the entities (every boot does this unless DATABASE_SYNC=false)
 npm run assets         # rebuild the showcase GLBs from tools/blender (needs Blender 5.2)
 npm run poster         # capture the landing's first frame from the built server on 5300
 ```
@@ -36,7 +36,6 @@ would be two copies of the client.
 
 ```sh
 npm run build                       # server tsc, client bundle, SSR bundle, prerender, budgets
-npm run schema:sync --workspace server    # once, on a database that has no tables yet
 npm start                           # serves the api AND the built client on ONE origin
 ```
 
@@ -92,9 +91,19 @@ carries `DATABASE_URL` and is the one place the name is written down; `tools/qa/
 the browser passes cannot drift from the server the way they once did. There are no migrations.
 `server/src/db/schema.ts` builds the schema with `syncSchema()`: the `citext` and `pgcrypto`
 extensions, then TypeORM's `synchronize()` from the entity metadata, then the indexes no
-decorator can express. `main.ts` runs it on every boot IN DEVELOPMENT ONLY; production gets
-`npm run schema:sync --workspace server`, which is the same code as a deliberate act rather than a
-side effect of starting.
+decorator can express. `main.ts` runs it on every boot while `DATABASE_SYNC` is on, which is its
+default under `npm run dev` and `npm start` alike, because the owner wants a deployment to follow the
+entities without a separate step. A deployment that would rather sync as a deliberate act sets
+`DATABASE_SYNC=false` and runs `npm run schema:sync --workspace server`, which is the same code.
+It is never TypeORM's own `synchronize: true` on the DataSource: that would build the tables and then
+drop the DESC and partial indexes `syncSchema` exists to rebuild, on every start.
+
+**Every query runner asks one thing at a time.** `data-source.ts` wraps the driver's
+`createQueryRunner` in `lib/one-at-a-time.ts`, because TypeORM 1.1.1 fans `loadTables` out with
+`Promise.all` over one client and pg 8.16+ prints "Calling client.query() when the client is already
+executing a query is deprecated" on every sync - and pg@9 will refuse it outright. pg queued those
+queries anyway, so the queue changes nothing but the warning. Upstream is typeorm#12238, fixed by
+PR #12421; delete the wrapper when the pin carries that fix.
 
 **That only works because the entities are complete**, and making them complete was the work. They
 carry 56 `@Check` constraints, 43 relations with their `onDelete` rules, every default, every
