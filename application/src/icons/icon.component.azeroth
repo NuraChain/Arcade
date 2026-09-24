@@ -23,7 +23,7 @@ export default component Icon(props: {
         aria-hidden="true"
         focusable="false"
     >
-        <For each={ (ICONS[props.name] ?? []) as Shape[] } key={ (shape: Shape, index: number) => `${ shape[0] }-${ index }` } let={ node }>
+        <For each={ (ICONS[props.name] ?? []) as Shape[] } key={ (shape: Shape, index: number) => `${ props.name }-${ shape[0] }-${ index }` } let={ node }>
             <g>
                 <Dynamic component={ node[0] } props={ node[1] } />
             </g>

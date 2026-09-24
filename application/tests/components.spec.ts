@@ -8,7 +8,8 @@ import Panel from '../src/components/ui/panel.component.azeroth';
 import GameRow from '../src/components/ui/game-row.component.azeroth';
 import SectionHeading from '../src/components/ui/section-heading.component.azeroth';
 import { GAMES } from '../src/data/games.ts';
-import { ALL_ICONS } from '../src/icons/all.ts';
+import { ALL_ICONS, type IconName } from '../src/icons/all.ts';
+import Icon from '../src/icons/icon.component.azeroth';
 import { ICONS } from '../src/icons/registry.ts';
 import { useFocus } from '../src/stores/focus.store.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
@@ -295,5 +296,23 @@ describe('the icon registry', () =>
         {
             expect(ICONS[name]?.length ?? 0, name).toBeGreaterThan(0);
         }
+    });
+
+    it('redraws the shape when the name changes, even to an icon drawn with the same kind of path', () =>
+    {
+        const [name, setName] = createSignal<IconName>('menu');
+        const { container } = renderTest(() => Icon({
+            get name()
+            {
+                return name();
+            }
+        }) as Rendered);
+        const drawn = (): string[] => [...container.querySelectorAll('path')].map((path) => path.getAttribute('d') ?? '');
+
+        expect(drawn()).toEqual(ALL_ICONS.menu.map(([, attrs]) => String(attrs.d)));
+
+        setName('close');
+
+        expect(drawn()).toEqual(ALL_ICONS.close.map(([, attrs]) => String(attrs.d)));
     });
 });
