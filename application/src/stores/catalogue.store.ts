@@ -5,6 +5,7 @@ import { drawable } from '../components/games/boards.ts';
 import { GAMES, gameBySlug, type Game, type GameId } from '../data/games.ts';
 import { TABLE_RULES, defaultTable, type TableConfig, type TableRules } from '../data/tables.ts';
 import { runtime } from '../lib/runtime.ts';
+import { useSettings } from './settings.store.ts';
 
 /**
  * How busy each game is, COUNTED.
@@ -118,7 +119,8 @@ export const useCatalogue = createStore((): CatalogueApi =>
             return {
                 ...base,
                 seats: rules.seats.find((seats) => seats >= 4) ?? rules.seats[rules.seats.length - 1] ?? base.seats,
-                target: rules.targets[0] ?? 0
+                target: rules.targets[0] ?? 0,
+                voice: useSettings().settings().voiceTables
             };
         },
 

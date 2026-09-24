@@ -22,6 +22,8 @@ export default component TableDock(props: {
     onResign?: () => void;
     upright?: boolean;
     voice?: string;
+    hostVoice?: boolean;
+    onHostVoice?: () => void;
 })
 {
     const locale = useLocale();
@@ -66,6 +68,7 @@ export default component TableDock(props: {
             {
                 code: props.code ?? '',
                 full,
+                ...(props.hostVoice === undefined || props.onHostVoice === undefined ? {} : { voice: props.hostVoice, onVoice: props.onHostVoice }),
                 ...(canFullscreen() ? { onFullscreen: toggleFull } : {}),
                 ...(props.onResign === undefined ? {} : { onResign: props.onResign })
             },
@@ -82,6 +85,18 @@ export default component TableDock(props: {
                 pressed={ sound }
                 onClick={ () => settings.update({ sound: !sound }) }
             />
+
+            <Show when={ props.hostVoice !== undefined && props.onHostVoice !== undefined }>
+                { () =>
+                    <IconButton
+                        icon={ props.hostVoice === true ? 'voice' : 'voice-off' }
+                        label={ locale.t(props.hostVoice === true ? 'voice.hostOff' : 'voice.hostOn') }
+                        variant="ghost"
+                        pressed={ props.hostVoice === true }
+                        onClick={ () => props.onHostVoice?.() }
+                    />
+                }
+            </Show>
 
             <Show when={ canFullscreen() }>
                 { () =>

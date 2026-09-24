@@ -220,6 +220,57 @@ describe('the realtime store', () =>
         expect(socket.opens, 'coming back did not reconnect').toBe(2);
     });
 
+    it('keeps the socket through a hidden tab while something holds it, and lets it go after', () =>
+    {
+        const live = useRealtime();
+        live.start();
+        socket.accept();
+
+        const release = live.hold();
+        hide();
+        clock.advance(IDLE_MS * 3);
+        expect(socket.closed.length, 'a voice call lost its socket to a hidden tab').toBe(0);
+
+        release();
+        release();
+        clock.advance(IDLE_MS + 1000);
+        expect(socket.closed.length).toBe(1);
+    });
+
+    it('reconnects a held socket that drops while the tab is hidden, rather than waiting to be looked at', () =>
+    {
+        const live = useRealtime();
+        live.start();
+        socket.accept();
+
+        live.hold();
+        hide();
+        socket.drop();
+        clock.advance(BACKOFF_MS[0] * 1.2);
+
+        expect(socket.opens, 'a call in a background tab stayed hung up').toBe(2);
+    });
+
+    it('rings every doorbell once when it comes back from idle, so nothing missed while away stays missed', () =>
+    {
+        const live = useRealtime();
+        const heard: string[] = [];
+        live.onNudge((scope, id) => heard.push(`${ scope }:${ id ?? '' }`));
+        live.start();
+        socket.accept();
+
+        clock.advance(NUDGE_WINDOW_MS);
+        expect(heard, 'the first connection is not a return').toEqual([]);
+
+        hide();
+        clock.advance(IDLE_MS + 1000);
+        show();
+        socket.accept();
+        clock.advance(NUDGE_WINDOW_MS);
+
+        expect(heard.sort()).toEqual(['chat:', 'game:', 'me:', 'social:', 'table:']);
+    });
+
     it('treats two online events as one reconnection', () =>
     {
         const live = useRealtime();

@@ -339,6 +339,53 @@ describe.skipIf(!active)('notifications, against a real database', () =>
         });
     });
 
+    describe('taking one back', () =>
+    {
+        it('removes the request a person has answered, and nothing else they were told', async () =>
+        {
+            const reader = await makeUser();
+            const asker = await makeUser();
+            const other = await makeUser();
+
+            await notify.tell({ userId: reader, kind: 'friend-request', actorId: asker, ref: {}, dedupeKey: `friend:${ asker }` });
+            await notify.tell({ userId: reader, kind: 'friend-request', actorId: other, ref: {}, dedupeKey: `friend:${ other }` });
+            await notify.tell({ userId: asker, kind: 'friend-request', actorId: reader, ref: {}, dedupeKey: `friend:${ reader }` });
+
+            await notify.retract(reader, 'friend-request', `friend:${ asker }`);
+
+            expect((await notify.page(reader, null)).items.map((item) => item.kind)).toEqual(['friend-request']);
+            expect(await notify.unread(reader)).toBe(1);
+            expect((await notify.page(asker, null)).items).toHaveLength(1);
+        });
+
+        it('turns an old acceptance into a request when the same person asks again, counting from one', async () =>
+        {
+            const reader = await makeUser();
+            const friend = await makeUser();
+
+            await notify.tell({ userId: reader, kind: 'friend-accepted', actorId: friend, ref: {}, dedupeKey: `friend:${ friend }` });
+            await notify.tell({ userId: reader, kind: 'friend-accepted', actorId: friend, ref: {}, dedupeKey: `friend:${ friend }` });
+            await notify.tell({ userId: reader, kind: 'friend-request', actorId: friend, ref: {}, dedupeKey: `friend:${ friend }` });
+
+            const items = (await notify.page(reader, null)).items;
+            expect(items.map((item) => [item.kind, item.count])).toEqual([['friend-request', 1]]);
+
+            await notify.retract(reader, 'friend-request', `friend:${ friend }`);
+            expect((await notify.page(reader, null)).items).toEqual([]);
+        });
+
+        it('leaves a notice of another kind under the same key alone', async () =>
+        {
+            const reader = await makeUser();
+            const friend = await makeUser();
+
+            await notify.tell({ userId: reader, kind: 'friend-accepted', actorId: friend, ref: {}, dedupeKey: `friend:${ friend }` });
+            await notify.retract(reader, 'friend-request', `friend:${ friend }`);
+
+            expect((await notify.page(reader, null)).items.map((item) => item.kind)).toEqual(['friend-accepted']);
+        });
+    });
+
     describe('push subscriptions', () =>
     {
         it('keys on the endpoint, so one browser is one row however often it re-subscribes', async () =>

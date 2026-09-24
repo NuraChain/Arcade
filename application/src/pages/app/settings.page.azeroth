@@ -11,12 +11,14 @@ import Rail from '../../components/ui/rail.component.azeroth';
 import SectionHeading from '../../components/ui/section-heading.component.azeroth';
 import Toggle from '../../components/ui/switch.component.azeroth';
 import Slider from '../../components/ui/slider.component.azeroth';
+import Select from '../../components/ui/select.component.azeroth';
 import { NURA_CHAIN } from '../../data/chain.ts';
 import type { Person } from '../../data/person.ts';
 import Icon from '../../icons/icon.component.azeroth';
 import type { IconName } from '../../icons/registry.ts';
 import PushToggle from '../../components/app/push-toggle.component.azeroth';
 import { runtime } from '../../lib/runtime.ts';
+import { RESERVED_KEYS, keyName } from '../../lib/talk-key.ts';
 import { shortAddress } from '../../lib/wallet.ts';
 import { usePeople } from '../../stores/people.store.ts';
 import { useAccount } from '../../stores/account.store.ts';
@@ -106,7 +108,64 @@ export default component SettingsPage()
     mount
     {
         social.want('reports');
+        void voice.survey();
+
+        return () => unbind?.();
     }
+
+    const named = (choices: { id: string; label: string }[]): { id: string; label: string }[] =>
+        choices.map((one, index) => ({ id: one.id, label: one.label === '' ? locale.t('voice.deviceUnnamed', { n: locale.n(index + 1) }) : one.label }));
+
+    derived mics = named(voice.inputs());
+
+    derived speakers = named(voice.outputs());
+
+    derived pickSpeaker = voice.canPickSpeaker() && speakers.length > 0;
+
+    state binding = false;
+
+    let unbind: (() => void) | null = null;
+
+    const bindKey = (): void =>
+    {
+        if (binding)
+        {
+            unbind?.();
+            return;
+        }
+
+        binding = true;
+
+        const heard = (event: KeyboardEvent): void =>
+        {
+            if (event.code === 'Tab')
+            {
+                return;
+            }
+
+            event.preventDefault();
+            event.stopPropagation();
+
+            if (event.code !== 'Escape' && !RESERVED_KEYS.has(event.code) && event.code !== '')
+            {
+                settings.update({ voiceTalkKey: event.code });
+            }
+
+            if (event.code === 'Escape' || !RESERVED_KEYS.has(event.code))
+            {
+                unbind?.();
+            }
+        };
+
+        window.addEventListener('keydown', heard, true);
+
+        unbind = () =>
+        {
+            window.removeEventListener('keydown', heard, true);
+            unbind = null;
+            binding = false;
+        };
+    };
 
     derived allReports = [...social.reports()].sort((a, b) => b.at - a.at);
 
@@ -136,17 +195,21 @@ export default component SettingsPage()
 
     const spot = (): void =>
     {
-        if (body === null || pinned !== null)
+        const page = body?.closest('.page') ?? null;
+
+        if (body === null || nav === null || page === null || pinned !== null)
         {
             return;
         }
 
-        const page = body.closest('.page');
-        const sections = [...body.querySelectorAll<HTMLElement>('section[id]')];
-        const line = (nav?.getBoundingClientRect().bottom ?? 0) + 32;
-        const bottomed = page !== null && page.scrollTop + page.clientHeight >= page.scrollHeight - 2;
-        const passed = sections.filter((section) => section.getBoundingClientRect().top <= line);
-        const current = bottomed ? sections.at(-1) : passed.at(-1);
+        const bar = nav.getBoundingClientRect();
+        const across = bar.width >= body.getBoundingClientRect().width;
+        const line = across ? bar.bottom + 32 : page.getBoundingClientRect().top + 48;
+        const bottomed = page.scrollTop > 0 && page.scrollTop + page.clientHeight >= page.scrollHeight - 2;
+        const tops = [...body.querySelectorAll<HTMLElement>('section[id]')].map((section) => ({ id: section.id, top: section.getBoundingClientRect().top }));
+        const current = bottomed
+            ? tops.at(-1)
+            : tops.filter((one) => one.top <= line).reduce<{ id: string; top: number } | undefined>((best, one) => (best === undefined || one.top > best.top + 1 ? one : best), undefined);
 
         active = current?.id ?? SECTIONS[0].id;
     };
@@ -456,6 +519,53 @@ export default component SettingsPage()
                                     description={ locale.t('voice.autoJoinHint') }
                                     onChange={ (checked) => settings.update({ voiceAutoJoin: checked }) }
                                 />
+                                <Toggle
+                                    checked={ current.voiceTables }
+                                    label={ locale.t('voice.tables') }
+                                    description={ locale.t('voice.tablesHint') }
+                                    onChange={ (checked) => settings.update({ voiceTables: checked }) }
+                                />
+                                <Toggle
+                                    checked={ current.voicePushToTalk }
+                                    label={ locale.t('voice.pushToTalk') }
+                                    description={ locale.t('voice.pushToTalkHint', { key: keyName(current.voiceTalkKey) }) }
+                                    onChange={ (checked) => settings.update({ voicePushToTalk: checked }) }
+                                />
+                                <Show when={ current.voicePushToTalk }>
+                                    { () =>
+                                        <div class="flex flex-wrap items-center gap-3 coarse:hidden">
+                                            <span class="flex min-w-0 flex-1 flex-col gap-0.5">
+                                                <span class="text-ui-sm font-semibold text-text">{ locale.t('voice.talkKey') }</span>
+                                                <span class="text-ui-xs text-muted">{ locale.t('voice.talkKeyHint') }</span>
+                                            </span>
+                                            <kbd class="tally flex h-9 min-w-9 items-center justify-center rounded-control border border-line-strong bg-sunk px-2.5 font-sans text-ui-sm font-semibold text-text">{ keyName(current.voiceTalkKey) }</kbd>
+                                            <Button variant={ binding ? 'primary' : 'outline' } size="sm" onClick={ () => bindKey() }>
+                                                { locale.t(binding ? 'voice.talkKeyListening' : 'voice.talkKeyChange') }
+                                            </Button>
+                                        </div>
+                                    }
+                                </Show>
+                                <div class="grid gap-4 @xl:grid-cols-2">
+                                    <Select
+                                        label={ locale.t('voice.mic') }
+                                        value={ current.voiceMic }
+                                        options={ [{ value: '', label: locale.t('voice.deviceDefault') }, ...mics.map((one) => ({ value: one.id, label: one.label }))] }
+                                        onChange={ (value) => void voice.useMic(value) }
+                                    />
+                                    <Show when={ pickSpeaker }>
+                                        { () =>
+                                            <Select
+                                                label={ locale.t('voice.speaker') }
+                                                value={ current.voiceSpeaker }
+                                                options={ [{ value: '', label: locale.t('voice.deviceDefault') }, ...speakers.map((one) => ({ value: one.id, label: one.label }))] }
+                                                onChange={ (value) => voice.useSpeaker(value) }
+                                            />
+                                        }
+                                    </Show>
+                                </div>
+                                <Show when={ voice.inputs().length === 0 || voice.inputs().some((one) => one.label === '') }>
+                                    { () => <p class="text-ui-xs text-muted">{ locale.t('voice.devicesHint') }</p> }
+                                </Show>
                                 <Slider
                                     value={ current.voiceVolume }
                                     min={ 0 }

@@ -20,6 +20,7 @@ export interface Wire
 export interface Edges
 {
     party: Party;
+    handle: string;
     friends: ReadonlySet<string>;
     blocks: ReadonlySet<string>;
     loadedAt: number;
@@ -83,14 +84,22 @@ export const EDGES_TTL_MS = 60_000;
 /** Deltas inside one window collapse into one frame. */
 export const TICK_MS = 500;
 
+export const VIEWED_MAX = 4;
+
+export type SelfTopic = 'notifications' | 'devices' | 'profile';
+
 export interface Hub
 {
     bind(connection: Connection, principal: Principal): Promise<void>;
     release(connection: Connection): void;
 
-    chatChanged(conversationId: string): void;
+    chatChanged(conversationId: string, ...also: string[]): void;
     socialChanged(...userIds: string[]): void;
+    edgesChanged(...userIds: string[]): void;
+    selfChanged(userId: string, what: SelfTopic): void;
     gameChanged(matchId: string, players: readonly string[]): void;
+    tableChanged(tableId: string, people: readonly string[]): void;
+    tableViewed(userId: string, tableId: string): void;
     sessionsRevoked(sessionIds: readonly string[]): void;
 
     typingIn(connection: Connection, conversationId: string): void;
@@ -101,7 +110,7 @@ export interface Hub
     resync(connection: Connection): void;
 
     sweep(): Promise<void>;
-    flush(): void;
+    flush(): Promise<void>;
 
     presenceOf(userId: string): PresenceEntry[];
     size(): number;
@@ -133,7 +142,12 @@ export function createHub(deps: HubDeps): Hub
     const edges = new Map<string, Edges>();
     const online = new Map<string, { state: PresenceState; since: number; leftAt: number | null }>();
 
-    const pendingChat = new Map<string, number>();
+    const pendingChat = new Map<string, { at: number; also: Set<string> }>();
+    const pendingEdges = new Set<string>();
+    const pendingSelf = new Map<string, Set<SelfTopic>>();
+    const pendingTable = new Map<string, { at: number; people: Set<string> }>();
+    const viewed = new Map<string, string[]>();
+    const watchers = new Map<string, Set<string>>();
 
     /**
      * A board that moved, and who is playing on it.
@@ -367,7 +381,7 @@ export function createHub(deps: HubDeps): Hub
             {
                 continue;
             }
-            const handle = edges.get(userId)?.party.id;
+            const handle = edges.get(userId)?.handle;
             out.push({ who: handle ?? userId, state: record.state, since: record.since });
         }
         return out;
@@ -376,6 +390,144 @@ export function createHub(deps: HubDeps): Hub
     const sendSnapshot = (connection: Held): void =>
     {
         emit(connection, (n) => presence(n, true, entriesFor(connection.userId)));
+    };
+
+    const handleOf = (userId: string): string => edges.get(userId)?.handle ?? userId;
+
+    const retalk = async (moved: ReadonlySet<string>): Promise<void> =>
+    {
+        for (const [tableId, room] of [...rooms])
+        {
+            const members = [...room.keys()];
+
+            if (!members.some((member) => moved.has(member)))
+            {
+                continue;
+            }
+
+            const pairs = members
+                .flatMap((a, index) => members.slice(index + 1).map((b) => [a, b] as const))
+                .filter(([a, b]) => moved.has(a) || moved.has(b));
+
+            const verdicts = await Promise.all(pairs.map(([a, b]) => deps.mayTalk(a, b)));
+            pairs.forEach(([a, b], index) => talks.set(pairOf(a, b), verdicts[index]));
+            roster(tableId);
+        }
+    };
+
+    const reload = async (userIds: readonly string[]): Promise<void> =>
+    {
+        const cached = userIds.filter((userId) => edges.has(userId));
+
+        if (cached.length === 0)
+        {
+            return;
+        }
+
+        const viewers = new Set(byUser.keys());
+        const before = new Map(cached.map((userId) => [userId, {
+            handle: handleOf(userId),
+            seen: online.has(userId) ? new Set([...byUser.keys()].filter((viewer) => visible(viewer, userId))) : new Set<string>()
+        }]));
+
+        const loaded = await Promise.all(cached.map((userId) => deps.edgesFor(userId)));
+        const moved = new Set<string>();
+
+        cached.forEach((userId, index) =>
+        {
+            const current = edges.get(userId);
+
+            if (current !== undefined && current.loadedAt <= loaded[index].loadedAt)
+            {
+                edges.set(userId, loaded[index]);
+                moved.add(userId);
+            }
+        });
+
+        for (const userId of moved)
+        {
+            const was = before.get(userId)!;
+            const handle = handleOf(userId);
+            const record = online.get(userId);
+            const people: PresenceEntry[] = record === undefined ? [] : [{ who: handle, state: record.state, since: record.since }];
+
+            for (const socket of connectionsOf(userId))
+            {
+                socket.handle = handle;
+            }
+
+            for (const [viewer, sockets] of byUser)
+            {
+                if (moved.has(viewer) || !viewers.has(viewer))
+                {
+                    continue;
+                }
+
+                const saw = was.seen.has(viewer);
+                const sees = people.length > 0 && visible(viewer, userId);
+                const renamed = saw && handle !== was.handle;
+
+                if (saw === sees && !renamed)
+                {
+                    continue;
+                }
+
+                const gone = saw && (!sees || renamed) ? [was.handle] : [];
+                const shown = sees ? people : [];
+
+                for (const connection of sockets)
+                {
+                    emit(connection, (n) => presence(n, false, shown, gone));
+                }
+            }
+        }
+
+        for (const viewer of byUser.keys())
+        {
+            if (moved.has(viewer) || !viewers.has(viewer))
+            {
+                for (const connection of connectionsOf(viewer))
+                {
+                    sendSnapshot(connection);
+                }
+            }
+        }
+
+        await retalk(moved);
+    };
+
+    const recheck = async (tableId: string): Promise<void> =>
+    {
+        const members = [...(rooms.get(tableId)?.values() ?? [])];
+        const verdicts = await Promise.all(members.map((member) => deps.voiceAllowed(member.socket.userId, tableId)));
+
+        members.forEach((member, index) =>
+        {
+            if (!verdicts[index])
+            {
+                leave(tableId, member.socket.id, true);
+            }
+        });
+    };
+
+    const unwatch = (userId: string, tableId: string): void =>
+    {
+        const set = watchers.get(tableId);
+        set?.delete(userId);
+
+        if (set?.size === 0)
+        {
+            watchers.delete(tableId);
+        }
+    };
+
+    const forgetViews = (userId: string): void =>
+    {
+        for (const tableId of viewed.get(userId) ?? [])
+        {
+            unwatch(userId, tableId);
+        }
+        viewed.delete(userId);
     };
 
     const schedule = (): void =>
@@ -387,53 +539,53 @@ export function createHub(deps: HubDeps): Hub
         timer = setTimeout(() =>
         {
             timer = null;
-            flush();
+            void flush();
         }, TICK_MS);
         timer.unref?.();
     };
 
-    function flush(): void
+    async function flush(): Promise<void>
     {
         const chat = [...pendingChat.entries()];
         const social = [...pendingSocial];
+        const moved = [...pendingEdges];
+        const self = [...pendingSelf.entries()];
         const games = [...pendingGame.entries()];
+        const tables = [...pendingTable.entries()];
         pendingChat.clear();
         pendingSocial.clear();
+        pendingEdges.clear();
+        pendingSelf.clear();
         pendingGame.clear();
-
-        for (const userId of social)
-        {
-            // A social change moves who may see whom, so everybody who can see this person and
-            // this person themselves get a fresh snapshot rather than a delta.
-            for (const connection of connectionsOf(userId))
-            {
-                sendSnapshot(connection);
-            }
-            for (const [other, sockets] of byUser)
-            {
-                if (other === userId)
-                {
-                    continue;
-                }
-                for (const connection of sockets)
-                {
-                    sendSnapshot(connection);
-                }
-            }
-            publish([userId], (n) => nudge(n, 'social', deps.now()));
-        }
-
-        for (const [conversationId, at] of chat)
-        {
-            void deps.recipientsOf(conversationId)
-                .then((recipients) => publish(recipients, (n) => nudge(n, 'chat', at, conversationId)))
-                .catch((error) => deps.report(error, 'realtime.recipients'));
-        }
+        pendingTable.clear();
 
         for (const [matchId, { at, players }] of games)
         {
             publish(players, (n) => nudge(n, 'game', at, matchId));
         }
+
+        for (const [tableId, { at, people }] of tables)
+        {
+            publish(new Set([...people, ...(watchers.get(tableId) ?? [])]), (n) => nudge(n, 'table', at, tableId));
+        }
+
+        for (const [userId, topics] of self)
+        {
+            for (const topic of topics)
+            {
+                publish([userId], (n) => nudge(n, 'me', deps.now(), topic));
+            }
+        }
+
+        await Promise.all([
+            reload(moved)
+                .catch((error) => deps.report(error, 'realtime.edges'))
+                .then(() => publish(new Set([...moved, ...social]), (n) => nudge(n, 'social', deps.now()))),
+            ...chat.map(([conversationId, { at, also }]) => deps.recipientsOf(conversationId)
+                .then((recipients) => publish(new Set([...recipients, ...also]), (n) => nudge(n, 'chat', at, conversationId)))
+                .catch((error) => deps.report(error, 'realtime.recipients'))),
+            ...tables.map(([tableId]) => recheck(tableId).catch((error) => deps.report(error, 'realtime.voice')))
+        ]);
     }
 
     const markOnline = (userId: string, state: PresenceState): void =>
@@ -453,7 +605,7 @@ export function createHub(deps: HubDeps): Hub
     const announce = (userId: string, except?: Held): void =>
     {
         const record = online.get(userId);
-        const handle = edges.get(userId)?.party.id ?? userId;
+        const handle = edges.get(userId)?.handle ?? userId;
 
         // A departure travels in `gone`, not as an empty `people`. There is no record left to build
         // an entry from - that is what having gone dark MEANS - so the only way to say it is to name
@@ -564,9 +716,46 @@ export function createHub(deps: HubDeps): Hub
             }
         },
 
-        chatChanged(conversationId)
+        chatChanged(conversationId, ...also)
         {
-            pendingChat.set(conversationId, deps.now());
+            const current = pendingChat.get(conversationId);
+            pendingChat.set(conversationId, { at: deps.now(), also: new Set([...(current?.also ?? []), ...also]) });
+            schedule();
+        },
+
+        tableChanged(tableId, people)
+        {
+            const current = pendingTable.get(tableId);
+            pendingTable.set(tableId, { at: deps.now(), people: new Set([...(current?.people ?? []), ...people]) });
+            schedule();
+        },
+
+        tableViewed(userId, tableId)
+        {
+            const list = (viewed.get(userId) ?? []).filter((one) => one !== tableId);
+            list.push(tableId);
+
+            for (const dropped of list.splice(0, Math.max(0, list.length - VIEWED_MAX)))
+            {
+                unwatch(userId, dropped);
+            }
+
+            viewed.set(userId, list);
+            watchers.set(tableId, (watchers.get(tableId) ?? new Set<string>()).add(userId));
+        },
+
+        edgesChanged(...userIds)
+        {
+            for (const userId of userIds)
+            {
+                pendingEdges.add(userId);
+            }
+            schedule();
+        },
+
+        selfChanged(userId, what)
+        {
+            pendingSelf.set(userId, (pendingSelf.get(userId) ?? new Set<SelfTopic>()).add(what));
             schedule();
         },
 
@@ -580,10 +769,6 @@ export function createHub(deps: HubDeps): Hub
         {
             for (const userId of userIds)
             {
-                // The cached sets are now wrong, so they are dropped rather than patched: the
-                // next bind reloads them, and a stale edge means somebody who blocked you keeps
-                // seeing you.
-                edges.delete(userId);
                 pendingSocial.add(userId);
             }
             schedule();
@@ -759,6 +944,15 @@ export function createHub(deps: HubDeps): Hub
                     // never hear that the account left.
                     announce(userId);
                     edges.delete(userId);
+                    forgetViews(userId);
+                }
+            }
+
+            for (const userId of [...viewed.keys()])
+            {
+                if (!online.has(userId) && !byUser.has(userId))
+                {
+                    forgetViews(userId);
                 }
             }
 
@@ -826,6 +1020,8 @@ export function createHub(deps: HubDeps): Hub
             edges.clear();
             rooms.clear();
             talks.clear();
+            viewed.clear();
+            watchers.clear();
             return sent;
         }
     };

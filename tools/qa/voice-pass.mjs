@@ -118,6 +118,12 @@ const players = async (page) =>
 
 const pillOf = (page, handle) => page.locator('li', { hasText: handle }).locator('.sr-only').allInnerTexts();
 
+const loudness = (page) => page.evaluate(() =>
+{
+    const audio = [...document.querySelectorAll('audio')].find((one) => one.srcObject !== null);
+    return audio === undefined ? -1 : audio.volume;
+});
+
 const dana = await seat('dana.w');
 const mina = await seat('mina');
 
@@ -137,7 +143,7 @@ for (const one of [dana, mina])
 
 for (const one of [dana, mina])
 {
-    await one.page.getByRole('button', { name: 'Join voice' }).click();
+    await one.page.getByRole('button', { name: 'Join voice' }).first().click();
 }
 
 const bothIn = await until(async () =>
@@ -174,9 +180,62 @@ const throughStart = started.ok()
     && (await dana.page.getByRole('button', { name: 'Leave voice' }).count()) > 0;
 record('the call carries on when the match starts', throughStart, started.ok() ? '' : `start ${ started.status() }`);
 
+const marked = await until(async () => (await dana.page.locator('.table-plate-voice[data-mark]').count()) >= 2);
+record('every player in the call carries a voice mark on their plate', marked, String(await dana.page.locator('.table-plate-voice').count()));
+
+await players(dana.page);
+const slider = dana.page.getByRole('slider', { name: /How loud Mina/ });
+record('the players list offers a volume for each other person in the call', (await slider.count()) > 0);
+await slider.first().focus();
+await dana.page.keyboard.press('Home');
+record('turning one person down reaches their audio and nobody else\'s', await until(async () => (await loudness(dana.page)) === 0), String(await loudness(dana.page)));
+await dana.page.keyboard.press('End');
+record('turning them back up restores it', await until(async () => (await loudness(dana.page)) === 1), String(await loudness(dana.page)));
+
+await dana.page.getByRole('button', { name: 'Stop hearing everybody' }).click();
+record('deafening silences everybody for the one who deafened', await until(async () => (await loudness(dana.page)) === 0));
+await players(mina.page);
+record('deafening shows as muted in the other browser', await until(async () => (await pillOf(mina.page, 'Dana')).some((text) => text === 'Muted')), (await pillOf(mina.page, 'Dana')).join(', '));
+await dana.page.getByRole('button', { name: 'Hear everybody again' }).click();
+record('undeafening gives the sound back', await until(async () => (await loudness(dana.page)) === 1));
+
 await mina.page.getByRole('button', { name: 'Leave voice' }).click();
 const gone = await until(async () => (await remoteAudio(dana.page)) === 'none');
 record('leaving takes the other player\'s audio away', gone);
+
+await mina.page.evaluate(() =>
+{
+    const stored = JSON.parse(localStorage.getItem('nura-games.settings') ?? '{}');
+    localStorage.setItem('nura-games.settings', JSON.stringify({ ...stored, voicePushToTalk: true }));
+});
+await mina.page.reload();
+await mina.page.waitForLoadState('networkidle');
+await mina.page.getByRole('button', { name: 'Join voice' }).first().click();
+await until(async () => (await remoteAudio(dana.page)) === 'live' && (await remoteAudio(mina.page)) === 'live', 20_000);
+await players(dana.page);
+await wait(2500);
+record('with push to talk, an idle microphone stays quiet in the other browser', !(await pillOf(dana.page, 'Mina')).some((text) => text === 'Speaking'), (await pillOf(dana.page, 'Mina')).join(', '));
+await mina.page.locator('body').click({ position: { x: 5, y: 5 } }).catch(() => undefined);
+await mina.page.keyboard.down('v');
+record('holding the talk key lights "speaking" in the other browser', await until(async () => (await pillOf(dana.page, 'Mina')).some((text) => text === 'Speaking'), 10_000), (await pillOf(dana.page, 'Mina')).join(', '));
+await mina.page.keyboard.up('v');
+record('letting go of the key goes quiet again', await until(async () => !(await pillOf(dana.page, 'Mina')).some((text) => text === 'Speaking'), 10_000));
+await mina.page.evaluate(() =>
+{
+    const stored = JSON.parse(localStorage.getItem('nura-games.settings') ?? '{}');
+    localStorage.setItem('nura-games.settings', JSON.stringify({ ...stored, voicePushToTalk: false }));
+});
+
+await dana.page.getByRole('button', { name: 'Turn voice off for this table' }).first().click();
+record('the host turning voice off takes everybody out of the call', await until(async () =>
+    (await dana.page.getByRole('button', { name: 'Leave voice' }).count()) === 0
+    && (await mina.page.getByRole('button', { name: 'Leave voice' }).count()) === 0
+    && (await mina.page.getByRole('button', { name: 'Join voice' }).count()) === 0));
+
+await dana.page.getByRole('button', { name: 'Turn voice on for this table' }).first().click();
+record('turning it back on offers the call to the other player without a reload', await until(async () =>
+    (await mina.page.getByRole('button', { name: 'Join voice' }).count()) > 0
+    && (await mina.page.getByText('This table has voice. Join to talk while you play.').count()) > 0));
 
 const errors = [...dana.errors, ...mina.errors];
 record('no console errors', errors.length === 0, errors.slice(0, 4).join(' | '));

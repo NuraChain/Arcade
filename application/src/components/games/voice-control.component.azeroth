@@ -1,22 +1,30 @@
 import Icon from '../../icons/icon.component.azeroth';
 import { haptic } from '../../lib/haptics.ts';
+import { keyName } from '../../lib/talk-key.ts';
 import { useLocale } from '../../stores/locale.store.ts';
+import { useSettings } from '../../stores/settings.store.ts';
 import { useToasts } from '../../stores/toasts.store.ts';
 import { useVoice } from '../../stores/voice.store.ts';
 import IconButton from '../ui/icon-button.component.azeroth';
 import Spinner from '../ui/spinner.component.azeroth';
+import Tooltip from '../ui/tooltip.component.azeroth';
 
 export default component VoiceControl(props: { table: string })
 {
     const locale = useLocale();
     const voice = useVoice();
     const toasts = useToasts();
+    const settings = useSettings();
 
     derived here = voice.table() === props.table;
 
     derived joining = here && voice.joining();
 
     derived live = voice.mic() === 'live';
+
+    derived holding = settings.settings().voicePushToTalk && live && !voice.muted();
+
+    derived holdLabel = locale.t('voice.hold', { key: keyName(settings.settings().voiceTalkKey) });
 
     derived talking = voice.people().filter((person) => !person.me).length;
 
@@ -56,21 +64,73 @@ export default component VoiceControl(props: { table: string })
                     fallback={ <span class="flex h-9 w-9 items-center justify-center coarse:h-11 coarse:w-11"><Spinner size={ 16 } class="text-accent" /></span> }
                 >
                     { () =>
-                        <IconButton
-                            icon={ voice.muted() ? 'voice-off' : 'voice' }
-                            label={ locale.t(!live ? 'voice.micUnavailable' : (voice.muted() ? 'voice.unmute' : 'voice.mute')) }
-                            variant="ghost"
-                            pressed={ live && !voice.muted() }
-                            disabled={ !live }
-                            class={ speaking ? 'rounded-full! text-live ring-2 ring-live/60' : (voice.muted() ? 'rounded-full! text-muted' : 'rounded-full! text-accent') }
-                            onClick={ () =>
-                            {
-                                haptic('tick');
-                                voice.toggleMute();
-                            } }
-                        />
+                        <Show
+                            when={ holding }
+                            fallback={
+                                <IconButton
+                                    icon={ voice.muted() ? 'voice-off' : 'voice' }
+                                    label={ locale.t(!live ? 'voice.micUnavailable' : (voice.muted() ? 'voice.unmute' : 'voice.mute')) }
+                                    variant="ghost"
+                                    pressed={ live && !voice.muted() }
+                                    disabled={ !live }
+                                    class={ speaking ? 'rounded-full! text-live ring-2 ring-live/60' : (voice.muted() ? 'rounded-full! text-muted' : 'rounded-full! text-accent') }
+                                    onClick={ () =>
+                                    {
+                                        haptic('tick');
+                                        voice.toggleMute();
+                                    } }
+                                />
+                            }
+                        >
+                            { () =>
+                                <Tooltip label={ voice.talking() ? locale.t('voice.holding') : holdLabel }>
+                                    <button
+                                        type="button"
+                                        class={ () => [
+                                            'flex h-9 w-9 cursor-pointer touch-none select-none items-center justify-center rounded-full transition-colors coarse:h-11 coarse:w-11',
+                                            voice.talking() ? 'bg-live text-bright-ink' : 'text-accent hover:bg-raised'
+                                        ].join(' ') }
+                                        aria-label={ holdLabel }
+                                        aria-pressed={ voice.talking() }
+                                        onPointerDown={ (event: PointerEvent) =>
+                                        {
+                                            (event.currentTarget as HTMLElement).setPointerCapture?.(event.pointerId);
+                                            haptic('tick');
+                                            voice.press();
+                                        } }
+                                        onPointerUp={ () => voice.release() }
+                                        onPointerCancel={ () => voice.release() }
+                                        onLostPointerCapture={ () => voice.release() }
+                                        onKeyDown={ (event: KeyboardEvent) =>
+                                        {
+                                            if ((event.key === ' ' || event.key === 'Enter') && !event.repeat)
+                                            {
+                                                event.preventDefault();
+                                                voice.press();
+                                            }
+                                        } }
+                                        onKeyUp={ () => voice.release() }
+                                        onBlur={ () => voice.release() }
+                                    >
+                                        <Icon name="voice" size={ 18 } />
+                                    </button>
+                                </Tooltip>
+                            }
+                        </Show>
                     }
                 </Show>
+                <IconButton
+                    icon={ voice.deaf() ? 'deafen' : 'listen' }
+                    label={ locale.t(voice.deaf() ? 'voice.undeafen' : 'voice.deafen') }
+                    variant="ghost"
+                    pressed={ voice.deaf() }
+                    class={ voice.deaf() ? 'rounded-full! text-danger' : 'rounded-full! text-muted' }
+                    onClick={ () =>
+                    {
+                        haptic('tick');
+                        voice.toggleDeafen();
+                    } }
+                />
                 <span class="tally min-w-5 px-1 text-center text-ui-xs font-semibold text-muted" aria-label={ locale.plural('voice.others', talking) }>{ locale.n(talking) }</span>
                 <IconButton
                     icon="hang-up"

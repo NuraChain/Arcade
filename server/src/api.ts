@@ -13,6 +13,7 @@ import {
     ladderQuery,
     ack,
     answerInput,
+    voiceSwitch,
     chatMessage,
     archiveInput,
     archiveList,
@@ -600,6 +601,9 @@ export function buildApi(ports: Ports)
                 await ports.table.close(context.principal.userId, context.params.id);
                 return { ok: true };
             }),
+
+            voice: routes.post('/:id/voice', { input: voiceSwitch, output: tableSummary },
+                (context) => ports.table.setVoice(context.principal.userId, context.params.id, context.input.on)),
 
             /**
              * Deals the board.

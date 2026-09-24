@@ -719,6 +719,70 @@ html:has(.site-drawer[open])
     border-right: 0;
 }
 
+.select-list
+{
+    position: absolute;
+    left: var(--x);
+    top: var(--y);
+    inline-size: var(--w);
+    max-block-size: min(18rem, 50dvh);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 0.25rem;
+    border-radius: var(--radius-panel);
+    border: 1px solid var(--line-strong);
+    background: var(--lifted);
+    box-shadow: var(--shadow-2);
+    pointer-events: auto;
+    opacity: 0;
+    outline: none;
+}
+
+.select-list[data-placed='true']
+{
+    opacity: 1;
+    animation: tooltip-in 120ms var(--ease-ui) both;
+}
+
+.select-option
+{
+    display: flex;
+    min-block-size: 2.5rem;
+    cursor: pointer;
+    align-items: center;
+    gap: 0.5rem;
+    padding-inline: 0.75rem;
+    border-radius: var(--radius-control);
+    color: var(--text);
+    font-size: var(--text-ui-md);
+}
+
+.select-option[aria-selected='true']
+{
+    font-weight: 600;
+}
+
+.select-option[data-active='true']
+{
+    background: var(--raised);
+}
+
+@media (pointer: coarse)
+{
+    .select-option
+    {
+        min-block-size: 2.75rem;
+    }
+}
+
+@media (prefers-reduced-motion: reduce)
+{
+    .select-list[data-placed='true']
+    {
+        animation: none;
+    }
+}
+
 @keyframes tooltip-in
 {
     from
@@ -1360,6 +1424,38 @@ html:has(.site-drawer[open])
     inset-block-start: -0.3rem;
     inset-inline-end: -0.35rem;
     display: flex;
+}
+
+.table-plate-voice
+{
+    position: absolute;
+    inset-block-end: -0.2rem;
+    inset-inline-end: -0.3rem;
+    display: flex;
+    inline-size: 1rem;
+    block-size: 1rem;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9999px;
+    background: var(--raised);
+    color: var(--muted);
+    box-shadow: 0 0 0 2px var(--void);
+}
+
+.table-plate-voice[data-mark='live']
+{
+    color: var(--accent);
+}
+
+.table-plate-voice[data-mark='speaking']
+{
+    background: var(--live);
+    color: var(--bright-ink);
+}
+
+.table-plate-voice[data-mark='muted']
+{
+    color: var(--danger);
 }
 
 .table-plate-text

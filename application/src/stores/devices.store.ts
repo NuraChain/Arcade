@@ -5,6 +5,7 @@ import { deviceVerifies } from '../lib/device-id.ts';
 import { keyStore, type DeviceKeys } from '../lib/device-keys.ts';
 import { deviceState, readinessOf, type DeviceState, type Readiness } from '../lib/device-state.ts';
 import { useAccount } from './account.store.ts';
+import { useRealtime } from './realtime.store.ts';
 import { useWallet } from './wallet.store.ts';
 
 export type EnrolFailure = 'unsupported' | 'refused' | 'unavailable';
@@ -61,6 +62,7 @@ export interface DevicesApi
     look(): Promise<void>;
 
     refresh(): Promise<void>;
+    start(): () => void;
     reset(): void;
 }
 
@@ -264,6 +266,17 @@ export const useDevices = createStore((): DevicesApi =>
 
         look,
         refresh,
+
+        start()
+        {
+            return useRealtime().onNudge((scope, id) =>
+            {
+                if (scope === 'me' && (id === undefined || id === 'devices'))
+                {
+                    void refresh();
+                }
+            });
+        },
 
         reset()
         {

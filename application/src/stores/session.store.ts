@@ -1,4 +1,4 @@
-import { createStore, createSignal, type Getter } from 'azerothjs';
+import { createStore, createSignal, untrack, type Getter } from 'azerothjs';
 
 import { rememberBeenHere } from '../lib/been-here.ts';
 import { client, type Account } from '../api.ts';
@@ -8,6 +8,7 @@ import { forgetSigners } from '../lib/sealing.ts';
 import { forgetArchive } from '../services/chat.source.ts';
 import { forgetWallets } from '../lib/wallet.ts';
 import { forgetSearchTerms } from '../lib/search-terms.ts';
+import { useRealtime } from './realtime.store.ts';
 
 export interface SessionApi
 {
@@ -22,6 +23,7 @@ export interface SessionApi
     signOutEverywhere(): Promise<number>;
 
     refresh(): Promise<void>;
+    start(): () => void;
     reset(): void;
 }
 
@@ -143,6 +145,35 @@ export const useSession = createStore((): SessionApi =>
         {
             settled = load();
             await settled;
+        },
+
+        start()
+        {
+            return useRealtime().onNudge((scope, id) =>
+            {
+                if (scope === 'me' && (id === undefined || id === 'profile'))
+                {
+                    const asked = untrack(account)?.id;
+
+                    void client.auth.me()
+                        .then((state) =>
+                        {
+                            const current = untrack(account);
+                            const next = state.account;
+
+                            if (next == null || current === null || current.id !== asked || next.id !== asked)
+                            {
+                                return;
+                            }
+
+                            if (JSON.stringify(next) !== JSON.stringify(current))
+                            {
+                                setAccount(next);
+                            }
+                        })
+                        .catch(() => undefined);
+                }
+            });
         },
 
         reset()

@@ -41,6 +41,13 @@ export default component TableRow(props: { table: TableSummary })
                 <span class="shrink-0"><span class="tally">{ `${ locale.n(props.table.taken) }/${ locale.n(props.table.seats) }` }</span> { locale.t('home.table.seated') }</span>
                 <span class="h-1 w-1 shrink-0 rounded-full bg-current opacity-50" aria-hidden="true"></span>
                 <span class="truncate">{ locale.relative(Date.parse(props.table.createdAt)) }</span>
+                <Show when={ props.table.voice }>
+                    { () =>
+                        <span class="flex shrink-0 items-center text-accent" role="img" aria-label={ locale.t('voice.tableHas') }>
+                            <Icon name="voice" size={ 12 } />
+                        </span>
+                    }
+                </Show>
             </span>
         </span>
         <Badge dot text={ locale.t(state.key) } tone={ state.tone } />

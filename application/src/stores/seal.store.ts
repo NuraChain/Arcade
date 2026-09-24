@@ -91,7 +91,7 @@ export const useSeal = createStore((): SealApi =>
         {
             return useRealtime().onNudge((scope, id) =>
             {
-                if (scope !== 'chat' || id === undefined || id !== untrack(chat.openId))
+                if (scope !== 'chat' || (id !== undefined && id !== untrack(chat.openId)))
                 {
                     return;
                 }

@@ -1302,6 +1302,50 @@ real `RTCPeerConnection`.
 track in each, the tone lighting "speaking" in the OTHER browser, mute, leave. Run it by hand against
 the built server with every change to this path.
 
+### Voice while the game plays
+
+**The host switches voice, and the switch is a table ring.** `POST /tables/:id/voice` is host-only and
+refuses a closed table; turning it off needs no new hub verb, because every table ring re-asks
+`voiceAllowed` for the whole room and `voiceAllowed` reads `tables.voice`. The dock carries the
+switch at a wide container and the table menu on a narrow one. Turning it back on rings the others'
+lobby, so their page offers the call - a toast with Join, once per table per visit, and again after
+the host switches it off and on - without a reload.
+
+**Nothing about holding the talk key reaches the server.** Push to talk is a GATE on the local track:
+the server hears `muted: false` once, when the call is joined, and the key or the hold button opens
+and closes the track in the browser. A frame per press would spend the voice-frame budget on every
+sentence and would flicker a mute icon on every plate at the table. The key is the player's choice -
+`voiceTalkKey`, a `KeyboardEvent.code`, V unless somebody records another in settings - and it is
+ignored while focus is in a field, so typing a V in the chat does not open the microphone. Escape,
+Tab, Enter, `/` and `[` cannot be bound: the first three are how a keyboard leaves things and the
+last two are the product's own shortcuts.
+
+**Deafen is Discord's**: nobody is heard and the microphone closes with it, and the room is told
+you are muted, because somebody who cannot hear the answer should not be asking the question.
+Unmuting while deafened undeafens. Undeafening restores whichever mute state came before.
+
+**A volume per person, and zero is the silence.** `volumes` replaced the silenced set, so "mute
+this person for me" is a volume of nought and the slider in the players list is the same fact.
+The heard volume is master times personal, times nought while deafened, applied on every link as it
+connects.
+
+**The microphone and the speaker are CHOICES, never requirements.** The mic is asked for with
+`deviceId: { ideal }`, so a headset that has been unplugged falls back to the default instead of
+failing the join; the speaker is `setSinkId` on every peer's audio element, offered only where the
+browser has it. Device names appear only after the microphone has been allowed once, and the
+settings page says so rather than listing "Device 1".
+
+**Every plate says who is in the call.** `voice.mark(who)` is speaking, live or muted, and the plate
+draws it as a small badge on the avatar; nobody in the call draws nothing. `voiceTables` opens a
+person's own tables with voice on, quick play included - joining the call stays each player's
+decision, and the microphone is still asked for only on the press.
+
+**A `<Show>` with a thunk child rebuilds whenever its `when` re-evaluates, so a control inside one
+that reads a roster loses its focus.** The per-person volume slider sat in a `when` that read the
+voice roster, which changes on every speaking level, and the keyboard lost the slider after the first
+key. It is a value-bound `<Show when let>` now, which swaps only when the value's truthiness does -
+the voice pass is what found it, as "turning them back up" failing after "turning one down" passed.
+
 ## Playing a game
 
 `server/src/domains/match/` is the first real game engine in this product, and it is what the table
@@ -1520,11 +1564,9 @@ go stale the first time one of them forgot. Closing is NOT a third: `close` refu
 live, because a host who could close the table mid-game could erase a loss by leaving. Last one out
 still closes it, since everybody has gone and the forfeits that follow are the honest result.
 
-**Realtime gets a third scope, `game`, and this is the first one that earns it.** The objection beside
-`ringTable` - that a third scope would be new vocabulary for information `chat` and `social` already
-carry - is right about groups and tables and wrong about a move. `social` fans a presence snapshot to
-every socket on the server and could not be afforded per roll; a `chat` nudge would hand the chat
-store an id it would resolve as a conversation. It stays a doorbell: the frame carries the match id
+**Realtime has a `game` scope, and a move is what earns it.** A move is new information that no other
+scope carries, and a `chat` nudge would hand the chat store an id it would resolve as a conversation.
+Tables have a scope of their own too now - see *Realtime* for why they left `social`. It stays a doorbell: the frame carries the match id
 and nothing about the move, and the client re-reads through the same route with the same
 authorisation. The players ride along in the pending entry rather than being resolved at flush time,
 because unlike a conversation's membership a match's seats cannot change while the frame is in the
@@ -3585,6 +3627,25 @@ Sending is fire-and-forget and never blocks a request: a slow push service must 
 message slow, and a dead one must not make it fail. A 404 or 410 from the service means the
 subscription is over — the row is retired rather than retried forever.
 
+**A row that is written, read or dismissed rings its owner's `me` scope**, with `notifications` as
+the id, and that is the only doorbell the notifications store answers. It used to re-read on EVERY
+nudge of every scope - a request per move per player in a live game - while a mark-all-read in one
+tab never reached the other, because nothing about reading rang at all.
+
+**A notification that changes KIND under one dedupe key takes the new kind and counts from one.**
+`friend:<id>` carries both a request and an acceptance, and the upsert used to keep the old kind - so
+somebody who was unfriended and then asked again was told they had been accepted.
+
+**An invitation at create is held to the invite route's rules.** A table opened with invitees writes
+a `table-invite` notice now, so the same `mayMessage` check `invite` makes is made for each of
+them before a chair is written, and a friends table refuses an invitee who is not a friend. Without it
+the notice was a way for a stranger to reach a minor.
+
+**A friend request is RETRACTED once it is answered or withdrawn.** `notify.retract` deletes the
+`friend-request` row under that pair's dedupe key, and only that kind: a `friend-accepted` under the
+same key is a different fact and stays. A request that is no longer pending and still sits in the
+bell with Accept on it is a button that can only fail.
+
 ## Realtime — `nura-rt/v1`
 
 One WebSocket at `/ws`, and it is a **doorbell, not a delivery**. A frame says "something about
@@ -3677,6 +3738,73 @@ something that will not fix itself and everything in between is one steady `reco
 the teardown runs in reverse and every store under it holds an unsubscribe against it. Each stop is
 wrapped in its own try/catch: one that throws must not strand the sockets, timers and listeners of
 every store after it.
+
+### Who hears what
+
+Five scopes, and each is one question somebody can be asked: `chat` (this conversation moved),
+`social` (your graph moved), `game` (this board moved), `table` (this table moved) and `me` (a thing
+of your own moved - `notifications`, `devices` or `profile`, carried as the id).
+
+**A social doorbell and an edge change are two different calls, and conflating them was the bug.**
+`socialChanged` used to drop the person's cached friends-and-blocks AND send a fresh presence
+snapshot to every socket on the server. Dropping the edges made `visible()` false for that person
+until they reconnected, so a friend request, a group join or a seat taken made the person who did it
+vanish from every presence list at once - and it cost one snapshot per socket per call. It is a
+doorbell and nothing else now. `edgesChanged` is what a block, an unfriend, an accept, a privacy
+change or a handle claim calls: it RELOADS the edges in the flush, sends the moved people a snapshot
+and everybody else a delta only if their view of them flipped - or, on a rename, the old handle in
+`gone` and the new one in `people` - and re-asks `mayTalk` for every voice pair they are in, so a
+block stops the audio without anybody leaving the room.
+
+**Presence names people by HANDLE, and for a long time it named them by uuid.** The cached `Party`'s
+`id` is the account uuid, and the hub used it as the `who` of every entry, while the client keys
+presence by handle - so in production no dot ever lit for anybody. The hub spec could not see it,
+because its fake uses handles AS user ids; `Edges` carries the handle now and the spec has a person
+whose id and handle differ. `tools/qa/realtime-pass.mjs` is what found it.
+
+**A table is its own scope, and it reaches three kinds of people.** Seated and invited are
+`table.peopleAt`; the third is anybody LOOKING at it. `GET /tables/:id` records the reader in the
+hub (`tableViewed`, memory only, the last four tables per person, dropped when they go dark), and
+that is how a spectator's page turns into the board when the match starts and back when it ends,
+without a reload. It rides on `social` no longer: a seat taken rang everybody's graph, and a
+spectator was never in the `social` set anyway. A table ring also re-asks `voiceAllowed` for
+everybody in its voice room, so standing up or closing the table takes the audio with it.
+
+**`chatChanged` takes the people who just LEFT.** `recipientsOf` answers who is in the room now, so
+somebody removed from a group, or standing up from a table, was exactly the one person never told
+the thread had gone from their list.
+
+**A look at a table is kept even before the socket exists.** A deep link fetches the table before
+the socket has bound, so `tableViewed` refusing an account with no socket meant a spectator who
+arrived by url never heard the table start. It records the look regardless, and the sweep drops the
+looks of accounts that are neither connected nor lingering.
+
+**A reload that lands late must not overwrite a fresher one.** Edges are reloaded after an await,
+and a bind or a second flush can load newer ones meanwhile; an entry that was swept or is newer than
+what came back is left alone. Anybody who connected during the await was not in the baseline the
+deltas are computed against, so they are sent a full snapshot instead of a delta that assumes they
+saw the old state.
+
+**Asking somebody who already asked you IS an acceptance**, and it rings like one: the edges reload
+and the request leaves the bell. It used to ring the plain doorbell, which left the two new friends
+invisible to each other's presence until a reconnect.
+
+**Coming back re-reads everything.** Every connection after the first rings every scope once with no
+id, whether the socket dropped or slept behind a hidden tab. A store answers a bare scope as "read it
+all again", which is what catches every doorbell that rang while nobody was listening - only three
+stores re-read after a drop before, and none after an idle.
+
+**A voice call HOLDS the socket.** A hidden tab lets its socket go after a minute, and the server
+empties the voice room when the socket closes - so switching away from a call hung it up for good.
+`realtime.hold()` keeps the socket through a hidden tab, and the voice store holds it from join to
+teardown.
+
+`tools/qa/realtime-pass.mjs` is three browsers on the built server - `dana.w`, `mina` and `omid.k`
+watching - and every check is made in the OTHER browser without a reload: a request lights the
+badge and the bell, an accept shows the friend with a live dot while everybody else keeps theirs,
+the bell forgets an answered request, a group thread arrives and leaves, a rename reaches a friend's
+list, an invitation at create rings the bell, a spectator's page turns into the board and back, and
+reading everything in one tab clears the other.
 
 ## The product shell
 
@@ -3867,6 +3995,15 @@ icon-only control has a visible name on a mouse and a long-press name on a finge
 `Badge` does counts, free text and dots. `Pagination` does numbered pages and load-more.
 `Slider` is pointer-captured and keyboard-driven. `lib/anchor.ts` is the shared placement maths
 (flip, shift, RTL) and `lib/swipe.ts` the two-axis drag with axis lock.
+
+**`Select` is ours, and there is no native `<select>` in the product.** The native one draws the
+operating system's list over a dark page - white on a phone, the wrong font, a dropdown arrow that
+matches nothing else - and cannot be themed. `Select` is the select-only combobox from the ARIA
+practices: a button with `aria-haspopup="listbox"` showing the chosen label, a listbox portalled to
+`.anchor-root` and placed by `lib/anchor.ts` (so it flips above the trigger near the bottom of a
+phone and sits over any sheet), arrows, Home and End, Enter and Space to pick, Escape to leave it as
+it was, a typed letter to jump, and a press anywhere else or any scroll to close. Options are 44px on
+a coarse pointer.
 
 **A toast's countdown stops for a pointer AND for focus, and starts again however the touch ended.**
 Pausing takes the time spent so far out of `remaining` and deliberately leaves `startedAt` where it

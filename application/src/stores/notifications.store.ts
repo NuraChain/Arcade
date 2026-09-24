@@ -125,9 +125,12 @@ export const useNotifications = createStore((): NotificationsApi =>
          */
         start()
         {
-            return useRealtime().onNudge(() =>
+            return useRealtime().onNudge((scope, id) =>
             {
-                void revalidate().catch(() => undefined);
+                if (scope === 'me' && (id === undefined || id === 'notifications'))
+                {
+                    void revalidate().catch(() => undefined);
+                }
             });
         },
 

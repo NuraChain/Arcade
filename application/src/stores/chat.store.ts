@@ -161,6 +161,18 @@ export const useChat = createStore((): ChatApi =>
 
     const revalidateList = (): Promise<void> => queue(() => list.refetch());
 
+    let listWaiting: Promise<void> | null = null;
+
+    const nudgedList = (): Promise<void> =>
+    {
+        listWaiting ??= queue(async () =>
+        {
+            listWaiting = null;
+            await list.refetch();
+        });
+        return listWaiting;
+    };
+
     const revalidate = (): Promise<void> => queue(() => Promise.all([list.refetch(), thread.refetch()]));
 
     const rows = (): ConversationRow[] => list.data() ?? [];
@@ -493,7 +505,7 @@ export const useChat = createStore((): ChatApi =>
                 {
                     return;
                 }
-                void (id !== undefined && id === untrack(openId) ? revalidate() : revalidateList());
+                void (id === undefined || id === untrack(openId) ? revalidate() : nudgedList());
             });
 
             const offTyping = live.onTyping(noteTyping);

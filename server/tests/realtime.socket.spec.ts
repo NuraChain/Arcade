@@ -77,6 +77,7 @@ beforeAll(async () =>
         accountMax: config.wsAccountMax,
         edgesFor: async () => ({
             party: { id: 'alex', isMinor: false, allowStrangerMessages: true, showOnline: true },
+            handle: 'alex',
             friends: new Set<string>(),
             blocks: new Set<string>(),
             loadedAt: Date.now()

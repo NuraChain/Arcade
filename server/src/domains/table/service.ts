@@ -565,6 +565,25 @@ export function createTableService(db: DataSource, social: SocialService)
                 throw new ValidationError({ invitees: 'More guests than chairs.' }, 'That is more people than seats.');
             }
 
+            const friends = privacy === 'friends' ? (await social.edgesFor(me))?.friends ?? new Set<string>() : null;
+
+            for (const guest of new Set(input.invitees))
+            {
+                const refusal = await social.mayMessage(me, guest);
+
+                if (refusal !== null)
+                {
+                    throw new ForbiddenError(refusal === 'blocked'
+                        ? 'You cannot reach that account.'
+                        : 'They are not taking invitations from people they have not added.');
+                }
+
+                if (friends !== null && !friends.has(guest))
+                {
+                    throw new ForbiddenError('They cannot reach that table.');
+                }
+            }
+
             for (let attempt = 0; attempt < CLAIM_ATTEMPTS; attempt += 1)
             {
                 try
@@ -887,7 +906,22 @@ export function createTableService(db: DataSource, social: SocialService)
             }
         },
 
-        /** Everybody sitting at it, as uuids. What the realtime layer needs to ring the doorbell. */
+        async setVoice(me: string, tableId: string, on: boolean): Promise<void>
+        {
+            const table = await mustSee(me, tableId);
+            if (!table.is_host)
+            {
+                throw new ForbiddenError('Only the host can turn voice on or off.');
+            }
+
+            const changed = await db.getRepository(Table).update({ id: tableId, hostId: me, status: Not('closed') }, { voice: on });
+
+            if (changed.affected === 0)
+            {
+                throw new ConflictError('That table has closed.');
+            }
+        },
+
         /**
          * The table's own thread and how long a turn lasts there, for callers with no viewer.
          *
@@ -911,13 +945,13 @@ export function createTableService(db: DataSource, social: SocialService)
             return row === undefined ? null : { conversationId: row.conversation_id, mode: row.mode };
         },
 
-        async seatedIds(tableId: string): Promise<string[]>
+        async peopleAt(tableId: string): Promise<string[]>
         {
             const rows = await db.getRepository(TableSeat).find({
-                select: { userId: true },
-                where: { tableId, userId: Not(IsNull()) }
+                select: { userId: true, invitedId: true },
+                where: [{ tableId, userId: Not(IsNull()) }, { tableId, invitedId: Not(IsNull()) }]
             });
-            return rows.map((row) => row.userId).filter((id): id is string => id !== null);
+            return [...new Set(rows.flatMap((row) => [row.userId, row.invitedId]).filter((id): id is string => id !== null))];
         }
     };
 }

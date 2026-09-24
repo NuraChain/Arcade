@@ -12,6 +12,11 @@ export interface Settings
     voiceStartMuted: boolean;
     voiceAutoJoin: boolean;
     voiceVolume: number;
+    voiceTables: boolean;
+    voicePushToTalk: boolean;
+    voiceTalkKey: string;
+    voiceMic: string;
+    voiceSpeaker: string;
     hintMoves: boolean;
     hintOutcome: boolean;
     hintRules: boolean;
@@ -30,6 +35,11 @@ export function defaultSettings(): Settings
         voiceStartMuted: true,
         voiceAutoJoin: false,
         voiceVolume: 1,
+        voiceTables: false,
+        voicePushToTalk: false,
+        voiceTalkKey: 'KeyV',
+        voiceMic: '',
+        voiceSpeaker: '',
         hintMoves: true,
         hintOutcome: true,
         hintRules: true

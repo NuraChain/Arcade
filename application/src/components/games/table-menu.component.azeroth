@@ -18,6 +18,8 @@ interface Entry
 export default component TableMenu(props: OverlayProps & {
     code: string;
     full: boolean;
+    voice?: boolean;
+    onVoice?: () => void;
     onFullscreen?: () => void;
     onResign?: () => void;
 })
@@ -65,6 +67,16 @@ export default component TableMenu(props: OverlayProps & {
                 run: () => settings.update({ hintRules: !current.hintRules })
             }
         ];
+
+        if (props.voice !== undefined && props.onVoice !== undefined)
+        {
+            list.push({
+                id: 'voice',
+                icon: props.voice ? 'voice-off' : 'voice',
+                label: locale.t(props.voice ? 'voice.hostOff' : 'voice.hostOn'),
+                run: () => props.onVoice?.()
+            });
+        }
 
         if (props.onFullscreen !== undefined)
         {

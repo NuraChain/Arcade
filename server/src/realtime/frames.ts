@@ -16,6 +16,8 @@ export interface VoicePeer
     talk: boolean;
 }
 
+export type NudgeScope = 'chat' | 'social' | 'game' | 'table' | 'me';
+
 export const SIGNAL_DATA_MAX = 12_288;
 
 const FRAME_MAX = 4096;
@@ -25,7 +27,7 @@ const SIGNAL_FRAME_MAX = SIGNAL_DATA_MAX + 512;
 export type ServerFrame =
     | { v: 1; t: 'hello'; n: number; rt: string; self: string; at: number }
     | { v: 1; t: 'presence'; n: number; full: boolean; people: PresenceEntry[]; gone?: string[] }
-    | { v: 1; t: 'nudge'; n: number; scope: 'chat' | 'social' | 'game'; id?: string; at: number }
+    | { v: 1; t: 'nudge'; n: number; scope: NudgeScope; id?: string; at: number }
     | { v: 1; t: 'typing'; n: number; who: string; id: string }
     | { v: 1; t: 'voice'; n: number; table: string; joined: boolean; peers: VoicePeer[] }
     | { v: 1; t: 'signal'; n: number; table: string; from: string; kind: SignalKind; data: string };
@@ -71,7 +73,7 @@ export const presence = (n: number, full: boolean, people: PresenceEntry[], gone
  * with a message body on it would be a second place for all three to be got wrong, and it would
  * have to be rewritten again when a body becomes ciphertext.
  */
-export const nudge = (n: number, scope: 'chat' | 'social' | 'game', at: number, id?: string): ServerFrame =>
+export const nudge = (n: number, scope: NudgeScope, at: number, id?: string): ServerFrame =>
     id === undefined ? { v: 1, t: 'nudge', n, scope, at } : { v: 1, t: 'nudge', n, scope, id, at };
 
 export const typing = (n: number, who: string, id: string): ServerFrame =>

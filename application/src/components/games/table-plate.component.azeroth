@@ -1,6 +1,7 @@
 import type { Child } from 'azerothjs';
 
 import Avatar from '../ui/avatar.component.azeroth';
+import Icon from '../../icons/icon.component.azeroth';
 import { usePeople } from '../../stores/people.store.ts';
 import { useVoice } from '../../stores/voice.store.ts';
 import type { PlateTone } from './plate-tag.ts';
@@ -48,6 +49,11 @@ export default component TablePlate(props: {
             </For>
             <Show when={ props.marker !== undefined }>
                 { () => <span class="table-plate-marker">{ props.marker }</span> }
+            </Show>
+            <Show when={ voice.mark(props.who) } let={ mark }>
+                <span class="table-plate-voice" data-mark={ mark } aria-hidden="true">
+                    <Icon name={ mark === 'muted' ? 'voice-off' : 'voice' } size={ 10 } />
+                </span>
             </Show>
         </span>
         <span class="table-plate-text">

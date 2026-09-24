@@ -145,7 +145,7 @@ describe('the notifications store', () =>
         expect(new Set(notifications.items().map((item) => item.id)).size).toBe(3);
     });
 
-    it('re-reads itself on any doorbell, because a notification follows something that happened', async () =>
+    it('re-reads itself when the server says one of its own notifications moved, and not on other doorbells', async () =>
     {
         const notifications = useNotifications();
         const stop = notifications.start();
@@ -156,6 +156,12 @@ describe('the notifications store', () =>
         server.calls = [];
 
         socket.deliver({ v: 1, t: 'nudge', n: 1, scope: 'chat', id: 'c-1', at: 0 });
+        clock.advance(NUDGE_WINDOW_MS);
+        await settle();
+
+        expect(server.calls).not.toContain('notifications.list');
+
+        socket.deliver({ v: 1, t: 'nudge', n: 2, scope: 'me', id: 'notifications', at: 0 });
         clock.advance(NUDGE_WINDOW_MS);
         await settle();
 

@@ -112,7 +112,8 @@ export function createNotifyService(db: DataSource, social: SocialService)
                 `insert into notifications (user_id, kind, actor_id, ref, dedupe_key)
                  values ($1, $2, $3, $4::jsonb, $5)
                  on conflict (user_id, dedupe_key) do update set
-                    count      = notifications.count + 1,
+                    count      = case when notifications.kind = excluded.kind then notifications.count + 1 else 1 end,
+                    kind       = excluded.kind,
                     created_at = now(),
                     read_at    = null,
                     actor_id   = excluded.actor_id,
@@ -120,6 +121,11 @@ export function createNotifyService(db: DataSource, social: SocialService)
                 [input.userId, input.kind, input.actorId, JSON.stringify(clean(input.ref)), input.dedupeKey]
             );
             return true;
+        },
+
+        async retract(userId: string, kind: NotificationKind, dedupeKey: string): Promise<void>
+        {
+            await db.getRepository(Notification).delete({ userId, kind, dedupeKey });
         },
 
         /** Tells several people the same thing. One row each, deduped per recipient. */

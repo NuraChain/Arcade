@@ -26,6 +26,7 @@ export interface VoiceCall
     sync(peers: readonly string[]): void;
     receive(from: string, signal: VoiceSignal): Promise<void>;
     setVolume(who: string, volume: number): void;
+    setSink(id: string): void;
     close(): void;
 }
 
@@ -78,6 +79,17 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
     let muted = true;
     let localMeter: (() => void) | null = null;
     let closed = false;
+    let sink = '';
+
+    const route = (audio: HTMLAudioElement): void =>
+    {
+        const output = audio as HTMLAudioElement & { setSinkId?: (id: string) => Promise<void> };
+
+        if (typeof output.setSinkId === 'function')
+        {
+            void output.setSinkId(sink).catch(() => undefined);
+        }
+    };
 
     const connect = deps.connect ?? ((config: RTCConfiguration) => new RTCPeerConnection(config));
 
@@ -183,6 +195,11 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
                 audio.volume = peer.volume;
                 document.body.append(audio);
                 peer.audio = audio;
+
+                if (sink !== '')
+                {
+                    route(audio);
+                }
             }
 
             peer.audio.srcObject = stream;
@@ -321,6 +338,19 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
                 if (peer.audio !== null)
                 {
                     peer.audio.volume = volume;
+                }
+            }
+        },
+
+        setSink(id)
+        {
+            sink = id;
+
+            for (const peer of peers.values())
+            {
+                if (peer.audio !== null)
+                {
+                    route(peer.audio);
                 }
             }
         },

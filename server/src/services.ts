@@ -54,9 +54,13 @@ import type {
  */
 export interface WriteListener
 {
-    chatChanged(conversationId: string): void;
+    chatChanged(conversationId: string, ...also: string[]): void;
     socialChanged(...userIds: string[]): void;
+    edgesChanged(...userIds: string[]): void;
+    selfChanged(userId: string, what: 'notifications' | 'devices' | 'profile'): void;
     gameChanged(matchId: string, players: readonly string[]): void;
+    tableChanged(tableId: string, people: readonly string[]): void;
+    tableViewed(userId: string, tableId: string): void;
     sessionsRevoked(sessionIds: readonly string[]): void;
 }
 
@@ -148,8 +152,15 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
     {
         if (await notify.tell(input))
         {
+            live?.selfChanged(input.userId, 'notifications');
             wake(input.userId);
         }
+    };
+
+    const retract = async (userId: string, kind: Notification['kind'], dedupeKey: string): Promise<void> =>
+    {
+        await notify.retract(userId, kind, dedupeKey);
+        live?.selfChanged(userId, 'notifications');
     };
 
     const asNotification = (row: NotificationRow): Notification =>
@@ -478,7 +489,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
     {
         if (row.conversation_id !== null)
         {
-            live?.chatChanged(row.conversation_id);
+            live?.chatChanged(row.conversation_id, ...also);
         }
         live?.socialChanged(...await group.memberIds(row.id), ...also);
     };
@@ -545,20 +556,13 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         return found;
     };
 
-    /**
-     * The doorbell for a table that changed.
-     *
-     * The same two scopes groups use, for the same reason: the table thread's membership moved
-     * (`chat`) and so did everybody's list of where they are sitting (`social`). A third scope
-     * would be new vocabulary for information these two already carry.
-     */
     const ringTable = async (row: TableRow, ...also: string[]): Promise<void> =>
     {
         if (row.conversation_id !== null)
         {
             live?.chatChanged(row.conversation_id);
         }
-        live?.socialChanged(...await table.seatedIds(row.id), ...also);
+        live?.tableChanged(row.id, [...await table.peopleAt(row.id), ...also]);
     };
 
     const match = createMatchService(db, achieve);
@@ -787,7 +791,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             else
             {
                 await courtesy('result line', () => declareResult(matchId));
-                live?.socialChanged(...await match.playersOf(matchId));
+                live?.tableChanged(answer.load.match.tableId, await table.peopleAt(answer.load.match.tableId));
             }
         }
 
@@ -834,7 +838,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             else
             {
                 await courtesy('result line', () => declareResult(expired.matchId));
-                live?.socialChanged(...await match.playersOf(expired.matchId));
+                live?.tableChanged(load.match.tableId, await table.peopleAt(load.match.tableId));
             }
         }
 
@@ -859,6 +863,27 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         {
             return;
         }
+
+        live.selfChanged(userId, 'devices');
+
+        for (const conversationId of await chat.seatedIn(userId))
+        {
+            live.chatChanged(conversationId);
+        }
+    };
+
+    const ringProfile = async (userId: string): Promise<void> =>
+    {
+        if (live === undefined)
+        {
+            return;
+        }
+
+        const [edges, requests] = await Promise.all([social.edgesFor(userId), social.requests(userId)]);
+        const parties = [...requests.incoming, ...requests.outgoing].map((request) => request.from_user === userId ? request.to_user : request.from_user);
+
+        live.selfChanged(userId, 'profile');
+        live.socialChanged(userId, ...(edges?.friends ?? []), ...parties);
 
         for (const conversationId of await chat.seatedIn(userId))
         {
@@ -1050,21 +1075,21 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             {
                 const ended = await identity.signOutEverywhere(userId);
 
-                // Every socket this account holds, not only the one that asked. Signing out
-                // everywhere that leaves a live socket open is the feature not working.
-                live?.socialChanged(userId);
                 live?.sessionsRevoked(ended);
                 return ended.length;
             },
-            claimHandle: (userId, handle) => identity.claimHandle(userId, handle),
+            async claimHandle(userId, handle)
+            {
+                const claimed = await identity.claimHandle(userId, handle);
+                live?.edgesChanged(userId);
+                await ringProfile(userId);
+                return claimed;
+            },
 
             async setProfile(userId, input)
             {
                 const row = await identity.setProfile(userId, input);
-
-                // The display name travels on every person payload the social graph sends, so
-                // everybody with this account on screen has to be told to re-read it.
-                live?.socialChanged(userId);
+                await ringProfile(userId);
                 return present(row);
             }
         },
@@ -1222,7 +1247,15 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                     dedupeKey: `friend:${ me }`
                 });
 
-                live?.socialChanged(me, other);
+                if (outcome.outcome === 'accepted')
+                {
+                    await retract(me, 'friend-request', `friend:${ other }`);
+                    live?.edgesChanged(me, other);
+                }
+                else
+                {
+                    live?.socialChanged(me, other);
+                }
                 return outcome;
             },
 
@@ -1233,7 +1266,13 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
 
                 // Only an acceptance is worth telling somebody about. A decline that announced
                 // itself would be a product that makes saying no cost something.
-                if (outcome === 'accepted' && asker !== null)
+                if (asker === null)
+                {
+                    live?.socialChanged(me);
+                    return;
+                }
+
+                if (outcome === 'accepted')
                 {
                     await tell({
                         userId: asker,
@@ -1244,13 +1283,23 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                     });
                 }
 
-                live?.socialChanged(me);
+                await retract(me, 'friend-request', `friend:${ asker }`);
+
+                if (outcome === 'accepted')
+                {
+                    live?.edgesChanged(me, asker);
+                }
+                else
+                {
+                    live?.socialChanged(me, asker);
+                }
             },
 
             async withdrawRequest(me, handle)
             {
                 const other = await mustResolve(handle);
                 await social.withdrawRequest(me, other);
+                await retract(other, 'friend-request', `friend:${ me }`);
                 live?.socialChanged(me, other);
             },
 
@@ -1258,21 +1307,21 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             {
                 const other = await mustResolve(handle);
                 await social.removeFriend(me, other);
-                live?.socialChanged(me, other);
+                live?.edgesChanged(me, other);
             },
 
             async block(me, handle)
             {
                 const other = await mustResolve(handle);
                 await social.block(me, other);
-                live?.socialChanged(me, other);
+                live?.edgesChanged(me, other);
             },
 
             async unblock(me, handle)
             {
                 const other = await mustResolve(handle);
                 await social.unblock(me, other);
-                live?.socialChanged(me, other);
+                live?.edgesChanged(me, other);
             },
             async setMute(me, kind, subjectId, muted)
             {
@@ -1396,7 +1445,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             async setPrivacy(me, wanted)
             {
                 const row = await social.setPrivacy(me, wanted);
-                live?.socialChanged(me);
+                live?.edgesChanged(me);
                 return {
                     allowStrangerMessages: row.allow_stranger_messages,
                     showOnline: row.show_online,
@@ -1493,9 +1542,9 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 {
                     await announce(found, null, 'owner', { who: outcome.newOwner });
                 }
-                if (!outcome.deleted)
+                if (found.conversation_id !== null)
                 {
-                    live?.chatChanged(found.conversation_id ?? '');
+                    live?.chatChanged(found.conversation_id, me);
                 }
                 live?.socialChanged(...members);
                 return null;
@@ -1589,6 +1638,11 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             async view(me, tableId)
             {
                 const found = await table.byId(me, tableId);
+
+                if (found !== null)
+                {
+                    live?.tableViewed(me, found.id);
+                }
                 return found === null ? null : asTable(found);
             },
 
@@ -1604,7 +1658,18 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 const known = guests.filter((person): person is NonNullable<typeof person> => person !== null);
 
                 const made = await table.create(me, { ...input, invitees: known.map((person) => person.id) });
-                live?.socialChanged(me, ...known.map((person) => person.id));
+                live?.tableChanged(made.id, [me, ...known.map((person) => person.id)]);
+
+                for (const person of known)
+                {
+                    await courtesy('invite notice', () => tell({
+                        userId: person.id,
+                        kind: 'table-invite',
+                        actorId: me,
+                        ref: { tableId: made.id },
+                        dedupeKey: `table:${ made.id }`
+                    }));
+                }
 
                 /**
                  * A table opened in a room is ANNOUNCED there, and that line is the only way anybody
@@ -1650,15 +1715,15 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             async leave(me, tableId)
             {
                 const before = await mustTable(me, tableId);
-                const seated = await table.seatedIds(before.id);
+                const people = await table.peopleAt(before.id);
 
                 await table.leave(me, before.id);
 
                 if (before.conversation_id !== null)
                 {
-                    live?.chatChanged(before.conversation_id);
+                    live?.chatChanged(before.conversation_id, me);
                 }
-                live?.socialChanged(...seated);
+                live?.tableChanged(before.id, people);
             },
 
             async setReady(me, tableId, ready)
@@ -1718,7 +1783,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             async close(me, tableId)
             {
                 const before = await mustTable(me, tableId);
-                const seated = await table.seatedIds(before.id);
+                const people = await table.peopleAt(before.id);
 
                 await table.close(me, before.id);
 
@@ -1726,7 +1791,15 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 {
                     live?.chatChanged(before.conversation_id);
                 }
-                live?.socialChanged(...seated);
+                live?.tableChanged(before.id, people);
+            },
+
+            async setVoice(me, tableId, on)
+            {
+                await table.setVoice(me, tableId, on);
+                const after = await mustTable(me, tableId);
+                await ringTable(after);
+                return asTable(after);
             }
         },
 
@@ -1755,7 +1828,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 const load = await match.start(me, tableId);
 
                 await ringMatch(load.match.id);
-                live?.socialChanged(...await table.seatedIds(tableId));
+                live?.tableChanged(tableId, await table.peopleAt(tableId));
 
                 return asMatch(load);
             },
@@ -1844,9 +1917,23 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 };
             },
 
-            markRead: (me, id) => notify.markRead(me, id),
-            markAllRead: (me) => notify.markAllRead(me),
-            dismiss: (me, id) => notify.dismiss(me, id),
+            async markRead(me, id)
+            {
+                await notify.markRead(me, id);
+                live?.selfChanged(me, 'notifications');
+            },
+
+            async markAllRead(me)
+            {
+                await notify.markAllRead(me);
+                live?.selfChanged(me, 'notifications');
+            },
+
+            async dismiss(me, id)
+            {
+                await notify.dismiss(me, id);
+                live?.selfChanged(me, 'notifications');
+            },
 
             pushKey: () => (vapid === null ? undefined : vapid.publicKey),
 
@@ -1906,7 +1993,9 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
 
             async rename(me, deviceId, label)
             {
-                return asDevice(await device.rename(me, deviceId, label));
+                const row = await device.rename(me, deviceId, label);
+                live?.selfChanged(me, 'devices');
+                return asDevice(row);
             },
 
             /**

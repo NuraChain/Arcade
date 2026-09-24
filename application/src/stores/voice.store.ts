@@ -8,6 +8,8 @@ import { useSettings } from './settings.store.ts';
 
 export type MicState = 'off' | 'live' | 'denied' | 'absent';
 
+export type VoiceMark = 'speaking' | 'live' | 'muted';
+
 export interface VoicePerson
 {
     who: string;
@@ -17,6 +19,13 @@ export interface VoicePerson
     link: PeerLink | null;
     speaking: boolean;
     silenced: boolean;
+    volume: number;
+}
+
+export interface MediaChoice
+{
+    id: string;
+    label: string;
 }
 
 export interface VoiceApi
@@ -24,14 +33,28 @@ export interface VoiceApi
     table: Getter<string | null>;
     joining: Getter<boolean>;
     muted: Getter<boolean>;
+    deaf: Getter<boolean>;
+    talking: Getter<boolean>;
     mic: Getter<MicState>;
     people: Getter<VoicePerson[]>;
+    inputs: Getter<MediaChoice[]>;
+    outputs: Getter<MediaChoice[]>;
+    canPickSpeaker(): boolean;
     speaking(who: string): boolean;
+    mark(who: string): VoiceMark | null;
+    volumeOf(who: string): number;
     join(table: string): Promise<void>;
     leave(): void;
     toggleMute(): void;
+    toggleDeafen(): void;
+    press(): void;
+    release(): void;
     silence(who: string): void;
+    setLevel(who: string, volume: number): void;
     applyVolume(): void;
+    survey(): Promise<void>;
+    useMic(id: string): Promise<void>;
+    useSpeaker(id: string): void;
     start(): () => void;
     reset(): void;
 }
@@ -39,6 +62,8 @@ export interface VoiceApi
 const SPEAKING = 0.08;
 
 const QUIET = 0.04;
+
+export const TALK_KEY = 'KeyV';
 
 let media: () => MediaDevices | null = () => (typeof navigator === 'undefined' ? null : navigator.mediaDevices ?? null);
 
@@ -54,6 +79,13 @@ export function setVoiceCall(next: ((deps: VoiceCallDeps) => VoiceCall) | null):
     makeCall = next ?? createVoiceCall;
 }
 
+const typing = (target: EventTarget | null): boolean =>
+{
+    const element = target as HTMLElement | null;
+
+    return element !== null && (element.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(element.tagName ?? ''));
+};
+
 export const useVoice = createStore((): VoiceApi =>
 {
     const realtime = useRealtime();
@@ -63,19 +95,38 @@ export const useVoice = createStore((): VoiceApi =>
     const [table, setTable] = createSignal<string | null>(null);
     const [joining, setJoining] = createSignal(false);
     const [muted, setMuted] = createSignal(true);
+    const [deaf, setDeaf] = createSignal(false);
+    const [talking, setTalking] = createSignal(false);
     const [mic, setMic] = createSignal<MicState>('off');
     const [roster, setRoster] = createSignal<VoiceFrame['peers']>([]);
     const [links, setLinks] = createSignal<Record<string, PeerLink>>({});
     const [loud, setLoud] = createSignal<ReadonlySet<string>>(new Set());
-    const [silenced, setSilenced] = createSignal<ReadonlySet<string>>(new Set());
+    const [volumes, setVolumes] = createSignal<Readonly<Record<string, number>>>({});
+    const [inputs, setInputs] = createSignal<MediaChoice[]>([]);
+    const [outputs, setOutputs] = createSignal<MediaChoice[]>([]);
 
     let call: VoiceCall | null = null;
     let stream: MediaStream | null = null;
     let context: AudioContext | null = null;
+    let mutedBeforeDeaf = true;
+    let unhold: (() => void) | null = null;
 
     const me = (): string => untrack(account.user)?.id ?? '';
 
-    const volume = (): number => Math.min(Math.max(untrack(settings.settings).voiceVolume, 0), 1);
+    const master = (): number => Math.min(Math.max(untrack(settings.settings).voiceVolume, 0), 1);
+
+    const own = (who: string): number => untrack(volumes)[who] ?? 1;
+
+    const heard = (who: string): number => (untrack(deaf) ? 0 : master() * own(who));
+
+    const pushToTalk = (): boolean => untrack(settings.settings).voicePushToTalk;
+
+    const talkKey = (): string => untrack(settings.settings).voiceTalkKey || TALK_KEY;
+
+    const gate = (): void =>
+    {
+        call?.setMuted(untrack(muted) || untrack(deaf) || (pushToTalk() && !untrack(talking)));
+    };
 
     const level = (who: string, value: number): void =>
     {
@@ -97,16 +148,22 @@ export const useVoice = createStore((): VoiceApi =>
         });
     };
 
-    const teardown = (): void =>
+    const stopStream = (): void =>
     {
-        call?.close();
-        call = null;
-
         for (const track of stream?.getTracks() ?? [])
         {
             track.stop();
         }
         stream = null;
+    };
+
+    const teardown = (): void =>
+    {
+        unhold?.();
+        unhold = null;
+        call?.close();
+        call = null;
+        stopStream();
 
         void context?.close().catch(() => undefined);
         context = null;
@@ -118,9 +175,11 @@ export const useVoice = createStore((): VoiceApi =>
         setLoud(new Set<string>());
         setMic('off');
         setMuted(true);
+        setDeaf(false);
+        setTalking(false);
     };
 
-    const heard = (frame: VoiceFrame): void =>
+    const onVoice = (frame: VoiceFrame): void =>
     {
         if (frame.table !== untrack(table))
         {
@@ -148,6 +207,24 @@ export const useVoice = createStore((): VoiceApi =>
         }
     };
 
+    const survey = async (): Promise<void> =>
+    {
+        const devices = media();
+
+        if (devices === null || typeof devices.enumerateDevices !== 'function')
+        {
+            return;
+        }
+
+        const found = await devices.enumerateDevices().catch(() => [] as MediaDeviceInfo[]);
+        const choices = (kind: MediaDeviceKind): MediaChoice[] => found
+            .filter((device) => device.kind === kind && device.deviceId !== '' && device.deviceId !== 'default')
+            .map((device) => ({ id: device.deviceId, label: device.label }));
+
+        setInputs(choices('audioinput'));
+        setOutputs(choices('audiooutput'));
+    };
+
     const microphone = async (): Promise<MediaStream | null> =>
     {
         const devices = media();
@@ -158,10 +235,20 @@ export const useVoice = createStore((): VoiceApi =>
             return null;
         }
 
+        const wanted = untrack(settings.settings).voiceMic;
+
         try
         {
-            const got = await devices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+            const got = await devices.getUserMedia({
+                audio: {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true,
+                    ...(wanted === '' ? {} : { deviceId: { ideal: wanted } })
+                }
+            });
             setMic('live');
+            void survey();
             return got;
         }
         catch (error)
@@ -171,31 +258,104 @@ export const useVoice = createStore((): VoiceApi =>
         }
     };
 
+    const people = (): VoicePerson[] =>
+    {
+        const self = account.user()?.id ?? '';
+        const state = links();
+        const speaking = loud();
+        const own = volumes();
+
+        return roster().map((peer) => ({
+            who: peer.who,
+            me: peer.who === self,
+            muted: peer.muted,
+            talk: peer.talk,
+            link: peer.who === self ? 'connected' : (state[peer.who] ?? null),
+            speaking: speaking.has(peer.who) && !peer.muted,
+            silenced: (own[peer.who] ?? 1) === 0,
+            volume: own[peer.who] ?? 1
+        }));
+    };
+
+    const applyVolume = (): void =>
+    {
+        for (const peer of untrack(roster))
+        {
+            call?.setVolume(peer.who, heard(peer.who));
+        }
+    };
+
+    const setLevel = (who: string, value: number): void =>
+    {
+        setVolumes((current) => ({ ...current, [who]: Math.min(Math.max(value, 0), 1) }));
+        call?.setVolume(who, heard(who));
+    };
+
+    const press = (): void =>
+    {
+        if (untrack(table) === null || untrack(talking))
+        {
+            return;
+        }
+
+        setTalking(true);
+        gate();
+    };
+
+    const letGo = (): void =>
+    {
+        if (!untrack(talking))
+        {
+            return;
+        }
+
+        setTalking(false);
+        gate();
+    };
+
+    const announce = (): void =>
+    {
+        const current = untrack(table);
+
+        if (current !== null)
+        {
+            realtime.voice(current, true, untrack(muted));
+        }
+    };
+
     return {
         table,
         joining,
         muted,
+        deaf,
+        talking,
         mic,
+        people,
+        inputs,
+        outputs,
 
-        people: () =>
-        {
-            const self = account.user()?.id ?? '';
-            const state = links();
-            const speaking = loud();
-            const quiet = silenced();
-
-            return roster().map((peer) => ({
-                who: peer.who,
-                me: peer.who === self,
-                muted: peer.muted,
-                talk: peer.talk,
-                link: peer.who === self ? 'connected' : (state[peer.who] ?? null),
-                speaking: speaking.has(peer.who) && !peer.muted,
-                silenced: quiet.has(peer.who)
-            }));
-        },
+        canPickSpeaker: () => typeof HTMLMediaElement !== 'undefined' && 'setSinkId' in HTMLMediaElement.prototype,
 
         speaking: (who) => loud().has(who) && roster().some((peer) => peer.who === who && !peer.muted),
+
+        mark(who)
+        {
+            const person = people().find((one) => one.who === who);
+
+            if (person === undefined)
+            {
+                return null;
+            }
+
+            if (person.speaking)
+            {
+                return 'speaking';
+            }
+
+            return person.muted ? 'muted' : 'live';
+        },
+
+        volumeOf: (who) => volumes()[who] ?? 1,
 
         async join(next)
         {
@@ -212,6 +372,8 @@ export const useVoice = createStore((): VoiceApi =>
 
             setTable(next);
             setJoining(true);
+            unhold?.();
+            unhold = realtime.hold();
 
             const ice = await client.voice.ice().catch(() => ({ servers: [] }));
 
@@ -241,28 +403,32 @@ export const useVoice = createStore((): VoiceApi =>
 
                     if (link === 'connected')
                     {
-                        call?.setVolume(who, untrack(silenced).has(who) ? 0 : volume());
+                        call?.setVolume(who, heard(who));
                     }
                 },
                 onLevel: level,
                 context: () => context
             });
 
+            const speaker = untrack(settings.settings).voiceSpeaker;
+
+            if (speaker !== '')
+            {
+                call.setSink(speaker);
+            }
+
             stream = await microphone();
 
             if (untrack(table) !== next)
             {
-                for (const track of stream?.getTracks() ?? [])
-                {
-                    track.stop();
-                }
+                stopStream();
                 return;
             }
 
-            const quiet = stream === null || untrack(settings.settings).voiceStartMuted;
+            const quiet = stream === null || (!pushToTalk() && untrack(settings.settings).voiceStartMuted);
 
             setMuted(quiet);
-            call.setMuted(quiet);
+            gate();
             await call.setMic(stream);
 
             realtime.voice(next, true, quiet);
@@ -283,50 +449,125 @@ export const useVoice = createStore((): VoiceApi =>
 
         toggleMute()
         {
-            const current = untrack(table);
-
-            if (current === null || untrack(mic) !== 'live')
+            if (untrack(table) === null || untrack(mic) !== 'live')
             {
                 return;
             }
 
-            const next = !untrack(muted);
-            setMuted(next);
-            call?.setMuted(next);
-            realtime.voice(current, true, next);
+            setMuted(!untrack(muted));
+
+            if (!untrack(muted))
+            {
+                setDeaf(false);
+                applyVolume();
+            }
+
+            gate();
+            announce();
         },
 
-        silence(who)
+        toggleDeafen()
         {
-            const next = new Set(untrack(silenced));
-
-            if (next.has(who))
+            if (untrack(table) === null)
             {
-                next.delete(who);
+                return;
+            }
+
+            if (untrack(deaf))
+            {
+                setDeaf(false);
+                setMuted(untrack(mic) !== 'live' || mutedBeforeDeaf);
             }
             else
             {
-                next.add(who);
+                mutedBeforeDeaf = untrack(muted);
+                setDeaf(true);
+                setMuted(true);
             }
 
-            setSilenced(next);
-            call?.setVolume(who, next.has(who) ? 0 : volume());
+            applyVolume();
+            gate();
+            announce();
         },
 
-        applyVolume()
-        {
-            const quiet = untrack(silenced);
+        press,
 
-            for (const peer of untrack(roster))
+        release: letGo,
+
+        silence(who)
+        {
+            setLevel(who, own(who) === 0 ? 1 : 0);
+        },
+
+        setLevel,
+
+        applyVolume,
+
+        survey,
+
+        async useMic(id)
+        {
+            settings.update({ voiceMic: id });
+
+            if (untrack(table) === null || call === null || untrack(mic) !== 'live')
             {
-                call?.setVolume(peer.who, quiet.has(peer.who) ? 0 : volume());
+                return;
             }
+
+            const next = await microphone();
+
+            if (next === null || call === null)
+            {
+                return;
+            }
+
+            stopStream();
+            stream = next;
+            await call.setMic(next);
+            gate();
+        },
+
+        useSpeaker(id)
+        {
+            settings.update({ voiceSpeaker: id });
+            call?.setSink(id);
         },
 
         start()
         {
+            const devices = media();
+            const changed = (): void => void survey();
+
+            devices?.addEventListener?.('devicechange', changed);
+
+            const down = (event: KeyboardEvent): void =>
+            {
+                if (event.code === talkKey() && !event.repeat && pushToTalk() && untrack(table) !== null && !typing(event.target))
+                {
+                    event.preventDefault();
+                    press();
+                }
+            };
+
+            const up = (event: KeyboardEvent): void =>
+            {
+                if (event.code === talkKey())
+                {
+                    letGo();
+                }
+            };
+
+            const blur = (): void => letGo();
+
+            if (typeof window !== 'undefined')
+            {
+                window.addEventListener('keydown', down);
+                window.addEventListener('keyup', up);
+                window.addEventListener('blur', blur);
+            }
+
             const stops = [
-                realtime.onVoice(heard),
+                realtime.onVoice(onVoice),
                 realtime.onSignal(signalled),
                 onBack(realtime, () =>
                 {
@@ -341,6 +582,15 @@ export const useVoice = createStore((): VoiceApi =>
 
             return () =>
             {
+                devices?.removeEventListener?.('devicechange', changed);
+
+                if (typeof window !== 'undefined')
+                {
+                    window.removeEventListener('keydown', down);
+                    window.removeEventListener('keyup', up);
+                    window.removeEventListener('blur', blur);
+                }
+
                 for (const stop of stops)
                 {
                     stop();
@@ -351,7 +601,9 @@ export const useVoice = createStore((): VoiceApi =>
         reset()
         {
             teardown();
-            setSilenced(new Set<string>());
+            setVolumes({});
+            setInputs([]);
+            setOutputs([]);
         }
     };
 });

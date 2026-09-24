@@ -168,6 +168,47 @@ export default component PlayPage()
 
     derived amHost = table?.chairs.find((chair) => chair.seat === table!.mine)?.host === true;
 
+    let offered = '';
+
+    effect
+    {
+        if (!talkable)
+        {
+            offered = '';
+            return;
+        }
+
+        const id = table!.id;
+
+        if (voice.table() === null && !untrack(settings.settings).voiceAutoJoin && id !== offered)
+        {
+            offered = id;
+            toasts.show({
+                kind: 'info',
+                icon: 'voice',
+                text: locale.t('voice.offered'),
+                action: { label: locale.t('voice.join'), run: () => void voice.join(id) },
+                dedupe: `voice-offer-${ id }`
+            });
+        }
+    }
+
+    const switchVoice = (): void =>
+    {
+        const current = untrack(lobby.table);
+
+        if (current === null)
+        {
+            return;
+        }
+
+        const on = !current.voice;
+
+        void lobby.setVoice(current.id, on)
+            .then(() => toasts.show({ kind: 'success', text: locale.t(on ? 'voice.turnedOn' : 'voice.turnedOff'), dedupe: 'table-voice' }))
+            .catch(() => toasts.show({ kind: 'warning', text: locale.t('voice.switchFailed'), dedupe: 'table-voice' }));
+    };
+
     derived showing = board.match() !== null && board.match()!.tableId === table?.id;
 
     derived awake = showing && board.match()!.finishedAt === undefined;
@@ -599,6 +640,8 @@ export default component PlayPage()
                                         onChat={ floating ? undefined : openChat }
                                         onResign={ resigning ? () => void resign() : undefined }
                                         voice={ talkable ? table!.id : undefined }
+                                        hostVoice={ amHost && table!.status !== 'closed' ? table!.voice : undefined }
+                                        onHostVoice={ switchVoice }
                                     />
                                     <Show when={ !seated && table?.matchId !== undefined && (table?.taken ?? 0) < (table?.seats ?? 0) }>
                                         { () =>

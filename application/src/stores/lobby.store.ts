@@ -5,7 +5,7 @@ import type { GameId } from '../data/games.ts';
 import type { TableConfig } from '../data/tables.ts';
 import { useAccount } from './account.store.ts';
 import { useCatalogue } from './catalogue.store.ts';
-import { onBack, useRealtime } from './realtime.store.ts';
+import { useRealtime } from './realtime.store.ts';
 
 export interface LobbyApi
 {
@@ -44,6 +44,7 @@ export interface LobbyApi
     ready(tableId: string, ready: boolean): Promise<void>;
     invite(tableId: string, handle: string): Promise<void>;
     end(tableId: string): Promise<void>;
+    setVoice(tableId: string, on: boolean): Promise<void>;
 
     /** Deals the board. Any seated player may, once every chair is taken and everybody is ready. */
     begin(tableId: string): Promise<void>;
@@ -245,6 +246,12 @@ export const useLobby = createStore((): LobbyApi =>
             await revalidate();
         },
 
+        async setVoice(tableId, on)
+        {
+            await client.tables.voice({ params: { id: tableId }, input: { on } });
+            await revalidate();
+        },
+
         async begin(tableId)
         {
             await client.tables.start({ params: { id: tableId } });
@@ -253,14 +260,11 @@ export const useLobby = createStore((): LobbyApi =>
 
         refresh: revalidate,
 
-        /** A chair changing hands is a social change: it moves who is sitting where. */
         start()
         {
-            const live = useRealtime();
-            const offBack = onBack(live, () => void revalidate().catch(() => undefined));
-            const offNudge = live.onNudge((scope) =>
+            return useRealtime().onNudge((scope) =>
             {
-                if (scope === 'social')
+                if (scope === 'table')
                 {
                     void revalidate().catch(() => undefined);
                 }
@@ -270,12 +274,6 @@ export const useLobby = createStore((): LobbyApi =>
                     void seated.refetch();
                 }
             });
-
-            return () =>
-            {
-                offNudge();
-                offBack();
-            };
         },
 
         stop: () => undefined,

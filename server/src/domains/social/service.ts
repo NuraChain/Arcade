@@ -277,7 +277,7 @@ export function createSocialService(db: DataSource)
          * presence decision per viewer per frame. The ceiling is what bounds how long a stale
          * edge can matter if a write ever forgets to tell the hub.
          */
-        async edgesFor(userId: string): Promise<{ party: Party; friends: Set<string>; blocks: Set<string> } | null>
+        async edgesFor(userId: string): Promise<{ party: Party; handle: string; friends: Set<string>; blocks: Set<string> } | null>
         {
             const mine = await person(userId);
             if (mine === null)
@@ -300,7 +300,7 @@ export function createSocialService(db: DataSource)
             {
                 (row.kind === 'friend' ? friends : blocks).add(row.other);
             }
-            return { party: partyOf(mine), friends, blocks };
+            return { party: partyOf(mine), handle: mine.handle, friends, blocks };
         },
 
         /**

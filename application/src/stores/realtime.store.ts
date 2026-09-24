@@ -9,6 +9,10 @@ export type VoiceFrame = Extract<ServerFrame, { t: 'voice' }>;
 
 export type SignalFrame = Extract<ServerFrame, { t: 'signal' }>;
 
+export type NudgeScope = Extract<ServerFrame, { t: 'nudge' }>['scope'];
+
+const SCOPES: readonly NudgeScope[] = ['chat', 'social', 'game', 'table', 'me'];
+
 export type RealtimeStatus = 'idle' | 'connecting' | 'connected' | 'down';
 
 /** Deltas inside this window become one refetch. */
@@ -79,7 +83,7 @@ export interface RealtimeApi
 
     presence: Getter<PresenceEntry[] | null>;
 
-    onNudge(listener: (scope: 'chat' | 'social' | 'game', id: string | undefined) => void): () => void;
+    onNudge(listener: (scope: NudgeScope, id: string | undefined) => void): () => void;
 
     /**
      * Somebody is typing, right now, in one conversation.
@@ -95,6 +99,8 @@ export interface RealtimeApi
     onSignal(listener: (frame: SignalFrame) => void): () => void;
 
     voice(table: string, on: boolean, muted: boolean): void;
+
+    hold(): () => void;
 
     signal(table: string, to: string, kind: SignalFrame['kind'], data: string): void;
 
@@ -126,7 +132,7 @@ export function onBack(live: Pick<RealtimeApi, 'onStatus'>, listener: () => void
 
     return live.onStatus((status) =>
     {
-        if (status === 'down')
+        if (status === 'down' || status === 'idle')
         {
             dropped = true;
             return;
@@ -160,12 +166,12 @@ export const useRealtime = createStore((): RealtimeApi =>
     const [stalled, setStalled] = createSignal(false);
     const [presence, setPresence] = createSignal<PresenceEntry[] | null>(null);
 
-    const listeners = new Set<(scope: 'chat' | 'social' | 'game', id: string | undefined) => void>();
+    const listeners = new Set<(scope: NudgeScope, id: string | undefined) => void>();
     const watchers = new Set<(status: RealtimeStatus) => void>();
     const typists = new Set<(who: string, conversationId: string) => void>();
     const voices = new Set<(frame: VoiceFrame) => void>();
     const signals = new Set<(frame: SignalFrame) => void>();
-    const pending = new Map<string, { scope: 'chat' | 'social' | 'game'; id: string | undefined }>();
+    const pending = new Map<string, { scope: NudgeScope; id: string | undefined }>();
 
     let close: (() => void) | null = null;
     let retry: (() => void) | null = null;
@@ -176,6 +182,8 @@ export const useRealtime = createStore((): RealtimeApi =>
 
     /** Cancels the pending "the tab has been hidden long enough" timer, if one is armed. */
     let cancelSleep: (() => void) | null = null;
+    let holds = 0;
+    let arm: (() => void) | null = null;
     let wanted = false;
     let watching: (() => void) | null = null;
 
@@ -208,7 +216,7 @@ export const useRealtime = createStore((): RealtimeApi =>
         }
     };
 
-    const nudge = (scope: 'chat' | 'social' | 'game', id: string | undefined): void =>
+    const nudge = (scope: NudgeScope, id: string | undefined): void =>
     {
         pending.set(`${ scope }:${ id ?? '' }`, { scope, id });
         if (coalesce === null)
@@ -312,7 +320,7 @@ export const useRealtime = createStore((): RealtimeApi =>
         {
             return;
         }
-        if (typeof document !== 'undefined' && document.visibilityState === 'hidden')
+        if (typeof document !== 'undefined' && document.visibilityState === 'hidden' && holds === 0)
         {
             return;
         }
@@ -322,9 +330,19 @@ export const useRealtime = createStore((): RealtimeApi =>
         close = active.open({
             onOpen()
             {
+                const back = everConnected();
+
                 connectedAt = runtime().clock.now();
                 setEverConnected(true);
                 announce('connected');
+
+                if (back)
+                {
+                    for (const scope of SCOPES)
+                    {
+                        nudge(scope, undefined);
+                    }
+                }
             },
 
             onFrame: receive,
@@ -377,7 +395,7 @@ export const useRealtime = createStore((): RealtimeApi =>
 
         const resume = (): void =>
         {
-            if (!wanted || close !== null || document.visibilityState === 'hidden')
+            if (!wanted || close !== null || (document.visibilityState === 'hidden' && holds === 0))
             {
                 return;
             }
@@ -399,7 +417,7 @@ export const useRealtime = createStore((): RealtimeApi =>
          */
         const sleep = (): void =>
         {
-            if (close === null || document.visibilityState !== 'hidden')
+            if (close === null || document.visibilityState !== 'hidden' || holds > 0)
             {
                 return;
             }
@@ -430,9 +448,11 @@ export const useRealtime = createStore((): RealtimeApi =>
 
         document.addEventListener('visibilitychange', watchVisibility);
         window.addEventListener('online', resume);
+        arm = watchVisibility;
 
         watching = () =>
         {
+            arm = null;
             cancelSleep?.();
             cancelSleep = null;
             document.removeEventListener('visibilitychange', watchVisibility);
@@ -483,6 +503,28 @@ export const useRealtime = createStore((): RealtimeApi =>
         },
 
         voice: (table, on, muted) => active.send({ t: 'voice', table, on, muted }),
+
+        hold()
+        {
+            holds += 1;
+            let held = true;
+
+            return () =>
+            {
+                if (!held)
+                {
+                    return;
+                }
+
+                held = false;
+                holds -= 1;
+
+                if (holds === 0 && typeof document !== 'undefined' && document.visibilityState === 'hidden')
+                {
+                    arm?.();
+                }
+            };
+        },
 
         signal: (table, to, kind, data) => active.send({ t: 'signal', table, to, kind, data }),
 
@@ -539,6 +581,7 @@ export const useRealtime = createStore((): RealtimeApi =>
             voices.clear();
             signals.clear();
             setStalled(false);
+            holds = 0;
             attempt = 0;
             suppressUntil = 0;
             connectedAt = 0;

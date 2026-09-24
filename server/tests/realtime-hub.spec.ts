@@ -66,7 +66,7 @@ interface World
 {
     hub: Hub;
     at: number;
-    edges: Map<string, { party: Party; friends: string[]; blocks: string[] }>;
+    edges: Map<string, { party: Party; handle?: string; friends: string[]; blocks: string[] }>;
     recipients: Map<string, string[]>;
     alive: Set<string>;
     touched: string[];
@@ -101,6 +101,7 @@ function build(): World
             const found = state.edges.get(userId) ?? { party: party(userId), friends: [], blocks: [] };
             return {
                 party: found.party,
+                handle: found.handle ?? found.party.id,
                 friends: new Set(found.friends),
                 blocks: new Set(found.blocks),
                 loadedAt: state.at
@@ -145,11 +146,12 @@ async function connect(userId: string, sessionId = `s-${ userId }`): Promise<{ c
 
 const settle = async (): Promise<void> =>
 {
-    world.hub.flush();
-    await Promise.resolve();
-    await Promise.resolve();
+    await world.hub.flush();
     await Promise.resolve();
 };
+
+const scopesOf = (wire: FakeWire): string[] =>
+    wire.framesOf('nudge').map((frame) => (frame.t === 'nudge' ? `${ frame.scope }:${ frame.id ?? '' }` : ''));
 
 const peopleSeenBy = (wire: FakeWire): string[] =>
     wire.framesOf('presence').flatMap((frame) => (frame.t === 'presence' ? frame.people.map((entry) => entry.who) : []));
@@ -245,6 +247,16 @@ describe('who may see whom online', () =>
         expect(peopleSeenBy(blocked.wire)).not.toContain('alex');
     });
 
+    it('names people by their handle, never by the account id underneath it', async () =>
+    {
+        world.edges.set('u-7', { party: party('u-7'), handle: 'nima', friends: [], blocks: [] });
+        const alex = await connect('alex');
+        await connect('u-7');
+
+        expect(peopleSeenBy(alex.wire)).toContain('nima');
+        expect(peopleSeenBy(alex.wire)).not.toContain('u-7');
+    });
+
     it('always shows somebody their own presence', async () =>
     {
         const alex = await connect('alex');
@@ -310,30 +322,212 @@ describe('nudges', () =>
 
 describe('a social change', () =>
 {
-    it('drops the cached edges so the next bind reloads them', async () =>
-    {
-        world.edges.set('alex', { party: party('alex'), friends: [], blocks: [] });
-        await connect('alex');
-
-        world.edges.set('alex', { party: party('alex'), friends: [], blocks: ['reza.t'] });
-        world.hub.socialChanged('alex');
-        await settle();
-
-        const reza = await connect('reza.t');
-        const alexAgain = await connect('alex');
-
-        expect(peopleSeenBy(reza.wire)).not.toContain('alex');
-        expect(peopleSeenBy(alexAgain.wire)).not.toContain('reza.t');
-    });
-
-    it('tells the person whose graph moved to go and re-read it', async () =>
+    it('tells the people named to go and re-read their graph, and touches nobody\'s presence', async () =>
     {
         const alex = await connect('alex');
+        const sara = await connect('sara.k');
+        const before = [alex.wire.sent.length, sara.wire.sent.length];
+
         world.hub.socialChanged('alex');
         await settle();
 
-        const scopes = alex.wire.framesOf('nudge').map((frame) => (frame.t === 'nudge' ? frame.scope : ''));
-        expect(scopes).toContain('social');
+        expect(scopesOf(alex.wire)).toEqual(['social:']);
+        expect(alex.wire.sent.slice(before[0]).filter((frame) => frame.t === 'presence')).toEqual([]);
+        expect(sara.wire.sent.length).toBe(before[1]);
+    });
+});
+
+describe('an edge change', () =>
+{
+    it('takes a block into account at once, without anybody reconnecting', async () =>
+    {
+        world.edges.set('alex', { party: party('alex'), friends: [], blocks: [] });
+        const alex = await connect('alex');
+        const reza = await connect('reza.t');
+
+        world.edges.set('alex', { party: party('alex'), friends: [], blocks: ['reza.t'] });
+        world.hub.edgesChanged('alex');
+        await settle();
+
+        expect(world.hub.presenceOf('reza.t').map((entry) => entry.who)).not.toContain('alex');
+        expect(world.hub.presenceOf('alex').map((entry) => entry.who)).not.toContain('reza.t');
+        expect(reza.wire.framesOf('presence').at(-1)).toMatchObject({ full: false, people: [], gone: ['alex'] });
+        expect(alex.wire.framesOf('presence').at(-1)).toMatchObject({ full: true });
+        expect(scopesOf(alex.wire)).toEqual(['social:']);
+    });
+
+    it('keeps everybody else on screen for the person whose graph moved', async () =>
+    {
+        world.edges.set('kian16', { party: party('kian16', { isMinor: true, allowStrangerMessages: false }), friends: [], blocks: [] });
+        const alex = await connect('alex');
+        await connect('sara.k');
+        await connect('kian16');
+
+        world.edges.set('alex', { party: party('alex'), friends: ['kian16'], blocks: [] });
+        world.edges.set('kian16', { party: party('kian16', { isMinor: true, allowStrangerMessages: false }), friends: ['alex'], blocks: [] });
+        world.hub.edgesChanged('alex', 'kian16');
+        await settle();
+
+        const last = alex.wire.framesOf('presence').at(-1);
+        expect(last?.t === 'presence' ? last.people.map((entry) => entry.who).sort() : []).toEqual(['alex', 'kian16', 'sara.k']);
+    });
+
+    it('sends a fresh snapshot only to the two people and a delta only to those whose view moved', async () =>
+    {
+        const alex = await connect('alex');
+        const sara = await connect('sara.k');
+        const omid = await connect('omid.k');
+        const counts = [alex, sara, omid].map((one) => one.wire.sent.length);
+
+        world.edges.set('alex', { party: party('alex'), friends: ['sara.k'], blocks: [] });
+        world.edges.set('sara.k', { party: party('sara.k'), friends: ['alex'], blocks: [] });
+        world.hub.edgesChanged('alex', 'sara.k');
+        await settle();
+
+        expect(alex.wire.sent.slice(counts[0]).filter((frame) => frame.t === 'presence')).toHaveLength(1);
+        expect(sara.wire.sent.slice(counts[1]).filter((frame) => frame.t === 'presence')).toHaveLength(1);
+        expect(omid.wire.sent.length).toBe(counts[2]);
+    });
+
+    it('moves a renamed person under their new handle for everybody who can see them', async () =>
+    {
+        const alex = await connect('alex');
+        const sara = await connect('sara.k');
+
+        world.edges.set('alex', { party: party('alex.new'), friends: [], blocks: [] });
+        world.hub.edgesChanged('alex');
+        await settle();
+
+        expect(sara.wire.framesOf('presence').at(-1)).toMatchObject({ full: false, people: [{ who: 'alex.new' }], gone: ['alex'] });
+        expect(alex.connection.handle).toBe('alex.new');
+    });
+
+    it('stops two people talking once one of them blocks the other', async () =>
+    {
+        world.seated.add('alex@t-1').add('sara.k@t-1');
+        const alex = await connect('alex');
+        const sara = await connect('sara.k');
+
+        world.hub.voice(alex.connection, 't-1', true, false);
+        await settle();
+        world.hub.voice(sara.connection, 't-1', true, false);
+        await settle();
+
+        world.apart.add(['alex', 'sara.k'].sort().join('|'));
+        world.edges.set('alex', { party: party('alex'), friends: [], blocks: ['sara.k'] });
+        world.hub.edgesChanged('alex');
+        await settle();
+
+        const last = alex.wire.framesOf('voice').at(-1);
+        expect(last?.t === 'voice' ? last.peers.find((peer) => peer.who === 'sara.k')?.talk : null).toBe(false);
+    });
+});
+
+describe('a table change', () =>
+{
+    it('reaches the people at the table and anybody looking at it, and nobody else', async () =>
+    {
+        const host = await connect('alex');
+        const invited = await connect('sara.k');
+        const watcher = await connect('omid.k');
+        const stranger = await connect('mina');
+        const presences = host.wire.framesOf('presence').length;
+
+        world.hub.tableViewed('omid.k', 't-1');
+        world.hub.tableChanged('t-1', ['alex', 'sara.k']);
+        await settle();
+
+        expect(scopesOf(host.wire)).toEqual(['table:t-1']);
+        expect(scopesOf(invited.wire)).toEqual(['table:t-1']);
+        expect(scopesOf(watcher.wire)).toEqual(['table:t-1']);
+        expect(scopesOf(stranger.wire)).toEqual([]);
+        expect(host.wire.framesOf('presence')).toHaveLength(presences);
+    });
+
+    it('keeps a look that arrived before the socket did, which is what a deep link does', async () =>
+    {
+        world.hub.tableViewed('omid.k', 't-1');
+        const watcher = await connect('omid.k');
+
+        world.hub.tableChanged('t-1', []);
+        await settle();
+
+        expect(scopesOf(watcher.wire)).toEqual(['table:t-1']);
+    });
+
+    it('lets go of a look from somebody who never connected once the sweep comes round', async () =>
+    {
+        world.hub.tableViewed('ghost', 't-1');
+        await world.hub.sweep();
+        const late = await connect('ghost');
+
+        world.hub.tableChanged('t-1', []);
+        await settle();
+
+        expect(scopesOf(late.wire)).toEqual([]);
+    });
+
+    it('forgets the oldest table somebody looked at once they have looked at more', async () =>
+    {
+        const watcher = await connect('omid.k');
+
+        for (const id of ['t-1', 't-2', 't-3', 't-4', 't-5'])
+        {
+            world.hub.tableViewed('omid.k', id);
+        }
+        world.hub.tableChanged('t-1', []);
+        world.hub.tableChanged('t-5', []);
+        await settle();
+
+        expect(scopesOf(watcher.wire)).toEqual(['table:t-5']);
+    });
+
+    it('takes somebody out of the voice room once the table no longer lets them in', async () =>
+    {
+        world.seated.add('alex@t-1');
+        const alex = await connect('alex');
+
+        world.hub.voice(alex.connection, 't-1', true, false);
+        await settle();
+
+        world.seated.delete('alex@t-1');
+        world.hub.tableChanged('t-1', ['alex']);
+        await settle();
+
+        expect(alex.wire.framesOf('voice').at(-1)).toMatchObject({ joined: false });
+        expect(world.hub.voiceOf('t-1')).toEqual([]);
+    });
+});
+
+describe('a change of one\'s own', () =>
+{
+    it('rings every tab of that account and no other', async () =>
+    {
+        const first = await connect('alex');
+        const second = await connect('alex');
+        const other = await connect('sara.k');
+
+        world.hub.selfChanged('alex', 'notifications');
+        await settle();
+
+        expect(scopesOf(first.wire)).toEqual(['me:notifications']);
+        expect(scopesOf(second.wire)).toEqual(['me:notifications']);
+        expect(scopesOf(other.wire)).toEqual([]);
+    });
+});
+
+describe('a chat change that reaches past the room', () =>
+{
+    it('reaches somebody who has just been taken out of it', async () =>
+    {
+        world.recipients.set('c-1', ['alex']);
+        await connect('alex');
+        const removed = await connect('sara.k');
+
+        world.hub.chatChanged('c-1', 'sara.k');
+        await settle();
+
+        expect(scopesOf(removed.wire)).toEqual(['chat:c-1']);
     });
 });
 

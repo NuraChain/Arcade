@@ -107,7 +107,7 @@ const hub = createHub({
         const loaded = await social.edgesFor(userId);
         if (loaded === null)
         {
-            return { party: { id: userId, isMinor: false, allowStrangerMessages: false, showOnline: false }, friends: new Set(), blocks: new Set(), loadedAt: Date.now() };
+            return { party: { id: userId, isMinor: false, allowStrangerMessages: false, showOnline: false }, handle: userId, friends: new Set(), blocks: new Set(), loadedAt: Date.now() };
         }
         return { ...loaded, loadedAt: Date.now() };
     },

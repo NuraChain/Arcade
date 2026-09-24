@@ -1438,6 +1438,14 @@ export const client =
             const table = mustTable(params.id);
             table.status = 'closed';
             return { ok: true };
+        },
+
+        async voice({ params, input }: { params: { id: string }; input: { on: boolean } })
+        {
+            server.calls.push('tables.voice');
+            const table = mustTable(params.id);
+            table.voice = input.on;
+            return table;
         }
     },
 

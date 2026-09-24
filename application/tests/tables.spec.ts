@@ -238,7 +238,7 @@ describe('the lobby store', () =>
         expect(lobby.failed() ?? null).toBeNull();
     });
 
-    it('re-reads itself when the social doorbell rings', async () =>
+    it('re-reads itself when the table doorbell rings', async () =>
     {
         const lobby = useLobby();
         const stop = lobby.start();
@@ -248,7 +248,7 @@ describe('the lobby store', () =>
         await lobby.host('hokm', defaultTable('hokm'), []);
         server.calls = [];
 
-        socket.deliver({ v: 1, t: 'nudge', n: 1, scope: 'social', at: 0 });
+        socket.deliver({ v: 1, t: 'nudge', n: 1, scope: 'table', id: 'table-1', at: 0 });
         clock.advance(NUDGE_WINDOW_MS);
         await settle();
 

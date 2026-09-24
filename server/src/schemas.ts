@@ -808,6 +808,8 @@ export type PersonView = Infer<typeof personView>;
 
 export const personRef = object({ id: string() });
 
+export const voiceSwitch = object({ on: boolean() });
+
 export const answerInput = object({ id: string(), outcome: enumOf(['accepted', 'declined']) });
 
 export const requestResult = object({ outcome: enumOf(['sent', 'accepted']) });
