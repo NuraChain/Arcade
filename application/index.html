@@ -31,20 +31,21 @@
                 var RTL = ['fa'];
                 var root = document.documentElement;
 
-                function stored(key, allowed)
+                function chosen(name, allowed)
                 {
-                    try
+                    var pairs = document.cookie.split('; ');
+                    for (var index = 0; index < pairs.length; index += 1)
                     {
-                        var value = localStorage.getItem(key);
-                        return allowed.indexOf(value) === -1 ? null : value;
+                        var pair = pairs[index].split('=');
+                        if (pair[0] === name && allowed.indexOf(pair[1]) !== -1)
+                        {
+                            return pair[1];
+                        }
                     }
-                    catch (error)
-                    {
-                        return null;
-                    }
+                    return null;
                 }
 
-                var locale = stored('nura-games.locale', LOCALES);
+                var locale = chosen('locale', LOCALES);
                 if (locale === null)
                 {
                     locale = (navigator.language || 'en').toLowerCase().indexOf('fa') === 0 ? 'fa' : 'en';

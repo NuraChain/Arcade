@@ -193,14 +193,10 @@ async function asPerson(person)
         recordVideo: SHOW ? { dir: VIDEO_DIR, size: { width: 1280, height: 900 } } : undefined
     });
 
+    await context.addCookies([{ name: 'locale', value: 'en', url: BASE }]);
+
     await context.addInitScript(() =>
     {
-        try
-        {
-            localStorage.setItem('nura-games.locale', 'en');
-        }
-        catch { /* a refused store is a state the product handles */ }
-
         const provider = {
             isNuraTest: true,
             async request({ method, params })

@@ -1,12 +1,10 @@
-import { createStore, createSignal, type Getter } from 'azerothjs';
+import { createStore, createSignal, setLocale as setDocumentLocale, useLocale as useDocumentLocale, type Getter } from 'azerothjs';
 
 import { runtime } from '../lib/runtime.ts';
-import { remember } from '../lib/storage.ts';
 import { pickText, type LocalizedText } from '../lib/text.ts';
 
 import type { MessageKey } from '../locales/en.ts';
 import { landing as enLanding } from '../locales/en/landing.ts';
-import { landing as faLanding } from '../locales/fa/landing.ts';
 import { interpolate, relativeUnit, resolveMessage, type Message, type MessageVars } from '../locales/format.ts';
 
 export type Locale = 'en' | 'fa';
@@ -30,17 +28,31 @@ export const LOCALE_TAG: Record<Locale, string> = {
 
 type Catalogue = Partial<Record<MessageKey, Message>>;
 
-const CATALOG: Record<Locale, Catalogue> = { en: { ...enLanding }, fa: { ...faLanding } };
+const CATALOG: Record<Locale, Catalogue> = { en: { ...enLanding }, fa: {} };
+
+const present = new Set<Locale>(['en']);
 
 export function registerCatalogue(pages: Record<Locale, Catalogue>): void
 {
     for (const locale of LOCALES)
     {
         Object.assign(CATALOG[locale], pages[locale]);
+        if (Object.keys(pages[locale]).length > 0)
+        {
+            present.add(locale);
+        }
     }
 }
 
-const STORAGE_KEY = 'nura-games.locale';
+export async function loadCatalogue(locale: Locale): Promise<void>
+{
+    if (present.has(locale))
+    {
+        return;
+    }
+    const { landing } = await import('../locales/fa/landing.ts');
+    registerCatalogue({ en: {}, fa: landing });
+}
 
 function isLocale(value: string | null | undefined): value is Locale
 {
@@ -49,12 +61,8 @@ function isLocale(value: string | null | undefined): value is Locale
 
 function initial(): Locale
 {
-    if (typeof document === 'undefined')
-    {
-        return 'en';
-    }
-    const stamped = document.documentElement.lang;
-    return isLocale(stamped) ? stamped : 'en';
+    const pinned = useDocumentLocale()();
+    return isLocale(pinned) ? pinned : 'en';
 }
 
 const formatters = new Map<string, unknown>();
@@ -97,14 +105,8 @@ export const useLocale = createStore((): LocaleApi =>
 
     const apply = (next: Locale): void =>
     {
-        if (typeof document === 'undefined')
-        {
-            return;
-        }
-        const root = document.documentElement;
-        root.lang = next;
-        root.dir = LOCALE_DIR[next];
-        remember(STORAGE_KEY, next);
+        setSignal(next);
+        setDocumentLocale(next);
     };
 
     const numbers = (options?: Intl.NumberFormatOptions): Intl.NumberFormat =>
@@ -127,8 +129,12 @@ export const useLocale = createStore((): LocaleApi =>
         tag,
         setLocale: (next) =>
         {
-            setSignal(next);
-            apply(next);
+            if (present.has(next))
+            {
+                apply(next);
+                return;
+            }
+            void loadCatalogue(next).then(() => apply(next));
         },
         t,
         plural: (key, count, vars) => t(key, { ...vars, count }),

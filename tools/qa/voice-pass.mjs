@@ -55,11 +55,7 @@ async function seat(handle)
     const wallet = privateKeyToAccount(fixture.privateKey);
     const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, locale: 'en-US', permissions: ['microphone'] });
 
-    await context.addInitScript(() =>
-    {
-        try { localStorage.setItem('nura-games.locale', 'en'); }
-        catch { return; }
-    });
+    await context.addCookies([{ name: 'locale', value: 'en', url: BASE }]);
 
     const issued = await context.request.post(`${ BASE }/api/auth/challenge`, { data: { address: wallet.address } });
     const challenge = await issued.json();

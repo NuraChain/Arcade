@@ -3,10 +3,14 @@ import { vi } from 'vitest';
 import { createFakeSource } from './fake-realtime.ts';
 import { setRealtimeSource } from '../src/stores/realtime.store.ts';
 import { setKeyStore } from '../src/lib/device-keys.ts';
+import { landing as faLanding } from '../src/locales/fa/landing.ts';
+import { registerCatalogue } from '../src/stores/locale.store.ts';
 
 vi.mock('../src/api.ts', async () => await import('./fake-api.ts'));
 
 setRealtimeSource(createFakeSource());
+
+registerCatalogue({ en: {}, fa: faLanding });
 
 const fake = await import('./fake-api.ts');
 

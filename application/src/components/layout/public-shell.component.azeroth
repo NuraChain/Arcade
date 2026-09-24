@@ -29,7 +29,7 @@ export default component PublicShell(props: { children?: MountNode })
         }
     }
 
-    <div class="site min-h-dvh bg-void text-text">
+    <div class="site flex min-h-dvh flex-col bg-void text-text">
 
         <a
             href="#main"
@@ -40,7 +40,7 @@ export default component PublicShell(props: { children?: MountNode })
 
         <SiteHeader />
 
-        <main id="main">
+        <main id="main" class="flex-1">
             <Outlet children={ props.children } />
         </main>
 

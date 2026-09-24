@@ -56,14 +56,10 @@ async function open({ width = 1280, height = 900, locale = 'en' } = {})
         locale: locale === 'fa' ? 'fa-IR' : 'en-US'
     });
 
-    await context.addInitScript((localeName) =>
-    {
-        try
-        {
-            localStorage.setItem('nura-games.locale', localeName);
-        }
-        catch { /* a refused store is a state the product handles */ }
+    await context.addCookies([{ name: 'locale', value: locale, url: BASE }]);
 
+    await context.addInitScript(() =>
+    {
         const provider = {
             isNuraTest: true,
             async request({ method, params })
@@ -86,7 +82,7 @@ async function open({ width = 1280, height = 900, locale = 'en' } = {})
         }));
         window.addEventListener('eip6963:requestProvider', announce);
         announce();
-    }, locale);
+    });
 
     await context.addInitScript((address) => { window.__walletAddress = address; }, wallet.address);
     await context.exposeFunction('__walletSign', (message) => wallet.signMessage({ message }));

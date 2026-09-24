@@ -336,10 +336,7 @@ async function main()
                     storageState
                 });
 
-                await context.addInitScript((tag) =>
-                {
-                    localStorage.setItem('nura-games.locale', tag);
-                }, locale);
+                await context.addCookies([{ name: 'locale', value: locale, url: BASE }]);
 
                 const page = await context.newPage();
                 const noise = [];

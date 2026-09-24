@@ -2,6 +2,7 @@ import { bootClient } from '@azerothjs/kit/client';
 
 import App from './App.azeroth';
 import { setRuntime } from './lib/runtime.ts';
+import { loadCatalogue } from './stores/locale.store.ts';
 
 if (import.meta.env.DEV)
 {
@@ -20,6 +21,11 @@ if (import.meta.env.DEV)
     {
         console.warn('[dev] devtools unavailable; continuing without the panel.', error);
     }
+}
+
+if (document.documentElement.lang === 'fa')
+{
+    await loadCatalogue('fa');
 }
 
 bootClient(App);

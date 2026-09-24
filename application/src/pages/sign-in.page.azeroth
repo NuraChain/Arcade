@@ -161,13 +161,13 @@ export default component SignInPage()
         }
     };
 
-    <div class="site relative min-h-dvh overflow-hidden bg-void text-text">
+    <div class="site relative flex min-h-dvh flex-col overflow-hidden bg-void text-text">
         <div class="pointer-events-none absolute -top-40 start-1/2 h-[32rem] w-[32rem] -translate-x-1/2 rounded-full bg-accent/15 blur-3xl" aria-hidden="true"></div>
         <div class="pointer-events-none absolute -bottom-48 -end-24 h-[26rem] w-[26rem] rounded-full bg-live/10 blur-3xl" aria-hidden="true"></div>
 
         <SiteHeader cta={ false } />
 
-        <main id="main" class="page-pad safe-b relative mx-auto flex w-full max-w-[40rem] flex-col pb-12 pt-24 sm:pt-28">
+        <main id="main" class="page-pad safe-b relative mx-auto flex w-full max-w-[40rem] flex-1 flex-col pb-12 pt-24 sm:pt-28">
             <h1 class="sr-only">{ locale.t('wallet.title') }</h1>
 
             <WalletPanel
