@@ -53,7 +53,7 @@ export async function createWorld(options: WorldOptions): Promise<WorldHandle>
     };
     complain = fail;
 
-    const renderer = new WebGLRenderer({ canvas, context });
+    let renderer: WebGLRenderer | null = null;
     let showcase: Showcase | null = null;
     let environment: Environment | null = null;
 
@@ -61,8 +61,15 @@ export async function createWorld(options: WorldOptions): Promise<WorldHandle>
     {
         showcase?.dispose();
         environment?.dispose();
-        renderer.dispose();
-        renderer.forceContextLoss();
+        renderer?.dispose();
+        if (context.isContextLost())
+        {
+            canvas.addEventListener('webglcontextrestored', () => context.getExtension('WEBGL_lose_context')?.loseContext(), { once: true });
+        }
+        else
+        {
+            context.getExtension('WEBGL_lose_context')?.loseContext();
+        }
         if (complain === fail)
         {
             complain = null;
@@ -71,6 +78,7 @@ export async function createWorld(options: WorldOptions): Promise<WorldHandle>
 
     try
     {
+        renderer = new WebGLRenderer({ canvas, context });
         renderer.toneMapping = NeutralToneMapping;
         renderer.toneMappingExposure = STUDIO.exposure;
 
@@ -133,6 +141,7 @@ async function start(
         {
             tier = next;
             size();
+            invalidate();
         },
         onExhausted: () => fail('The device could not keep up')
     });
@@ -141,11 +150,11 @@ async function start(
     {
         frame = 0;
         const delta = last === 0 ? 16 : now - last;
+        governor.sample(last === 0 ? Infinity : delta);
         last = now;
 
         const moving = rig.update(delta);
         renderer.render(scene, rig.camera);
-        governor.sample(delta);
 
         if (moving && running)
         {
@@ -172,14 +181,6 @@ async function start(
     };
     canvas.addEventListener('webglcontextlost', lost);
 
-    const observer = new ResizeObserver(() =>
-    {
-        size();
-        rig.snap();
-        invalidate();
-    });
-    observer.observe(canvas);
-
     await renderer.compileAsync(scene, rig.camera);
     for (const texture of showcase.textures)
     {
@@ -187,6 +188,17 @@ async function start(
     }
     renderer.render(scene, rig.camera);
     callbacks.onReady?.();
+
+    const observer = new ResizeObserver(() =>
+    {
+        size();
+        rig.snap();
+        if (running && !disposed)
+        {
+            renderer.render(scene, rig.camera);
+        }
+    });
+    observer.observe(canvas);
 
     return {
         measure(beats: readonly Beat[])

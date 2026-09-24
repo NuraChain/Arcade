@@ -386,6 +386,21 @@ describe('camera rig', () =>
         expect(moved).toBeLessThan(0.05);
     });
 
+    it('pushes a focused game further from the copy, on whichever side the copy is', () =>
+    {
+        for (const [side, away] of [[0.66, -1], [0.34, 1]] as const)
+        {
+            const rig = createRig(PATH);
+            rig.resize(1440, 900);
+            rig.setFrame(side, 0.5);
+            rig.snap();
+            const resting = rig.camera.view!.offsetX;
+            rig.focus(FOCUS.hokm);
+            rig.snap();
+            expect(Math.sign(rig.camera.view!.offsetX - resting)).toBe(away);
+        }
+    });
+
     it('frames the subject where the layout asks', () =>
     {
         const rig = createRig(PATH);

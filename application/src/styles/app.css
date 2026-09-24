@@ -2527,6 +2527,11 @@ html:has(.site-drawer[open])
     {
         max-width: 36rem;
     }
+
+    .scene-column-wide
+    {
+        max-width: min(52rem, 50vw);
+    }
 }
 
 @media (orientation: landscape) and (max-height: 540px) and (min-aspect-ratio: 4/3)

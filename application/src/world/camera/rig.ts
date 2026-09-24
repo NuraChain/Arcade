@@ -9,6 +9,8 @@ const POINTER_RATE = 0.08;
 
 const PARALLAX = 0.03;
 
+const FOCUS_PUSH = 0.07;
+
 const SETTLED = 0.0004;
 
 const UP = new Vector3(0, 1, 0);
@@ -55,6 +57,8 @@ export function createRig(shots: Shot[]): Rig
     const desiredTarget = new Vector3();
     let desiredFov = 30;
 
+    let push = 0;
+
     const pointer = { x: 0, y: 0 };
     const smoothed = { x: 0, y: 0 };
 
@@ -81,7 +85,7 @@ export function createRig(shots: Shot[]): Rig
             .addScaledVector(lift, smoothed.y * PARALLAX);
         camera.lookAt(target);
 
-        const view = lens(fov, width / height, subjectX, subjectY);
+        const view = lens(fov, width / height, subjectX + Math.sign(subjectX - 0.5) * push, subjectY);
         camera.fov = view.fov;
         camera.aspect = width / height;
         camera.setViewOffset(width, height, view.x * width, view.y * height, width, height);
@@ -132,6 +136,7 @@ export function createRig(shots: Shot[]): Rig
             fov = desiredFov;
             smoothed.x = pointer.x;
             smoothed.y = pointer.y;
+            push = focused === null ? 0 : FOCUS_PUSH;
             apply();
         },
 
@@ -147,13 +152,17 @@ export function createRig(shots: Shot[]): Rig
             smoothed.x += (pointer.x - smoothed.x) * settle;
             smoothed.y += (pointer.y - smoothed.y) * settle;
 
+            const pushed = focused === null ? 0 : FOCUS_PUSH;
+            push += (pushed - push) * damping(POSITION_RATE, deltaMs);
+
             apply();
 
             return position.distanceTo(desiredPosition) > SETTLED
                 || target.distanceTo(desiredTarget) > SETTLED
                 || Math.abs(desiredFov - fov) > 0.01
                 || Math.abs(pointer.x - smoothed.x) > 0.002
-                || Math.abs(pointer.y - smoothed.y) > 0.002;
+                || Math.abs(pointer.y - smoothed.y) > 0.002
+                || Math.abs((focused === null ? 0 : FOCUS_PUSH) - push) > 0.0005;
         }
     };
 

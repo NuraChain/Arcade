@@ -48,12 +48,14 @@ export default component WorldCanvas()
                 return;
             }
 
-            const { createWorld } = await import('../../world/world.ts');
-            if (disposed)
+            const lose = (): void => opened.context.getExtension('WEBGL_lose_context')?.loseContext();
+            const loaded = await import('../../world/world.ts').catch(() => null);
+            if (disposed || loaded === null)
             {
-                opened.context.getExtension('WEBGL_lose_context')?.loseContext();
+                lose();
                 return;
             }
+            const { createWorld } = loaded;
 
             const handle = await createWorld({
                 canvas,
@@ -80,6 +82,7 @@ export default component WorldCanvas()
             }
 
             world = handle;
+            handle.focus(focus.game());
             const page = host.parentElement ?? document.body;
 
             const measure = (): void =>
@@ -125,7 +128,7 @@ export default component WorldCanvas()
 
             const visibility = new IntersectionObserver((entries) =>
             {
-                if (entries[0].isIntersecting)
+                if (entries[entries.length - 1].isIntersecting)
                 {
                     handle.resume();
                 }

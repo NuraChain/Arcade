@@ -9,14 +9,14 @@ export default component SceneGames(props: { returning: boolean })
 
     <section id="games" data-beat="games" class="scene pt-15" aria-labelledby="games-title">
         <div class="scene-copy copy-plate pb-16">
-            <div class="scene-column">
+            <div class="scene-column scene-column-wide">
                 <div class="reveal flex flex-col gap-2">
                     <h2 id="games-title" class="title text-ui-3xl text-text @lg:text-ui-4xl">{ locale.t('landing.games.title') }</h2>
                     <p class="text-ui-md text-muted">{ locale.t('landing.games.lead') }</p>
                 </div>
-                <ul class="mt-6 grid grid-cols-2 gap-3">
+                <ul class="reveal rail-x bleed bleed-pad mt-6 flex snap-x snap-mandatory gap-3 pb-1 sm:mx-0 sm:grid sm:grid-cols-2 sm:gap-4 sm:overflow-visible sm:px-0 sm:pb-0">
                     <For each={ GAMES } key={ (game) => game.id } let={ game }>
-                        <li class="reveal flex min-w-0">
+                        <li class="flex w-[min(82%,20rem)] shrink-0 snap-start sm:w-auto sm:min-w-0">
                             <LandingGameCard game={ game } returning={ props.returning } />
                         </li>
                     </For>
