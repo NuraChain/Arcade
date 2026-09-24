@@ -1,7 +1,8 @@
 import { decodeFunctionData } from 'viem';
 import { describe, expect, it } from 'vitest';
 
-import { callsFor, createChainProfiles, REGISTRY_ABI } from '../src/chain/profile.ts';
+import { callsFor, createChainProfiles, RECORD_KEY, recordValue, REGISTRY_ABI } from '../src/chain/profile.ts';
+import type { PersonRecord } from '../src/schemas.ts';
 
 const REGISTRY = '0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512';
 const LENS = '0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0';
@@ -82,6 +83,63 @@ describe('composing the registry write', () =>
     });
 });
 
+const played = (game: string, played: number, won: number, rating: number): PersonRecord['games'][number] => ({
+    game, rating, peak: rating + 12, played, won, abandoned: 0, streak: 1, bestStreak: 3, tallies: { rolls: 40 }
+} as PersonRecord['games'][number]);
+
+const recordOf = (games: PersonRecord['games']): PersonRecord => ({
+    handle: 'dana.w',
+    progress: { xp: 420, level: 4, into: 20, span: 250 },
+    games,
+    achievements: {
+        scopes: [{ earned: 3, total: 1000 }, { game: 'ludo', earned: 12, total: 1000 }],
+        families: [],
+        recent: []
+    }
+} as PersonRecord);
+
+describe('the game record on the profile', () =>
+{
+    it('writes the record beside the name and the bio, in the one signature a publish already is', () =>
+    {
+        const record = recordValue(recordOf([played('ludo', 9, 4, 1232)]));
+        const [call] = callsFor(REGISTRY, 7n, 'Dana', 'Hello', record);
+        const fields = decode(call.data).args[1] as { key: string; lang: string; value: string }[];
+
+        expect(fields.map((field) => field.key)).toEqual(['displayName', 'bio', RECORD_KEY]);
+        expect(fields[2]).toEqual({ key: 'games.nura.record', lang: '', value: record });
+    });
+
+    it('says what a finished game counts and nothing else: no tallies, no streaks, no games never played', () =>
+    {
+        const value = JSON.parse(recordValue(recordOf([played('ludo', 9, 4, 1232), played('hokm', 0, 0, 1200)])));
+
+        expect(value).toEqual({
+            v: 1,
+            level: 4,
+            xp: 420,
+            games: [{ game: 'ludo', rating: 1232, peak: 1244, played: 9, won: 4 }],
+            medals: { earned: 15, total: 2000 }
+        });
+    });
+
+    it('writes nothing for an account that has not finished a game, rather than a record of zeroes', () =>
+    {
+        expect(recordValue(null)).toBe('');
+        expect(recordValue(recordOf([played('ludo', 0, 0, 1200)]))).toBe('');
+
+        const [call] = callsFor(REGISTRY, 7n, 'Dana', 'Hello', '');
+        expect((decode(call.data).args[1] as { key: string }[]).map((field) => field.key)).toEqual(['displayName', 'bio']);
+    });
+
+    it('fits the value limit of the registry with every game played', () =>
+    {
+        const all = ['ludo', 'hokm', 'backgammon', 'poker'].map((game) => played(game, 99_999, 99_999, 3200));
+
+        expect(new TextEncoder().encode(recordValue(recordOf(all))).length).toBeLessThanOrEqual(4096);
+    });
+});
+
 /**
  * Pointed at no registry, which is what every deployment is until somebody sets three variables.
  *
@@ -117,7 +175,7 @@ describe('a deployment with no registry behind it', () =>
         const chain = createChainProfiles({ rpcUrl: RPC, registry: '', lens: '' });
 
         await expect(chain.profile('0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266', 'en')).resolves.toBeNull();
-        await expect(chain.publish({ address: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266', displayName: 'Dana', bio: '' })).resolves.toEqual([]);
+        await expect(chain.publish({ address: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266', displayName: 'Dana', bio: '', record: '' })).resolves.toEqual([]);
         expect(chain.registry).toBe('');
     });
 
@@ -127,6 +185,6 @@ describe('a deployment with no registry behind it', () =>
         const chain = createChainProfiles({ rpcUrl: RPC, registry: REGISTRY, lens: LENS });
 
         await expect(chain.profile('', 'en')).resolves.toBeNull();
-        await expect(chain.publish({ address: '', displayName: 'Dana', bio: '' })).resolves.toEqual([]);
+        await expect(chain.publish({ address: '', displayName: 'Dana', bio: '', record: '' })).resolves.toEqual([]);
     });
 });

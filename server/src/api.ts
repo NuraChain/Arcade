@@ -307,6 +307,7 @@ export function buildApi(ports: Ports)
                     configured: ports.chain.configured,
                     registry: ports.chain.registry,
                     chainId: ports.chain.chainId,
+                    record: ports.chain.configured ? await ports.chain.record(context.principal.userId) : '',
                     ...(profile === null ? {} : { profile })
                 };
             }),

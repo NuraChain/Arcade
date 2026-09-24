@@ -884,6 +884,27 @@ then be a plain fetch proxy to `127.0.0.1:8545` — the node holds the keys, so 
 `eth_sendTransaction` both work unlocked, and it sets `Access-Control-Allow-Origin: *`. One catch
 worth writing down: it wants the message HEX-encoded, which is the step MetaMask does for you.
 
+**The node does not have to be on 8545**, and on this machine it cannot be: Windows reserves a port
+range that includes it and `listen` fails with -4092. `npx hardhat node --port 8645`, then
+`node tools/qa/chain-deploy.mjs` deploys the implementation, the proxy and the lens from the
+SmartContract project's artifacts (`QA_CONTRACTS` moves where it looks) and prints the three
+addresses to set, with `NURA_CHAIN_ID=31337`. `tools/qa/chain-pass.mjs` then drives /app/me as
+`dana.w` with a provider whose requests Playwright forwards to the node - through the test process
+rather than a page `fetch`, so the page's own policies cannot stand between the wallet and the chain.
+
+**The game record is a field the profile holds, written by the person's own wallet.**
+`games.nura.record` sits beside the display name and the bio in the same `setFields`, so publishing
+is still one signature. A new profile is `createProfile` first, and the record needs the id that
+creates, so the store asks for a second round once the first has landed. The value is compact JSON
+(`v`, the level, the XP, each played game's rating, peak, played and won, and the medal count) and
+nothing else: no tallies and no streaks, because the registry is public and permanent and a record
+there should be the one somebody would put on a card. `recordValue` refuses anything over the
+registry's 4096 bytes before a wallet is asked, and answers the empty string for somebody who has
+finished nothing - a record of zeroes is not an achievement. It is read back with `getField`, and
+/app/me says whether what the registry holds is what this product would publish now. Nothing here
+claims the record is verified: the server composed it and the person signed it, which is exactly
+what it is.
+
 ## Groups
 
 `server/src/domains/group/` owns them, and three of its rules are INDEXES rather than application
@@ -4567,7 +4588,7 @@ cover what they walk through.
 `node tools/qa/regression-pass.mjs` · `node tools/qa/ludo-pass.mjs` · `node tools/qa/hokm-pass.mjs` ·
 `node tools/qa/play-pass.mjs` · `node tools/qa/hokm-play-pass.mjs` · `node tools/qa/voice-pass.mjs` ·
 `node tools/qa/backgammon-pass.mjs` · `node tools/qa/poker-pass.mjs` · `node tools/qa/backgammon-play-pass.mjs` ·
-`node tools/qa/poker-play-pass.mjs`,
+`node tools/qa/poker-play-pass.mjs` · `node tools/qa/realtime-pass.mjs` · `node tools/qa/chain-pass.mjs` (against a local chain),
 then a browser pass: every route at
 390, 1280 and 1440 in both languages, a screenshot of every screen judged against
 `design.jpg`, console clean, and

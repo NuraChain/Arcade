@@ -15,6 +15,8 @@ import { useWallet } from './wallet.store.ts';
  */
 export type ChainSync = 'off' | 'absent' | 'synced' | 'drifted';
 
+export type RecordSync = 'off' | 'none' | 'current' | 'stale';
+
 /**
  * What a publish actually did, which the screen has to be able to say.
  *
@@ -34,6 +36,7 @@ export interface ChainApi
     configured: Getter<boolean>;
     profile: Getter<ChainProfile | null>;
     sync: Getter<ChainSync>;
+    record: Getter<RecordSync>;
     loading: Getter<boolean>;
     failed: Getter<boolean>;
     busy: Getter<boolean>;
@@ -163,6 +166,23 @@ export const useChain = createStore((): ChainApi =>
             return same ? 'synced' : 'drifted';
         },
 
+        record()
+        {
+            const answer = state.data();
+
+            if (answer === undefined || !answer.configured || !account.isWallet())
+            {
+                return 'off';
+            }
+
+            if (answer.record === '')
+            {
+                return 'none';
+            }
+
+            return answer.profile?.record === answer.record ? 'current' : 'stale';
+        },
+
         async publish()
         {
             if (busy())
@@ -178,28 +198,36 @@ export const useChain = createStore((): ChainApi =>
             setBusy(true);
             try
             {
-                const { calls } = await client.chain.publish();
-                if (calls.length === 0)
+                for (let round = 0; round < 2; round += 1)
                 {
-                    return 'unavailable';
-                }
-
-                for (const call of calls)
-                {
-                    const hash = await wallet.send(call.to, call.data);
-                    if (hash === null)
+                    const { calls } = await client.chain.publish();
+                    if (calls.length === 0)
                     {
-                        return 'rejected';
+                        return 'unavailable';
                     }
 
-                    const ok = await settled(hash);
-                    if (ok === null)
+                    for (const call of calls)
                     {
-                        return 'pending';
+                        const hash = await wallet.send(call.to, call.data);
+                        if (hash === null)
+                        {
+                            return 'rejected';
+                        }
+
+                        const ok = await settled(hash);
+                        if (ok === null)
+                        {
+                            return 'pending';
+                        }
+                        if (!ok)
+                        {
+                            return 'reverted';
+                        }
                     }
-                    if (!ok)
+
+                    if (!calls.some((call) => call.kind === 'create') || state.data()?.record === '')
                     {
-                        return 'reverted';
+                        break;
                     }
                 }
 

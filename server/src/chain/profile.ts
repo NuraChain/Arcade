@@ -1,6 +1,38 @@
 import { createPublicClient, encodeFunctionData, http, isAddress, parseAbi, type Address, type PublicClient } from 'viem';
 
-import type { ChainCall, ChainProfile } from '../schemas.ts';
+import type { ChainCall, ChainProfile, PersonRecord } from '../schemas.ts';
+
+export const RECORD_KEY = 'games.nura.record';
+
+export const RECORD_MAX_BYTES = 4096;
+
+export function recordValue(record: PersonRecord | null): string
+{
+    if (record === null || record.games.every((one) => one.played === 0))
+    {
+        return '';
+    }
+
+    const value = JSON.stringify({
+        v: 1,
+        level: record.progress.level,
+        xp: record.progress.xp,
+        games: record.games
+            .filter((one) => one.played > 0)
+            .map((one) => ({ game: one.game, rating: one.rating, peak: one.peak, played: one.played, won: one.won })),
+        medals: {
+            earned: record.achievements.scopes.reduce((sum, scope) => sum + scope.earned, 0),
+            total: record.achievements.scopes.reduce((sum, scope) => sum + scope.total, 0)
+        }
+    });
+
+    if (new TextEncoder().encode(value).length > RECORD_MAX_BYTES)
+    {
+        throw new Error(`a game record of ${ value.length } characters does not fit the registry's ${ RECORD_MAX_BYTES } bytes`);
+    }
+
+    return value;
+}
 
 /**
  * The NuraProfile registry, as much of it as this product uses.
@@ -23,7 +55,8 @@ export const REGISTRY_ABI = parseAbi([
     'struct FieldInput { string key; string lang; string value; }',
     'function profileIdOf(address owner) view returns (uint256)',
     'function createProfile(string username, string displayName, string bio, string avatar) returns (uint256)',
-    'function setFields(uint256 profileId, FieldInput[] fields)'
+    'function setFields(uint256 profileId, FieldInput[] fields)',
+    'function getField(uint256 profileId, string key) view returns (string)'
 ]);
 
 /**
@@ -44,7 +77,7 @@ export const REGISTRY_ABI = parseAbi([
  * and writing it under `en` would hide it from a Persian reader while claiming to be the
  * English of something nobody localized.
  */
-export function callsFor(registry: string, profileId: bigint, displayName: string, bio: string): ChainCall[]
+export function callsFor(registry: string, profileId: bigint, displayName: string, bio: string, record = ''): ChainCall[]
 {
     if (profileId === 0n)
     {
@@ -67,7 +100,8 @@ export function callsFor(registry: string, profileId: bigint, displayName: strin
             functionName: 'setFields',
             args: [profileId, [
                 { key: 'displayName', lang: '', value: displayName },
-                { key: 'bio', lang: '', value: bio }
+                { key: 'bio', lang: '', value: bio },
+                ...(record === '' ? [] : [{ key: RECORD_KEY, lang: '', value: record }])
             ]]
         })
     }];
@@ -90,7 +124,7 @@ export interface ChainProfiles
 
     profile(address: string, lang: string): Promise<ChainProfile | null>;
 
-    publish(input: { address: string; displayName: string; bio: string }): Promise<ChainCall[]>;
+    publish(input: { address: string; displayName: string; bio: string; record: string }): Promise<ChainCall[]>;
 }
 
 /**
@@ -144,6 +178,13 @@ export function createChainProfiles(settings: ChainSettings): ChainProfiles
                 return null;
             }
 
+            const record = await reader().readContract({
+                address: registry,
+                abi: REGISTRY_ABI,
+                functionName: 'getField',
+                args: [view.id, RECORD_KEY]
+            });
+
             return {
                 id: view.id.toString(),
                 owner: view.owner,
@@ -155,6 +196,7 @@ export function createChainProfiles(settings: ChainSettings): ChainProfiles
                 location: view.location,
                 jobTitle: view.jobTitle,
                 company: view.company,
+                record,
                 updatedAt: new Date(Number(view.updatedAt) * 1000).toISOString()
             };
         },
@@ -173,7 +215,7 @@ export function createChainProfiles(settings: ChainSettings): ChainProfiles
                 args: [input.address]
             });
 
-            return callsFor(registry, profileId, input.displayName, input.bio);
+            return callsFor(registry, profileId, input.displayName, input.bio, input.record);
         }
     };
 }

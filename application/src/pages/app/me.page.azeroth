@@ -118,6 +118,8 @@ export default component MePage()
 
     derived publishLabel = chain.sync() === 'absent' ? 'chain.create' : 'chain.publish';
 
+    derived publishable = chain.sync() === 'absent' || chain.sync() === 'drifted' || chain.record() === 'stale';
+
     derived registryName = (chain.profile()?.username ?? '') === ''
         ? locale.t('chain.noUsername')
         : chain.profile()!.username;
@@ -210,6 +212,14 @@ export default component MePage()
                                 <Panel class="flex flex-col gap-3">
                                     <p class="text-ui-sm text-muted">{ locale.t('chain.lead', { chain: NURA_CHAIN.name }) }</p>
                                     <p class="text-ui-base text-text">{ locale.t(chainNote) }</p>
+                                    <Show when={ chain.record() === 'current' || chain.record() === 'stale' }>
+                                        { () =>
+                                            <p class="flex items-start gap-2 text-ui-sm text-muted">
+                                                <Icon name={ chain.record() === 'current' ? 'check-circle' : 'history' } size={ 16 } class={ chain.record() === 'current' ? 'mt-0.5 shrink-0 text-live' : 'mt-0.5 shrink-0 text-gold' } />
+                                                { locale.t(chain.record() === 'current' ? 'chain.recordCurrent' : 'chain.recordStale') }
+                                            </p>
+                                        }
+                                    </Show>
 
                                     <Show when={ chain.profile() !== null }>
                                         { () =>
@@ -226,7 +236,7 @@ export default component MePage()
                                     </Show>
 
                                     <div class="flex flex-wrap gap-2">
-                                        <Show when={ chain.sync() === 'absent' || chain.sync() === 'drifted' }>
+                                        <Show when={ publishable }>
                                             { () =>
                                                 <Button variant="primary" leading="send" loading={ chain.busy() } onClick={ () => void publish() }>
                                                     { locale.t(publishLabel) }

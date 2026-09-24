@@ -17,7 +17,7 @@ import { endingOf } from './domains/match/declare.ts';
 import { createMatchService, type MatchLoad } from './domains/match/service.ts';
 import { WATCH_DELAY_MS, createWatchService } from './domains/match/watch.ts';
 import { createTableService, type TableRow } from './domains/table/service.ts';
-import { createChainProfiles } from './chain/profile.ts';
+import { createChainProfiles, recordValue } from './chain/profile.ts';
 import { createIdentityService } from './domains/identity/service.ts';
 import { maySeeOnline } from './domains/social/policy.ts';
 import { createSocialService, type PersonRow } from './domains/social/service.ts';
@@ -1124,6 +1124,12 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 return row === null || row.address === null ? null : chain.profile(row.address, lang);
             },
 
+            async record(userId)
+            {
+                const row = await identity.profileFor(userId);
+                return row === null ? '' : recordValue(await achieve.recordOf(row.handle));
+            },
+
             async publish(userId)
             {
                 const row = await identity.profileFor(userId);
@@ -1131,7 +1137,12 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 {
                     return [];
                 }
-                return chain.publish({ address: row.address, displayName: row.display_name, bio: row.bio });
+                return chain.publish({
+                    address: row.address,
+                    displayName: row.display_name,
+                    bio: row.bio,
+                    record: recordValue(await achieve.recordOf(row.handle))
+                });
             }
         },
 

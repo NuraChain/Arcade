@@ -193,5 +193,7 @@ export const me = {
     'chain.pending': 'Sent, but not mined yet. It shows here once it lands.',
     'chain.unavailable': 'The registry could not be reached, so nothing was sent.',
     'chain.wrongChain': 'Your wallet is on another network. Switch it to {chain} and try again.',
-    'chain.adopted': 'Your profile now says what the registry does.'
+    'chain.adopted': 'Your profile now says what the registry does.',
+    'chain.recordCurrent': 'Your game record on the profile is up to date: your level, and your rating and results at each game you have played.',
+    'chain.recordStale': 'You have played since your record was last published. Publishing writes the latest one with your own wallet.'
 };

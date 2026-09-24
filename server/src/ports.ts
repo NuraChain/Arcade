@@ -510,6 +510,8 @@ export interface ChainPort
 
     profile(userId: string, lang: string): Promise<ChainProfile | null>;
 
+    record(userId: string): Promise<string>;
+
     publish(userId: string): Promise<ChainCall[]>;
 }
 

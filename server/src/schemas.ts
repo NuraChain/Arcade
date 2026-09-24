@@ -333,6 +333,7 @@ export const chainProfile = object({
     location: string(),
     jobTitle: string(),
     company: string(),
+    record: string(),
     updatedAt: string()
 });
 
@@ -342,6 +343,7 @@ export const chainProfileState = object({
     configured: boolean(),
     registry: string(),
     chainId: string(),
+    record: string(),
     profile: chainProfile.optional()
 });
 
