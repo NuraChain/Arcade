@@ -47,3 +47,7 @@ framework-bugs.md
 # Browser-pass recordings
 tools/qa/out/
 board.png
+
+# Scratch scripts and reference images kept at the root while working, never part of the product.
+/*.jpg
+/.*.mjs

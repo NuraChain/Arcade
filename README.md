@@ -136,7 +136,7 @@ npm run build          # bundles, prerenders, and fails on a blown performance b
 **The database suite is opt-in**, because `npm test` promises to need no Postgres:
 
 ```sh
-TEST_DATABASE_URL=postgres://postgres:root@127.0.0.1:5432/nuragames_test \
+TEST_DATABASE_URL=postgres://postgres:change-me@127.0.0.1:5432/nuragames_test \
   npm run test:db --workspace server
 ```
 
