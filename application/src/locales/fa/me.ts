@@ -73,7 +73,6 @@ export const me: Pick<Dictionary, keyof typeof reference> = {
     'settings.safety': 'حریم خصوصی و ایمنی',
     'settings.notifications': 'اعلان‌ها',
     'settings.appearance': 'ظاهر',
-    'settings.premium': 'ویژه',
 
     'settings.account.wallet': 'ورود با {wallet}',
     'settings.account.demo': 'صندلی مهمان',
@@ -108,19 +107,6 @@ export const me: Pick<Dictionary, keyof typeof reference> = {
 
     'settings.appearance.language': 'زبان',
     'settings.appearance.motion': 'دستگاهت حرکت کمتری خواسته — ما گوش می‌دهیم.',
-
-    'settings.premium.title': 'نورا ویژه',
-    'settings.premium.lead': 'فقط ظاهری. هیچ‌وقت دست بهتری به تو نمی‌دهد.',
-    'settings.premium.price': 'ماهی {price}',
-    'settings.premium.currency': 'یک واحد پول. نه جعبهٔ شانس، نه کیف دوم، نه هدیهٔ قفل‌شده.',
-    'settings.premium.includes': 'چه می‌گیری',
-    'settings.premium.item.tables': 'پوستهٔ میز برای هر چهار بازی',
-    'settings.premium.item.frames': 'قاب آواتار و رنگ نام',
-    'settings.premium.item.emotes': 'یک بستهٔ واکنش سر میز',
-    'settings.premium.item.stats': 'آمار عمیق‌تر و تاریخچهٔ بازی‌ها',
-    'settings.premium.refund': 'هر وقت خواستی لغو کن. بازگشت وجه تا ۱۴ روز، بی‌سؤال.',
-    'settings.premium.subscribe': 'به‌زودی',
-    'settings.premium.never': 'هرگز: پرداخت برای برد، تبلیغات، یا ایمنی پشت پولی‌سازی.',
 
     'devices.title': 'دستگاه‌ها',
     'devices.lead': 'مرورگرها و برنامه‌هایی که به این حساب وارد شده‌اند. هرکدام کلیدهای خودش را دارد و بیرون‌کردن یکی، کلیدهایش را می‌سوزاند.',

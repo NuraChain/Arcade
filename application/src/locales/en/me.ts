@@ -70,7 +70,6 @@ export const me = {
     'settings.safety': 'Privacy & safety',
     'settings.notifications': 'Notifications',
     'settings.appearance': 'Appearance',
-    'settings.premium': 'Premium',
 
     'settings.account.wallet': 'Signed in with {wallet}',
     'settings.account.demo': 'Guest seat',
@@ -105,19 +104,6 @@ export const me = {
 
     'settings.appearance.language': 'Language',
     'settings.appearance.motion': 'Your device asks for less motion — we listen.',
-
-    'settings.premium.title': 'Nura Premium',
-    'settings.premium.lead': 'Cosmetics only. It never deals you a better hand.',
-    'settings.premium.price': '{price} a month',
-    'settings.premium.currency': 'One currency. No blind boxes, no second wallet, no gated gifting.',
-    'settings.premium.includes': 'What you get',
-    'settings.premium.item.tables': 'Table skins for all four games',
-    'settings.premium.item.frames': 'Avatar frames and name colours',
-    'settings.premium.item.emotes': 'A pack of table reactions',
-    'settings.premium.item.stats': 'Deeper stats and match history',
-    'settings.premium.refund': 'Cancel any time. Refunds within 14 days, no questions.',
-    'settings.premium.subscribe': 'Coming soon',
-    'settings.premium.never': 'Never: pay-to-win, ads, or safety behind a paywall.',
 
     'devices.title': 'Devices',
     'devices.lead': 'The browsers and apps signed in to this account. Each one holds its own keys, and signing one out burns them.',

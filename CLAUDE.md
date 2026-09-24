@@ -2902,6 +2902,11 @@ that grants one - and it is the same judgement that removed the invented levels 
 provably-fair badge. The customisation is real because it is stored; the shop would be decoration
 with nothing behind it.
 
+The settings page carried a "Nura Premium" card for a while - a monthly price, four perks, a refund
+policy and a Subscribe button that was disabled - for a subscription with no payment provider, no
+entitlement anywhere in the schema and no skin to unlock. It is gone for the same reason. A price is
+a promise, and a refund policy for something nobody can buy is copy standing in for a product.
+
 **A suggestion has one reason left, and it is checkable**: how many friends you already share, from
 the real graph. "Plays the same game" and "same region" compared two fixture literals.
 

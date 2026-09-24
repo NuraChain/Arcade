@@ -29,8 +29,6 @@ import { useVoice } from '../../stores/voice.store.ts';
 import type { MessageKey } from '../../locales/en.ts';
 import { NOTICES, type Notice } from '../../../../server/src/domains/notify/notices.ts';
 
-const PREMIUM: MessageKey[] = ['settings.premium.item.tables', 'settings.premium.item.frames', 'settings.premium.item.emotes', 'settings.premium.item.stats'];
-
 const SAFETY_PAGE = 5;
 
 const SECTIONS: readonly { id: string; icon: IconName; key: MessageKey }[] = [
@@ -39,8 +37,7 @@ const SECTIONS: readonly { id: string; icon: IconName; key: MessageKey }[] = [
     { id: 'settings-safety', icon: 'shield', key: 'settings.safety' },
     { id: 'settings-notifications', icon: 'bell', key: 'settings.notifications' },
     { id: 'settings-voice', icon: 'voice', key: 'voice.settings' },
-    { id: 'settings-helpers', icon: 'idea', key: 'helpers.title' },
-    { id: 'settings-premium', icon: 'sparkles', key: 'settings.premium' }
+    { id: 'settings-helpers', icon: 'idea', key: 'helpers.title' }
 ];
 
 export default component SettingsPage()
@@ -480,36 +477,6 @@ export default component SettingsPage()
                                     description={ locale.t('helpers.rulesHint') }
                                     onChange={ (checked) => settings.update({ hintRules: checked }) }
                                 />
-                            </Panel>
-                        </section>
-
-                        <section id="settings-premium" class="scroll-mt-16 @4xl:scroll-mt-4" aria-labelledby="settings-premium-title">
-                            <SectionHeading id="settings-premium-title" title={ locale.t('settings.premium') } />
-                            <Panel tone="accent">
-                                <h3 class="flex items-center gap-2 title text-ui-lg text-text">
-                                    <Icon name="sparkles" size={ 18 } class="text-accent" />
-                                    { locale.t('settings.premium.title') }
-                                </h3>
-                                <p class="mt-1 text-ui-base text-muted">{ locale.t('settings.premium.lead') }</p>
-                                <p class="mt-3 title text-ui-2xl text-text">
-                                    { locale.t('settings.premium.price', { price: locale.n(4, { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }) }) }
-                                </p>
-                                <p class="mt-1 text-ui-xs text-muted">{ locale.t('settings.premium.currency') }</p>
-                                <p class="label mt-4 text-ui-xs text-faint">{ locale.t('settings.premium.includes') }</p>
-                                <ul class="mt-2 flex flex-col gap-1.5">
-                                    <For each={ PREMIUM } key={ (item) => item } let={ item }>
-                                        <li class="flex items-center gap-2 text-ui-sm text-text">
-                                            <Icon name="check-circle" size={ 14 } class="shrink-0 text-accent" />
-                                            { locale.t(item) }
-                                        </li>
-                                    </For>
-                                </ul>
-                                <p class="mt-3 text-ui-xs text-muted">{ locale.t('settings.premium.refund') }</p>
-                                <Button variant="outline" block class="mt-4" disabled>{ locale.t('settings.premium.subscribe') }</Button>
-                                <p class="mt-3 flex items-start gap-2 text-ui-xs text-live">
-                                    <Icon name="shield" size={ 13 } class="mt-0.5 shrink-0" />
-                                    { locale.t('settings.premium.never') }
-                                </p>
                             </Panel>
                         </section>
                     </div>
