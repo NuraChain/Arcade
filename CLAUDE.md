@@ -4658,8 +4658,17 @@ cover what they walk through.
 `node tools/qa/regression-pass.mjs` · `node tools/qa/ludo-pass.mjs` · `node tools/qa/hokm-pass.mjs` ·
 `node tools/qa/play-pass.mjs` · `node tools/qa/hokm-play-pass.mjs` · `node tools/qa/voice-pass.mjs` ·
 `node tools/qa/backgammon-pass.mjs` · `node tools/qa/poker-pass.mjs` · `node tools/qa/backgammon-play-pass.mjs` ·
-`node tools/qa/poker-play-pass.mjs` · `node tools/qa/realtime-pass.mjs` · `node tools/qa/chain-pass.mjs` (against a local chain),
-then a browser pass: every route at
+`node tools/qa/poker-play-pass.mjs` · `node tools/qa/realtime-pass.mjs` · `node tools/qa/tour-pass.mjs` · `node tools/qa/latency-pass.mjs` ·
+`node tools/qa/chain-pass.mjs` (against a local chain),
+
+`tour-pass.mjs` presses its way through every page, every game and every feature as `dana.w`, a friend
+and a guest, at 390 and 1280, and wants a DEVELOPMENT server over a database you do not mind losing,
+because it needs the wallet fixtures and leaves tables behind. `latency-pass.mjs` plays a ludo table
+between two browsers through a `node:net` proxy that delays every byte (Chrome's throttling does not
+reliably slow a WebSocket frame), measures press-to-own-board and press-to-other-board at loopback, 4G
+and 3G, and writes `out/latency/<stamp>/report.json`.
+
+Then a browser pass: every route at
 390, 1280 and 1440 in both languages, a screenshot of every screen judged against
 `design.jpg`, console clean, and
 the disposal check — repeatedly create and dispose the world and confirm no "Too many active
