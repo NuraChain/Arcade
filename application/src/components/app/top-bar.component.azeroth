@@ -33,11 +33,13 @@ export default component TopBar()
 
     derived unread = notifications.unread();
 
-    derived collapsible = device.posture() === 'sidebar' && (meta.immersive !== true || meta.messenger === true);
+    derived collapsible = device.posture() === 'sidebar';
 
-    derived open = settings.settings().sidebarOpen;
+    derived table = meta.immersive === true && meta.messenger !== true;
 
-    const toggle = (): void => settings.update({ sidebarOpen: !settings.settings().sidebarOpen });
+    derived open = table ? settings.settings().tableSidebarOpen : settings.settings().sidebarOpen;
+
+    const toggle = (): void => settings.update(table ? { tableSidebarOpen: !open } : { sidebarOpen: !open });
 
     mount
     {

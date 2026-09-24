@@ -396,7 +396,7 @@ describe('the top bar', () =>
     afterEach(() =>
     {
         useDevice().override(null);
-        useSettings().update({ sidebarOpen: true });
+        useSettings().update({ sidebarOpen: true, tableSidebarOpen: false });
     });
 
     it('collapses the sidebar to the rail and brings it back, and remembers which', async () =>
@@ -418,14 +418,25 @@ describe('the top bar', () =>
         expect(useSettings().settings().sidebarOpen).toBe(true);
     });
 
-    it('offers no toggle where there is no sidebar to fold, or on a game that already has the rail', async () =>
+    it('offers no toggle at rail width, where there is no sidebar to fold', async () =>
     {
         useDevice().override('rail');
         expect(toggle(await mount())).toBeNull();
-        cleanup();
+    });
 
+    it('offers the same toggle at a table, which opens folded and remembers its own choice', async () =>
+    {
         useDevice().override('sidebar');
-        expect(toggle(await mount(true))).toBeNull();
+        const container = await mount(true);
+
+        expect(toggle(container)?.getAttribute('aria-label')).toBe('Expand the menu');
+
+        fire(toggle(container)!, 'click');
+        await settle();
+
+        expect(useSettings().settings().tableSidebarOpen).toBe(true);
+        expect(useSettings().settings().sidebarOpen).toBe(true);
+        expect(toggle(container)?.getAttribute('aria-label')).toBe('Collapse the menu');
     });
 });
 

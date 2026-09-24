@@ -3997,7 +3997,11 @@ the far left of the top bar collapses the 15rem sidebar to the 4.5rem rail and b
 YouTube, Gmail, Slack and Linear share - and `[` does the same from the keyboard, beside `/` for
 search. The choice is `settings.sidebarOpen`, a device preference like the others, so a wide monitor
 and a laptop can disagree. The toggle is not drawn at rail width, where there is no sidebar to fold,
-nor on a game route, which already has the rail. The top bar's primary action is "Play now", to the
+and on every other page it is the SAME top bar - the owner asked for exactly that, after the table was
+the one page without it. A table opens folded, because the 170px belong to the board, but its choice is
+its own (`settings.tableSidebarOpen`): somebody who opens the sidebar mid-game has not asked for every
+other page to change, and somebody who folds it everywhere has not asked the table to lose it either.
+The top bar's primary action is "Play now", to the
 games list, because starting a game is what the product is for; the sidebar and the rail already
 carry the chat count, so the top bar does not repeat it.
 

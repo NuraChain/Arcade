@@ -8,6 +8,7 @@ export interface Settings
     haptics: boolean;
     railOpen: boolean;
     sidebarOpen: boolean;
+    tableSidebarOpen: boolean;
     recentEmoji: string[];
     voiceStartMuted: boolean;
     voiceAutoJoin: boolean;
@@ -31,6 +32,7 @@ export function defaultSettings(): Settings
         haptics: true,
         railOpen: false,
         sidebarOpen: true,
+        tableSidebarOpen: false,
         recentEmoji: [],
         voiceStartMuted: true,
         voiceAutoJoin: false,

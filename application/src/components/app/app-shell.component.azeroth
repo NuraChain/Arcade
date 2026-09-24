@@ -125,7 +125,9 @@ export default component AppShell(props: { children?: MountNode })
 
     derived bare = bareFor(immersive, posture, device.height());
 
-    derived compact = !bare && (posture === 'rail' || (posture === 'sidebar' && ((immersive && !messenger) || !settings.settings().sidebarOpen)));
+    derived folded = immersive && !messenger ? !settings.settings().tableSidebarOpen : !settings.settings().sidebarOpen;
+
+    derived compact = !bare && (posture === 'rail' || (posture === 'sidebar' && folded));
 
     <div class="contents">
         <div
