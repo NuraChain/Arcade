@@ -135,6 +135,12 @@ const reload = async (page) =>
 
 const path = (page) => new URL(page.url()).pathname;
 
+const settledOn = async (page) =>
+{
+    await page.waitForResponse((response) => /\/api\/chat\/[^/]+\/messages/.test(new URL(response.url()).pathname), { timeout: 8000 }).catch(() => undefined);
+    await page.waitForTimeout(800);
+};
+
 const lit = (page) => page.evaluate(() => [...document.querySelectorAll('nav[aria-label="Main navigation"]')]
     .filter((nav) => nav.checkVisibility())
     .flatMap((nav) => [...nav.querySelectorAll('[aria-current="page"]')].map((node) => node.getAttribute('href'))));
@@ -445,7 +451,7 @@ try
             await page.waitForURL(/\/app\/play\/[0-9a-f-]{36}/, { timeout: 15000 }).catch(() => undefined);
             record(`creating a ${ game.name } table with its defaults lands on its play page`, /^\/app\/play\/[0-9a-f-]{36}$/.test(path(page)), path(page));
 
-            await page.waitForLoadState('networkidle', { timeout: 6000 }).catch(() => undefined);
+            await settledOn(page);
             await clearTables(visitor);
             await pause(1500);
         }
@@ -469,12 +475,12 @@ try
         const seated = await visitor.api('GET', '/tables/mine');
         record('the guest is sitting at that table', (seated.body?.tables ?? []).some((one) => path(page).endsWith(one.id)));
 
-        await page.waitForLoadState('networkidle', { timeout: 6000 }).catch(() => undefined);
+        await settledOn(page);
         await clearTables(visitor);
         await pause(1500);
         await go(page, '/app/games');
 
-        record('KNOWN DEFECT: leaving a table over the api while its page is open does not send the page asking for that table and its chat', tableChat404.length === 0, `${ tableChat404.length } 404s: ${ [...new Set(tableChat404.map((one) => one.replace(/[0-9a-f-]{36}/, ':id')))].join(', ') }`);
+        record('leaving a table over the api while its page is open does not send the page asking for that table and its chat', tableChat404.length === 0, `${ tableChat404.length } 404s: ${ [...new Set(tableChat404.map((one) => one.replace(/[0-9a-f-]{36}/, ':id')))].join(', ') }`);
     }, [/status of 404.*\/api\/(chat|tables)\//]);
 
     await part('6 watch', async () =>
