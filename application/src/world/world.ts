@@ -14,6 +14,7 @@ import { FOCUS, SHOTS } from './camera/shots.ts';
 import { createGovernor } from './quality/governor.ts';
 import { pixelRatioFor, type Choice, type QualityTier } from './quality/tiers.ts';
 import { STUDIO, createEnvironment, type Environment } from './render/environment.ts';
+import { createSettling } from './settle.ts';
 
 export interface WorldOptions
 {
@@ -154,9 +155,11 @@ async function start(
         last = now;
 
         const moving = rig.update(delta);
+        settling.look(rig.camera.position);
+        const settled = settling.update(delta / 1000);
         renderer.render(scene, rig.camera);
 
-        if (moving && running)
+        if ((moving || settled) && running)
         {
             frame = requestAnimationFrame(tick);
         }
@@ -186,6 +189,7 @@ async function start(
     {
         renderer.initTexture(texture);
     }
+    const settling = createSettling(showcase.root, showcase.animations);
     renderer.render(scene, rig.camera);
     callbacks.onReady?.();
 
@@ -193,6 +197,10 @@ async function start(
     {
         size();
         rig.snap();
+        if (settling.look(rig.camera.position))
+        {
+            invalidate();
+        }
         if (running && !disposed)
         {
             renderer.render(scene, rig.camera);
@@ -266,6 +274,7 @@ async function start(
             disposed = true;
             cancelAnimationFrame(frame);
             observer.disconnect();
+            settling.dispose();
             canvas.removeEventListener('webglcontextlost', lost);
             scene.remove(showcase.root);
             release();

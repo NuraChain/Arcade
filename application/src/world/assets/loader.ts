@@ -3,6 +3,7 @@ import {
     Mesh,
     MeshBasicMaterial,
     Texture,
+    type AnimationClip,
     type BufferGeometry,
     type Group,
     type Object3D
@@ -16,6 +17,8 @@ import type { SceneSet } from '../quality/tiers.ts';
 export interface Showcase
 {
     root: Group;
+
+    animations: AnimationClip[];
 
     textures: Texture[];
 
@@ -99,6 +102,7 @@ export async function loadShowcase(base: string, set: SceneSet, anisotropy: numb
 
     return {
         root,
+        animations: gltf.animations,
         textures,
 
         dispose()

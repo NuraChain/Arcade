@@ -6,6 +6,7 @@ from mathutils import Matrix
 from lib import kit
 from lib import looks
 from lib import pieces
+from lib import settle
 from lib import studio
 
 TOP = studio.PLINTH_HEIGHT
@@ -91,6 +92,7 @@ def build():
     die = pieces.die('ludo-die', 0.022, looks.sticker(), looks.ludo_ink())
     x, y = cell_point(8, 12)
     pieces.place(die, x, y, BOARD_TOP + 0.011, math.radians(24.0))
+    settle.drop(die, 'settle-ludo', 0.24, (4.4, 2.2, 1.6), bounce=0.008)
 
     for obj in [plinth, board, die]:
         obj.parent = root

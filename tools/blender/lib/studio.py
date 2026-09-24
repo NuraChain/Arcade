@@ -148,8 +148,8 @@ def _to_srgb(linear):
     return np.where(linear <= 0.0031308, linear * 12.92, 1.055 * np.power(np.clip(linear, 0.0, None), 1.0 / 2.4) - 0.055)
 
 
-def _decal_plane(name, size, z, path, parent):
-    bpy.ops.mesh.primitive_plane_add(size=size, location=(0.0, 0.0, z))
+def _decal_plane(name, size, z, path, parent, centre=(0.0, 0.0)):
+    bpy.ops.mesh.primitive_plane_add(size=size, location=(centre[0], centre[1], z))
     plane = bpy.context.active_object
     plane.name = name
     kit.uv_planar(plane, (0.0, 0.0, 1.0, 1.0), only_up=False)
@@ -189,13 +189,13 @@ def bake_floor(game, root, members, resolution=512):
     return _decal_plane('decal-floor-' + game, FLOOR_SIZE, 0.0005, path, root)
 
 
-def bake_contact(game, label, root, surface_z, size, casters, hidden, resolution=1024, clip=None):
+def bake_contact(game, label, root, surface_z, size, casters, hidden, resolution=1024, clip=None, centre=(0.0, 0.0), name=None, feather=False, lift=0.0001):
     os.makedirs(BAKES, exist_ok=True)
-    bpy.ops.mesh.primitive_plane_add(size=size, location=(0.0, 0.0, surface_z))
+    bpy.ops.mesh.primitive_plane_add(size=size, location=(centre[0], centre[1], surface_z))
     receiver = bpy.context.active_object
     receiver.name = 'bake-receiver'
     kit.assign(receiver, kit.material('bake-white', base='#FFFFFF', roughness=1.0))
-    camera = _camera_ortho('bake-contact-camera', 0.0, 0.0, size, height=surface_z + 2.0)
+    camera = _camera_ortho('bake-contact-camera', centre[0], centre[1], size, height=surface_z + 2.0)
     _visibility(hidden, render=False)
     _visibility(casters, camera=False, shadow=True)
     shadowed = _render(camera, resolution, os.path.join(BAKES, '%s-%s.exr' % (game, label)), False)
@@ -214,8 +214,13 @@ def bake_contact(game, label, root, surface_z, size, casters, hidden, resolution
         axis = ((np.arange(resolution) + 0.5) / resolution - 0.5) * size
         across, along = np.meshgrid(axis, axis)
         out[:, :, 3] *= ((np.abs(across) <= clip[0] / 2.0) & (np.abs(along) <= clip[1] / 2.0)).astype(np.float32)
+    if feather:
+        axis = ((np.arange(resolution) + 0.5) / resolution - 0.5) * 2.0
+        reach = np.hypot(*np.meshgrid(axis, axis))
+        edge = np.clip((1.0 - reach) / 0.3, 0.0, 1.0)
+        out[:, :, 3] *= edge * edge * (3.0 - 2.0 * edge)
     path = _write_png(out, os.path.join(BAKES, '%s-%s.png' % (game, label)))
-    return _decal_plane('decal-%s-%s' % (label, game), size, surface_z + 0.0001, path, root)
+    return _decal_plane(name or 'decal-%s-%s' % (label, game), size, surface_z + lift, path, root, centre)
 
 
 def preview(path, look_at, position, fov=32.0, width=1600, height=1000, samples=192):

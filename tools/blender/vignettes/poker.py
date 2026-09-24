@@ -5,6 +5,7 @@ import bpy
 from lib import kit
 from lib import looks
 from lib import pieces
+from lib import settle
 from lib import studio
 
 TOP = studio.PLINTH_HEIGHT
@@ -55,6 +56,7 @@ def build():
         if colour not in chips:
             chips[colour] = pieces.chip('poker-chip-' + colour, colour)
         placed += pieces.stack(chips[colour], count, x, y, FELT_TOP + 0.0002, seed=index + 1, parent=holder)
+    settle.drop(placed[-1], 'settle-poker', 0.14, (0.5, 0.25, 2.6), fall=10, bounce=0.003)
     prototypes = list(chips.values())
     for prototype in prototypes:
         bpy.data.objects.remove(prototype, do_unlink=True)

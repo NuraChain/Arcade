@@ -6,6 +6,7 @@ import bpy
 from lib import kit
 from lib import looks
 from lib import pieces
+from lib import settle
 from lib import studio
 
 TOP = studio.PLINTH_HEIGHT
@@ -121,6 +122,8 @@ def build():
         die = pieces.die('backgammon-die-%d' % index, 0.017, looks.ivory(), looks.ink())
         pieces.place(die, x, y, FIELD_TOP + 0.0085, math.radians(yaw), 0.0, roll)
         dice.append(die)
+    settle.drop(dice[0], 'settle-backgammon-a', 0.2, (3.8, 1.5, 2.2), bounce=0.006, drift=(-0.03, 0.02))
+    settle.drop(dice[1], 'settle-backgammon-b', 0.22, (-3.2, 2.4, -1.8), start=4, bounce=0.006, drift=(-0.02, -0.01))
 
     cube = pieces.doubling_cube('backgammon-cube', 0.024, 64)
     for part in cube:

@@ -503,6 +503,33 @@ expects zero. Two consequences are worth knowing: a resize has to render synchro
 the canvas size clears it and nothing else would draw the next frame; and the governor's patience
 restarts with every burst, or three seconds of reading would count as three seconds of slow frames.
 
+**Three pieces land when their game arrives, once.** The ludo die, the backgammon pair and the top
+chip of a poker stack are hidden until the CAMERA itself comes within 0.35 m of their beat's shot
+(`world/settle.ts`), then drop onto the table from a clip the GLB carries and stay where they fell, however
+often the reader scrolls back. It is the camera and not the scroll because the scroll is where the camera is
+GOING: a fling from the line-up to the finale passes through two beats in half a second, and a drop keyed
+to the scroll was spent on a close-up the camera never reached. It is a distance rather than a beat because a
+hovered game card flies to the same close-up without scrolling anywhere, and the die has to be on the board
+when it gets there. The loop keeps drawing only while a clip plays; counted on the built
+server, the hero draws no frames and neither does a beat once its piece has landed. The arrival has no
+piece, so the poster is still the renderer's first frame and still matches it to under one level.
+
+**A hidden piece is not compiled.** `compileAsync` walks the scene with `traverseVisible`, so the
+settling is built after the compile, while every piece is still showing; hidden first, the die's shader
+compiled on the frame it appeared.
+
+Two things make a clip that plays correctly still look wrong, and both did:
+
+- **The loader freezes `matrixWorldAutoUpdate` on every node**, and `updateMatrixWorld` skips a node with
+  it off. The die is a Group of two meshes, so re-enabling it on the Group moved the Group while its
+  meshes stayed at the drop height, with the baked contact shadow sitting empty on the board below.
+  A settling node turns it back on for its whole subtree. `settle.spec.ts` builds the die as a Group
+  with a child and measures the CHILD's world matrix, because the Group's own position was correct
+  throughout.
+- **One long frame swallows the drop.** The frame a piece first appears on can take a second, from a
+  shader compiling or from software GL, and a mixer given a second plays the whole 0.7 s clip in one
+  step. It advances at most 50 ms a frame.
+
 **The poster and the canvas agree because they share one lens.** `--subject-x/y` on `.stage` place the
 subject for the poster's cover crop AND for `lens()`, which shifts the frustum with `setViewOffset`
 so the subject lands where the layout leaves room - 30% down on a phone, 66% across from 64rem, 34%
@@ -4189,13 +4216,28 @@ committed**, so `npm run build` and CI never need Blender.
   contact decal sat at the lowest cards' height and drew black squares over them. Decals sit 0.1 mm
   above their surface and everything standing on it sits higher.
 - `merge()` joins static meshes by material set and repeated pieces are `EXT_mesh_gpu_instancing`:
-  57 draw calls. `inspect.mjs` gates each GLB - 2.5 MiB / 1.0 MiB, 40k unique and 120k drawn triangles,
+  63 draw calls. `inspect.mjs` gates each GLB - 2.5 MiB / 1.0 MiB, 40k unique and 120k drawn triangles,
   90 draw calls, the extension allow-list, root names equal to the `GAMES` ids, three decals per game.
 - Every vignette renders a Cycles preview into `tools/blender/out/` (git-ignored) with `NURA_PREVIEW=1`,
   because modelling from a script means never seeing the model otherwise. Judge the runtime, though:
   materials were tuned in the browser against `NeutralToneMapping` and written back into `looks.py`.
 - `surfaces.py` renders the app's table cloths and is NOT part of the showcase; do not re-run it to
   touch the landing.
+- **The settle clips are keyframed in the vignettes** (`lib/settle.py`: `drop` for a fall, a bounce and
+  a rest) and the scene is set to their LAST frame before the bakes and the export. A settling piece is
+  kept out of `merge()`, and a mesh it shares with instanced pieces is copied first, so the piece is a
+  node of its own. The piece lands level and turns only about its vertical axis; the wobble is on the
+  bounce, in the air, because a die tilted at resting height puts a corner through the board.
+- **A settling piece casts no shadow into the shared decals**, because it is hidden until its drop and
+  the board would show its shadow with nothing standing in it. Each one resting on the playing surface
+  bakes a small footprint of its own (`decal-footprint-<piece>`, feathered at the edge) that scales in over
+  the last three frames of the fall, so the shadow arrives with the piece. The poker chip lands on a stack
+  rather than on the felt and has none.
+- **Blender's glTF exporter points animation channels at the wrong nodes when
+  `EXT_mesh_gpu_instancing` is on**: each channel's node index is off by the number of nodes the
+  instancing collapsed, so the first build animated three unrelated props and dropped the poker clip
+  entirely. `settle.retarget` rewrites every channel by its owner's name after the export and fails the
+  build on a clip it cannot place, or on one that was not exported at all.
 
 **Blender MCP** is installed (`.mcp.json`) for interactive authoring. It needs Blender open with
 the addon connected (`N` → BlenderMCP → Connect) and cannot run headless. Anything arrived at
@@ -4217,13 +4259,13 @@ server.
 | | budget | actual |
 |---|---|---|
 | initial JS, gzip | < 60 KB | 57.9 KB |
-| world chunk (three.js) | < 200 KB gzip, lazy | 158.6 KB, behind a 0.5 KB gate |
+| world chunk (three.js) | < 200 KB gzip, lazy | 162.8 KB, behind a 0.5 KB gate |
 | `/app` shell + page | lazy per route | 10.0 KB gzip shell, ≤ 6.2 KB per page |
-| showcase GLB | 2.5 MiB desktop, 1.0 MiB phone | 1.85 MiB, 0.91 MiB |
+| showcase GLB | 2.5 MiB desktop, 1.0 MiB phone | 1.86 MiB, 0.94 MiB |
 | posters | 90 KB portrait, 130 KB wide | 37.5, 60.2, 75.9 KB |
 | game art, SVG scene | < 32 KB each | 13–22 KB |
 | game icon, SVG | < 32 KB each | 4–5 KB |
-| showcase triangles | 40k unique, 120k drawn | 36k unique, 85k drawn, 57 draw calls |
+| showcase triangles | 40k unique, 120k drawn | 36k unique, 85k drawn, 63 draw calls |
 
 **What leaves the server is compressed, and brotli is never spent on the fly.** The framework compresses
 nothing by default, so for a long time the built server sent every chunk raw - the world chunk as
