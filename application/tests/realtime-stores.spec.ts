@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 import { manualClock, type ManualClock } from '../src/lib/clock.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
@@ -158,7 +158,27 @@ describe('the chat doorbell', () =>
         await settle();
 
         expect(server.calls).toContain('chat.list');
-        expect(server.calls).toContain('chat.messages');
+        await vi.waitFor(() => expect(server.calls).toContain('chat.messages'));
+
+        stop();
+    });
+
+    it('does not re-read a thread the reader has been taken out of', async () =>
+    {
+        const chat = useChat();
+        const stop = chat.start();
+
+        chat.openThread('c-reza');
+        await chat.refresh();
+        server.conversations = server.conversations.filter((row) => row.id !== 'c-reza');
+        server.calls = [];
+
+        socket.deliver({ v: 1, t: 'nudge', n: 1, scope: 'chat', id: 'c-reza', at: 0 });
+        clock.advance(NUDGE_WINDOW_MS);
+        await vi.waitFor(() => expect(server.calls).toContain('chat.list'));
+        await new Promise((resolve) => setTimeout(resolve, 50));
+
+        expect(server.calls).not.toContain('chat.messages');
 
         stop();
     });

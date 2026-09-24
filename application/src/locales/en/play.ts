@@ -51,6 +51,7 @@ export const play = {
     'game.notFound': 'No such game.',
 
     'create.lead': 'Private by default. Invite who you want; nobody else sees it.',
+    'create.refused': 'That table can’t be opened with these settings.',
     'create.seats': 'Seats',
     'create.pace': 'Pace',
     'openHere.title': 'Open a table here',

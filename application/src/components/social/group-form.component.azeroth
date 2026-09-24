@@ -69,7 +69,7 @@ export default component GroupForm(props: OverlayProps & { group?: GroupSummary 
                 kind: 'success',
                 text: props.group === undefined
                     ? locale.t('groups.made', { name: saved.name })
-                    : locale.t('groups.editTitle', { name: saved.name })
+                    : locale.t('groups.saved', { name: saved.name })
             });
             props.close(saved);
         }

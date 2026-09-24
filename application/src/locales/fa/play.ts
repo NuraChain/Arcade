@@ -54,6 +54,7 @@ export const play: Pick<Dictionary, keyof typeof reference> = {
     'game.notFound': 'چنین بازی‌ای نداریم.',
 
     'create.lead': 'به‌طور پیش‌فرض خصوصی. هر که را می‌خواهی دعوت کن؛ کس دیگری آن را نمی‌بیند.',
+    'create.refused': 'این میز با این تنظیمات باز نمی‌شود.',
     'create.seats': 'صندلی‌ها',
     'create.pace': 'ریتم',
     'openHere.title': 'یک میز همین‌جا باز کن',

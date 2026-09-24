@@ -85,7 +85,7 @@ export default component GroupPage()
         {
             return;
         }
-        const pick = game ?? catalogue.featured();
+        const pick = game !== null && catalogue.playable(game) ? game : catalogue.featured();
 
         const fits = catalogue.rules(pick).seats.filter((count) => count <= group.memberCount);
         const seats = fits[fits.length - 1];
@@ -248,8 +248,8 @@ export default component GroupPage()
                                             <Show when={ group?.conversationId !== undefined }>
                                                 { () => <Button variant="secondary" leading="chats" block to={ `/app/chats/${ group!.conversationId! }` }>{ locale.t('groups.chat') }</Button> }
                                             </Show>
-                                            <Show when={ game !== null }>
-                                                { () => <Button variant="outline" leading="add" block to={ `/app/games/${ game! }/create` }>{ locale.t('groups.createGame') }</Button> }
+                                            <Show when={ game !== null && catalogue.playable(game) }>
+                                                { () => <Button variant="outline" leading="add" block to={ `/app/games/${ game ?? '' }/create` }>{ locale.t('groups.createGame') }</Button> }
                                             </Show>
                                         </>
                                     }

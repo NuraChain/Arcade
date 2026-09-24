@@ -44,6 +44,16 @@ export default component PersonPage()
         { name: 'social.person' }
     );
 
+    effect
+    {
+        const fetched = view.data()?.person;
+
+        if (fetched !== undefined)
+        {
+            people.remember([fetched]);
+        }
+    }
+
     derived person = view.data()?.person ?? people.byHandle(params().handle ?? '') ?? null;
 
     derived name = person === null ? locale.t('person.notFound') : person.displayName;

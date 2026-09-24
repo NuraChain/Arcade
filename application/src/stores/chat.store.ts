@@ -180,6 +180,16 @@ export const useChat = createStore((): ChatApi =>
 
     const revalidate = (): Promise<void> => queue(() => Promise.all([list.refetch(), thread.refetch()]));
 
+    const nudgedOpen = (id: string): Promise<void> => queue(async () =>
+    {
+        await list.refetch();
+
+        if (untrack(openId) === id && (list.data() ?? []).some((row) => row.conversation.id === id))
+        {
+            await thread.refetch();
+        }
+    });
+
     const rows = (): ConversationRow[] => list.data() ?? [];
 
     const rowOf = (id: string): ConversationRow | undefined => rows().find((row) => row.conversation.id === id);
@@ -527,7 +537,7 @@ export const useChat = createStore((): ChatApi =>
                 {
                     return;
                 }
-                void (id === undefined || id === untrack(openId) ? revalidate() : nudgedList());
+                void (id === undefined ? revalidate() : id === untrack(openId) ? nudgedOpen(id) : nudgedList());
             });
 
             const offTyping = live.onTyping(noteTyping);

@@ -723,6 +723,7 @@ describe('the table’s chat and its controls', () =>
         await settle();
 
         expect(container.querySelector('.table-sheet')!.className).toContain('h-[48dvh]');
+        await vi.waitFor(() => expect(button(container, 'Make the chat bigger')).toBeDefined(), { timeout: 5000 });
 
         fire(button(container, 'Make the chat bigger')!, 'click');
         await settle();

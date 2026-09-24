@@ -28,16 +28,23 @@ export default component CreateGamePage()
                 <div class="flex flex-col gap-6">
                     <PageHeader eyebrow={ locale.t(game!.nameKey) } title={ locale.t('create.title') } lead={ locale.t('create.lead') } back={ `/app/games/${ game!.slug }` } flush />
                     <Show
-                        when={ !catalogue.loading() }
-                        fallback={
-                            <div class="flex flex-col gap-6" aria-busy="true">
-                                <Skeleton lines={ 3 } />
-                                <Skeleton lines={ 4 } />
-                            </div>
-                        }
+                        when={ catalogue.loading() || (game !== null && catalogue.playable(game.id)) }
+                        fallback={ <EmptyState icon="games" title={ locale.t('games.soon') } lead={ locale.t('games.soonLead') } action={ locale.t('app.nav.games') } to="/app/games" /> }
                     >
                         { () =>
-                            <CreateGameForm game={ game! } onCreated={ (tableId) => navigate(`/app/play/${ tableId }`, { replace: true }) } />
+                            <Show
+                                when={ !catalogue.loading() }
+                                fallback={
+                                    <div class="flex flex-col gap-6" aria-busy="true">
+                                        <Skeleton lines={ 3 } />
+                                        <Skeleton lines={ 4 } />
+                                    </div>
+                                }
+                            >
+                                { () =>
+                                    <CreateGameForm game={ game! } onCreated={ (tableId) => navigate(`/app/play/${ tableId }`, { replace: true }) } />
+                                }
+                            </Show>
                         }
                     </Show>
                 </div>

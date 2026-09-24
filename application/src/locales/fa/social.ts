@@ -255,6 +255,7 @@ export const social: Pick<Dictionary, keyof typeof reference> = {
     'groups.edit': 'ویرایش گروه',
     'groups.editTitle': 'ویرایش {name}',
     'groups.made': '{name} مال توست. سلام کن.',
+    'groups.saved': '{name} ذخیره شد.',
     'groups.add': 'افزودن دوست',
     'groups.addTitle': 'کسی را به {name} اضافه کن',
     'groups.addLead': 'فقط کسانی را می‌شود آورد که اضافه‌شان کرده‌ای.',

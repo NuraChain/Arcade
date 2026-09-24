@@ -252,6 +252,7 @@ export const social = {
     'groups.edit': 'Edit group',
     'groups.editTitle': 'Edit {name}',
     'groups.made': '{name} is yours. Say hello.',
+    'groups.saved': '{name} is saved.',
     'groups.add': 'Add a friend',
     'groups.addTitle': 'Add someone to {name}',
     'groups.addLead': 'Only people you have added can be brought in.',
