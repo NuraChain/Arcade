@@ -5,7 +5,6 @@ import { forgetSigners } from '../lib/sealing.ts';
 import { sealabilityOf, type Sealability } from '../lib/seal-state.ts';
 import { useAccount } from './account.store.ts';
 import { useChat } from './chat.store.ts';
-import { useRealtime } from './realtime.store.ts';
 
 export interface SealApi
 {
@@ -89,9 +88,9 @@ export const useSeal = createStore((): SealApi =>
          */
         start()
         {
-            return useRealtime().onNudge((scope, id) =>
+            return chat.onThread((id) =>
             {
-                if (scope !== 'chat' || (id !== undefined && id !== untrack(chat.openId)))
+                if (id !== undefined && id !== untrack(chat.openId))
                 {
                     return;
                 }

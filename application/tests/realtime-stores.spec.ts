@@ -325,6 +325,29 @@ describe('the social doorbell', () =>
         stop();
     });
 
+    it('leaves the chat list and the open thread alone when the graph moved without a block', async () =>
+    {
+        const social = useSocial();
+        const chat = useChat();
+        const stops = [social.start(), chat.start()];
+
+        chat.openThread('c-reza');
+        await social.refresh();
+        await chat.refresh();
+        await vi.waitFor(() => expect(server.calls).toContain('chat.messages'));
+        server.calls = [];
+
+        socket.deliver({ v: 1, t: 'nudge', n: 1, scope: 'social', at: 0 });
+        clock.advance(NUDGE_WINDOW_MS);
+        await vi.waitFor(() => expect(server.calls).toContain('social.graph'));
+        await new Promise((resolve) => setTimeout(resolve, 50));
+
+        expect(server.calls).not.toContain('chat.list');
+        expect(server.calls).not.toContain('chat.messages');
+
+        stops.forEach((stop) => stop());
+    });
+
     it('stops listening when the shell tears it down', async () =>
     {
         const social = useSocial();

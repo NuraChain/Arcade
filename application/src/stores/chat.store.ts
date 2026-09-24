@@ -1,4 +1,4 @@
-import { createStore, createResource, createSignal, untrack, type Getter } from 'azerothjs';
+import { createMemo, createStore, createResource, createSignal, untrack, type Getter } from 'azerothjs';
 
 import { client } from '../api.ts';
 import type { Conversation, Message } from '../data/chat.ts';
@@ -86,6 +86,8 @@ export interface ChatApi
     openDirect(personId: string): Promise<string>;
     forGroup(groupId: string): string | undefined;
     refresh(): Promise<void>;
+    onThread(listener: (id: string | undefined) => void): () => void;
+
     start(): () => void;
     stop(): void;
     reset(): void;
@@ -100,7 +102,14 @@ export const useChat = createStore((): ChatApi =>
 
     const meId = (): string => account.user()?.id ?? 'you';
 
-    const scope = (): ChatScope => ({ me: meId(), blocked: social.blocked() });
+    const scopeKey = createMemo(() => `${ meId() }|${ [...social.blocked()].sort().join(',') }`);
+
+    const scope = createMemo((): ChatScope =>
+    {
+        scopeKey();
+
+        return untrack(() => ({ me: meId(), blocked: social.blocked() }));
+    });
 
     /**
      * Files away the people and groups the rooms name, so a thread opened cold can say who it is
@@ -180,12 +189,19 @@ export const useChat = createStore((): ChatApi =>
 
     const revalidate = (): Promise<void> => queue(() => Promise.all([list.refetch(), thread.refetch()]));
 
+    const threaders = new Set<(id: string | undefined) => void>();
+
     const nudgedOpen = (id: string): Promise<void> => queue(async () =>
     {
         await list.refetch();
 
         if (untrack(openId) === id && (list.data() ?? []).some((row) => row.conversation.id === id))
         {
+            for (const listener of threaders)
+            {
+                listener(id);
+            }
+
             await thread.refetch();
         }
     });
@@ -527,6 +543,12 @@ export const useChat = createStore((): ChatApi =>
          * the server says a conversation changed, and this goes and re-reads it through the same
          * route the page would have used, with the same membership, block and watermark rules.
          */
+        onThread(listener)
+        {
+            threaders.add(listener);
+            return () => threaders.delete(listener);
+        },
+
         start()
         {
             const live = useRealtime();
@@ -537,6 +559,14 @@ export const useChat = createStore((): ChatApi =>
                 {
                     return;
                 }
+                if (id === undefined)
+                {
+                    for (const listener of threaders)
+                    {
+                        listener(undefined);
+                    }
+                }
+
                 void (id === undefined ? revalidate() : id === untrack(openId) ? nudgedOpen(id) : nudgedList());
             });
 

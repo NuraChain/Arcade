@@ -5,6 +5,7 @@ import Page from '../../components/app/page.component.azeroth';
 import { gameNameOf, groupNameOf, othersOf, sealSentenceOf, titleOf } from '../../components/chat/chat-title.ts';
 import { sendBlockOf } from '../../lib/seal-state.ts';
 import { attachStick } from '../../lib/stick.ts';
+import { runtime } from '../../lib/runtime.ts';
 import { haptic } from '../../lib/haptics.ts';
 import { threadRows } from '../../lib/thread.ts';
 import ChatList from '../../components/chat/chat-list.component.azeroth';
@@ -206,11 +207,39 @@ export default component ChatPage()
             {
                 if (list !== null)
                 {
-                    list.scrollTop = list.scrollHeight - held.from;
+                    keepPlace(list, held.from);
                 }
             });
         }
     }
+
+    const keepPlace = (target: HTMLElement, from: number): void =>
+    {
+        const apply = (): void =>
+        {
+            target.scrollTop = target.scrollHeight - from;
+        };
+
+        apply();
+
+        if (typeof ResizeObserver === 'undefined' || target.firstElementChild === null)
+        {
+            return;
+        }
+
+        const watch = new ResizeObserver(apply);
+        const release = (): void =>
+        {
+            watch.disconnect();
+            target.removeEventListener('wheel', release);
+            target.removeEventListener('touchstart', release);
+        };
+
+        watch.observe(target.firstElementChild);
+        target.addEventListener('wheel', release, { passive: true });
+        target.addEventListener('touchstart', release, { passive: true });
+        runtime().clock.after(1200, release);
+    };
 
     derived readable = conversation === null ? '' : id;
 

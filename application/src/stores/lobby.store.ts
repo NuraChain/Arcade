@@ -78,10 +78,17 @@ export const useLobby = createStore((): LobbyApi =>
 
     const seated = createResource(who, () => client.tables.mine(), { name: 'tables.mine' });
 
+    const left = new Set<string>();
+
     const viewing = createResource(
         () => (openId() === '' ? null : { id: openId(), who: who() }),
         async (current) =>
         {
+            if (left.has(current.id))
+            {
+                return null;
+            }
+
             try
             {
                 return await client.tables.view({ params: { id: current.id } });
@@ -106,9 +113,25 @@ export const useLobby = createStore((): LobbyApi =>
     {
         inFlight = inFlight.catch(() => undefined).then(async () =>
         {
+            const open = untrack(openId);
+            const held = untrack(viewing.data) ?? null;
+
+            if (open !== '' && held !== null && held.id === open && held.mine !== undefined && held.privacy !== 'public')
+            {
+                await seated.refetch();
+
+                if (!(untrack(seated.data)?.tables ?? []).some((table) => table.id === open))
+                {
+                    left.add(open);
+                }
+
+                await viewing.refetch();
+                return;
+            }
+
             await Promise.all([
                 seated.refetch(),
-                untrack(openId) === '' ? Promise.resolve() : viewing.refetch()
+                open === '' ? Promise.resolve() : viewing.refetch()
             ]);
         });
         return inFlight;
@@ -170,7 +193,11 @@ export const useLobby = createStore((): LobbyApi =>
 
         waiting: () => (seated.data()?.tables ?? []).filter((table) => table.yourTurn === true),
 
-        open: (tableId) => setOpenId(tableId),
+        open(tableId)
+        {
+            left.delete(tableId);
+            setOpenId(tableId);
+        },
         close: () => setOpenId(''),
         openId,
 
@@ -299,6 +326,7 @@ export const useLobby = createStore((): LobbyApi =>
 
         reset()
         {
+            left.clear();
             setOpenId('');
             inFlight = Promise.resolve();
             void seated.refetch();
