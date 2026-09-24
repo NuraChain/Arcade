@@ -49,7 +49,7 @@ describe.skipIf(!active)('recording', () =>
             await base.query(`drop database if exists ${ PROBE }`);
             await base.destroy();
         }
-    });
+    }, 60_000);
 
     it('writes schema-snapshot.json from the schema the entities build', async () =>
     {

@@ -73,7 +73,7 @@ describe.skipIf(!active)('the schema the entities build', () =>
             await base.query(`drop database if exists ${ PROBE }`);
             await base.destroy();
         }
-    });
+    }, 60_000);
 
     it('creates every table, with every column at the right type, nullability and default', async () =>
     {
