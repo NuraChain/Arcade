@@ -4,8 +4,10 @@ export const landing = {
     'brand.accent': 'Games',
     'brand.trail': '',
 
+    'landing.cta.back': 'Back to your tables',
+    'landing.cta.guest': 'Play as a guest',
+    'landing.games.live': 'Live',
     'nav.games': 'Games',
-    'nav.rooms': 'Rooms',
     'nav.connect': 'Connect wallet',
     'nav.enter': 'Play',
     'hero.enter': 'Back to your tables',
@@ -64,8 +66,6 @@ export const landing = {
     'finale.lead': 'Bring three friends or arrive alone. Someone is always short a player.',
     'finale.cta': 'Pull up a chair',
 
-    'footer.tagline': 'A social gaming world by Nura.',
-    'footer.product': 'Product',
     'footer.rights': 'All rights reserved.',
 
     'locale.label': 'Language',

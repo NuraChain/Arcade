@@ -19,6 +19,7 @@ export default component IconButton(props: {
     disabled?: boolean;
     flip?: boolean;
     pressed?: boolean;
+    expanded?: boolean;
     tip?: boolean;
     tipSide?: Side;
     class?: string;
@@ -49,6 +50,7 @@ export default component IconButton(props: {
                     class={ shell }
                     aria-label={ props.label }
                     aria-pressed={ props.pressed }
+                    aria-expanded={ props.expanded }
                     disabled={ props.disabled === true }
                     onClick={ () => (props.disabled === true ? undefined : props.onClick?.()) }
                 >

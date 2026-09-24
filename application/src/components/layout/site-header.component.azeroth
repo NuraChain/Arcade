@@ -1,51 +1,69 @@
+import { Dynamic, type MountNode } from 'azerothjs';
+
 import BrandLogo from './brand-logo.component.azeroth';
+import BrandMark from './brand-mark.component.azeroth';
+import LanguageSwitch from './language-switch.component.azeroth';
 import Button from '../ui/button.component.azeroth';
-import Icon from '../../icons/icon.component.azeroth';
+import IconButton from '../ui/icon-button.component.azeroth';
 import { beenHere } from '../../lib/been-here.ts';
 import { useConnect } from '../../stores/connect.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
-import { useScroll } from '../../stores/scroll.store.ts';
-import BrandMark from './brand-mark.component.azeroth';
-import LanguageSwitch from './language-switch.component.azeroth';
-import Panel from '../ui/panel.component.azeroth';
+
+interface DrawerProps
+{
+    open: boolean;
+    returning: boolean;
+    close: () => void;
+}
 
 export default component SiteHeader(props: { cta?: boolean })
 {
     const locale = useLocale();
-    const scroll = useScroll();
     const connect = useConnect();
 
     state open = false;
 
     state returning = false;
 
+    state loaded = false;
+
+    let Drawer: ((props: DrawerProps) => MountNode) | null = null;
+
+    const drawerProps = () => ({
+        open,
+        returning,
+        close: () => open = false
+    });
+
     mount
     {
         returning = beenHere();
-
-        return scroll.start();
     }
 
-    derived retracted = open === false && scroll.past() && scroll.direction() === 'down';
+    const toggle = (): void =>
+    {
+        open = !open;
+        if (open && !loaded)
+        {
+            void import('./site-drawer.component.azeroth').then((module) =>
+            {
+                Drawer = module.default;
+                loaded = true;
+            });
+        }
+    };
 
-    <header
-        class={ [
-            'pointer-events-none fixed inset-x-0 top-0 z-30',
-            'transition-transform duration-300 ease-[var(--ease-ui)] motion-reduce:transition-none',
-            retracted ? '-translate-y-full' : 'translate-y-0'
-        ].join(' ') }
-    >
-        <div class="pointer-events-none absolute inset-0 h-24 bg-gradient-to-b from-void/85 to-transparent"></div>
-
-        <div class="pointer-events-auto relative mx-auto flex h-16 w-full max-w-[80rem] items-center justify-between gap-4 px-5 sm:h-20 sm:px-8">
-            <a href="/" class="flex items-center gap-2.5 rounded-control" aria-label={ locale.t('brand.name') }>
-
-                <BrandLogo size="sm" />
-                <BrandMark class="text-ui-lg text-text" />
+    <header class="site-header fixed inset-x-0 top-0 z-30 safe-t">
+        <div class="page-pad flex h-15 items-center gap-3">
+            <a href="/" class="flex min-h-11 items-center gap-2.5 rounded-control" aria-label={ locale.t('brand.name') }>
+                <BrandLogo size="md" />
+                <BrandMark class="hidden text-ui-lg text-text min-[25rem]:inline" />
             </a>
 
-            <nav class="hidden items-center gap-2 sm:flex" aria-label={ locale.t('nav.menu') }>
-                <LanguageSwitch />
+            <div class="ms-auto flex items-center gap-2">
+                <div class="hidden sm:block">
+                    <LanguageSwitch />
+                </div>
                 <Show when={ props.cta !== false }>
                     { () =>
                         <Show
@@ -60,51 +78,12 @@ export default component SiteHeader(props: { cta?: boolean })
                         </Show>
                     }
                 </Show>
-            </nav>
-
-            <button
-                type="button"
-                class="flex h-11 w-11 cursor-pointer items-center justify-center rounded-full border border-line bg-field text-muted transition-colors duration-150 hover:border-accent hover:text-text sm:hidden"
-                aria-label={ open ? locale.t('nav.close') : locale.t('nav.menu') }
-                aria-expanded={ open }
-                onClick={ () => open = !open }
-            >
-                <Icon name={ open ? 'close' : 'menu' } size={ 18 } />
-            </button>
+                <IconButton icon="menu" label={ locale.t('nav.menu') } expanded={ open } onClick={ toggle } />
+            </div>
         </div>
 
-        <Show when={ open }>
-            <div class="pointer-events-auto relative mx-auto flex w-full max-w-[80rem] flex-col gap-3 px-5 pb-4 sm:hidden">
-                <Panel pad="sm" class="flex items-center gap-3">
-                    <LanguageSwitch />
-                </Panel>
-                <Show when={ props.cta !== false }>
-                    { () =>
-                        <Show
-                            when={ returning }
-                            fallback={ <Button
-                                variant="primary"
-                                size="md"
-                                leading="wallet"
-                                block
-                                onClick={ () =>
-                                {
-                                    open = false;
-                                    connect.show();
-                                } }
-                            >
-                                { locale.t('nav.connect') }
-                            </Button> }
-                        >
-                            { () =>
-                                <Button variant="primary" size="md" leading="games" block to="/app" onClick={ () => open = false }>
-                                    { locale.t('nav.enter') }
-                                </Button>
-                            }
-                        </Show>
-                    }
-                </Show>
-            </div>
+        <Show when={ loaded }>
+            { () => <Dynamic component={ Drawer! } props={ drawerProps } /> }
         </Show>
     </header>
 }

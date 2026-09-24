@@ -1,0 +1,195 @@
+import { Link } from 'azerothjs';
+
+import BrandLogo from './brand-logo.component.azeroth';
+import BrandMark from './brand-mark.component.azeroth';
+import LanguageSwitch from './language-switch.component.azeroth';
+import GameIcon from '../games/game-icon.component.azeroth';
+import SeatCount from '../games/seat-count.component.azeroth';
+import Badge from '../ui/badge.component.azeroth';
+import Button from '../ui/button.component.azeroth';
+import IconButton from '../ui/icon-button.component.azeroth';
+import Icon from '../../icons/icon.component.azeroth';
+import { GAMES } from '../../data/games.ts';
+import { runtime } from '../../lib/runtime.ts';
+import { createDrag } from '../../lib/swipe.ts';
+import { useConnect } from '../../stores/connect.store.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+
+export default component SiteDrawer(props: {
+    open: boolean;
+    returning: boolean;
+    close: () => void;
+})
+{
+    const locale = useLocale();
+    const connect = useConnect();
+
+    const drag = createDrag({ axis: 'x', threshold: 80, velocity: 0.5 });
+
+    let dialog: HTMLDialogElement | null = null;
+
+    let captured = false;
+
+    const toward = (x: number): number => (locale.dir() === 'rtl' ? -x : x);
+
+    const slide = (offset: number | null): void =>
+    {
+        if (dialog !== null)
+        {
+            dialog.style.translate = offset === null ? '' : `${ locale.dir() === 'rtl' ? -offset : offset }px 0`;
+            dialog.style.transition = offset === null ? '' : 'none';
+        }
+    };
+
+    const sync = (open: boolean): void =>
+    {
+        if (dialog === null)
+        {
+            return;
+        }
+        if (open && !dialog.open)
+        {
+            dialog.showModal();
+        }
+        if (!open && dialog.open)
+        {
+            dialog.close();
+        }
+    };
+
+    effect
+    {
+        sync(props.open);
+    }
+
+    mount
+    {
+        sync(props.open);
+    }
+
+    const play = (): void =>
+    {
+        props.close();
+        connect.show();
+    };
+
+    <dialog
+        ref={ (element) => dialog = element as HTMLDialogElement }
+        class="site-drawer"
+        aria-label={ locale.t('nav.menu') }
+        onClose={ () => props.close() }
+        onClick={ (event) => (event.target === dialog ? props.close() : undefined) }
+        onPointerDown={ (event) =>
+        {
+            if (event.pointerType !== 'mouse')
+            {
+                captured = false;
+                drag.start(toward(event.clientX), event.clientY, runtime().clock.now());
+            }
+        } }
+        onPointerMove={ (event) =>
+        {
+            if (!drag.active())
+            {
+                return;
+            }
+            const frame = drag.move(toward(event.clientX), event.clientY, runtime().clock.now());
+            if (frame.axis === 'x')
+            {
+                if (!captured)
+                {
+                    (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+                    captured = true;
+                }
+                slide(frame.offset);
+            }
+        } }
+        onPointerUp={ () =>
+        {
+            if (!drag.active())
+            {
+                return;
+            }
+            const frame = drag.end(runtime().clock.now());
+            slide(null);
+            if (frame.axis === 'x' && frame.dismiss)
+            {
+                props.close();
+            }
+        } }
+        onPointerCancel={ () =>
+        {
+            drag.end(runtime().clock.now());
+            slide(null);
+        } }
+    >
+        <div class="flex h-full flex-col">
+            <div class="page-pad flex h-15 shrink-0 items-center justify-between gap-3 border-b border-line">
+                <span class="flex items-center gap-2.5">
+                    <BrandLogo size="md" />
+                    <BrandMark class="text-ui-lg text-text" />
+                </span>
+                <IconButton icon="close" label={ locale.t('nav.close') } onClick={ () => props.close() } />
+            </div>
+
+            <div class="page-pad flex min-h-0 flex-1 flex-col gap-7 overflow-y-auto py-5">
+                <Show
+                    when={ props.returning }
+                    fallback={
+                        <div class="flex flex-col gap-2">
+                            <span class="glow-cta rounded-control">
+                                <Button variant="primary" size="lg" leading="wallet" block onClick={ play }>{ locale.t('nav.connect') }</Button>
+                            </span>
+                            <Button variant="outline" size="lg" block to="/sign-in">{ locale.t('landing.cta.guest') }</Button>
+                        </div>
+                    }
+                >
+                    { () =>
+                        <span class="glow-cta rounded-control">
+                            <Button variant="primary" size="lg" leading="games" block to="/app">{ locale.t('landing.cta.back') }</Button>
+                        </span>
+                    }
+                </Show>
+
+                <section aria-labelledby="drawer-games" class="flex flex-col gap-2">
+                    <h2 id="drawer-games" class="label text-ui-xs text-faint">{ locale.t('nav.games') }</h2>
+                    <ul class="flex flex-col divide-y divide-line overflow-hidden rounded-panel border border-line bg-field">
+                        <For each={ GAMES } key={ (game) => game.id } let={ game }>
+                            <li>
+                                <Show
+                                    when={ props.returning }
+                                    fallback={
+                                        <button type="button" class="drawer-game" onClick={ play }>
+                                            <GameIcon game={ game.id } class="h-10 w-10 shrink-0" />
+                                            <span class="flex min-w-0 flex-1 flex-col text-start">
+                                                <span class="truncate text-ui-md font-semibold text-text">{ locale.t(game.nameKey) }</span>
+                                                <SeatCount game={ game } class="text-ui-xs text-muted" />
+                                            </span>
+                                            <Badge dot text={ locale.t('landing.games.live') } tone="live" size="sm" class="shrink-0" />
+                                        </button>
+                                    }
+                                >
+                                    { () =>
+                                        <Link to={ `/app/games/${ game.slug }` } class="drawer-game">
+                                            <GameIcon game={ game.id } class="h-10 w-10 shrink-0" />
+                                            <span class="flex min-w-0 flex-1 flex-col">
+                                                <span class="truncate text-ui-md font-semibold text-text">{ locale.t(game.nameKey) }</span>
+                                                <SeatCount game={ game } class="text-ui-xs text-muted" />
+                                            </span>
+                                            <Icon name="forward" size={ 16 } class="icon-flip shrink-0 text-faint" />
+                                        </Link>
+                                    }
+                                </Show>
+                            </li>
+                        </For>
+                    </ul>
+                </section>
+
+                <section aria-labelledby="drawer-language" class="flex flex-col gap-2">
+                    <h2 id="drawer-language" class="label text-ui-xs text-faint">{ locale.t('locale.label') }</h2>
+                    <LanguageSwitch class="w-full" />
+                </section>
+            </div>
+        </div>
+    </dialog>
+}

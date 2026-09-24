@@ -1,42 +1,4 @@
 import { useLocale } from '../../stores/locale.store.ts';
-import type { MessageKey } from '../../locales/en.ts';
-import BrandMark from './brand-mark.component.azeroth';
-
-interface FooterLink
-{
-    href: string;
-    labelKey: MessageKey;
-}
-
-interface FooterColumn
-{
-    headingKey: MessageKey;
-    links: FooterLink[];
-}
-
-/**
- * Every link here goes somewhere, which it did not.
- *
- * `/about`, `/contact`, `/privacy` and `/terms` were four entries in this list and none of them is
- * a route in `routes.ts` - so the footer on every public page, including the landing page, offered
- * four links that answered 404. Nothing could see it: `npm run qa` tours the routes the router
- * DECLARES, so a url that exists only in this file was never once opened by any gate.
- *
- * They are gone rather than stubbed, which is the rule this product follows for anything with no
- * producer behind it. A privacy page in particular is owed real content - the notes promise that
- * the epoch-coarse forward secrecy, what the server still sees and the typing indicator are all
- * stated in it - and a page of placeholder text under that heading would be worse than no heading,
- * because it is a claim rather than an absence. It comes back when it is written.
- */
-const COLUMNS: FooterColumn[] = [
-    {
-        headingKey: 'footer.product',
-        links: [
-            { href: '/#games', labelKey: 'nav.games' },
-            { href: '/#crew', labelKey: 'nav.rooms' }
-        ]
-    }
-];
 
 export default component SiteFooter()
 {
@@ -45,29 +7,13 @@ export default component SiteFooter()
     const year = new Date().getFullYear();
 
     <footer class="relative z-10 border-t border-line bg-void">
-        <div class="mx-auto grid w-full max-w-[80rem] gap-10 px-5 py-14 sm:grid-cols-[1.5fr_repeat(3,1fr)] sm:px-8">
-            <div class="flex flex-col gap-3">
-                <BrandMark class="text-ui-lg text-text" />
-                <p class="max-w-[28ch] text-ui-base text-muted">{ locale.t('footer.tagline') }</p>
-            </div>
-
-            <For each={ COLUMNS } key={ (column) => column.headingKey } let={ column }>
-                <div class="flex flex-col gap-3">
-                    <h2 class="label text-ui-sm text-faint">{ locale.t(column.headingKey) }</h2>
-                    <ul class="flex flex-col gap-2">
-                        <For each={ column.links } key={ (link) => link.href } let={ link }>
-                            <li>
-                                <a href={ link.href } class="text-ui-base text-muted transition-colors duration-150 hover:text-accent">{ locale.t(link.labelKey) }</a>
-                            </li>
-                        </For>
-                    </ul>
-                </div>
-            </For>
-        </div>
-
-        <div class="mx-auto w-full max-w-[80rem] border-t border-line px-5 py-6 sm:px-8">
-            
-            <p class="text-ui-sm text-faint"><span class="tally">{ locale.n(year, { useGrouping: false }) }</span> { locale.t('brand.name') }. { locale.t('footer.rights') }</p>
+        <div class="page-pad safe-b flex flex-wrap items-center justify-between gap-x-6 gap-y-1 py-3">
+            <p class="text-ui-sm text-faint">
+                <span class="tally">{ locale.n(year, { useGrouping: false }) }</span> { locale.t('brand.name') }. { locale.t('footer.rights') }
+            </p>
+            <a href="/#games" class="flex min-h-11 items-center text-ui-sm text-muted transition-colors duration-150 hover:text-accent">
+                { locale.t('nav.games') }
+            </a>
         </div>
     </footer>
 }

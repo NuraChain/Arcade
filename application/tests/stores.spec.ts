@@ -1,39 +1,10 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 
-import { isPast, resolveDirection } from '../src/stores/scroll.store.ts';
 import { LOCALE_DIR, useLocale } from '../src/stores/locale.store.ts';
 
 beforeEach(() =>
 {
     useLocale().setLocale('en');
-});
-
-describe('scroll direction', () =>
-{
-    it('reads a real move in the direction it went', () =>
-    {
-        expect(resolveDirection('up', 100, 400).direction).toBe('down');
-        expect(resolveDirection('down', 400, 100).direction).toBe('up');
-    });
-
-    it('HOLDS the previous direction through sub-pixel jitter', () =>
-    {
-        expect(resolveDirection('down', 400, 402).direction).toBe('down');
-        expect(resolveDirection('up', 400, 398).direction).toBe('up');
-    });
-
-    it('does not move the anchor while jittering, so small moves cannot accumulate unseen', () =>
-    {
-        expect(resolveDirection('up', 400, 402).anchor).toBe(400);
-        expect(resolveDirection('up', 400, 460).anchor).toBe(460);
-    });
-
-    it('keeps the header down only once it would cover content', () =>
-    {
-        expect(isPast(0)).toBe(false);
-        expect(isPast(119)).toBe(false);
-        expect(isPast(400)).toBe(true);
-    });
 });
 
 describe('locale store', () =>

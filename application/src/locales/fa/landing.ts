@@ -7,8 +7,10 @@ export const landing: Pick<Dictionary, keyof typeof reference> = {
     'brand.accent': 'بازی‌های',
     'brand.trail': 'نورا',
 
+    'landing.cta.back': 'برگرد سر میزهایت',
+    'landing.cta.guest': 'به‌عنوان مهمان بازی کن',
+    'landing.games.live': 'فعال',
     'nav.games': 'بازی‌ها',
-    'nav.rooms': 'اتاق‌ها',
     'nav.connect': 'اتصال کیف پول',
     'nav.enter': 'بازی',
     'hero.enter': 'برگرد سر میزهایت',
@@ -67,8 +69,6 @@ export const landing: Pick<Dictionary, keyof typeof reference> = {
     'finale.lead': 'سه نفر را با خودت بیاور یا تنها بیا. همیشه یک میز یک بازیکن کم دارد.',
     'finale.cta': 'بیا سر میز',
 
-    'footer.tagline': 'یک دنیای بازی اجتماعی از نورا.',
-    'footer.product': 'محصول',
     'footer.rights': 'همهٔ حقوق محفوظ است.',
 
     'locale.label': 'زبان',

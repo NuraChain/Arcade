@@ -1,6 +1,6 @@
 import { LOCALES, LOCALE_LABEL, useLocale, type Locale } from '../../stores/locale.store.ts';
 
-export default component LanguageSwitch()
+export default component LanguageSwitch(props: { class?: string })
 {
     const locale = useLocale();
 
@@ -12,14 +12,18 @@ export default component LanguageSwitch()
         }
     };
 
-    <div class="flex items-center gap-0.5 rounded-full border border-line bg-field p-0.5" role="group" aria-label={ locale.t('locale.label') }>
+    <div
+        class={ () => ['flex items-center gap-0.5 rounded-control bg-sunk p-0.5', props.class ?? ''].join(' ') }
+        role="group"
+        aria-label={ locale.t('locale.label') }
+    >
         <For each={ LOCALES } key={ (name) => name } let={ name }>
             <button
                 type="button"
                 lang={ name }
                 class={ () => [
-                    'flex h-8 items-center justify-center rounded-full px-3 text-ui-sm font-semibold transition-colors duration-150 coarse:h-11 coarse:px-4',
-                    locale.locale() === name ? 'cursor-default bg-raised text-accent' : 'cursor-pointer text-muted hover:text-text'
+                    'flex h-8 flex-1 items-center justify-center rounded-[0.375rem] px-3 text-ui-sm font-semibold transition-colors duration-150 coarse:h-11 coarse:px-4',
+                    locale.locale() === name ? 'cursor-default bg-raised text-text shadow-1' : 'cursor-pointer text-muted hover:text-text'
                 ].join(' ') }
                 aria-pressed={ locale.locale() === name }
                 onClick={ () => press(name) }
