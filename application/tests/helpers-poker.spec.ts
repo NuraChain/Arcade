@@ -5,7 +5,7 @@ import { pokerEngine } from '../../server/src/domains/match/engines/poker.ts';
 import { toCall } from '../../server/src/domains/match/poker/betting.ts';
 import { evaluate } from '../../server/src/domains/match/poker/evaluator.ts';
 import type { PokerAction, PokerState } from '../../server/src/domains/match/poker/state.ts';
-import { coachOf, namedHand, outcomeOf } from '../src/game/helpers/poker.ts';
+import { coachOf, namedHand, outcomeOf, predicted } from '../src/game/helpers/poker.ts';
 import type { PokerBoard } from '../src/data/match.ts';
 
 const SUIT_OF: Record<string, Suit> = { C: 'clubs', D: 'diamonds', H: 'hearts', S: 'spades' };
@@ -249,6 +249,7 @@ describe('every word against the server\'s own table', () =>
         const faults: string[] = [];
         const seen = new Set<string>();
         let actions = 0;
+        let guessed = 0;
 
         while (pokerEngine.finish(state) === null && actions < 4000 && faults.length === 0)
         {
@@ -275,7 +276,9 @@ describe('every word against the server\'s own table', () =>
             const measured = legal.filter((move) => move.kind !== 'allin');
             const roll = next();
             const pool = roll < 0.8 && passive.length > 0 ? passive : (roll < 0.97 ? measured : legal);
-            const applied = pokerEngine.apply(state, pool[Math.floor(next() * pool.length)], draws);
+            const chosen = pool[Math.floor(next() * pool.length)];
+            const before = boardOf(state, turn);
+            const applied = pokerEngine.apply(state, chosen, draws);
 
             if (!applied.ok)
             {
@@ -283,11 +286,27 @@ describe('every word against the server\'s own table', () =>
                 break;
             }
 
+            const after = boardOf(applied.state, turn);
+
+            if (after.hand === before.hand && after.street === before.street)
+            {
+                const guess = predicted(before, turn, chosen.kind as never, 'amount' in chosen ? chosen.amount : 0).seats.find((row) => row.seat === turn);
+                const truth = after.seats.find((row) => row.seat === turn);
+
+                guessed += 1;
+
+                if (JSON.stringify(guess) !== JSON.stringify(truth))
+                {
+                    faults.push(`guessed ${ JSON.stringify(guess) } for a ${ chosen.kind }, the engine made ${ JSON.stringify(truth) }`);
+                }
+            }
+
             state = applied.state;
             actions += 1;
         }
 
         expect(faults).toEqual([]);
+        expect(guessed).toBeGreaterThan(20);
         expect([...seen].sort()).toEqual(['helpers.poker.allIn', 'helpers.poker.facing', 'helpers.poker.facing.noRaise', 'helpers.poker.free']);
     });
 });

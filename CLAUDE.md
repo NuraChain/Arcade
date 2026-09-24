@@ -1629,6 +1629,18 @@ second copy answer `already`. The API passes play hundreds of turns through them
 keeps failing polls `since` every three seconds while a match is open, so a table does not freeze behind
 a proxy that refuses WebSockets. A spectator is never pushed a board - the delay is the point of watching.
 
+**Every board answers the press before the server does, and only with what the press decides.** A
+hokm card leaves the hand and flies to the felt at once, and the server's echo of that same card is
+taken out of the batch rather than flown twice; a ludo token walks to `movedTo`'s square, computed from
+the server's own `ludo/board.ts`; a poker call, raise, all-in or fold is drawn in front of the reader
+by `predicted`; a backgammon turn stays staged on the board until the revision moves. Nothing that
+chance or another player decides is ever guessed - no die, no card dealt, no capture, no pot, no
+street, no turn - so the prediction can only be wrong when the server refuses, and `board.play`
+answers `stale` or `failed` for exactly that and the board takes it back. A prediction is keyed to the
+revision it was made against, so the first newer board replaces it whether the ack or the push lands
+first. `helpers-ludo.spec.ts` and `helpers-poker.spec.ts` compare every prediction with what the real
+engine did over self-played games.
+
 The gateway checks a play twice: the frame shape strictly, then `matchPlayInput` with a comparison that
 refuses any key the schema would have stripped, so a `die` inside a play is refused rather than quietly
 dropped. One socket's plays run one after another, so a socket never holds two match transactions. Every

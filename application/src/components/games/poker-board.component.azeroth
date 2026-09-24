@@ -11,7 +11,7 @@ import Slider from '../ui/slider.component.azeroth';
 import Icon from '../../icons/icon.component.azeroth';
 import { FACE_KEY, rankOf, suitOf } from '../../data/cards.ts';
 import { pokerOf } from '../../data/match.ts';
-import { coachOf, outcomeOf } from '../../game/helpers/poker.ts';
+import { coachOf, outcomeOf, predicted, type PokerVerb } from '../../game/helpers/poker.ts';
 import { useBoard } from '../../stores/match.store.ts';
 import { useSettings } from '../../stores/settings.store.ts';
 import { haptic } from '../../lib/haptics.ts';
@@ -166,7 +166,11 @@ export default component PokerBoard(props: { match: MatchView; starting?: boolea
         return Math.min(high, Math.max(low, target));
     };
 
-    derived plates = view === null ? [] : view.seats.map((row) =>
+    state ahead: { rev: number; view: NonNullable<typeof view> } | null = null;
+
+    derived drawn = ahead !== null && ahead.rev === game.rev ? ahead.view : view;
+
+    derived plates = drawn === null ? [] : drawn.seats.map((row) =>
     {
         const place = (row.seat - viewer + count) % count;
         const angle = Math.PI / 2 + (place / count) * Math.PI * 2;
@@ -272,10 +276,28 @@ export default component PokerBoard(props: { match: MatchView; starting?: boolea
         });
     })();
 
+    const send = async (verb: PokerVerb, amount?: number): Promise<void> =>
+    {
+        const current = untrack(() => view);
+        const seat = untrack(() => mine);
+
+        if (current !== null && seat !== undefined && !untrack(board.busy))
+        {
+            ahead = { rev: untrack(() => game.rev), view: predicted(current, seat, verb, amount) };
+        }
+
+        const outcome = await board.play(verb === 'raise' ? { kind: 'poker', verb, amount: amount ?? 0 } : { kind: 'poker', verb });
+
+        if (outcome === 'stale' || outcome === 'failed')
+        {
+            ahead = null;
+        }
+    };
+
     const act = async (verb: 'fold' | 'check' | 'call' | 'allin'): Promise<void> =>
     {
         haptic('select');
-        await board.play({ kind: 'poker', verb });
+        await send(verb);
     };
 
     const raise = async (): Promise<void> =>
@@ -283,13 +305,7 @@ export default component PokerBoard(props: { match: MatchView; starting?: boolea
         haptic('select');
         raising = false;
 
-        if (chosen >= high)
-        {
-            await board.play({ kind: 'poker', verb: 'allin' });
-            return;
-        }
-
-        await board.play({ kind: 'poker', verb: 'raise', amount: chosen });
+        await (chosen >= high ? send('allin') : send('raise', chosen));
     };
 
     <div data-rev={ props.match.rev } class="table-stage poker-stage">

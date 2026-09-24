@@ -346,6 +346,71 @@ describe('playing a card with a finger', () =>
     });
 });
 
+describe('playing ahead of the server', () =>
+{
+    const turn = (): MatchView => match({ phase: 'tricks', trump: 'spades', turn: 0, lead: 0, hand: [0, 14, 30], plays: [0, 14] }, 0);
+
+    const drive = (): ((events: MatchEvent[]) => void) =>
+    {
+        const [batch, setBatch] = createSignal<EventBatch>({ seq: 0, events: [] });
+
+        vi.spyOn(useBoard(), 'events').mockImplementation(batch);
+
+        return (events) => setBatch((held) => ({ seq: held.seq + 1, events }));
+    };
+
+    const press = (container: HTMLElement, card: number): void =>
+        fire(container.querySelector<HTMLButtonElement>(`.card-hold[data-card="${ card }"]`)!, 'click');
+
+    it('takes the card out of the hand and flies it to the felt at the press, before the server has answered', () =>
+    {
+        useDevice().overrideCoarse(false);
+        drive();
+        vi.spyOn(useBoard(), 'play').mockReturnValue(new Promise(() => undefined));
+        const animate = vi.spyOn(Element.prototype, 'animate');
+        const { container } = renderTest(() => HokmBoard({ match: turn() }) as Rendered);
+
+        press(container, 14);
+
+        expect(container.querySelector('.card-hold[data-card="14"]')).toBeNull();
+        expect(container.querySelector('.hokm-trick[data-card="14"]')?.getAttribute('data-landing')).toBe('true');
+        expect(animate).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not fly the card a second time when the server says it was played', () =>
+    {
+        useDevice().overrideCoarse(false);
+        const send = drive();
+        vi.spyOn(useBoard(), 'play').mockReturnValue(new Promise(() => undefined));
+        const animate = vi.spyOn(Element.prototype, 'animate');
+        const [current, setCurrent] = createSignal(turn());
+        const { container } = renderTest(() => HokmBoard({ get match() { return current(); } }) as Rendered);
+
+        press(container, 14);
+        setCurrent({ ...match({ phase: 'tricks', trump: 'spades', turn: 1, lead: 0, trick: [14], hand: [0, 30], plays: [] }, 0), rev: 4 });
+        send([{ rev: 4, seat: 0, at: '', log: { kind: 'hokm', moves: [{ e: 'card', seat: 0, card: 14 }] } }]);
+        (runtime().clock as ManualClock).advance(TIMING.FLY + 100);
+
+        expect(animate).toHaveBeenCalledTimes(1);
+        expect(container.querySelectorAll('.hokm-trick[data-card="14"]').length).toBe(1);
+    });
+
+    it('puts a refused card back in the hand', async () =>
+    {
+        useDevice().overrideCoarse(false);
+        drive();
+        vi.spyOn(useBoard(), 'play').mockResolvedValue('stale');
+        const { container } = renderTest(() => HokmBoard({ match: turn() }) as Rendered);
+
+        press(container, 14);
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(container.querySelector('.card-hold[data-card="14"]')).not.toBeNull();
+        expect(container.querySelector('.hokm-trick[data-card="14"]')).toBeNull();
+    });
+});
+
 describe('the game helpers', () =>
 {
     const following = (): MatchView => match({ phase: 'tricks', trump: 'spades', turn: 0, lead: 3, trick: [34], hand: [38, 0, 40], plays: [38] }, 0);

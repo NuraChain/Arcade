@@ -109,6 +109,8 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
 
     state banner: { points: number; kot: boolean; ours: boolean } | null = null;
 
+    state sending: number | null = null;
+
     derived game = props.match;
 
     derived view = hokmOf(game);
@@ -231,7 +233,7 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
 
     derived tip = view === null || over ? null : coachOf(view, mine);
 
-    derived hand = view === null ? [] : (sorted ? arrangeHand(view.hand, view.trump) : [...view.hand]);
+    derived hand = view === null ? [] : (sorted ? arrangeHand(view.hand, view.trump) : [...view.hand]).filter((card) => card !== sending);
 
     state room = { width: 0, height: 0 };
 
@@ -318,7 +320,21 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
         picked = null;
         aimed = null;
         haptic('select');
-        await board.play({ kind: 'hokm', verb: 'card', card });
+
+        const seat = untrack(() => mine);
+        const ahead = seat !== undefined && shown === null && holding === null && busyUntil <= runtime().clock.now();
+
+        if (ahead)
+        {
+            predict(card, seat);
+        }
+
+        const outcome = await board.play({ kind: 'hokm', verb: 'card', card });
+
+        if (ahead && sending === card && (outcome === 'stale' || outcome === 'failed'))
+        {
+            jump();
+        }
     };
 
     const touchCard = (card: number): void =>
@@ -396,6 +412,7 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
         stopAll();
         generation += 1;
         busyUntil = 0;
+        sending = null;
         shown = null;
         landing = [];
         banner = null;
@@ -612,6 +629,19 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
         }
     };
 
+    const predict = (card: number, seat: number): void =>
+    {
+        const table = viewFelt();
+
+        generation += 1;
+        sending = card;
+        shown = table;
+        settled = { cards: [...table.cards, { card, seat }], took: null };
+        busyUntil = runtime().clock.now() + TIMING.FLY;
+        run({ at: 0, kind: 'card', card, seat, duration: TIMING.FLY });
+        later(TIMING.FLY, () => run({ at: 0, kind: 'land', card, seat }));
+    };
+
     const release = (round: number): void =>
     {
         if (generation === round)
@@ -660,7 +690,9 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
 
         const gap = fresh[0].rev !== lastRev + 1;
         const now = runtime().clock.now();
-        const moves = fresh.flatMap((one) => (one.log.kind === 'hokm' ? one.log.moves : [])) as HokmMove[];
+        const heard = fresh.flatMap((one) => (one.log.kind === 'hokm' ? one.log.moves : [])) as HokmMove[];
+        const echo = sending === null ? -1 : heard.findIndex((move) => move.e === 'card' && move.card === sending);
+        const moves = echo < 0 ? heard : heard.filter((_, index) => index !== echo);
         let start = Math.max(now, busyUntil);
         let heldFor = 0;
 
@@ -676,6 +708,14 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
         }
 
         const behind = Math.max(0, start - now);
+
+        if (sending !== null && echo < 0)
+        {
+            jump();
+            return;
+        }
+
+        sending = null;
 
         if (gap || behind > JUMP_OVER || overflows(fresh.length, moves) || layer === null
             || (typeof document !== 'undefined' && document.visibilityState === 'hidden'))

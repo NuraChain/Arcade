@@ -37,6 +37,8 @@ import { useToasts } from './toasts.store.ts';
  * error: a retried tap and a tap that crossed a realtime frame are both ordinary.
  */
 
+export type Outcome = 'now' | 'already' | 'stale' | 'failed';
+
 export interface BoardApi
 {
     match: Getter<MatchView | null>;
@@ -68,8 +70,8 @@ export interface BoardApi
     /** The action in flight, so a control can disable itself without inventing a state. */
     busy: Getter<boolean>;
 
-    roll(): Promise<void>;
-    move(piece: number): Promise<void>;
+    roll(): Promise<Outcome>;
+    move(piece: number): Promise<Outcome>;
 
     /**
      * Any game's verb, composed by whoever knows the game.
@@ -78,9 +80,9 @@ export interface BoardApi
      * them; a second game's board composes its own play and hands it over rather than growing two
      * more methods on a store every game shares.
      */
-    play(what: MatchPlay): Promise<void>;
+    play(what: MatchPlay): Promise<Outcome>;
 
-    resign(): Promise<void>;
+    resign(): Promise<Outcome>;
 
     refresh(): Promise<void>;
     start(): () => void;
@@ -103,7 +105,7 @@ export const ACK_MS = 3000;
 
 export const POLL_MS = 3000;
 
-type Answer = { match: MatchView; events: readonly MatchEvent[] };
+type Answer = { match: MatchView; applied: 'now' | 'already' | 'stale'; events: readonly MatchEvent[] };
 
 export const useBoard = createStore((): BoardApi =>
 {
@@ -247,13 +249,13 @@ export const useBoard = createStore((): BoardApi =>
         }
     };
 
-    const act = async (play: MatchPlay | null): Promise<void> =>
+    const act = async (play: MatchPlay | null): Promise<Outcome> =>
     {
         const current = untrack(board);
 
         if (current === null || untrack(busy))
         {
-            return;
+            return 'failed';
         }
 
         setBusy(true);
@@ -269,12 +271,16 @@ export const useBoard = createStore((): BoardApi =>
                     : await client.matches.play({ params: { id }, input: { key, rev: current.rev, play } }));
 
             heard(answer.match, answer.events);
+
+            return answer.applied;
         }
         catch
         {
             await revalidate().catch(() => undefined);
 
             useToasts().show({ kind: 'error', text: useLocale().t('match.actionFailed'), dedupe: 'match-action' });
+
+            return 'failed';
         }
         finally
         {

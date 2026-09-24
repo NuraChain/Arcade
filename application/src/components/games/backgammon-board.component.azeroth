@@ -110,12 +110,15 @@ export default component BackgammonBoard(props: { match: MatchView; starting?: b
 
     derived game = props.match;
 
+    let stagedFor = untrack(() => `${ props.match.id }:${ props.match.rev }`);
+
     effect
     {
-        const rev = game.rev;
+        const at = `${ game.id }:${ game.rev }`;
 
-        if (rev >= 0)
+        if (at !== stagedFor)
         {
+            stagedFor = at;
             staged = [];
             picked = null;
         }

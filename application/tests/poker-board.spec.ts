@@ -105,6 +105,23 @@ describe('PokerBoard', () =>
         ]);
     });
 
+    it('puts the call in front of the reader at the press, and takes it back if the server refuses', async () =>
+    {
+        let answer: (outcome: 'stale') => void = () => undefined;
+        vi.spyOn(useBoard(), 'play').mockReturnValue(new Promise((resolve) => { answer = resolve; }));
+        const { container } = renderTest(() => PokerBoard({ match: match({ toCall: 20 }) }) as Rendered);
+
+        fire(button(container, 'Call 20')!, 'click');
+
+        expect(container.querySelector('.poker-bet')?.textContent).toContain('20');
+
+        answer('stale');
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(container.querySelector('.poker-bet')).toBeNull();
+    });
+
     it('raises to what the reader chose, and to the pot on the pot button', () =>
     {
         const play = vi.spyOn(useBoard(), 'play').mockResolvedValue(undefined);

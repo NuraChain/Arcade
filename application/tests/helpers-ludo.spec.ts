@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { coachOf, outcomeOf, type LudoHappened, type LudoOutcome } from '../src/game/helpers/ludo.ts';
+import { coachOf, movedTo, outcomeOf, type LudoHappened, type LudoOutcome } from '../src/game/helpers/ludo.ts';
 import type { LudoBoard } from '../src/data/match.ts';
 import { ludoEngine } from '../../server/src/domains/match/engines/ludo.ts';
 import { apply, create } from '../../server/src/domains/match/ludo/engine.ts';
@@ -99,12 +99,19 @@ describe('what a ludo move does', () =>
                     const board = boardOf(state);
                     const piece = board.moves[next() % board.moves.length];
                     const said = outcomeOf(board, seat, piece);
+                    const ahead = movedTo(board, seat, piece);
                     const moved = apply(state, { kind: 'move', seat, piece });
 
                     if (!moved.ok)
                     {
                         throw new Error(moved.reason);
                     }
+
+                    const mineAfter = boardOf(moved.state, seat).seats.find((one) => one.seat === seat)!;
+                    const guessed = ahead?.seats.find((one) => one.seat === seat);
+
+                    expect(guessed?.tokens.find((token) => token.piece === piece)).toEqual(mineAfter.tokens.find((token) => token.piece === piece));
+                    expect(guessed?.home).toBe(mineAfter.home);
 
                     const captures = moved.events.filter((event) => event.e === 'capture');
 

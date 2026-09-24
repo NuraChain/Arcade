@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { cleanup, fire, renderTest } from '@azerothjs/testing';
+import { createSignal } from 'azerothjs';
 
 import BackgammonBoard from '../src/components/games/backgammon-board.component.azeroth';
 import {
@@ -171,6 +172,20 @@ describe('BackgammonBoard', () =>
         fire(undo(), 'click');
         expect(undo().disabled).toBe(true);
         expect(button(container, 'Move a checker from 7 to 6')).toBeUndefined();
+    });
+
+    it('keeps a half-staged turn through a re-read of the same board, and drops it once the board moves', () =>
+    {
+        const [current, setCurrent] = createSignal(match({}));
+        const { container } = renderTest(() => BackgammonBoard({ get match() { return current(); } }) as Rendered);
+        const undo = (): HTMLButtonElement => button(container, 'Undo');
+
+        fire(button(container, 'Move a checker from 13 to 7'), 'click');
+        setCurrent({ ...current() });
+        expect(undo().disabled).toBe(false);
+
+        setCurrent({ ...current(), rev: current().rev + 1 });
+        expect(undo().disabled).toBe(true);
     });
 
     it('offers roll and a double before the dice are thrown, and sends each as its verb', () =>

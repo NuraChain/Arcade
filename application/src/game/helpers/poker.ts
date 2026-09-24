@@ -53,6 +53,34 @@ function playing(view: PokerBoard, mine: number | undefined): boolean
     return mine !== undefined && view.winner === undefined && row !== undefined && !row.out && !row.folded;
 }
 
+export type PokerVerb = 'fold' | 'check' | 'call' | 'raise' | 'allin';
+
+export function predicted(view: PokerBoard, seat: number, verb: PokerVerb, amount = 0): PokerBoard
+{
+    const highest = Math.max(0, ...view.seats.map((row) => row.bet));
+
+    return {
+        ...view,
+        seats: view.seats.map((row) =>
+        {
+            if (row.seat !== seat)
+            {
+                return row;
+            }
+
+            if (verb === 'fold')
+            {
+                return { ...row, folded: true };
+            }
+
+            const to = verb === 'call' ? row.bet + (view.toCall ?? highest - row.bet) : verb === 'raise' ? amount : verb === 'allin' ? row.bet + row.stack : row.bet;
+            const pay = Math.max(0, Math.min(row.stack, to - row.bet));
+
+            return { ...row, bet: row.bet + pay, stack: row.stack - pay, allIn: row.stack === pay && pay > 0 ? true : row.allIn };
+        })
+    };
+}
+
 export function outcomeOf(view: PokerBoard, mine: number | undefined): PokerOutcome | null
 {
     if (!playing(view, mine))

@@ -1,3 +1,5 @@
+import { untrack } from 'azerothjs';
+
 import BoardCanvas from './board-canvas.component.azeroth';
 import CoachLine from './coach-line.component.azeroth';
 import TableResult from './table-result.component.azeroth';
@@ -16,7 +18,7 @@ import type { BoardView, LudoBeat } from '../../game/bridge.ts';
 import { chairsOf, ludoOf } from '../../data/match.ts';
 import { seatsFor } from './seats.ts';
 import { CELL, MARGIN } from '../../game/layout.ts';
-import { coachOf, outcomeOf } from '../../game/helpers/ludo.ts';
+import { coachOf, movedTo, outcomeOf } from '../../game/helpers/ludo.ts';
 
 const STAGE = `--cell-cq: ${ (CELL * 100).toFixed(4) }cqi; --margin-cq: ${ (MARGIN * 100).toFixed(4) }cqi`;
 
@@ -83,7 +85,11 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
         return locale.t('match.turn.theirs', { name: nameOf });
     })();
 
-    derived tokens = seatsFor(ludo, mine);
+    state ahead: { rev: number; board: NonNullable<ReturnType<typeof movedTo>> } | null = null;
+
+    derived drawn = ahead !== null && ahead.rev === game.rev ? ahead.board : ludo;
+
+    derived tokens = seatsFor(drawn, mine);
 
     const CORNER: Record<string, string> = {
         red: 'top-left',
@@ -129,7 +135,7 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
 
     derived view = ((): BoardView => ({
         tokens,
-        die: ludo.die ?? null,
+        die: drawn.die ?? null,
         turn: turnSeat?.colour ?? null,
         yours: !over && mine !== undefined && mine === game.turn,
         winner: ludo.seats.find((seat) => seat.seat === game.winner)?.colour ?? null,
@@ -146,7 +152,27 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
             return;
         }
 
-        await board.move(piece);
+        await moveNow(piece);
+    };
+
+    const moveNow = async (piece: number): Promise<void> =>
+    {
+        const seat = untrack(() => mine);
+        const current = untrack(() => ludo);
+        const rev = untrack(() => game.rev);
+        const next = seat === undefined || untrack(board.busy) ? null : movedTo(current, seat, piece);
+
+        if (next !== null)
+        {
+            ahead = { rev, board: next };
+        }
+
+        const outcome = await board.move(piece);
+
+        if (outcome === 'stale' || outcome === 'failed')
+        {
+            ahead = null;
+        }
     };
 
     const moveSays = (piece: number): string =>
@@ -252,7 +278,7 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
                                                 variant="secondary"
                                                 class="h-auto! min-h-10 w-full py-2 coarse:min-h-11"
                                                 disabled={ board.busy() }
-                                                onClick={ () => void board.move(piece) }
+                                                onClick={ () => void moveNow(piece) }
                                             >
                                                 <span class="min-w-0 text-balance leading-snug">{ moveSays(piece) }</span>
                                             </Button>

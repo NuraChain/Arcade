@@ -1,4 +1,4 @@
-import { FINISHED, RING_STEPS, YARD, isSafeRing, ringIndex, type LudoColour } from '../../../../server/src/domains/match/ludo/board.ts';
+import { FINISHED, RING_STEPS, YARD, cellAt, isSafeRing, ringIndex, type LudoColour } from '../../../../server/src/domains/match/ludo/board.ts';
 import type { LudoBoard, LudoSeat } from '../../data/match.ts';
 import type { Tip } from './tip.ts';
 
@@ -36,6 +36,36 @@ const landing = (seat: LudoSeat, piece: number, die: number): number | null =>
 
     return token.at === YARD ? 0 : token.at + die;
 };
+
+export function movedTo(board: LudoBoard, seat: number, piece: number): LudoBoard | null
+{
+    const mover = board.seats.find((one) => one.seat === seat);
+    const to = mover === undefined || board.die === undefined || !board.moves.includes(piece) ? null : landing(mover, piece, board.die);
+
+    if (mover === undefined || to === null || to > FINISHED)
+    {
+        return null;
+    }
+
+    const cell = cellAt(mover.colour as LudoColour, to);
+    const next: LudoBoard = {
+        ...board,
+        moves: [],
+        seats: board.seats.map((one) => one.seat !== seat ? one : {
+            ...one,
+            home: one.home + (to === FINISHED ? 1 : 0),
+            tokens: one.tokens.map((token) => token.piece !== piece ? token : {
+                piece,
+                at: to,
+                ...(cell === null ? {} : { cell: { col: cell.col, row: cell.row } })
+            })
+        })
+    };
+
+    delete next.die;
+
+    return next;
+}
 
 export function outcomeOf(board: LudoBoard, seat: number, piece: number): LudoOutcome | null
 {
