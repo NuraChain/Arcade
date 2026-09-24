@@ -134,7 +134,7 @@ export default component ToastHost()
 
     <Portal>
         <div
-            class="toast-root"
+            class="fixed inset-x-0 z-(--z-toast) flex flex-col items-center gap-2 px-3 pointer-events-none data-[placement=bottom]:inset-be-[calc(var(--nav-h)+env(safe-area-inset-bottom,0px)+0.75rem)] data-[placement=top]:inset-bs-[calc(env(safe-area-inset-top,0px)+0.75rem)] data-[placement=top]:flex-col-reverse rail:data-[placement=bottom]:inset-be-4 rail:data-[placement=bottom]:items-end rail:data-[placement=bottom]:px-4 sidebar:data-[placement=bottom]:inset-be-4 sidebar:data-[placement=bottom]:items-end sidebar:data-[placement=bottom]:px-4"
             data-placement={ toasts.placement() }
             data-posture={ device.posture() }
             role="region"
@@ -143,7 +143,7 @@ export default component ToastHost()
         >
             <For each={ items } key={ (toast) => toast.id } let={ toast }>
                 <div
-                    class="toast pointer-events-auto"
+                    class="pointer-events-auto relative flex inline-full max-inline-[26rem] items-center gap-2.5 overflow-hidden rounded-panel border border-line bg-lifted py-2 pr-2 pl-3 [box-shadow:var(--shadow-3)] touch-pan-x [translate:0_var(--swipe,0px)] animate-toast-in before:absolute before:inset-y-0 before:start-0 before:inline-[3px] before:bg-(--toast-tone,var(--accent)) data-[kind=success]:[--toast-tone:var(--live)] data-[kind=live]:[--toast-tone:var(--live)] data-[kind=error]:[--toast-tone:var(--danger)] data-[kind=warning]:[--toast-tone:var(--gold)]"
                     data-kind={ toast.kind }
                     role={ toast.kind === 'error' ? 'alert' : 'status' }
                     aria-live={ toast.kind === 'error' ? 'assertive' : 'polite' }
@@ -251,8 +251,8 @@ export default component ToastHost()
 
                     <Show when={ !held(toast) }>
                         { () =>
-                            <span class="toast-progress" aria-hidden="true">
-                                <span class={ BAR[toast.kind] } style={ `inline-size: ${ Math.round((1 - toasts.progress(toast.id, now)) * 100) }%` }></span>
+                            <span class="absolute inset-x-0 inset-be-0 block-[2px] bg-line/60" aria-hidden="true">
+                                <span class={ () => [ 'block block-full [transition:inline-size_140ms_linear]', BAR[toast.kind] ].join(' ') } style={ `inline-size: ${ Math.round((1 - toasts.progress(toast.id, now)) * 100) }%` }></span>
                             </span>
                         }
                     </Show>

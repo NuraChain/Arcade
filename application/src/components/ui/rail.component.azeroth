@@ -58,13 +58,13 @@ export default component Rail(props: { children?: Child; label?: string; bleed?:
     }
 
     <div
-        class={ [ 'rail', props.bleed === true ? 'bleed' : '', props.class ?? '' ].filter(Boolean).join(' ') }
+        class={ [ 'group/rail relative min-inline-0 data-[start=false]:ltr:[--fade-left:3.5rem] data-[end=false]:ltr:[--fade-right:3.5rem] data-[start=false]:rtl:[--fade-right:3.5rem] data-[end=false]:rtl:[--fade-left:3.5rem]', props.bleed === true ? 'bleed' : '', props.class ?? '' ].filter(Boolean).join(' ') }
         data-start={ atStart ? 'true' : 'false' }
         data-end={ atEnd ? 'true' : 'false' }
     >
         <div
             ref={ (element) => scroller = element }
-            class={ [ 'rail-x flex snap-x gap-2.5', props.bleed === true ? 'bleed-pad' : '', props.inner ?? '' ].filter(Boolean).join(' ') }
+            class={ [ 'rail-x flex snap-x gap-2.5 scroll-smooth py-[2px] [mask-image:linear-gradient(to_right,transparent_0,black_var(--fade-left,0px),black_calc(100%-var(--fade-right,0px)),transparent_100%)] fine:group-not-[[data-start=true][data-end=true]]/rail:cursor-grab focus-visible:[outline:2px_solid_var(--accent)] focus-visible:outline-offset-[-2px] focus-visible:rounded-tile motion-reduce:scroll-auto', props.bleed === true ? 'bleed-pad' : '', props.inner ?? '' ].filter(Boolean).join(' ') }
             role={ props.label === undefined ? undefined : 'group' }
             aria-label={ props.label }
             tabindex={ scrolls ? '0' : undefined }
@@ -84,11 +84,11 @@ export default component Rail(props: { children?: Child; label?: string; bleed?:
         </div>
         <Show when={ scrolls && !device.coarse() }>
             { () =>
-                <div class="rail-arrows" aria-hidden="true">
-                    <button type="button" class="rail-arrow" tabindex="-1" disabled={ atStart } onClick={ () => step(-1) }>
+                <div class="absolute inset-y-0 inset-x-2 flex items-center justify-between pointer-events-none" aria-hidden="true">
+                    <button type="button" class="inline-flex items-center justify-center inline-8 block-8 rounded-[999px] border border-line bg-lifted text-text [box-shadow:var(--shadow-2)] cursor-pointer pointer-events-auto opacity-0 [transition:opacity_160ms_var(--ease-ui),border-color_160ms_var(--ease-ui)] disabled:invisible group-[:hover]/rail:opacity-100 group-focus-within/rail:opacity-100 [&:hover]:border-line-strong" tabindex="-1" disabled={ atStart } onClick={ () => step(-1) }>
                         <Icon name="chevron-right" size={ 16 } class="icon-flip rotate-180" />
                     </button>
-                    <button type="button" class="rail-arrow" tabindex="-1" disabled={ atEnd } onClick={ () => step(1) }>
+                    <button type="button" class="inline-flex items-center justify-center inline-8 block-8 rounded-[999px] border border-line bg-lifted text-text [box-shadow:var(--shadow-2)] cursor-pointer pointer-events-auto opacity-0 [transition:opacity_160ms_var(--ease-ui),border-color_160ms_var(--ease-ui)] disabled:invisible group-[:hover]/rail:opacity-100 group-focus-within/rail:opacity-100 [&:hover]:border-line-strong" tabindex="-1" disabled={ atEnd } onClick={ () => step(1) }>
                         <Icon name="chevron-right" size={ 16 } class="icon-flip" />
                     </button>
                 </div>

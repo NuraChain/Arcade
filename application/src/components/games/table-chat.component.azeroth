@@ -33,6 +33,7 @@ import Icon from '../../icons/icon.component.azeroth';
 import IconButton from '../ui/icon-button.component.azeroth';
 import Slider from '../ui/slider.component.azeroth';
 import Segmented from '../ui/segmented.component.azeroth';
+import { CHAT_WELL } from '../ui/variants.ts';
 
 const QUICK: readonly MessageKey[] = ['play.quick.luck', 'play.quick.nice', 'play.quick.gg', 'play.quick.go'];
 
@@ -354,7 +355,7 @@ export default component TableChat(props: {
         <Show when={ tab === 'chat' }>
             { () =>
                 <div class="flex min-h-0 flex-1 flex-col">
-                    <ul ref={ (element) => watch(element) } class="chat-well @container/thread flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden px-3 py-3 [&>li:first-child]:mt-auto" aria-live="polite">
+                    <ul ref={ (element) => watch(element) } class={ [ CHAT_WELL, '@container/thread flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden px-3 py-3 [&>li:first-child]:mt-auto' ].join(' ') } aria-live="polite">
                         <Show when={ messages.length === 0 && !chat.threadLoading() }>
                             { () =>
                                 <li class="m-auto flex max-w-[16rem] flex-col items-center gap-2 px-2 py-8 text-center">

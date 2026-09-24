@@ -18,10 +18,10 @@ export default component EmptyState(props: {
     <div class={ [ 'flex flex-col items-center px-6 py-10 text-center', props.class ?? '' ].filter(Boolean).join(' ') }>
         <Show when={ props.icon !== undefined }>
             { () =>
-                <span class="empty-art" data-tone={ props.tone ?? 'accent' } aria-hidden="true">
-                    <span class="empty-art-card"></span>
-                    <span class="empty-art-card is-back"></span>
-                    <span class="empty-art-disc">
+                <span class="empty-art relative block inline-34 block-27 mbe-5 [--tone:var(--accent)] data-[tone=live]:[--tone:var(--live)] before:absolute before:[inset:-12%_-18%] before:[background:radial-gradient(closest-side,color-mix(in_oklab,var(--tone)_24%,transparent),transparent_72%)]" data-tone={ props.tone ?? 'accent' } aria-hidden="true">
+                    <span class="empty-art-card absolute left-[0.9rem] top-[0.55rem] inline-10 block-[3.4rem] rotate-[-14deg] rounded-[0.45rem] border border-line-strong [background:linear-gradient(160deg,var(--lifted),var(--field))] [box-shadow:0_8px_18px_-10px_rgb(0_0_0/0.8)]"></span>
+                    <span class="empty-art-card absolute left-auto right-[0.9rem] top-[1.1rem] inline-10 block-[3.4rem] rotate-[13deg] rounded-[0.45rem] border border-line-strong [background:linear-gradient(160deg,var(--lifted),var(--field))] [box-shadow:0_8px_18px_-10px_rgb(0_0_0/0.8)]"></span>
+                    <span class="absolute z-1 left-1/2 top-1/2 flex items-center justify-center inline-15 block-15 [translate:-50%_-50%] rounded-[999px] border border-(--tone)/45 text-(--tone) [background:color-mix(in_oklab,var(--tone)_16%,var(--field))] [box-shadow:0_0_26px_-6px_var(--tone)]">
                         <Icon name={ props.icon! } size={ 26 } />
                     </span>
                 </span>

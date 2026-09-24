@@ -201,13 +201,13 @@ export default component Tooltip(props: {
         <Show when={ shown }>
             { () =>
                 <Portal>
-                    <div class="anchor-root">
+                    <div class="anchor-root fixed inset-0 z-(--z-anchor) pointer-events-none">
                         <div
                             ref={ (element) => bubble = element }
                             id={ tipId }
                             role="tooltip"
                             dir="auto"
-                            class="tooltip"
+                            class="tooltip absolute left-(--x) top-(--y) max-inline-72 rounded-control border border-line bg-lifted px-2 py-1.25 text-[12px] leading-[1.35] font-semibold text-text [box-shadow:var(--shadow-2)] pointer-events-none opacity-0 data-[placed=true]:[animation:tooltip-in_120ms_var(--ease-ui)_both] motion-reduce:data-[placed=true]:[animation-duration:0.01ms]"
                             data-side={ at.side }
                             data-placed={ placed ? 'true' : 'false' }
                             style={ `--x: ${ at.x }px; --y: ${ at.y }px; --arrow: ${ at.arrow }px` }

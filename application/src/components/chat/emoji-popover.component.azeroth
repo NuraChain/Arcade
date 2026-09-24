@@ -122,7 +122,7 @@ export default component EmojiPopover()
     <Show when={ current !== null }>
         { () =>
             <Portal>
-                <div class="anchor-root">
+                <div class="anchor-root fixed inset-0 z-(--z-anchor) pointer-events-none">
                     <div
                         ref={ (element) => panel = element }
                         class={ () => [

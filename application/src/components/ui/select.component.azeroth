@@ -231,13 +231,13 @@ export default component Select(props: {
         <Show when={ open }>
             { () =>
                 <Portal>
-                    <div class="anchor-root">
+                    <div class="anchor-root fixed inset-0 z-(--z-anchor) pointer-events-none">
                         <ul
                             ref={ (element) => list = element }
                             id={ `${ id }-list` }
                             role="listbox"
                             tabindex="-1"
-                            class="select-list"
+                            class="absolute left-(--x) top-(--y) inline-(--w) max-block-[min(18rem,50dvh)] overflow-y-auto overscroll-contain rounded-panel border border-line-strong bg-lifted p-1 [box-shadow:var(--shadow-2)] pointer-events-auto opacity-0 [outline:none] data-[placed=true]:opacity-100 data-[placed=true]:[animation:tooltip-in_120ms_var(--ease-ui)_both] motion-reduce:data-[placed=true]:animate-none"
                             data-placed={ at.placed ? 'true' : 'false' }
                             style={ `--x: ${ at.x }px; --y: ${ at.y }px; --w: ${ at.width }px` }
                             aria-labelledby={ `${ id }-label` }
@@ -248,7 +248,7 @@ export default component Select(props: {
                                 <li
                                     id={ `${ id }-option-${ one.index }` }
                                     role="option"
-                                    class="select-option"
+                                    class="flex min-block-10 cursor-pointer items-center gap-2 rounded-control px-3 text-[length:var(--text-ui-md)] text-text aria-selected:font-semibold data-[active=true]:bg-raised coarse:min-block-11"
                                     data-index={ one.index }
                                     data-active={ one.index === active ? 'true' : undefined }
                                     aria-selected={ one.value === props.value }

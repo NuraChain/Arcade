@@ -4,6 +4,7 @@ import Page from '../../components/app/page.component.azeroth';
 import PageHeader from '../../components/app/page-header.component.azeroth';
 import ChatList from '../../components/chat/chat-list.component.azeroth';
 import Icon from '../../icons/icon.component.azeroth';
+import { CHAT_WELL } from '../../components/ui/variants.ts';
 import { useChat } from '../../stores/chat.store.ts';
 import { useDevice } from '../../stores/device.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
@@ -43,7 +44,7 @@ export default component ChatsPage()
                         <h1 class="shrink-0 px-4 pb-2.5 pt-4 text-ui-xl font-bold text-text">{ locale.t('app.nav.chats') }</h1>
                         <ChatList pane class="min-h-0 flex-1" />
                     </aside>
-                    <div class="chat-well flex min-w-0 flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
+                    <div class={ [ CHAT_WELL, 'flex min-w-0 flex-1 flex-col items-center justify-center gap-3 px-6 text-center' ].join(' ') }>
                         <span class="flex h-16 w-16 items-center justify-center rounded-full border border-line bg-field text-accent shadow-1">
                             <Icon name="chats" size={ 28 } />
                         </span>

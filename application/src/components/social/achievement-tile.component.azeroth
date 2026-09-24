@@ -3,6 +3,7 @@ import type { IconName } from '../../icons/registry.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import type { AchievementTier } from '../../api.ts';
 import type { LocalizedText } from '../../lib/text.ts';
+import { MEDAL } from '../ui/variants.ts';
 
 export interface Medal
 {
@@ -20,7 +21,7 @@ export default component AchievementTile(props: { achievement: Medal; class?: st
     derived earned = props.achievement.earnedAt !== undefined;
 
     <div class={ [ 'flex items-center gap-3 p-3', props.class ?? '' ].join(' ') }>
-        <span class="medal" data-tier={ earned ? props.achievement.tier : 'locked' } aria-hidden="true">
+        <span class={ MEDAL } data-tier={ earned ? props.achievement.tier : 'locked' } aria-hidden="true">
             <Icon name={ props.achievement.icon as IconName } size={ 20 } />
         </span>
 

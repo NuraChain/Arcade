@@ -112,6 +112,7 @@
 }
 
 @custom-variant coarse (@media (pointer: coarse));
+@custom-variant fine (@media (pointer: fine));
 @custom-variant phone (&:where([data-posture='phone'], [data-posture='phone'] *));
 @custom-variant rail (&:where([data-posture='rail'], [data-posture='rail'] *));
 @custom-variant sidebar (&:where([data-posture='sidebar'], [data-posture='sidebar'] *));

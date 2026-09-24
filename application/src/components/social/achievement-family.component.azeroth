@@ -2,6 +2,7 @@ import Icon from '../../icons/icon.component.azeroth';
 import type { IconName } from '../../icons/registry.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import type { AchievementFamily as Family } from '../../api.ts';
+import { MEDAL } from '../ui/variants.ts';
 
 export default component AchievementFamily(props: { family: Family; onOpen: (family: Family) => void })
 {
@@ -16,7 +17,7 @@ export default component AchievementFamily(props: { family: Family; onOpen: (fam
         class="flex h-full w-full min-w-0 items-center gap-3 rounded-tile border border-line bg-field p-3 text-start transition-colors hover:bg-raised"
         onClick={ () => props.onOpen(props.family) }
     >
-        <span class="medal" data-tier={ props.family.tier ?? 'locked' } aria-hidden="true">
+        <span class={ MEDAL } data-tier={ props.family.tier ?? 'locked' } aria-hidden="true">
             <Icon name={ props.family.icon as IconName } size={ 20 } />
         </span>
 

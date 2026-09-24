@@ -33,7 +33,7 @@ export default component LeaderboardPage()
             >
                 { () =>
                     <div class="flex flex-col gap-5">
-                        <Rail inner="pb-1">
+                        <Rail>
                         <ul class="flex shrink-0 gap-2.5" role="group" aria-label={ locale.t('leaderboard.pick') }>
                             <For each={ games } key={ (game) => game.id } let={ game }>
                                 <li class="shrink-0">

@@ -167,3 +167,22 @@ export const PANEL_GLOW: Record<PanelTone, string> = {
     danger: '',
     dashed: ''
 };
+
+export const MEDAL = [
+    'relative flex flex-none items-center justify-center inline-11 block-11 rounded-[999px]',
+    '[--metal-light:#F6C7A1] [--metal:#D08A52] [--metal-dark:#8A4F24]',
+    'text-[color-mix(in_oklab,var(--metal-dark)_80%,black)]',
+    '[background:radial-gradient(circle_at_34%_28%,var(--metal-light),var(--metal)_55%,var(--metal-dark))]',
+    '[box-shadow:inset_0_0_0_2px_rgb(255_255_255/0.35),inset_0_-3px_6px_rgb(0_0_0/0.25),0_0_0_2px_var(--metal-dark),0_6px_14px_-6px_rgb(0_0_0/0.7)]',
+    'data-[tier=silver]:[--metal-light:#F8FAFC] data-[tier=silver]:[--metal:#CBD5E1] data-[tier=silver]:[--metal-dark:#6B7A90]',
+    'data-[tier=gold]:[--metal-light:#FFE8A3] data-[tier=gold]:[--metal:#F5B72E] data-[tier=gold]:[--metal-dark:#A86B12]',
+    'data-[tier=gold]:[box-shadow:inset_0_0_0_2px_rgb(255_255_255/0.4),inset_0_-3px_6px_rgb(0_0_0/0.22),0_0_0_2px_var(--metal-dark),0_0_16px_-2px_rgb(245_183_46/0.55)]',
+    'data-[tier=platinum]:[--metal-light:#F1F5FF] data-[tier=platinum]:[--metal:#A9B8E0] data-[tier=platinum]:[--metal-dark:#4E5C8C]',
+    'data-[tier=platinum]:[box-shadow:inset_0_0_0_2px_rgb(255_255_255/0.5),inset_0_-3px_6px_rgb(0_0_0/0.2),0_0_0_2px_var(--metal-dark),0_0_16px_-2px_rgb(169_184_224/0.55)]',
+    'data-[tier=diamond]:[--metal-light:#F0FDFF] data-[tier=diamond]:[--metal:#67E8F9] data-[tier=diamond]:[--metal-dark:#0E7490]',
+    'data-[tier=diamond]:[background:conic-gradient(from_45deg_at_50%_50%,rgb(255_255_255/0.35),transparent_25%,rgb(255_255_255/0.25)_50%,transparent_75%,rgb(255_255_255/0.35)),radial-gradient(circle_at_34%_28%,var(--metal-light),var(--metal)_55%,var(--metal-dark))]',
+    'data-[tier=diamond]:[box-shadow:inset_0_0_0_2px_rgb(255_255_255/0.55),inset_0_-3px_6px_rgb(0_0_0/0.2),0_0_0_2px_var(--metal-dark),0_0_20px_-2px_rgb(103_232_249/0.65)]',
+    'data-[tier=locked]:text-faint data-[tier=locked]:[background:var(--sunk)] data-[tier=locked]:[box-shadow:inset_0_0_0_1px_var(--line-strong)]'
+].join(' ');
+
+export const CHAT_WELL = '[background:radial-gradient(circle_at_1px_1px,color-mix(in_oklab,var(--line)_70%,transparent)_1px,transparent_1.5px)_0_0/22px_22px,linear-gradient(to_bottom,var(--sunk),color-mix(in_oklab,var(--sunk)_70%,var(--void)))]';
