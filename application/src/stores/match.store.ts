@@ -381,7 +381,7 @@ export const useBoard = createStore((): BoardApi =>
                 cancel = runtime().clock.after(POLL_MS, () =>
                 {
                     const cut = untrack(live.status);
-                    const shown = typeof document === 'undefined' || document.visibilityState === 'visible';
+                    const shown = typeof document === 'undefined' || (document.visibilityState === 'visible' && navigator.onLine !== false);
 
                     if (untrack(openId) !== '' && shown && (cut === 'down' || cut === 'connecting'))
                     {

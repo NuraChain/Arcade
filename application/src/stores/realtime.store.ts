@@ -451,6 +451,10 @@ export const useRealtime = createStore((): RealtimeApi =>
         {
             return;
         }
+        if (typeof navigator !== 'undefined' && navigator.onLine === false)
+        {
+            return;
+        }
 
         announce('connecting');
 

@@ -171,7 +171,15 @@ export const useCatalogue = createStore((): CatalogueApi =>
         {
             if (stop === null)
             {
-                const cancel = runtime().clock.every(LIVE_REFRESH_MS, () => live.refetch());
+                const cancel = runtime().clock.every(LIVE_REFRESH_MS, () =>
+                {
+                    const away = typeof document !== 'undefined' && (document.visibilityState === 'hidden' || navigator.onLine === false);
+
+                    if (!away)
+                    {
+                        void live.refetch();
+                    }
+                });
                 stop = () =>
                 {
                     cancel();
