@@ -2,6 +2,7 @@ import { useHead, useNavigate, useQuery, type MountNode } from 'azerothjs';
 
 import { checkHandle, handleFromName } from '../../../server/src/domains/identity/handle.ts';
 
+import '../icons/all.ts';
 import WalletPanel from '../components/app/wallet-panel.component.azeroth';
 import SiteFooter from '../components/layout/site-footer.component.azeroth';
 import SiteHeader from '../components/layout/site-header.component.azeroth';

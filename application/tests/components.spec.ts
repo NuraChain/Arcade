@@ -8,6 +8,8 @@ import Panel from '../src/components/ui/panel.component.azeroth';
 import GameRow from '../src/components/ui/game-row.component.azeroth';
 import SectionHeading from '../src/components/ui/section-heading.component.azeroth';
 import { GAMES } from '../src/data/games.ts';
+import { ALL_ICONS } from '../src/icons/all.ts';
+import { ICONS } from '../src/icons/registry.ts';
 import { useFocus } from '../src/stores/focus.store.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
 
@@ -282,5 +284,16 @@ describe('Panel', () =>
         const panel = container.querySelector('div')!;
         expect(panel.className).toContain('border-danger/40');
         expect(panel.className).not.toContain('bg-field');
+    });
+});
+
+describe('the icon registry', () =>
+{
+    it('draws every icon the product names once the full set has loaded', () =>
+    {
+        for (const name of Object.keys(ALL_ICONS) as (keyof typeof ALL_ICONS)[])
+        {
+            expect(ICONS[name]?.length ?? 0, name).toBeGreaterThan(0);
+        }
     });
 });

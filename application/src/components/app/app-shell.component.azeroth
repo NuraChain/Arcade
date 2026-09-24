@@ -1,5 +1,6 @@
 import { Outlet, untrack, useHead, useMatch, useRoute, type MountNode } from 'azerothjs';
 
+import '../../icons/all.ts';
 import '../../locales/app-catalogue.ts';
 import { setHaptics } from '../../lib/haptics.ts';
 import { routeMeta } from '../../lib/route-meta.ts';

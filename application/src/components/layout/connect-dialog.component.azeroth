@@ -1,6 +1,7 @@
 import { Portal } from 'azerothjs';
 
 import { NURA_CHAIN } from '../../data/chain.ts';
+import '../../icons/all.ts';
 import Icon from '../../icons/icon.component.azeroth';
 import type { IconName } from '../../icons/registry.ts';
 import { focusQuietly } from '../../lib/focus.ts';
