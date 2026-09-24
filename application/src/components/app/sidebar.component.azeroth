@@ -9,7 +9,7 @@ import BrandMark from '../layout/brand-mark.component.azeroth';
 import Avatar from '../ui/avatar.component.azeroth';
 import Badge from '../ui/badge.component.azeroth';
 import { useNavCounts } from './nav-counts.ts';
-import { RAIL } from './nav-items.ts';
+import { ACTIVE_ROW, RAIL } from './nav-items.ts';
 
 export default component Sidebar()
 {
@@ -33,7 +33,7 @@ export default component Sidebar()
         <ul class="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-3 pt-3">
             <For each={ RAIL } key={ (item) => item.to } let={ item }>
                 <li>
-                    <Link to={ item.to } end={ item.end } activeClass="is-active" prefetch="hover" class="nav-item nav-row flex h-11 items-center gap-3 rounded-tile px-3 text-ui-md font-semibold text-muted transition-colors duration-150 hover:bg-raised hover:text-text">
+                    <Link to={ item.to } end={ item.end } activeClass="is-active" prefetch="hover" class={ `nav-row ${ ACTIVE_ROW } flex h-11 items-center gap-3 rounded-tile px-3 text-ui-md font-semibold text-muted transition-colors duration-150 hover:bg-raised hover:text-text` }>
                         <Icon name={ item.icon } size={ 20 } />
                         <span class="min-w-0 flex-1 truncate">{ locale.t(item.labelKey) }</span>
                         <Show when={ countOf(item) > 0 }>

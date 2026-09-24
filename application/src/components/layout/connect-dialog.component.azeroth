@@ -21,6 +21,7 @@ import Button from '../ui/button.component.azeroth';
 import IconButton from '../ui/icon-button.component.azeroth';
 import Spinner from '../ui/spinner.component.azeroth';
 import Panel from '../ui/panel.component.azeroth';
+import { OVERLAY_HIDDEN, OVERLAY_PANEL, OVERLAY_SCRIM } from '../app/overlay-classes.ts';
 
 interface Choice
 {
@@ -187,9 +188,9 @@ export default component ConnectDialog(props: { close: () => void; navigate: (to
     };
 
     <Portal>
-        <div class="overlay-root">
-            <div class="overlay-layer" data-kind="modal">
-                <div class="overlay-scrim" onClick={ () => dismiss() }></div>
+        <div class="fixed inset-0 z-(--z-overlay) pointer-events-none">
+            <div class="absolute inset-0 pointer-events-auto" data-kind="modal">
+                <div class={ () => [ OVERLAY_SCRIM, entering || leaving ? 'opacity-0' : '' ].filter(Boolean).join(' ') } onClick={ () => dismiss() }></div>
 
                 <div
                     ref={ (element) => panel = element }
@@ -197,7 +198,7 @@ export default component ConnectDialog(props: { close: () => void; navigate: (to
                     aria-modal="true"
                     aria-label={ locale.t('wallet.choose') }
                     tabindex="-1"
-                    class={ [ 'modal', entering ? 'modal-enter-from' : '', leaving ? 'modal-leave-to' : '' ].filter(Boolean).join(' ') }
+                    class={ () => [ OVERLAY_PANEL.modal, entering || leaving ? OVERLAY_HIDDEN.modal : '' ].filter(Boolean).join(' ') }
                     onTransitionEnd={ (event) =>
                     {
                         if (event.target !== panel || !leaving || gone)
@@ -216,7 +217,7 @@ export default component ConnectDialog(props: { close: () => void; navigate: (to
                         <IconButton icon="close" label={ locale.t('wallet.chooseClose') } onClick={ () => dismiss() } />
                     </header>
 
-                    <div class="sheet-body flex flex-col gap-3 p-5">
+                    <div class="overflow-y-auto overscroll-contain [touch-action:pan-y] min-block-0 flex flex-col gap-3 p-5">
                         <ul class="flex flex-col gap-2.5">
                             <For each={ CHOICES } key={ (choice) => choice.rdns } let={ choice }>
                                 <li>

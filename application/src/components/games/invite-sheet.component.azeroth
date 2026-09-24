@@ -55,7 +55,7 @@ export default component InviteSheet(props: OverlayProps & { tableId: string })
             when={ candidates.length > 0 }
             fallback={ <EmptyState icon="people" title={ locale.t('create.noFriends') } class="pb-8" /> }
         >
-            <ul class="sheet-body flex flex-col gap-0.5 px-3 pb-4">
+            <ul class="overflow-y-auto overscroll-contain [touch-action:pan-y] min-block-0 flex flex-col gap-0.5 px-3 pb-4">
                 <For each={ candidates } key={ (person) => person.id } let={ person }>
                     <li>
                         <button

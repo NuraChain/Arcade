@@ -45,7 +45,7 @@ export default component BottomNav()
         <ul class="mx-auto grid h-[var(--nav-h)] w-full max-w-[40rem] grid-cols-5">
             <For each={ NAV } key={ (item) => item.tab } let={ item }>
                 <li class="flex">
-                    <Link to={ item.to } end={ item.end } activeClass="is-active" prefetch="hover" onClick={ press(item) } class="nav-item flex flex-1 flex-col items-center justify-center gap-1 rounded-tile text-ui-2xs font-semibold text-muted transition-colors duration-150">
+                    <Link to={ item.to } end={ item.end } activeClass="is-active" prefetch="hover" onClick={ press(item) } class="[&.is-active]:text-accent flex flex-1 flex-col items-center justify-center gap-1 rounded-tile text-ui-2xs font-semibold text-muted transition-colors duration-150">
                         <span class="nav-pill relative flex h-6 w-10 items-center justify-center">
                             <Icon name={ item.icon } size={ 22 } />
                             <Show when={ countOf(item) > 0 }>

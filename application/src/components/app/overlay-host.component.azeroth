@@ -46,7 +46,7 @@ export default component OverlayHost()
     }
 
     <Portal>
-        <div class="overlay-root" data-overlay-root>
+        <div class="fixed inset-0 z-(--z-overlay) pointer-events-none" data-overlay-root>
             <For each={ overlay.items() } key={ (entry) => entry.id } let={ entry }>
                 <div class="contents">
                     <OverlayLayer entry={ entry } />

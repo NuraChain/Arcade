@@ -150,8 +150,8 @@ export default component Page(props: { children?: Child; padded?: boolean; width
     <div
         ref={ (element) => root = element }
         class={ () => [
-            'page bg-void',
-            slide > 0 ? 'is-sliding' : '',
+            'page absolute inset-0 overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch] [--page-pad:1rem] sm:[--page-pad:1.5rem] lg:[--page-pad:2rem] bg-void',
+            slide > 0 ? '[translate:calc(var(--slide,0px)*var(--lead,1))_0] [box-shadow:var(--shadow-3)] [transition:none] rtl:[--lead:-1]' : '',
             props.padded === false ? '' : 'page-pad pb-8 pt-[var(--page-pad)]',
             props.class ?? ''
         ].filter(Boolean).join(' ') }
@@ -162,12 +162,12 @@ export default component Page(props: { children?: Child; padded?: boolean; width
     >
         <Show when={ props.onRefresh !== undefined && device.coarse() }>
             { () =>
-                <div class="pull-indicator" style={ `--pull:${ indicator }` } aria-hidden={ !busy }>
+                <div class="sticky inset-bs-0 z-2 flex justify-center block-0 pointer-events-none [translate:0_calc(var(--pull,0)*1px-2.75rem)] opacity-[calc(var(--pull,0)/72)] [transition:translate_180ms_var(--ease-reveal),opacity_180ms_var(--ease-ui)]" style={ `--pull:${ indicator }` } aria-hidden={ !busy }>
                     <span class={ () => [
                         'flex h-9 w-9 items-center justify-center rounded-full border border-line bg-lifted text-muted shadow-2 transition-colors duration-150',
                         armed || busy ? 'border-accent/60 text-accent' : ''
                     ].filter(Boolean).join(' ') }>
-                        <Show when={ busy } fallback={ <Icon name="refresh" size={ 17 } class="pull-arrow" /> }>
+                        <Show when={ busy } fallback={ <Icon name="refresh" size={ 17 } class="rotate-[calc(var(--pull,0)*2.6deg)] motion-reduce:rotate-none" /> }>
                             { () => <Spinner size={ 17 } label={ locale.t('app.refreshing') } /> }
                         </Show>
                     </span>

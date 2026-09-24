@@ -53,7 +53,7 @@ export default component SiteHeader(props: { cta?: boolean })
         }
     };
 
-    <header class="site-header fixed inset-x-0 top-0 z-30 safe-t">
+    <header class="site-header fixed inset-x-0 top-0 z-30 safe-t bg-[color-mix(in_srgb,var(--void)_85%,transparent)] [border-block-end:1px_solid_var(--line)] [-webkit-backdrop-filter:blur(12px)] [backdrop-filter:blur(12px)] supports-[animation-timeline:scroll()]:[animation:header-settle_linear_both] supports-[animation-timeline:scroll()]:[animation-timeline:scroll(root)] supports-[animation-timeline:scroll()]:[animation-range:0_120px]">
         <div class="page-pad flex h-15 items-center gap-3">
             <a href="/" class="flex min-h-11 items-center gap-2.5 rounded-control" aria-label={ locale.t('brand.name') }>
                 <BrandLogo size="md" />

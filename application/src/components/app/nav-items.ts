@@ -34,3 +34,5 @@ export const RAIL: NavItem[] = [
     { tab: 'discover', to: '/app/discover', icon: 'discover', labelKey: 'app.nav.discover', end: false },
     { tab: 'me', to: '/app/me/settings', icon: 'settings', labelKey: 'app.nav.settings', end: false }
 ];
+
+export const ACTIVE_ROW = '[&.is-active]:[background:linear-gradient(90deg,var(--accent-fill),color-mix(in_oklab,var(--accent-fill)_72%,var(--field)))] [&.is-active]:text-accent-ink [&.is-active]:[box-shadow:0_8px_24px_-12px_color-mix(in_oklab,var(--accent)_70%,transparent),inset_0_1px_0_rgb(255_255_255/0.12)]';

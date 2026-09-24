@@ -9,7 +9,7 @@ import Avatar from '../ui/avatar.component.azeroth';
 import Badge from '../ui/badge.component.azeroth';
 import Tooltip from '../ui/tooltip.component.azeroth';
 import { useNavCounts } from './nav-counts.ts';
-import { RAIL } from './nav-items.ts';
+import { ACTIVE_ROW, RAIL } from './nav-items.ts';
 
 export default component NavRail()
 {
@@ -30,7 +30,7 @@ export default component NavRail()
             <For each={ RAIL } key={ (item) => item.to } let={ item }>
                 <li class="shrink-0">
                     <Tooltip label={ locale.t(item.labelKey) } side="end">
-                        <Link to={ item.to } end={ item.end } activeClass="is-active" prefetch="hover" class="nav-item nav-row relative flex h-11 w-11 items-center justify-center rounded-tile text-muted transition-colors duration-150 hover:bg-raised hover:text-text" aria-label={ locale.t(item.labelKey) }>
+                        <Link to={ item.to } end={ item.end } activeClass="is-active" prefetch="hover" class={ `nav-row ${ ACTIVE_ROW } relative flex h-11 w-11 items-center justify-center rounded-tile text-muted transition-colors duration-150 hover:bg-raised hover:text-text` } aria-label={ locale.t(item.labelKey) }>
                             <Icon name={ item.icon } size={ 20 } />
                             <Show when={ countOf(item) > 0 }>
                                 { () => <Badge count={ countOf(item) } size="sm" tone={ toneOf(item) } anchor label={ labelOf(item) } /> }

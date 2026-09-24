@@ -9,6 +9,7 @@ import { createDrag } from '../../lib/swipe.ts';
 import { useDevice } from '../../stores/device.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useOverlay, type OverlayEntry } from '../../stores/overlay.store.ts';
+import { OVERLAY_HIDDEN, OVERLAY_PANEL, OVERLAY_RESTING, OVERLAY_SCRIM } from './overlay-classes.ts';
 
 const HALF = 0.46;
 
@@ -29,9 +30,7 @@ export default component OverlayLayer(props: { entry: OverlayEntry })
     let returnTo: HTMLElement | null = null;
     let points: number[] = [];
 
-    derived phaseClass = props.entry.phase === 'opening'
-        ? `${ kind }-enter-from`
-        : (props.entry.phase === 'closing' ? `${ kind }-leave-to` : '');
+    derived hidden = props.entry.phase === 'opening' || props.entry.phase === 'closing';
 
     const stops = (height: number): number[] =>
         (height >= device.height() * 0.6 ? [0, Math.round(height * HALF), height] : [0, height]);
@@ -94,9 +93,9 @@ export default component OverlayLayer(props: { entry: OverlayEntry })
         };
     }
 
-    <div class="overlay-layer" data-overlay-layer={ props.entry.id } data-kind={ kind }>
+    <div class="absolute inset-0 pointer-events-auto" data-overlay-layer={ props.entry.id } data-kind={ kind }>
         <div
-            class="overlay-scrim"
+            class={ () => [ OVERLAY_SCRIM, hidden && kind !== 'popover' ? 'opacity-0' : '' ].filter(Boolean).join(' ') }
             onClick={ () => (props.entry.dismissible ? props.entry.props.close() : undefined) }
         ></div>
         <div
@@ -105,7 +104,7 @@ export default component OverlayLayer(props: { entry: OverlayEntry })
             aria-modal="true"
             aria-label={ props.entry.label }
             tabindex="-1"
-            class={ [ kind, phaseClass ].filter(Boolean).join(' ') }
+            class={ () => [ OVERLAY_PANEL[kind], hidden ? OVERLAY_HIDDEN[kind] : OVERLAY_RESTING[kind] ].filter(Boolean).join(' ') }
             style={ detent > 0 ? `--detent:${ detent }px` : undefined }
             onTransitionEnd={ (event) =>
             {
@@ -119,7 +118,7 @@ export default component OverlayLayer(props: { entry: OverlayEntry })
                 { () =>
                     <button
                         type="button"
-                        class="sheet-handle flex shrink-0 cursor-grab justify-center pt-2.5 pb-1"
+                        class="touch-none flex shrink-0 cursor-grab justify-center pt-2.5 pb-1"
                         aria-label={ locale.t('overlay.handle') }
                         onClick={ () => (props.entry.dismissible ? props.entry.props.close() : undefined) }
                         onPointerDown={ (event) =>
@@ -159,7 +158,7 @@ export default component OverlayLayer(props: { entry: OverlayEntry })
                     </button>
                 }
             </Show>
-            <div ref={ (element) => body = element } class="sheet-body">
+            <div ref={ (element) => body = element } class="overflow-y-auto overscroll-contain [touch-action:pan-y] min-block-0">
                 <Dynamic component={ props.entry.component } props={ props.entry.props } />
             </div>
         </div>

@@ -29,7 +29,7 @@ export default component PublicShell(props: { children?: MountNode })
         }
     }
 
-    <div class="site flex min-h-dvh flex-col bg-void text-text">
+    <div class="[--page-pad:max(1rem,env(safe-area-inset-left),env(safe-area-inset-right))] sm:[--page-pad:max(1.5rem,env(safe-area-inset-left),env(safe-area-inset-right))] lg:[--page-pad:max(2rem,env(safe-area-inset-left),env(safe-area-inset-right))] flex min-h-dvh flex-col bg-void text-text">
 
         <a
             href="#main"
