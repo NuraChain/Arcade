@@ -5,9 +5,7 @@ import { cleanup, fire, renderTest } from '@azerothjs/testing';
 import BrandMark from '../src/components/layout/brand-mark.component.azeroth';
 import Button from '../src/components/ui/button.component.azeroth';
 import Panel from '../src/components/ui/panel.component.azeroth';
-import GameRow from '../src/components/ui/game-row.component.azeroth';
 import SectionHeading from '../src/components/ui/section-heading.component.azeroth';
-import { GAMES } from '../src/data/games.ts';
 import { ALL_ICONS, type IconName } from '../src/icons/all.ts';
 import Icon from '../src/icons/icon.component.azeroth';
 import { ICONS } from '../src/icons/registry.ts';
@@ -154,53 +152,6 @@ describe('BrandMark', () =>
     {
         const { container } = renderTest(() => BrandMark({}) as Rendered);
         expect(container.textContent).not.toMatch(/\s$/);
-    });
-});
-
-describe('GameRow', () =>
-{
-    const hokm = GAMES.find((game) => game.id === 'hokm')!;
-    const backgammon = GAMES.find((game) => game.id === 'backgammon')!;
-    const ludo = GAMES.find((game) => game.id === 'ludo')!;
-
-    it('states a single seat count without a range', () =>
-    {
-        const { container } = renderTest(() => GameRow({ game: backgammon }) as Rendered);
-        expect(container.querySelector('.tally')!.textContent).toBe('2');
-    });
-
-    it('states a range with an en dash, and isolates it so it cannot reverse', () =>
-    {
-        const { container } = renderTest(() => GameRow({ game: ludo }) as Rendered);
-        const tally = container.querySelector('.tally')!;
-        expect(tally.textContent).toBe('2–4');
-        expect(tally.className).toContain('tally');
-    });
-
-    it('prints the range in the reader’s digits', () =>
-    {
-        useLocale().setLocale('fa');
-        const { container } = renderTest(() => GameRow({ game: ludo }) as Rendered);
-        expect(container.querySelector('.tally')!.textContent).toBe('۲–۴');
-    });
-
-    it('is a real control, so the keyboard reaches every table', () =>
-    {
-        const { container } = renderTest(() => GameRow({ game: hokm }) as Rendered);
-        expect(container.querySelector('button')).not.toBeNull();
-    });
-
-    it('lights the matching table on focus and lets go on blur', () =>
-    {
-        const focus = useFocus();
-        const { container } = renderTest(() => GameRow({ game: hokm }) as Rendered);
-        const button = container.querySelector('button')!;
-
-        fire(button, 'focus');
-        expect(focus.game()).toBe('hokm');
-
-        fire(button, 'blur');
-        expect(focus.game()).toBeNull();
     });
 });
 

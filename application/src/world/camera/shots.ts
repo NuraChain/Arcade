@@ -34,7 +34,7 @@ export const FOCUS: Record<GameId, Frame> = {
 
 export const SHOTS: Record<string, Frame> = {
     arrival: FOCUS.hokm,
-    games: { position: [8.6, 3.2, 9.0], target: [1.05, 0.1, 0], fov: 30 },
+    games: { position: [7.9, 3.2, 8.8], target: [0.1, 0.1, 0], fov: 22 },
     together: FOCUS.ludo,
     compete: FOCUS.backgammon,
     finale: FOCUS.poker

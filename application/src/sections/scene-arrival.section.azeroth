@@ -1,61 +1,25 @@
+import PlayCta from '../components/layout/play-cta.component.azeroth';
 import Button from '../components/ui/button.component.azeroth';
-import Icon from '../icons/icon.component.azeroth';
-import { beenHere } from '../lib/been-here.ts';
-import { useConnect } from '../stores/connect.store.ts';
 import { useLocale } from '../stores/locale.store.ts';
 
-export default component SceneArrival()
+export default component SceneArrival(props: { returning: boolean })
 {
     const locale = useLocale();
-    const connect = useConnect();
 
-    /**
-     * Somebody already signed in is sent back to their tables, not asked to connect again.
-     *
-     * Read in `mount` because this section is PRERENDERED - the server has no cookie, so a value
-     * baked into the static HTML would be wrong for everybody. See `lib/been-here.ts` for why the
-     * landing page cannot simply ask, and why being briefly generous is the safe direction to fail.
-     */
-    state returning = false;
-
-    mount
-    {
-        returning = beenHere();
-    }
-
-    <section class="relative flex min-h-dvh flex-col justify-end pb-20 pt-28 sm:pb-24" aria-labelledby="arrival-title">
-        <div class="mx-auto w-full max-w-[80rem] px-5 sm:px-8">
-            <div class="flex max-w-[34rem] flex-col items-start gap-5">
-                
-                <p class="text-ui-base text-muted">{ locale.t('hero.eyebrow') }</p>
-
-                <h1 id="arrival-title" class="text-display-xl text-text">
-                    { locale.t('hero.title') }
+    <section data-beat="arrival" class="scene pt-15" aria-labelledby="arrival-title">
+        <div class="scene-copy copy-plate pb-[max(2.5rem,env(safe-area-inset-bottom))]">
+            <div class="scene-column flex flex-col items-start gap-4">
+                <p class="label text-ui-sm text-accent">{ locale.t('landing.arrival.eyebrow') }</p>
+                <h1 id="arrival-title" class="title text-display-lg text-text sideways:text-ui-3xl">
+                    <span class="block">{ locale.t('landing.arrival.lead') }</span>
+                    <span class="block text-accent">{ locale.t('landing.arrival.accent') }</span>
                 </h1>
-
-                <p class="max-w-[42ch] text-ui-lg text-muted">
-                    { locale.t('hero.lead') }
-                </p>
-
-                <div class="mt-2 flex flex-wrap items-center gap-3">
-                    <Show
-                        when={ returning }
-                        fallback={ <Button variant="primary" size="lg" leading="wallet" onClick={ () => connect.show() }>{ locale.t('hero.cta') }</Button> }
-                    >
-                        { () => <Button variant="primary" size="lg" leading="games" to="/app">{ locale.t('hero.enter') }</Button> }
-                    </Show>
-                    <Button href="#games" variant="ghost" size="lg" icon="chevron-down">{ locale.t('nav.games') }</Button>
+                <p class="max-w-[46ch] text-ui-md text-muted">{ locale.t('landing.arrival.body') }</p>
+                <div class="mt-2 flex w-full flex-col gap-3 @sm:w-auto @sm:flex-row">
+                    <PlayCta returning={ props.returning } />
+                    <Button href="#games" variant="ghost" size="lg" icon="chevron-down">{ locale.t('landing.cta.games') }</Button>
                 </div>
             </div>
-        </div>
-
-        
-        <div class="pointer-events-none absolute inset-x-0 bottom-6 flex justify-center">
-            
-            <span class="flex items-center gap-2 text-ui-xs text-muted motion-safe:animate-beckon">
-                { locale.t('hero.scroll') }
-                <Icon name="chevron-down" size={ 14 } />
-            </span>
         </div>
     </section>
 }

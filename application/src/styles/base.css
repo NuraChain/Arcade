@@ -260,23 +260,50 @@
     background: linear-gradient(
         to top,
         var(--void) 0%,
-        color-mix(in oklab, var(--void) 82%, transparent) 30%,
-        color-mix(in oklab, var(--void) 34%, transparent) 55%,
-        transparent 78%
+        color-mix(in oklab, var(--void) 70%, transparent) 22%,
+        transparent 48%
     );
 }
 
-@media (min-width: 40rem)
+@utility copy-plate
+{
+    padding-top: 6rem;
+    background: linear-gradient(
+        to bottom,
+        transparent 0%,
+        color-mix(in oklab, var(--void) 88%, transparent) 4rem,
+        var(--void) 7rem
+    );
+}
+
+@media (min-width: 64rem), (orientation: landscape) and (max-height: 540px) and (min-aspect-ratio: 4/3)
 {
     .scrim
     {
         background: linear-gradient(
             to right,
             var(--void) 0%,
-            color-mix(in oklab, var(--void) 78%, transparent) 26%,
-            color-mix(in oklab, var(--void) 30%, transparent) 48%,
-            transparent 66%
+            color-mix(in oklab, var(--void) 82%, transparent) 24%,
+            color-mix(in oklab, var(--void) 32%, transparent) 42%,
+            transparent 58%
         );
+    }
+
+    [dir='rtl'] .scrim
+    {
+        background: linear-gradient(
+            to left,
+            var(--void) 0%,
+            color-mix(in oklab, var(--void) 82%, transparent) 24%,
+            color-mix(in oklab, var(--void) 32%, transparent) 42%,
+            transparent 58%
+        );
+    }
+
+    .copy-plate
+    {
+        padding-top: 0;
+        background: none;
     }
 }
 
@@ -293,20 +320,6 @@
 [dir='rtl'] .icon-flip
 {
     transform: scaleX(-1);
-}
-
-@media (min-width: 40rem)
-{
-    [dir='rtl'] .scrim
-    {
-        background: linear-gradient(
-            to left,
-            var(--void) 0%,
-            color-mix(in oklab, var(--void) 78%, transparent) 26%,
-            color-mix(in oklab, var(--void) 30%, transparent) 48%,
-            transparent 66%
-        );
-    }
 }
 
 @utility page-pad

@@ -173,10 +173,11 @@ def bake_floor(game, root, members, resolution=512):
 
     light = linear[:, :, :3].mean(axis=2)
     axis = (np.arange(resolution) + 0.5) / resolution * 2.0 - 1.0
-    distance = np.hypot(*np.meshgrid(axis, axis))
-    reference = np.percentile(light[(distance > 0.42) & (distance < 0.5)], 90)
+    distance = np.hypot(*np.meshgrid(axis, axis)) * FLOOR_SIZE / 2.0
+    reference = np.percentile(light[(distance > PLINTH_RADIUS + 0.04) & (distance < PLINTH_RADIUS + 0.14)], 90)
     lit = np.clip(light / max(reference, 1e-6), 0.0, 1.0)
-    fade = np.clip((0.98 - distance) / (0.98 - 0.4), 0.0, 1.0)
+    edge = 0.98 * FLOOR_SIZE / 2.0
+    fade = np.clip((edge - distance) / (edge - PLINTH_RADIUS), 0.0, 1.0)
     fade = fade * fade * (3.0 - 2.0 * fade)
     amount = (lit * fade)[:, :, None]
     void = np.array(kit.srgb(SPEC['sky'])[:3])

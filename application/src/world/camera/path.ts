@@ -19,21 +19,14 @@ export interface Frame
     fov: number;
 }
 
-function spline(p0: number, p1: number, p2: number, p3: number, u: number): number
-{
-    const u2 = u * u;
-    const u3 = u2 * u;
-    return 0.5 * (
-        (2 * p1) +
-        (-p0 + p2) * u +
-        (2 * p0 - 5 * p1 + 4 * p2 - p3) * u2 +
-        (-p0 + 3 * p1 - 3 * p2 + p3) * u3
-    );
-}
-
 function at(shots: Shot[], index: number): Shot
 {
     return shots[Math.min(Math.max(index, 0), shots.length - 1)];
+}
+
+function mix(a: Vec3, b: Vec3, u: number): Vec3
+{
+    return [a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u, a[2] + (b[2] - a[2]) * u];
 }
 
 export function sampleShots(shots: Shot[], progress: number): Frame
@@ -51,23 +44,9 @@ export function sampleShots(shots: Shot[], progress: number): Frame
     const span = b.at - a.at;
     const u = span <= 0 ? 0 : Math.min(Math.max((t - a.at) / span, 0), 1);
 
-    const p0 = at(shots, index - 1);
-    const p3 = at(shots, index + 2);
-
-    const axis = (pick: (shot: Shot) => Vec3, component: 0 | 1 | 2): number =>
-        spline(pick(p0)[component], pick(a)[component], pick(b)[component], pick(p3)[component], u);
-
     return {
-        position: [
-            axis((shot) => shot.position, 0),
-            axis((shot) => shot.position, 1),
-            axis((shot) => shot.position, 2)
-        ],
-        target: [
-            axis((shot) => shot.target, 0),
-            axis((shot) => shot.target, 1),
-            axis((shot) => shot.target, 2)
-        ],
+        position: mix(a.position, b.position, u),
+        target: mix(a.target, b.target, u),
         fov: a.fov + (b.fov - a.fov) * u
     };
 }

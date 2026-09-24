@@ -1,26 +1,33 @@
-import GameRow from '../components/ui/game-row.component.azeroth';
+import LandingGameCard from '../components/games/landing-game-card.component.azeroth';
 import { GAMES } from '../data/games.ts';
+import Icon from '../icons/icon.component.azeroth';
 import { useLocale } from '../stores/locale.store.ts';
 
-export default component SceneGames()
+export default component SceneGames(props: { returning: boolean })
 {
     const locale = useLocale();
 
-    <section id="games" class="relative flex min-h-dvh items-center pb-16 pt-28" aria-labelledby="games-title">
-        <div class="mx-auto w-full max-w-[80rem] px-5 sm:px-8">
-            <div class="flex flex-col gap-3">
-                <h2 id="games-title" class="max-w-[16ch] text-display-xl text-text">{ locale.t('games.title') }</h2>
-                <p class="max-w-[48ch] text-ui-lg text-muted">{ locale.t('games.lead') }</p>
+    <section id="games" data-beat="games" class="scene pt-15" aria-labelledby="games-title">
+        <div class="scene-copy copy-plate pb-16">
+            <div class="scene-column">
+                <div class="reveal flex flex-col gap-2">
+                    <h2 id="games-title" class="title text-ui-3xl text-text @lg:text-ui-4xl">{ locale.t('landing.games.title') }</h2>
+                    <p class="text-ui-md text-muted">{ locale.t('landing.games.lead') }</p>
+                </div>
+                <ul class="mt-6 grid grid-cols-2 gap-3">
+                    <For each={ GAMES } key={ (game) => game.id } let={ game }>
+                        <li class="reveal flex min-w-0">
+                            <LandingGameCard game={ game } returning={ props.returning } />
+                        </li>
+                    </For>
+                </ul>
+                <p class="reveal mt-5 flex items-start gap-3 text-ui-sm text-muted">
+                    <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-control bg-accent/12 text-accent">
+                        <Icon name="idea" size={ 18 } />
+                    </span>
+                    <span class="pt-2">{ locale.t('landing.games.helpers') }</span>
+                </p>
             </div>
-
-            
-            <ul class="mt-10 border-b border-line lg:max-w-[54rem]">
-                <For each={ GAMES } key={ (game) => game.id } let={ game }>
-                    <li>
-                        <GameRow game={ game } />
-                    </li>
-                </For>
-            </ul>
         </div>
     </section>
 }

@@ -1,0 +1,60 @@
+import type { Game } from '../../data/games.ts';
+import { useConnect } from '../../stores/connect.store.ts';
+import { useFocus } from '../../stores/focus.store.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import Badge from '../ui/badge.component.azeroth';
+import Button from '../ui/button.component.azeroth';
+import GameArt from './game-art.component.azeroth';
+import SeatCount from './seat-count.component.azeroth';
+
+export default component LandingGameCard(props: { game: Game; returning: boolean })
+{
+    const locale = useLocale();
+    const connect = useConnect();
+    const focus = useFocus();
+
+    derived name = locale.t(props.game.nameKey);
+
+    derived label = locale.t('landing.games.playGame', { game: name });
+
+    const enter = (event: PointerEvent): void =>
+    {
+        if (event.pointerType === 'mouse')
+        {
+            focus.focus(props.game.id);
+        }
+    };
+
+    const leave = (): void => focus.focus(null);
+
+    <article
+        class="group flex min-w-0 flex-col overflow-hidden rounded-panel border border-line bg-field transition duration-200 ease-[var(--ease-ui)] hover:border-line-strong"
+        onPointerEnter={ enter }
+        onPointerLeave={ leave }
+        onFocusIn={ () => focus.focus(props.game.id) }
+        onFocusOut={ leave }
+    >
+        <div class="relative">
+            <GameArt game={ props.game.id } ratio="wide" class="transition-transform duration-500 ease-[var(--ease-reveal)] group-hover:scale-[1.03]" />
+            <span class="absolute start-2 top-2 flex rounded-full bg-void/70 backdrop-blur-md">
+                <Badge dot text={ locale.t('landing.games.live') } tone="live" size="sm" />
+            </span>
+        </div>
+        <div class="flex flex-1 flex-col gap-1 p-3">
+            <h3 class="title truncate text-ui-md text-text">{ name }</h3>
+            <p class="flex min-w-0 flex-wrap items-center gap-x-1.5 text-ui-xs text-muted">
+                <span>{ locale.t(props.game.categoryKey) }</span>
+                <span class="h-1 w-1 shrink-0 rounded-full bg-faint" aria-hidden="true"></span>
+                <SeatCount game={ props.game } />
+            </p>
+            <div class="mt-auto pt-2.5">
+                <Show
+                    when={ props.returning }
+                    fallback={ <Button variant="primary" size="sm" block label={ label } onClick={ () => connect.show() }>{ locale.t('landing.games.play') }</Button> }
+                >
+                    { () => <Button variant="primary" size="sm" block label={ label } to={ `/app/games/${ props.game.slug }` }>{ locale.t('landing.games.play') }</Button> }
+                </Show>
+            </div>
+        </div>
+    </article>
+}

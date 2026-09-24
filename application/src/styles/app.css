@@ -2481,3 +2481,75 @@ html:has(.site-drawer[open])
 {
     opacity: 1;
 }
+
+.scene-overlay
+{
+    position: relative;
+    z-index: 10;
+    margin-top: -100vh;
+    margin-top: -100lvh;
+}
+
+.scene
+{
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    min-height: 100svh;
+}
+
+.scene-copy
+{
+    margin-top: auto;
+    padding-inline: var(--page-pad, 1rem);
+}
+
+.scene-column
+{
+    container-type: inline-size;
+    max-width: 40rem;
+}
+
+@media (min-width: 64rem), (orientation: landscape) and (max-height: 540px) and (min-aspect-ratio: 4/3)
+{
+    .scene-copy
+    {
+        margin-block: auto;
+    }
+
+    .scene-column
+    {
+        max-width: 36rem;
+    }
+}
+
+@media (orientation: landscape) and (max-height: 540px) and (min-aspect-ratio: 4/3)
+{
+    .scene-column
+    {
+        max-width: 26rem;
+    }
+}
+
+@keyframes reveal
+{
+    from
+    {
+        opacity: 0;
+        translate: 0 1.5rem;
+    }
+}
+
+@media (prefers-reduced-motion: no-preference)
+{
+    @supports (animation-timeline: view())
+    {
+        .reveal
+        {
+            animation: reveal linear both;
+            animation-timeline: view();
+            animation-range: entry 0% entry 60%;
+        }
+    }
+}

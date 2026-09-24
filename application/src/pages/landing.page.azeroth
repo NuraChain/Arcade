@@ -1,25 +1,43 @@
 import WorldCanvas from '../components/world/world-canvas.component.azeroth';
+import { beenHere } from '../lib/been-here.ts';
 import SceneArrival from '../sections/scene-arrival.section.azeroth';
-import SceneCompete from '../sections/scene-compete.section.azeroth';
-import SceneCrew from '../sections/scene-crew.section.azeroth';
 import SceneFinale from '../sections/scene-finale.section.azeroth';
 import SceneGames from '../sections/scene-games.section.azeroth';
-import SceneHub from '../sections/scene-hub.section.azeroth';
-import ScenePeople from '../sections/scene-people.section.azeroth';
+import SceneRows, { type SceneRow } from '../sections/scene-rows.section.azeroth';
+
+const TOGETHER: SceneRow[] = [
+    { icon: 'friend-add', title: 'landing.together.friends.title', body: 'landing.together.friends.body' },
+    { icon: 'lock', title: 'landing.together.chats.title', body: 'landing.together.chats.body' },
+    { icon: 'people', title: 'landing.together.groups.title', body: 'landing.together.groups.body' },
+    { icon: 'chats', title: 'landing.together.tables.title', body: 'landing.together.tables.body' },
+    { icon: 'voice', title: 'landing.together.voice.title', body: 'landing.together.voice.body' }
+];
+
+const COMPETE: SceneRow[] = [
+    { icon: 'trophy', title: 'landing.compete.boards.title', body: 'landing.compete.boards.body' },
+    { icon: 'activity', title: 'landing.compete.rating.title', body: 'landing.compete.rating.body' },
+    { icon: 'medal', title: 'landing.compete.medals.title', body: 'landing.compete.medals.body' },
+    { icon: 'star', title: 'landing.compete.levels.title', body: 'landing.compete.levels.body' }
+];
 
 export default component LandingPage()
 {
+    state returning = false;
+
+    mount
+    {
+        returning = beenHere();
+    }
+
     <div class="relative">
         <WorldCanvas />
 
-        <div class="relative z-10 -mt-[100dvh]">
-            <SceneArrival />
-            <SceneHub />
-            <ScenePeople />
-            <SceneGames />
-            <SceneCrew />
-            <SceneCompete />
-            <SceneFinale />
+        <div class="scene-overlay">
+            <SceneArrival returning={ returning } />
+            <SceneGames returning={ returning } />
+            <SceneRows beat="together" title="landing.together.title" lead="landing.together.lead" rows={ TOGETHER } />
+            <SceneRows beat="compete" title="landing.compete.title" lead="landing.compete.lead" rows={ COMPETE } />
+            <SceneFinale returning={ returning } />
         </div>
     </div>
 }

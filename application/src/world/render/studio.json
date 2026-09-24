@@ -3,7 +3,7 @@
     "sky": "#0B1220",
     "floor": {
         "lit": "#16223A",
-        "size": 2.4
+        "size": 1.6
     },
     "plinth": {
         "radius": 0.46,
