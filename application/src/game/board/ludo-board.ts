@@ -80,10 +80,12 @@ const SPRITE = 'absolute max-inline-none select-none [-webkit-user-drag:none]';
 
 const STILL = '[.lb[data-still]_&]:animate-none';
 
+const ROLLED = 'absolute inset-s-[50%] inset-bs-[50%] hidden [translate:-50%_-50%] [.lb[data-rolled]_&]:block';
+
 export async function createLudoBoard(options: BoardOptions): Promise<BoardHandle>
 {
     const host = options.host;
-    const root = element('div', 'lb', host);
+    const root = element('div', 'lb absolute inset-0 overflow-hidden isolate pointer-events-none [&[data-paused]_*]:[animation-play-state:paused]', host);
     const pieces = new Map<string, Piece>();
     const timers = new Set<number>();
 
@@ -109,8 +111,8 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
         return id;
     };
 
-    const glow = element('div', 'lb-die-glow', root);
-    const die = element('div', 'lb-die', root);
+    const glow = element('div', `${ ROLLED } z-[9400] inline-[calc(var(--c)*3)] block-[calc(var(--c)*3)] rounded-[50%] [background:radial-gradient(closest-side,color-mix(in_oklab,var(--tone,transparent)_45%,transparent),color-mix(in_oklab,var(--tone,transparent)_22%,transparent)_60%,transparent)]`, root);
+    const die = element('div', `lb-die ${ ROLLED } z-[9500] inline-[19.12cqi] block-[19.12cqi] [background:url(/board/ludo-dice.svg)_calc(var(--face,0)*100%/7)_0/800%_100%_no-repeat] data-spent:opacity-[0.55] data-spent:[transition:opacity_200ms_var(--ease-ui)] data-[spent=three-sixes]:[filter:sepia(1)_saturate(4)_hue-rotate(-30deg)_brightness(0.95)]`, root);
 
     const spotOf = (token: BoardToken): Spot =>
     {
@@ -225,7 +227,7 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
             return;
         }
 
-        const ring = element('span', 'lb-burst', root);
+        const ring = element('span', 'absolute inset-s-0 inset-bs-0 inline-[calc(var(--c)*0.95)] block-[calc(var(--c)*0.475)] mbs-[calc(var(--c)*-0.2375)] ms-[calc(var(--c)*-0.475)] [border:calc(var(--c)*0.06)_solid_var(--tone)] rounded-[50%]', root);
 
         ring.style.translate = at(spot);
         ring.style.setProperty('--tone', colour);
@@ -536,7 +538,7 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
         {
             const angle = (index / CONFETTI) * Math.PI * 2 + (index % 5) * 0.11;
             const reach = 26 + (index % 7) * 3.5;
-            const fleck = element('span', 'lb-fleck', root);
+            const fleck = element('span', 'absolute inset-s-0 inset-bs-0 z-[9600] inline-[1.4cqi] block-[2.6cqi] mbs-[-1.3cqi] ms-[-0.7cqi] rounded-[1px]', root);
 
             fleck.style.background = index % 3 === 0 ? tone : (index % 3 === 1 ? '#F6F1E6' : '#FFFFFF');
             fleck.animate(

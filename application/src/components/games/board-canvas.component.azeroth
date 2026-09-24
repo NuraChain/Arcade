@@ -163,18 +163,18 @@ export default component BoardCanvas(props: { game: string; view: BoardView; onP
     }
 
     <div
-        class="board-plate"
+        class="board-plate [direction:ltr] relative isolate @container inline-full block-full bg-[url('/board/ludo-board.svg')] bg-[length:100%_100%] bg-no-repeat rounded-panel overflow-hidden"
         role="img"
         aria-label={ locale.t('match.board') }
         style={ `--rim:${ (MARGIN * 100).toFixed(4) }%; --cell:${ (CELL * 100).toFixed(4) }%` }
     >
-        <div class="board-canvas" aria-hidden="true" ref={ (element) => host = element }></div>
+        <div class="board-canvas absolute inset-0" aria-hidden="true" ref={ (element) => host = element }></div>
 
         <Show when={ failed }>
             { () =>
                 <For each={ [...props.view.tokens] } key={ (token) => token.key } let={ token }>
                     <span
-                        class="board-token"
+                        class="board-token absolute inline-[calc(var(--cell)*0.80)] block-[calc(var(--cell)*0.80)] inset-s-[calc(var(--rim)_+_var(--at-col)_*_var(--cell)_+_var(--cell)_*_0.10)] inset-bs-[calc(var(--rim)_+_var(--at-row)_*_var(--cell)_+_var(--cell)_*_0.10)] z-[calc(var(--at-row)*10)] origin-[50%_62.5%] [transition:inset-inline-start_var(--duration-ui,180ms)_var(--ease-ui,ease),inset-block-start_var(--duration-ui,180ms)_var(--ease-ui,ease)] motion-reduce:[transition:none] data-home:[scale:0.62]"
                         aria-hidden="true"
                         data-home={ token.at === FINISHED ? 'true' : undefined }
                         style={ `--at-col:${ token.col }; --at-row:${ token.row }; --pawn: url('/board/pawn-${ token.colour }.svg'); --tone: var(--ludo-${ token.colour })` }

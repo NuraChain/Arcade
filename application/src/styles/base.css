@@ -137,6 +137,9 @@
 }
 
 @custom-variant sideways (@media (orientation: landscape) and (max-height: 540px) and (min-aspect-ratio: 4/3));
+@custom-variant slim (@container (max-width: 36rem));
+@custom-variant fit-wide (@container fit (min-aspect-ratio: 5 / 4));
+@custom-variant fit-short (@container fit (max-height: 22rem));
 
 @utility safe-t
 {

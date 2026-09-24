@@ -161,87 +161,15 @@ html:has(.site-drawer[open])
     }
 }
 
-.ludo-pip
-{
-    flex: none;
-    inline-size: 0.7rem;
-    block-size: 0.7rem;
-    border-radius: 999px;
-    border: 2px solid color-mix(in oklab, var(--ink) 75%, transparent);
-}
-
-.ludo-pip[data-home='true']
-{
-    border-color: var(--ink);
-    background: var(--ink);
-    box-shadow: 0 0 6px -1px var(--ink);
-}
-
-.ludo-stage
-{
-    padding: 0.625rem;
-    border-radius: var(--radius-hero);
-    background:
-        radial-gradient(ellipse 70% 60% at 50% 42%, rgb(255 184 110 / 0.16), transparent 70%),
-        radial-gradient(ellipse 85% 80% at 50% 50%, transparent 52%, rgb(6 3 1 / 0.62) 100%),
-        #3A2110 url('/board/ludo-table.webp') center / cover no-repeat;
-    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.07), inset 0 0 0 1px rgb(0 0 0 / 0.45), 0 24px 48px -28px rgb(0 0 0 / 0.9);
-}
-
-@container (max-width: 36rem)
-{
-    .ludo-stage
-    {
-        margin-inline: calc(0.375rem - var(--page-pad, 1rem));
-    }
-}
-
 .board-stage
 {
-    isolation: isolate;
     position: relative;
-    container-type: inline-size;
     inline-size: 100%;
     aspect-ratio: 1;
-    border-radius: var(--radius-panel);
-    box-shadow: 0 26px 40px -20px rgb(0 0 0 / 0.85), 0 3px 8px rgb(0 0 0 / 0.45);
-}
-
-.ludo-frame
-{
-    --plate-row: 3rem;
-    --plate-col: 9.5rem;
-
-    direction: ltr;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    grid-template-areas: 'tl tr' 'board board' 'bl br';
-    align-items: center;
-    gap: 0.5rem;
-    inline-size: min(100cqw, 100cqh - 2 * var(--plate-row) - 1rem);
-}
-
-.ludo-frame > .board-stage
-{
-    grid-area: board;
 }
 
 @container fit (min-aspect-ratio: 5 / 4)
 {
-    .ludo-frame
-    {
-        grid-template-columns: var(--plate-col) auto var(--plate-col);
-        grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
-        grid-template-areas: 'tl board tr' 'bl board br';
-        inline-size: auto;
-        column-gap: 0.75rem;
-    }
-
-    .ludo-frame
-    {
-        --plate-col: 6.5rem;
-    }
-
     .ludo-frame > .board-stage
     {
         inline-size: min(100cqh, 100cqw - 2 * var(--plate-col) - 1.5rem);
@@ -265,60 +193,14 @@ html:has(.site-drawer[open])
         max-inline-size: 100%;
         text-align: center;
     }
-
-    .yard-badge[data-corner^='top']
-    {
-        align-self: start;
-    }
-
-    .yard-badge[data-corner^='bottom']
-    {
-        align-self: end;
-    }
 }
 
 @container fit (max-height: 22rem)
 {
-    .ludo-frame
-    {
-        --plate-col: 5.75rem;
-        --plate-row: 2.75rem;
-    }
-
     .yard-badge .table-plate-name
     {
         display: none;
     }
-}
-
-.yard-badge
-{
-    display: flex;
-    min-inline-size: 0;
-}
-
-.yard-badge[data-corner='top-left']
-{
-    grid-area: tl;
-    justify-content: flex-start;
-}
-
-.yard-badge[data-corner='top-right']
-{
-    grid-area: tr;
-    justify-content: flex-end;
-}
-
-.yard-badge[data-corner='bottom-left']
-{
-    grid-area: bl;
-    justify-content: flex-start;
-}
-
-.yard-badge[data-corner='bottom-right']
-{
-    grid-area: br;
-    justify-content: flex-end;
 }
 
 .yard-badge[data-corner$='right'] .table-plate
@@ -344,55 +226,6 @@ html:has(.site-drawer[open])
     pointer-events: none;
 }
 
-.yard-initial
-{
-    display: grid;
-    place-items: center;
-    inline-size: 1.1rem;
-    block-size: 1.1rem;
-    border-radius: 999px;
-    background: var(--ink);
-    color: white;
-    font-size: 0.625rem;
-    font-weight: 800;
-    line-height: 1;
-    box-shadow: 0 0 0 2px var(--void);
-}
-
-.yard-die
-{
-    display: block;
-    flex: none;
-    inline-size: 1.75rem;
-    block-size: 1.75rem;
-    filter: drop-shadow(0 4px 6px rgb(0 0 0 / 0.55));
-}
-
-.yard-pips
-{
-    display: flex;
-    flex: none;
-    align-items: center;
-    gap: 3px;
-}
-
-.yard-pips > .ludo-pip
-{
-    inline-size: 0.5rem;
-    block-size: 0.5rem;
-    border-width: 1.5px;
-}
-
-.ludo-bar
-{
-    padding: 0.75rem;
-    border: 1px solid rgb(255 255 255 / 0.08);
-    border-radius: var(--radius-panel);
-    background: rgb(8 13 25 / 0.8);
-    backdrop-filter: blur(8px);
-    box-shadow: 0 16px 30px -18px rgb(0 0 0 / 0.9);
-}
-
 @container stage (min-width: 44rem) and (min-aspect-ratio: 3 / 2)
 {
     .table-grid.ludo-grid
@@ -412,22 +245,6 @@ html:has(.site-drawer[open])
     }
 }
 
-.board-roll
-{
-    position: absolute;
-    z-index: 6;
-    left: 50%;
-    top: 50%;
-    display: grid;
-    place-items: center;
-    inline-size: max(3.5rem, calc(var(--cell-cq) * 3.2));
-    block-size: max(3.5rem, calc(var(--cell-cq) * 3.2));
-    translate: -50% -50%;
-    border-radius: calc(var(--cell-cq) * 0.8);
-    cursor: pointer;
-    -webkit-tap-highlight-color: transparent;
-}
-
 .board-roll::before
 {
     content: '';
@@ -436,35 +253,6 @@ html:has(.site-drawer[open])
     border-radius: inherit;
     box-shadow: 0 0 0 calc(var(--cell-cq) * 0.12) var(--accent), 0 0 calc(var(--cell-cq) * 1.2) calc(var(--cell-cq) * 0.1) var(--accent);
     animation: roll-ring 1.4s ease-in-out infinite;
-}
-
-.board-roll-die
-{
-    inline-size: 70%;
-    block-size: 70%;
-    filter: drop-shadow(0 8px 10px rgb(0 0 0 / 0.55));
-    animation: roll-bob 1.4s ease-in-out infinite;
-}
-
-.board-roll:active .board-roll-die
-{
-    scale: 0.92;
-}
-
-.board-roll:disabled
-{
-    cursor: progress;
-}
-
-.board-roll:disabled .board-roll-die
-{
-    animation: roll-shake 0.45s linear infinite;
-}
-
-.board-roll:focus-visible
-{
-    outline: 3px solid var(--accent);
-    outline-offset: 2px;
 }
 
 @keyframes yard-breathe
@@ -497,9 +285,7 @@ html:has(.site-drawer[open])
 @media (prefers-reduced-motion: reduce)
 {
     .yard-badge .table-plate[data-turn]::before,
-    .board-roll::before,
-    .board-roll-die,
-    .board-roll:disabled .board-roll-die
+    .board-roll::before
     {
         animation: none;
     }
@@ -1882,38 +1668,6 @@ html:has(.site-drawer[open])
     }
 }
 
-.board-plate
-{
-    direction: ltr;
-
-    position: relative;
-    isolation: isolate;
-    container-type: inline-size;
-    inline-size: 100%;
-    block-size: 100%;
-    background-image: url('/board/ludo-board.svg');
-    background-size: 100% 100%;
-    background-repeat: no-repeat;
-    border-radius: var(--radius-panel);
-    overflow: hidden;
-}
-
-.board-token
-{
-    position: absolute;
-    inline-size: calc(var(--cell) * 0.80);
-    block-size: calc(var(--cell) * 0.80);
-
-    inset-inline-start: calc(var(--rim) + var(--at-col) * var(--cell) + var(--cell) * 0.10);
-    inset-block-start: calc(var(--rim) + var(--at-row) * var(--cell) + var(--cell) * 0.10);
-
-    z-index: calc(var(--at-row) * 10);
-
-    transform-origin: 50% 62.5%;
-    transition: inset-inline-start var(--duration-ui, 180ms) var(--ease-ui, ease),
-                inset-block-start var(--duration-ui, 180ms) var(--ease-ui, ease);
-}
-
 .board-token::before,
 .board-token::after
 {
@@ -1940,42 +1694,6 @@ html:has(.site-drawer[open])
     opacity: 0.6;
 }
 
-.board-token[data-home]
-{
-    scale: 0.62;
-}
-
-@media (prefers-reduced-motion: reduce)
-{
-    .board-token
-    {
-        transition: none;
-    }
-}
-
-.board-canvas
-{
-    position: absolute;
-    inset: 0;
-}
-
-.lb
-{
-    position: absolute;
-    inset: 0;
-    overflow: hidden;
-    isolation: isolate;
-    pointer-events: none;
-}
-
-.lb-burst,
-.lb-fleck
-{
-    position: absolute;
-    inset-inline-start: 0;
-    inset-block-start: 0;
-}
-
 .lp[data-movable]:not([data-moving]) .lp-lift
 {
     animation: lp-hop 1110ms calc(var(--i) * 90ms) infinite;
@@ -1989,11 +1707,6 @@ html:has(.site-drawer[open])
 .lp[data-movable]:not([data-moving]) .lp-shadow
 {
     animation: lp-breathe 1110ms calc(var(--i) * 90ms) infinite;
-}
-
-.lb[data-paused] *
-{
-    animation-play-state: paused;
 }
 
 @keyframes lp-dash
@@ -2056,59 +1769,6 @@ html:has(.site-drawer[open])
         scale: 0.85;
         opacity: 0.45;
     }
-}
-
-.lb-burst
-{
-    inline-size: calc(var(--c) * 0.95);
-    block-size: calc(var(--c) * 0.475);
-    margin-block-start: calc(var(--c) * -0.2375);
-    margin-inline-start: calc(var(--c) * -0.475);
-    border: calc(var(--c) * 0.06) solid var(--tone);
-    border-radius: 50%;
-}
-
-.lb-fleck
-{
-    z-index: 9600;
-    inline-size: 1.4cqi;
-    block-size: 2.6cqi;
-    margin-block-start: -1.3cqi;
-    margin-inline-start: -0.7cqi;
-    border-radius: 1px;
-}
-
-.lb-die,
-.lb-die-glow
-{
-    position: absolute;
-    inset-inline-start: 50%;
-    inset-block-start: 50%;
-    display: none;
-    translate: -50% -50%;
-}
-
-.lb-die
-{
-    z-index: 9500;
-    inline-size: 19.12cqi;
-    block-size: 19.12cqi;
-    background: url('/board/ludo-dice.svg') calc(var(--face, 0) * 100% / 7) 0 / 800% 100% no-repeat;
-}
-
-.lb-die-glow
-{
-    z-index: 9400;
-    inline-size: calc(var(--c) * 3);
-    block-size: calc(var(--c) * 3);
-    border-radius: 50%;
-    background: radial-gradient(closest-side, color-mix(in oklab, var(--tone, transparent) 45%, transparent), color-mix(in oklab, var(--tone, transparent) 22%, transparent) 60%, transparent);
-}
-
-.lb[data-rolled] .lb-die,
-.lb[data-rolled] .lb-die-glow
-{
-    display: block;
 }
 
 .empty-art::after
@@ -2198,17 +1858,6 @@ html:has(.site-drawer[open])
         scale: 0.94;
         translate: 0 0.5rem;
     }
-}
-
-.lb-die[data-spent]
-{
-    opacity: 0.55;
-    transition: opacity 200ms var(--ease-ui);
-}
-
-.lb-die[data-spent='three-sixes']
-{
-    filter: sepia(1) saturate(4) hue-rotate(-30deg) brightness(0.95);
 }
 
 @keyframes reveal

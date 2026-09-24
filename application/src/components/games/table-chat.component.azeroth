@@ -516,7 +516,7 @@ export default component TableChat(props: {
                                 { () =>
                                     <span class="flex shrink-0 items-center gap-1" style={ `--ink: var(--ludo-${ row.colour })` } role="img" aria-label={ locale.plural('match.tokens', row.home!) }>
                                         <For each={ [0, 1, 2, 3] } key={ (pip) => pip } let={ pip }>
-                                            <span class="ludo-pip" data-home={ pip < row.home! ? 'true' : 'false' } aria-hidden="true"></span>
+                                            <span class="flex-none rounded-[999px] border-[color:color-mix(in_oklab,var(--ink)_75%,transparent)] data-[home=true]:border-[color:var(--ink)] data-[home=true]:bg-(--ink) data-[home=true]:[box-shadow:0_0_6px_-1px_var(--ink)] inline-[0.7rem] block-[0.7rem] border-2" data-home={ pip < row.home! ? 'true' : 'false' } aria-hidden="true"></span>
                                         </For>
                                     </span>
                                 }
