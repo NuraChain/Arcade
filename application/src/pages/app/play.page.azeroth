@@ -20,6 +20,7 @@ import { usePeople } from '../../stores/people.store.ts';
 import { SHORT_MAX, useDevice } from '../../stores/device.store.ts';
 import { useVoice } from '../../stores/voice.store.ts';
 import { useLobby } from '../../stores/lobby.store.ts';
+import { useRealtime } from '../../stores/realtime.store.ts';
 import { useBoard } from '../../stores/match.store.ts';
 import { useSettings } from '../../stores/settings.store.ts';
 import { useWatch } from '../../stores/watch.store.ts';
@@ -219,6 +220,7 @@ export default component PlayPage()
         if (awake)
         {
             onCleanup(holdScreen());
+            onCleanup(useRealtime().hold());
         }
     }
 

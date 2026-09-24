@@ -40,6 +40,7 @@ import type {
     MatchView,
     TableSummary
 } from './schemas.ts';
+import { matchView } from './schemas.ts';
 
 /**
  * Builds the real implementations behind `Ports`.
@@ -59,7 +60,7 @@ export interface WriteListener
     socialChanged(...userIds: string[]): void;
     edgesChanged(...userIds: string[]): void;
     selfChanged(userId: string, what: 'notifications' | 'devices' | 'profile'): void;
-    gameChanged(matchId: string, players: readonly string[]): void;
+    gamePushed(pushes: readonly { userId: string; match: MatchView; events: MatchEventLog[] }[]): void;
     tableChanged(tableId: string, people: readonly string[]): void;
     tableViewed(userId: string, tableId: string): void;
     sessionsRevoked(sessionIds: readonly string[]): void;
@@ -681,9 +682,27 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
      * the chat store an id it would resolve as a conversation. It stays a doorbell: the frame
      * carries the match id and nothing about the move.
      */
-    const ringMatch = async (matchId: string): Promise<void> =>
+    const shipped = (view: MatchView): MatchView => matchView.parse(view);
+
+    const pushMatch = async (matchId: string, before: number): Promise<void> =>
     {
-        live?.gameChanged(matchId, await match.playersOf(matchId));
+        if (live === undefined)
+        {
+            return;
+        }
+
+        const found = await match.feed(matchId, before);
+
+        if (found === null)
+        {
+            return;
+        }
+
+        live.gamePushed(found.load.players.map((row) => ({
+            userId: row.user_id,
+            match: shipped(asMatch({ ...found.load, mine: row.seat })),
+            events: logged(found.events(row.seat))
+        })));
     };
 
     /**
@@ -783,7 +802,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
 
         if (answer.applied === 'now')
         {
-            await ringMatch(matchId);
+            await courtesy('game push', () => pushMatch(matchId, answer.before));
 
             if (answer.load.match.finishedAt === null)
             {
@@ -823,7 +842,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             }
 
             played += 1;
-            await courtesy('turn ring', () => ringMatch(expired.matchId));
+            await courtesy('game push', () => pushMatch(expired.matchId, expired.before));
 
             const load = await match.peek(expired.matchId);
 
@@ -1839,7 +1858,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             {
                 const load = await match.start(me, tableId);
 
-                await ringMatch(load.match.id);
+                await courtesy('game push', () => pushMatch(load.match.id, load.match.rev));
                 live?.tableChanged(tableId, await table.peopleAt(tableId));
 
                 return asMatch(load);

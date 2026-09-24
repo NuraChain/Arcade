@@ -799,7 +799,7 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
         };
     }
 
-    <div class="table-stage hokm-stage" ref={ (element) => arena = element }>
+    <div data-rev={ props.match.rev } class="table-stage hokm-stage" ref={ (element) => arena = element }>
         <div class="table-grid">
         <Show when={ view !== null }>
             { () =>

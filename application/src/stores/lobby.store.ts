@@ -262,7 +262,9 @@ export const useLobby = createStore((): LobbyApi =>
 
         start()
         {
-            return useRealtime().onNudge((scope) =>
+            const live = useRealtime();
+
+            const offNudge = live.onNudge((scope) =>
             {
                 if (scope === 'table')
                 {
@@ -274,6 +276,23 @@ export const useLobby = createStore((): LobbyApi =>
                     void seated.refetch();
                 }
             });
+
+            const offGame = live.onGame((frame) =>
+            {
+                const known = untrack(seated.data)?.tables.find((table) => table.matchId === frame.match.id);
+                const mine = frame.match.finishedAt === undefined && frame.match.mine !== undefined && frame.match.mine === frame.match.turn;
+
+                if (known === undefined || frame.match.finishedAt !== undefined || (known.yourTurn === true) !== mine)
+                {
+                    void seated.refetch();
+                }
+            });
+
+            return () =>
+            {
+                offNudge();
+                offGame();
+            };
         },
 
         stop: () => undefined,

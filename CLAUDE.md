@@ -1612,13 +1612,28 @@ go stale the first time one of them forgot. Closing is NOT a third: `close` refu
 live, because a host who could close the table mid-game could erase a loss by leaving. Last one out
 still closes it, since everybody has gone and the forfeits that follow are the honest result.
 
-**Realtime has a `game` scope, and a move is what earns it.** A move is new information that no other
-scope carries, and a `chat` nudge would hand the chat store an id it would resolve as a conversation.
-Tables have a scope of their own too now - see *Realtime* for why they left `social`. It stays a doorbell: the frame carries the match id
-and nothing about the move, and the client re-reads through the same route with the same
-authorisation. The players ride along in the pending entry rather than being resolved at flush time,
-because unlike a conversation's membership a match's seats cannot change while the frame is in the
-air.
+**A game is played OVER the socket, and a move is delivered rather than rung.** For chat the socket is a
+doorbell; for a game it is the delivery, and the cost that forced it is measured: as a doorbell, a move
+reached the other seat after a 500 ms hub window, a 250 ms client window and two re-reads, which was
+about 800 ms on loopback and 1.6 s on 3G before anybody saw anything. So a `play` frame carries the same
+body `POST /matches/:id/play` takes and is answered by an `ack` or a `refused` under the same
+idempotency key, and after every committed action each seat is PUSHED a `game` frame, composed for that
+seat by the same `asMatch` and `Engine.view`/`Engine.log` the routes use and passed through `matchView`
+so nothing undeclared can reach a wire. The redaction story is therefore unchanged: one composition per
+reader, never one payload filtered. Nothing waits for a window: a push leaves the moment the
+transaction commits.
+
+The HTTP routes stay, and not as a shim: the browser sends a play over HTTP, under the SAME key, when
+the socket is not connected or no ack came within three seconds, and the idempotency ledger makes the
+second copy answer `already`. The API passes play hundreds of turns through them. A browser whose socket
+keeps failing polls `since` every three seconds while a match is open, so a table does not freeze behind
+a proxy that refuses WebSockets. A spectator is never pushed a board - the delay is the point of watching.
+
+The gateway checks a play twice: the frame shape strictly, then `matchPlayInput` with a comparison that
+refuses any key the schema would have stripped, so a `die` inside a play is refused rather than quietly
+dropped. One socket's plays run one after another, so a socket never holds two match transactions. Every
+frame kind that costs something is metered by one ten-second budget (`voice` 30, `signal` 120, `play`
+40, `resume` 20, `ping` 10), and past it the socket is closed 4429.
 
 **A turn that runs out is played, not punished.** The sweep finds due matches by Postgres `now()` -
 never `MoreThan(new Date())`, because the deadline is written by Postgres too (`commit` sets it as
@@ -3702,8 +3717,9 @@ exists — with the same membership check, the same block rules, the same read w
 delivery path carrying message bodies would be a second place to get all three wrong, and it would
 have to be rewritten again the moment a body becomes ciphertext.
 
-`server/src/realtime/frames.ts` is the whole wire. Four server frames (`hello`, `presence`,
-`nudge`, `typing`), three client frames (`sync`, `presence`, `typing`), and
+`server/src/realtime/frames.ts` is the whole wire. Server frames: `hello`, `presence`, `nudge`,
+`typing`, `voice`, `signal`, `game`, `ack`, `refused`, `pong`. Client frames: `sync`, `presence`,
+`typing`, `voice`, `signal`, `play`, `resume`, `ping`. And
 `parseClientFrame` is total and strict — **unknown keys are refused**, because a frame carrying a
 field this version does not know is a frame from something that is not this client.
 
@@ -3739,7 +3755,8 @@ server that is on its way out.
 
 **`isMetered('/ws')` is now nearly dead code.** The rate limiter still scopes to `/api` and
 `/ws`, but a socket costs one request per connection and the gateway meters frames itself
-(`sync` 5s, `presence` 2s, `typing` 3s, ten faults and the socket is closed 4400). Keep the
+(`sync` 5s, `presence` 2s, `typing` 3s, ten faults and the socket is closed 4400; the budgets under
+*A game is played over the socket*). Keep the
 prefix — a handshake flood is still a flood — but the per-frame budget is where the real metering
 happens.
 
@@ -3774,6 +3791,17 @@ and `stores/realtime.store.ts` (one connection, jittered backoff seeded from `ru
 visibility pause, coalesced nudges). **Connecting does not reset the backoff — staying connected
 for `STEADY_MS` does**, or a socket that opens and dies 200ms later in a loop is hammered at one
 second forever. 4400, 4401 and 4429 are terminal and never retried.
+
+**The seed is random per browser.** It was the constant 1, so every client on the deployment drew the
+same jitter and a restart brought them all back in the same instant; tests set theirs explicitly.
+
+**A table holds the socket, and a held socket is probed.** The play page holds it while a live match is
+on screen, which keeps it through a hidden tab. Ten seconds without a frame sends a `ping`; four more
+without an answer hang it up and reopen it at once, because a socket whose far end has gone quiet
+without a FIN is otherwise trusted until TCP gives up minutes later. The pongs also give the round trip
+and the server clock's offset, from the fastest of the last eight. The server's own heartbeat is 15 s
+with a 10 s pong timeout. The fake socket answers pings the way the server does and has a `deaf`
+switch for the case where it does not.
 
 `stores/connection.store.ts` reports only what it can see: the socket's own status plus
 `navigator.onLine`. The `latency` it used to publish was never measured by any request, and the

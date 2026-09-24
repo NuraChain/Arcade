@@ -69,7 +69,7 @@ const MAX_TIMEOUTS = 3;
 export type Applied = 'now' | 'already' | 'stale';
 
 export type Expired =
-    | { matchId: string; game: string; played: true }
+    | { matchId: string; game: string; played: true; before: number }
     | { matchId: string; game: string; played: false; reason: string };
 
 export interface MatchSeatRow
@@ -413,6 +413,33 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
                 where: { tableId, finishedAt: IsNull() }
             }))?.id ?? null,
 
+        feed: async (matchId: string, rev: number): Promise<{ load: MatchLoad; events: (seat: number | null) => ActionLog[] } | null> =>
+        {
+            const found = await db.getRepository(Match).findOne({ where: { id: matchId } });
+            const engine = found === null ? null : engineFor(found.game);
+
+            if (found === null || engine === null)
+            {
+                return null;
+            }
+
+            const rows = await db.getRepository(MatchAction).find({
+                select: { rev: true, seat: true, createdAt: true, events: true },
+                where: { matchId, rev: MoreThan(rev) },
+                order: { rev: 'ASC' }
+            });
+
+            return {
+                load: { match: found, state: stateOf(found), players: await seatsOf(db, matchId), mine: -1 },
+                events: (seat) => rows.map((row) => ({
+                    rev: row.rev,
+                    seat: row.seat,
+                    at: row.createdAt,
+                    log: engine.log((row.events ?? []) as unknown[], seat)
+                }))
+            };
+        },
+
         since: async (me: string, matchId: string, rev: number): Promise<{ load: MatchLoad; events: ActionLog[] } | null> =>
         {
             const load = await read(me, matchId);
@@ -609,12 +636,14 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
             me: string,
             matchId: string,
             want: { play: MatchPlay | null; rev?: number; key: string }
-        ): Promise<{ load: MatchLoad; applied: Applied }> =>
+        ): Promise<{ load: MatchLoad; applied: Applied; before: number }> =>
         {
             if (!UUID.test(matchId))
             {
                 throw new NotFoundError('No game there.');
             }
+
+            let before = -1;
 
             const applied = await db.transaction(async (tx): Promise<Applied> =>
             {
@@ -627,6 +656,8 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
                 {
                     throw new NotFoundError('No game there.');
                 }
+
+                before = match.rev;
 
                 const seat = await tx.getRepository(MatchPlayer).findOne({
                     select: { seat: true },
@@ -713,7 +744,7 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
                 throw error;
             });
 
-            return { load: (await read(me, matchId)) as MatchLoad, applied };
+            return { load: (await read(me, matchId)) as MatchLoad, applied, before };
         },
 
         /**
@@ -866,7 +897,7 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
                         key: null
                     }, mode);
 
-                    return { matchId: match.id, game: match.game, played: true };
+                    return { matchId: match.id, game: match.game, played: true, before: match.rev };
                 });
             }
             catch (error: unknown)

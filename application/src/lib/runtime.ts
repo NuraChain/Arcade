@@ -9,7 +9,9 @@ export interface Runtime
 
 function defaults(): Runtime
 {
-    return { clock: realClock(), seed: 1, latency: 1 };
+    const seed = typeof crypto === 'undefined' ? 1 : crypto.getRandomValues(new Uint32Array(1))[0];
+
+    return { clock: realClock(), seed, latency: 1 };
 }
 
 let current: Runtime = defaults();

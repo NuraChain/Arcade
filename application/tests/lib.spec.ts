@@ -135,7 +135,8 @@ describe('runtime seam', () =>
     {
         setRuntime({ seed: 9 });
         resetRuntime();
-        expect(runtime().seed).toBe(1);
+        expect(runtime().seed).not.toBe(9);
+        expect(Number.isInteger(runtime().seed)).toBe(true);
     });
 });
 

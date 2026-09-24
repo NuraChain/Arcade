@@ -13,7 +13,7 @@ import { ludoOf } from '../data/match.ts';
 import { useAccount } from './account.store.ts';
 import { runtime } from '../lib/runtime.ts';
 import { useLocale } from './locale.store.ts';
-import { useRealtime } from './realtime.store.ts';
+import { useRealtime, type ReplyFrame } from './realtime.store.ts';
 import { useToasts } from './toasts.store.ts';
 
 /**
@@ -94,8 +94,16 @@ const mintKey = (): string =>
 {
     keys += 1;
 
-    return `${ runtime().clock.now().toString(36) }-${ keys.toString(36) }`;
+    return typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : `${ runtime().clock.now().toString(36) }-${ keys.toString(36) }`;
 };
+
+export const ACK_MS = 3000;
+
+export const POLL_MS = 3000;
+
+type Answer = { match: MatchView; events: readonly MatchEvent[] };
 
 export const useBoard = createStore((): BoardApi =>
 {
@@ -157,15 +165,65 @@ export const useBoard = createStore((): BoardApi =>
         return fetched !== null && fetched.id === held.id && fetched.rev >= held.rev ? fetched : held;
     };
 
+    let heardFor = '';
+    let heardRev = -1;
+
+    const waiting = new Map<string, (reply: ReplyFrame) => void>();
+
     const heard = (match: MatchView, batch: readonly MatchEvent[]): void =>
     {
-        setLatest((held) => held !== null && held.id === match.id && held.rev >= match.rev ? held : match);
+        const held = untrack(board);
+        const base = held !== null && held.id === match.id ? held.rev : -1;
 
-        if (batch.length > 0)
+        if (heardFor !== match.id)
         {
-            setEvents((current) => ({ seq: current.seq + 1, events: batch }));
+            heardFor = match.id;
+            heardRev = -1;
         }
+
+        const floor = Math.max(base, heardRev);
+        const fresh = batch.filter((event) => event.rev > floor);
+
+        setLatest((current) => current !== null && current.id === match.id && current.rev >= match.rev ? current : match);
+
+        if (fresh.length === 0 || (floor >= 0 && fresh[0].rev > floor + 1))
+        {
+            return;
+        }
+
+        heardRev = fresh[fresh.length - 1].rev;
+        setEvents((current) => ({ seq: current.seq + 1, events: fresh }));
     };
+
+    const overSocket = (id: string, key: string, rev: number, play: MatchPlay): Promise<Answer | null> =>
+        new Promise((resolve, reject) =>
+        {
+            if (!useRealtime().play(id, key, rev, play))
+            {
+                resolve(null);
+                return;
+            }
+
+            const late = runtime().clock.after(ACK_MS, () =>
+            {
+                waiting.delete(key);
+                resolve(null);
+            });
+
+            waiting.set(key, (reply) =>
+            {
+                late();
+                waiting.delete(key);
+
+                if (reply.t === 'ack')
+                {
+                    resolve(reply);
+                    return;
+                }
+
+                reject(new ApiError(reply.status, 'refused', reply.message, undefined));
+            });
+        });
 
     const catchUp = async (): Promise<void> =>
     {
@@ -189,7 +247,7 @@ export const useBoard = createStore((): BoardApi =>
         }
     };
 
-    const act = async (send: (id: string, key: string, rev: number) => Promise<{ match: MatchView; events: readonly MatchEvent[] }>): Promise<void> =>
+    const act = async (play: MatchPlay | null): Promise<void> =>
     {
         const current = untrack(board);
 
@@ -200,28 +258,20 @@ export const useBoard = createStore((): BoardApi =>
 
         setBusy(true);
 
+        const key = mintKey();
+        const id = current.id;
+
         try
         {
-            const ack = await send(current.id, mintKey(), current.rev);
+            const answer = (play === null ? null : await overSocket(id, key, current.rev, play))
+                ?? (play === null
+                    ? await client.matches.resign({ params: { id }, input: { key } })
+                    : await client.matches.play({ params: { id }, input: { key, rev: current.rev, play } }));
 
-            heard(ack.match, ack.events);
+            heard(answer.match, answer.events);
         }
         catch
         {
-            /*
-             * A refusal here is a real failure, and it used to be invisible.
-             *
-             * The ordinary outcomes are not throws: a retried tap answers `already` and a tap that
-             * crossed a realtime frame answers `stale`, both 200, both meaning the board is simply
-             * further on than the finger was. What reaches this catch is a game that has ended
-             * under somebody, a turn that is not theirs, or a request that never arrived - and the
-             * board was re-read, looked unchanged, and said nothing. A refused move and a move that
-             * did nothing are indistinguishable, which on the one surface somebody is actively
-             * playing is the worst place for it.
-             *
-             * The re-read stays and comes FIRST: whatever else is true, the board on screen has to
-             * be the table as it really is before anybody is told anything about it.
-             */
             await revalidate().catch(() => undefined);
 
             useToasts().show({ kind: 'error', text: useLocale().t('match.actionFailed'), dedupe: 'match-action' });
@@ -279,17 +329,13 @@ export const useBoard = createStore((): BoardApi =>
 
         events,
 
-        roll: async () => await act(async (id, key, rev) =>
-            await client.matches.play({ params: { id }, input: { key, rev, play: { kind: 'ludo', verb: 'roll' } } })),
+        roll: async () => await act({ kind: 'ludo', verb: 'roll' }),
 
-        move: async (piece) => await act(async (id, key, rev) =>
-            await client.matches.play({ params: { id }, input: { key, rev, play: { kind: 'ludo', verb: 'move', piece } } })),
+        move: async (piece) => await act({ kind: 'ludo', verb: 'move', piece }),
 
-        play: async (what) => await act(async (id, key, rev) =>
-            await client.matches.play({ params: { id }, input: { key, rev, play: what } })),
+        play: async (what) => await act(what),
 
-        resign: async () => await act(async (id, key) =>
-            await client.matches.resign({ params: { id }, input: { key } })),
+        resign: async () => await act(null),
 
         refresh: revalidate,
 
@@ -303,13 +349,52 @@ export const useBoard = createStore((): BoardApi =>
         start()
         {
             const live = useRealtime();
-            return live.onNudge((scope, id) =>
+
+            const offNudge = live.onNudge((scope, id) =>
             {
                 if (scope === 'game' && untrack(openId) !== '' && (id === undefined || id === untrack(openId)))
                 {
                     void catchUp().catch(() => undefined);
                 }
             });
+
+            const offGame = live.onGame((frame) =>
+            {
+                if (frame.match.id === untrack(openId))
+                {
+                    heard(frame.match, frame.events);
+                }
+            });
+
+            const offReply = live.onReply((frame) => waiting.get(frame.key)?.(frame));
+
+            let cancel: (() => void) | null = null;
+
+            const poll = (): void =>
+            {
+                cancel = runtime().clock.after(POLL_MS, () =>
+                {
+                    const cut = untrack(live.status);
+                    const shown = typeof document === 'undefined' || document.visibilityState === 'visible';
+
+                    if (untrack(openId) !== '' && shown && (cut === 'down' || cut === 'connecting'))
+                    {
+                        void catchUp().catch(() => undefined);
+                    }
+
+                    poll();
+                });
+            };
+
+            poll();
+
+            return () =>
+            {
+                cancel?.();
+                offNudge();
+                offGame();
+                offReply();
+            };
         },
 
         stop: () => undefined,
@@ -321,6 +406,9 @@ export const useBoard = createStore((): BoardApi =>
             setLatest(null);
             setEvents({ seq: 0, events: [] });
             inFlight = Promise.resolve();
+            heardFor = '';
+            heardRev = -1;
+            waiting.clear();
         }
     };
 });

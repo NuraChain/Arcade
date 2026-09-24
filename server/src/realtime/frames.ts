@@ -1,3 +1,5 @@
+import type { MatchEvent, MatchView } from '../schemas.ts';
+
 export type PresenceState = 'online' | 'away';
 
 export interface PresenceEntry
@@ -30,14 +32,23 @@ export type ServerFrame =
     | { v: 1; t: 'nudge'; n: number; scope: NudgeScope; id?: string; at: number }
     | { v: 1; t: 'typing'; n: number; who: string; id: string }
     | { v: 1; t: 'voice'; n: number; table: string; joined: boolean; peers: VoicePeer[] }
-    | { v: 1; t: 'signal'; n: number; table: string; from: string; kind: SignalKind; data: string };
+    | { v: 1; t: 'signal'; n: number; table: string; from: string; kind: SignalKind; data: string }
+    | { v: 1; t: 'game'; n: number; at: number; match: MatchView; events: MatchEvent[] }
+    | { v: 1; t: 'ack'; n: number; key: string; match: MatchView; applied: Applied; events: MatchEvent[] }
+    | { v: 1; t: 'refused'; n: number; key: string; match: string; status: number; message: string }
+    | { v: 1; t: 'pong'; n: number; at: number };
+
+export type Applied = 'now' | 'already' | 'stale';
 
 export type ClientFrame =
     | { t: 'sync' }
     | { t: 'presence'; state: PresenceState }
     | { t: 'typing'; id: string }
     | { t: 'voice'; table: string; on: boolean; muted: boolean }
-    | { t: 'signal'; table: string; to: string; kind: SignalKind; data: string };
+    | { t: 'signal'; table: string; to: string; kind: SignalKind; data: string }
+    | { t: 'play'; match: string; key: string; rev?: number; play: unknown }
+    | { t: 'resume'; match: string; rev: number }
+    | { t: 'ping' };
 
 /** The transport version, carried in the payload. Independent of `nura-e2ee/v1`, which seals. */
 export const REALTIME_WIRE = 'nura-rt/v1';
@@ -85,6 +96,17 @@ export const voice = (n: number, table: string, joined: boolean, peers: VoicePee
 export const signal = (n: number, table: string, from: string, kind: SignalKind, data: string): ServerFrame =>
     ({ v: 1, t: 'signal', n, table, from, kind, data });
 
+export const game = (n: number, at: number, match: MatchView, events: MatchEvent[]): ServerFrame =>
+    ({ v: 1, t: 'game', n, at, match, events });
+
+export const ack = (n: number, key: string, match: MatchView, applied: Applied, events: MatchEvent[]): ServerFrame =>
+    ({ v: 1, t: 'ack', n, key, match, applied, events });
+
+export const refused = (n: number, key: string, match: string, status: number, message: string): ServerFrame =>
+    ({ v: 1, t: 'refused', n, key, match, status, message });
+
+export const pong = (n: number, at: number): ServerFrame => ({ v: 1, t: 'pong', n, at });
+
 const KINDS = new Set(['offer', 'answer', 'ice']);
 
 const idOf = (value: unknown): value is string => typeof value === 'string' && value.length > 0 && value.length <= 64;
@@ -109,8 +131,14 @@ const SHAPES: Record<string, ReadonlySet<string>> = Object.assign(Object.create(
     presence: new Set(['v', 't', 'state']),
     typing: new Set(['v', 't', 'id']),
     voice: new Set(['v', 't', 'table', 'on', 'muted']),
-    signal: new Set(['v', 't', 'table', 'to', 'kind', 'data'])
+    signal: new Set(['v', 't', 'table', 'to', 'kind', 'data']),
+    play: new Set(['v', 't', 'match', 'key', 'rev', 'play']),
+    resume: new Set(['v', 't', 'match', 'rev']),
+    ping: new Set(['v', 't'])
 });
+
+const revOf = (value: unknown): value is number =>
+    typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 2_147_483_647;
 
 /**
  * The entire inbound attack surface, parsed strictly and totally.
@@ -167,6 +195,24 @@ export function parseClientFrame(text: string): ClientFrame | null
     if (frame.t === 'sync')
     {
         return { t: 'sync' };
+    }
+
+    if (frame.t === 'ping')
+    {
+        return { t: 'ping' };
+    }
+
+    if (frame.t === 'play')
+    {
+        return idOf(frame.match) && idOf(frame.key) && (frame.rev === undefined || revOf(frame.rev))
+            && typeof frame.play === 'object' && frame.play !== null && !Array.isArray(frame.play)
+            ? { t: 'play', match: frame.match, key: frame.key, ...(frame.rev === undefined ? {} : { rev: frame.rev as number }), play: frame.play }
+            : null;
+    }
+
+    if (frame.t === 'resume')
+    {
+        return idOf(frame.match) && revOf(frame.rev) ? { t: 'resume', match: frame.match, rev: frame.rev } : null;
     }
 
     if (frame.t === 'presence')

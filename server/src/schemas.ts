@@ -1467,6 +1467,8 @@ export const matchEvent = object({
 
 export const matchDelta = object({ match: matchView, events: array(matchEvent) });
 
+export type MatchEvent = Infer<typeof matchEvent>;
+
 /**
  * What an action answers.
  *

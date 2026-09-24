@@ -265,6 +265,28 @@ describe('who may see whom online', () =>
     });
 });
 
+describe('a game push', () =>
+{
+    it('reaches every socket of the seat it was composed for, at once, and nobody else', async () =>
+    {
+        const alex = await connect('alex');
+        const other = await connect('alex');
+        const sara = await connect('sara.k');
+        const reza = await connect('reza.t');
+        const board = (mine: number) => ({ id: 'm-1', rev: 5, mine }) as unknown as Parameters<typeof world.hub.gamePushed>[0][number]['match'];
+
+        world.hub.gamePushed([
+            { userId: 'alex', match: board(0), events: [] },
+            { userId: 'sara.k', match: board(1), events: [] }
+        ]);
+
+        expect(alex.wire.framesOf('game')).toMatchObject([{ match: { mine: 0 } }]);
+        expect(other.wire.framesOf('game')).toMatchObject([{ match: { mine: 0 } }]);
+        expect(sara.wire.framesOf('game')).toMatchObject([{ match: { mine: 1 } }]);
+        expect(reza.wire.framesOf('game')).toEqual([]);
+    });
+});
+
 describe('nudges', () =>
 {
     it('reaches exactly the recipients the chat domain named', async () =>

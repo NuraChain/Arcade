@@ -292,7 +292,7 @@ export default component PokerBoard(props: { match: MatchView; starting?: boolea
         await board.play({ kind: 'poker', verb: 'raise', amount: chosen });
     };
 
-    <div class="table-stage poker-stage">
+    <div data-rev={ props.match.rev } class="table-stage poker-stage">
         <div class="table-grid">
             <Show when={ view !== null }>
                 { () =>

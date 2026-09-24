@@ -23,6 +23,16 @@ export const socket =
 
     sent: [] as ClientFrame[],
 
+    /**
+     * Pings are the clock and the probe, counted apart so a test about what a store SAID is not
+     * about them, and answered at once the way the server answers them - a fake that never did would
+     * be modelling a dead server, and the probe would rightly hang up on it.
+     */
+    pings: 0,
+
+    /** Set to model a server that has stopped answering without closing the socket. */
+    deaf: false,
+
     /** The live connection's handlers, or null between connections. */
     live: null as RealtimeHandlers | null,
 
@@ -31,6 +41,8 @@ export const socket =
         socket.opens = 0;
         socket.closed = [];
         socket.sent = [];
+        socket.pings = 0;
+        socket.deaf = false;
         socket.live = null;
     },
 
@@ -85,10 +97,23 @@ export function createFakeSource(): RealtimeSource
 
         send(frame)
         {
-            if (socket.live !== null)
+            if (socket.live === null)
             {
-                socket.sent.push(frame);
+                return false;
             }
+
+            if (frame.t === 'ping')
+            {
+                socket.pings += 1;
+                if (!socket.deaf)
+                {
+                    socket.live.onFrame({ v: 1, t: 'pong', n: 0, at: 0 });
+                }
+                return true;
+            }
+
+            socket.sent.push(frame);
+            return true;
         }
     };
 }

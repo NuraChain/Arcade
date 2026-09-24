@@ -260,5 +260,25 @@ describe.skipIf(!active)('one seat cannot read another', () =>
 
             expect(await matches.since(await makeUser(), matchId, 0)).toBeNull();
         });
+
+        it('composes the pushed log for each seat separately, and for nobody with no seat', async () =>
+        {
+            const { matchId } = await secretMatch();
+            const feed = await matches.feed(matchId, 0);
+
+            const mine = JSON.stringify(feed!.events(0));
+            const theirs = JSON.stringify(feed!.events(1));
+            const nobody = JSON.stringify(feed!.events(null));
+
+            expect(mine).toContain(String(SECRETS[0]));
+            expect(mine, 'seat 0 was pushed seat 1 secret').not.toContain(String(SECRETS[1]));
+            expect(theirs).toContain(String(SECRETS[1]));
+            expect(theirs, 'seat 1 was pushed seat 0 secret').not.toContain(String(SECRETS[0]));
+
+            for (const secret of SECRETS)
+            {
+                expect(nobody, `a seatless reader was pushed ${ secret }`).not.toContain(String(secret));
+            }
+        });
     });
 });

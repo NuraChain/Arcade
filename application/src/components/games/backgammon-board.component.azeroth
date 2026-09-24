@@ -504,7 +504,7 @@ export default component BackgammonBoard(props: { match: MatchView; starting?: b
         row: view?.seats.find((one) => one.seat === seat)
     }));
 
-    <div class="table-stage bg-stage">
+    <div data-rev={ props.match.rev } class="table-stage bg-stage">
         <div class="table-grid bg-grid">
             <Show when={ view !== null }>
                 { () =>

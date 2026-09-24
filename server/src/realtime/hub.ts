@@ -1,6 +1,7 @@
 import { maySeeOnline, type Party, type Relation } from '../domains/social/policy.ts';
 import type { Principal } from '../http/auth.ts';
-import { hello, nudge, presence, signal, typing, voice, type PresenceEntry, type PresenceState, type ServerFrame, type SignalKind, type VoicePeer } from './frames.ts';
+import type { MatchEvent, MatchView } from '../schemas.ts';
+import { game, hello, nudge, presence, signal, typing, voice, type PresenceEntry, type PresenceState, type ServerFrame, type SignalKind, type VoicePeer } from './frames.ts';
 
 /**
  * What the hub needs from a socket.
@@ -52,6 +53,13 @@ export interface HubDeps
     accountMax: number;
 }
 
+export interface GamePush
+{
+    userId: string;
+    match: MatchView;
+    events: MatchEvent[];
+}
+
 export interface Connection
 {
     readonly id: string;
@@ -97,7 +105,8 @@ export interface Hub
     socialChanged(...userIds: string[]): void;
     edgesChanged(...userIds: string[]): void;
     selfChanged(userId: string, what: SelfTopic): void;
-    gameChanged(matchId: string, players: readonly string[]): void;
+    gamePushed(pushes: readonly GamePush[]): void;
+    reply(connection: Connection, build: (n: number) => ServerFrame): void;
     tableChanged(tableId: string, people: readonly string[]): void;
     tableViewed(userId: string, tableId: string): void;
     sessionsRevoked(sessionIds: readonly string[]): void;
@@ -149,15 +158,6 @@ export function createHub(deps: HubDeps): Hub
     const viewed = new Map<string, string[]>();
     const watchers = new Map<string, Set<string>>();
 
-    /**
-     * A board that moved, and who is playing on it.
-     *
-     * The players ride along rather than being resolved at flush time, because unlike a
-     * conversation's membership this set cannot change while the frame is in the air - a match's
-     * seats are fixed the moment it is dealt. It saves a query per burst and removes the only
-     * asynchronous step the other two fan-outs have.
-     */
-    const pendingGame = new Map<string, { at: number; players: readonly string[] }>();
     const pendingSocial = new Set<string>();
     let timer: ReturnType<typeof setTimeout> | null = null;
 
@@ -550,19 +550,12 @@ export function createHub(deps: HubDeps): Hub
         const social = [...pendingSocial];
         const moved = [...pendingEdges];
         const self = [...pendingSelf.entries()];
-        const games = [...pendingGame.entries()];
         const tables = [...pendingTable.entries()];
         pendingChat.clear();
         pendingSocial.clear();
         pendingEdges.clear();
         pendingSelf.clear();
-        pendingGame.clear();
         pendingTable.clear();
-
-        for (const [matchId, { at, players }] of games)
-        {
-            publish(players, (n) => nudge(n, 'game', at, matchId));
-        }
 
         for (const [tableId, { at, people }] of tables)
         {
@@ -759,10 +752,19 @@ export function createHub(deps: HubDeps): Hub
             schedule();
         },
 
-        gameChanged(matchId, players)
+        gamePushed(pushes)
         {
-            pendingGame.set(matchId, { at: deps.now(), players });
-            schedule();
+            const at = deps.now();
+
+            for (const push of pushes)
+            {
+                publish([push.userId], (n) => game(n, at, push.match, push.events));
+            }
+        },
+
+        reply(connection, build)
+        {
+            emit(held(connection), build);
         },
 
         socialChanged(...userIds)

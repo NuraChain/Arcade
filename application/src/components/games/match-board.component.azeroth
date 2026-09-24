@@ -177,7 +177,7 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
         return locale.t('match.move.step', { token, die: locale.n(ludo.die ?? 0) });
     };
 
-    <div class="table-stage p-2.5 rounded-hero [background:radial-gradient(ellipse_70%_60%_at_50%_42%,rgb(255_184_110/0.16),transparent_70%),radial-gradient(ellipse_85%_80%_at_50%_50%,transparent_52%,rgb(6_3_1/0.62)_100%),#3A2110_url('/board/ludo-table.webp')_center/cover_no-repeat] [box-shadow:inset_0_1px_0_rgb(255_255_255/0.07),inset_0_0_0_1px_rgb(0_0_0/0.45),0_24px_48px_-28px_rgb(0_0_0/0.9)] slim:mx-[calc(0.375rem_-_var(--page-pad,1rem))]">
+    <div data-rev={ props.match.rev } class="table-stage p-2.5 rounded-hero [background:radial-gradient(ellipse_70%_60%_at_50%_42%,rgb(255_184_110/0.16),transparent_70%),radial-gradient(ellipse_85%_80%_at_50%_50%,transparent_52%,rgb(6_3_1/0.62)_100%),#3A2110_url('/board/ludo-table.webp')_center/cover_no-repeat] [box-shadow:inset_0_1px_0_rgb(255_255_255/0.07),inset_0_0_0_1px_rgb(0_0_0/0.45),0_24px_48px_-28px_rgb(0_0_0/0.9)] slim:mx-[calc(0.375rem_-_var(--page-pad,1rem))]">
         <div class="table-grid ludo-grid">
             <div class="table-fit">
                 <div class="ludo-frame [--plate-row:3rem] [--plate-col:9.5rem] [direction:ltr] grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] [grid-template-areas:'tl_tr'_'board_board'_'bl_br'] items-center gap-2 inline-[min(100cqw,100cqh_-_2_*_var(--plate-row)_-_1rem)] fit-wide:grid-cols-[var(--plate-col)_auto_var(--plate-col)] fit-wide:grid-rows-[minmax(0,1fr)_minmax(0,1fr)] fit-wide:[grid-template-areas:'tl_board_tr'_'bl_board_br'] fit-wide:inline-auto fit-wide:gap-x-3 fit-wide:[--plate-col:6.5rem] fit-short:[--plate-col:5.75rem] fit-short:[--plate-row:2.75rem]">

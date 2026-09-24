@@ -6,6 +6,7 @@ import { connect as tcpConnect, type Socket } from 'node:net';
 import { randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 
+import { ConflictError } from '@azerothjs/http';
 import { FrameParser, OPCODE, serializeFrame } from '@azerothjs/ws';
 
 import { attachRealtime } from '../src/realtime/gateway.ts';
@@ -113,6 +114,21 @@ beforeAll(async () =>
                 noted.push('principal -> ' + (answer === null ? 'null' : answer.handle));
                 return answer;
             }
+        },
+        match: {
+            play: async (_me: string, matchId: string, input: { key: string }) =>
+            {
+                noted.push(`played ${ input.key }`);
+
+                if (matchId === 'refused')
+                {
+                    throw new ConflictError('It is not your turn.');
+                }
+
+                await settle(input.key === 'slow' ? 120 : 1);
+                return { match: { id: matchId, rev: 1 }, applied: 'now', events: [] };
+            },
+            since: async (_me: string, matchId: string) => ({ match: { id: matchId, rev: 4 }, events: [] })
         }
     } as unknown as Ports;
 
@@ -320,6 +336,59 @@ describe('a bound socket', () =>
         // said - which is exactly what it did while OPCODE.TEXT was undefined and this suite
         // parsed no frames at all.
         expect((await talker.closed).code).toBe(4400);
+    });
+
+    it('answers a ping with the server clock', async () =>
+    {
+        const talker = talk('/ws', { Origin: 'http://localhost:3100', Cookie: COOKIE });
+        await settle();
+
+        talker.send({ v: 1, t: 'ping' });
+        await settle(100);
+
+        expect(talker.frames.some((frame) => frame.t === 'pong' && typeof frame.at === 'number')).toBe(true);
+        talker.end();
+    });
+
+    it('plays a move over the socket and acknowledges it by key, in the order it was sent', async () =>
+    {
+        const talker = talk('/ws', { Origin: 'http://localhost:3100', Cookie: COOKIE });
+        await settle();
+
+        talker.send({ v: 1, t: 'play', match: 'm1', key: 'slow', rev: 0, play: { kind: 'ludo', verb: 'roll' } });
+        talker.send({ v: 1, t: 'play', match: 'm1', key: 'fast', play: { kind: 'ludo', verb: 'roll' } });
+        await settle(400);
+
+        const acks = talker.frames.filter((frame) => frame.t === 'ack').map((frame) => frame.t === 'ack' ? frame.key : '');
+        expect(acks).toEqual(['slow', 'fast']);
+        talker.end();
+    });
+
+    it('says why a play was refused, and refuses one carrying a field no play has', async () =>
+    {
+        const talker = talk('/ws', { Origin: 'http://localhost:3100', Cookie: COOKIE });
+        await settle();
+
+        talker.send({ v: 1, t: 'play', match: 'refused', key: 'k1', play: { kind: 'ludo', verb: 'roll' } });
+        talker.send({ v: 1, t: 'play', match: 'm1', key: 'k2', play: { kind: 'ludo', verb: 'roll', die: 6 } });
+        await settle(300);
+
+        const refusals = talker.frames.flatMap((frame) => frame.t === 'refused' ? [[frame.key, frame.status]] : []);
+        expect(refusals).toEqual([['k1', 409], ['k2', 422]]);
+        expect(noted).not.toContain('played k2');
+        talker.end();
+    });
+
+    it('resumes a match from a revision with a game frame', async () =>
+    {
+        const talker = talk('/ws', { Origin: 'http://localhost:3100', Cookie: COOKIE });
+        await settle();
+
+        talker.send({ v: 1, t: 'resume', match: 'm1', rev: 3 });
+        await settle(100);
+
+        expect(talker.frames.some((frame) => frame.t === 'game' && frame.match.rev === 4)).toBe(true);
+        talker.end();
     });
 
     it('does not bind a socket whose session turns out to be dead', async () =>

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { Server } from 'node:http';
 
+import { HttpError } from '@azerothjs/http';
 import { attachWebSockets } from '@azerothjs/ws';
 import type { Logger } from '@azerothjs/logger';
 
@@ -8,7 +9,8 @@ import type { ServerConfig } from '../env.ts';
 import type { Ports } from '../ports.ts';
 import { admit, toWebRequest } from './admit.ts';
 import { createHandshakeLimit } from './handshake-limit.ts';
-import { parseClientFrame, SIGNAL_DATA_MAX } from './frames.ts';
+import { matchPlayInput } from '../schemas.ts';
+import { ack, game, parseClientFrame, pong, refused, SIGNAL_DATA_MAX, type ClientFrame } from './frames.ts';
 import type { Connection, Hub } from './hub.ts';
 
 export interface GatewayDeps
@@ -30,11 +32,95 @@ const SWEEP_MS = 30_000;
 
 const THROTTLES: Record<string, number> = { sync: 5000, presence: 2000, typing: 3000 };
 
-const SIGNAL_WINDOW_MS = 10_000;
+const BUDGET_WINDOW_MS = 10_000;
 
-const SIGNALS_PER_WINDOW = 120;
+const BUDGETS: Record<string, number> = { voice: 30, signal: 120, play: 40, resume: 20, ping: 10 };
 
-const VOICE_PER_WINDOW = 30;
+const HEARTBEAT_MS = 15_000;
+
+const PONG_TIMEOUT_MS = 10_000;
+
+interface Line
+{
+    tail: Promise<void>;
+}
+
+const whole = (raw: unknown, parsed: unknown): boolean =>
+{
+    if (typeof raw !== 'object' || raw === null)
+    {
+        return raw === parsed;
+    }
+
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(raw) !== Array.isArray(parsed))
+    {
+        return false;
+    }
+
+    const kept = parsed as Record<string, unknown>;
+
+    return Object.keys(raw).every((key) => Object.hasOwn(kept, key) && whole((raw as Record<string, unknown>)[key], kept[key]));
+};
+
+const refusalOf = (error: unknown): { status: number; message: string } =>
+    error instanceof HttpError && error.expose
+        ? { status: error.status, message: error.message }
+        : { status: 500, message: 'Something went wrong.' };
+
+const queue = (line: Line, work: () => Promise<void>): void =>
+{
+    line.tail = line.tail.then(work, work);
+};
+
+async function playOver(deps: GatewayDeps, connection: Connection, frame: Extract<ClientFrame, { t: 'play' }>): Promise<void>
+{
+    const raw = { key: frame.key, ...(frame.rev === undefined ? {} : { rev: frame.rev }), play: frame.play };
+    const input = matchPlayInput.safeParse(raw);
+
+    if (!input.ok || !whole(raw, input.value))
+    {
+        deps.hub.reply(connection, (n) => refused(n, frame.key, frame.match, 422, 'That is not a move in this game.'));
+        return;
+    }
+
+    try
+    {
+        const answer = await deps.ports.match.play(connection.userId, frame.match, input.value);
+        deps.hub.reply(connection, (n) => ack(n, frame.key, answer.match, answer.applied, answer.events));
+    }
+    catch (error)
+    {
+        const refusal = refusalOf(error);
+
+        if (refusal.status === 500)
+        {
+            deps.log.error('realtime play failed', { connection: connection.id, error });
+        }
+
+        deps.hub.reply(connection, (n) => refused(n, frame.key, frame.match, refusal.status, refusal.message));
+    }
+}
+
+async function resumeOver(deps: GatewayDeps, connection: Connection, frame: Extract<ClientFrame, { t: 'resume' }>): Promise<void>
+{
+    try
+    {
+        const found = await deps.ports.match.since(connection.userId, frame.match, frame.rev);
+
+        if (found === null)
+        {
+            deps.hub.reply(connection, (n) => refused(n, '', frame.match, 404, 'No game there.'));
+            return;
+        }
+
+        deps.hub.reply(connection, (n) => game(n, Date.now(), found.match, found.events));
+    }
+    catch (error)
+    {
+        const refusal = refusalOf(error);
+        deps.hub.reply(connection, (n) => refused(n, '', frame.match, refusal.status, refusal.message));
+    }
+}
 
 /**
  * The one place a WebSocket is accepted.
@@ -75,6 +161,8 @@ export function attachRealtime(server: Server, deps: GatewayDeps): () => void
         // a connection cap in the thousands.
         maxPayload: SIGNAL_DATA_MAX + 512,
         maxMessage: SIGNAL_DATA_MAX + 512,
+        heartbeatMs: HEARTBEAT_MS,
+        pongTimeoutMs: PONG_TIMEOUT_MS,
 
         verifyOrigin: admit({
             origin: deps.config.origin,
@@ -102,9 +190,25 @@ export function attachRealtime(server: Server, deps: GatewayDeps): () => void
 
             const buffered: string[] = [];
             const lastSeen: Record<string, number> = {};
-            let signals: number[] = [];
-            let voices: number[] = [];
+            const spent: Record<string, number[]> = {};
+            const line: Line = { tail: Promise.resolve() };
             let faults = 0;
+
+            const spend = (kind: string, at: number): boolean =>
+            {
+                const recent = (spent[kind] ?? []).filter((when) => at - when < BUDGET_WINDOW_MS);
+
+                if (recent.length >= (BUDGETS[kind] ?? 0))
+                {
+                    refusing = true;
+                    socket.close(4429, `Too many ${ kind } frames`);
+                    return false;
+                }
+
+                recent.push(at);
+                spent[kind] = recent;
+                return true;
+            };
 
             /**
              * Whether this socket has already been refused.
@@ -136,31 +240,38 @@ export function attachRealtime(server: Server, deps: GatewayDeps): () => void
 
                 const at = Date.now();
 
+                if (frame.t in BUDGETS && !spend(frame.t, at))
+                {
+                    return;
+                }
+
                 if (frame.t === 'voice')
                 {
-                    voices = voices.filter((when) => at - when < SIGNAL_WINDOW_MS);
-                    if (voices.length >= VOICE_PER_WINDOW)
-                    {
-                        refusing = true;
-                        socket.close(4429, 'Too many voice changes');
-                        return;
-                    }
-                    voices.push(at);
                     deps.hub.voice(connection, frame.table, frame.on, frame.muted);
                     return;
                 }
 
                 if (frame.t === 'signal')
                 {
-                    signals = signals.filter((when) => at - when < SIGNAL_WINDOW_MS);
-                    if (signals.length >= SIGNALS_PER_WINDOW)
-                    {
-                        refusing = true;
-                        socket.close(4429, 'Too many signals');
-                        return;
-                    }
-                    signals.push(at);
                     deps.hub.signal(connection, frame.table, frame.to, frame.kind, frame.data);
+                    return;
+                }
+
+                if (frame.t === 'ping')
+                {
+                    deps.hub.reply(connection, (n) => pong(n, Date.now()));
+                    return;
+                }
+
+                if (frame.t === 'play')
+                {
+                    queue(line, () => playOver(deps, connection, frame));
+                    return;
+                }
+
+                if (frame.t === 'resume')
+                {
+                    queue(line, () => resumeOver(deps, connection, frame));
                     return;
                 }
 

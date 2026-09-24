@@ -427,7 +427,7 @@ describe.skipIf(!active)('a match, against a real database', () =>
 
             await expireNow(load.match.id);
 
-            expect(await matches.expireNext()).toEqual({ matchId: load.match.id, game: 'ludo', played: true });
+            expect(await matches.expireNext()).toEqual({ matchId: load.match.id, game: 'ludo', played: true, before: load.match.rev });
             expect(await matches.expireNext()).toBeNull();
         });
 
@@ -574,7 +574,7 @@ describe.skipIf(!active)('a match, against a real database', () =>
             expect(first?.played === false ? first.reason : '').toContain('poisoned');
             expect(await deadlineOf(poisonedMatch.match.id)).toBe(true);
 
-            expect(await sweeper.expireNext()).toEqual({ matchId: healthyMatch.match.id, game: 'ludo', played: true });
+            expect(await sweeper.expireNext()).toEqual({ matchId: healthyMatch.match.id, game: 'ludo', played: true, before: healthyMatch.match.rev });
             expect(await sweeper.expireNext()).toBeNull();
         });
     });
