@@ -13,7 +13,7 @@ export const landing: Pick<Dictionary, keyof typeof reference> = {
     'nav.menu': 'منو',
     'nav.close': 'بستن منو',
 
-    'landing.arrival.eyebrow': 'بازی کن. وصل شو. ببر.',
+    'landing.arrival.eyebrow': 'بازی کن. وصل شو. رقابت کن.',
     'landing.arrival.lead': 'بازی‌های همیشگی،',
     'landing.arrival.accent': 'این بار کنار هم.',
     'landing.arrival.body': 'حکم، پوکر، تخته‌نرد و منچ؛ با دوستانت یا با چهره‌های تازه. پشت یک میز باز بنشین یا میز خودت را بچین.',
@@ -59,14 +59,14 @@ export const landing: Pick<Dictionary, keyof typeof reference> = {
     'landing.compete.boards.title': 'جدول‌های رده‌بندی',
     'landing.compete.boards.body': 'امروز، این ماه، امسال و همهٔ زمان‌ها؛ تا تازه‌واردها هم به صدر برسند.',
     'landing.compete.rating.title': 'امتیازی که جابه‌جا می‌شود',
-    'landing.compete.rating.body': 'هر بازی تمام‌شده آن را جابه‌جا می‌کند و بردن از یک میز قوی بیشتر می‌ارزد.',
+    'landing.compete.rating.body': 'هر بازی‌ای که تا پایان انجام شود آن را جابه‌جا می‌کند و بردن از یک میز قوی بیشتر می‌ارزد.',
     'landing.compete.medals.title': 'مدال‌هایی که ارزش جمع کردن دارند',
     'landing.compete.medals.body': '۵٬۰۰۰ دستاورد در نردبان‌هایی از برنز تا الماس، برای هر بازی و برای همهٔ بازی‌ها با هم.',
     'landing.compete.levels.title': 'سطح‌ها',
     'landing.compete.levels.body': 'بازی کردن امتیاز تجربه می‌دهد و سطحت آن را نشان می‌دهد. یک افتخار است؛ هیچ چیزی پشتش قفل نیست.',
 
     'landing.finale.title': 'بیا سر میز',
-    'landing.finale.lead': 'با متامسک، تراست والت یا کیف پول نورا وارد شو، یا مهمان بیا. به فارسی یا انگلیسی بازی کن.',
+    'landing.finale.lead': 'با متامسک، تراست والت یا کیف پول نورا وارد شو، یا مهمان بازی کن؛ برای گفت‌وگو کیف پول لازم است. به فارسی یا انگلیسی بازی کن.',
 
     'footer.rights': 'همهٔ حقوق محفوظ است.',
     'locale.label': 'زبان',

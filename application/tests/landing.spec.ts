@@ -103,6 +103,15 @@ describe('the landing game card', () =>
         expect(container.querySelector('.tally')!.textContent).toBe('۲–۴');
     });
 
+    it('lists the seat counts a game really plays when they are not a run', () =>
+    {
+        const poker = GAMES.find((game) => game.id === 'poker')!;
+        expect(routed(() => LandingGameCard({ game: poker, returning: false })).textContent).toMatch(/2, 6,? or 9 players/);
+        cleanup();
+        useLocale().setLocale('fa');
+        expect(routed(() => LandingGameCard({ game: poker, returning: false })).textContent).toMatch(/۲،.*۶،? یا ۹ بازیکن/);
+    });
+
     it('names its button after the game', () =>
     {
         const container = routed(() => LandingGameCard({ game: ludo, returning: false }));

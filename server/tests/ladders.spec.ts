@@ -152,7 +152,7 @@ describe('the ladders', () =>
 
     it('draw every icon from the registry the client ships', () =>
     {
-        const registry = readFileSync(new URL('../../application/src/icons/registry.ts', import.meta.url), 'utf8');
+        const registry = ['registry.ts', 'all.ts'].map((file) => readFileSync(new URL(`../../application/src/icons/${ file }`, import.meta.url), 'utf8')).join('\n');
 
         for (const icon of new Set(RUNGS.map((rung) => rung.icon)))
         {

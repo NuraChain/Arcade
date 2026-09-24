@@ -52,7 +52,7 @@ for game in ONLY:
     everything = parts['surfaces'] + parts['raised'] + parts['pieces']
     studio.bake_floor(game, parts['root'], [parts['plinth']] + everything)
     studio.bake_contact(game, 'plinth', parts['root'], studio.PLINTH_HEIGHT, studio.PLINTH_RADIUS * 2.0, everything, [parts['plinth']] + decals())
-    studio.bake_contact(game, 'surface', parts['root'], parts['surface_z'], parts['surface_size'], parts['raised'] + parts['pieces'], [parts['plinth']] + parts['surfaces'] + decals())
+    studio.bake_contact(game, 'surface', parts['root'], parts['surface_z'], parts['surface_size'], parts['raised'] + parts['pieces'], [parts['plinth']] + parts['surfaces'] + decals(), clip=parts.get('surface_clip'))
     if PREVIEW:
         preview(game, parts)
     for obj in members + decals():

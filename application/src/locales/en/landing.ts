@@ -56,14 +56,14 @@ export const landing = {
     'landing.compete.boards.title': 'Leaderboards',
     'landing.compete.boards.body': 'Today, this month, this year and all time, so someone new can still reach the top.',
     'landing.compete.rating.title': 'A rating that moves',
-    'landing.compete.rating.body': 'Every finished game moves it, and beating a strong table counts for more.',
+    'landing.compete.rating.body': 'Every game played to the end moves it, and beating a strong table counts for more.',
     'landing.compete.medals.title': 'Medals worth collecting',
     'landing.compete.medals.body': '5,000 achievements in ladders from bronze to diamond, for every game and across all of them.',
     'landing.compete.levels.title': 'Levels',
     'landing.compete.levels.body': 'Playing earns XP and your level shows it. It is a trophy; nothing is locked behind it.',
 
     'landing.finale.title': 'Pull up a chair',
-    'landing.finale.lead': 'Sign in with MetaMask, Trust Wallet or Nura Wallet, or come in as a guest. Play in English or Persian.',
+    'landing.finale.lead': 'Sign in with MetaMask, Trust Wallet or Nura Wallet, or play as a guest; chatting needs a wallet. Play in English or Persian.',
 
     'footer.rights': 'All rights reserved.',
     'locale.label': 'Language',

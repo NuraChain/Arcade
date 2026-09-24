@@ -2538,7 +2538,7 @@ html:has(.site-drawer[open])
 {
     .scene-column
     {
-        max-width: 26rem;
+        max-width: min(26rem, 44vw);
     }
 }
 

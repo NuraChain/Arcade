@@ -2,7 +2,7 @@ import type { Dictionary } from '../en/index.ts';
 import type { play as reference } from '../en/play.ts';
 
 export const play: Pick<Dictionary, keyof typeof reference> = {
-    'home.hero.eyebrow': 'بازی کن. وصل شو. ببر.',
+    'home.hero.eyebrow': 'بازی کن. وصل شو. رقابت کن.',
     'home.hero.lead': 'امروز یک بازیِ',
     'home.hero.accent': 'به‌یادماندنی',
     'home.hero.body': 'به یک بازی سریع بپیوند یا میز خودت را باز کن و با دوستانت بازی کن.',

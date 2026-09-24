@@ -137,5 +137,6 @@ def build():
         'pieces': points + placed + dice + cube,
         'surface_z': FIELD_TOP + 0.0004,
         'surface_size': 0.44,
+        'surface_clip': (WIDTH, DEPTH),
         'hero': {'look_at': (0.0, 0.0, 0.15), 'position': (-0.3, -0.62, 0.5), 'fov': 30.0}
     }

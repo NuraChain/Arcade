@@ -505,6 +505,7 @@ console.log('\n[10] the landing asks the server for nothing, rests when nothing 
             asked.push(path);
         }
     });
+    fresh.page.on('websocket', (socket) => asked.push(new URL(socket.url()).pathname));
     try
     {
         await fresh.page.goto(`${ BASE }/`, { waitUntil: 'networkidle' });
@@ -635,12 +636,13 @@ console.log('\n[10] the landing asks the server for nothing, rests when nothing 
                 return [...document.querySelectorAll('[data-beat]')].map((element, index) =>
                 {
                     const box = element.getBoundingClientRect();
-                    return index === 0 ? 0 : Math.max(0, Math.round(box.top + window.scrollY + (box.height - stage) / 2));
+                    return index === 0 ? 0 : Math.max(0, Math.round(box.top + window.scrollY + Math.min(0, (box.height - stage) / 2)));
                 });
             });
             const beats = ['arrival', 'games', 'together', 'compete', 'finale'];
             let worst = Infinity;
             let where = '';
+            const unmeasured = [];
             for (const [index, at] of arrivals.entries())
             {
                 await page.evaluate((y) => window.scrollTo(0, y), at);
@@ -667,6 +669,10 @@ console.log('\n[10] the landing asks the server for nothing, rests when nothing 
                 const png = await page.screenshot();
                 await page.evaluate(() => document.getElementById('qa-ink')?.remove());
                 const ratios = await luminance(png, boxes);
+                if (ratios.filter((ratio) => ratio !== null).length === 0)
+                {
+                    unmeasured.push(beats[index]);
+                }
                 ratios.forEach((ratio, at) =>
                 {
                     if (ratio !== null && ratio < worst)
@@ -676,6 +682,7 @@ console.log('\n[10] the landing asks the server for nothing, rests when nothing 
                     }
                 });
             }
+            record(`${ cell } every beat has copy to measure`, unmeasured.length === 0, unmeasured.join(', '));
             record(`${ cell } every line of copy clears 4.5:1 against the brightest pixel behind it`, worst >= 4.5, `${ worst.toFixed(2) }:1 at ${ where }`);
         }
         catch (e)

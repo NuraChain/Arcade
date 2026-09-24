@@ -189,7 +189,7 @@ def bake_floor(game, root, members, resolution=512):
     return _decal_plane('decal-floor-' + game, FLOOR_SIZE, 0.0005, path, root)
 
 
-def bake_contact(game, label, root, surface_z, size, casters, hidden, resolution=1024):
+def bake_contact(game, label, root, surface_z, size, casters, hidden, resolution=1024, clip=None):
     os.makedirs(BAKES, exist_ok=True)
     bpy.ops.mesh.primitive_plane_add(size=size, location=(0.0, 0.0, surface_z))
     receiver = bpy.context.active_object
@@ -210,6 +210,10 @@ def bake_contact(game, label, root, surface_z, size, casters, hidden, resolution
     full = np.maximum(open_sky[:, :, :3].mean(axis=2), 1e-6)
     out = np.zeros((resolution, resolution, 4), dtype=np.float32)
     out[:, :, 3] = np.clip(1.0 - lit / full, 0.0, 1.0) * 0.92
+    if clip is not None:
+        axis = ((np.arange(resolution) + 0.5) / resolution - 0.5) * size
+        across, along = np.meshgrid(axis, axis)
+        out[:, :, 3] *= ((np.abs(across) <= clip[0] / 2.0) & (np.abs(along) <= clip[1] / 2.0)).astype(np.float32)
     path = _write_png(out, os.path.join(BAKES, '%s-%s.png' % (game, label)))
     return _decal_plane('decal-%s-%s' % (label, game), size, surface_z + 0.0001, path, root)
 

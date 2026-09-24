@@ -1,13 +1,23 @@
 import type { Game } from '../../data/games.ts';
+import { TABLE_RULES } from '../../data/tables.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 
 export default component SeatCount(props: { game: Game; class?: string })
 {
     const locale = useLocale();
 
-    derived range = props.game.minPlayers === props.game.maxPlayers
-        ? locale.n(props.game.minPlayers)
-        : `${ locale.n(props.game.minPlayers) }–${ locale.n(props.game.maxPlayers) }`;
+    derived seats = TABLE_RULES[props.game.id].seats;
 
-    <span class={ props.class ?? '' }><span class="tally">{ range }</span> { locale.t('games.players') }</span>
+    derived run = seats.every((count, index) => index === 0 || count === seats[index - 1] + 1);
+
+    derived range = seats.length === 1
+        ? locale.n(seats[0])
+        : `${ locale.n(seats[0]) }–${ locale.n(seats[seats.length - 1]) }`;
+
+    <Show
+        when={ run }
+        fallback={ <span class={ props.class ?? '' }>{ locale.list(seats.map((count) => locale.n(count)), { type: 'disjunction' }) } { locale.t('games.players') }</span> }
+    >
+        { () => <span class={ props.class ?? '' }><span class="tally">{ range }</span> { locale.t('games.players') }</span> }
+    </Show>
 }

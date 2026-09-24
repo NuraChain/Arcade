@@ -93,7 +93,7 @@ export default component WorldCanvas()
                     const box = element.getBoundingClientRect();
                     return {
                         name: element.dataset.beat ?? '',
-                        at: index === 0 ? 0 : Math.max(0, box.top + window.scrollY + (box.height - stage) / 2)
+                        at: index === 0 ? 0 : Math.max(0, box.top + window.scrollY + Math.min(0, (box.height - stage) / 2))
                     };
                 });
                 handle.measure(beats);
