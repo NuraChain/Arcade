@@ -1,161 +1,158 @@
 #!/usr/bin/env node
 
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { GAMES } from '../../application/src/data/games.ts';
+
 const OUT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', 'application', 'public', 'world');
+
+const ALLOWED = new Set([
+    'EXT_meshopt_compression',
+    'EXT_mesh_gpu_instancing',
+    'EXT_texture_webp',
+    'KHR_materials_clearcoat',
+    'KHR_materials_sheen',
+    'KHR_texture_transform'
+]);
+
+export const BUDGETS = {
+    'showcase-desktop.glb': { bytes: 2.5 * 1024 * 1024, largestTexture: 2048 },
+    'showcase-phone.glb': { bytes: 1.0 * 1024 * 1024, largestTexture: 1024 }
+};
+
+const UNIQUE_TRIANGLES = 40000;
+const DRAWN_TRIANGLES = 120000;
+const DRAW_CALLS = 90;
 
 function readGlb(path)
 {
     const buffer = readFileSync(path);
-    const jsonLength = buffer.readUInt32LE(12);
-    const json = JSON.parse(buffer.subarray(20, 20 + jsonLength).toString('utf8'));
-    const binStart = 20 + jsonLength + 8;
-    return { json, bin: buffer.subarray(binStart) };
+    const length = buffer.readUInt32LE(12);
+    return JSON.parse(buffer.subarray(20, 20 + length).toString('utf8'));
 }
 
-const COMPONENT = {
-    5121: { bytes: 1, read: (b, o) => b.readUInt8(o) / 255 },
-    5123: { bytes: 2, read: (b, o) => b.readUInt16LE(o) / 65535 },
-    5126: { bytes: 4, read: (b, o) => b.readFloatLE(o) }
-};
-
-function compressed(json, accessor)
+function webpSize(buffer)
 {
-    const view = json.bufferViews?.[accessor.bufferView];
-    return view?.extensions !== undefined;
-}
-
-function firstColour({ json, bin })
-{
-    for (const mesh of json.meshes ?? [])
+    const format = buffer.toString('ascii', 12, 16);
+    if (format === 'VP8 ')
     {
-        for (const primitive of mesh.primitives)
+        return [buffer.readUInt16LE(26) & 0x3fff, buffer.readUInt16LE(28) & 0x3fff];
+    }
+    if (format === 'VP8L')
+    {
+        const bits = buffer.readUInt32LE(21);
+        return [(bits & 0x3fff) + 1, ((bits >> 14) & 0x3fff) + 1];
+    }
+    if (format === 'VP8X')
+    {
+        return [1 + buffer.readUIntLE(24, 3), 1 + buffer.readUIntLE(27, 3)];
+    }
+    return [0, 0];
+}
+
+export function inspect(file)
+{
+    const path = join(OUT, file);
+    const budget = BUDGETS[file];
+    const problems = [];
+    if (!existsSync(path))
+    {
+        return { file, problems: [`${ file } was not built`] };
+    }
+    const bytes = statSync(path).size;
+    const gltf = readGlb(path);
+    const raw = readFileSync(path);
+    const binStart = 20 + raw.readUInt32LE(12) + 8;
+
+    const trianglesOf = (mesh) => mesh.primitives.reduce((sum, primitive) => sum + (primitive.indices === undefined ? 0 : gltf.accessors[primitive.indices].count / 3), 0);
+    const unique = gltf.meshes.reduce((sum, mesh) => sum + trianglesOf(mesh), 0);
+
+    let drawn = 0;
+    let calls = 0;
+    for (const node of gltf.nodes)
+    {
+        if (node.mesh === undefined)
         {
-            const index = primitive.attributes.COLOR_0;
-            if (index === undefined)
-            {
-                continue;
-            }
-            const accessor = json.accessors[index];
-            if (compressed(json, accessor))
-            {
-                return { colour: null, componentType: accessor.componentType, type: accessor.type };
-            }
-            const view = json.bufferViews[accessor.bufferView];
-            const spec = COMPONENT[accessor.componentType];
-            const base = (view.byteOffset ?? 0) + (accessor.byteOffset ?? 0);
-            const channels = accessor.type === 'VEC4' ? 4 : 3;
-            const out = [];
-            for (let channel = 0; channel < channels; channel += 1)
-            {
-                out.push(spec.read(bin, base + channel * spec.bytes));
-            }
-            return { colour: out, componentType: accessor.componentType, type: accessor.type };
+            continue;
+        }
+        const instancing = node.extensions?.EXT_mesh_gpu_instancing;
+        const copies = instancing === undefined ? 1 : gltf.accessors[instancing.attributes.TRANSLATION].count;
+        drawn += trianglesOf(gltf.meshes[node.mesh]) * copies;
+        calls += gltf.meshes[node.mesh].primitives.length;
+    }
+
+    let largest = 0;
+    for (const image of gltf.images ?? [])
+    {
+        const view = gltf.bufferViews[image.bufferView];
+        const start = binStart + (view.byteOffset ?? 0);
+        const [width, height] = webpSize(raw.subarray(start, start + view.byteLength));
+        largest = Math.max(largest, width, height);
+    }
+
+    const roots = gltf.scenes[gltf.scene ?? 0].nodes.map((index) => gltf.nodes[index].name).sort();
+    const expected = GAMES.map((game) => game.id).sort();
+    const decals = (gltf.materials ?? []).filter((material) => material.name.startsWith('decal-')).map((material) => material.name);
+
+    if (bytes > budget.bytes)
+    {
+        problems.push(`${ (bytes / 1024).toFixed(0) } KB is over its ${ (budget.bytes / 1024).toFixed(0) } KB budget`);
+    }
+    if (unique > UNIQUE_TRIANGLES)
+    {
+        problems.push(`${ unique } unique triangles is over ${ UNIQUE_TRIANGLES }`);
+    }
+    if (drawn > DRAWN_TRIANGLES)
+    {
+        problems.push(`${ drawn } drawn triangles is over ${ DRAWN_TRIANGLES }`);
+    }
+    if (calls > DRAW_CALLS)
+    {
+        problems.push(`${ calls } draw calls is over ${ DRAW_CALLS }`);
+    }
+    if (largest > budget.largestTexture)
+    {
+        problems.push(`a ${ largest }px texture is over ${ budget.largestTexture }px`);
+    }
+    for (const extension of gltf.extensionsUsed ?? [])
+    {
+        if (!ALLOWED.has(extension))
+        {
+            problems.push(`uses ${ extension }, which the loader is not set up for`);
         }
     }
-    return null;
-}
-
-const files = readdirSync(OUT).filter((name) => name.endsWith('.glb')).sort();
-const images = readdirSync(OUT).filter((name) => /\.(webp|png)$/.test(name)).sort();
-
-if (files.length === 0)
-{
-    console.log('No GLBs built yet. Run `npm run assets`.');
-    process.exit(0);
-}
-
-const showColours = process.argv.includes('--colours') || process.argv.includes('--colors');
-let failed = 0;
-
-console.log('asset                      tris    verts  attributes                       materials');
-console.log('-'.repeat(110));
-
-let totalTris = 0;
-
-for (const file of files)
-{
-    const parsed = readGlb(join(OUT, file));
-    const gltf = parsed.json;
-    const accessors = gltf.accessors ?? [];
-
-    let tris = 0;
-    let verts = 0;
-    const attributes = new Set();
-    const missingColour = [];
-
-    for (const mesh of gltf.meshes ?? [])
+    if (roots.join(',') !== expected.join(','))
     {
-        for (const primitive of mesh.primitives)
+        problems.push(`roots are ${ roots.join(', ') } where the games are ${ expected.join(', ') }`);
+    }
+    for (const game of expected)
+    {
+        for (const kind of ['floor', 'plinth', 'surface'])
         {
-            if (primitive.indices !== undefined)
+            if (!decals.includes(`decal-${ kind }-${ game }`))
             {
-                tris += accessors[primitive.indices].count / 3;
-            }
-            const position = primitive.attributes.POSITION;
-            if (position !== undefined)
-            {
-                verts += accessors[position].count;
-            }
-            for (const key of Object.keys(primitive.attributes))
-            {
-                attributes.add(key);
-            }
-            if (primitive.attributes.COLOR_0 === undefined)
-            {
-                missingColour.push(mesh.name);
+                problems.push(`${ game } has no ${ kind } decal`);
             }
         }
     }
 
-    totalTris += tris;
-    const materials = (gltf.materials ?? []).map((material) => material.name).join(' ');
-    const meshopt = (gltf.extensionsUsed ?? []).includes('EXT_meshopt_compression') ? ' meshopt' : '';
-    const embeddedBytes = (gltf.images ?? []).reduce((sum, image) =>
-        sum + (image.bufferView === undefined ? 0 : (gltf.bufferViews[image.bufferView].byteLength ?? 0)), 0);
+    return { file, bytes, unique, drawn, calls, largest, problems };
+}
 
-    console.log(
-        file.replace(/\.glb$/, '').padEnd(24) +
-        String(tris).padStart(7) +
-        String(verts).padStart(9) +
-        '  ' + ([...attributes].sort().join(',') + meshopt).padEnd(31) +
-        '  ' + materials
-    );
-
-    if (missingColour.length > 0)
+if (process.argv[1] === fileURLToPath(import.meta.url))
+{
+    let failed = 0;
+    for (const file of Object.keys(BUDGETS))
     {
-        failed += 1;
-        console.log(`    FAIL: no COLOR_0 on ${ [...new Set(missingColour)].join(', ') } - renders black under vertexColors`);
-    }
-    if (embeddedBytes > 8 * 1024)
-    {
-        failed += 1;
-        console.log(`    FAIL: ${ (embeddedBytes / 1024).toFixed(1) } KB of embedded images - the atlas must stay external`);
-    }
-
-    if (showColours)
-    {
-        const sample = firstColour(parsed);
-        if (sample !== null && sample.colour !== null)
+        const report = inspect(file);
+        console.log(`${ file.padEnd(24) }${ String(Math.round((report.bytes ?? 0) / 1024)).padStart(6) } KB  ${ report.unique ?? 0 } unique / ${ report.drawn ?? 0 } drawn tris  ${ report.calls ?? 0 } calls  ${ report.largest ?? 0 }px`);
+        for (const problem of report.problems)
         {
-            const linear = sample.colour.slice(0, 3).map((value) => value.toFixed(4)).join(', ');
-            console.log(`    COLOR_0 ${ sample.type }/${ sample.componentType } first = [${ linear }]`);
+            failed += 1;
+            console.log(`    FAIL: ${ problem }`);
         }
     }
+    process.exit(failed > 0 ? 1 : 0);
 }
-
-console.log('-'.repeat(110));
-console.log(`${ 'total'.padEnd(24) }${ String(totalTris).padStart(7) }`);
-
-if (images.length > 0)
-{
-    console.log('');
-    for (const image of images)
-    {
-        console.log(`${ image.padEnd(24) }${ (statSync(join(OUT, image)).size / 1024).toFixed(1).padStart(9) } KB`);
-    }
-}
-
-process.exit(failed > 0 ? 1 : 0);

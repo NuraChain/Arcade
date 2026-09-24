@@ -1,94 +1,33 @@
 import bpy
 import bmesh
+import json
 import math
 import os
+import re
+import urllib.request
 from mathutils import Vector
 
 import numpy as np
+
+HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ROOT = os.path.abspath(os.path.join(HERE, '..', '..'))
+SCRATCH = os.path.join(HERE, 'scratch')
+TEXTURES = os.path.join(SCRATCH, 'textures')
+ART = os.path.join(SCRATCH, 'art')
+TOKENS = os.path.join(ROOT, 'application', 'src', 'styles', 'tokens.css')
+STUDIO = os.path.join(ROOT, 'application', 'src', 'world', 'render', 'studio.json')
 
 
 def output_dir():
     base = os.environ.get('NURA_OUT')
     if base is None:
-        here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        base = os.path.join(here, '..', '..', 'application', 'public', 'world')
+        base = os.path.join(ROOT, 'application', 'public', 'world')
     os.makedirs(base, exist_ok=True)
     return os.path.abspath(base)
 
 
 def output_path(name):
     return os.path.join(output_dir(), name + '.glb')
-
-
-PALETTE = {
-    'felt': '#1D5647',
-    'felt_dark': '#143D33',
-    'felt_light': '#276B59',
-    'wood': '#6B4327',
-    'wood_dark': '#4A2D19',
-    'wood_light': '#8A5B37',
-    'walnut': '#5A3A22',
-    'walnut_dark': '#3E2716',
-    'brass': '#B98A3C',
-    'brass_dark': '#8A6528',
-    'ivory': '#E8DCC4',
-    'ivory_dim': '#CFC3A8',
-    'bone': '#E9E1CF',
-    'ebony': '#1E1A18',
-    'leather': '#6B3F2A',
-    'leather_dark': '#4E2C1D',
-    'oxblood': '#6E1A1E',
-    'enamel': '#C96F5A',
-    'enamel_blue': '#4E7C8C',
-    'enamel_green': '#5E8C63',
-    'enamel_sand': '#D8A85E',
-    'ludo_red': '#CC332E',
-    'ludo_green': '#2E854D',
-    'ludo_yellow': '#EDBD2E',
-    'ludo_blue': '#2E66B8',
-    'chip_white': '#F0EEE3',
-    'chip_red': '#B31F24',
-    'chip_blue': '#26529E',
-    'chip_green': '#24704A',
-    'chip_black': '#1A1A1C',
-    'cream': '#F2EBD6',
-    'lamp': '#FFB43D',
-    'shade': '#2A3A40',
-    'stone': '#33474F',
-    'stone_dark': '#22343B',
-    'rope': '#8C7A5E',
-    'leaf': '#3E6B4F',
-    'leaf_dark': '#2C4F3A',
-    'white': '#F4F2EE',
-    'black': '#141416',
-    'charcoal': '#2B2B30',
-    'navy': '#232C3F',
-    'denim': '#3A4A66',
-    'olive': '#5B5E3E',
-    'skin_light': '#E6B896',
-    'skin_medium': '#B97C57',
-    'skin_deep': '#6A4229',
-    'hair_black': '#1A1512',
-    'hair_brown': '#4A2E1E',
-    'hair_auburn': '#7A3F22',
-    'hair_grey': '#8C8580'
-}
-
-MATERIALS = {
-    'felt': {'roughness': 0.95, 'metallic': 0.0},
-    'wood': {'roughness': 0.35, 'metallic': 0.0},
-    'brass': {'roughness': 0.28, 'metallic': 0.20},
-    'ivory': {'roughness': 0.70, 'metallic': 0.0},
-    'enamel': {'roughness': 0.50, 'metallic': 0.0},
-    'glow': {'roughness': 1.0, 'metallic': 0.0},
-    'print': {'roughness': 0.55, 'metallic': 0.0},
-    'leather': {'roughness': 0.70, 'metallic': 0.0},
-    'lacquer': {'roughness': 0.18, 'metallic': 0.0, 'coat': 0.3},
-    'glass': {'roughness': 0.05, 'metallic': 0.0, 'transmission': 0.9},
-    'skin': {'roughness': 0.55, 'metallic': 0.0},
-    'cloth': {'roughness': 0.85, 'metallic': 0.0},
-    'hair': {'roughness': 0.45, 'metallic': 0.0}
-}
 
 
 def srgb(hex_colour, alpha=1.0):
@@ -100,111 +39,130 @@ def srgb(hex_colour, alpha=1.0):
     return (out[0], out[1], out[2], alpha)
 
 
-def colour(name, alpha=1.0):
-    return srgb(PALETTE[name], alpha) if name in PALETTE else srgb(name, alpha)
+_tokens = None
+
+
+def token(name):
+    global _tokens
+    if _tokens is None:
+        with open(TOKENS, encoding='utf-8') as handle:
+            _tokens = dict(re.findall(r'--([a-z0-9-]+):\s*(#[0-9A-Fa-f]{6})', handle.read()))
+    return _tokens[name]
+
+
+def studio():
+    with open(STUDIO, encoding='utf-8') as handle:
+        return json.load(handle)
+
+
+def texture(asset, kind, resolution='2k'):
+    os.makedirs(TEXTURES, exist_ok=True)
+    path = os.path.join(TEXTURES, f'{asset}_{kind}_{resolution}.jpg')
+    if os.path.exists(path):
+        return path
+    request = urllib.request.Request(f'https://api.polyhaven.com/files/{asset}', headers={'User-Agent': 'nura-games-build'})
+    files = json.loads(urllib.request.urlopen(request).read())
+    url = files[kind][resolution]['jpg']['url']
+    download = urllib.request.Request(url, headers={'User-Agent': 'nura-games-build'})
+    with urllib.request.urlopen(download) as response, open(path, 'wb') as target:
+        target.write(response.read())
+    return path
 
 
 def reset_scene():
     bpy.ops.wm.read_factory_settings(use_empty=True)
 
 
-def atlas_image():
-    existing = bpy.data.images.get('atlas')
+def image(path, colour=True):
+    name = os.path.basename(path)
+    existing = bpy.data.images.get(name)
     if existing is not None:
         return existing
-    path = os.path.join(output_dir(), 'atlas-2048.webp')
-    if os.path.exists(path):
-        image = bpy.data.images.load(path)
-    else:
-        image = bpy.data.images.new('atlas', 8, 8)
-        image.pixels.foreach_set(np.ones(8 * 8 * 4, dtype=np.float32))
-    image.name = 'atlas'
-    image.colorspace_settings.name = 'sRGB'
-    return image
+    loaded = bpy.data.images.load(path)
+    loaded.name = name
+    loaded.colorspace_settings.name = 'sRGB' if colour else 'Non-Color'
+    return loaded
 
 
-def wood_image():
-    existing = bpy.data.images.get('wood')
+def _node(tree, kind):
+    return next(node for node in tree.nodes if node.type == kind)
+
+
+def _image_node(tree, picture, uv_scale=None):
+    node = tree.nodes.new('ShaderNodeTexImage')
+    node.image = picture
+    node.interpolation = 'Linear'
+    if uv_scale is not None:
+        mapping = tree.nodes.new('ShaderNodeMapping')
+        mapping.inputs['Scale'].default_value = (uv_scale, uv_scale, 1.0)
+        coords = tree.nodes.new('ShaderNodeTexCoord')
+        tree.links.new(coords.outputs['UV'], mapping.inputs['Vector'])
+        tree.links.new(mapping.outputs['Vector'], node.inputs['Vector'])
+    return node
+
+
+def material(name, base='#FFFFFF', roughness=0.5, metallic=0.0, coat=0.0, coat_roughness=0.08, sheen=0.0,
+             sheen_roughness=0.5, sheen_tint='#FFFFFF', base_image=None, normal_image=None, normal_strength=1.0,
+             roughness_image=None, uv_scale=None, alpha=False):
+    existing = bpy.data.materials.get(name)
     if existing is not None:
         return existing
-    path = os.path.join(output_dir(), 'wood-512.webp')
-    if os.path.exists(path):
-        image = bpy.data.images.load(path)
-    else:
-        image = bpy.data.images.new('wood', 8, 8)
-        image.pixels.foreach_set(np.ones(8 * 8 * 4, dtype=np.float32))
-    image.name = 'wood'
-    image.colorspace_settings.name = 'sRGB'
-    return image
-
-
-TEXTURED = {'print': atlas_image, 'wood': wood_image}
-
-
-def _mix_colour_inputs(node):
-    sockets = [socket for socket in node.inputs if socket.type == 'RGBA']
-    return sockets[0], sockets[1]
-
-
-def material(family):
-    if family in bpy.data.materials:
-        return bpy.data.materials[family]
-
-    spec = MATERIALS[family]
-    mat = bpy.data.materials.new(family)
+    mat = bpy.data.materials.new(name)
     mat.use_nodes = True
     tree = mat.node_tree
-    bsdf = tree.nodes['Principled BSDF']
-    bsdf.inputs['Roughness'].default_value = spec['roughness']
-    bsdf.inputs['Metallic'].default_value = spec['metallic']
-    if 'coat' in spec:
-        bsdf.inputs['Coat Weight'].default_value = spec['coat']
-    if 'transmission' in spec:
-        bsdf.inputs['Transmission Weight'].default_value = spec['transmission']
-
-    attribute = tree.nodes.new('ShaderNodeVertexColor')
-    attribute.layer_name = 'Col'
-
-    if family in TEXTURED:
-        image = tree.nodes.new('ShaderNodeTexImage')
-        image.image = TEXTURED[family]()
-        image.interpolation = 'Linear'
-        mix = tree.nodes.new('ShaderNodeMix')
-        mix.data_type = 'RGBA'
-        mix.blend_type = 'MULTIPLY'
-        mix.inputs['Factor'].default_value = 1.0
-        a, b = _mix_colour_inputs(mix)
-        tree.links.new(image.outputs['Color'], a)
-        tree.links.new(attribute.outputs['Color'], b)
-        tree.links.new(mix.outputs[2], bsdf.inputs['Base Color'])
-    else:
-        tree.links.new(attribute.outputs['Color'], bsdf.inputs['Base Color'])
-
-    if family == 'glow':
-        tree.links.new(attribute.outputs['Color'], bsdf.inputs['Emission Color'])
-        bsdf.inputs['Emission Strength'].default_value = 3.0
-
+    bsdf = _node(tree, 'BSDF_PRINCIPLED')
+    bsdf.inputs['Base Color'].default_value = srgb(base)
+    bsdf.inputs['Roughness'].default_value = roughness
+    bsdf.inputs['Metallic'].default_value = metallic
+    bsdf.inputs['Coat Weight'].default_value = coat
+    bsdf.inputs['Coat Roughness'].default_value = coat_roughness
+    bsdf.inputs['Sheen Weight'].default_value = sheen
+    bsdf.inputs['Sheen Roughness'].default_value = sheen_roughness
+    bsdf.inputs['Sheen Tint'].default_value = srgb(sheen_tint)
+    if base_image is not None:
+        node = _image_node(tree, image(base_image), uv_scale)
+        tree.links.new(node.outputs['Color'], bsdf.inputs['Base Color'])
+        if alpha:
+            tree.links.new(node.outputs['Alpha'], bsdf.inputs['Alpha'])
+    if roughness_image is not None:
+        node = _image_node(tree, image(roughness_image, colour=False), uv_scale)
+        tree.links.new(node.outputs['Color'], bsdf.inputs['Roughness'])
+    if normal_image is not None:
+        node = _image_node(tree, image(normal_image, colour=False), uv_scale)
+        normal = tree.nodes.new('ShaderNodeNormalMap')
+        normal.inputs['Strength'].default_value = normal_strength
+        tree.links.new(node.outputs['Color'], normal.inputs['Color'])
+        tree.links.new(normal.outputs['Normal'], bsdf.inputs['Normal'])
     return mat
 
 
-def paint(obj, colour_name, faces=None):
-    mesh = obj.data
-    if 'Col' not in mesh.color_attributes:
-        mesh.color_attributes.new(name='Col', type='FLOAT_COLOR', domain='CORNER')
+def emission(name, colour, strength):
+    existing = bpy.data.materials.get(name)
+    if existing is not None:
+        return existing
+    mat = bpy.data.materials.new(name)
+    mat.use_nodes = True
+    tree = mat.node_tree
+    for node in list(tree.nodes):
+        if node.type != 'OUTPUT_MATERIAL':
+            tree.nodes.remove(node)
+    emit = tree.nodes.new('ShaderNodeEmission')
+    emit.inputs['Color'].default_value = srgb(colour)
+    emit.inputs['Strength'].default_value = strength
+    tree.links.new(emit.outputs['Emission'], _node(tree, 'OUTPUT_MATERIAL').inputs['Surface'])
+    return mat
 
-    layer = mesh.color_attributes['Col']
-    rgba = colour(colour_name)
 
-    for poly in mesh.polygons:
-        if faces is not None and not faces(poly.center, poly.normal):
-            continue
-        for loop_index in poly.loop_indices:
-            layer.data[loop_index].color = rgba
-
-
-def assign(obj, family):
+def assign(obj, *materials):
     obj.data.materials.clear()
-    obj.data.materials.append(material(family))
+    for mat in materials:
+        obj.data.materials.append(mat)
+
+
+def slot(obj, index, predicate):
+    for poly in obj.data.polygons:
+        if predicate(poly.center, poly.normal):
+            poly.material_index = index
 
 
 def shade_flat(obj):
@@ -482,176 +440,33 @@ def use_gpu():
     bpy.context.scene.cycles.device = 'CPU'
 
 
-def bake_ao(objects, distance=0.06, samples=48, strength=0.85):
-    scene = bpy.context.scene
-    scene.render.engine = 'CYCLES'
-    use_gpu()
-    scene.cycles.samples = samples
-    scene.cycles.use_adaptive_sampling = True
-    scene.cycles.use_denoising = False
-    scene.cycles.bake_type = 'AO'
-    if scene.world is None:
-        scene.world = bpy.data.worlds.new('bake')
-    scene.world.light_settings.distance = distance
-    scene.render.bake.target = 'VERTEX_COLORS'
-    scene.render.bake.use_clear = True
-
-    for obj in objects:
-        mesh = obj.data
-        if 'AO' not in mesh.color_attributes:
-            mesh.color_attributes.new(name='AO', type='FLOAT_COLOR', domain='CORNER')
-        mesh.color_attributes.active_color_index = list(mesh.color_attributes.keys()).index('AO')
-
+def export(path, objects, quality=86):
     bpy.ops.object.select_all(action='DESELECT')
     for obj in objects:
         obj.select_set(True)
-    bpy.context.view_layer.objects.active = objects[0]
-    bpy.ops.object.bake(type='AO', target='VERTEX_COLORS', use_clear=True)
-
-    for obj in objects:
-        mesh = obj.data
-        count = len(mesh.loops) * 4
-        occlusion = np.empty(count, dtype=np.float32)
-        base = np.empty(count, dtype=np.float32)
-        mesh.color_attributes['AO'].data.foreach_get('color', occlusion)
-        mesh.color_attributes['Col'].data.foreach_get('color', base)
-        occlusion = occlusion.reshape(-1, 4)
-        base = base.reshape(-1, 4)
-        factor = 1.0 - strength * (1.0 - occlusion[:, :1])
-        base[:, :3] *= np.clip(factor, 0.0, 1.0)
-        mesh.color_attributes['Col'].data.foreach_set('color', base.ravel())
-        mesh.color_attributes.remove(mesh.color_attributes['AO'])
-        mesh.color_attributes.active_color_index = list(mesh.color_attributes.keys()).index('Col')
-        mesh.update()
-
-
-def export(path, apply_modifiers_on_export=True, texcoords=False, compress=False, objects=None):
-    if objects is None:
-        bpy.ops.object.select_all(action='SELECT')
-    else:
-        bpy.ops.object.select_all(action='DESELECT')
-        for obj in objects:
-            obj.select_set(True)
-    options = {
-        'filepath': str(path),
-        'export_format': 'GLB',
-        'use_selection': True,
-        'export_apply': apply_modifiers_on_export,
-        'export_yup': True,
-        'export_normals': True,
-        'export_vertex_color': 'MATERIAL',
-        'export_all_vertex_colors': False,
-        'export_texcoords': texcoords,
-        'export_image_format': 'AUTO',
-        'export_materials': 'EXPORT',
-        'export_shared_accessors': True,
-        'export_hierarchy_flatten_objs': False,
-        'export_cameras': False,
-        'export_lights': False,
-        'export_animations': False,
-        'export_skins': False,
-        'export_morph': False,
-        'export_extras': False
-    }
-    if compress:
-        options['export_meshopt_compression_enable'] = True
-        options['export_meshopt_extension'] = 'EXT_meshopt_compression'
-    for obj in bpy.context.selected_objects:
-        if obj.type == 'MESH':
-            layers = obj.data.uv_layers
-            while len(layers) > 1:
-                layers.remove(layers[len(layers) - 1])
-    swapped = _stub_atlas()
-    try:
-        bpy.ops.export_scene.gltf(**options)
-    finally:
-        _restore_atlas(swapped)
-
-
-def _stub_atlas():
-    swapped = []
-    stub = bpy.data.images.get('atlas-stub')
-    for mat in bpy.data.materials:
-        if not mat.use_nodes:
-            continue
-        for node in mat.node_tree.nodes:
-            if node.type == 'TEX_IMAGE' and node.image is not None and node.image.name in ('atlas', 'wood'):
-                if stub is None:
-                    stub = bpy.data.images.new('atlas-stub', 8, 8)
-                    stub.pixels.foreach_set(np.ones(8 * 8 * 4, dtype=np.float32))
-                swapped.append((node, node.image))
-                node.image = stub
-    return swapped
-
-
-def _restore_atlas(swapped):
-    for node, image in swapped:
-        node.image = image
-
-
-def render_preview(path, look_at=(0.0, 0.0, 0.0), distance=2.3, height=1.65, fov=34.0, samples=96, width=1600, height_px=1000, yaw=0.35):
-    scene = bpy.context.scene
-    scene.render.engine = 'CYCLES'
-    use_gpu()
-    scene.cycles.samples = samples
-    scene.cycles.use_adaptive_sampling = True
-    scene.cycles.use_denoising = True
-    scene.render.resolution_x = width
-    scene.render.resolution_y = height_px
-    scene.render.resolution_percentage = 100
-    scene.render.film_transparent = False
-    scene.render.filepath = path
-
-    world = scene.world or bpy.data.worlds.new('preview')
-    scene.world = world
-    world.use_nodes = True
-    world.node_tree.nodes['Background'].inputs['Color'].default_value = srgb('#0A1216')
-    world.node_tree.nodes['Background'].inputs['Strength'].default_value = 0.6
-
-    target = bpy.data.objects.new('preview-target', None)
-    target.location = look_at
-    bpy.context.collection.objects.link(target)
-
-    bpy.ops.object.camera_add(location=(look_at[0] + math.sin(yaw) * distance, look_at[1] - math.cos(yaw) * distance, look_at[2] + height))
-    camera = bpy.context.active_object
-    camera.data.sensor_fit = 'VERTICAL'
-    camera.data.sensor_height = 24.0
-    camera.data.lens = 12.0 / math.tan(math.radians(fov) / 2)
-    track = camera.constraints.new('TRACK_TO')
-    track.target = target
-    track.track_axis = 'TRACK_NEGATIVE_Z'
-    track.up_axis = 'UP_Y'
-    scene.camera = camera
-
-    def light(kind, location, energy, size, colour_hex, rotation=None):
-        bpy.ops.object.light_add(type=kind, location=location)
-        lamp = bpy.context.active_object
-        lamp.data.energy = energy
-        lamp.data.color = srgb(colour_hex)[:3]
-        if kind == 'AREA':
-            lamp.data.size = size
-        if rotation is not None:
-            lamp.rotation_euler = rotation
-        else:
-            aim = lamp.constraints.new('TRACK_TO')
-            aim.target = target
-            aim.track_axis = 'TRACK_NEGATIVE_Z'
-            aim.up_axis = 'UP_Y'
-        return lamp
-
-    light('AREA', (look_at[0] + 0.6, look_at[1] - 0.5, look_at[2] + 2.2), 240.0, 1.4, '#FFC46A')
-    light('AREA', (look_at[0] - 2.2, look_at[1] - 1.2, look_at[2] + 1.2), 60.0, 3.0, '#2B4E5E')
-    light('AREA', (look_at[0] + 0.4, look_at[1] + 2.6, look_at[2] + 1.6), 90.0, 2.5, '#7FB4C9')
-
-    scene.view_settings.view_transform = 'AgX'
-    scene.view_settings.exposure = -0.3
-    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
-    bpy.ops.render.render(write_still=True)
-
-    for obj in (camera, target):
-        bpy.data.objects.remove(obj, do_unlink=True)
-    for obj in [o for o in bpy.data.objects if o.type == 'LIGHT']:
-        bpy.data.objects.remove(obj, do_unlink=True)
+    bpy.ops.export_scene.gltf(
+        filepath=str(path),
+        export_format='GLB',
+        use_selection=True,
+        export_apply=True,
+        export_yup=True,
+        export_normals=True,
+        export_texcoords=True,
+        export_vertex_color='NONE',
+        export_materials='EXPORT',
+        export_image_format='WEBP',
+        export_image_quality=quality,
+        export_shared_accessors=True,
+        export_hierarchy_flatten_objs=False,
+        export_gpu_instances=True,
+        export_cameras=False,
+        export_lights=False,
+        export_animations=False,
+        export_skins=False,
+        export_morph=False,
+        export_extras=False,
+        export_meshopt_compression_enable=True
+    )
 
 
 def ellipse_path(a, b, segments=56, phase=0.0):
@@ -667,6 +482,15 @@ def square_path(half, corner=0.0, corner_segments=4):
         return [(half, -half), (half, half), (-half, half), (-half, -half)]
     out = []
     for cx, cy, start in ((half - corner, -(half - corner), -math.pi / 2), (half - corner, half - corner, 0.0), (-(half - corner), half - corner, math.pi / 2), (-(half - corner), -(half - corner), math.pi)):
+        for step in range(corner_segments + 1):
+            t = start + (math.pi / 2) * step / corner_segments
+            out.append((cx + math.cos(t) * corner, cy + math.sin(t) * corner))
+    return out
+
+
+def rect_path(half_x, half_y, corner, corner_segments=8):
+    out = []
+    for cx, cy, start in ((half_x - corner, -(half_y - corner), -math.pi / 2), (half_x - corner, half_y - corner, 0.0), (-(half_x - corner), half_y - corner, math.pi / 2), (-(half_x - corner), -(half_y - corner), math.pi)):
         for step in range(corner_segments + 1):
             t = start + (math.pi / 2) * step / corner_segments
             out.append((cx + math.cos(t) * corner, cy + math.sin(t) * corner))

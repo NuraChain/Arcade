@@ -1,36 +1,19 @@
-import json
 import math
 import os
 import sys
-import urllib.request
 
 import bmesh
 import bpy
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from lib.kit import texture
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, '..', '..'))
 OUT = os.path.join(ROOT, 'application', 'public', 'board')
-CACHE = os.path.join(HERE, 'scratch', 'textures')
 ONLY = os.environ.get('NURA_SURFACE', '')
 SAMPLES = int(os.environ.get('NURA_SAMPLES', '256'))
-
-
-def texture(asset, kind, resolution='2k'):
-    os.makedirs(CACHE, exist_ok=True)
-    path = os.path.join(CACHE, f'{asset}_{kind}_{resolution}.jpg')
-
-    if os.path.exists(path):
-        return path
-
-    request = urllib.request.Request(f'https://api.polyhaven.com/files/{asset}', headers={'User-Agent': 'nura-games-build'})
-    files = json.loads(urllib.request.urlopen(request).read())
-    url = files[kind][resolution]['jpg']['url']
-    download = urllib.request.Request(url, headers={'User-Agent': 'nura-games-build'})
-
-    with urllib.request.urlopen(download) as response, open(path, 'wb') as target:
-        target.write(response.read())
-
-    return path
 
 
 def reset(width, height):

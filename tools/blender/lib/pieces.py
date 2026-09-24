@@ -1,19 +1,17 @@
+import json
 import math
+import os
 import random
 
-import bmesh
 import bpy
-from mathutils import Vector
+from mathutils import Matrix, Vector
 
-from lib import atlas
 from lib import kit
+from lib import looks
 
-CARD_SIZES = {
-    'poker': (0.0635, 0.0889),
-    'bridge': (0.05715, 0.0889)
-}
-CARD_THICKNESS = 0.0006
-CARD_RADIUS = 0.0032
+CARD = (0.0635, 0.0889)
+CARD_THICKNESS = 0.00045
+CARD_RADIUS = 0.0034
 
 CHIP_RADIUS = 0.0195
 CHIP_THICKNESS = 0.0033
@@ -36,161 +34,172 @@ DIE_FACES = {
     (0, 1, 0): 4
 }
 
+WHITE_UV = (0.5, 0.03)
 
-def _swatch(name):
-    return atlas.uv_point('swatch-' + name, 0.5, 0.5)
+_atlases = {}
 
 
-def card(name, code, size='poker', face_up=True):
-    width, height = CARD_SIZES[size]
-    obj = kit.rounded_plate(name, width, height, CARD_THICKNESS, CARD_RADIUS, corner_segments=4)
-    face_rect = atlas.uv_rect('card-' + code) if code != 'back' else atlas.uv_rect('card-back')
-    back_rect = atlas.uv_rect('card-back')
-    top_rect, bottom_rect = (face_rect, back_rect) if face_up else (back_rect, face_rect)
-    edge = _swatch('white')
+def _rects(name):
+    if name not in _atlases:
+        with open(os.path.join(kit.ART, name + '.json'), encoding='utf-8') as handle:
+            _atlases[name] = json.load(handle)
+    return _atlases[name]
 
-    def mapper(face, co):
-        nz = face.normal.z
-        if nz > 0.5:
-            rect = top_rect
-            u = (co.x + width / 2) / width
-        elif nz < -0.5:
-            rect = bottom_rect
-            u = 1.0 - (co.x + width / 2) / width
-        else:
-            return edge
+
+def _uv_rect(width, height, rect):
+    return (
+        rect['x'] / width,
+        1.0 - (rect['y'] + rect['height']) / height,
+        (rect['x'] + rect['width']) / width,
+        1.0 - rect['y'] / height
+    )
+
+
+def card_rect(code):
+    data = _rects('cards')
+    cell = next(cell for cell in data['cells'] if cell['code'] == code)
+    return _uv_rect(data['width'], data['height'], cell)
+
+
+def _lerp_rect(rect, u, v):
+    return (rect[0] + (rect[2] - rect[0]) * u, rect[1] + (rect[3] - rect[1]) * v)
+
+
+def card(name, code, face_up=True):
+    width, height = CARD
+    obj = kit.rounded_plate(name, width, height, CARD_THICKNESS, CARD_RADIUS, corner_segments=5)
+    obj.location = (0.0, 0.0, 0.0)
+    face = card_rect(code)
+    back = card_rect('back')
+    top, bottom = (face, back) if face_up else (back, face)
+
+    def mapper(poly, co):
+        u = (co.x + width / 2) / width
         v = (co.y + height / 2) / height
-        return (rect[0] + (rect[2] - rect[0]) * u, rect[1] + (rect[3] - rect[1]) * v)
+        if poly.normal.z > 0.5:
+            return _lerp_rect(top, u, v)
+        if poly.normal.z < -0.5:
+            return _lerp_rect(bottom, 1.0 - u, v)
+        return WHITE_UV
 
     kit.uv_map(obj, mapper)
-    kit.paint(obj, 'white')
-    kit.assign(obj, 'print')
+    kit.assign(obj, looks.card())
     return obj
 
 
-def deck(name, count=40, size='poker', top='back'):
-    width, height = CARD_SIZES[size]
-    depth = CARD_THICKNESS * count
-    obj = kit.rounded_plate(name, width, height, depth, CARD_RADIUS, corner_segments=4)
-    top_rect = atlas.uv_rect('card-back') if top == 'back' else atlas.uv_rect('card-' + top)
-    edge_rect = atlas.uv_rect('deckedge')
+def chip(name, colour):
+    data = _rects('chips')
+    cell = next(cell for cell in data['cells'] if cell['name'] == colour)
+    face = _uv_rect(data['width'], data['height'], cell['face'])
+    edge = _uv_rect(data['width'], data['height'], cell['edge'])
+    r = CHIP_RADIUS
+    t = CHIP_THICKNESS
+    profile = [
+        (0.0, 0.0),
+        (r - 0.0012, 0.0),
+        (r - 0.0003, 0.0003),
+        (r, 0.0009),
+        (r, t - 0.0009),
+        (r - 0.0003, t - 0.0003),
+        (r - 0.0012, t),
+        (0.0, t)
+    ]
+    obj = kit.lathe(name, profile, sides=40)
 
-    def mapper(face, co):
-        nz = face.normal.z
-        if nz > 0.5:
-            u = (co.x + width / 2) / width
-            v = (co.y + height / 2) / height
-            return (top_rect[0] + (top_rect[2] - top_rect[0]) * u, top_rect[1] + (top_rect[3] - top_rect[1]) * v)
-        if nz < -0.5:
-            return _swatch('white')
-        along = (co.x + co.y + width) / (width + height)
-        v = co.z / depth
-        return (edge_rect[0] + (edge_rect[2] - edge_rect[0]) * (along % 1.0), edge_rect[1] + (edge_rect[3] - edge_rect[1]) * v)
-
-    kit.uv_map(obj, mapper)
-    kit.paint(obj, 'white')
-    kit.assign(obj, 'print')
-    return obj
-
-
-def chip_stack(name, value, count, seed=0, sides=20):
-    rng = random.Random(seed * 7919 + count)
-    profile = [(0.0, 0.0), (CHIP_RADIUS - 0.0022, 0.0)]
-    groove = 0.0005
-    for index in range(count):
-        z0 = index * CHIP_THICKNESS
-        profile.append((CHIP_RADIUS - groove, z0 + 0.0003))
-        profile.append((CHIP_RADIUS, z0 + 0.0011))
-    top = count * CHIP_THICKNESS
-    profile += [(CHIP_RADIUS - 0.0022, top), (0.0, top)]
-    obj = kit.lathe(name, profile, sides=sides)
-    face_rect = atlas.uv_rect('chip-' + value)
-    edge_rect = atlas.uv_rect('chipedge-' + value)
-    offsets = [rng.random() for _ in range(count)]
-
-    def mapper(face, co):
-        nz = face.normal.z
-        if abs(nz) > 0.6:
-            u = 0.5 + co.x / (2 * CHIP_RADIUS)
-            v = 0.5 + co.y / (2 * CHIP_RADIUS)
-            return (face_rect[0] + (face_rect[2] - face_rect[0]) * u, face_rect[1] + (face_rect[3] - face_rect[1]) * v)
-        centre = face.calc_center_median()
+    def mapper(poly, co):
+        if abs(poly.normal.z) > 0.6:
+            return _lerp_rect(face, 0.5 + co.x / (2 * r), 0.5 + co.y / (2 * r))
+        centre = poly.calc_center_median()
         centre_angle = math.atan2(centre.y, centre.x)
         angle = math.atan2(co.y, co.x)
         while angle - centre_angle > math.pi:
             angle -= math.tau
         while angle - centre_angle < -math.pi:
             angle += math.tau
-        index = min(int(centre.z / CHIP_THICKNESS), count - 1)
-        u = (angle / math.tau + offsets[index]) % 1.0
-        v = (co.z - index * CHIP_THICKNESS) / CHIP_THICKNESS
-        v = min(max(v, 0.0), 1.0)
-        return (edge_rect[0] + (edge_rect[2] - edge_rect[0]) * u, edge_rect[1] + (edge_rect[3] - edge_rect[1]) * v)
+        u = angle / math.tau + 1.0 / 16.0
+        v = min(max(co.z / t, 0.0), 1.0)
+        return (edge[0] + (edge[2] - edge[0]) * u, edge[1] + (edge[3] - edge[1]) * v)
 
     kit.uv_map(obj, mapper)
-    kit.paint(obj, 'white')
-    kit.assign(obj, 'print')
+    kit.assign(obj, looks.chip())
     kit.smooth(obj, 35.0)
     return obj
 
 
-def checker(name, colour_name, diameter=0.034, thickness=0.009, sides=28):
+def stack(prototype, count, x, y, z, seed=0, parent=None):
+    rng = random.Random(seed)
+    placed = []
+    for index in range(count):
+        copy = prototype.copy()
+        copy.name = '%s-%d-%d' % (prototype.name, seed, index)
+        bpy.context.collection.objects.link(copy)
+        copy.location = (x + rng.uniform(-0.0004, 0.0004), y + rng.uniform(-0.0004, 0.0004), z + index * CHIP_THICKNESS)
+        copy.rotation_euler = (0.0, 0.0, rng.uniform(0.0, math.tau))
+        if parent is not None:
+            copy.parent = parent
+        placed.append(copy)
+    return placed
+
+
+def checker(name, side, diameter=0.034, thickness=0.0085):
     r = diameter / 2
     t = thickness
     profile = [
-        (0.0, 0.0005),
-        (r - 0.0032, 0.0),
-        (r - 0.0010, 0.0009),
-        (r, 0.0024),
-        (r, t - 0.0024),
-        (r - 0.0010, t - 0.0009),
-        (r - 0.0032, t),
-        (r * 0.50, t),
-        (r * 0.42, t - 0.0007),
-        (r * 0.20, t - 0.0011),
-        (0.0, t - 0.0012)
+        (0.0, 0.0004),
+        (r - 0.0030, 0.0),
+        (r - 0.0009, 0.0008),
+        (r, 0.0022),
+        (r, t - 0.0022),
+        (r - 0.0009, t - 0.0008),
+        (r - 0.0030, t),
+        (r * 0.62, t),
+        (r * 0.56, t - 0.0006),
+        (r * 0.50, t - 0.0006),
+        (r * 0.46, t),
+        (0.0, t)
     ]
-    obj = kit.lathe(name, profile, sides=sides)
-    kit.paint(obj, colour_name)
-    kit.assign(obj, 'lacquer')
+    obj = kit.lathe(name, profile, sides=40)
+    kit.assign(obj, looks.checker(side), looks.checker_rim(side))
+    kit.slot(obj, 1, lambda centre, normal: math.hypot(centre.x, centre.y) > r - 0.0024 or (r * 0.45 < math.hypot(centre.x, centre.y) < r * 0.63 and centre.z > t - 0.0008))
     kit.smooth(obj, 40.0)
     return obj
 
 
-def pawn(name, colour_name):
+def pawn(name, colour):
     profile = [
         (0.0, 0.0),
-        (0.0080, 0.0),
-        (0.0092, 0.0012),
-        (0.0092, 0.0030),
-        (0.0072, 0.0042),
-        (0.0052, 0.0080),
-        (0.0040, 0.0140),
-        (0.0044, 0.0172),
-        (0.0060, 0.0186),
-        (0.0044, 0.0200)
+        (0.0112, 0.0),
+        (0.0118, 0.0011),
+        (0.0117, 0.0036),
+        (0.0106, 0.0048),
+        (0.0092, 0.0054),
+        (0.0088, 0.0068),
+        (0.0079, 0.0115),
+        (0.0066, 0.0165),
+        (0.0056, 0.0198),
+        (0.0060, 0.0208),
+        (0.0072, 0.0218),
+        (0.0060, 0.0229)
     ]
-    ball_r = 0.0056
-    ball_z = 0.0214
-    for step in range(1, 8):
-        a = -math.pi / 2 + math.pi * step / 8
-        profile.append((math.cos(a) * ball_r, ball_z + math.sin(a) * ball_r))
+    ball_r = 0.0082
+    ball_z = 0.0292
+    for step in range(1, 12):
+        a = -math.pi / 2 + math.pi * step / 12
+        profile.append((max(math.cos(a) * ball_r, 0.0), ball_z + math.sin(a) * ball_r))
     profile.append((0.0, ball_z + ball_r))
-    obj = kit.lathe(name, profile, sides=20)
-    kit.paint(obj, colour_name)
-    kit.assign(obj, 'lacquer')
-    kit.smooth(obj, 40.0)
+    obj = kit.lathe(name, profile, sides=36)
+    kit.assign(obj, looks.pawn(colour))
+    kit.smooth(obj, 45.0)
     return obj
 
 
-def die(name, size=0.016, body='bone', pip='ebony', seed=0):
+def die(name, size, body, pip):
     obj = kit.box(name, size=(size, size, size), bevel_width=0)
-    kit.finish(obj, size * 0.11, segments=3, angle=35.0)
-
+    kit.finish(obj, size * 0.14, segments=4, angle=35.0)
     pips = []
-    pip_r = size * 0.115
+    pip_r = size * 0.1
     depth = size * 0.045
-    spread = size * 0.24
+    spread = size * 0.25
     for normal, value in DIE_FACES.items():
         n = Vector(normal)
         axis_a = Vector((0, 1, 0)) if abs(n.y) < 0.5 else Vector((1, 0, 0))
@@ -198,7 +207,7 @@ def die(name, size=0.016, body='bone', pip='ebony', seed=0):
         axis_a = axis_b.cross(n).normalized()
         for px, py in DIE_PIPS[value]:
             centre = n * (size / 2 + pip_r - depth) + axis_a * (px * spread) + axis_b * (py * spread)
-            pips.append(kit.sphere('pip', radius=pip_r, segments=12, rings=6, location=tuple(centre)))
+            pips.append(kit.sphere('pip', radius=pip_r, segments=16, rings=8, location=tuple(centre)))
     cutter = kit.join(pips, name + '-pips')
     modifier = obj.modifiers.new('Pips', 'BOOLEAN')
     modifier.operation = 'DIFFERENCE'
@@ -206,188 +215,70 @@ def die(name, size=0.016, body='bone', pip='ebony', seed=0):
     modifier.solver = 'EXACT'
     kit.apply_modifiers(obj)
     bpy.data.objects.remove(cutter, do_unlink=True)
-
     limit = size / 2 - depth * 0.35
-    kit.paint(obj, body)
-    kit.paint(obj, pip, faces=lambda c, n: max(abs(c.x), abs(c.y), abs(c.z)) < limit)
-    kit.assign(obj, 'lacquer')
+    kit.assign(obj, body, pip)
+    kit.slot(obj, 1, lambda centre, normal: max(abs(centre.x), abs(centre.y), abs(centre.z)) < limit)
     kit.smooth(obj, 35.0)
     return obj
 
 
-def doubling_cube(name, size=0.032, showing=64):
+def _glyph(name, text, size):
+    curve = bpy.data.curves.new(name, type='FONT')
+    curve.body = text
+    curve.size = size
+    curve.align_x = 'CENTER'
+    curve.align_y = 'CENTER'
+    curve.extrude = size * 0.02
+    obj = bpy.data.objects.new(name, curve)
+    bpy.context.collection.objects.link(obj)
+    kit.select_only(obj)
+    bpy.ops.object.convert(target='MESH')
+    return bpy.context.active_object
+
+
+def _on_face(glyph, normal, distance, up):
+    n = Vector(normal)
+    z = n
+    y = Vector(up)
+    x = y.cross(z).normalized()
+    y = z.cross(x).normalized()
+    matrix = [[x.x, y.x, z.x], [x.y, y.y, z.y], [x.z, y.z, z.z]]
+    rotation = Matrix(matrix).to_4x4()
+    glyph.data.transform(rotation)
+    glyph.data.transform(Matrix.Translation(n * distance))
+    glyph.data.update()
+
+
+def doubling_cube(name, size, showing):
     obj = kit.box(name, size=(size, size, size), bevel_width=0)
-    kit.finish(obj, size * 0.09, segments=3, angle=35.0)
-    order = {1: 64, 6: 2, 2: 4, 5: 32, 3: 8, 4: 16}
-    faces = {normal: order[value] for normal, value in DIE_FACES.items()}
-    ivory = _swatch('ivory')
-
-    def mapper(face, co):
-        n = face.normal
-        best = None
-        for normal, number in faces.items():
-            dot = n.x * normal[0] + n.y * normal[1] + n.z * normal[2]
-            if best is None or dot > best[0]:
-                best = (dot, normal, number)
-        dot, normal, number = best
-        if dot < 0.85:
-            return ivory
-        nv = Vector(normal)
-        axis_a = Vector((0, 1, 0)) if abs(nv.y) < 0.5 else Vector((1, 0, 0))
-        axis_b = nv.cross(axis_a).normalized()
-        axis_a = axis_b.cross(nv).normalized()
-        u = 0.5 + co.dot(axis_a) / size
-        v = 0.5 + co.dot(axis_b) / size
-        rect = atlas.uv_rect('cube-%d' % number)
-        return (rect[0] + (rect[2] - rect[0]) * u, rect[1] + (rect[3] - rect[1]) * v)
-
-    kit.uv_map(obj, mapper)
-    kit.paint(obj, 'white')
-    kit.assign(obj, 'print')
-    return obj
+    kit.finish(obj, size * 0.1, segments=3, angle=35.0)
+    others = [value for value in (2, 4, 8, 16, 32, 64) if value != showing]
+    faces = [((0, 0, 1), showing, (0, 1, 0))] + list(zip(
+        [(0, 0, -1), (1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0)],
+        others,
+        [(0, 1, 0), (0, 0, 1), (0, 0, 1), (0, 0, 1), (0, 0, 1)]
+    ))
+    glyphs = []
+    for normal, value, up in faces:
+        glyph = _glyph(name + '-%d' % value, str(value), size * (0.52 if value < 10 else 0.42))
+        _on_face(glyph, normal, size / 2 + 0.00005, up)
+        glyphs.append(glyph)
+    numbers = kit.join(glyphs, name + '-numbers')
+    kit.assign(obj, looks.ivory())
+    kit.assign(numbers, looks.ink())
+    return [obj, numbers]
 
 
-def dice_cup(name, radius=0.023, height=0.075, wall=0.0025):
-    profile = [
-        (0.0, 0.0),
-        (radius - 0.002, 0.0),
-        (radius, 0.002),
-        (radius + 0.002, height - 0.006),
-        (radius + 0.0035, height - 0.003),
-        (radius + 0.0035, height),
-        (radius + 0.001, height),
-        (radius - wall, height - 0.004),
-        (radius - wall - 0.001, wall + 0.001),
-        (0.0, wall)
-    ]
-    obj = kit.lathe(name, profile, sides=36)
-    kit.paint(obj, 'leather')
-    kit.paint(obj, 'leather_dark', faces=lambda c, n: math.hypot(c.x, c.y) < radius - wall * 0.5 and c.z > wall)
-    kit.assign(obj, 'leather')
-    kit.smooth(obj, 40.0)
-    return obj
-
-
-def bowl(name, radius=0.055, height=0.030, colour_name='ivory'):
-    profile = [
-        (0.0, 0.0),
-        (radius * 0.45, 0.0),
-        (radius * 0.55, 0.003),
-        (radius * 0.9, height * 0.6),
-        (radius, height),
-        (radius - 0.003, height),
-        (radius * 0.86, height * 0.62),
-        (radius * 0.5, 0.006),
-        (0.0, 0.005)
-    ]
-    obj = kit.lathe(name, profile, sides=40)
-    kit.paint(obj, colour_name)
-    kit.assign(obj, 'lacquer')
-    kit.smooth(obj, 40.0)
-    return obj
-
-
-def mound(name, radius=0.040, height=0.016, colour_name='enamel_sand'):
-    profile = [(0.0, 0.0), (radius, 0.0)]
-    for step in range(1, 9):
-        a = math.pi / 2 * step / 8
-        profile.append((math.cos(a) * radius, math.sin(a) * height))
-    obj = kit.lathe(name, profile, sides=28)
-    kit.paint(obj, colour_name)
-    kit.assign(obj, 'enamel')
-    kit.smooth(obj, 40.0)
-    return obj
-
-
-def estekan(name):
-    glass = kit.lathe(name, [
-        (0.0, 0.0),
-        (0.021, 0.0),
-        (0.023, 0.004),
-        (0.020, 0.026),
-        (0.017, 0.036),
-        (0.021, 0.048),
-        (0.026, 0.062),
-        (0.027, 0.064),
-        (0.025, 0.064),
-        (0.024, 0.061),
-        (0.019, 0.048),
-        (0.015, 0.036),
-        (0.018, 0.026),
-        (0.020, 0.006),
-        (0.0, 0.004)
-    ], sides=36)
-    kit.paint(glass, 'white')
-    kit.assign(glass, 'glass')
-    kit.smooth(glass, 40.0)
-
-    tea = kit.lathe(name + '-tea', [
-        (0.0, 0.005),
-        (0.0195, 0.006),
-        (0.0178, 0.026),
-        (0.0148, 0.036),
-        (0.0185, 0.047),
-        (0.0, 0.047)
-    ], sides=36)
-    kit.paint(tea, '#8A3A12')
-    kit.assign(tea, 'lacquer')
-    kit.smooth(tea, 40.0)
-
-    rim = kit.torus(name + '-rim', major=0.026, minor=0.0012, major_segments=36, minor_segments=8, location=(0, 0, 0.063))
-    kit.paint(rim, 'brass')
-    kit.assign(rim, 'brass')
-    kit.smooth(rim, 40.0)
-
-    saucer = kit.lathe(name + '-saucer', [
-        (0.0, 0.0),
-        (0.030, 0.0),
-        (0.052, 0.006),
-        (0.056, 0.010),
-        (0.054, 0.011),
-        (0.030, 0.004),
-        (0.0, 0.003)
-    ], sides=40)
-    kit.paint(saucer, 'ivory')
-    kit.assign(saucer, 'lacquer')
-    kit.smooth(saucer, 40.0)
-    for part in (glass, tea, rim):
-        part.location.z += 0.004
-    return [glass, tea, rim, saucer]
-
-
-def dealer_button(name, diameter=0.051, thickness=0.008):
+def dealer_button(name, diameter=0.046, thickness=0.007):
     r = diameter / 2
     profile = [(0.0, 0.0), (r - 0.0015, 0.0), (r, 0.0015), (r, thickness - 0.0015), (r - 0.0015, thickness), (0.0, thickness)]
-    obj = kit.lathe(name, profile, sides=40)
-    rect = atlas.uv_rect('button')
-    white = _swatch('white')
-
-    def mapper(face, co):
-        if face.normal.z > 0.5:
-            return (rect[0] + (rect[2] - rect[0]) * (0.5 + co.x / diameter), rect[1] + (rect[3] - rect[1]) * (0.5 + co.y / diameter))
-        return white
-
-    kit.uv_map(obj, mapper)
-    kit.paint(obj, 'white')
-    kit.assign(obj, 'print')
+    obj = kit.lathe(name, profile, sides=48)
+    kit.assign(obj, looks.ivory())
     kit.smooth(obj, 40.0)
-    return obj
-
-
-def score_sheet(name, width=0.105, height=0.090):
-    obj = kit.rounded_plate(name, width, height, 0.0006, 0.002, corner_segments=2)
-    rect = atlas.uv_rect('score')
-    cream = _swatch('cream')
-
-    def mapper(face, co):
-        if face.normal.z > 0.5:
-            return (rect[0] + (rect[2] - rect[0]) * ((co.x + width / 2) / width), rect[1] + (rect[3] - rect[1]) * ((co.y + height / 2) / height))
-        return cream
-
-    kit.uv_map(obj, mapper)
-    kit.paint(obj, 'white')
-    kit.assign(obj, 'print')
-    return obj
+    letter = _glyph(name + '-letter', 'D', diameter * 0.5)
+    _on_face(letter, (0, 0, 1), thickness + 0.00005, (0, 1, 0))
+    kit.assign(letter, looks.ink())
+    return [obj, letter]
 
 
 def place(obj, x, y, z=0.0, yaw=0.0, pitch=0.0, roll=0.0):
@@ -396,14 +287,14 @@ def place(obj, x, y, z=0.0, yaw=0.0, pitch=0.0, roll=0.0):
     return obj
 
 
-def fan(cards, cx, cy, z, facing, spread=6.0, pivot=0.075, bow=0.004):
+def fan(cards, cx, cy, z, facing, spread=8.0, pivot=0.09, bow=0.0):
     count = len(cards)
     for index, obj in enumerate(cards):
-        t = (index - (count - 1) / 2)
-        a = facing + math.radians(spread) * t
-        x = cx + math.cos(a + math.pi / 2) * 0.0 - math.sin(a) * 0.0
-        obj.location = (cx - math.cos(facing) * pivot + math.cos(a) * pivot, cy - math.sin(facing) * pivot + math.sin(a) * pivot, z + index * CARD_THICKNESS)
+        offset = index - (count - 1) / 2
+        angle = facing + math.radians(spread) * offset
+        x = cx - math.cos(facing) * pivot + math.cos(angle) * pivot
+        y = cy - math.sin(facing) * pivot + math.sin(angle) * pivot
         lift = bow * (1.0 - (2.0 * index / max(count - 1, 1) - 1.0) ** 2)
-        obj.location = (obj.location.x, obj.location.y, obj.location.z + lift)
-        obj.rotation_euler = (0.0, 0.0, a - math.pi / 2)
+        obj.location = (x, y, z + index * CARD_THICKNESS * 1.1 + lift)
+        obj.rotation_euler = (0.0, 0.0, angle - math.pi / 2)
     return cards
