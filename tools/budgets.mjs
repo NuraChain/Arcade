@@ -25,6 +25,8 @@ import { gzipSync } from 'node:zlib';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { POSTERS, fingerprint } from './art/poster.mjs';
+
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const DIST = join(ROOT, 'application', 'dist');
 const ASSETS = join(DIST, 'assets');
@@ -57,8 +59,12 @@ const MUST_BE_LAZY = [
     { match: /^app-catalogue-/, why: 'the app message catalogue — only the shell and sign-in import it' },
     { match: /^session\.store-/, why: 'lib/guards.ts imports session.store.ts dynamically' },
     { match: /^connect-dialog\.component-/, why: 'public-shell imports connect-dialog dynamically' },
-    { match: /-board-/, why: 'a board renderer — dynamic import inside mount, only once a match is running' }
+    { match: /-board-/, why: 'a board renderer — dynamic import inside mount, only once a match is running' },
+    { match: /^api-/, why: 'the typed api client — its top-level await fetches the route manifest' },
+    { match: /^landing-/, why: 'the Persian landing catalogue — loaded only for a Persian reader' }
 ];
+
+const WORLD_BUDGET = 200 * KB;
 
 const BOARD_BUDGET = 16 * KB;
 
@@ -258,6 +264,49 @@ if (soundTotal > SOUND_BUDGET)
     problems.push(`the table sounds are ${ size(soundTotal) }, over ${ size(SOUND_BUDGET) }`);
 }
 
+const world = all.find((name) => /^world-/.test(name));
+const worldBytes = world === undefined ? 0 : gzip(world);
+
+if (world === undefined)
+{
+    problems.push('no world chunk reached dist/assets');
+}
+else if (worldBytes > WORLD_BUDGET)
+{
+    problems.push(`the world chunk is ${ size(worldBytes) }, over ${ size(WORLD_BUDGET) }`);
+}
+
+for (const locale of ['en', 'fa'])
+{
+    if (!existsSync(join(DIST, `index.${ locale }.html`)))
+    {
+        problems.push(`index.${ locale }.html was not prerendered - a ${ locale } reader would get the other language at first paint`);
+    }
+}
+
+const posterBytes = POSTERS.map((poster) =>
+{
+    const path = join(DIST, 'world', poster.file);
+    if (!existsSync(path))
+    {
+        problems.push(`${ poster.file } is missing - run node tools/art/poster.mjs against the built server`);
+        return 0;
+    }
+    const bytes = statSync(path).size;
+    if (bytes > poster.budget)
+    {
+        problems.push(`${ poster.file } is ${ size(bytes) }, over ${ size(poster.budget) }`);
+    }
+    return bytes;
+});
+
+const stamp = join(ROOT, 'application', 'public', 'world', 'poster.json');
+const captured = existsSync(stamp) ? JSON.parse(readFileSync(stamp, 'utf8')).inputs : null;
+if (captured !== fingerprint())
+{
+    problems.push('the posters were captured from a different scene than the one that ships - run node tools/art/poster.mjs against the built server');
+}
+
 // ---------------------------------------------------------------- say what was measured, always
 const shell = all.find((name) => /^app-shell\.component-/.test(name));
 const pages = all.filter((name) => /\.page-/.test(name)).map((name) => gzip(name));
@@ -267,6 +316,8 @@ console.log(`  app shell    ${ shell === undefined ? 'absent' : size(gzip(shell)
 console.log(`  routes       ${ pages.length } chunks, largest ${ size(Math.max(0, ...pages)) } / ${ size(ROUTE_BUDGET) }`);
 console.log(`  board        ${ boardChunk === null ? 'absent' : size(gzip(boardChunk)) } / ${ size(BOARD_BUDGET) }`);
 console.log(`  sounds       ${ sounds.length } pack, ${ size(soundTotal) } / ${ size(SOUND_BUDGET) }`);
+console.log(`  world        ${ size(worldBytes) } / ${ size(WORLD_BUDGET) }`);
+console.log(`  posters      ${ posterBytes.map(size).join(', ') }`);
 console.log(`  class binds  ${ classBindsRead } read, ${ problems.length === 0 ? 'every one that reads a signal effect-wrapped' : 'see below' }`);
 
 if (problems.length > 0)

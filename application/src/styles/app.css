@@ -2450,6 +2450,9 @@ html:has(.site-drawer[open])
 {
     --subject-x: 0.5;
     --subject-y: 0.3;
+    background: var(--void) url('/world/poster-portrait.webp') no-repeat;
+    background-size: cover;
+    background-position: calc(var(--subject-x) * 100%) calc(var(--subject-y) * 100%);
 }
 
 @media (min-width: 64rem), (orientation: landscape) and (max-height: 540px) and (min-aspect-ratio: 4/3)
@@ -2458,11 +2461,13 @@ html:has(.site-drawer[open])
     {
         --subject-x: 0.66;
         --subject-y: 0.5;
+        background-image: url('/world/poster-wide-ltr.webp');
     }
 
     [dir='rtl'] .stage
     {
         --subject-x: 0.34;
+        background-image: url('/world/poster-wide-rtl.webp');
     }
 }
 

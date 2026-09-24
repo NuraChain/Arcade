@@ -190,7 +190,7 @@ export default component WorldCanvas()
         }
     }
 
-    <div ref={ (element) => host = element } class="stage bg-void" aria-hidden="true">
+    <div ref={ (element) => host = element } class="stage" aria-hidden="true">
         <canvas
             ref={ (element) => canvas = element }
             class={ () => ['world-canvas', live ? 'is-live' : ''].join(' ') }
