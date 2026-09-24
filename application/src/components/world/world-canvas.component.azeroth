@@ -193,10 +193,10 @@ export default component WorldCanvas()
         }
     }
 
-    <div ref={ (element) => host = element } class="stage" aria-hidden="true">
+    <div ref={ (element) => host = element } class="stage [--subject-x:0.5] [--subject-y:0.3] bg-void bg-[url('/world/poster-portrait.webp')] bg-cover bg-[position:calc(var(--subject-x)*100%)_calc(var(--subject-y)*100%)] bg-no-repeat beside:[--subject-x:0.66] beside:[--subject-y:0.5] beside:bg-[url('/world/poster-wide-ltr.webp')] beside:rtl:[--subject-x:0.34] beside:rtl:bg-[url('/world/poster-wide-rtl.webp')]" aria-hidden="true">
         <canvas
             ref={ (element) => canvas = element }
-            class={ () => ['world-canvas', live ? 'is-live' : ''].join(' ') }
+            class={ () => ['world-canvas absolute inset-0 block h-full w-full [transition:opacity_400ms_ease]', live ? 'is-live opacity-100' : 'opacity-0'].join(' ') }
         ></canvas>
         <div class="scrim"></div>
     </div>

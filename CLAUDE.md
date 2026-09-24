@@ -537,7 +537,7 @@ four without asking the server. The components on `/` are built only from pieces
 a void `copy-plate` below it, the game cards a scroll-snap row of cards most of the screen wide. From
 40rem the cards are a 2x2 grid; from 64rem, and on a phone turned sideways, the copy takes the start
 side, the scrim follows it from the same side, and the games column alone widens to min(52rem, 50vw).
-Reveals are scroll-driven CSS (`.reveal`) inside `prefers-reduced-motion: no-preference` and
+Reveals are scroll-driven CSS (the `scroll-driven:` variant) inside `prefers-reduced-motion: no-preference` and
 `@supports (animation-timeline: view())`, so a browser without them shows everything, and a reveal
 never sits on an item inside a horizontal scroller, whose nearest scroll container is the rail.
 

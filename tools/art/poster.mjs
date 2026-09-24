@@ -41,8 +41,8 @@ export function fingerprint()
         hash.update(input);
         hash.update(readFileSync(join(ROOT, input)));
     }
-    const sheet = readFileSync(join(ROOT, 'application', 'src', 'styles', 'app.css'), 'utf8');
-    hash.update(sheet.split('\n').filter((line) => line.includes('--subject-') || line.includes('/world/poster-')).join('\n'));
+    const stage = readFileSync(join(ROOT, 'application', 'src', 'components', 'world', 'world-canvas.component.azeroth'), 'utf8');
+    hash.update(stage.split('\n').filter((line) => line.includes('--subject-') || line.includes('/world/poster-')).join('\n'));
     return hash.digest('hex');
 }
 

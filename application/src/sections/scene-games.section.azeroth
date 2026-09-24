@@ -7,21 +7,21 @@ export default component SceneGames(props: { returning: boolean })
 {
     const locale = useLocale();
 
-    <section id="games" data-beat="games" class="scene pt-15" aria-labelledby="games-title">
-        <div class="scene-copy copy-plate pb-16">
-            <div class="scene-column scene-column-wide">
-                <div class="reveal flex flex-col gap-2">
+    <section id="games" data-beat="games" class="relative flex min-h-svh flex-col pt-15" aria-labelledby="games-title">
+        <div class="mt-auto page-pad beside:my-auto copy-plate pb-16">
+            <div class="scene-column @container max-w-[40rem] beside:max-w-[min(52rem,50vw)] sideways:max-w-[min(26rem,44vw)]">
+                <div class="scroll-driven:animate-[reveal_linear_both] scroll-driven:[animation-timeline:view()] scroll-driven:[animation-range:entry_0%_entry_60%] flex flex-col gap-2">
                     <h2 id="games-title" class="title text-ui-3xl text-text @lg:text-ui-4xl">{ locale.t('landing.games.title') }</h2>
                     <p class="text-ui-md text-muted">{ locale.t('landing.games.lead') }</p>
                 </div>
-                <ul class="reveal rail-x bleed bleed-pad mt-6 flex snap-x snap-mandatory gap-3 pb-1 sm:mx-0 sm:grid sm:grid-cols-2 sm:gap-4 sm:overflow-visible sm:px-0 sm:pb-0">
+                <ul class="scroll-driven:animate-[reveal_linear_both] scroll-driven:[animation-timeline:view()] scroll-driven:[animation-range:entry_0%_entry_60%] rail-x bleed bleed-pad mt-6 flex snap-x snap-mandatory gap-3 pb-1 sm:mx-0 sm:grid sm:grid-cols-2 sm:gap-4 sm:overflow-visible sm:px-0 sm:pb-0">
                     <For each={ GAMES } key={ (game) => game.id } let={ game }>
                         <li class="flex w-[min(82%,20rem)] shrink-0 snap-start sm:w-auto sm:min-w-0">
                             <LandingGameCard game={ game } returning={ props.returning } />
                         </li>
                     </For>
                 </ul>
-                <p class="reveal mt-5 flex items-start gap-3 text-ui-sm text-muted">
+                <p class="scroll-driven:animate-[reveal_linear_both] scroll-driven:[animation-timeline:view()] scroll-driven:[animation-range:entry_0%_entry_60%] mt-5 flex items-start gap-3 text-ui-sm text-muted">
                     <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-control bg-accent/12 text-accent">
                         <Icon name="idea" size={ 18 } />
                     </span>

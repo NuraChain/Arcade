@@ -6,9 +6,9 @@ export default component SceneArrival(props: { returning: boolean })
 {
     const locale = useLocale();
 
-    <section data-beat="arrival" class="scene pt-15" aria-labelledby="arrival-title">
-        <div class="scene-copy copy-plate pb-[max(2.5rem,env(safe-area-inset-bottom))]">
-            <div class="scene-column flex flex-col items-start gap-4">
+    <section data-beat="arrival" class="relative flex min-h-svh flex-col pt-15" aria-labelledby="arrival-title">
+        <div class="mt-auto page-pad beside:my-auto copy-plate pb-[max(2.5rem,env(safe-area-inset-bottom))]">
+            <div class="scene-column @container max-w-[40rem] beside:max-w-[36rem] sideways:max-w-[min(26rem,44vw)] flex flex-col items-start gap-4">
                 <p class="label text-ui-sm text-accent">{ locale.t('landing.arrival.eyebrow') }</p>
                 <h1 id="arrival-title" class="title text-display-lg text-text sideways:text-ui-3xl">
                     <span class="block">{ locale.t('landing.arrival.lead') }</span>

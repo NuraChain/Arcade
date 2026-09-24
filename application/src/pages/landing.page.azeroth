@@ -32,7 +32,7 @@ export default component LandingPage()
     <div class="relative">
         <WorldCanvas />
 
-        <div class="scene-overlay">
+        <div class="scene-overlay relative z-10 mt-[-100lvh]">
             <SceneArrival returning={ returning } />
             <SceneGames returning={ returning } />
             <SceneRows beat="together" title="landing.together.title" lead="landing.together.lead" rows={ TOGETHER } />

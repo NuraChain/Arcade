@@ -5,9 +5,9 @@ export default component SceneFinale(props: { returning: boolean })
 {
     const locale = useLocale();
 
-    <section data-beat="finale" class="scene pt-15" aria-labelledby="finale-title">
-        <div class="scene-copy copy-plate pb-[max(3rem,env(safe-area-inset-bottom))]">
-            <div class="scene-column reveal flex flex-col items-start gap-4">
+    <section data-beat="finale" class="relative flex min-h-svh flex-col pt-15" aria-labelledby="finale-title">
+        <div class="mt-auto page-pad beside:my-auto copy-plate pb-[max(3rem,env(safe-area-inset-bottom))]">
+            <div class="scene-column @container max-w-[40rem] beside:max-w-[36rem] sideways:max-w-[min(26rem,44vw)] scroll-driven:animate-[reveal_linear_both] scroll-driven:[animation-timeline:view()] scroll-driven:[animation-range:entry_0%_entry_60%] flex flex-col items-start gap-4">
                 <h2 id="finale-title" class="title text-ui-3xl text-text @lg:text-ui-4xl">{ locale.t('landing.finale.title') }</h2>
                 <p class="max-w-[46ch] text-ui-md text-muted">{ locale.t('landing.finale.lead') }</p>
                 <div class="mt-2 flex w-full flex-col gap-3 @sm:w-auto @sm:flex-row">

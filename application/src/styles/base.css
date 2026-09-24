@@ -116,6 +116,26 @@
 @custom-variant phone (&:where([data-posture='phone'], [data-posture='phone'] *));
 @custom-variant rail (&:where([data-posture='rail'], [data-posture='rail'] *));
 @custom-variant sidebar (&:where([data-posture='sidebar'], [data-posture='sidebar'] *));
+
+@custom-variant beside
+{
+    @media (min-width: 64rem), (orientation: landscape) and (max-height: 540px) and (min-aspect-ratio: 4/3)
+    {
+        @slot;
+    }
+}
+
+@custom-variant scroll-driven
+{
+    @media (prefers-reduced-motion: no-preference)
+    {
+        @supports (animation-timeline: view())
+        {
+            @slot;
+        }
+    }
+}
+
 @custom-variant sideways (@media (orientation: landscape) and (max-height: 540px) and (min-aspect-ratio: 4/3));
 
 @utility safe-t

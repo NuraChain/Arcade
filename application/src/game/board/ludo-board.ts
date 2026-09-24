@@ -74,7 +74,11 @@ function element<K extends keyof HTMLElementTagNameMap>(tag: K, name: string, pa
     return made;
 }
 
-const RING = '<svg viewBox="-60 -30 120 60" aria-hidden="true"><ellipse class="lp-ring-edge" rx="56" ry="28"/><ellipse class="lp-ring-dash" rx="56" ry="28" pathLength="120"/></svg>';
+const RING = '<svg viewBox="-60 -30 120 60" aria-hidden="true" class="block inline-full block-full overflow-visible"><ellipse class="fill-none stroke-[#0B1220] [stroke-opacity:0.55] stroke-[10]" rx="56" ry="28"/><ellipse class="fill-none stroke-[#FFFFFF] [stroke-opacity:0.95] stroke-[5.5] [stroke-dasharray:7.5_2.5] animate-[lp-dash_2400ms_linear_infinite] [.lp[data-movable]:hover_&]:[stroke-dasharray:none] [.lp[data-movable]:hover_&]:stroke-[7.5] [.lb[data-still]_&]:animate-none [.lb[data-still]_&]:[stroke-dasharray:none]" rx="56" ry="28" pathLength="120"/></svg>';
+
+const SPRITE = 'absolute max-inline-none select-none [-webkit-user-drag:none]';
+
+const STILL = '[.lb[data-still]_&]:animate-none';
 
 export async function createLudoBoard(options: BoardOptions): Promise<BoardHandle>
 {
@@ -156,11 +160,11 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
 
     const mint = (token: BoardToken): Piece =>
     {
-        const node = element('div', 'lp', root);
-        const shadow = element('img', 'lp-shadow', node);
-        const ring = element('span', 'lp-ring', node);
-        const lift = element('span', 'lp-lift', node);
-        const pawn = element('img', 'lp-pawn', lift);
+        const node = element('div', 'lp absolute inset-s-0 inset-bs-0 inline-0 block-0', root);
+        const shadow = element('img', `lp-shadow ${ SPRITE } block inset-s-[calc(var(--c)*-0.753)] inset-bs-[calc(var(--c)*-0.2588)] inline-[calc(var(--c)*1.506)] block-[calc(var(--c)*0.753)] opacity-[0.6] origin-[50%_34.375%] ${ STILL }`, node);
+        const ring = element('span', `${ SPRITE } hidden inset-s-[calc(var(--c)*-0.6)] inset-bs-[calc(var(--c)*-0.3)] inline-[calc(var(--c)*1.2)] block-[calc(var(--c)*0.6)] bg-[radial-gradient(closest-side,rgb(255_255_255/0.3),rgb(255_255_255/0.3)_40%,transparent_42%)] [.lp[data-movable]_&]:block`, node);
+        const lift = element('span', `lp-lift absolute inset-s-0 inset-bs-0 ${ STILL } [.lb[data-still]_.lp[data-movable]_&]:[translate:0_calc(var(--c)*-0.06)]`, node);
+        const pawn = element('img', `lp-pawn ${ SPRITE } block inset-s-[calc(var(--c)*-0.8435)] inset-bs-[calc(var(--c)*-1.3114)] inline-[calc(var(--c)*1.687)] block-[calc(var(--c)*1.687)] origin-[50%_77.73%] [.lp[data-movable]_&]:pointer-events-auto [.lp[data-movable]_&]:cursor-pointer [.lp[data-movable]:hover_&]:[filter:brightness(1.08)] ${ STILL }`, lift);
 
         shadow.src = '/board/pawn-shadow.svg';
         shadow.alt = '';

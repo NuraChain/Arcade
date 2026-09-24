@@ -16,14 +16,14 @@ export default component SceneRows(props: { beat: string; title: MessageKey; lea
 {
     const locale = useLocale();
 
-    <section data-beat={ props.beat } class="scene pt-15" aria-labelledby={ `${ props.beat }-title` }>
-        <div class="scene-copy copy-plate pb-16">
-            <div class="scene-column">
-                <div class="reveal flex flex-col gap-2">
+    <section data-beat={ props.beat } class="relative flex min-h-svh flex-col pt-15" aria-labelledby={ `${ props.beat }-title` }>
+        <div class="mt-auto page-pad beside:my-auto copy-plate pb-16">
+            <div class="scene-column @container max-w-[40rem] beside:max-w-[36rem] sideways:max-w-[min(26rem,44vw)]">
+                <div class="scroll-driven:animate-[reveal_linear_both] scroll-driven:[animation-timeline:view()] scroll-driven:[animation-range:entry_0%_entry_60%] flex flex-col gap-2">
                     <h2 id={ `${ props.beat }-title` } class="title text-ui-3xl text-text @lg:text-ui-4xl">{ locale.t(props.title) }</h2>
                     <p class="text-ui-md text-muted">{ locale.t(props.lead) }</p>
                 </div>
-                <ul class="reveal mt-6 divide-y divide-line rounded-panel border border-line bg-field">
+                <ul class="scroll-driven:animate-[reveal_linear_both] scroll-driven:[animation-timeline:view()] scroll-driven:[animation-range:entry_0%_entry_60%] mt-6 divide-y divide-line rounded-panel border border-line bg-field">
                     <For each={ props.rows } key={ (row) => row.title } let={ row }>
                         <li class="flex items-start gap-3 p-4">
                             <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-control bg-accent/12 text-accent">
