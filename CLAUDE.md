@@ -18,7 +18,8 @@ npm run test:shuffle   # every suite in random order — the isolation gate
 npm run qa             # 600-cell Playwright matrix: 12 widths × orientation × locale × route
 npm start              # the built server, serving the api AND the built client on one origin
 npm run schema:sync    # build the schema from the entities (dev does this on every boot)
-npm run assets         # rebuild the GLB kit from tools/blender (needs Blender 5.2)
+npm run assets         # rebuild the showcase GLBs from tools/blender (needs Blender 5.2)
+npm run poster         # capture the landing's first frame from the built server on 5300
 ```
 
 ## Running it, both ways
@@ -441,18 +442,18 @@ production one process answers everything, so there is no CORS between halves in
 
 ```
 application/src/
-  world/            THE 3D MARKET. Zero AzerothJS imports.
-    world.ts          lifecycle: build, run, dispose
+  world/            THE 3D SHOWCASE. Zero AzerothJS imports.
+    gate.ts           who gets 3D at all - its own tiny chunk, loaded before three.js
+    world.ts          lifecycle: the gate's context in, render on demand, dispose
     bridge.ts         the only UI <-> 3D contract
-    camera/           path.ts (pure maths) · shots.ts (the shot list) · rig.ts (damping)
-    quality/          tiers.ts (capability probe) · governor.ts (runtime downgrade)
-    scene/            market.ts · lamps.ts · atmosphere.ts · procedural.ts · textures.ts
-    render/materials.ts   five shared material families
-    assets/loader.ts      GLB load + material remap
+    camera/           path.ts (progressAt, lens, sampleShots) · shots.ts (beats, close-ups) · rig.ts
+    quality/          tiers.ts (pixel budgets) · governor.ts (step down, then give up)
+    render/           environment.ts + studio.json - the softbox rig Blender shares
+    assets/loader.ts  one GLB per device class, decals unlit
   components/world/ the ONE component that touches three.js
-  sections/         one component per cinematic scene
-  data/games.ts     the catalogue — read by the DOM roster AND by the 3D market
-  stores/           locale · focus · scroll
+  sections/         one component per beat
+  data/games.ts     the catalogue - read by the landing cards AND by the showcase
+  stores/           locale · focus · connect
   styles/tokens.css every colour, font and motion value
 ```
 
@@ -463,12 +464,75 @@ prerenderer and never blocks first paint.
 
 ## The fallback is the default state
 
-The landing route is `render: 'static'`. Every heading, blurb and CTA is in the prerendered HTML.
-The canvas lives behind `<Show when={ ready }>`, and `ready` flips inside `mount` — after
-hydration has adopted the server's markup.
+The landing route is `render: 'static'`, prerendered once per language - see *RTL*. Every heading,
+sentence and button is in that HTML, and the stage behind it paints a POSTER: the live renderer's own
+first frame, captured by `tools/art/poster.mjs`, picked by orientation and reading direction in CSS so
+exactly one of the three is fetched.
 
-If WebGL is missing, the kit fails to load, or the device cannot cope, `ready` never flips and the
-page stays exactly as it prerendered. Nobody has to remember to write a fallback branch.
+The canvas is always in the markup, at opacity 0. `mount` imports `world/gate.ts` - half a kilobyte -
+and only if it opens a context imports `world/world.ts`; the canvas fades in over 400ms once the first
+frame is drawn. The gate refuses reduced motion, Save-Data, a 2G or 3G connection, 2 GB of memory or
+less, and a WebGL2 context refused under `failIfMajorPerformanceCaveat`, which is how software
+rendering announces itself; a refused visitor downloads the poster and nothing else. Anything that
+goes wrong afterwards - a chunk or the GLB failing to load, an error three.js reports, a lost context,
+a device the governor cannot hold at 30fps on the lowest tier - fades the canvas out, disposes it and
+says nothing. Nobody has to remember to write a fallback branch: the fallback is what paints first.
+
+**The context is the gate's, and it is lost on every exit.** `WebGLRenderer({ canvas, context })`
+takes the one the gate opened, because three `console.error`s a context it failed to create itself.
+Every path out - a failed import, a renderer that throws, dispose - calls `WEBGL_lose_context`, and a
+context the GPU restores after a loss is lost again the moment it comes back; otherwise it counts
+toward the browser's active-context limit with nothing using it. `setConsoleFunction` routes three's
+own messages: an error fails the world, everything else is dropped, so the console stays clean.
+
+**Frames are drawn only while something moves.** `invalidate()` schedules one frame; the rig answers
+whether it is still travelling, and the loop stops when it is not. A phone left on the hero draws
+none - `regression-pass.mjs` counts `requestAnimationFrame` calls on a real GPU for three seconds and
+expects zero. Two consequences are worth knowing: a resize has to render synchronously, because setting
+the canvas size clears it and nothing else would draw the next frame; and the governor's patience
+restarts with every burst, or three seconds of reading would count as three seconds of slow frames.
+
+**The poster and the canvas agree because they share one lens.** `--subject-x/y` on `.stage` place the
+subject for the poster's cover crop AND for `lens()`, which shifts the frustum with `setViewOffset`
+so the subject lands where the layout leaves room - 30% down on a phone, 66% across from 64rem, 34%
+in Persian - and widens the field on a portrait screen so the subject still fits across. Measured at
+1440 in Persian, the live frame differs from the poster by under one level on average once the mouse
+parallax is centred. `tools/budgets.mjs` refuses a build whose posters were captured from a different
+scene: `public/world/poster.json` holds a fingerprint of both GLBs, the shots, the lens, the studio and
+the anchors. After touching any of them: build, restart the server on 5300, `npm run poster`, build.
+
+## The landing, and the beats the camera follows
+
+`pages/landing.page.azeroth` is a sticky 100lvh stage and five sections laid over it with a -100lvh
+margin. Each section carries a `data-beat` - `arrival`, `games`, `together`, `compete`, `finale` -
+and `SHOTS` in `world/camera/shots.ts` has a frame for each: Hokm, the four in a row, Ludo,
+Backgammon, Poker. The component measures where every beat ARRIVES - the scroll at which its section
+is centred in the stage - on mount, on resize and when the fonts land, and `progressAt` turns the
+scroll into a position between beats, eased so the camera rests while a section is read and travels
+between them. The path between two beats is a straight line: Catmull-Rom tangents through the far
+line-up pulled the camera toward the plinths on the way between two close-ups.
+
+A game card focused by the keyboard or entered by a MOUSE writes `useFocus`, and the world flies to
+that game's close-up, pushed a further 7% from the copy by the lens. A finger does not: a tap is a
+tap on the button.
+
+**Every claim on the page is one the product backs.** No counts, no waits, no seasons, no fairness,
+no chess. Voice is "encrypted by the browser" and never end-to-end; poker is live only; a level unlocks
+nothing. `reference-parity.spec.ts` pins every game seed `available` because `/` prints "Live" on all
+four without asking the server. The components on `/` are built only from pieces with no path to
+`api.ts` - `GameCard` and `GameTile` reach `catalogue.store` and are not allowed there.
+
+**Mobile first.** The unprefixed layout is the phone's: the scene in the top of the stage, the copy on
+a void `copy-plate` below it, the game cards a scroll-snap row of cards most of the screen wide. From
+40rem the cards are a 2x2 grid; from 64rem, and on a phone turned sideways, the copy takes the start
+side, the scrim follows it from the same side, and the games column alone widens to min(52rem, 50vw).
+Reveals are scroll-driven CSS (`.reveal`) inside `prefers-reduced-motion: no-preference` and
+`@supports (animation-timeline: view())`, so a browser without them shows everything, and a reveal
+never sits on an item inside a horizontal scroller, whose nearest scroll container is the rail.
+
+**The header never hides and the drawer holds the rest.** Transparent over the hero, a hairline and a
+blur after 120px of scroll by `animation-timeline: scroll()`, no JavaScript. The menu is a lazily
+imported `<dialog>` with the games, the language and the way in, swipe to close.
 
 ## Design system — Arena Blue, one theme
 
@@ -548,8 +612,8 @@ reader's own notifications and their online friends - nothing the server does no
 and `<game>-icon.svg` (the tile) are hand-built vector: sharp at any width and a few kilobytes each.
 `tools/art/games.mjs` composes the scenes, because a board in perspective with pieces standing on it
 is geometry; the icons are hand-authored. `npm run art` regenerates the scenes. The Blender art
-script and its WebPs are gone - the user judged the renders not good enough - and the 3D market's
-GLB kit, which is a live scene rather than an image, stays.
+script and its WebPs are gone - the user judged the renders not good enough - and the landing's
+showcase GLBs, which are a live scene rather than an image, stay.
 
 **The brand is a sparkle, because Nura means light.** `BrandLogo` draws it inline - a four-point star
 and a small one on the accent tile - with flat fills and no gradient ids, because an id-referenced
@@ -566,12 +630,14 @@ is a metal gradient per tier with the icon engraved in it, and a locked one is a
 row reads earned or not before the words do. `.empty-art` is two tilted cards, a dashed orbit and
 the icon disc, toned by the empty state's own `tone`. Neither is an image file, so neither can 404.
 
-The `--world-*` tokens carry the market's own palette and the WebGL layer reads them ONCE, at
-`createWorld`. There is no relight path: it existed only so the market could follow a theme change.
-`--world-sky` equals `--void`, so the canvas and the page share one ground and the seam disappears.
-The kit itself - felt, walnut, brass, cards, dice and figures - is baked vertex colour inside the
-GLBs, and the lamps are warm: the market is lamplit, and that warmth against the navy is the whole
-picture.
+**The showcase is lit by one rig, written down once.** `world/render/studio.json` holds the exposure,
+the sky (`#0B1220`, the page's `void`), the floor pool and four softbox panels - a warm key, a cool
+fill, an Arena Blue rim and a top light - and both halves read it: Blender builds the panels as
+emitters for Cycles, and `render/environment.ts` builds the same panels and hands them to
+`PMREMGenerator.fromScene`, so the light the browser shades with is the light the contact shadows
+were baked under. There are no punctual lights and no shadow maps at runtime. Tone mapping is Khronos
+PBR Neutral at both ends, because it keeps the ludo reds and the baize green true to the 2D art. There
+are no `--world-*` tokens any more.
 
 ## The schema, and reference data
 
@@ -631,7 +697,7 @@ has the row is `update games set status = …`, not a redeploy.
 
 **The catalogue is split, and the split is the point.** The server owns what a game IS — seats,
 modes, targets, fairness, whether it can be opened. `application/src/data/games.ts` keeps where its
-table STANDS in the 3D market — `anchor`, `rotation`, `table`, `set` — because that is scene
+game STANDS in the landing's showcase — `anchor`, one row 1.6 m apart — because that is scene
 geometry and the landing route is `render: 'static'`: it must paint with no JavaScript and no
 server. The two merge by id, the server wins where both hold a field, and
 `server/tests/reference-parity.spec.ts` fails if they ever drift.
@@ -3869,30 +3935,31 @@ a wallet that is not installed.
 
 ## The 3D asset kit
 
-`tools/blender/assets/*.py` are the source of truth. `npm run assets` runs Blender headless and
-writes GLBs into `application/public/world/`. **The GLBs are committed**, so `npm run build` and CI
-never need Blender.
+`tools/blender/` is the source of truth. `npm run assets` rasterises the product's own `deck.svg`,
+`card-back.svg` and `ludo-board.svg` with Chrome, runs `showcase.py` in Blender headless, and writes
+`showcase-desktop.glb` and `showcase-phone.glb` into `application/public/world/`. **The GLBs are
+committed**, so `npm run build` and CI never need Blender.
 
-- Stylised realism at real dimensions, smooth-shaded, bevelled with `kit.finish` (Bevel +
-  Weighted Normal, applied through `meshes.new_from_object`) and lathed with `kit.lathe` /
-  `kit.sweep`. Vertex colour carries tint and baked contact AO (`kit.bake_ao`, Cycles).
-- Two shared textures live outside the GLBs: `atlas-2048.webp` (`lib/atlas.py`: cards, chips,
-  dice, Ludo field, score sheet — drawn with numpy SDFs + `blf`) and the tileable walnut pair
-  `wood-512.webp` / `wood-normal-512.webp` (`lib/wood.py`). The `print` and `wood` families are
-  `Image × Color Attribute → Base Color` through a Mix node with **Factor exactly 1.0**, or the
-  exporter drops COLOR_0 and the mesh renders black under `vertexColors`. `kit.export` swaps the
-  images for an 8×8 stub so nothing is embedded; three loads the atlas with `flipY = false`.
-- Thirteen material families by name; the loader swaps every GLB material for one shared
-  instance. Avatars are three metaball figures (`lib/figure.py`) instanced per variant; the
-  `Shirt` mesh is the only one tinted per instance.
-- Seats come from `seatAround()` in `data/games.ts`: a circle for round tables, a rail-normal
-  offset for the poker oval. Tables and sets both get `rotation.y = -game.rotation`; a figure
-  built facing Blender +Y faces three −Z, so its yaw is `π/2 − facing`.
-- **Paint after every geometry op.** Faces created after `paint` have no colour and render white.
-- Budgets are enforced by `build.mjs`. `node tools/blender/inspect.mjs --colours` reports
-  triangles, attributes, embedded images and the linear value each palette entry converts to.
-- Every set script renders Cycles previews into `tools/blender/out/` (git-ignored) from the
-  landing-page dolly distance — modelling from a script means never seeing the model otherwise.
+- Four vignettes (`vignettes/{hokm,poker,backgammon,ludo}.py`), each built at the origin on a plinth
+  under an empty named by its game id; the runtime places each root at its anchor. Real-world metres.
+- glTF PBR as authored - sheen on felt and baize, clearcoat on lacquer, chips, pawns and card stock -
+  from `lib/looks.py`; the loader keeps every material except the decals.
+- Shadows are BAKED, three decals per game: a floor pool graded to exactly `#0B1220` at its edge, and
+  contact shadows on the plinth and the playing surface from a shadowed render divided by an open one
+  (Cycles' shadow catcher came back empty under emissive panels). A `decal-*` material is drawn unlit,
+  transparent, without writing depth and without tone mapping.
+- **Nothing may be coplanar.** Cycles resolves two faces at one height one way and a depth buffer the
+  other: the backgammon field sat exactly at the walnut board's top and rendered as walnut, and the
+  contact decal sat at the lowest cards' height and drew black squares over them. Decals sit 0.1 mm
+  above their surface and everything standing on it sits higher.
+- `merge()` joins static meshes by material set and repeated pieces are `EXT_mesh_gpu_instancing`:
+  57 draw calls. `inspect.mjs` gates each GLB - 2.5 MiB / 1.0 MiB, 40k unique and 120k drawn triangles,
+  90 draw calls, the extension allow-list, root names equal to the `GAMES` ids, three decals per game.
+- Every vignette renders a Cycles preview into `tools/blender/out/` (git-ignored) with `NURA_PREVIEW=1`,
+  because modelling from a script means never seeing the model otherwise. Judge the runtime, though:
+  materials were tuned in the browser against `NeutralToneMapping` and written back into `looks.py`.
+- `surfaces.py` renders the app's table cloths and is NOT part of the showcase; do not re-run it to
+  touch the landing.
 
 **Blender MCP** is installed (`.mcp.json`) for interactive authoring. It needs Blender open with
 the addon connected (`N` → BlenderMCP → Connect) and cannot run headless. Anything arrived at
@@ -3902,22 +3969,35 @@ interactively must be written back into a script; the scripts stay the source of
 
 **`npm run build` fails on these now.** `tools/budgets.mjs` runs after `azeroth build`, gzips the
 chunks the prerendered `index.html` actually pulls, and exits 1 over budget - so the table below is
-a gate rather than a paragraph. It also asserts the four chunks that must NOT be in that initial
-set: three.js, the app catalogue, `session.store` behind `lib/guards.ts`, and `connect-dialog`
-behind the public shell. Each of those is one keystroke from being undone and every one of them
+a gate rather than a paragraph. It also asserts the chunks that must NOT be in that initial set:
+three.js, the app catalogue, `session.store` behind `lib/guards.ts`, `connect-dialog` behind the
+public shell, the typed `api` client, and the Persian landing catalogue; that the world chunk stays
+under 200 KB gzip; that both prerendered languages exist; and that the posters are present, within
+their bytes and captured from the scene that ships. Each of those is one keystroke from being undone and every one of them
 fails silently - the page still works, it just pays for the whole typed api client, and its
 top-level await on `/api/_manifest`, on a route prerendered to a file precisely so it needs no
 server.
 
 | | budget | actual |
 |---|---|---|
-| initial JS, gzip | < 60 KB | 55.1 KB |
-| three.js chunk | lazy | 165.3 KB gzip, after first paint |
+| initial JS, gzip | < 60 KB | 57.9 KB |
+| world chunk (three.js) | < 200 KB gzip, lazy | 158.6 KB, behind a 0.5 KB gate |
 | `/app` shell + page | lazy per route | 10.0 KB gzip shell, ≤ 6.2 KB per page |
-| GLB kit + textures | < 4.5 MB | see `npm run assets` |
+| showcase GLB | 2.5 MiB desktop, 1.0 MiB phone | 1.85 MiB, 0.91 MiB |
+| posters | 90 KB portrait, 130 KB wide | 37.5, 60.2, 75.9 KB |
 | game art, SVG scene | < 32 KB each | 13–22 KB |
 | game icon, SVG | < 32 KB each | 4–5 KB |
-| kit triangles | — | ~190k, ~20% of it instanced figures |
+| showcase triangles | 40k unique, 120k drawn | 36k unique, 85k drawn, 57 draw calls |
+
+**What leaves the server is compressed, and brotli is never spent on the fly.** The framework compresses
+nothing by default, so for a long time the built server sent every chunk raw - the world chunk as
+643 KB where gzip makes 158. `tools/precompress.mjs` writes brotli-11 and gzip-9 siblings for
+`dist/assets` and `dist/world` after the build, `server/src/http/compression.ts` serves them with
+the original content type, `Vary` and a coding-suffixed ETag, and gzips everything else on the way
+out. Brotli 11 is 0.75 s of CPU on that chunk and `compressResponse` has no quality knob, so the
+on-the-fly path offers gzip only. The GLBs compress too - the phone scene is 931 KB raw and 505 KB
+under brotli - and a model is served as `model/gltf-binary`, which the framework's own table lacks.
+Framework register #33 and #34.
 
 The `/app` tree is kept out of the landing's initial payload by four things, all of which must
 stay true: the `/app` layout route is `lazy`, the app message catalogue is registered by
@@ -3973,10 +4053,11 @@ argument as an updater, so `Dialog = module.default` CALLS the component with th
 construction rather than any kind of error. The public shell holds the loaded component in a plain
 `let` and a separate boolean says when it is there.
 
-Three quality tiers picked from a capability probe, then policed by a frame-time governor that
-only ever steps **down**. Most lamps are not lights: they are emissive geometry plus an additive
-sprite and a painted light pool, which is why a market of lit tables affords at most four real
-point lights.
+Three tiers are PIXEL budgets - 0.8, 1.6 and 3.7 megapixels - and the pixel ratio is whatever fits
+the budget, capped at 2. A phone is judged by its short side and starts on medium with the phone
+scene, so an iPhone is not punished for reporting few cores. A frame-time governor steps down when
+the median frame is slower than 36ms for two seconds, never up, and past the lowest tier gives the
+page back to its poster.
 
 ## Mobile first, and what a wide-first layout hides
 
@@ -4069,13 +4150,22 @@ layout that should flip; a number that came from the layout engine already has a
 it logically flips it a second time. `.tooltip` and its arrow use `left`/`top` for exactly that
 reason.
 
-Locale is switched client-side and remembered in storage, not carried in the url, because
-AzerothJS prefix routing is recorded as broken in the framework's own `framework-bugs.md`.
+The language is not carried in the url, because AzerothJS prefix routing is recorded as broken in the
+framework's own `framework-bugs.md`. It is a `locale` COOKIE, written by the framework's own
+`setLocale`, so the server can answer the first request in it: `tools/prerender-locales.mjs` writes
+`index.en.html` and `index.fa.html`, and `mountPages` picks one by the cookie and then by
+`Accept-Language`. A Persian reader gets Persian HTML with no JavaScript and no flash of English. The
+Persian landing catalogue is a dynamic import, awaited before hydration only when `<html lang>` is
+`fa`, so an English reader never downloads it. The build CLI does not pass `locales` to the
+prerenderer, which is why the script exists; it is in the framework register.
 
 ## No glyph the OS draws
 
-Icons are Lucide shapes re-exported through `icons/registry.ts` as `[tag, attrs]` tuples and
-rendered as inline SVG with `currentColor`. **Nothing renders an emoji, a dingbat or a symbol
+Icons are Lucide shapes held as `[tag, attrs]` tuples and rendered as inline SVG with
+`currentColor`. `icons/registry.ts` holds only the two dozen the landing draws, so they ride in its
+initial chunk; `icons/all.ts` holds the rest and registers them on import, and the app shell, the
+sign-in page and the wallet chooser import it. `IconName` comes from `all.ts`, so a name is checked
+against every icon, and `components.spec.ts` renders each one. **Nothing renders an emoji, a dingbat or a symbol
 character as content** — group identity is a crest (`components/social/group-crest.component
 .azeroth`) drawn from the registry over a hue-tinted tile, and a separator dot is a 4px
 `rounded-full` span, not a `·`. `·` and `–` inside translated sentences are punctuation and stay.
