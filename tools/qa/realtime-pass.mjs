@@ -153,6 +153,22 @@ try
     record('the spectator\'s page leaves the board once the game is over, without a reload', await soon(async () => await omid.page.locator('.table-stage').count() === 0, 10_000));
 
     const second = await mina.context.newPage();
+    await omid.page.goto(`${ BASE }/app/chats`);
+    await omid.page.waitForSelector('main');
+    const threads = () => omid.page.locator('a[href^="/app/chats/"]').count();
+    await soon(async () => await threads() > 0);
+    const before = await threads();
+    record('the shared thread is in the chats list of the other person to begin with', before > 0, String(before));
+
+    await dana.api('POST', '/social/blocks', { id: 'omid.k' });
+    record('a block takes the shared threads out of the chats list of the other person without a reload', await soon(async () => await threads() < before));
+
+    await dana.api('POST', '/social/blocks/remove', { id: 'omid.k' });
+    record('an unblock brings them back without a reload', await soon(async () => await threads() === before));
+
+    await dana.api('POST', '/social/requests', { id: 'omid.k' });
+    await omid.api('POST', '/social/requests', { id: 'dana.w' });
+
     await mina.page.goto(`${ BASE }/app/notifications`);
     await second.goto(`${ BASE }/app/notifications`);
     await second.waitForSelector('main');

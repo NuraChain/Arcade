@@ -892,6 +892,24 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         }
     };
 
+    const ringShared = async (me: string, other: string): Promise<void> =>
+    {
+        if (live === undefined)
+        {
+            return;
+        }
+
+        const theirs = new Set(await chat.seatedIn(other));
+
+        for (const conversationId of await chat.seatedIn(me))
+        {
+            if (theirs.has(conversationId))
+            {
+                live.chatChanged(conversationId, me, other);
+            }
+        }
+    };
+
     const ringProfile = async (userId: string): Promise<void> =>
     {
         if (live === undefined)
@@ -908,6 +926,16 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         for (const conversationId of await chat.seatedIn(userId))
         {
             live.chatChanged(conversationId);
+        }
+
+        for (const row of await group.mine(userId))
+        {
+            await ring(row);
+        }
+
+        for (const row of await table.mine(userId))
+        {
+            await ringTable(row);
         }
     };
 
@@ -1345,7 +1373,10 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             {
                 const other = await mustResolve(handle);
                 await social.block(me, other);
+                await retract(other, 'friend-request', `friend:${ me }`);
+                await retract(me, 'friend-request', `friend:${ other }`);
                 live?.edgesChanged(me, other);
+                await ringShared(me, other);
             },
 
             async unblock(me, handle)
@@ -1353,6 +1384,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 const other = await mustResolve(handle);
                 await social.unblock(me, other);
                 live?.edgesChanged(me, other);
+                await ringShared(me, other);
             },
             async setMute(me, kind, subjectId, muted)
             {
