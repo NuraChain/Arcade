@@ -1,7 +1,7 @@
 import { Check, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryColumn } from 'typeorm';
 import { User } from './user.entity.ts';
 
-export type MuteSubject = 'person' | 'conversation' | 'game';
+export type MuteSubject = 'person' | 'conversation' | 'game' | 'notice';
 
 /**
  * Silence, for one kind of subject.
@@ -10,7 +10,8 @@ export type MuteSubject = 'person' | 'conversation' | 'game';
  * account being notified. One table for people, conversations and games, because the product had
  * three separate lists for the same idea and every feature had to remember all three.
  */
-@Check('mutes_kind_known', `subject_kind in ('person', 'conversation', 'game')`)
+@Check('mutes_kind_known', `subject_kind in ('person', 'conversation', 'game', 'notice')`)
+@Check('mutes_notice_known', `subject_kind <> 'notice' or subject_id in ('invites', 'requests', 'messages', 'groups', 'turns')`)
 @Entity('mutes')
 export class Mute
 {
