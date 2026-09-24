@@ -140,9 +140,7 @@ if (!skipSurfaces && (only === null || only === 'surfaces'))
     {
         failed += 1;
         console.log('FAILED');
-        console.log((result.stderr || result.stdout || '').split('
-').slice(-25).join('
-'));
+        console.log((result.stderr || result.stdout || '').split('\n').slice(-25).join('\n'));
     }
     else
     {

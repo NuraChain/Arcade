@@ -20,7 +20,6 @@
         "start": "npm start --workspace server",
         "schema:sync": "npm run schema:sync --workspace server",
         "assets": "node tools/blender/build.mjs",
-        "assets:poster": "node tools/blender/build.mjs --poster-only",
         "art": "node tools/art/games.mjs && node tools/art/boards.mjs && node tools/art/deck.mjs && node tools/art/raster.mjs",
         "qa": "node tools/qa/matrix.mjs",
         "sound": "node tools/art/sound.mjs"
