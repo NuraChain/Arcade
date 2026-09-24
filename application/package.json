@@ -25,6 +25,7 @@
         "@noble/hashes": "^2.4.0",
         "azerothjs": "2.1.0",
         "lucide": "^1.43.0",
+        "motion": "13.4.3",
         "qrcode-generator": "^2.0.4",
         "three": "0.186.0"
     },

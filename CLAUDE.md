@@ -4017,6 +4017,8 @@ icon-only control has a visible name on a mouse and a long-press name on a finge
 `Slider` is pointer-captured and keyboard-driven. `lib/anchor.ts` is the shared placement maths
 (flip, shift, RTL) and `lib/swipe.ts` the two-axis drag with axis lock.
 
+**Motion is for physics and nothing else, and it is never on the first paint.** CSS transitions already open and close every sheet, modal and toast, and they stay. What CSS cannot do is carry a gesture into a spring, or slide a row from where it was to where it went. `lib/motion.ts` loads `motion/mini` behind a dynamic import - a sheet asks for it on the pointer going down, so it has arrived by the release; the chat list asks at mount, so a reorder never waits for a download. A released sheet springs to its detent from where the finger left it, and the chat list FLIPs a thread to the top when a message moves it there. Reduced motion skips both, and neither is in the shell or the landing budget.
+
 **Anything a phone scrolls sideways, a mouse can drag.** `lib/drag-scroll.ts` is the one copy of the
 behaviour: a mouse press that moves more than four pixels scrolls the strip, the click that ends a
 drag is swallowed so it cannot press whatever the pointer stopped over, and a finger is left to the

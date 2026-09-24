@@ -8,7 +8,9 @@ import SearchInput from '../ui/search-input.component.azeroth';
 import Skeleton from '../ui/skeleton.component.azeroth';
 import Tabs from '../ui/tabs.component.azeroth';
 import type { Conversation } from '../../data/chat.ts';
+import { flip, motion, type MotionKit } from '../../lib/motion.ts';
 import { fold } from '../../services/search.service.ts';
+import { useDevice } from '../../stores/device.store.ts';
 import { usePeople } from '../../stores/people.store.ts';
 import { useChat } from '../../stores/chat.store.ts';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
@@ -26,6 +28,7 @@ export default component ChatList(props: { active?: string; pane?: boolean; clas
     const overlay = useOverlay();
     const groups = useGroups();
     const people = usePeople();
+    const device = useDevice();
 
     const gameName = (game: GameId): string => locale.t(catalogue.byId(game).nameKey);
 
@@ -36,6 +39,12 @@ export default component ChatList(props: { active?: string; pane?: boolean; clas
 
     let scroller: HTMLElement | null = null;
 
+    let rows: HTMLElement | null = null;
+
+    let kit: MotionKit | null = null;
+
+    const tops = new Map<string, number>();
+
     const hold = (): void =>
     {
         kept.scroll = scroller?.scrollTop ?? kept.scroll;
@@ -43,6 +52,8 @@ export default component ChatList(props: { active?: string; pane?: boolean; clas
 
     mount
     {
+        void motion().then((loaded) => kit = loaded).catch(() => undefined);
+
         if (scroller === null)
         {
             return;
@@ -96,6 +107,16 @@ export default component ChatList(props: { active?: string; pane?: boolean; clas
         });
     })();
 
+    effect
+    {
+        const order = filtered.map((conversation) => conversation.id).join('|');
+
+        if (order !== '')
+        {
+            requestAnimationFrame(() => (rows === null ? undefined : flip(rows, tops, kit, device.reducedMotion())));
+        }
+    }
+
     derived items = [
         { id: 'all', label: locale.t('chats.tab.all'), count: chat.totalUnread() },
         { id: 'direct', label: locale.t('chats.tab.direct') },
@@ -120,13 +141,14 @@ export default component ChatList(props: { active?: string; pane?: boolean; clas
             <Switch
                 fallback={
                     <ul
+                        ref={ (element) => rows = element }
                         class={ () => pane
                             ? 'flex flex-col gap-0.5'
                             : 'flex flex-col divide-y divide-line rounded-panel border border-line bg-field px-1.5' }
                         aria-label={ locale.t('app.nav.chats') }
                     >
                         <For each={ filtered } key={ (conversation) => conversation.id } let={ conversation }>
-                            <li>
+                            <li data-flip={ conversation.id }>
                                 <ChatListItem
                                     conversation={ conversation }
                                     me={ mine }
