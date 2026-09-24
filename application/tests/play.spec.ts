@@ -29,6 +29,7 @@ import { useLobby } from '../src/stores/lobby.store.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
 import { usePresence } from '../src/stores/presence.store.ts';
 import { useRealtime } from '../src/stores/realtime.store.ts';
+import { useConnection } from '../src/stores/connection.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
 import { useSettings } from '../src/stores/settings.store.ts';
 import { client, server } from './fake-api.ts';
@@ -227,6 +228,26 @@ describe('PlayHeader', () =>
 
         expect(locale.plural('play.tables.waiting', 1)).toBe(locale.plural('play.tables.waiting', 2));
         locale.setLocale('en');
+    });
+
+    it('says at the table that the connection dropped, in place of the pace, and that moves still go', async () =>
+    {
+        const live = useRealtime();
+        const stopLive = live.start();
+        const stopLink = useConnection().start();
+        socket.accept();
+
+        const container = mount(table('one', 'hokm'), []);
+        expect(container.querySelector('[role="status"]')).toBeNull();
+
+        socket.drop();
+        await Promise.resolve();
+
+        expect(container.querySelector('[role="status"]')?.textContent).toContain('Your moves still go through');
+        expect(container.textContent).not.toContain('Turn-based');
+
+        stopLink();
+        stopLive();
     });
 
     it('tells two tables of one game apart by their codes', () =>

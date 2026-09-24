@@ -73,7 +73,7 @@ export const app: Pick<Dictionary, keyof typeof reference> = {
 
     'overlay.handle': 'برای بستن به پایین بکش',
 
-    'connection.offline': 'آفلاین هستی. میزها تا برگشتنت صبر می‌کنند.',
+    'connection.offline': 'آفلاین هستی. میزهای زنده بدون تو ادامه می‌دهند.',
     'connection.reconnecting': 'اتصال قطع شد. در حال اتصال دوباره…',
     'connection.restored': 'دوباره آنلاین شدی.',
 

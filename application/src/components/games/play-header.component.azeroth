@@ -7,6 +7,7 @@ import IconButton from '../ui/icon-button.component.azeroth';
 import Icon from '../../icons/icon.component.azeroth';
 import type { GameId } from '../../data/games.ts';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
+import { useConnection } from '../../stores/connection.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import type { TableSummary } from '../../api.ts';
 import { copyText } from '../../lib/clipboard.ts';
@@ -25,6 +26,12 @@ export default component PlayHeader(props: { table: TableSummary; others: TableS
 
     derived waiting = props.others.filter((table) => table.yourTurn === true).length;
 
+    const connection = useConnection();
+
+    derived link = connection.state();
+
+    derived linked = link === 'online' || link === 'restored';
+
     <header class="@container min-w-0">
         <div class="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
             <div class="flex min-w-0 flex-1 items-center gap-3">
@@ -33,16 +40,30 @@ export default component PlayHeader(props: { table: TableSummary; others: TableS
                 <div class="min-w-0 flex-1">
                     <h1 class="truncate text-ui-xl font-bold text-text">{ nameOf(props.table.game) }</h1>
                     <p class="flex min-w-0 items-center gap-2 text-ui-xs text-muted">
-                        <span class="shrink-0">{ locale.plural('common.players', props.table.seats) }</span>
-                        <span class="h-1 w-1 shrink-0 rounded-full bg-faint" aria-hidden="true"></span>
-                        <span class="truncate">{ locale.t(props.table.mode === 'turns' ? 'games.mode.turns' : 'games.mode.live') }</span>
-                        <Show when={ props.table.voice }>
-                            { () =>
-                                <span class="flex shrink-0 items-center gap-1 text-accent">
-                                    <Icon name="voice" size={ 12 } />
-                                    <span class="hidden @md:inline">{ locale.t('voice.tableHas') }</span>
-                                    <span class="sr-only @md:hidden">{ locale.t('voice.tableHas') }</span>
+                        <Show
+                            when={ linked }
+                            fallback={
+                                <span class={ () => [ 'flex min-w-0 items-center gap-1.5 font-semibold', link === 'offline' ? 'text-danger' : 'text-accent' ].join(' ') } role="status">
+                                    <Icon name={ link === 'offline' ? 'wifi-off' : 'history' } size={ 12 } class="shrink-0" />
+                                    <span class="truncate">{ locale.t(link === 'offline' ? 'play.link.offline' : 'play.link.reconnecting') }</span>
                                 </span>
+                            }
+                        >
+                            { () =>
+                                <>
+                                    <span class="shrink-0">{ locale.plural('common.players', props.table.seats) }</span>
+                                    <span class="h-1 w-1 shrink-0 rounded-full bg-faint" aria-hidden="true"></span>
+                                    <span class="truncate">{ locale.t(props.table.mode === 'turns' ? 'games.mode.turns' : 'games.mode.live') }</span>
+                                    <Show when={ props.table.voice }>
+                                        { () =>
+                                            <span class="flex shrink-0 items-center gap-1 text-accent">
+                                                <Icon name="voice" size={ 12 } />
+                                                <span class="hidden @md:inline">{ locale.t('voice.tableHas') }</span>
+                                                <span class="sr-only @md:hidden">{ locale.t('voice.tableHas') }</span>
+                                            </span>
+                                        }
+                                    </Show>
+                                </>
                             }
                         </Show>
                         <span class="hidden h-1 w-1 shrink-0 rounded-full bg-faint @2xl:block" aria-hidden="true"></span>

@@ -183,6 +183,8 @@ export const play = {
     'play.menu.title': 'This table',
     'play.dock.copy': 'Copy the table code {code}',
     'play.dock.codeCopied': 'Table code copied.',
+    'play.link.reconnecting': 'Reconnecting. Your moves still go through.',
+    'play.link.offline': 'Offline. The turn clock keeps running.',
     'play.dock.soundOn': 'Turn sound on',
     'play.dock.soundOff': 'Turn sound off',
     'play.dock.fullscreen': 'Fill the screen',

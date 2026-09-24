@@ -85,4 +85,12 @@ async function loadManifest(): Promise<Manifest>
     }
 }
 
-export const client = createClient<Api>(await loadManifest(), { baseUrl: '/api' });
+export const REQUEST_MS = 15_000;
+
+const timed = (request: Request): Promise<Response> =>
+    fetch(request, { signal: AbortSignal.any([request.signal, AbortSignal.timeout(REQUEST_MS)]) });
+
+export const client = createClient<Api>(await loadManifest(), {
+    baseUrl: '/api',
+    ...(typeof window !== 'undefined' && typeof AbortSignal.any === 'function' ? { fetch: timed } : {})
+});

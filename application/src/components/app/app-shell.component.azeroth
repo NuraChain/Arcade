@@ -144,7 +144,7 @@ export default component AppShell(props: { children?: MountNode })
 
             <div class="flex h-dvh min-h-0 min-w-0 flex-col">
                 <Show when={ !bare }>{ () => <TopBar /> }</Show>
-                <ConnectionBanner />
+                <Show when={ !immersive }>{ () => <ConnectionBanner /> }</Show>
                 <Show when={ !immersive }>{ () => <KeysBanner /> }</Show>
                 <div class="flex min-h-0 flex-1">
                     <main id="app-main" class="relative min-h-0 min-w-0 flex-1 overflow-hidden">

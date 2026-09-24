@@ -186,6 +186,8 @@ export const play: Pick<Dictionary, keyof typeof reference> = {
     'play.menu.title': 'این میز',
     'play.dock.copy': 'کپی کد میز {code}',
     'play.dock.codeCopied': 'کد میز کپی شد.',
+    'play.link.reconnecting': 'در حال اتصال دوباره. حرکت‌هایت همچنان فرستاده می‌شوند.',
+    'play.link.offline': 'آفلاین هستی. ساعت نوبت همچنان می‌گذرد.',
     'play.dock.soundOn': 'صدا را روشن کن',
     'play.dock.soundOff': 'صدا را خاموش کن',
     'play.dock.fullscreen': 'تمام صفحه',

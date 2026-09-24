@@ -70,7 +70,7 @@ export const app = {
 
     'overlay.handle': 'Drag down to close',
 
-    'connection.offline': 'You’re offline. Tables pause until you’re back.',
+    'connection.offline': 'You’re offline. Live tables keep playing without you.',
     'connection.reconnecting': 'Connection interrupted. Reconnecting…',
     'connection.restored': 'Back online.',
 
