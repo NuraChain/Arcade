@@ -3,46 +3,19 @@ import { Link, useMatch, useNavigate } from 'azerothjs';
 import Icon from '../../icons/icon.component.azeroth';
 import { haptic } from '../../lib/haptics.ts';
 import { routeMeta } from '../../lib/route-meta.ts';
-import { useChat } from '../../stores/chat.store.ts';
-import { useLobby } from '../../stores/lobby.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
-import { useSocial } from '../../stores/social.store.ts';
 import Badge from '../ui/badge.component.azeroth';
+import { useNavCounts } from './nav-counts.ts';
 import { NAV } from './nav-items.ts';
 import type { NavItem } from './nav-items.ts';
 
 export default component BottomNav()
 {
     const locale = useLocale();
-    const chat = useChat();
-    const social = useSocial();
-    const lobby = useLobby();
+    const { countOf, labelOf, toneOf } = useNavCounts();
     const match = useMatch();
     const { navigate } = useNavigate();
 
-    derived unread = chat.totalUnread();
-
-    derived requests = social.incoming().length;
-
-    derived waiting = lobby.waiting().length;
-
-    const COUNTS: Partial<Record<NavItem['tab'], () => number>> = {
-        chats: () => unread,
-        friends: () => requests,
-        games: () => waiting
-    };
-
-    const countOf = (item: NavItem): number => COUNTS[item.tab]?.() ?? 0;
-
-    const labelOf = (item: NavItem): string =>
-    {
-        if (item.tab === 'games')
-        {
-            return locale.plural('common.waitingTables', waiting);
-        }
-
-        return item.tab === 'chats' ? locale.plural('common.unread', unread) : locale.plural('common.requests', requests);
-    };
 
     const press = (item: NavItem): ((event: MouseEvent) => void) =>
     {
@@ -78,7 +51,7 @@ export default component BottomNav()
                             <Show when={ countOf(item) > 0 }>
                                 { () =>
                                     <span class="absolute -end-0.5 -top-1.5">
-                                        <Badge count={ countOf(item) } tone={ item.tab === 'games' ? 'live' : 'accent' } label={ labelOf(item) } />
+                                        <Badge count={ countOf(item) } tone={ toneOf(item) } label={ labelOf(item) } />
                                     </span>
                                 }
                             </Show>

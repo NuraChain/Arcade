@@ -29,6 +29,7 @@ export const RAIL: NavItem[] = [
     GAMES,
     FRIENDS,
     CHATS,
+    { tab: 'notifications', to: '/app/notifications', icon: 'bell', labelKey: 'app.nav.notifications', end: false },
     { tab: 'leaderboard', to: '/app/leaderboard', icon: 'trophy', labelKey: 'app.nav.leaderboard', end: false },
     { tab: 'discover', to: '/app/discover', icon: 'discover', labelKey: 'app.nav.discover', end: false },
     { tab: 'me', to: '/app/me/settings', icon: 'settings', labelKey: 'app.nav.settings', end: false }

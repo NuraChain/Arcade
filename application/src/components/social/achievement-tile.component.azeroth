@@ -28,7 +28,7 @@ export default component AchievementTile(props: { achievement: Medal; class?: st
             <p class={ () => [ 'truncate text-ui-sm font-semibold', earned ? 'text-text' : 'text-muted' ].join(' ') }>
                 { locale.text(props.achievement.name) }
             </p>
-            <p class="text-ui-2xs text-muted">{ locale.text(props.achievement.blurb) }</p>
+            <p class="line-clamp-2 text-ui-2xs text-muted">{ locale.text(props.achievement.blurb) }</p>
         </div>
 
         <Show

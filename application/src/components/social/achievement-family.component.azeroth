@@ -13,7 +13,7 @@ export default component AchievementFamily(props: { family: Family; onOpen: (fam
 
     <button
         type="button"
-        class="flex w-full min-w-0 items-center gap-3 rounded-tile border border-line bg-field p-3 text-start transition-colors hover:bg-raised"
+        class="flex h-full w-full min-w-0 items-center gap-3 rounded-tile border border-line bg-field p-3 text-start transition-colors hover:bg-raised"
         onClick={ () => props.onOpen(props.family) }
     >
         <span class="medal" data-tier={ props.family.tier ?? 'locked' } aria-hidden="true">
@@ -25,7 +25,7 @@ export default component AchievementFamily(props: { family: Family; onOpen: (fam
                 <span class="truncate text-ui-sm font-semibold text-text">{ locale.text(props.family.name) }</span>
                 <span class="tally shrink-0 text-ui-2xs font-semibold text-muted">{ locale.n(props.family.earned) }/{ locale.n(props.family.total) }</span>
             </span>
-            <span class="text-ui-2xs text-muted">
+            <span class="line-clamp-2 text-ui-2xs text-muted">
                 { next === null ? locale.t('achievements.complete') : locale.text(next!.blurb) }
             </span>
             <span class="flex items-center gap-2" aria-hidden="true">

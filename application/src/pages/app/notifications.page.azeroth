@@ -84,12 +84,11 @@ export default component NotificationsPage()
                                     </li>
                                 </For>
                             </ul>
-                            <Show when={ notifications.hasMore() }>
-                                { () =>
-                                    <LoadMore label={ locale.t('common.more') } onMore={ () => void notifications.more() } />
-                                }
-                            </Show>
                         </section>
+                    </Show>
+
+                    <Show when={ notifications.hasMore() }>
+                        { () => <LoadMore label={ locale.t('common.more') } onMore={ () => void notifications.more() } /> }
                     </Show>
                 </div>
             }

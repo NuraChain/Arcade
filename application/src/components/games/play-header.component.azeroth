@@ -30,7 +30,7 @@ export default component PlayHeader(props: { table: TableSummary; others: TableS
     <header class="@container min-w-0">
         <div class="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
             <div class="flex min-w-0 flex-1 items-center gap-3">
-                <IconButton icon="back" label={ locale.t('app.nav.back') } to="/app/games" class="icon-flip shrink-0" />
+                <IconButton icon="back" label={ locale.t('app.nav.back') } to="/app/games" flip class="shrink-0" />
                 <GameIcon game={ props.table.game as GameId } class="h-10 w-10 shrink-0" />
                 <div class="min-w-0 flex-1">
                     <h1 class="truncate text-ui-xl font-bold text-text">{ nameOf(props.table.game) }</h1>

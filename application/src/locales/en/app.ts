@@ -49,6 +49,7 @@ export const app = {
     'common.friendsOnline': { one: '{count} friend online', other: '{count} friends online' },
     'common.unread': { one: '{count} unread', other: '{count} unread' },
     'common.requests': { one: '{count} friend request', other: '{count} friend requests' },
+    'common.notices': { one: '{count} new notification', other: '{count} new notifications' },
     'common.waitingTables': { one: '{count} table waiting on you', other: '{count} tables waiting on you' },
     'common.optional': 'Optional',
     'page.range': '{from}–{to} of {total}',

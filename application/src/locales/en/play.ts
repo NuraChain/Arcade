@@ -40,7 +40,7 @@ export const play = {
     'game.rules.hokm.3': 'More than half the tricks takes the hand; the first side to the target takes the game.',
     'game.rules.poker.1': 'Texas hold’em: two cards to you, five on the table.',
     'game.rules.poker.2': 'Blinds set the pace. Low, mid or high — your table, your call.',
-    'game.rules.poker.3': 'Chips are play money. Bust and buy back in for free.',
+    'game.rules.poker.3': 'Chips are play money. Run out and you watch the rest; the last player with chips wins.',
     'game.rules.backgammon.1': 'Fifteen checkers each. Race them home, bear them off.',
     'game.rules.backgammon.2': 'The doubling cube sits on the table where everyone can see it.',
     'game.rules.backgammon.3': 'Matches run to 1, 3 or 5 points.',

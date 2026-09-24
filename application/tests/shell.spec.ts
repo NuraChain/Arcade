@@ -304,9 +304,9 @@ describe('BottomNav', () =>
 
 describe('the shell’s destinations', () =>
 {
-    it('lists the design’s seven in the sidebar, Tournaments not among them', () =>
+    it('lists the design’s seven in the sidebar, plus notifications,, Tournaments not among them', () =>
     {
-        expect(RAIL.map((item) => item.to)).toEqual(['/app', '/app/games', '/app/friends', '/app/chats', '/app/leaderboard', '/app/discover', '/app/me/settings']);
+        expect(RAIL.map((item) => item.to)).toEqual(['/app', '/app/games', '/app/friends', '/app/chats', '/app/notifications', '/app/leaderboard', '/app/discover', '/app/me/settings']);
     });
 
     it('calls the fifth phone tab Profile', async () =>
@@ -407,6 +407,24 @@ describe('the right panel', () =>
         const rows = container.querySelectorAll('section[aria-labelledby="panel-activity"] li button');
         expect(rows.length).toBe(1);
         expect(rows[0].textContent).toContain('ago');
+    });
+});
+
+describe('the sidebar’s counts', () =>
+{
+    it('badges Friends with the requests waiting and Notifications with the unread, like the phone nav', async () =>
+    {
+        await useAccount().signIn('Alex');
+        server.notify({ kind: 'friend-request', actor: 'sara.k', dedupeKey: 'friend:sara.k' });
+        useNotifications().reset();
+        const Stub = (): HTMLElement => document.createElement('div');
+        const router = createRouter({ routes: [{ path: '/app', component: Stub }], history: createMemoryHistory('/app'), scroll: false });
+        const { container } = renderTest(() => RouterProvider({ router, children: () => Sidebar({}) }) as Rendered);
+        await settle();
+
+        expect(container.querySelector('a[href="/app/friends"]')!.textContent).toContain('2');
+        expect(container.querySelector('a[href="/app/friends"]')!.innerHTML).toContain('2 friend requests');
+        expect(container.querySelector('a[href="/app/notifications"]')!.textContent).toContain('1');
     });
 });
 

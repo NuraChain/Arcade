@@ -37,7 +37,7 @@ const PAGE_WIDTH: Record<PageWidth, string> = {
     full: ''
 };
 
-export default component Page(props: { children?: Child; padded?: boolean; width?: PageWidth; fill?: boolean; class?: string; label?: string; onRefresh?: () => void })
+export default component Page(props: { children?: Child; padded?: boolean; width?: PageWidth; fill?: boolean; class?: string; label?: string; parent?: string; onRefresh?: () => void })
 {
     const route = useRoute();
     const match = useMatch();
@@ -84,7 +84,9 @@ export default component Page(props: { children?: Child; padded?: boolean; width
 
     derived meta = routeMeta(match());
 
-    derived leaving = meta.parent !== undefined || shell.depth() > 0;
+    derived parent = props.parent ?? meta.parent;
+
+    derived leaving = parent !== undefined || shell.depth() > 0;
 
     derived indicator = busy ? PULL_ARM : pull;
 
@@ -109,7 +111,7 @@ export default component Page(props: { children?: Child; padded?: boolean; width
             back();
             return;
         }
-        replace(meta.parent ?? '/app');
+        replace(parent ?? '/app');
     };
 
     mount

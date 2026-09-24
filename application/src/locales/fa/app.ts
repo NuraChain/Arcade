@@ -52,6 +52,7 @@ export const app: Pick<Dictionary, keyof typeof reference> = {
     'common.friendsOnline': { one: '{count} دوست آنلاین', other: '{count} دوست آنلاین' },
     'common.unread': { one: '{count} خوانده‌نشده', other: '{count} خوانده‌نشده' },
     'common.requests': { one: '{count} درخواست دوستی', other: '{count} درخواست دوستی' },
+    'common.notices': { one: '{count} اعلان تازه', other: '{count} اعلان تازه' },
     'common.waitingTables': { one: '{count} میز منتظر توست', other: '{count} میز منتظر توست' },
     'common.optional': 'اختیاری',
     'page.range': '{from} تا {to} از {total}',
