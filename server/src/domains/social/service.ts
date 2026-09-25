@@ -1,8 +1,9 @@
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '@azerothjs/http';
-import { IsNull, type DataSource } from 'typeorm';
+import { In, IsNull, type DataSource } from 'typeorm';
 
 import { affectedBy, firstRow, rowsOf } from '../../lib/rows.ts';
 import { Block } from '../../entities/block.entity.ts';
+import { User } from '../../entities/user.entity.ts';
 import { FriendRequest } from '../../entities/friend-request.entity.ts';
 import { Friendship } from '../../entities/friendship.entity.ts';
 import { Mute, type MuteSubject } from '../../entities/mute.entity.ts';
@@ -124,6 +125,21 @@ export function createSocialService(db: DataSource)
         person,
         personByHandle,
         relationOf,
+
+        async namesOf(handles: readonly string[]): Promise<Pick<PersonRow, 'handle' | 'display_name' | 'bio' | 'hue' | 'is_minor'>[]>
+        {
+            if (handles.length === 0)
+            {
+                return [];
+            }
+
+            const found = await db.getRepository(User).find({
+                select: { handle: true, displayName: true, bio: true, hue: true, isMinor: true },
+                where: { handle: In([...handles]), isSuspended: false }
+            });
+
+            return found.map((user) => ({ handle: user.handle, display_name: user.displayName, bio: user.bio, hue: user.hue, is_minor: user.isMinor }));
+        },
 
         async friends(me: string): Promise<PersonRow[]>
         {

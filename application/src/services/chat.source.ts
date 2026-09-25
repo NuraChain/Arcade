@@ -12,7 +12,8 @@ import {
     openMessage,
     sealForSend,
     type EpochFailure,
-    type MessageFailure
+    type MessageFailure,
+    type OpenedMessage
 } from '../lib/sealing.ts';
 import type { MemberSeal } from '../lib/seal-state.ts';
 import { THREAD_MOST, THREAD_PAGE } from '../../../server/src/domains/chat/pages.ts';
@@ -245,6 +246,40 @@ export function createApiSource(): ChatSource
      * A line the server authored is not sealed and never was - it is `{ key, params }` rendered
      * through the catalogue - so it passes through untouched. Only `text` goes near the crypto.
      */
+    const opens = new Map<string, OpenedMessage>();
+
+    const openCached = async (
+        wire: ChatMessage,
+        keyFor: (epoch: number) => Promise<Uint8Array | null>
+    ): Promise<OpenedMessage> =>
+    {
+        const key = `${ wire.id }|${ wire.signature ?? '' }`;
+        const held = opens.get(key);
+
+        if (held !== undefined)
+        {
+            return held;
+        }
+
+        const fresh = await openMessage(wire.conversationId, wire, keyFor);
+
+        if ('text' in fresh)
+        {
+            opens.set(key, fresh);
+
+            for (const old of opens.keys())
+            {
+                if (opens.size <= ARCHIVE_MAX)
+                {
+                    break;
+                }
+                opens.delete(old);
+            }
+        }
+
+        return fresh;
+    };
+
     const zero = async (given: readonly Promise<Uint8Array | null>[]): Promise<void> =>
     {
         for (const bytes of await Promise.all(given.map((one) => one.catch(() => null))))
@@ -290,14 +325,14 @@ export function createApiSource(): ChatSource
             return asMessage(wire, '', 'expired');
         }
 
-        const opened = await openMessage(wire.conversationId, wire, keyFor);
+        const read = await openCached(wire, keyFor);
 
-        if (!('text' in opened))
+        if (!('text' in read))
         {
-            return asMessage(wire, '', opened.failure);
+            return asMessage(wire, '', read.failure);
         }
 
-        const body = decodeText(opened.text);
+        const body = decodeText(read.text);
 
         if (body === null)
         {
@@ -305,9 +340,9 @@ export function createApiSource(): ChatSource
         }
 
         return asMessage(wire, body.text, null, {
-            from: opened.from,
-            frankingKey: opened.frankingKey,
-            plain: opened.text,
+            from: read.from,
+            frankingKey: read.frankingKey,
+            plain: read.text,
             ...(body.reply === undefined ? {} : { reply: body.reply }),
             ...(body.fwd === true ? { fwd: true as const } : {}),
             reactions: await openReactions(wire, keyFor)
@@ -324,7 +359,7 @@ export function createApiSource(): ChatSource
 
         const opened = await Promise.all(live.map(async (one): Promise<Reaction | null> =>
         {
-            const found = await openMessage(one.conversationId, one, keyFor);
+            const found = await openCached(one, keyFor);
 
             if (!('text' in found))
             {
@@ -569,6 +604,7 @@ export function createApiSource(): ChatSource
         reset()
         {
             archive.clear();
+            opens.clear();
             openedFor = '';
         }
     };

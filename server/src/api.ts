@@ -58,6 +58,7 @@ import {
     messagePage,
     muteInput,
     notificationPage,
+    namesQuery,
     personList,
     pinInput,
     personRef,
@@ -95,6 +96,7 @@ import {
     historyQuery,
     sinceQuery
 } from './schemas.ts';
+import { NAMES_MAX } from './domains/social/names.ts';
 
 /**
  * The whole API, declared once.
@@ -328,6 +330,16 @@ export function buildApi(ports: Ports)
 
             people: routes.get('/people', { output: personList }, async (context) => ({
                 people: await ports.social.directory(context.principal.userId, 60)
+            })),
+
+            /**
+             * Names for a batch of handles, at most fifty: the display name, the bio and the hue a
+             * screen needs to draw somebody it was only told the handle of. Deliberately no
+             * presence and no relation - one request instead of one per unknown person, and
+             * nothing in it a directory row does not already show.
+             */
+            names: routes.get('/names', { output: personList, query: namesQuery }, async (context) => ({
+                people: await ports.social.names(context.query.handles.split(',').map((one) => one.trim()).filter(Boolean).slice(0, NAMES_MAX))
             })),
 
             suggestions: routes.get('/suggestions', { output: suggestionList }, async (context) => ({

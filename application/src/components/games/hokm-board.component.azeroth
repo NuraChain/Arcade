@@ -490,16 +490,21 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
             return;
         }
 
-        cards.forEach((one, index) =>
+        const measured = cards.map((one) =>
         {
             const real = find(`.hokm-trick[data-card="${ one.card }"]`);
 
-            if (real === null)
+            return real === null ? null : { one, from: rectIn(layer!, real) };
+        });
+
+        measured.forEach((entry, index) =>
+        {
+            if (entry === null)
             {
                 return;
             }
 
-            const from = rectIn(layer!, real);
+            const { one, from } = entry;
 
             fly(layer!, cardNode(one.card, from.width), from, sized(target, from.width, from.height), {
                 duration: TIMING.GATHER,

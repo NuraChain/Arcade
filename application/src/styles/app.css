@@ -546,6 +546,12 @@ html:has(.site-drawer[open])
     animation: plate-clock var(--ms) linear forwards;
 }
 
+.table-plate-clock[data-still] > circle
+{
+    animation: none;
+    stroke-dashoffset: calc((1 - var(--from)) * 100px);
+}
+
 @keyframes plate-clock
 {
     from
@@ -1866,5 +1872,18 @@ html:has(.site-drawer[open])
     {
         opacity: 0;
         translate: 0 1.5rem;
+    }
+}
+
+@keyframes toast-bar
+{
+    from
+    {
+        transform: scaleX(var(--from, 1));
+    }
+
+    to
+    {
+        transform: scaleX(0);
     }
 }

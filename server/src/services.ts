@@ -1319,6 +1319,18 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 return ranked.map((entry) => ({ person: seenBy(viewer, entry.person, 'none'), mutual: entry.mutual }));
             },
 
+            async names(handles)
+            {
+                return (await social.namesOf(handles)).map((row) => ({
+                    id: row.handle,
+                    handle: row.handle,
+                    displayName: row.display_name,
+                    bio: row.bio,
+                    hue: row.hue,
+                    isMinor: row.is_minor
+                }));
+            },
+
             async view(me, handle)
             {
                 const [viewer, subject] = await Promise.all([social.person(me), social.personByHandle(handle)]);

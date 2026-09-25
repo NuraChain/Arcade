@@ -11,6 +11,7 @@ import { onBack, useRealtime } from '../src/stores/realtime.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
 import { defaultSettings, useSettings } from '../src/stores/settings.store.ts';
 import { useShell } from '../src/stores/shell.store.ts';
+import { usePeople } from '../src/stores/people.store.ts';
 import { TOAST_DURATION, TOAST_VISIBLE, useToasts } from '../src/stores/toasts.store.ts';
 import { server } from './fake-api.ts';
 import { socket } from './fake-realtime.ts';
@@ -243,6 +244,23 @@ describe('settings', () =>
     {
         expect(defaultSettings().sound).toBe(true);
         expect(defaultSettings().railOpen).toBe(false);
+    });
+});
+
+describe('people nobody has described yet', () =>
+{
+    it('are asked about together, in one request, and never twice', async () =>
+    {
+        const people = usePeople();
+        people.reset();
+        server.calls = [];
+
+        people.want(['sara.k', 'reza.t', 'mina', 'sara.k']);
+        people.want(['sara.k']);
+        await vi.waitFor(() => expect(people.byHandle('mina')?.displayName).toBe('Mina Sadeghi'));
+
+        expect(server.calls.filter((call) => call === 'social.names')).toHaveLength(1);
+        expect(server.calls).not.toContain('social.person');
     });
 });
 

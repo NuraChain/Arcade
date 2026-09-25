@@ -4461,6 +4461,28 @@ The client half of the same audits, each a thing that outlived what it belonged 
 - **A browser that knows it is offline stops asking**: no socket reopen, no fallback poll of the match
   and no live-count poll until the `online` event.
 
+## What the browser stopped paying for
+
+- **A message is opened once.** `chat.source` keeps what it opened by `(id, signature)` - the same
+  bytes cannot open to different words - so a refetch of the list or a thread, which every doorbell
+  causes, costs no signature check, no key fetch and no decryption for anything already on screen. Only
+  a successful open is kept; a failure is asked again. It is capped with the archive and dropped with it.
+- **Unknown people are asked about in one request.** `GET /social/names?handles=` answers up to fifty
+  (`NAMES_MAX`, a zero-import module both halves read) with a name, a bio and a hue - no presence and no
+  relation - where `people.want` used to send one request per handle.
+- **A day-long turn is not animated.** A turn ring is a `stroke-dashoffset` animation, which the
+  compositor cannot run, so a twenty-four hour one repainted the plate every frame for a day while the
+  ring moved one pixel every quarter hour. Over ten minutes the ring is drawn still and moved once a
+  minute; a live turn keeps its smooth animation.
+- **The toast bar is CSS**: a `transform` animation paused with `animation-play-state`, where a 120ms
+  timer rewrote a width - a layout - for every toast on screen.
+- **The landing preloads its poster** with the same media queries the stage's CSS chooses by, so the
+  largest paint starts with the HTML rather than after the stylesheet, and each screen still fetches
+  exactly one of the three. `tools/prerender-locales.mjs` writes the two links into the prerendered
+  files only, because the other pages share `index.html`.
+- **Hidden and offline tabs stop polling** the live counts and the watch list.
+- **Hokm's gather reads every card's box before it moves any**, instead of a read and a write per card.
+
 ## Mobile first, and what a wide-first layout hides
 
 **The unprefixed utilities ARE the phone layout.** `sm:`/`md:`/`lg:`/`@3xl:` only ever ADD to it for

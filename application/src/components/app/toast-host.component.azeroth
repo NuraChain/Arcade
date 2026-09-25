@@ -1,4 +1,4 @@
-import { onCleanup, Portal } from 'azerothjs';
+import { Portal, untrack } from 'azerothjs';
 
 import Icon from '../../icons/icon.component.azeroth';
 import type { IconName } from '../../icons/registry.ts';
@@ -59,7 +59,6 @@ export default component ToastHost()
     const device = useDevice();
     const people = usePeople();
 
-    state now = runtime().clock.now();
 
     /**
      * One drag recogniser per toast on screen - and only per toast on screen.
@@ -89,32 +88,6 @@ export default component ToastHost()
     }
 
     derived items = toasts.items();
-
-    /**
-     * The clock only runs while something is actually counting down.
-     *
-     * It used to be armed unconditionally in `mount`, which meant a 120ms interval writing a signal
-     * roughly eight times a second for the entire life of the app - the host is mounted by the shell
-     * and never unmounts, so "cleared on teardown" was true and meaningless. Nothing was leaked; the
-     * cost was that the whole reactive graph was woken eight times a second to animate nothing.
-     *
-     * A toast with an infinite duration is held open deliberately and has no bar to advance, and a
-     * paused one is not moving either, so neither needs the tick.
-     *
-     * `onCleanup` inside an effect run fires before the NEXT run as well as on disposal, so the
-     * previous interval is always cancelled before another is armed.
-     */
-    effect
-    {
-        const ticking = items.some((toast) => Number.isFinite(toast.duration) && !toast.paused);
-        if (!ticking)
-        {
-            return;
-        }
-
-        now = runtime().clock.now();
-        onCleanup(runtime().clock.every(120, () => now = runtime().clock.now()));
-    }
 
     effect
     {
@@ -252,7 +225,12 @@ export default component ToastHost()
                     <Show when={ !held(toast) }>
                         { () =>
                             <span class="absolute inset-x-0 inset-be-0 block-[2px] bg-line/60" aria-hidden="true">
-                                <span class={ () => [ 'block block-full [transition:inline-size_140ms_linear]', BAR[toast.kind] ].join(' ') } style={ `inline-size: ${ Math.round((1 - toasts.progress(toast.id, now)) * 100) }%` }></span>
+                                <For each={ [toast] } key={ (one) => `${ one.id }:${ one.kind }:${ one.duration }` } let={ one }>
+                                    <span
+                                        class={ () => [ 'block block-full origin-left rtl:origin-right [animation:toast-bar_var(--left)_linear_forwards]', one.paused ? '[animation-play-state:paused]' : '', BAR[one.kind] ].join(' ') }
+                                        style={ untrack(() => `--from: ${ (1 - toasts.progress(one.id, runtime().clock.now())).toFixed(4) }; --left: ${ Math.round(one.remaining) }ms`) }
+                                    ></span>
+                                </For>
                             </span>
                         }
                     </Show>

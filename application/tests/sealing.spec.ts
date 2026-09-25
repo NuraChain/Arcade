@@ -448,6 +448,19 @@ describe('replies, reactions and deletions, all inside the seal', () =>
         expect(after[1].reactions).toBeUndefined();
     });
 
+    it('opens a message once, and hands the same words back on every read after that', async () =>
+    {
+        const source = createApiSource();
+        await source.post(said('only once'));
+
+        const first = (await source.thread(THREAD, scope, new AbortController().signal)).messages;
+        server.calls = [];
+        const again = (await source.thread(THREAD, scope, new AbortController().signal)).messages;
+
+        expect(again.map((message) => message.text)).toEqual(first.map((message) => message.text));
+        expect(server.calls.filter((call) => call !== 'chat.messages')).toEqual([]);
+    });
+
     it('turns a deleted message into a tombstone and drops its words from the archive', async () =>
     {
         const source = createApiSource();

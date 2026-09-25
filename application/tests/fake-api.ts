@@ -1540,6 +1540,13 @@ export const client =
             return { person: personWire(params.handle), relation, mutual: 0 };
         },
 
+        async names({ query }: { query: { handles: string } })
+        {
+            server.calls.push('social.names');
+            const handles = query.handles.split(',').filter((handle) => reachable(handle) && PEOPLE_FIXTURES.some((one) => one.handle === handle));
+            return { people: handles.map((handle) => personWire(handle)) };
+        },
+
         async people()
         {
             server.calls.push('social.people');

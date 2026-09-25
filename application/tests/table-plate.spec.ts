@@ -35,6 +35,17 @@ describe('the seat plate every table draws', () =>
         expect(clock.getAttribute('style')).toContain('--ms: 15000ms');
     });
 
+    it('holds a day-long turn still and moves it once a minute, rather than repainting it every frame for a day', () =>
+    {
+        const day = 24 * 60 * 60 * 1000;
+        const { container } = renderTest(() => TablePlate({ who: 'omid.k', name: 'Omid', turn: true, remainingMs: day / 2, turnMs: day }) as Rendered);
+        const clock = container.querySelector<SVGElement>('.table-plate-clock')!;
+
+        expect(clock.dataset.still).toBe('true');
+        expect(clock.getAttribute('style')).toContain('--from: 0.5000');
+        expect(clock.getAttribute('style')).not.toContain('--ms');
+    });
+
     it('draws no clock for a watcher, who is sent no deadline', () =>
     {
         const { container } = renderTest(() => TablePlate({ who: 'omid.k', name: 'Omid', turn: true, turnMs: 30000 }) as Rendered);

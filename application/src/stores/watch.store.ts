@@ -89,7 +89,9 @@ export const useWatch = createStore((): WatchApi =>
             {
                 const cancel = runtime().clock.every(WATCH_POLL_MS, () =>
                 {
-                    if (matchId() !== null)
+                    const away = typeof document !== 'undefined' && (document.visibilityState === 'hidden' || navigator.onLine === false);
+
+                    if (matchId() !== null && !away)
                     {
                         watched.refetch();
                     }

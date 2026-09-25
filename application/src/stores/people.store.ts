@@ -1,6 +1,7 @@
 import { createStore, createSignal, untrack, type Getter } from 'azerothjs';
 
 import { client, type PersonSummary } from '../api.ts';
+import { NAMES_MAX } from '../../../server/src/domains/social/names.ts';
 
 export interface PeopleApi
 {
@@ -102,15 +103,15 @@ export const usePeople = createStore((): PeopleApi =>
             for (const handle of missing)
             {
                 asked.add(handle);
+            }
 
-                void client.social.person({ params: { handle } })
-                    .then((view) => remember([view.person]))
-                    .catch(() =>
-                    {
-                        // Blocked, gone, or never there. The handle stays unknown and renders as
-                        // itself; retrying would be one request per render for an answer that is
-                        // not going to change.
-                    });
+            for (let start = 0; start < missing.length; start += NAMES_MAX)
+            {
+                const batch = missing.slice(start, start + NAMES_MAX);
+
+                void client.social.names({ query: { handles: batch.join(',') } })
+                    .then((answer) => remember(answer.people))
+                    .catch(() => undefined);
             }
         },
 
