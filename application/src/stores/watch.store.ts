@@ -1,10 +1,11 @@
-import { createResource, createSignal, createStore, type Getter } from 'azerothjs';
+import { createResource, createSignal, createStore, untrack, type Getter } from 'azerothjs';
 
 import { ApiError, client } from '../api.ts';
 import { runtime } from '../lib/runtime.ts';
+import { useRealtime } from './realtime.store.ts';
 import type { MatchWatch } from '../api.ts';
 
-export const WATCH_POLL_MS = 10_000;
+export const WATCH_POLL_MS = 30_000;
 
 export interface WatchApi
 {
@@ -97,9 +98,18 @@ export const useWatch = createStore((): WatchApi =>
                     }
                 });
 
+                const offNudge = useRealtime().onNudge((scope, id) =>
+                {
+                    if (scope === 'game' && id !== undefined && id === untrack(matchId))
+                    {
+                        void watched.refetch();
+                    }
+                });
+
                 stop = () =>
                 {
                     cancel();
+                    offNudge();
                     stop = null;
                 };
             }

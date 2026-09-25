@@ -1627,7 +1627,10 @@ The HTTP routes stay, and not as a shim: the browser sends a play over HTTP, und
 the socket is not connected or no ack came within three seconds, and the idempotency ledger makes the
 second copy answer `already`. The API passes play hundreds of turns through them. A browser whose socket
 keeps failing polls `since` every three seconds while a match is open, so a table does not freeze behind
-a proxy that refuses WebSockets. A spectator is never pushed a board - the delay is the point of watching.
+a proxy that refuses WebSockets. A spectator is never pushed a board - the delay is the point of watching -
+but is RUNG once a move is old enough to show them (`WATCH_DELAY_MS` and a second, `gameWatched` in the
+hub, players excluded), and re-reads through the watch route; its poll is a thirty-second safety net
+rather than the only way a watcher's board moved.
 
 **Every board answers the press before the server does, and only with what the press decides.** A
 hokm card leaves the hand and flies to the felt at once, and the server's echo of that same card is

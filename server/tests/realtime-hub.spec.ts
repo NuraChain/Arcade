@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createHub, EDGES_TTL_MS, LINGER_MS, type Connection, type Edges, type Hub, type Wire } from '../src/realtime/hub.ts';
 import type { Party } from '../src/domains/social/policy.ts';
@@ -286,6 +286,35 @@ describe('a game push', () =>
         expect(other.wire.framesOf('game')).toMatchObject([{ match: { mine: 0 } }]);
         expect(sara.wire.framesOf('game')).toMatchObject([{ match: { mine: 1 } }]);
         expect(reza.wire.framesOf('game')).toEqual([]);
+    });
+});
+
+describe('a game somebody is watching', () =>
+{
+    it('rings the people looking at the table once the move is old enough to show them, and not the players', async () =>
+    {
+        vi.useFakeTimers();
+
+        try
+        {
+            const player = await connect('alex');
+            const watcher = await connect('sara.k');
+
+            world.hub.tableViewed('alex', 't-1');
+            world.hub.tableViewed('sara.k', 't-1');
+            world.hub.gameWatched('t-1', 'm-1', 31_000, ['alex']);
+
+            vi.advanceTimersByTime(30_000);
+            expect(watcher.wire.framesOf('nudge')).toEqual([]);
+
+            vi.advanceTimersByTime(1_000);
+            expect(watcher.wire.framesOf('nudge')).toMatchObject([{ scope: 'game', id: 'm-1' }]);
+            expect(player.wire.framesOf('nudge')).toEqual([]);
+        }
+        finally
+        {
+            vi.useRealTimers();
+        }
     });
 });
 

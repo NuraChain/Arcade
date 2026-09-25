@@ -107,6 +107,7 @@ export interface Hub
     edgesChanged(...userIds: string[]): void;
     selfChanged(userId: string, what: SelfTopic): void;
     gamePushed(pushes: readonly GamePush[]): void;
+    gameWatched(tableId: string, matchId: string, afterMs: number, players: readonly string[]): void;
     reply(connection: Connection, build: (n: number) => ServerFrame): void;
     tableChanged(tableId: string, people: readonly string[]): void;
     tableViewed(userId: string, tableId: string): void;
@@ -547,6 +548,8 @@ export function createHub(deps: HubDeps): Hub
 
     let flushing: Promise<void> = Promise.resolve();
 
+    const later = new Set<ReturnType<typeof setTimeout>>();
+
     function flush(): Promise<void>
     {
         flushing = flushing.then(drain, drain);
@@ -776,6 +779,20 @@ export function createHub(deps: HubDeps): Hub
             {
                 publish([push.userId], (n) => game(n, at, push.match, push.events));
             }
+        },
+
+        gameWatched(tableId, matchId, afterMs, players)
+        {
+            const skip = new Set(players);
+            const ring = setTimeout(() =>
+            {
+                later.delete(ring);
+                const looking = [...(watchers.get(tableId) ?? [])].filter((userId) => !skip.has(userId));
+                publish(looking, (n) => nudge(n, 'game', deps.now(), matchId));
+            }, afterMs);
+
+            ring.unref?.();
+            later.add(ring);
         },
 
         reply(connection, build)
@@ -1022,6 +1039,12 @@ export function createHub(deps: HubDeps): Hub
                 clearTimeout(timer);
                 timer = null;
             }
+
+            for (const ring of later)
+            {
+                clearTimeout(ring);
+            }
+            later.clear();
 
             let sent = 0;
             for (const sockets of [...byUser.values()])

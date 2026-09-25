@@ -63,6 +63,7 @@ export interface WriteListener
     edgesChanged(...userIds: string[]): void;
     selfChanged(userId: string, what: 'notifications' | 'devices' | 'profile'): void;
     gamePushed(pushes: readonly { userId: string; match: MatchView; events: MatchEventLog[] }[]): void;
+    gameWatched(tableId: string, matchId: string, afterMs: number, players: readonly string[]): void;
     tableChanged(tableId: string, people: readonly string[]): void;
     tableViewed(userId: string, tableId: string): void;
     sessionsRevoked(sessionIds: readonly string[]): void;
@@ -734,6 +735,8 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             match: shipped(asMatch({ ...found.load, mine: row.seat })),
             events: logged(found.events(row.seat))
         })));
+
+        live.gameWatched(found.load.match.tableId, matchId, WATCH_DELAY_MS + 1000, found.load.players.map((row) => row.user_id));
     };
 
     /**
