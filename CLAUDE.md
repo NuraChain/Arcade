@@ -4394,6 +4394,44 @@ scene, so an iPhone is not punished for reporting few cores. A frame-time govern
 the median frame is slower than 36ms for two seconds, never up, and past the lowest tier gives the
 page back to its poster.
 
+## What the server spends, and where it stopped spending it
+
+Five audits read the server and the browser for cost and for leaks; these are the rules the server
+half left behind.
+
+- **The pool is configured, not defaulted.** `DATABASE_POOL_MAX` was read by `env.ts`, logged at boot
+  and applied nowhere, so every deployment ran pg's default of ten with no timeouts. `data-source.ts`
+  passes it as `extra.max` with a five-second connection timeout and a thirty-second
+  `statement_timeout`, so a runaway query fails rather than holding a connection for ever.
+- **A request costs one statement to authenticate.** The session lookup and the hourly `last_used_at`
+  touch are one data-modifying CTE; they were two round trips, and the second ran on every request
+  whether or not it changed anything.
+- **A room is told in one statement.** `notify.tellAll` inserts a message notification for every
+  member with `insert ... select` over `unnest`, checking the same mutes and blocks `tell` checks, and
+  answers who it told so exactly those are rung and woken. It was five queries per recipient per
+  message.
+- **Reading or pinning a thread rings only the reader** (`chatSeen`), because nobody else's screen
+  changes; it rang every member.
+- **The chat list is a page.** Every pinned room and the sixty most recently active, keyset over
+  `(last activity, id)` for the rest - "Show older conversations" at the foot of the list. A room with
+  something unread is by definition recently active, so the first page carries every unread count
+  anybody needs. It was every room the person had ever sat in, each with four correlated sub-queries,
+  on every chat doorbell.
+- **Nobody sits at more than fifty open tables** (`SEATED_MAX`). Create and claim refuse the next one
+  with the code `seated-max`, which the browser turns into its own sentence, so `/tables/mine` is
+  bounded by a rule rather than by a silent `LIMIT`.
+- **A finish inserts only the rungs it newly reached**, reading what is held first, and records its
+  players in id order so two matches finishing for the same people take their locks in one order.
+- **Push has a timeout, a cap and one key.** A push service that never answers is abandoned after ten
+  seconds, the response body is cancelled, at most sixty-four wakes are in flight (a wake is a courtesy,
+  so one past the cap is dropped rather than queued), and the VAPID key is imported once.
+- **The handshake limiter trusts the proxy's hop, not the client's.** `X-Forwarded-For` is read from the
+  RIGHT, because the left end is whatever the client wrote; an IPv6 address counts as its /64, because
+  one host owns the whole block; and the table of addresses is capped, oldest first.
+- **Housekeeping runs daily** (`jobs.tidy`): expired sign-in and recovery nonces, sessions a month past
+  their expiry or revocation, and push subscriptions a push service has retired. Nothing deleted any of
+  them before, whatever the comments said.
+
 ## Mobile first, and what a wide-first layout hides
 
 **The unprefixed utilities ARE the phone layout.** `sm:`/`md:`/`lg:`/`@3xl:` only ever ADD to it for

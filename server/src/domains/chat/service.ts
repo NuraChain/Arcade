@@ -98,6 +98,8 @@ export interface SealedInput
 /** How many messages one page of history carries. */
 export const PAGE = THREAD_PAGE;
 
+export const LIST_PAGE = 60;
+
 /**
  * How far a message's signed expiry may sit from the room's rule.
  *
@@ -252,7 +254,7 @@ export function createChatService(db: DataSource, social: SocialService, frankin
          * to read a message to count it, which is why unread is a comparison against my own
          * watermark rather than anything about the content.
          */
-        async list(me: string): Promise<ConversationRow[]>
+        async list(me: string, after: { at: Date | null; id: string } | null = null, size = LIST_PAGE): Promise<{ rows: ConversationRow[]; more: boolean }>
         {
             const rows = await db.query(
                 `select c.id, c.kind, c.table_id, c.game, c.title, c.expire_after,
@@ -312,6 +314,8 @@ export function createChatService(db: DataSource, social: SocialService, frankin
                      limit 1
                  ) last on true
                  where m.user_id = $1
+                   and ($2::uuid is null
+                        or (not m.pinned and (coalesce(last.created_at, '-infinity'::timestamptz), c.id) < (coalesce($3::timestamptz, '-infinity'::timestamptz), $2::uuid)))
                    -- A block hides the thread, not just the person. Leaving a direct conversation
                    -- listed after a block means a row in the inbox with somebody you have said
                    -- you do not want to hear from.
@@ -319,10 +323,22 @@ export function createChatService(db: DataSource, social: SocialService, frankin
                                     join blocks b on (b.user_id = $1 and b.blocked_id = other.user_id)
                                                   or (b.user_id = other.user_id and b.blocked_id = $1)
                                    where other.conversation_id = c.id and other.user_id <> $1)
-                 order by m.pinned desc, last.created_at desc nulls last`,
-                [me]
+                 order by m.pinned desc, coalesce(last.created_at, '-infinity'::timestamptz) desc, c.id desc
+                 limit $4::int + (case when $2::uuid is null
+                                       then (select count(*)::int from conversation_members p where p.user_id = $1 and p.pinned)
+                                       else 0 end)`,
+                [me, after?.id ?? null, after?.at ?? null, size + 1]
             );
-            return rowsOf<ConversationRow>(rows);
+            const found = rowsOf<ConversationRow>(rows);
+            const unpinned = found.filter((row) => !row.pinned);
+
+            if (unpinned.length <= size)
+            {
+                return { rows: found, more: false };
+            }
+
+            const dropped = unpinned[unpinned.length - 1];
+            return { rows: found.filter((row) => row !== dropped), more: true };
         },
 
         /**

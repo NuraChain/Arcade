@@ -1819,7 +1819,7 @@ export const conversationSummary = object({
 
 export type ConversationSummary = Infer<typeof conversationSummary>;
 
-export const conversationList = object({ conversations: array(conversationSummary) });
+export const conversationList = object({ conversations: array(conversationSummary), cursor: string().optional() });
 
 /**
  * One page of history, oldest-first within the page, plus the cursor for the page BEFORE it.

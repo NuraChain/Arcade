@@ -42,6 +42,8 @@ export interface ChatApi
 
     conversations: Getter<Conversation[]>;
     listLoading: Getter<boolean>;
+    hasMoreConversations: Getter<boolean>;
+    moreConversations(): void;
     listError: Getter<unknown>;
     conversation(id: string): Conversation | undefined;
 
@@ -135,12 +137,14 @@ export const useChat = createStore((): ChatApi =>
     const [drafts, setDrafts] = createSignal<Record<string, string>>({});
     const [pins, setPins] = createSignal<Record<string, boolean>>({});
 
+    const [pages, setPages] = createSignal(1);
+
     const list = createResource(
-        scope,
+        () => ({ scope: scope(), pages: pages() }),
         async (current, signal) =>
         {
-            const answer = await active.conversations(current, signal);
-            ingest(answer.map((row) => row.conversation));
+            const answer = await active.conversations(current.scope, signal, current.pages);
+            ingest(answer.rows.map((row) => row.conversation));
             return answer;
         },
         { name: 'chat.conversations' }
@@ -195,7 +199,7 @@ export const useChat = createStore((): ChatApi =>
     {
         await list.refetch();
 
-        if (untrack(openId) === id && (list.data() ?? []).some((row) => row.conversation.id === id))
+        if (untrack(openId) === id && (list.data()?.rows ?? []).some((row) => row.conversation.id === id))
         {
             for (const listener of threaders)
             {
@@ -206,7 +210,7 @@ export const useChat = createStore((): ChatApi =>
         }
     });
 
-    const rows = (): ConversationRow[] => list.data() ?? [];
+    const rows = (): ConversationRow[] => list.data()?.rows ?? [];
 
     const rowOf = (id: string): ConversationRow | undefined => rows().find((row) => row.conversation.id === id);
 
@@ -333,6 +337,8 @@ export const useChat = createStore((): ChatApi =>
 
         conversations,
         listLoading: () => list.loading(),
+        hasMoreConversations: () => list.data()?.more === true,
+        moreConversations: () => setPages((held) => held + 1),
         listError: () => list.error(),
         conversation: (id) => rowOf(id)?.conversation,
 
@@ -595,6 +601,7 @@ export const useChat = createStore((): ChatApi =>
             announced.clear();
             setOpenId('');
             setDepth(THREAD_PAGE);
+            setPages(1);
             setSeen({});
             setTypists({});
             setDrafts({});

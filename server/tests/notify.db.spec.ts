@@ -59,7 +59,7 @@ describe.skipIf(!active)('notifications, against a real database', () =>
 
     beforeEach(async () =>
     {
-        await db.query('truncate notifications cascade');
+        await db.query('truncate notifications, conversations cascade');
         await db.query('delete from users');
         social = createSocialService(db);
         notify = createNotifyService(db, social);
@@ -169,6 +169,29 @@ describe.skipIf(!active)('notifications, against a real database', () =>
 
             expect((await notify.page(one, null)).items.length).toBe(1);
             expect((await notify.page(two, null)).items.length).toBe(1);
+        });
+
+        it('tells a whole room in one go by the same rules as one person, and says who it told', async () =>
+        {
+            const writer = await makeUser();
+            const [plain, mutedWriter, mutedRoom, mutedKind, blocking] = await Promise.all(Array.from({ length: 5 }, () => makeUser()));
+
+            await social.setMute(mutedWriter, 'person', writer, true);
+            await social.setMute(mutedRoom, 'conversation', 'c-9', true);
+            await social.setMute(mutedKind, 'notice', 'messages', true);
+            await social.block(blocking, writer);
+
+            const told = await notify.tellAll([plain, mutedWriter, mutedRoom, mutedKind, blocking, writer], {
+                kind: 'message',
+                actorId: writer,
+                ref: { conversationId: 'c-9' },
+                dedupeKey: 'chat:c-9'
+            });
+
+            expect(told).toEqual([plain]);
+
+            await notify.tellAll([plain], { kind: 'message', actorId: writer, ref: { conversationId: 'c-9' }, dedupeKey: 'chat:c-9' });
+            expect((await notify.page(plain, null)).items[0].count).toBe(2);
         });
     });
 

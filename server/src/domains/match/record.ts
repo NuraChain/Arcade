@@ -87,7 +87,7 @@ export function createRecorder(achieve: AchieveService): Recorder
         async finish(tx, matchId, engine, state): Promise<void>
         {
             const game = engine.id;
-            const players = await tx.getRepository(MatchPlayer).find({ where: { matchId } });
+            const players = await tx.getRepository(MatchPlayer).find({ where: { matchId }, order: { userId: 'ASC' } });
 
             if (players.length === 0)
             {

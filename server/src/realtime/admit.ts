@@ -115,8 +115,8 @@ function clientAddress(request: IncomingMessage, trustProxy: boolean): string
     if (trustProxy)
     {
         const forwarded = request.headers['x-forwarded-for'];
-        const first = Array.isArray(forwarded) ? forwarded[0] : forwarded;
-        const address = first?.split(',')[0]?.trim();
+        const joined = Array.isArray(forwarded) ? forwarded.join(',') : forwarded;
+        const address = joined?.split(',').at(-1)?.trim();
         if (address !== undefined && address !== '')
         {
             return address;

@@ -28,6 +28,28 @@ export interface HandshakeLimit
  * and `npm run qa` fails on a dirty console - so the budget is set where ordinary use, including
  * a matrix run, never reaches it.
  */
+const HELD_MAX = 4096;
+
+export const addressKey = (address: string): string =>
+{
+    if (address.startsWith('::ffff:'))
+    {
+        return address.slice(7);
+    }
+
+    if (!address.includes(':'))
+    {
+        return address;
+    }
+
+    const [head, tail = ''] = address.split('::');
+    const left = head === '' ? [] : head.split(':');
+    const right = tail === '' ? [] : tail.split(':');
+    const groups = [...left, ...Array.from({ length: Math.max(0, 8 - left.length - right.length) }, () => '0'), ...right];
+
+    return `${ groups.slice(0, 4).map((group) => group.toLowerCase().replace(/^0+(?=.)/, '')).join(':') }::/64`;
+};
+
 export function createHandshakeLimit(options: HandshakeLimitOptions): HandshakeLimit
 {
     const windowMs = options.windowMs ?? 60_000;
@@ -35,19 +57,18 @@ export function createHandshakeLimit(options: HandshakeLimitOptions): HandshakeL
     const windows = new Map<string, { started: number; count: number }>();
 
     return {
-        take(address)
+        take(raw)
         {
+            const address = addressKey(raw);
             const at = now();
             const current = windows.get(address);
 
             if (current === undefined || at - current.started >= windowMs)
             {
+                windows.delete(address);
                 windows.set(address, { started: at, count: 1 });
 
-                // Swept here rather than on a timer: a timer would keep the process alive and
-                // would be one more thing to stop during a drain. The map only grows while
-                // handshakes arrive, and every arrival pays for one expiry.
-                if (windows.size > 4096)
+                if (windows.size > HELD_MAX)
                 {
                     for (const [key, window] of windows)
                     {
@@ -57,6 +78,16 @@ export function createHandshakeLimit(options: HandshakeLimitOptions): HandshakeL
                         }
                     }
                 }
+
+                for (const key of windows.keys())
+                {
+                    if (windows.size <= HELD_MAX)
+                    {
+                        break;
+                    }
+                    windows.delete(key);
+                }
+
                 return true;
             }
 

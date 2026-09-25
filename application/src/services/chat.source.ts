@@ -71,9 +71,15 @@ export interface ThreadPage
     earlier: boolean;
 }
 
+export interface ConversationPage
+{
+    rows: ConversationRow[];
+    more: boolean;
+}
+
 export interface ChatSource
 {
-    conversations(scope: ChatScope, signal: AbortSignal): Promise<ConversationRow[]>;
+    conversations(scope: ChatScope, signal: AbortSignal, pages?: number): Promise<ConversationPage>;
     thread(id: string, scope: ChatScope, signal: AbortSignal, wanted?: number): Promise<ThreadPage>;
     /**
      * Seals and sends. `expiresAt` is epoch milliseconds, or 0 for a message that lasts.
@@ -366,19 +372,34 @@ export function createApiSource(): ChatSource
     });
 
     const source: ChatSource = {
-        async conversations(scope)
+        async conversations(scope, _signal, pages = 1)
         {
             openedFor = scope.me;
 
-            const answer = await client.chat.list();
+            const wires: Awaited<ReturnType<typeof client.chat.list>>['conversations'] = [];
+            let cursor: string | undefined;
+            let read = 0;
 
-            return Promise.all(answer.conversations.map(async (row) => ({
-                conversation: asConversation(row),
-                last: row.last === undefined
-                    ? null
-                    : await openOne(row.last, (epoch) => heldKey(row.id, epoch)),
-                unread: row.unread
-            })));
+            do
+            {
+                const answer = await client.chat.list(cursor === undefined ? {} : { query: { cursor } });
+
+                wires.push(...answer.conversations.filter((row) => !wires.some((held) => held.id === row.id)));
+                cursor = answer.cursor;
+                read += 1;
+            }
+            while (cursor !== undefined && read < pages);
+
+            return {
+                rows: await Promise.all(wires.map(async (row) => ({
+                    conversation: asConversation(row),
+                    last: row.last === undefined
+                        ? null
+                        : await openOne(row.last, (epoch) => heldKey(row.id, epoch)),
+                    unread: row.unread
+                }))),
+                more: cursor !== undefined
+            };
         },
 
         async thread(id, scope, _signal, wanted = THREAD_PAGE)

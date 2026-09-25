@@ -88,6 +88,7 @@ export const play = {
     'create.search': 'Search friends',
     'create.noFriends': 'No friends match.',
 
+    'play.seatedMax': 'You’re already at fifty tables. Leave one to sit at another.',
     'play.openFailed': 'That table would not open. Try again in a moment.',
     'play.title.lobby': 'Lobby',
     'play.lobby.ready': 'I’m ready',

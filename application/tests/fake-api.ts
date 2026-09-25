@@ -195,6 +195,9 @@ export const server =
     messages: [] as ChatMessage[],
     refuseSend: null as string | null,
 
+    /** How many conversations one page of the list holds; unset, the whole list is one page. */
+    listPage: null as number | null,
+
     /**
      * The groups, from the same fixtures the development server seeds.
      *
@@ -385,6 +388,7 @@ export const server =
         server.refuseMute = false;
         server.me = 'alex';
         server.refuseSend = null;
+        server.listPage = null;
         loadFixtures();
         loadGraph();
     }
@@ -624,10 +628,15 @@ export const client =
 
     chat:
     {
-        async list()
+        async list(request?: { query?: { cursor?: string } })
         {
             server.calls.push('chat.list');
-            return { conversations: server.conversations.map((row) => ({ ...row })) };
+            const all = server.conversations.map((row) => ({ ...row }));
+            const from = Number(request?.query?.cursor ?? 0);
+            const size = server.listPage ?? all.length;
+            const page = all.slice(from, from + size);
+
+            return from + size < all.length ? { conversations: page, cursor: String(from + size) } : { conversations: page };
         },
 
         async devices({ params }: { params: { id: string } })

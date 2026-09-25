@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { IncomingMessage } from 'node:http';
 
 import { admit, isSameOrigin } from '../src/realtime/admit.ts';
-import { createHandshakeLimit } from '../src/realtime/handshake-limit.ts';
+import { addressKey, createHandshakeLimit } from '../src/realtime/handshake-limit.ts';
 import { hello, nudge, parseClientFrame, presence, REALTIME_WIRE, typing } from '../src/realtime/frames.ts';
 
 /**
@@ -166,6 +166,45 @@ describe('the handshake budget', () =>
 
         at += 60_000;
         expect(limit.take('a')).toBe(true);
+    });
+
+    it('counts a whole IPv6 /64 as one address, so a host cannot rotate through its own block', () =>
+    {
+        const limit = createHandshakeLimit({ max: 2 });
+
+        expect(addressKey('2001:db8:aa:bb:1::1')).toBe(addressKey('2001:0db8:00aa:00bb:ffff::9'));
+        expect(addressKey('::ffff:9.9.9.9')).toBe('9.9.9.9');
+        expect(limit.take('2001:db8:aa:bb::1')).toBe(true);
+        expect(limit.take('2001:db8:aa:bb::2')).toBe(true);
+        expect(limit.take('2001:db8:aa:bb::3')).toBe(false);
+        expect(limit.take('2001:db8:aa:cc::1')).toBe(true);
+    });
+
+    it('holds a bounded number of addresses however many arrive inside one window', () =>
+    {
+        const limit = createHandshakeLimit({ max: 1 });
+
+        for (let index = 0; index < 5000; index += 1)
+        {
+            limit.take(`10.0.${ Math.floor(index / 256) }.${ index % 256 }`);
+        }
+
+        expect(limit.take('10.0.0.0')).toBe(true);
+        expect(limit.take('10.0.19.135')).toBe(false);
+    });
+
+    it('trusts only the address the proxy appended, never one the client wrote', () =>
+    {
+        const gated = admit({
+            origin: 'http://localhost:3100',
+            secureCookies: false,
+            limit: createHandshakeLimit({ max: 1 }),
+            trustProxy: true
+        });
+        const forged = (lie: string) => request({ host: 'localhost:3200', cookie: COOKIE, 'x-forwarded-for': `${ lie }, 7.7.7.7` }, '10.0.0.1');
+
+        expect(gated('http://localhost:3200', forged('1.1.1.1'))).toBe(true);
+        expect(gated('http://localhost:3200', forged('2.2.2.2'))).toBe(false);
     });
 });
 

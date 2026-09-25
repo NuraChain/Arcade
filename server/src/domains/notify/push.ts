@@ -39,7 +39,23 @@ const base64url = (input: Buffer): string => input.toString('base64url');
  * scalar - so the scalar is dropped into a fixed PKCS#8 prologue for `prime256v1`. The prologue
  * is constant because the curve is.
  */
+const imported = new Map<string, ReturnType<typeof createPrivateKey>>();
+
 function privateKeyFrom(raw: string): ReturnType<typeof createPrivateKey>
+{
+    const held = imported.get(raw);
+
+    if (held !== undefined)
+    {
+        return held;
+    }
+
+    const key = importKey(raw);
+    imported.set(raw, key);
+    return key;
+}
+
+function importKey(raw: string): ReturnType<typeof createPrivateKey>
 {
     const scalar = Buffer.from(raw, 'base64url');
     if (scalar.length !== 32)
@@ -98,6 +114,8 @@ export function vapidToken(endpoint: string, keys: VapidKeys, now: number): stri
 
 export type PushOutcome = 'sent' | 'gone' | 'failed';
 
+export const PUSH_TIMEOUT_MS = 10_000;
+
 /**
  * Wakes one browser. No body, no headers about what happened, nothing to read off the wire.
  *
@@ -116,13 +134,16 @@ export async function sendPush(endpoint: string, keys: VapidKeys, now: number, f
                 'Content-Length': '0',
                 'Urgency': 'normal',
                 'Authorization': `vapid t=${ vapidToken(endpoint, keys, now) }, k=${ keys.publicKey }`
-            }
+            },
+            signal: AbortSignal.timeout(PUSH_TIMEOUT_MS)
         });
     }
     catch
     {
         return 'failed';
     }
+
+    await response.body?.cancel().catch(() => undefined);
 
     if (response.status === 404 || response.status === 410)
     {

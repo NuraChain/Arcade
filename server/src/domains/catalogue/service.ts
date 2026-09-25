@@ -100,7 +100,7 @@ export function createCatalogueService(db: DataSource): CataloguePort
         {
             const rows = await db.getRepository(Game)
                 .createQueryBuilder('g')
-                .leftJoin(Table, 't', `t.game = g.id and t.status <> 'closed' and t.privacy = 'public'`)
+                .leftJoin(Table, 't', `t.game = g.id and t.status = 'open' and t.privacy = 'public'`)
                 .leftJoin(TableSeat, 's', 's.table_id = t.id and s.user_id is not null')
                 .select('g.id', 'game')
                 .addSelect('count(distinct t.id)::int', 'tables')

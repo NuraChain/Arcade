@@ -4,6 +4,7 @@ import ChatActions from './chat-actions.component.azeroth';
 import ChatListItem from './chat-list-item.component.azeroth';
 import { gameNameOf, groupNameOf, titleOf } from './chat-title.ts';
 import EmptyState from '../ui/empty-state.component.azeroth';
+import LoadMore from '../ui/load-more.component.azeroth';
 import SearchInput from '../ui/search-input.component.azeroth';
 import Skeleton from '../ui/skeleton.component.azeroth';
 import Tabs from '../ui/tabs.component.azeroth';
@@ -140,24 +141,29 @@ export default component ChatList(props: { active?: string; pane?: boolean; clas
         <div ref={ (element) => scroller = pane ? element : null } class={ () => pane ? 'min-h-0 flex-1 overflow-y-auto px-2 pb-3' : '' }>
             <Switch
                 fallback={
-                    <ul
-                        ref={ (element) => rows = element }
-                        class={ () => pane
-                            ? 'flex flex-col gap-0.5'
-                            : 'flex flex-col divide-y divide-line rounded-panel border border-line bg-field px-1.5' }
-                        aria-label={ locale.t('app.nav.chats') }
-                    >
-                        <For each={ filtered } key={ (conversation) => conversation.id } let={ conversation }>
-                            <li data-flip={ conversation.id }>
-                                <ChatListItem
-                                    conversation={ conversation }
-                                    me={ mine }
-                                    active={ conversation.id === props.active }
-                                    onHold={ () => overlay.open(ChatActions, { conversationId: conversation.id }, { label: locale.t('chats.actions') }) }
-                                />
-                            </li>
-                        </For>
-                    </ul>
+                    <>
+                        <ul
+                            ref={ (element) => rows = element }
+                            class={ () => pane
+                                ? 'flex flex-col gap-0.5'
+                                : 'flex flex-col divide-y divide-line rounded-panel border border-line bg-field px-1.5' }
+                            aria-label={ locale.t('app.nav.chats') }
+                        >
+                            <For each={ filtered } key={ (conversation) => conversation.id } let={ conversation }>
+                                <li data-flip={ conversation.id }>
+                                    <ChatListItem
+                                        conversation={ conversation }
+                                        me={ mine }
+                                        active={ conversation.id === props.active }
+                                        onHold={ () => overlay.open(ChatActions, { conversationId: conversation.id }, { label: locale.t('chats.actions') }) }
+                                    />
+                                </li>
+                            </For>
+                        </ul>
+                        <Show when={ chat.hasMoreConversations() && query === '' }>
+                            { () => <LoadMore label={ locale.t('chats.older') } loading={ chat.listLoading() } class="pt-3" onMore={ () => chat.moreConversations() } /> }
+                        </Show>
+                    </>
                 }
             >
                 <Match when={ loading }>

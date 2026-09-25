@@ -1,3 +1,4 @@
+import { ApiError } from '../api.ts';
 import { useLocale } from '../stores/locale.store.ts';
 import { useToasts } from '../stores/toasts.store.ts';
 
@@ -27,15 +28,17 @@ import { useToasts } from '../stores/toasts.store.ts';
  * once here beats nine copies of the same catch, five of which would have had to import a toast
  * store to write it.
  */
+export const seatedMax = (error: unknown): boolean => error instanceof ApiError && error.code === 'seated-max';
+
 export function openTable(made: Promise<string>, go: (to: string) => void, settled?: () => void): void
 {
     void made
         .then((id) => go(`/app/play/${ id }`))
-        .catch(() =>
+        .catch((error: unknown) =>
         {
             useToasts().show({
                 kind: 'warning',
-                text: useLocale().t('play.openFailed'),
+                text: useLocale().t(seatedMax(error) ? 'play.seatedMax' : 'play.openFailed'),
                 dedupe: 'open-table'
             });
         })

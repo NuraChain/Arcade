@@ -5,6 +5,7 @@ import type { DataSource } from 'typeorm';
 import { createCatalogueService } from './domains/catalogue/service.ts';
 import { createChatService, type ConversationRow, type MessageRow } from './domains/chat/service.ts';
 import { createFranking, discloses } from './domains/chat/franking.ts';
+import { affectedBy } from './lib/rows.ts';
 import { createEpochService } from './domains/chat/epochs.ts';
 import { threadSize } from './domains/chat/pages.ts';
 import { createPeerDevices, type PeerDeviceRow } from './domains/device/peers.ts';
@@ -57,6 +58,7 @@ import { matchView } from './schemas.ts';
 export interface WriteListener
 {
     chatChanged(conversationId: string, ...also: string[]): void;
+    chatSeen(conversationId: string, userId: string): void;
     socialChanged(...userIds: string[]): void;
     edgesChanged(...userIds: string[]): void;
     selfChanged(userId: string, what: 'notifications' | 'devices' | 'profile'): void;
@@ -83,10 +85,13 @@ export interface Services extends Ports
 {
     jobs: {
         sweepTurns(forMs: number): Promise<TurnSweep>;
+        tidy(): Promise<Record<string, number>>;
     };
 }
 
 const TURN_TTL_SECONDS = 3600;
+
+const PUSH_AT_ONCE = 64;
 
 export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteListener): Services
 {
@@ -123,12 +128,16 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
      * Fire and forget on purpose: a push service being slow must not make sending a message slow,
      * and a push service being down must not make it fail.
      */
+    let pushing = 0;
+
     const wake = (userId: string): void =>
     {
-        if (vapid === null)
+        if (vapid === null || pushing >= PUSH_AT_ONCE)
         {
             return;
         }
+
+        pushing += 1;
 
         void (async () =>
         {
@@ -140,7 +149,10 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                     await notify.retire(subscription.id);
                 }
             }
-        })().catch(() => undefined);
+        })().catch(() => undefined).finally(() =>
+        {
+            pushing -= 1;
+        });
     };
 
     /** Tells somebody, then wakes them if they asked to be woken. */
@@ -200,6 +212,25 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         const [at, id] = Buffer.from(cursor, 'base64url').toString('utf8').split('|');
         const when = new Date(at ?? '');
         return id === undefined || Number.isNaN(when.getTime()) ? null : { at: when, id };
+    };
+
+    const LIST_CURSOR = /^([0-9T:.\-Z]*)\|([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
+
+    const listCursorOf = (row: { last_at: Date | null; id: string }): string =>
+        Buffer.from(`${ row.last_at?.toISOString() ?? '' }|${ row.id }`, 'utf8').toString('base64url');
+
+    const listAfter = (cursor: string | undefined): { at: Date | null; id: string } | null =>
+    {
+        const found = cursor === undefined ? null : LIST_CURSOR.exec(Buffer.from(cursor, 'base64url').toString('utf8'));
+
+        if (found === null)
+        {
+            return null;
+        }
+
+        const at = found[1] === '' ? null : new Date(found[1]);
+
+        return at !== null && Number.isNaN(at.getTime()) ? null : { at, id: found[2] };
     };
 
     const asMessage = (row: MessageRow): ChatMessage =>
@@ -820,6 +851,27 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         return { match: asMatch(answer.load), applied: answer.applied, events: since === null ? [] : logged(since.events) };
     };
 
+    const TIDY: Record<string, string> = {
+        nonces: `delete from siwe_nonces where expires_at < now() - interval '1 day'`,
+        recoveryNonces: `delete from recovery_nonces where expires_at < now() - interval '1 day'`,
+        sessions: `delete from sessions
+                    where expires_at < now() - interval '30 days'
+                       or revoked_at < now() - interval '30 days'`,
+        pushes: `delete from push_subscriptions where failed_at is not null`
+    };
+
+    const tidy = async (): Promise<Record<string, number>> =>
+    {
+        const gone: Record<string, number> = {};
+
+        for (const [what, sql] of Object.entries(TIDY))
+        {
+            gone[what] = affectedBy(await db.query(sql));
+        }
+
+        return gone;
+    };
+
     const sweepTurns = async (forMs: number): Promise<TurnSweep> =>
     {
         const until = Date.now() + forMs;
@@ -1074,7 +1126,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
     };
 
     return {
-        jobs: { sweepTurns },
+        jobs: { sweepTurns, tidy },
 
         meta: {
             info: () => ({ wire: 'nura-e2ee/v1', env: process.env.NODE_ENV ?? 'development' })
@@ -2151,9 +2203,16 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         },
 
         chat: {
-            async list(me)
+            async list(me, cursor)
             {
-                return (await chat.list(me)).map(asConversation);
+                const page = await chat.list(me, listAfter(cursor));
+                const unpinned = page.rows.filter((row) => !row.pinned);
+                const oldest = unpinned[unpinned.length - 1];
+
+                return {
+                    conversations: page.rows.map(asConversation),
+                    ...(page.more && oldest !== undefined ? { cursor: listCursorOf(oldest) } : {})
+                };
             },
 
             /**
@@ -2303,21 +2362,17 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                     return message;
                 }
 
-                // One notification per conversation, counting up. Twelve messages while somebody
-                // was away is one row saying twelve, not twelve rows to swipe through - and the
-                // count resets when they read it, because that is what reading it means.
-                for (const recipient of await chat.recipients(conversationId))
+                const told = await notify.tellAll(await chat.recipients(conversationId), {
+                    kind: 'message',
+                    actorId: me,
+                    ref: { conversationId },
+                    dedupeKey: `chat:${ conversationId }`
+                });
+
+                for (const recipient of told)
                 {
-                    if (recipient !== me)
-                    {
-                        await tell({
-                            userId: recipient,
-                            kind: 'message',
-                            actorId: me,
-                            ref: { conversationId },
-                            dedupeKey: `chat:${ conversationId }`
-                        });
-                    }
+                    live?.selfChanged(recipient, 'notifications');
+                    wake(recipient);
                 }
 
                 live?.chatChanged(conversationId);
@@ -2357,16 +2412,13 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             async markRead(me, conversationId)
             {
                 await chat.markRead(me, conversationId);
-
-                // Nobody is excluded, including the person who just read it: their OTHER tabs are
-                // the ones that would otherwise keep showing the badge.
-                live?.chatChanged(conversationId);
+                live?.chatSeen(conversationId, me);
             },
 
             async setPinned(me, conversationId, pinned)
             {
                 await chat.setPinned(me, conversationId, pinned);
-                live?.chatChanged(conversationId);
+                live?.chatSeen(conversationId, me);
             },
 
             async openDirect(me, handle)

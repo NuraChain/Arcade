@@ -182,6 +182,36 @@ describe.skipIf(!active)('chat, against a real database', () =>
         await expect(chat.messages(stranger, '00000000-0000-0000-0000-000000000000', null)).rejects.toThrow('No conversation with that id.');
     });
 
+    it('lists every pinned room and the sixty most recent, and pages the rest without repeating one', async () =>
+    {
+        const me = await makeUser();
+        const rooms: string[] = [];
+
+        for (let index = 0; index < 63; index += 1)
+        {
+            rooms.push(await chat.openDirect(me, await makeUser()));
+        }
+        await say(me, rooms[5], 'the newest');
+        await chat.setPinned(me, rooms[0], true);
+
+        const first = await chat.list(me, null, 60);
+        const unpinned = first.rows.filter((row) => !row.pinned);
+
+        expect(first.rows.length).toBe(61);
+        expect(first.more).toBe(true);
+        expect(first.rows[0].id).toBe(rooms[0]);
+        expect(unpinned[0].id).toBe(rooms[5]);
+
+        const last = unpinned[unpinned.length - 1];
+        const second = await chat.list(me, { at: last.last_at, id: last.id }, 60);
+        const seen = new Set([...first.rows, ...second.rows].map((row) => row.id));
+
+        expect(second.more).toBe(false);
+        expect(second.rows.length).toBe(2);
+        expect(second.rows.some((row) => row.pinned)).toBe(false);
+        expect(seen.size).toBe(63);
+    });
+
     it('hides the conversation from both sides of a block, and gives it back on unblock', async () =>
     {
         const [a, b] = [await makeUser(), await makeUser()];
@@ -189,12 +219,12 @@ describe.skipIf(!active)('chat, against a real database', () =>
         await say(a, conversation, 'hello');
 
         await social.block(a, b);
-        expect(await chat.list(a)).toEqual([]);
-        expect(await chat.list(b)).toEqual([]);
+        expect((await chat.list(a)).rows).toEqual([]);
+        expect((await chat.list(b)).rows).toEqual([]);
         await expect(chat.messages(b, conversation, null)).rejects.toThrow();
 
         await social.unblock(a, b);
-        expect((await chat.list(a)).length).toBe(1);
+        expect(((await chat.list(a)).rows).length).toBe(1);
     });
 
     it('refuses a message that is words AND a payload, or neither', async () =>
@@ -238,13 +268,13 @@ describe.skipIf(!active)('chat, against a real database', () =>
         await say(b, conversation, 'one');
         await say(b, conversation, 'two');
 
-        const forA = (await chat.list(a))[0];
-        const forB = (await chat.list(b))[0];
+        const forA = ((await chat.list(a)).rows)[0];
+        const forB = ((await chat.list(b)).rows)[0];
         expect(forA.unread).toBe(2);
         expect(forB.unread).toBe(0);
 
         await chat.markRead(a, conversation);
-        expect((await chat.list(a))[0].unread).toBe(0);
+        expect(((await chat.list(a)).rows)[0].unread).toBe(0);
     });
 
     it('pins for one member and nobody else', async () =>
@@ -253,8 +283,8 @@ describe.skipIf(!active)('chat, against a real database', () =>
         const conversation = await chat.openDirect(a, b);
 
         await chat.setPinned(a, conversation, true);
-        expect((await chat.list(a))[0].pinned).toBe(true);
-        expect((await chat.list(b))[0].pinned).toBe(false);
+        expect(((await chat.list(a)).rows)[0].pinned).toBe(true);
+        expect(((await chat.list(b)).rows)[0].pinned).toBe(false);
     });
 
     it('walks history by keyset, without repeating or skipping a line', async () =>
@@ -332,7 +362,7 @@ describe.skipIf(!active)('chat, against a real database', () =>
         const conversation = await chat.openDirect(a, b);
         await say(b, conversation, 'the last word');
 
-        const row = (await chat.list(a))[0];
+        const row = ((await chat.list(a)).rows)[0];
         expect(row.last_body).toBe('the last word');
         expect(Array.isArray(row.members)).toBe(true);
         expect(row.members.length).toBe(2);
@@ -366,7 +396,7 @@ describe.skipIf(!active)('chat, against a real database', () =>
         await expect(say(b, quiet, 'hello')).rejects.toThrow('Chat is off at this table.');
         await expect(say(b, talking, 'hello')).resolves.toBeDefined();
 
-        const rows = await chat.list(a);
+        const rows = (await chat.list(a)).rows;
         expect(rows.find((row) => row.id === quiet)?.quiet).toBe(true);
         expect(rows.find((row) => row.id === talking)?.quiet).toBe(false);
     });
@@ -405,7 +435,7 @@ describe.skipIf(!active)('chat, against a real database', () =>
         await chat.markRead(a, conversation);
         await say(b, conversation, 'sealed-emoji', second.id);
 
-        const row = (await chat.list(a)).find((one) => one.id === conversation)!;
+        const row = ((await chat.list(a)).rows).find((one) => one.id === conversation)!;
 
         expect(row.unread).toBe(0);
         expect(row.last_id).toBe(second.id);
@@ -433,7 +463,7 @@ describe.skipIf(!active)('chat, against a real database', () =>
         const reactions = await db.query(`select count(*)::int as n from messages where kind = 'reaction'`);
         expect(rowsOf<{ n: number }>(reactions)[0].n).toBe(0);
 
-        const row = (await chat.list(b)).find((one) => one.id === conversation)!;
+        const row = ((await chat.list(b)).rows).find((one) => one.id === conversation)!;
         expect(row.last_id).toBeNull();
     });
 

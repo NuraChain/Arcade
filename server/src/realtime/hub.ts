@@ -102,6 +102,7 @@ export interface Hub
     release(connection: Connection): void;
 
     chatChanged(conversationId: string, ...also: string[]): void;
+    chatSeen(conversationId: string, userId: string): void;
     socialChanged(...userIds: string[]): void;
     edgesChanged(...userIds: string[]): void;
     selfChanged(userId: string, what: SelfTopic): void;
@@ -714,6 +715,11 @@ export function createHub(deps: HubDeps): Hub
             const current = pendingChat.get(conversationId);
             pendingChat.set(conversationId, { at: deps.now(), also: new Set([...(current?.also ?? []), ...also]) });
             schedule();
+        },
+
+        chatSeen(conversationId, userId)
+        {
+            publish([userId], (n) => nudge(n, 'chat', deps.now(), conversationId));
         },
 
         tableChanged(tableId, people)

@@ -8,7 +8,7 @@ import { DataSource } from 'typeorm';
 import { entities } from '../src/entities/index.ts';
 import { createMatchService } from '../src/domains/match/service.ts';
 import { createSocialService } from '../src/domains/social/service.ts';
-import { createTableService } from '../src/domains/table/service.ts';
+import { SEATED_MAX, createTableService } from '../src/domains/table/service.ts';
 import { createWatchService } from '../src/domains/match/watch.ts';
 import { syncSchema } from '../src/db/schema.ts';
 import { rowsOf } from '../src/lib/rows.ts';
@@ -146,6 +146,26 @@ describe.skipIf(!active)('a match, against a real database', () =>
         social = createSocialService(db);
         tables = createTableService(db, social);
         matches = createMatchService(db, createAchieveService(db));
+    });
+
+    describe('how many tables one person holds', () =>
+    {
+        it('refuses a fifty-first open table, and a fifty-first seat, with a code the browser can put into words', async () =>
+        {
+            const me = await makeUser();
+            const config = { game: 'ludo', seats: 2, mode: 'live' as const, privacy: 'public' as const, target: 0, cube: false, blinds: 'low', chat: false, voice: false, invitees: [] };
+
+            for (let index = 0; index < SEATED_MAX; index += 1)
+            {
+                await tables.create(me, config);
+            }
+
+            await expect(tables.create(me, config)).rejects.toMatchObject({ status: 409, code: 'seated-max' });
+
+            const other = await tables.create(await makeUser(), config);
+            await expect(tables.claimSeat(me, other.id)).rejects.toMatchObject({ code: 'seated-max' });
+            expect(await tables.mine(me)).toHaveLength(SEATED_MAX);
+        });
     });
 
     describe('starting', () =>

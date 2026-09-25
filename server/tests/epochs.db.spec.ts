@@ -656,11 +656,11 @@ describe.skipIf(!active)('the epoch a conversation is sealed under', () =>
             const { left, right, conversationId } = await pair();
 
             expect(await chat.setExpiry(left.id, conversationId, 3600)).toBe(3600);
-            expect((await chat.list(right.id))[0].expire_after).toBe(3600);
+            expect(((await chat.list(right.id)).rows)[0].expire_after).toBe(3600);
 
             // The other member can change it too. It describes the room, not whoever opened it.
             expect(await chat.setExpiry(right.id, conversationId, null)).toBeNull();
-            expect((await chat.list(left.id))[0].expire_after).toBeNull();
+            expect(((await chat.list(left.id)).rows)[0].expire_after).toBeNull();
         });
 
         it('refuses a length of time nobody means to choose', async () =>

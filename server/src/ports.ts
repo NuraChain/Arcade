@@ -343,7 +343,7 @@ export interface DevicePort
 
 export interface ChatPort
 {
-    list(me: string): Promise<ConversationSummary[]>;
+    list(me: string, cursor?: string): Promise<{ conversations: ConversationSummary[]; cursor?: string }>;
 
     /**
      * The member devices of one conversation, as a peer may see them.

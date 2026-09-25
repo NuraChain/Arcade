@@ -128,23 +128,53 @@ export function createNotifyService(db: DataSource, social: SocialService)
             await db.getRepository(Notification).delete({ userId, kind, dedupeKey });
         },
 
-        /** Tells several people the same thing. One row each, deduped per recipient. */
+        /**
+         * Tells several people the same thing in ONE statement, with every rule `tell` applies.
+         *
+         * Raw SQL because it is an `insert ... select` over `unnest` ending in an upsert that counts
+         * up - the same two shapes `tell` needs, asked once for a whole room rather than five queries
+         * per recipient. Answers who was told, so the caller rings exactly those.
+         */
         async tellAll(userIds: readonly string[], input: {
             kind: NotificationKind;
             actorId: string | null;
             ref: Record<string, string>;
             dedupeKey: string;
-        }): Promise<number>
+        }): Promise<string[]>
         {
-            let told = 0;
-            for (const userId of userIds)
+            const targets = [...new Set(userIds)].filter((id) => id !== input.actorId);
+
+            if (targets.length === 0)
             {
-                if (await this.tell({ ...input, userId }))
-                {
-                    told += 1;
-                }
+                return [];
             }
-            return told;
+
+            const rows = await db.query(
+                `insert into notifications (user_id, kind, actor_id, ref, dedupe_key)
+                 select t.id, $2, $3::uuid, $4::jsonb, $5
+                   from unnest($1::uuid[]) as t(id)
+                  where not exists (
+                            select 1 from mutes m
+                             where m.user_id = t.id
+                               and ((m.subject_kind = 'person' and m.subject_id = $3::text)
+                                 or (m.subject_kind = 'conversation' and m.subject_id = $6::text)
+                                 or (m.subject_kind = 'notice' and m.subject_id = $7::text)))
+                    and ($3::uuid is null or not exists (
+                            select 1 from blocks b
+                             where (b.user_id = t.id and b.blocked_id = $3::uuid)
+                                or (b.user_id = $3::uuid and b.blocked_id = t.id)))
+                 on conflict (user_id, dedupe_key) do update set
+                    count      = case when notifications.kind = excluded.kind then notifications.count + 1 else 1 end,
+                    kind       = excluded.kind,
+                    created_at = now(),
+                    read_at    = null,
+                    actor_id   = excluded.actor_id,
+                    ref        = excluded.ref
+                 returning user_id`,
+                [targets, input.kind, input.actorId, JSON.stringify(clean(input.ref)), input.dedupeKey, input.ref.conversationId ?? null, NOTICE_OF[input.kind]]
+            );
+
+            return rowsOf<{ user_id: string }>(rows).map((row) => row.user_id);
         },
 
         /**

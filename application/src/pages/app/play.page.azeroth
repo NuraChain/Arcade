@@ -32,6 +32,7 @@ import Panel from '../../components/ui/panel.component.azeroth';
 import type { MatchView } from '../../api.ts';
 import { plainOf } from '../../lib/markdown.ts';
 import { holdScreen } from '../../lib/wake-lock.ts';
+import { seatedMax } from '../../lib/open-table.ts';
 import { copyText } from '../../lib/clipboard.ts';
 import { BOARDS, drawable, type BoardComponent } from '../../components/games/boards.ts';
 import { turnMs } from '../../../../server/src/domains/match/turns.ts';
@@ -508,11 +509,18 @@ export default component PlayPage()
         {
             return;
         }
-        const seat = await lobby.claim(table.id);
+        try
+        {
+            const seat = await lobby.claim(table.id);
 
-        toasts.show(seat === null
-            ? { kind: 'warning', text: locale.t('play.table.tooLate') }
-            : { kind: 'success', text: locale.t('play.table.satDown') });
+            toasts.show(seat === null
+                ? { kind: 'warning', text: locale.t('play.table.tooLate') }
+                : { kind: 'success', text: locale.t('play.table.satDown') });
+        }
+        catch (error)
+        {
+            toasts.show({ kind: 'warning', text: locale.t(seatedMax(error) ? 'play.seatedMax' : 'common.actionFailed'), dedupe: 'sit-down' });
+        }
     };
 
     const leave = async (): Promise<void> =>

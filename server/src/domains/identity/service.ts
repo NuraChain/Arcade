@@ -133,14 +133,22 @@ export function createIdentityService(db: DataSource, config: IdentityConfig)
         async principalFor(token: string): Promise<Principal | null>
         {
             const rows = await db.query(
-                `select u.id, u.handle, u.display_name, u.bio, u.hue, u.kind, u.is_minor,
-                        u.is_suspended, s.id as session_id
-                 from sessions s
-                 join users u on u.id = s.user_id
-                 where s.token_hash = $1
-                   and s.revoked_at is null
-                   and s.expires_at > now()
-                   and u.is_suspended = false`,
+                `with found as (
+                     select u.id, u.handle, u.display_name, u.bio, u.hue, u.kind, u.is_minor,
+                            u.is_suspended, s.id as session_id
+                     from sessions s
+                     join users u on u.id = s.user_id
+                     where s.token_hash = $1
+                       and s.revoked_at is null
+                       and s.expires_at > now()
+                       and u.is_suspended = false
+                 ),
+                 touched as (
+                     update sessions set last_used_at = now()
+                      where id = (select session_id from found)
+                        and (last_used_at is null or last_used_at < now() - interval '1 hour')
+                 )
+                 select id, handle, display_name, bio, hue, kind, is_minor, is_suspended, session_id from found`,
                 [hashToken(token)]
             );
 
@@ -149,14 +157,6 @@ export function createIdentityService(db: DataSource, config: IdentityConfig)
             {
                 return null;
             }
-
-            // Touched at most hourly: a write on every request would make this table the busiest
-            // one in the product for information nobody reads that precisely.
-            void db.query(
-                `update sessions set last_used_at = now()
-                 where id = $1 and (last_used_at is null or last_used_at < now() - interval '1 hour')`,
-                [found.session_id]
-            ).catch(() => undefined);
 
             return principalOf(found, found.session_id);
         },

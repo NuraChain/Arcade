@@ -353,10 +353,21 @@ export function createAchieveService(db: DataSource)
                 return;
             }
 
+            const held = new Set((await tx.getRepository(UserAchievement).find({
+                select: { achievementId: true },
+                where: { userId, achievementId: In(ids) }
+            })).map((row) => row.achievementId));
+            const fresh = ids.filter((id) => !held.has(id));
+
+            if (fresh.length === 0)
+            {
+                return;
+            }
+
             await tx.getRepository(UserAchievement)
                 .createQueryBuilder()
                 .insert()
-                .values(ids.map((achievementId) => ({ userId, achievementId, matchId })))
+                .values(fresh.map((achievementId) => ({ userId, achievementId, matchId })))
                 .orIgnore()
                 .execute();
         },

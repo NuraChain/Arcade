@@ -91,6 +91,7 @@ export const play: Pick<Dictionary, keyof typeof reference> = {
     'create.search': 'جست‌وجوی دوستان',
     'create.noFriends': 'دوستی با این نام نیست.',
 
+    'play.seatedMax': 'همین حالا پشت پنجاه میز نشسته‌ای. برای نشستن پشت میز دیگر، یکی را ترک کن.',
     'play.openFailed': 'آن میز باز نشد. کمی بعد دوباره تلاش کن.',
     'play.title.lobby': 'لابی',
     'play.lobby.ready': 'آماده‌ام',

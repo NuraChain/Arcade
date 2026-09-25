@@ -251,6 +251,20 @@ const expiries = setInterval(() =>
 
 expiries.unref();
 
+const TIDY_MS = 24 * 60 * 60 * 1000;
+
+const tidyNow = (): void =>
+{
+    void ports.jobs.tidy()
+        .then((gone) => log.info('housekeeping', gone))
+        .catch((error: unknown) => log.error('housekeeping failed', { error }));
+};
+
+const housekeeping = setInterval(tidyNow, TIDY_MS);
+
+housekeeping.unref();
+setTimeout(tidyNow, 60_000).unref();
+
 const TURN_SWEEP_MS = 5_000;
 
 const TURN_SWEEP_BUDGET_MS = 4_000;
@@ -301,6 +315,7 @@ handleShutdownSignals(served, {
         // network failing, which sends every client into a reconnect backoff for a restart they
         // were told about.
         clearInterval(expiries);
+        clearInterval(housekeeping);
         if (turns !== null)
         {
             clearTimeout(turns);

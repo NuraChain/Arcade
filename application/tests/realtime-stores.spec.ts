@@ -301,6 +301,24 @@ describe('typing', () =>
     });
 });
 
+describe('a long chat list', () =>
+{
+    it('reads one page, and the rest only when asked', async () =>
+    {
+        const chat = useChat();
+        const everything = server.conversations.length;
+
+        server.listPage = 2;
+        await chat.refresh();
+        await vi.waitFor(() => expect(chat.conversations().length).toBe(2));
+
+        expect(chat.hasMoreConversations()).toBe(true);
+
+        chat.moreConversations();
+        await vi.waitFor(() => expect(chat.conversations().length).toBe(Math.min(4, everything)));
+    });
+});
+
 describe('the social doorbell', () =>
 {
     it('re-reads the graph, and only the graph', async () =>

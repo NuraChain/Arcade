@@ -222,8 +222,24 @@ const visibleTo = (viewer: string): string => `(
                                          where cm.conversation_id = t.room_id and cm.user_id = ${ viewer }))
 )`;
 
+export const SEATED_MAX = 50;
+
 export function createTableService(db: DataSource, social: SocialService)
 {
+    const mustHaveRoom = async (me: string): Promise<void> =>
+    {
+        const seated = await db.getRepository(TableSeat)
+            .createQueryBuilder('seat')
+            .innerJoin(Table, 't', `t.id = seat.table_id and t.status <> 'closed'`)
+            .where('seat.user_id = :me', { me })
+            .getCount();
+
+        if (seated >= SEATED_MAX)
+        {
+            throw new ConflictError(`You are already sitting at ${ SEATED_MAX } tables. Leave one first.`, { code: 'seated-max' });
+        }
+    };
+
     const one = async (me: string, tableId: string): Promise<TableRow | null> =>
     {
         if (!UUID.test(tableId))
@@ -413,6 +429,7 @@ export function createTableService(db: DataSource, social: SocialService)
                 .innerJoin(TableSeat, 'seat', 'seat.table_id = t.id and seat.user_id = :me')
                 .where(`t.status <> 'closed'`)
                 .orderBy('t.created_at', 'DESC')
+                .limit(SEATED_MAX)
                 .getRawMany<TableRow>();
         },
 
@@ -437,6 +454,8 @@ export function createTableService(db: DataSource, social: SocialService)
             roomId?: string | null;
         }): Promise<TableRow>
         {
+            await mustHaveRoom(me);
+
             const rules = await db.getRepository(GameRule)
                 .createQueryBuilder('r')
                 .innerJoin(Game, 'g', `g.id = r.game_id and g.status = 'available'`)
@@ -680,6 +699,8 @@ export function createTableService(db: DataSource, social: SocialService)
             {
                 return table.mine;
             }
+
+            await mustHaveRoom(me);
 
             if (table.host !== null)
             {

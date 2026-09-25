@@ -52,7 +52,7 @@ describe.skipIf(!active)('a mute asked for at the edge, against a real database'
 
     beforeEach(async () =>
     {
-        await db.query('truncate notifications, mutes cascade');
+        await db.query('truncate notifications, mutes, conversations cascade');
         await db.query('delete from users');
     });
 

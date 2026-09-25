@@ -838,9 +838,8 @@ export function buildApi(ports: Ports)
          * exactly as one that does not exist, so an id cannot be probed for existence.
          */
         chat: feature('/chat', [session], (routes) => ({
-            list: routes.get('/', { output: conversationList }, async (context) => ({
-                conversations: await ports.chat.list(context.principal.userId)
-            })),
+            list: routes.get('/', { output: conversationList, query: cursorQuery }, async (context) =>
+                await ports.chat.list(context.principal.userId, context.query.cursor)),
 
             /**
              * The devices a message in this conversation could be sealed to.
