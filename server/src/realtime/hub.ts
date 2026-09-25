@@ -98,7 +98,7 @@ export type SelfTopic = 'notifications' | 'devices' | 'profile';
 
 export interface Hub
 {
-    bind(connection: Connection, principal: Principal): Promise<void>;
+    bind(connection: Connection, principal: Principal): Promise<boolean>;
     release(connection: Connection): void;
 
     chatChanged(conversationId: string, ...also: string[]): void;
@@ -545,7 +545,15 @@ export function createHub(deps: HubDeps): Hub
         timer.unref?.();
     };
 
-    async function flush(): Promise<void>
+    let flushing: Promise<void> = Promise.resolve();
+
+    function flush(): Promise<void>
+    {
+        flushing = flushing.then(drain, drain);
+        return flushing;
+    }
+
+    async function drain(): Promise<void>
     {
         const chat = [...pendingChat.entries()];
         const social = [...pendingSocial];
@@ -649,7 +657,7 @@ export function createHub(deps: HubDeps): Hub
             {
                 socket.alive = false;
                 connection.wire.close(4429, 'Too many connections');
-                return;
+                return false;
             }
 
             const cached = edges.get(principal.userId);
@@ -674,6 +682,8 @@ export function createHub(deps: HubDeps): Hub
                 announce(principal.userId, socket);
                 deps.touchSeen([principal.userId]);
             }
+
+            return true;
         },
 
         release(connection)
@@ -863,12 +873,12 @@ export function createHub(deps: HubDeps): Hub
 
                     const verdicts = await Promise.all(others.map((other) => deps.mayTalk(socket.userId, other.socket.userId)));
 
-                    others.forEach((other, index) => talks.set(pairOf(socket.userId, other.socket.userId), verdicts[index]));
-
                     if (!socket.alive)
                     {
                         return;
                     }
+
+                    others.forEach((other, index) => talks.set(pairOf(socket.userId, other.socket.userId), verdicts[index]));
 
                     const previous = room.get(socket.userId);
 

@@ -38,6 +38,8 @@ const BUDGETS: Record<string, number> = { voice: 30, signal: 120, play: 40, resu
 
 const HEARTBEAT_MS = 15_000;
 
+const FAULT_WINDOW_MS = 60_000;
+
 const PONG_TIMEOUT_MS = 10_000;
 
 interface Line
@@ -193,6 +195,7 @@ export function attachRealtime(server: Server, deps: GatewayDeps): () => void
             const spent: Record<string, number[]> = {};
             const line: Line = { tail: Promise.resolve() };
             let faults = 0;
+            let faultsSince = 0;
 
             const spend = (kind: string, at: number): boolean =>
             {
@@ -278,6 +281,12 @@ export function attachRealtime(server: Server, deps: GatewayDeps): () => void
                 const floor = THROTTLES[frame.t] ?? 1000;
                 if (at - (lastSeen[frame.t] ?? 0) < floor)
                 {
+                    if (at - faultsSince > FAULT_WINDOW_MS)
+                    {
+                        faults = 0;
+                        faultsSince = at;
+                    }
+
                     faults += 1;
                     if (faults > 10)
                     {
@@ -367,7 +376,12 @@ export function attachRealtime(server: Server, deps: GatewayDeps): () => void
                     }
 
                     connection.pending = false;
-                    await deps.hub.bind(connection, principal);
+
+                    if (!await deps.hub.bind(connection, principal))
+                    {
+                        refusing = true;
+                        return;
+                    }
 
                     if (closed)
                     {

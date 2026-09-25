@@ -96,7 +96,7 @@ beforeAll(async () =>
         async bind(connection: Parameters<typeof base.bind>[0], principal: Parameters<typeof base.bind>[1])
         {
             noted.push(`bound ${ principal.handle }`);
-            await base.bind(connection, principal);
+            return await base.bind(connection, principal);
         },
         resync(connection: Parameters<typeof base.resync>[0])
         {

@@ -118,7 +118,7 @@ function build(): World
     return state;
 }
 
-async function connect(userId: string, sessionId = `s-${ userId }`): Promise<{ connection: Connection; wire: FakeWire }>
+async function connect(userId: string, sessionId = `s-${ userId }`): Promise<{ connection: Connection; wire: FakeWire; bound: boolean }>
 {
     world.seq += 1;
     const wire = new FakeWire();
@@ -140,8 +140,8 @@ async function connect(userId: string, sessionId = `s-${ userId }`): Promise<{ c
         sessionId
     };
 
-    await world.hub.bind(connection, principal);
-    return { connection, wire };
+    const bound = await world.hub.bind(connection, principal);
+    return { connection, wire, bound };
 }
 
 const settle = async (): Promise<void> =>
@@ -186,6 +186,8 @@ describe('binding', () =>
         const fourth = await connect('alex');
 
         expect(fourth.wire.closed).toEqual({ code: 4429, reason: 'Too many connections' });
+        expect(fourth.bound, 'the gateway would go on dispatching a refused socket's buffered frames').toBe(false);
+        expect(first.bound).toBe(true);
         expect(first.wire.closed).toBeNull();
         expect(world.hub.size()).toBe(3);
     });
