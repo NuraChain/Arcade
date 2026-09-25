@@ -1,4 +1,4 @@
-import { useHead, useNavigate } from 'azerothjs';
+import { useHead } from 'azerothjs';
 
 import Page from '../../components/app/page.component.azeroth';
 import PageHeader from '../../components/app/page-header.component.azeroth';
@@ -57,7 +57,6 @@ export default component SettingsPage()
     const people = usePeople();
     const toasts = useToasts();
     const voice = useVoice();
-    const { navigate } = useNavigate();
 
     useHead({ title: () => locale.t('settings.title') });
 
@@ -172,11 +171,14 @@ export default component SettingsPage()
 
     derived reports = allReports.slice(0, reportsPage * SAFETY_PAGE);
 
-    const leave = (): void =>
+    state leaving = false;
+
+    const leave = async (): Promise<void> =>
     {
+        leaving = true;
         wallet.disconnect();
-        session.signOut();
-        navigate('/sign-in', { replace: true });
+        await session.signOut();
+        window.location.replace('/sign-in');
     };
 
     state active = SECTIONS[0].id;
@@ -309,7 +311,7 @@ export default component SettingsPage()
                                     <Button variant="outline" block leading="key" to="/app/me/devices">
                                         { locale.t('devices.title') }
                                     </Button>
-                                    <Button variant="outline" block leading="sign-out" onClick={ leave }>
+                                    <Button variant="outline" block leading="sign-out" loading={ leaving } onClick={ () => void leave() }>
                                         { account.isWallet() ? locale.t('settings.account.disconnect') : locale.t('settings.account.signOut') }
                                     </Button>
                                 </div>

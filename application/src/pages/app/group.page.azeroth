@@ -1,4 +1,4 @@
-import { useHead, useNavigate, useParams } from 'azerothjs';
+import { untrack, useHead, useNavigate, useParams } from 'azerothjs';
 
 import type { GroupSummary } from '../../api.ts';
 import ConfirmSheet from '../../components/app/confirm-sheet.component.azeroth';
@@ -47,13 +47,19 @@ export default component GroupPage()
 
     mount
     {
-        groups.open(params().id ?? '');
+        const mine = untrack(() => params().id ?? '');
+
+        groups.open(mine);
         const release = shell.claimTitle(() => name);
 
         return () =>
         {
             release();
-            groups.close();
+
+            if (untrack(groups.openId) === mine)
+            {
+                groups.close();
+            }
         };
     }
 

@@ -218,6 +218,16 @@ export const useToasts = createStore((): ToastsApi =>
                 dedupe
             };
 
+            const stuck = untrack(items).length < TOAST_VISIBLE
+                ? undefined
+                : untrack(items).find((held) => held.kind === 'error' && held.remaining === Infinity);
+
+            if (stuck !== undefined)
+            {
+                stop(stuck.id);
+                setItems(untrack(items).filter((held) => held.id !== stuck.id));
+            }
+
             if (untrack(items).length < TOAST_VISIBLE)
             {
                 setItems([...untrack(items), toast]);

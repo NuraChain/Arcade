@@ -32,6 +32,7 @@ import Sidebar from './sidebar.component.azeroth';
 import SocialPanel from './social-panel.component.azeroth';
 import ToastHost from './toast-host.component.azeroth';
 import EmojiPopover from '../chat/emoji-popover.component.azeroth';
+import { useEmojiPop } from '../../stores/emoji-pop.store.ts';
 import { useToasts } from '../../stores/toasts.store.ts';
 import { useVoice } from '../../stores/voice.store.ts';
 import TopBar from './top-bar.component.azeroth';
@@ -51,6 +52,8 @@ export default component AppShell(props: { children?: MountNode })
 
     let seen = untrack(() => route().key);
 
+    let seenPath = untrack(() => route().pathname);
+
     effect
     {
         setHaptics(settings.settings().haptics && device.coarse());
@@ -64,6 +67,15 @@ export default component AppShell(props: { children?: MountNode })
             return;
         }
         seen = location.key;
+        if (location.pathname !== seenPath)
+        {
+            seenPath = location.pathname;
+            untrack(() =>
+            {
+                useEmojiPop().close();
+                overlay.closeAll();
+            });
+        }
         if (location.navigationKind === 'push')
         {
             shell.notePush();

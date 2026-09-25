@@ -299,6 +299,19 @@ describe('toasts', () =>
         expect(toasts.items().map((toast) => toast.text)).toEqual(['t3', 't4']);
     });
 
+    it('lets the oldest error that would never leave give its slot to what came after it', () =>
+    {
+        const toasts = useToasts();
+
+        toasts.show({ kind: 'error', text: 'e1' });
+        toasts.show({ kind: 'error', text: 'e2' });
+        toasts.show({ kind: 'error', text: 'e3' });
+        toasts.show({ kind: 'success', text: 'saved' });
+
+        expect(toasts.items().map((toast) => toast.text)).toEqual(['e2', 'e3', 'saved']);
+        expect(toasts.queued()).toBe(0);
+    });
+
     it('pauses the clock while hovered and resumes with what is left', () =>
     {
         const toasts = useToasts();

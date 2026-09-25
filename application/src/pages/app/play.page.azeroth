@@ -120,7 +120,7 @@ export default component PlayPage()
         {
             release();
 
-            if (untrack(voice.table) !== null)
+            if (untrack(voice.table) === mine)
             {
                 voice.leave();
             }

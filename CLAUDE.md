@@ -2225,8 +2225,9 @@ to open. That is the only shape E2EE allows, because a server-side message index
 **The archive is the plaintext, and it has to be surrendered like a key.** Six independent audit
 routes converged on the same defect: `surrenderKeys` dropped the epoch keys, the device keypairs and
 the signer cache, and left every message those keys had already opened sitting in a module-level
-`Map`. Sign-out is a client-side navigation — no reload, same module — and signing in as somebody
-else does not replace it. So the next person at the keyboard signed in as themselves, opened search,
+`Map`. Sign-out was a client-side navigation — no reload, same module — and signing in as somebody
+else did not replace it. It loads `/sign-in` now (see *What the browser held on to*), and the rest of
+this section stays true as the belt under that brace. So the next person at the keyboard signed in as themselves, opened search,
 typed a common word, and read the previous person's conversations **without needing a key at all**.
 The plaintext outlived the keys that produced it, while `session.store.ts`'s own docstring promised
 the opposite in so many words.
@@ -4431,6 +4432,34 @@ half left behind.
 - **Housekeeping runs daily** (`jobs.tidy`): expired sign-in and recovery nonces, sessions a month past
   their expiry or revocation, and push subscriptions a push service has retired. Nothing deleted any of
   them before, whatever the comments said.
+
+## What the browser held on to
+
+The client half of the same audits, each a thing that outlived what it belonged to.
+
+- **Signing out LOADS `/sign-in`.** It used to navigate within the page, so every store kept the last
+  person's drafts, board, notification pages and the names of their friends in module memory for
+  whoever signed in next - the archive defect in *Reading chat* was one case of it, and a list of stores
+  to reset would be one entry short the day somebody adds a store. The session is forgotten first, the
+  server and the keyring are told, and then the tab starts again from nothing.
+- **A voice join that has been overtaken stops its own microphone.** `join` is counted, and every await
+  asks whether it is still the latest; a superseded one stops the tracks it was granted instead of
+  writing them over the live ones, which is how a second join to the same table used to leave a
+  microphone open that nothing held. `useMic` stops a stream it could not use. The play page leaves
+  only the call for its OWN table, because on a phone the old page's teardown runs after the new one
+  has joined.
+- **Moving to another page closes what the last one opened**: every overlay and the emoji popover,
+  which otherwise held a detached anchor and a closure over a page that no longer existed.
+- **An error that would never leave gives its slot up.** Error toasts do not expire, so three of them
+  used to fill every slot and queue everything after them for good; a new toast now retires the oldest.
+- **A timer that fires takes its own stop-handle with it** in the hokm board and the table cues, which
+  otherwise kept one per beat for the whole match.
+- **The plaintext archive is capped** at five thousand messages, oldest first, and **epoch key bytes
+  are zeroed** once a page of history or a list preview has been opened with them - the thread shares
+  one copy per epoch across a page, so it is zeroed after the page, not after each message.
+- **The group page closes only its own group**, the rule the play and chat pages already follow.
+- **A browser that knows it is offline stops asking**: no socket reopen, no fallback poll of the match
+  and no live-count poll until the `online` event.
 
 ## Mobile first, and what a wide-first layout hides
 

@@ -148,17 +148,25 @@ export const useVoice = createStore((): VoiceApi =>
         });
     };
 
-    const stopStream = (): void =>
+    const stopTracks = (held: MediaStream | null): void =>
     {
-        for (const track of stream?.getTracks() ?? [])
+        for (const track of held?.getTracks() ?? [])
         {
             track.stop();
         }
+    };
+
+    const stopStream = (): void =>
+    {
+        stopTracks(stream);
         stream = null;
     };
 
+    let joins = 0;
+
     const teardown = (): void =>
     {
+        joins += 1;
         unhold?.();
         unhold = null;
         call?.close();
@@ -375,9 +383,10 @@ export const useVoice = createStore((): VoiceApi =>
             unhold?.();
             unhold = realtime.hold();
 
+            const round = ++joins;
             const ice = await client.voice.ice().catch(() => ({ servers: [] }));
 
-            if (untrack(table) !== next)
+            if (round !== joins || untrack(table) !== next)
             {
                 return;
             }
@@ -417,13 +426,15 @@ export const useVoice = createStore((): VoiceApi =>
                 call.setSink(speaker);
             }
 
-            stream = await microphone();
+            const got = await microphone();
 
-            if (untrack(table) !== next)
+            if (round !== joins || untrack(table) !== next)
             {
-                stopStream();
+                stopTracks(got);
                 return;
             }
+
+            stream = got;
 
             const quiet = stream === null || (!pushToTalk() && untrack(settings.settings).voiceStartMuted);
 
@@ -514,10 +525,12 @@ export const useVoice = createStore((): VoiceApi =>
                 return;
             }
 
+            const round = joins;
             const next = await microphone();
 
-            if (next === null || call === null)
+            if (next === null || call === null || round !== joins)
             {
+                stopTracks(next);
                 return;
             }
 

@@ -303,6 +303,37 @@ describe('voice at a table', () =>
         expect(useVoice().people().find((person) => person.who === 'sara.k')?.volume).toBeCloseTo(0.4);
     });
 
+    it('stops the microphone a superseded join was granted, rather than leaving it live with nothing holding it', async () =>
+    {
+        const granted: { stopped: boolean }[] = [];
+        const answers: ((value: MediaStream) => void)[] = [];
+
+        setVoiceMedia(() => ({
+            getUserMedia: () => new Promise<MediaStream>((resolve) =>
+            {
+                const held = { stopped: false };
+                const live = { stop: () => { held.stopped = true; } } as unknown as MediaStreamTrack;
+
+                granted.push(held);
+                answers.push(() => resolve({ getTracks: () => [live], getAudioTracks: () => [live] } as unknown as MediaStream));
+            })
+        }) as unknown as MediaDevices);
+
+        const first = useVoice().join(TABLE);
+        await settle();
+        useVoice().leave();
+        const second = useVoice().join(TABLE);
+        await settle();
+
+        answers.forEach((answer) => answer(stream));
+        await Promise.all([first, second]);
+
+        expect(granted.length).toBe(2);
+        expect(granted[0].stopped, 'the first grant is live with nothing holding it').toBe(true);
+        expect(granted[1].stopped).toBe(false);
+        expect(useVoice().mic()).toBe('live');
+    });
+
     it('asks for the chosen microphone as a preference, so one that has gone falls back to the default', async () =>
     {
         const asked: MediaStreamConstraints[] = [];

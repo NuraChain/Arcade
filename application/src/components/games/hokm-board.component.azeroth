@@ -388,7 +388,13 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
 
     const later = (ms: number, run: () => void): void =>
     {
-        timers.push(runtime().clock.after(Math.max(0, ms), run));
+        const stop = runtime().clock.after(Math.max(0, ms), () =>
+        {
+            timers = timers.filter((one) => one !== stop);
+            run();
+        });
+
+        timers.push(stop);
     };
 
     const quiet = (): boolean => device.reducedMotion();

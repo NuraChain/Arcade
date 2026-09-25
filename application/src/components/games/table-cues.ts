@@ -210,8 +210,10 @@ export function tableCues(options: { enabled: boolean; seq: number; match: { id:
 
             for (const beat of options.beats(fresh))
             {
-                timers.push(runtime().clock.after(beat.at, () =>
+                const stop = runtime().clock.after(beat.at, () =>
                 {
+                    timers = timers.filter((one) => one !== stop);
+
                     if (beat.cue !== undefined)
                     {
                         sound.play(beat.cue, { gain: beat.gain, rate: beat.rate });
@@ -221,7 +223,9 @@ export function tableCues(options: { enabled: boolean; seq: number; match: { id:
                     {
                         haptic(beat.buzz);
                     }
-                }));
+                });
+
+                timers.push(stop);
             }
         },
 

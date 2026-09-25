@@ -152,6 +152,8 @@ export function forgetArchive(): void
  * preview opens only if this browser already holds the key, and says `locked` until the thread has
  * been opened once.
  */
+export const ARCHIVE_MAX = 5000;
+
 export function createApiSource(): ChatSource
 {
     const archive = new Map<string, Message>();
@@ -171,7 +173,18 @@ export function createApiSource(): ChatSource
             return message;
         }
 
+        archive.delete(message.id);
         archive.set(message.id, message);
+
+        for (const id of archive.keys())
+        {
+            if (archive.size <= ARCHIVE_MAX)
+            {
+                break;
+            }
+            archive.delete(id);
+        }
+
         return message;
     };
 
@@ -232,6 +245,33 @@ export function createApiSource(): ChatSource
      * A line the server authored is not sealed and never was - it is `{ key, params }` rendered
      * through the catalogue - so it passes through untouched. Only `text` goes near the crypto.
      */
+    const zero = async (given: readonly Promise<Uint8Array | null>[]): Promise<void> =>
+    {
+        for (const bytes of await Promise.all(given.map((one) => one.catch(() => null))))
+        {
+            bytes?.fill(0);
+        }
+    };
+
+    const openHeld = async (id: string, wire: ChatMessage): Promise<Message> =>
+    {
+        const given: Promise<Uint8Array | null>[] = [];
+
+        try
+        {
+            return await openOne(wire, (epoch) =>
+            {
+                const fetching = heldKey(id, epoch);
+                given.push(fetching);
+                return fetching;
+            });
+        }
+        finally
+        {
+            await zero(given);
+        }
+    };
+
     const openOne = async (
         wire: ChatMessage,
         keyFor: (epoch: number) => Promise<Uint8Array | null>
@@ -395,7 +435,7 @@ export function createApiSource(): ChatSource
                     conversation: asConversation(row),
                     last: row.last === undefined
                         ? null
-                        : await openOne(row.last, (epoch) => heldKey(row.id, epoch)),
+                        : await openHeld(row.id, row.last),
                     unread: row.unread
                 }))),
                 more: cursor !== undefined
@@ -448,7 +488,14 @@ export function createApiSource(): ChatSource
                 return fetching;
             };
 
-            return { messages: await Promise.all(page.wires.map((wire) => openOne(wire, keyFor))), earlier: page.earlier };
+            try
+            {
+                return { messages: await Promise.all(page.wires.map((wire) => openOne(wire, keyFor))), earlier: page.earlier };
+            }
+            finally
+            {
+                await zero([...keys.values()]);
+            }
         },
 
         /**
