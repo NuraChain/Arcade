@@ -1,6 +1,7 @@
 import { ApiError, applyFieldErrors } from '@azerothjs/http/api/shared';
 
 import { threadSize } from '../../server/src/domains/chat/pages.ts';
+import { NOTICE_OF } from '../../server/src/domains/notify/notices.ts';
 import { candidatesFor, handleFromAddress, handleFromName } from '../../server/src/domains/identity/handle.ts';
 import type {
     Account,
@@ -1206,16 +1207,20 @@ export const client =
 
     notifications:
     {
-        async list({ query }: { query: { cursor?: string } })
+        async list({ query }: { query: { cursor?: string; notice?: string } })
         {
-            server.calls.push('notifications.list');
+            server.calls.push(query.notice === undefined ? 'notifications.list' : `notifications.list:${ query.notice }`);
+
+            const kept = query.notice === undefined
+                ? server.notifications
+                : server.notifications.filter((one) => NOTICE_OF[one.kind] === query.notice);
 
             const from = query.cursor === undefined
                 ? 0
-                : server.notifications.findIndex((one) => one.id === query.cursor) + 1;
+                : kept.findIndex((one) => one.id === query.cursor) + 1;
 
-            const slice = server.notifications.slice(from, from + NOTIFY_PAGE);
-            const hasMore = from + NOTIFY_PAGE < server.notifications.length;
+            const slice = kept.slice(from, from + NOTIFY_PAGE);
+            const hasMore = from + NOTIFY_PAGE < kept.length;
 
             return {
                 items: slice,

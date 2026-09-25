@@ -121,6 +121,20 @@ describe.skipIf(!active)('notifications, against a real database', () =>
             expect(await notify.unread(reader)).toBe(1);
         });
 
+        it('narrows a page to the kinds asked for, and pages within them', async () =>
+        {
+            const reader = await makeUser();
+            const writer = await makeUser();
+
+            await notify.tell({ userId: reader, kind: 'message', actorId: writer, ref: {}, dedupeKey: 'chat:c-1' });
+            await notify.tell({ userId: reader, kind: 'friend-request', actorId: writer, ref: {}, dedupeKey: 'friend:w' });
+
+            const requests = await notify.page(reader, null, ['friend-request', 'friend-accepted']);
+            expect(requests.items.map((row) => row.kind)).toEqual(['friend-request']);
+            expect((await notify.page(reader, null, [])).items.length).toBe(0);
+            expect((await notify.page(reader, null)).items.length).toBe(2);
+        });
+
         it('keeps two different conversations apart', async () =>
         {
             const reader = await makeUser();

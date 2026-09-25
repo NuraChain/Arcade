@@ -50,6 +50,13 @@ export function rank(fields: readonly string[], needle: string): number
     return best;
 }
 
+export const SEARCH_FROM = 8;
+
+export function narrowed<T>(items: readonly T[], needle: string, fields: (item: T) => readonly string[]): T[]
+{
+    return needle.trim() === '' ? [...items] : ranked(items, needle, fields);
+}
+
 export function ranked<T>(items: readonly T[], needle: string, fields: (item: T) => readonly string[]): T[]
 {
     const scored: Array<{ item: T; score: number }> = [];

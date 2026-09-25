@@ -5,6 +5,7 @@ import { usePeople } from '../../stores/people.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { usePresence } from '../../stores/presence.store.ts';
 import Avatar from '../ui/avatar.component.azeroth';
+import Badge from '../ui/badge.component.azeroth';
 import { useVoice } from '../../stores/voice.store.ts';
 
 export default component SeatCard(props: {
@@ -89,10 +90,7 @@ export default component SeatCard(props: {
         { () =>
             <div class={ shell }>
                 <Show when={ props.seat.host }>
-                    <span class="absolute start-2 top-2 flex items-center gap-1 rounded-full bg-accent/15 px-2 py-0.5 text-ui-2xs font-semibold text-accent">
-                        <Icon name="star" size={ 11 } />
-                        { locale.t('play.lobby.host') }
-                    </span>
+                    <Badge dot text={ locale.t('play.lobby.host') } tone="accent" class="absolute start-2 top-2" />
                 </Show>
                 <span class={ () => [ 'flex rounded-full transition-shadow duration-150', props.seat.who !== undefined && voice.speaking(props.seat.who) ? 'ring-3 ring-live ring-offset-2 ring-offset-field' : '' ].filter(Boolean).join(' ') }>
                     <Avatar

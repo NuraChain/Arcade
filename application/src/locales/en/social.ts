@@ -215,6 +215,7 @@ export const social = {
 
     'groups.title': 'Groups',
     'groups.members': 'Members',
+    'groups.searchMembers': 'Search members',
     'groups.playTogether': 'Play together',
     'groups.tooFew': 'This group is too small for that game yet. Add somebody, or open a table from the games page.',
     'groups.chat': 'Group chat',
@@ -273,6 +274,14 @@ export const social = {
     'groups.ownerLeaving': 'The group passes to whoever has been here longest.',
 
     'notifications.lead': 'Everything waiting for an answer.',
+    'notifications.filter': 'Show',
+    'notifications.kind.all': 'All',
+    'notifications.kind.invites': 'Invitations',
+    'notifications.kind.requests': 'Requests',
+    'notifications.kind.messages': 'Messages',
+    'notifications.kind.groups': 'Groups',
+    'notifications.kind.turns': 'Turns',
+    'notifications.emptyKind': 'Nothing of this kind.',
     'notifications.markAll': 'Mark all read',
     'notifications.empty': 'Nothing new.',
     'notifications.emptyLead': 'Invitations, requests and results land here.',

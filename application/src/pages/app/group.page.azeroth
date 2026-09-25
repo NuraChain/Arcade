@@ -12,6 +12,8 @@ import Button from '../../components/ui/button.component.azeroth';
 import EmptyState from '../../components/ui/empty-state.component.azeroth';
 import ErrorState from '../../components/ui/error-state.component.azeroth';
 import IconButton from '../../components/ui/icon-button.component.azeroth';
+import Pagination from '../../components/ui/pagination.component.azeroth';
+import SearchInput from '../../components/ui/search-input.component.azeroth';
 import SectionHeading from '../../components/ui/section-heading.component.azeroth';
 import Skeleton from '../../components/ui/skeleton.component.azeroth';
 import type { GameId } from '../../data/games.ts';
@@ -29,6 +31,11 @@ import { useShell } from '../../stores/shell.store.ts';
 import { useToasts } from '../../stores/toasts.store.ts';
 import { openTable } from '../../lib/open-table.ts';
 import { attempt } from '../../lib/attempt.ts';
+import { pagingFor, visible } from '../../lib/pagination.ts';
+import { narrowed, SEARCH_FROM } from '../../services/search.service.ts';
+import { useDevice } from '../../stores/device.store.ts';
+
+const MEMBER_PAGE = 12;
 
 export default component GroupPage()
 {
@@ -82,6 +89,17 @@ export default component GroupPage()
         .filter((person): person is Person => person !== null);
 
     derived online = (group?.members ?? []).filter((handle) => presence.isOnline(handle));
+
+    const device = useDevice();
+
+    state query = '';
+    state memberPage = 1;
+
+    derived paging = pagingFor(device.posture() === 'phone');
+
+    derived found = narrowed(members, query, (person) => [person.displayName, person.handle]);
+
+    derived shown = visible(found, MEMBER_PAGE, memberPage, paging);
 
     derived game = (group?.game ?? null) as GameId | null;
 
@@ -279,8 +297,28 @@ export default component GroupPage()
                             }
                         />
 
-                        <ul class="flex flex-col divide-y divide-line rounded-panel border border-line bg-field px-2" aria-label={ locale.t('groups.members') }>
-                            <For each={ members } key={ (person) => person.id } let={ person }>
+                        <Show when={ members.length > SEARCH_FROM }>
+                            { () =>
+                                <SearchInput
+                                    value={ query }
+                                    onInput={ (value) =>
+                                    {
+                                        query = value;
+                                        memberPage = 1;
+                                    } }
+                                    placeholder={ locale.t('groups.searchMembers') }
+                                    label={ locale.t('groups.searchMembers') }
+                                    class="mb-3"
+                                />
+                            }
+                        </Show>
+
+                        <Show when={ found.length === 0 && members.length > 0 }>
+                            { () => <EmptyState icon="search" title={ locale.t('search.empty', { query: query.trim() }) } class="py-8" /> }
+                        </Show>
+
+                        <ul class="flex flex-col divide-y divide-line rounded-panel border border-line bg-field px-2 empty:hidden" aria-label={ locale.t('groups.members') }>
+                            <For each={ shown } key={ (person) => person.id } let={ person }>
                                 <li>
                                     <FriendRow
                                         person={ person }
@@ -321,6 +359,14 @@ export default component GroupPage()
                                 </li>
                             </For>
                         </ul>
+                        <Pagination
+                            total={ found.length }
+                            size={ MEMBER_PAGE }
+                            page={ memberPage }
+                            mode={ paging }
+                            label={ locale.t('groups.members') }
+                            onPage={ (page) => memberPage = page }
+                        />
                     </section>
 
                     <div class="flex flex-col items-center gap-4">

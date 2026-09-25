@@ -11,6 +11,7 @@ import Button from '../../components/ui/button.component.azeroth';
 import EmptyState from '../../components/ui/empty-state.component.azeroth';
 import IconButton from '../../components/ui/icon-button.component.azeroth';
 import Pagination from '../../components/ui/pagination.component.azeroth';
+import SearchInput from '../../components/ui/search-input.component.azeroth';
 import SectionHeading from '../../components/ui/section-heading.component.azeroth';
 import Tabs from '../../components/ui/tabs.component.azeroth';
 import type { Person } from '../../data/person.ts';
@@ -26,6 +27,8 @@ import { useDevice } from '../../stores/device.store.ts';
 import { useSocial } from '../../stores/social.store.ts';
 import { openTable } from '../../lib/open-table.ts';
 import { attempt } from '../../lib/attempt.ts';
+import { pagingFor, visible } from '../../lib/pagination.ts';
+import { narrowed, SEARCH_FROM } from '../../services/search.service.ts';
 
 const LIST_PAGE = 12;
 const SUGGEST_PAGE = 8;
@@ -48,9 +51,12 @@ export default component FriendsPage()
 
     state tab = 'all';
     state listPage = 1;
+    state query = '';
     state suggestPage = 1;
 
     derived roomy = device.posture() !== 'phone';
+
+    derived paging = pagingFor(!roomy);
 
     const peopleOf = (ids: readonly string[]): Person[] => ids
         .map((id) => people.byHandle(id))
@@ -72,7 +78,7 @@ export default component FriendsPage()
 
     derived allSuggestions = social.suggestions();
 
-    derived suggestions = allSuggestions.slice(0, suggestPage * SUGGEST_PAGE);
+    derived suggestions = visible(allSuggestions, SUGGEST_PAGE, suggestPage, paging);
 
     derived items = [
         { id: 'all', label: locale.t('friends.tab.all'), count: friends.length },
@@ -84,7 +90,9 @@ export default component FriendsPage()
 
     derived pool = tab === 'online' ? online : friends;
 
-    derived listed = pool.slice(0, listPage * LIST_PAGE);
+    derived found = narrowed(pool, query, (person) => [person.displayName, person.handle]);
+
+    derived listed = visible(found, LIST_PAGE, listPage, paging);
 
     const playWith = (person: Person): void =>
     {
@@ -136,11 +144,32 @@ export default component FriendsPage()
             {
                 tab = id;
                 listPage = 1;
+                query = '';
                 suggestPage = 1;
             } }
         />
 
-        <Show when={ tab === 'all' || tab === 'online' }>
+        <Show when={ (tab === 'all' || tab === 'online') && friends.length > SEARCH_FROM }>
+            { () =>
+                <SearchInput
+                    value={ query }
+                    onInput={ (value) =>
+                    {
+                        query = value;
+                        listPage = 1;
+                    } }
+                    placeholder={ locale.t('create.search') }
+                    label={ locale.t('create.search') }
+                    class="mb-3"
+                />
+            }
+        </Show>
+
+        <Show when={ (tab === 'all' || tab === 'online') && pool.length > 0 && found.length === 0 }>
+            { () => <EmptyState icon="search" title={ locale.t('search.empty', { query: query.trim() }) } lead={ locale.t('search.emptyLead') } class="py-10" /> }
+        </Show>
+
+        <Show when={ (tab === 'all' || tab === 'online') && (pool.length === 0 || found.length > 0) }>
             { () =>
                 <Show
                     when={ pool.length > 0 }
@@ -192,10 +221,10 @@ export default component FriendsPage()
         <Show when={ tab === 'all' || tab === 'online' }>
             { () =>
                 <Pagination
-                    total={ pool.length }
+                    total={ found.length }
                     size={ LIST_PAGE }
                     page={ listPage }
-                    mode="more"
+                    mode={ paging }
                     label={ locale.t('friends.tab.all') }
                     onPage={ (page) => listPage = page }
                 />
@@ -349,7 +378,7 @@ export default component FriendsPage()
                     total={ allSuggestions.length }
                     size={ SUGGEST_PAGE }
                     page={ suggestPage }
-                    mode="more"
+                    mode={ paging }
                     label={ locale.t('friends.tab.suggestions') }
                     onPage={ (page) => suggestPage = page }
                 />

@@ -18,7 +18,7 @@ const shareOrigin = (): Plugin =>
     };
 };
 
-export default defineConfig({
+export default defineConfig(({ isSsrBuild }) => ({
     plugins: [azeroth(), tailwindcss(), shareOrigin()],
 
     resolve:
@@ -68,7 +68,15 @@ export default defineConfig({
         // a warning nobody can act on is one that hides the ones they can.
         chunkSizeWarningLimit: 1500,
 
-        assetsInlineLimit: (file: string) => file.endsWith('.cues') ? false : undefined
+        assetsInlineLimit: (file: string) => file.endsWith('.cues') ? false : undefined,
+
+        rolldownOptions: isSsrBuild === true ? {} : {
+            output: {
+                codeSplitting: {
+                    groups: [{ name: 'hint', test: /\/src\/(components\/ui\/(badge|tooltip)\.component|lib\/anchor)\./ }]
+                }
+            }
+        }
     },
 
     server:
@@ -106,4 +114,4 @@ export default defineConfig({
         // nothing is listening on - and bury a genuine failure in connection noise.
         setupFiles: ['./tests/setup.ts']
     }
-});
+}));

@@ -1,5 +1,5 @@
 import Icon from '../../icons/icon.component.azeroth';
-import { windowOf } from '../../lib/pagination.ts';
+import { windowOf, type Paging } from '../../lib/pagination.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import Button from './button.component.azeroth';
 
@@ -7,7 +7,7 @@ export default component Pagination(props: {
     total: number;
     size: number;
     page: number;
-    mode?: 'pages' | 'more';
+    mode?: Paging;
     label: string;
     moreLabel?: string;
     class?: string;
@@ -22,11 +22,24 @@ export default component Pagination(props: {
 
     derived remaining = Math.max(0, props.total - shown);
 
+    let nav: HTMLElement | null = null;
+
+    const go = (page: number): void =>
+    {
+        props.onPage(page);
+        const list = nav?.previousElementSibling;
+        const scroller = nav?.closest('.page');
+        if (list instanceof HTMLElement && scroller instanceof HTMLElement && list.getBoundingClientRect().top < scroller.getBoundingClientRect().top)
+        {
+            list.scrollIntoView({ block: 'start' });
+        }
+    };
+
     <Show when={ view.pages > 1 }>
         <Show
             when={ props.mode === 'more' }
             fallback={
-                <nav class={ [ '@container flex flex-wrap items-center justify-between gap-3 pt-3', props.class ?? '' ].filter(Boolean).join(' ') } aria-label={ props.label }>
+                <nav ref={ (element) => nav = element } class={ [ '@container flex flex-wrap items-center justify-between gap-3 pt-3', props.class ?? '' ].filter(Boolean).join(' ') } aria-label={ props.label }>
                     <p class="text-ui-xs text-faint">
                         { locale.t('page.range', { from: locale.n(view.from), to: locale.n(view.to), total: locale.n(view.total) }) }
                     </p>
@@ -37,7 +50,7 @@ export default component Pagination(props: {
                                 class="flex h-9 w-9 cursor-pointer items-center justify-center rounded-control text-muted transition-colors hover:bg-raised hover:text-text disabled:cursor-not-allowed disabled:opacity-40 coarse:h-11 coarse:w-11"
                                 aria-label={ locale.t('page.previous') }
                                 disabled={ view.page <= 1 }
-                                onClick={ () => props.onPage(view.page - 1) }
+                                onClick={ () => go(view.page - 1) }
                             >
                                 <Icon name="chevron-right" size={ 17 } class="icon-flip rotate-180" />
                             </button>
@@ -58,7 +71,7 @@ export default component Pagination(props: {
                                             ].join(' ') }
                                             aria-current={ item === view.page ? 'page' : undefined }
                                             aria-label={ locale.t('page.go', { page: locale.n(item as number) }) }
-                                            onClick={ () => props.onPage(item as number) }
+                                            onClick={ () => go(item as number) }
                                         >
                                             { locale.n(item as number) }
                                         </button>
@@ -74,7 +87,7 @@ export default component Pagination(props: {
                                 class="flex h-9 w-9 cursor-pointer items-center justify-center rounded-control text-muted transition-colors hover:bg-raised hover:text-text disabled:cursor-not-allowed disabled:opacity-40 coarse:h-11 coarse:w-11"
                                 aria-label={ locale.t('page.next') }
                                 disabled={ view.page >= view.pages }
-                                onClick={ () => props.onPage(view.page + 1) }
+                                onClick={ () => go(view.page + 1) }
                             >
                                 <Icon name="chevron-right" size={ 17 } class="icon-flip" />
                             </button>

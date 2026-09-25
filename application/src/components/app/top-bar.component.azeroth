@@ -2,14 +2,15 @@ import BrandLogo from '../layout/brand-logo.component.azeroth';
 import { Link, useMatch, useNavigate } from 'azerothjs';
 
 import Icon from '../../icons/icon.component.azeroth';
-import { routeMeta } from '../../lib/route-meta.ts';
+import { parentOf, routeMeta } from '../../lib/route-meta.ts';
 import { useDevice } from '../../stores/device.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useNotifications } from '../../stores/notifications.store.ts';
 import { useAccount } from '../../stores/account.store.ts';
 import { useSettings } from '../../stores/settings.store.ts';
-import { useShell } from '../../stores/shell.store.ts';
+import { leave, useShell } from '../../stores/shell.store.ts';
 import BrandMark from '../layout/brand-mark.component.azeroth';
+import { RAIL } from './nav-items.ts';
 import Avatar from '../ui/avatar.component.azeroth';
 import Button from '../ui/button.component.azeroth';
 import IconButton from '../ui/icon-button.component.azeroth';
@@ -23,13 +24,21 @@ export default component TopBar()
     const settings = useSettings();
     const notifications = useNotifications();
     const match = useMatch();
-    const { navigate } = useNavigate();
+    const { navigate, back, replace } = useNavigate();
 
     derived meta = routeMeta(match());
 
     derived title = shell.title() ?? (meta.title === undefined ? '' : locale.t(meta.title));
 
     derived phone = device.posture() === 'phone';
+
+    derived destination = RAIL.some((item) => item.to === match()?.pathname);
+
+    derived parent = meta.immersive === true || (!phone && destination) ? undefined : parentOf(match());
+
+    derived titled = phone && parent !== undefined;
+
+    const goBack = (): void => leave({ back, replace }, shell.depth(), parent);
 
     derived unread = notifications.unread();
 
@@ -75,8 +84,6 @@ export default component TopBar()
 
     <header class="z-topbar safe-t sticky top-0 border-b border-line bg-void/85 backdrop-blur-md">
         <div class="flex h-[var(--topbar-h)] w-full items-center gap-1.5 px-3 sm:gap-2 sm:px-6">
-            <h1 class="sr-only">{ title }</h1>
-
             <Show when={ collapsible }>
                 { () =>
                     <IconButton
@@ -88,6 +95,12 @@ export default component TopBar()
                     />
                 }
             </Show>
+
+            <Show when={ parent !== undefined }>
+                { () => <IconButton icon="back" label={ locale.t('app.nav.back') } variant="ghost" flip onClick={ goBack } /> }
+            </Show>
+
+            <h1 class={ () => titled ? 'min-w-0 flex-1 truncate text-ui-lg font-bold text-text' : 'sr-only' } dir="auto">{ title }</h1>
 
             <Show
                 when={ phone }
@@ -102,12 +115,16 @@ export default component TopBar()
                 }
             >
                 { () =>
-                    <div class="flex min-w-0 flex-1 items-center">
-                        <Link to="/app" class="flex h-11 min-w-0 items-center gap-2.5 rounded-full pe-2" aria-label={ locale.t('app.nav.home') }>
-                            <BrandLogo size="md" />
-                            <BrandMark class="truncate text-ui-lg text-text" />
-                        </Link>
-                    </div>
+                    <Show when={ !titled }>
+                        { () =>
+                            <div class="flex min-w-0 flex-1 items-center">
+                                <Link to="/app" class="flex h-11 min-w-0 items-center gap-2.5 rounded-full pe-2" aria-label={ locale.t('app.nav.home') }>
+                                    <BrandLogo size="md" />
+                                    <BrandMark class="truncate text-ui-lg text-text" />
+                                </Link>
+                            </div>
+                        }
+                    </Show>
                 }
             </Show>
 

@@ -64,6 +64,18 @@ export function windowOf(total: number, size: number, page: number, span = 1): P
     return { page: current, pages, items, from, to, total };
 }
 
+export type Paging = 'pages' | 'more';
+
+export function pagingFor(phone: boolean): Paging
+{
+    return phone ? 'more' : 'pages';
+}
+
+export function visible<T>(items: readonly T[], size: number, page: number, paging: Paging): T[]
+{
+    return paging === 'more' ? items.slice(0, Math.max(1, page) * size) : slice(items, size, page);
+}
+
 export function slice<T>(items: readonly T[], size: number, page: number): T[]
 {
     const pages = pageCount(items.length, size);

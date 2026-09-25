@@ -24,6 +24,7 @@ import { attempt } from '../../lib/attempt.ts';
 import { usePeople } from '../../stores/people.store.ts';
 import { useAccount } from '../../stores/account.store.ts';
 import { useDevice } from '../../stores/device.store.ts';
+import { pagingFor, visible } from '../../lib/pagination.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useSession } from '../../stores/session.store.ts';
 import { useSettings } from '../../stores/settings.store.ts';
@@ -94,7 +95,9 @@ export default component SettingsPage()
         .map((id) => people.byHandle(id))
         .filter((person): person is Person => person !== null);
 
-    derived blocked = allBlocked.slice(0, blockedPage * SAFETY_PAGE);
+    derived paging = pagingFor(device.posture() === 'phone');
+
+    derived blocked = visible(allBlocked, SAFETY_PAGE, blockedPage, paging);
 
     derived allMuted = social.mutes()
         .filter((entry) => entry.kind === 'person')
@@ -103,7 +106,7 @@ export default component SettingsPage()
 
     derived privacy = social.privacy();
 
-    derived muted = allMuted.slice(0, mutedPage * SAFETY_PAGE);
+    derived muted = visible(allMuted, SAFETY_PAGE, mutedPage, paging);
 
     mount
     {
@@ -169,7 +172,7 @@ export default component SettingsPage()
 
     derived allReports = [...social.reports()].sort((a, b) => b.at - a.at);
 
-    derived reports = allReports.slice(0, reportsPage * SAFETY_PAGE);
+    derived reports = visible(allReports, SAFETY_PAGE, reportsPage, paging);
 
     state leaving = false;
 
@@ -386,7 +389,7 @@ export default component SettingsPage()
                                         total={ allBlocked.length }
                                         size={ SAFETY_PAGE }
                                         page={ blockedPage }
-                                        mode="more"
+                                        mode={ paging }
                                         label={ locale.t('settings.safety.blocked') }
                                         onPage={ (page) => blockedPage = page }
                                     />
@@ -421,7 +424,7 @@ export default component SettingsPage()
                                         total={ allMuted.length }
                                         size={ SAFETY_PAGE }
                                         page={ mutedPage }
-                                        mode="more"
+                                        mode={ paging }
                                         label={ locale.t('settings.safety.muted') }
                                         onPage={ (page) => mutedPage = page }
                                     />
@@ -462,7 +465,7 @@ export default component SettingsPage()
                                         total={ allReports.length }
                                         size={ SAFETY_PAGE }
                                         page={ reportsPage }
-                                        mode="more"
+                                        mode={ paging }
                                         label={ locale.t('settings.safety.reports') }
                                         onPage={ (page) => reportsPage = page }
                                     />

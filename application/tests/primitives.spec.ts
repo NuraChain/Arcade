@@ -9,7 +9,7 @@ import Pagination from '../src/components/ui/pagination.component.azeroth';
 import Slider from '../src/components/ui/slider.component.azeroth';
 import Tooltip from '../src/components/ui/tooltip.component.azeroth';
 import { place, physicalSide } from '../src/lib/anchor.ts';
-import { clampPage, pageCount, slice, windowOf } from '../src/lib/pagination.ts';
+import { clampPage, pageCount, pagingFor, slice, visible, windowOf } from '../src/lib/pagination.ts';
 import { createDrag } from '../src/lib/swipe.ts';
 import { manualClock, type ManualClock } from '../src/lib/clock.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
@@ -145,6 +145,15 @@ describe('pagination maths', () =>
         expect(slice(items, 10, 1)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
         expect(slice(items, 10, 3)).toEqual([20, 21, 22, 23, 24]);
         expect(slice(items, 10, 99)).toEqual([20, 21, 22, 23, 24]);
+    });
+
+    it('grows the list on a phone and turns the page on a wider screen', () =>
+    {
+        const items = Array.from({ length: 25 }, (_value, index) => index);
+        expect(pagingFor(true)).toBe('more');
+        expect(pagingFor(false)).toBe('pages');
+        expect(visible(items, 10, 2, 'more')).toHaveLength(20);
+        expect(visible(items, 10, 2, 'pages')).toEqual([10, 11, 12, 13, 14, 15, 16, 17, 18, 19]);
     });
 });
 

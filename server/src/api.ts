@@ -28,6 +28,7 @@ import {
     conversationList,
     conversationRef,
     cursorQuery,
+    notificationQuery,
     threadQuery,
     chainProfileState,
     chainPublish,
@@ -710,8 +711,8 @@ export function buildApi(ports: Ports)
          * that does not exist.
          */
         notifications: feature('/notifications', [session], (routes) => ({
-            list: routes.get('/', { output: notificationPage, query: cursorQuery },
-                (context) => ports.notify.page(context.principal.userId, context.query.cursor)),
+            list: routes.get('/', { output: notificationPage, query: notificationQuery },
+                (context) => ports.notify.page(context.principal.userId, context.query.cursor, context.query.notice)),
 
             read: routes.post('/:id/read', { output: ack }, async (context) =>
             {

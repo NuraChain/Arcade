@@ -25,6 +25,7 @@ import { useAccount } from '../src/stores/account.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
 import { useDevice } from '../src/stores/device.store.ts';
 import { useSettings } from '../src/stores/settings.store.ts';
+import { useShell } from '../src/stores/shell.store.ts';
 import { TOAST_DURATION, useToasts } from '../src/stores/toasts.store.ts';
 import { server } from './fake-api.ts';
 
@@ -437,6 +438,84 @@ describe('the top bar', () =>
         expect(useSettings().settings().tableSidebarOpen).toBe(true);
         expect(useSettings().settings().sidebarOpen).toBe(true);
         expect(toggle(container)?.getAttribute('aria-label')).toBe('Collapse the menu');
+    });
+
+    const subPage = async (at: string): Promise<{ container: HTMLElement; router: ReturnType<typeof createRouter> }> =>
+    {
+        const Stub = (): HTMLElement => document.createElement('div');
+        const router = createRouter({
+            routes: [{
+                path: '/app',
+                component: Stub,
+                children: [
+                    { path: '', component: Stub, meta: { tab: 'home' } },
+                    { path: 'watch', component: Stub, meta: { tab: 'watch', parent: '/app/games' } },
+                    { path: 'games/:slug', component: Stub, meta: { tab: 'games', parent: '/app/games' } },
+                    { path: 'games/:slug/create', component: Stub, meta: { title: 'create.title', tab: 'games', parent: '/app/games/:slug' } },
+                    { path: 'play/:id', component: Stub, meta: { tab: 'games', parent: '/app/games', immersive: true } }
+                ]
+            }],
+            history: createMemoryHistory(at),
+            scroll: false
+        });
+        const { container } = renderTest(() => RouterProvider({ router, children: () => TopBar({}) }) as Rendered);
+        await settle();
+        return { container, router };
+    };
+
+    const backOf = (container: HTMLElement): HTMLElement | null => container.querySelector('button[aria-label="Back"]');
+
+    it('offers a way back on every sub-page, to the page it belongs under when there is no history', async () =>
+    {
+        useShell().reset();
+        useDevice().override('phone');
+        const { container, router } = await subPage('/app/games/hokm/create');
+
+        expect(backOf(container)).not.toBeNull();
+        expect(container.querySelector('h1')?.className).not.toContain('sr-only');
+        expect(container.querySelector('a[aria-label="Home"]')).toBeNull();
+
+        fire(backOf(container)!, 'click');
+        await settle();
+
+        expect(router.location().pathname).toBe('/app/games/hokm');
+    });
+
+    it('goes back through history when this visit has one', async () =>
+    {
+        useShell().reset();
+        useDevice().override('sidebar');
+        const { container, router } = await subPage('/app');
+        router.navigate('/app/games/hokm');
+        useShell().notePush();
+        await settle();
+
+        fire(backOf(container)!, 'click');
+        await settle();
+
+        expect(router.location().pathname).toBe('/app');
+    });
+
+    it('draws no back on a destination, nor over a table, which carries its own', async () =>
+    {
+        useShell().reset();
+        useDevice().override('phone');
+        const home = await subPage('/app');
+        expect(backOf(home.container)).toBeNull();
+        expect(home.container.querySelector('a[aria-label="Home"]')).not.toBeNull();
+
+        cleanup();
+        useDevice().override('sidebar');
+        const table = await subPage('/app/play/x');
+        expect(backOf(table.container)).toBeNull();
+
+        cleanup();
+        const watch = await subPage('/app/watch');
+        expect(backOf(watch.container)).toBeNull();
+
+        cleanup();
+        useDevice().override('phone');
+        expect(backOf((await subPage('/app/watch')).container)).not.toBeNull();
     });
 });
 

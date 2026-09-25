@@ -1,5 +1,5 @@
 import type { GameId } from '../../data/games.ts';
-import { Link, untrack, useHead, useParams, useRoute } from 'azerothjs';
+import { Link, untrack, useHead, useNavigate, useParams, useRoute } from 'azerothjs';
 
 import Page from '../../components/app/page.component.azeroth';
 import { gameNameOf, groupNameOf, othersOf, sealSentenceOf, titleOf } from '../../components/chat/chat-title.ts';
@@ -41,7 +41,7 @@ import { useLocale } from '../../stores/locale.store.ts';
 import { useOverlay } from '../../stores/overlay.store.ts';
 import { usePresence } from '../../stores/presence.store.ts';
 import { useSeal } from '../../stores/seal.store.ts';
-import { useShell } from '../../stores/shell.store.ts';
+import { leave, useShell } from '../../stores/shell.store.ts';
 import { useSocial } from '../../stores/social.store.ts';
 import { useToasts } from '../../stores/toasts.store.ts';
 
@@ -387,7 +387,9 @@ export default component ChatPage()
         );
     };
 
-    derived phone = device.posture() === 'phone';
+    const { back, replace } = useNavigate();
+
+    const goBack = (): void => leave({ back, replace }, shell.depth(), '/app/chats');
 
     derived split = device.posture() === 'sidebar';
 
@@ -427,8 +429,8 @@ export default component ChatPage()
                     { () =>
                         <div class="flex h-full min-h-0 flex-col">
                             <header class="safe-t z-topbar sticky top-0 flex min-h-15 items-center gap-1.5 border-b border-line bg-void/90 px-2 py-1.5 backdrop-blur-md sm:px-3">
-                                <Show when={ phone }>
-                                    { () => <IconButton icon="back" label={ locale.t('app.nav.back') } flip to="/app/chats" /> }
+                                <Show when={ !split }>
+                                    { () => <IconButton icon="back" label={ locale.t('app.nav.back') } flip onClick={ goBack } /> }
                                 </Show>
                                 <Show
                                     when={ group !== null }

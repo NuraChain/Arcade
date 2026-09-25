@@ -13,6 +13,7 @@ import ErrorState from '../../components/ui/error-state.component.azeroth';
 import Skeleton from '../../components/ui/skeleton.component.azeroth';
 import type { GameId } from '../../data/games.ts';
 import Icon from '../../icons/icon.component.azeroth';
+import Badge from '../../components/ui/badge.component.azeroth';
 import { runtime } from '../../lib/runtime.ts';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useChat } from '../../stores/chat.store.ts';
@@ -664,7 +665,7 @@ export default component PlayPage()
                                                 <span class="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent-fill text-accent-ink">
                                                     <Icon name="chats" size={ 18 } />
                                                     <Show when={ unread > 0 }>
-                                                        { () => <span class="tally absolute -end-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-danger-fill px-1 text-ui-2xs font-bold text-accent-ink ring-2 ring-lifted">{ locale.n(unread) }</span> }
+                                                        { () => <Badge count={ unread } tone="danger" class="absolute -end-1 -top-1" /> }
                                                     </Show>
                                                 </span>
                                                 <span class="flex min-w-0 flex-col">

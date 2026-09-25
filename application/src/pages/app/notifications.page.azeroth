@@ -6,6 +6,8 @@ import PageHeader from '../../components/app/page-header.component.azeroth';
 import NotificationRow from '../../components/social/notification-row.component.azeroth';
 import Button from '../../components/ui/button.component.azeroth';
 import EmptyState from '../../components/ui/empty-state.component.azeroth';
+import FilterBar from '../../components/ui/filter-bar.component.azeroth';
+import { NOTICES, type Notice } from '../../../../server/src/domains/notify/notices.ts';
 import SectionHeading from '../../components/ui/section-heading.component.azeroth';
 import type { Notification } from '../../api.ts';
 import { targetOf } from '../../lib/notifications.ts';
@@ -24,6 +26,23 @@ export default component NotificationsPage()
     useHead({ title: () => locale.t('app.nav.notifications') });
 
     derived items = notifications.items();
+
+    derived kind = notifications.notice();
+
+    state loadingMore = false;
+
+    const more = (): void =>
+    {
+        loadingMore = true;
+        void notifications.more().finally(() => loadingMore = false);
+    };
+
+    derived kinds = [ 'all', ...NOTICES ].map((id) => ({ id, label: locale.t(`notifications.kind.${ id as Notice | 'all' }`) }));
+
+    mount
+    {
+        return () => notifications.only(null);
+    }
 
     derived dayStart = ((): number =>
     {
@@ -55,9 +74,17 @@ export default component NotificationsPage()
                 : undefined }
         />
 
+        <Show when={ items.length > 0 || kind !== null }>
+            { () => <FilterBar items={ kinds } value={ kind ?? 'all' } label={ locale.t('notifications.filter') } class="mb-4" onChange={ (id) => notifications.only(id === 'all' ? null : id as Notice) } /> }
+        </Show>
+
         <Show
             when={ items.length > 0 }
-            fallback={ <EmptyState icon="bell" title={ locale.t('notifications.empty') } lead={ locale.t('notifications.emptyLead') } class="py-10" /> }
+            fallback={
+                <Show when={ kind === null } fallback={ <EmptyState icon="bell" title={ locale.t('notifications.emptyKind') } class="py-10" /> }>
+                    { () => <EmptyState icon="bell" title={ locale.t('notifications.empty') } lead={ locale.t('notifications.emptyLead') } class="py-10" /> }
+                </Show>
+            }
         >
             { () =>
                 <div class="flex flex-col gap-6">
@@ -88,7 +115,7 @@ export default component NotificationsPage()
                     </Show>
 
                     <Show when={ notifications.hasMore() }>
-                        { () => <LoadMore label={ locale.t('common.more') } onMore={ () => void notifications.more() } /> }
+                        { () => <LoadMore label={ locale.t('common.more') } loading={ loadingMore } onMore={ more } /> }
                     </Show>
                 </div>
             }

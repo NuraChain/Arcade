@@ -183,7 +183,7 @@ export function createNotifyService(db: DataSource, social: SocialService)
          * `(created_at, id)` descending, the same shape chat history uses. An OFFSET page repeats
          * or skips a row every time something arrives at the other end while somebody is reading.
          */
-        async page(me: string, cursor: { at: Date; id: string } | null): Promise<NotificationPage>
+        async page(me: string, cursor: { at: Date; id: string } | null, kinds: readonly string[] | null = null): Promise<NotificationPage>
         {
             const rows = await db.query(
                 `select n.id, n.kind, n.ref, n.count, n.created_at, n.read_at,
@@ -191,9 +191,10 @@ export function createNotifyService(db: DataSource, social: SocialService)
                  from notifications n
                  where n.user_id = $1
                    and ($2::timestamptz is null or (n.created_at, n.id) < ($2, $3::uuid))
+                   and ($5::text[] is null or n.kind = any($5::text[]))
                  order by n.created_at desc, n.id desc
                  limit $4`,
-                [me, cursor?.at ?? null, cursor?.id ?? null, PAGE + 1]
+                [me, cursor?.at ?? null, cursor?.id ?? null, PAGE + 1, kinds === null ? null : [...kinds]]
             );
 
             const page = rowsOf<NotificationRow>(rows);

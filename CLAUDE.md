@@ -4077,6 +4077,26 @@ landing-page concern, not an app one. Everything else starts in the shell, in th
 `effect` — that forms a cycle and the scheduler gives up with "Reactive flush did not settle".
 Use the updater form (`setX((current) => …)`, which does not subscribe) or `untrack`.
 
+**Every sub-page has a way back, and it is the top bar's.** A route's `meta.parent` names where it
+belongs, with `:param` placeholders filled from the match (`/app/games/:slug` for the create page), and
+`parentOf` resolves it. The top bar draws a back arrow for any route with a parent - on a phone it
+replaces the brand and the page's title sits beside it - except over a table, which carries its own,
+and on a page the sidebar lists as a destination at a width where the sidebar is showing. `leave`
+goes BACK through history when this visit has any (`shell.depth()`), and replaces to the parent only
+when somebody arrived by link, so the play header returns to the game page a player came from rather
+than to a hard-coded games list. The chat thread shows its own back whenever the list is not beside
+it, which includes a phone held sideways: that is rail posture with no rail and no top bar, and the
+thread was a page with no way out.
+
+**A phone grows a list and a wider screen turns its pages.** `pagingFor` picks `more` on a phone and
+`pages` from rail width up, and `visible` slices accordingly, so each list states only its page size.
+Turning a page scrolls the list's top back into view when it had scrolled away. A list somebody scans
+for one name (friends, group members, the group-add picker) grows a search box once it holds more than
+`SEARCH_FROM`, folding letterforms with the same `narrowed`/`ranked` global search uses. Notifications
+filter by the account-mute categories on the SERVER (`?notice=`), because filtering a keyset-paged list
+in the browser only filters the pages already fetched; the right panel reads `latest()`, the unfiltered
+head, so choosing Messages on the page does not empty the panel beside it.
+
 **Three list controls, one each.** `FilterBar` is a single-select row of chips over `Rail`, with an
 optional count on each - the games page counts its categories, the search page names its scopes.
 `Pagination` numbers pages from `@md` of its own width and says "4 of 12" below it, because a row of
@@ -4343,6 +4363,12 @@ stay true: the `/app` layout route is `lazy`, the app message catalogue is regis
 `locales/app-catalogue.ts` which only the shell and sign-in import, **`lib/guards.ts` imports
 `session.store.ts` dynamically**, and **`public-shell.component.azeroth` imports
 `connect-dialog.component.azeroth` dynamically**.
+
+**Badge, Tooltip and `lib/anchor.ts` are pinned into one chunk** (`hint`, a `codeSplitting` group in
+`vite.config.ts`, client build only - the SSR bundle stays one file). The landing needs all three, and
+the bundler groups modules by which lazy routes reach them: dropping one `IconButton` from `PageHeader`
+changed that set, split the three into separate chunks and pushed the landing 0.8 KB over its budget
+with no byte of new code in it.
 
 A fourth is in the same family for a different reason: **`lib/seal-state.ts` imports
 `lib/attestation.ts` dynamically**, because the curve code behind it is 14 KB gzip that most

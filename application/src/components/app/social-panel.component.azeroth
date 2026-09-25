@@ -26,7 +26,7 @@ export default component SocialPanel()
         .map((id) => people.byHandle(id))
         .filter((person): person is Person => person !== null);
 
-    derived recent = notifications.items().slice(0, 5);
+    derived recent = notifications.latest().slice(0, 5);
 
     const personOf = (item: Notification): Person | null => item.actor === undefined ? null : people.byHandle(item.actor);
 

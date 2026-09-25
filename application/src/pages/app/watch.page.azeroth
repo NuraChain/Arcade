@@ -8,15 +8,20 @@ import Button from '../../components/ui/button.component.azeroth';
 import EmptyState from '../../components/ui/empty-state.component.azeroth';
 import ErrorState from '../../components/ui/error-state.component.azeroth';
 import FilterBar from '../../components/ui/filter-bar.component.azeroth';
+import Pagination from '../../components/ui/pagination.component.azeroth';
 import Skeleton from '../../components/ui/skeleton.component.azeroth';
 import { GAMES, type GameId } from '../../data/games.ts';
 import { client } from '../../api.ts';
+import { pagingFor, visible } from '../../lib/pagination.ts';
 import { runtime } from '../../lib/runtime.ts';
+import { useDevice } from '../../stores/device.store.ts';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { usePeople } from '../../stores/people.store.ts';
 
 const REFRESH_MS = 15_000;
+
+const WATCH_PAGE = 12;
 
 export default component WatchPage()
 {
@@ -40,6 +45,14 @@ export default component WatchPage()
 
     derived rows = tables.data()?.tables ?? [];
 
+    const device = useDevice();
+
+    state page = 1;
+
+    derived paging = pagingFor(device.posture() === 'phone');
+
+    derived shown = visible(rows, WATCH_PAGE, page, paging);
+
     derived loading = tables.loading() && tables.data() === undefined;
 
     derived failed = tables.error() !== null && rows.length === 0;
@@ -56,7 +69,13 @@ export default component WatchPage()
 
     mount
     {
-        return runtime().clock.every(REFRESH_MS, () => void tables.refetch());
+        return runtime().clock.every(REFRESH_MS, () =>
+        {
+            if (document.visibilityState === 'visible' && navigator.onLine !== false)
+            {
+                void tables.refetch();
+            }
+        });
     }
 
     derived choices = [
@@ -77,7 +96,11 @@ export default component WatchPage()
         <PageHeader title={ locale.t('watch.page.title') } lead={ locale.t('watch.page.lead') } />
 
         <div class="flex flex-col gap-4">
-            <FilterBar items={ choices } value={ picked } label={ locale.t('watch.page.filter') } onChange={ (id) => picked = id } />
+            <FilterBar items={ choices } value={ picked } label={ locale.t('watch.page.filter') } onChange={ (id) =>
+            {
+                picked = id;
+                page = 1;
+            } } />
 
             <Show when={ loading }>
                 { () =>
@@ -109,7 +132,7 @@ export default component WatchPage()
             <Show when={ rows.length > 0 }>
                 { () =>
                     <ul class="flex flex-col divide-y divide-line overflow-hidden rounded-panel border border-line bg-field" aria-label={ locale.t('watch.page.title') }>
-                        <For each={ rows } key={ (row) => row.id } let={ row }>
+                        <For each={ shown } key={ (row) => row.id } let={ row }>
                             <li class="flex min-w-0 items-center gap-3 px-3 py-2.5">
                                 <GameIcon game={ row.game as GameId } class="h-10 w-10 shrink-0" />
                                 <span class="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -134,6 +157,7 @@ export default component WatchPage()
                     </ul>
                 }
             </Show>
+            <Pagination total={ rows.length } size={ WATCH_PAGE } page={ page } mode={ paging } label={ locale.t('watch.page.title') } onPage={ (next) => page = next } />
         </div>
     </Page>
 }

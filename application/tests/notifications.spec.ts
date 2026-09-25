@@ -145,6 +145,52 @@ describe('the notifications store', () =>
         expect(new Set(notifications.items().map((item) => item.id)).size).toBe(3);
     });
 
+    it('keeps the pages already read when one row in them is dismissed', async () =>
+    {
+        const notifications = useNotifications();
+
+        for (let index = 0; index < 7; index += 1)
+        {
+            server.notify({ kind: 'message', actor: 'sara.k', ref: {}, dedupeKey: `chat:c-${ index }` });
+        }
+        await notifications.refresh();
+        await notifications.more();
+
+        const deep = notifications.items()[4].id;
+        await notifications.dismiss(deep);
+
+        expect(notifications.items().length).toBe(5);
+        expect(notifications.items().some((item) => item.id === deep)).toBe(false);
+        expect(new Set(notifications.items().map((item) => item.id)).size).toBe(5);
+    });
+
+    it('asks the server for one kind, and pages within it', async () =>
+    {
+        const notifications = useNotifications();
+
+        for (let index = 0; index < 4; index += 1)
+        {
+            server.notify({ kind: 'message', actor: 'sara.k', ref: {}, dedupeKey: `chat:c-${ index }` });
+        }
+        server.notify({ kind: 'friend-request', actor: 'reza.t', dedupeKey: 'friend:reza.t' });
+        await notifications.refresh();
+        server.calls = [];
+
+        notifications.only('requests');
+        await settle();
+
+        expect(server.calls).toContain('notifications.list:requests');
+        expect(notifications.items().map((item) => item.kind)).toEqual(['friend-request']);
+        expect(notifications.latest().length).toBe(3);
+        expect(notifications.hasMore()).toBe(false);
+
+        notifications.only(null);
+        await settle();
+
+        expect(notifications.items().length).toBe(3);
+        expect(notifications.hasMore()).toBe(true);
+    });
+
     it('re-reads itself when the server says one of its own notifications moved, and not on other doorbells', async () =>
     {
         const notifications = useNotifications();

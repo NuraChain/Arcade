@@ -255,7 +255,7 @@ export interface TablePort
  */
 export interface NotifyPort
 {
-    page(me: string, cursor: string | undefined): Promise<NotificationPage>;
+    page(me: string, cursor: string | undefined, notice?: string): Promise<NotificationPage>;
     markRead(me: string, id: string): Promise<void>;
     markAllRead(me: string): Promise<void>;
     dismiss(me: string, id: string): Promise<void>;

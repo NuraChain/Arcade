@@ -1,4 +1,4 @@
-import { Link, type Child } from 'azerothjs';
+import { Link, useNavigate, type Child } from 'azerothjs';
 
 import Rail from '../ui/rail.component.azeroth';
 import GameIcon from './game-icon.component.azeroth';
@@ -11,10 +11,15 @@ import { useConnection } from '../../stores/connection.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import type { TableSummary } from '../../api.ts';
 import { copyText } from '../../lib/clipboard.ts';
+import { leave, useShell } from '../../stores/shell.store.ts';
 
 export default component PlayHeader(props: { table: TableSummary; others: TableSummary[]; tools?: Child })
 {
     const locale = useLocale();
+    const shell = useShell();
+    const { back, replace } = useNavigate();
+
+    const goBack = (): void => leave({ back, replace }, shell.depth(), '/app/games');
 
     const copyCode = (): void =>
     {
@@ -35,7 +40,7 @@ export default component PlayHeader(props: { table: TableSummary; others: TableS
     <header class="@container min-w-0">
         <div class="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
             <div class="flex min-w-0 flex-1 items-center gap-3">
-                <IconButton icon="back" label={ locale.t('app.nav.back') } to="/app/games" flip class="shrink-0" />
+                <IconButton icon="back" label={ locale.t('app.nav.back') } onClick={ goBack } flip class="shrink-0" />
                 <GameIcon game={ props.table.game as GameId } class="h-10 w-10 shrink-0" />
                 <div class="min-w-0 flex-1">
                     <h1 class="truncate text-ui-xl font-bold text-text">{ nameOf(props.table.game) }</h1>

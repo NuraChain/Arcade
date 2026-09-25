@@ -19,14 +19,14 @@ export default component CreateGamePage()
 
     useHead({ title: () => locale.t('create.title') });
 
-    <Page width="narrow" label={ locale.t('create.title') } parent={ game === null ? undefined : `/app/games/${ game.slug }` }>
+    <Page width="narrow" label={ locale.t('create.title') }>
         <Show
             when={ game !== null }
             fallback={ <EmptyState icon="games" title={ locale.t('game.notFound') } action={ locale.t('app.nav.games') } to="/app/games" /> }
         >
             { () =>
                 <div class="flex flex-col gap-6">
-                    <PageHeader eyebrow={ locale.t(game!.nameKey) } title={ locale.t('create.title') } lead={ locale.t('create.lead') } back={ `/app/games/${ game!.slug }` } flush />
+                    <PageHeader eyebrow={ locale.t(game!.nameKey) } title={ locale.t('create.title') } lead={ locale.t('create.lead') } flush />
                     <Show
                         when={ catalogue.loading() || (game !== null && catalogue.playable(game.id)) }
                         fallback={ <EmptyState icon="games" title={ locale.t('games.soon') } lead={ locale.t('games.soonLead') } action={ locale.t('app.nav.games') } to="/app/games" /> }

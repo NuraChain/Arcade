@@ -1,17 +1,9 @@
-import type { Child, NavigateTarget } from 'azerothjs';
+import type { Child } from 'azerothjs';
 
-import { useLocale } from '../../stores/locale.store.ts';
-import IconButton from '../ui/icon-button.component.azeroth';
-
-export default component PageHeader(props: { title: string; lead?: string; eyebrow?: string; actions?: Child; flush?: boolean; back?: NavigateTarget })
+export default component PageHeader(props: { title: string; lead?: string; eyebrow?: string; actions?: Child; flush?: boolean })
 {
-    const locale = useLocale();
-
     <header class={ [ 'flex flex-col gap-3 @2xl:flex-row @2xl:items-end @2xl:justify-between', props.flush === true ? '' : 'pb-6' ].filter(Boolean).join(' ') }>
         <div class="flex min-w-0 flex-col gap-2">
-            <Show when={ props.back !== undefined }>
-                { () => <IconButton icon="back" label={ locale.t('app.nav.back') } flip to={ props.back! } class="-ms-2.5 mb-1 self-start" /> }
-            </Show>
             <Show when={ props.eyebrow !== undefined }>
                 { () => <p class="label -mb-1 text-ui-xs text-faint">{ props.eyebrow }</p> }
             </Show>

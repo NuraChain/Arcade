@@ -218,6 +218,7 @@ export const social: Pick<Dictionary, keyof typeof reference> = {
 
     'groups.title': 'گروه‌ها',
     'groups.members': 'اعضا',
+    'groups.searchMembers': 'جست‌وجوی اعضا',
     'groups.playTogether': 'با هم بازی کنیم',
     'groups.tooFew': 'این گروه هنوز برای آن بازی کوچک است. کسی را اضافه کن، یا از صفحهٔ بازی‌ها میز باز کن.',
     'groups.chat': 'گفت‌وگوی گروه',
@@ -276,6 +277,14 @@ export const social: Pick<Dictionary, keyof typeof reference> = {
     'groups.ownerLeaving': 'گروه به قدیمی‌ترین عضو می‌رسد.',
 
     'notifications.lead': 'هر چیزی که منتظر جواب است.',
+    'notifications.filter': 'نمایش',
+    'notifications.kind.all': 'همه',
+    'notifications.kind.invites': 'دعوت‌ها',
+    'notifications.kind.requests': 'درخواست‌ها',
+    'notifications.kind.messages': 'پیام‌ها',
+    'notifications.kind.groups': 'گروه‌ها',
+    'notifications.kind.turns': 'نوبت‌ها',
+    'notifications.emptyKind': 'از این نوع چیزی نیست.',
     'notifications.markAll': 'همه خوانده شد',
     'notifications.empty': 'چیز تازه‌ای نیست.',
     'notifications.emptyLead': 'دعوت‌ها، درخواست‌ها و نتیجه‌ها اینجا می‌آیند.',

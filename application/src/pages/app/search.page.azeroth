@@ -22,6 +22,8 @@ import { useLocale } from '../../stores/locale.store.ts';
 import { useSearch, SEARCH_SCOPES, type SearchScope } from '../../stores/search.store.ts';
 import { useSocial } from '../../stores/social.store.ts';
 import Panel from '../../components/ui/panel.component.azeroth';
+import { pagingFor, visible } from '../../lib/pagination.ts';
+import { useDevice } from '../../stores/device.store.ts';
 
 const PEOPLE_PAGE = 8;
 const MESSAGE_PAGE = 10;
@@ -53,6 +55,9 @@ export default component SearchPage()
     const whereOf = (conversationId: string): Conversation => chat.conversation(conversationId) ?? NOWHERE;
     const social = useSocial();
     const people = usePeople();
+    const device = useDevice();
+
+    derived paging = pagingFor(device.posture() === 'phone');
     const { navigate } = useNavigate();
 
     const asked = useQuery();
@@ -161,7 +166,7 @@ export default component SearchPage()
                                 <section>
                                     <SectionHeading title={ locale.t('search.scope.people') } />
                                     <ul class="flex flex-col divide-y divide-line rounded-panel border border-line bg-field px-2" aria-label={ locale.t('search.scope.people') }>
-                                        <For each={ results.people.slice(0, peoplePage * PEOPLE_PAGE) } key={ (person) => person.id } let={ person }>
+                                        <For each={ visible(results.people, PEOPLE_PAGE, peoplePage, paging) } key={ (person) => person.id } let={ person }>
                                             <li>
                                                 <FriendRow person={ person } subtitle={ `@${ person.handle }` } />
                                             </li>
@@ -171,7 +176,7 @@ export default component SearchPage()
                                         total={ results.people.length }
                                         size={ PEOPLE_PAGE }
                                         page={ peoplePage }
-                                        mode="more"
+                                        mode={ paging }
                                         label={ locale.t('search.scope.people') }
                                         onPage={ (page) => peoplePage = page }
                                     />
@@ -226,7 +231,7 @@ export default component SearchPage()
                                 <section>
                                     <SectionHeading title={ locale.t('search.scope.chats') } />
                                     <ul class="flex flex-col divide-y divide-line rounded-panel border border-line bg-field px-2" aria-label={ locale.t('search.scope.chats') }>
-                                        <For each={ results.messages.slice(0, messagePage * MESSAGE_PAGE) } key={ (message) => message.id } let={ message }>
+                                        <For each={ visible(results.messages, MESSAGE_PAGE, messagePage, paging) } key={ (message) => message.id } let={ message }>
                                             <li>
                                                 <button
                                                     type="button"
@@ -247,7 +252,7 @@ export default component SearchPage()
                                         total={ results.messages.length }
                                         size={ MESSAGE_PAGE }
                                         page={ messagePage }
-                                        mode="more"
+                                        mode={ paging }
                                         label={ locale.t('search.scope.chats') }
                                         onPage={ (page) => messagePage = page }
                                     />

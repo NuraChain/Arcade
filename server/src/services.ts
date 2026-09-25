@@ -13,6 +13,7 @@ import { createRecoveryService } from './domains/device/recovery-service.ts';
 import { createDeviceService, type DeviceRow } from './domains/device/service.ts';
 import { createGroupService, type GroupRow } from './domains/group/service.ts';
 import { createNotifyService, type NotificationRow } from './domains/notify/service.ts';
+import { isNotice, NOTICE_OF } from './domains/notify/notices.ts';
 import { sendPush, type VapidKeys } from './domains/notify/push.ts';
 import { createAchieveService } from './domains/achieve/service.ts';
 import { endingOf } from './domains/match/declare.ts';
@@ -93,6 +94,8 @@ export interface Services extends Ports
 const TURN_TTL_SECONDS = 3600;
 
 const PUSH_AT_ONCE = 64;
+
+const WATCHABLE_MAX = 48;
 
 export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteListener): Services
 {
@@ -2016,7 +2019,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
 
             async watchable(me, game)
             {
-                const rows = await table.watchable(me, game, 12);
+                const rows = await table.watchable(me, game, WATCHABLE_MAX);
 
                 return {
                     tables: rows.map((row) => ({
@@ -2032,9 +2035,12 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         },
 
         notify: {
-            async page(me, cursor)
+            async page(me, cursor, notice)
             {
-                const page = await notify.page(me, decodeCursor(cursor));
+                const kinds = notice !== undefined && isNotice(notice)
+                    ? Object.keys(NOTICE_OF).filter((kind) => NOTICE_OF[kind] === notice)
+                    : null;
+                const page = await notify.page(me, decodeCursor(cursor), kinds);
                 const oldest = page.items[page.items.length - 1];
 
                 return {

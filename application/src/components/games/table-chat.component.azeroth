@@ -28,6 +28,7 @@ import { useToasts } from '../../stores/toasts.store.ts';
 import { useVoice, type VoicePerson } from '../../stores/voice.store.ts';
 import type { MessageKey } from '../../locales/en.ts';
 import Avatar from '../ui/avatar.component.azeroth';
+import Badge from '../ui/badge.component.azeroth';
 import Button from '../ui/button.component.azeroth';
 import Icon from '../../icons/icon.component.azeroth';
 import IconButton from '../ui/icon-button.component.azeroth';
@@ -510,7 +511,7 @@ export default component TableChat(props: {
                                 }
                             </Show>
                             <Show when={ row.timeouts > 0 }>
-                                { () => <span class="shrink-0 rounded-full bg-danger/15 px-2 py-0.5 text-ui-2xs font-semibold text-danger">{ locale.plural('match.missed', row.timeouts) }</span> }
+                                { () => <Badge dot text={ locale.plural('match.missed', row.timeouts) } tone="danger" /> }
                             </Show>
                             <Show when={ row.home !== undefined }>
                                 { () =>

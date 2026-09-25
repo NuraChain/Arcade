@@ -11,6 +11,7 @@ import Avatar from '../ui/avatar.component.azeroth';
 import EmptyState from '../ui/empty-state.component.azeroth';
 import IconButton from '../ui/icon-button.component.azeroth';
 import SearchInput from '../ui/search-input.component.azeroth';
+import { narrowed } from '../../services/search.service.ts';
 import { attempt } from '../../lib/attempt.ts';
 
 export default component InviteSheet(props: OverlayProps & { tableId: string })
@@ -35,11 +36,9 @@ export default component InviteSheet(props: OverlayProps & { tableId: string })
         const taken = new Set((table?.chairs ?? [])
             .flatMap((chair) => [chair.who, chair.invited])
             .filter((handle): handle is string => handle !== undefined));
-        const needle = query.trim().toLowerCase();
-        const found = social.friends()
+        const found = narrowed(social.friends()
             .map((handle) => people.byHandle(handle))
-            .filter((person): person is Person => person !== null && !taken.has(person.id))
-            .filter((person) => needle === '' || person.displayName.toLowerCase().includes(needle) || person.handle.includes(needle));
+            .filter((person): person is Person => person !== null && !taken.has(person.id)), query, (person) => [person.displayName, person.handle]);
         const rank = (person: Person): number => (presence.isOnline(person.id) ? 0 : 1);
         return found.sort((a, b) => rank(a) - rank(b));
     })();

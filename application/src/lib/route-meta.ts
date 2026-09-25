@@ -23,6 +23,16 @@ export function routeMeta(match: RouteMatch | null): RouteMeta
     return meta === undefined ? {} : (meta as RouteMeta);
 }
 
+export function parentOf(match: RouteMatch | null): string | undefined
+{
+    const parent = routeMeta(match).parent;
+    if (parent === undefined || match === null)
+    {
+        return parent;
+    }
+    return parent.replace(/:(\w+)/g, (whole, name: string) => match.params[name] === undefined ? whole : encodeURIComponent(match.params[name]));
+}
+
 export function defineMeta(meta: RouteMeta): Record<string, unknown>
 {
     return meta as Record<string, unknown>;

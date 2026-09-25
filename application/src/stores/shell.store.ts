@@ -1,5 +1,21 @@
 import { createStore, createSignal, type Getter } from 'azerothjs';
 
+export interface Leaving
+{
+    back(): void;
+    replace(to: string): void;
+}
+
+export function leave(go: Leaving, depth: number, parent: string | undefined): void
+{
+    if (depth > 0)
+    {
+        go.back();
+        return;
+    }
+    go.replace(parent ?? '/app');
+}
+
 export interface ShellApi
 {
     depth: Getter<number>;

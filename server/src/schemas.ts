@@ -1977,4 +1977,6 @@ export const conversationRef = object({ id: string() });
 /** The keyset cursor, opaque to the client: the last row of the page it already has. */
 export const cursorQuery = object({ cursor: string().optional() });
 
+export const notificationQuery = object({ cursor: string().optional(), notice: string({ max: 16 }).optional() });
+
 export const threadQuery = object({ cursor: string().optional(), limit: string({ max: 3 }).optional() });

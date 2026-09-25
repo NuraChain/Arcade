@@ -10,6 +10,8 @@ import { useSocial } from '../../stores/social.store.ts';
 import { useToasts } from '../../stores/toasts.store.ts';
 import Avatar from '../ui/avatar.component.azeroth';
 import EmptyState from '../ui/empty-state.component.azeroth';
+import SearchInput from '../ui/search-input.component.azeroth';
+import { narrowed, SEARCH_FROM } from '../../services/search.service.ts';
 
 /**
  * Who can be brought into a group: the people this account has added, minus whoever is already
@@ -30,12 +32,15 @@ export default component GroupAdd(props: OverlayProps & { group: GroupSummary })
     const people = usePeople();
 
     state pending = '';
+    state query = '';
 
-    derived candidates = social.friends()
+    derived everyone = social.friends()
         .filter((handle) => !props.group.members.includes(handle))
         .map((handle) => people.byHandle(handle))
         .filter((person): person is Person => person !== null)
         .sort((a, b) => (presence.isOnline(a.id) ? 0 : 1) - (presence.isOnline(b.id) ? 0 : 1));
+
+    derived candidates = narrowed(everyone, query, (person) => [person.displayName, person.handle]);
 
     const add = async (person: Person): Promise<void> =>
     {
@@ -66,9 +71,13 @@ export default component GroupAdd(props: OverlayProps & { group: GroupSummary })
             <p class="mt-2 text-ui-base text-muted">{ locale.t('groups.addLead') }</p>
         </div>
 
+        <Show when={ everyone.length > SEARCH_FROM }>
+            { () => <SearchInput value={ query } onInput={ (value) => query = value } placeholder={ locale.t('create.search') } label={ locale.t('create.search') } /> }
+        </Show>
+
         <Show
             when={ candidates.length > 0 }
-            fallback={ <EmptyState icon="people" title={ locale.t('groups.addNone') } class="py-8" /> }
+            fallback={ <EmptyState icon="people" title={ everyone.length > 0 ? locale.t('search.empty', { query: query.trim() }) : locale.t('groups.addNone') } class="py-8" /> }
         >
             { () =>
                 <ul class="flex flex-col gap-1" aria-label={ locale.t('groups.add') }>

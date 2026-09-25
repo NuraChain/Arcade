@@ -3,12 +3,12 @@ import { untrack, useMatch, useNavigate, useRoute, type Child } from 'azerothjs'
 import Icon from '../../icons/icon.component.azeroth';
 import { attachGestures, PULL_ARM } from '../../lib/gestures.ts';
 import { haptic } from '../../lib/haptics.ts';
-import { routeMeta } from '../../lib/route-meta.ts';
+import { parentOf } from '../../lib/route-meta.ts';
 import { runtime } from '../../lib/runtime.ts';
 import { scrollMemory } from '../../lib/scroll-memory.ts';
 import { useDevice } from '../../stores/device.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
-import { useShell } from '../../stores/shell.store.ts';
+import { leave, useShell } from '../../stores/shell.store.ts';
 import Spinner from '../ui/spinner.component.azeroth';
 
 /**
@@ -37,7 +37,7 @@ const PAGE_WIDTH: Record<PageWidth, string> = {
     full: ''
 };
 
-export default component Page(props: { children?: Child; padded?: boolean; width?: PageWidth; fill?: boolean; class?: string; label?: string; parent?: string; onRefresh?: () => void })
+export default component Page(props: { children?: Child; padded?: boolean; width?: PageWidth; fill?: boolean; class?: string; label?: string; onRefresh?: () => void })
 {
     const route = useRoute();
     const match = useMatch();
@@ -82,9 +82,7 @@ export default component Page(props: { children?: Child; padded?: boolean; width
         depth = root?.scrollTop ?? depth;
     };
 
-    derived meta = routeMeta(match());
-
-    derived parent = props.parent ?? meta.parent;
+    derived parent = parentOf(match());
 
     derived leaving = parent !== undefined || shell.depth() > 0;
 
@@ -106,12 +104,7 @@ export default component Page(props: { children?: Child; padded?: boolean; width
     const exit = (): void =>
     {
         haptic('tick');
-        if (shell.depth() > 0)
-        {
-            back();
-            return;
-        }
-        replace(parent ?? '/app');
+        leave({ back, replace }, shell.depth(), parent);
     };
 
     mount

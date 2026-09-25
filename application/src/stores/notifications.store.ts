@@ -1,12 +1,14 @@
-import { createStore, createResource, createSignal, untrack, type Getter } from 'azerothjs';
+import { createStore, createMemo, createResource, createSignal, untrack, type Getter } from 'azerothjs';
 
 import { client, type Notification } from '../api.ts';
+import type { Notice } from '../../../server/src/domains/notify/notices.ts';
 import { useAccount } from './account.store.ts';
 import { useRealtime } from './realtime.store.ts';
 
 export interface NotificationsApi
 {
     items: Getter<Notification[]>;
+    latest: Getter<Notification[]>;
     unread: Getter<number>;
     loading: Getter<boolean>;
     failed: Getter<unknown>;
@@ -14,6 +16,9 @@ export interface NotificationsApi
     /** Whether there is another page behind the one already held. */
     hasMore: Getter<boolean>;
     more(): Promise<void>;
+
+    notice: Getter<Notice | null>;
+    only(notice: Notice | null): void;
 
     markRead(id: string): Promise<void>;
     markAllRead(): Promise<void>;
@@ -45,8 +50,27 @@ export const useNotifications = createStore((): NotificationsApi =>
 
     const [older, setOlder] = createSignal<Notification[]>([]);
     const [tailCursor, setTailCursor] = createSignal<string | undefined>(undefined);
+    const [notice, setNotice] = createSignal<Notice | null>(null);
 
-    const first = createResource(who, () => client.notifications.list({ query: {} }), { name: 'notifications.list' });
+    const asked = (): { notice?: Notice } =>
+    {
+        const kind = untrack(notice);
+        return kind === null ? {} : { notice: kind };
+    };
+
+    const key = createMemo(() => (who() === null ? null : `${ who() }:${ notice() ?? '' }`));
+
+    const first = createResource(
+        key,
+        () => client.notifications.list({ query: asked() }),
+        { name: 'notifications.list' }
+    );
+
+    const everything = createResource(
+        createMemo(() => (notice() === null ? null : who())),
+        () => client.notifications.list({ query: {} }),
+        { name: 'notifications.latest' }
+    );
 
     /** Where the next page starts: the head's cursor until `more` has run, then the tail's. */
     const nextCursor = (): string | undefined => (older().length === 0 ? first.data()?.cursor : tailCursor());
@@ -73,11 +97,23 @@ export const useNotifications = createStore((): NotificationsApi =>
     {
         setOlder([]);
         setTailCursor(undefined);
-        await first.refetch();
+        await Promise.all([first.refetch(), untrack(notice) === null ? undefined : everything.refetch()]);
+    });
+
+    const keep = (change: (rows: Notification[]) => Notification[]): Promise<void> => queue(async () =>
+    {
+        setOlder(change(untrack(older)));
+        await Promise.all([first.refetch(), untrack(notice) === null ? undefined : everything.refetch()]);
     });
 
     return {
-        items: () => [...(first.data()?.items ?? []), ...older()],
+        items: () =>
+        {
+            const head = first.data()?.items ?? [];
+            const seen = new Set(head.map((row) => row.id));
+            return [...head, ...older().filter((row) => !seen.has(row.id))];
+        },
+        latest: () => (notice() === null ? first.data()?.items : everything.data()?.items) ?? [],
         unread: () => first.data()?.unread ?? 0,
         loading: () => first.loading(),
         failed: () => first.error(),
@@ -91,7 +127,7 @@ export const useNotifications = createStore((): NotificationsApi =>
             {
                 return;
             }
-            const page = await client.notifications.list({ query: { cursor } });
+            const page = await client.notifications.list({ query: { cursor, ...asked() } });
             setOlder([...untrack(older), ...page.items]);
             setTailCursor(page.hasMore ? page.cursor : undefined);
         }),
@@ -99,22 +135,35 @@ export const useNotifications = createStore((): NotificationsApi =>
         async markRead(id)
         {
             await client.notifications.read({ params: { id } });
-            await revalidate();
+            await keep((rows) => rows.map((row) => (row.id === id ? { ...row, read: true } : row)));
         },
 
         async markAllRead()
         {
             await client.notifications.readAll();
-            await revalidate();
+            await keep((rows) => rows.map((row) => ({ ...row, read: true })));
         },
 
         async dismiss(id)
         {
             await client.notifications.dismiss({ params: { id } });
-            await revalidate();
+            await keep((rows) => rows.filter((row) => row.id !== id));
         },
 
         refresh: revalidate,
+
+        notice,
+
+        only(kind)
+        {
+            if (kind === untrack(notice))
+            {
+                return;
+            }
+            setOlder([]);
+            setTailCursor(undefined);
+            setNotice(kind);
+        },
 
         /**
          * Both doorbells ring this.
@@ -129,7 +178,7 @@ export const useNotifications = createStore((): NotificationsApi =>
             {
                 if (scope === 'me' && (id === undefined || id === 'notifications'))
                 {
-                    void revalidate().catch(() => undefined);
+                    void (id === undefined ? revalidate() : keep((rows) => rows)).catch(() => undefined);
                 }
             });
         },
@@ -140,6 +189,7 @@ export const useNotifications = createStore((): NotificationsApi =>
         {
             setOlder([]);
             setTailCursor(undefined);
+            setNotice(null);
             inFlight = Promise.resolve();
             void first.refetch();
         }
