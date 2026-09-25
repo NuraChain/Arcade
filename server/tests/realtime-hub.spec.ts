@@ -186,7 +186,7 @@ describe('binding', () =>
         const fourth = await connect('alex');
 
         expect(fourth.wire.closed).toEqual({ code: 4429, reason: 'Too many connections' });
-        expect(fourth.bound, 'the gateway would go on dispatching a refused socket's buffered frames').toBe(false);
+        expect(fourth.bound, 'the gateway would go on dispatching the buffered frames of a refused socket').toBe(false);
         expect(first.bound).toBe(true);
         expect(first.wire.closed).toBeNull();
         expect(world.hub.size()).toBe(3);
