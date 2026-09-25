@@ -15,7 +15,6 @@ import { User } from './user.entity.ts';
  */
 @Check('sessions_token_hash_shape', `token_hash ~ '^[0-9a-f]{64}$'`)
 @Index('sessions_device_idx', ['deviceId'], { where: `revoked_at is null` })
-@Index('sessions_live_idx', ['tokenHash'], { where: `revoked_at is null` })
 @Index('sessions_user_id_idx', ['userId'])
 @Entity('sessions')
 export class Session

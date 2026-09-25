@@ -37,6 +37,7 @@ export type TableStatus = 'open' | 'closed';
 @Check('tables_seats_range', `seats between 2 and 9`)
 @Check('tables_status_known', `status in ('open', 'closed')`)
 @Index('tables_code', ['code'], { unique: true })
+@Index('tables_host', ['hostId'])
 @Entity('tables')
 export class Table
 {

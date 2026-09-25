@@ -14,6 +14,7 @@ export type RequestOutcome = 'accepted' | 'declined' | 'withdrawn';
 @Check('friend_requests_not_self', `from_user <> to_user`)
 @Check('friend_requests_outcome_known', `outcome is null or outcome in ('accepted', 'declined', 'withdrawn')`)
 @Index('friend_requests_inbox', ['toUser'], { where: `answered_at is null` })
+@Index('friend_requests_outbox', ['fromUser'], { where: `answered_at is null` })
 @Entity('friend_requests')
 export class FriendRequest
 {

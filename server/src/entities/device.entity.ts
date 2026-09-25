@@ -21,6 +21,7 @@ export type Attestation = 'wallet' | 'contract' | 'server';
 @Check('devices_attested_known', `attested in ('wallet', 'contract', 'server')`)
 @Check('devices_id_shape', `id ~ '^[A-Za-z0-9_-]{22}$'`)
 @Index('devices_user_live', ['userId', 'createdAt'], { where: `revoked_at is null` })
+@Index('devices_user', ['userId'])
 @Entity('devices')
 export class Device
 {

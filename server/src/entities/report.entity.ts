@@ -1,4 +1,4 @@
-import { Check, Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
+import { Check, Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
 import { Message } from './message.entity.ts';
 import { User } from './user.entity.ts';
 
@@ -24,6 +24,7 @@ export type ReportStatus = 'received' | 'reviewed' | 'actioned';
 @Check('reports_message_has_disclosure', `message_id is null or disclosed is not null`)
 @Check('reports_not_self', `reporter <> against`)
 @Check('reports_status_known', `status in ('received', 'reviewed', 'actioned')`)
+@Index('reports_mine', ['reporter'])
 @Entity('reports')
 export class Report
 {

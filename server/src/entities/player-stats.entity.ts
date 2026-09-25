@@ -1,4 +1,4 @@
-import { Check, Column, Entity, JoinColumn, ManyToOne, PrimaryColumn, UpdateDateColumn } from 'typeorm';
+import { Check, Column, Entity, Index, JoinColumn, ManyToOne, PrimaryColumn, UpdateDateColumn } from 'typeorm';
 import { Game } from './game.entity.ts';
 import { User } from './user.entity.ts';
 
@@ -21,6 +21,7 @@ import { User } from './user.entity.ts';
 @Check('player_stats_peak_reached', `peak_rating >= rating or played = 0`)
 @Check('player_stats_streaks', `streak >= 0 and best_streak >= streak`)
 @Check('player_stats_tallies', `jsonb_typeof(tallies) = 'object' and xp >= 0`)
+@Index('player_stats_board', ['game', 'xp'])
 @Entity('player_stats')
 export class PlayerStats
 {
