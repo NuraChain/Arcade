@@ -262,6 +262,25 @@ describe('page gestures', () =>
         release();
     });
 
+    it('makes a scroll wait on no script unless it could turn into a pull or a back swipe', () =>
+    {
+        const page = document.createElement('div');
+        Object.defineProperty(page, 'scrollTop', { value: 240, configurable: true });
+        Object.defineProperty(page, 'clientWidth', { value: 400, configurable: true });
+        document.body.append(page);
+        const added = vi.spyOn(page, 'addEventListener');
+        const release = attachGestures(page, { rtl: () => false, refresh: vi.fn(), back: vi.fn() });
+        const blocking = (): number => added.mock.calls.filter(([type, , options]) => type === 'touchmove' && (options as AddEventListenerOptions)?.passive === false).length;
+
+        touch(page, 'touchstart', 200, 300);
+        expect(blocking(), 'a mid-list scroll waited on a listener that can never act').toBe(0);
+        touch(page, 'touchend', 200, 300);
+
+        touch(page, 'touchstart', 4, 300);
+        expect(blocking()).toBe(1);
+        release();
+    });
+
     it('goes back on a drag from the leading edge, and mirrors that edge under rtl', () =>
     {
         const page = document.createElement('div');

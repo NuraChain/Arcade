@@ -629,7 +629,7 @@ export default component PlayPage()
                 <div class="flex min-h-0 flex-1 gap-4">
                     <div
                         ref={ (element) => arena = element }
-                        class={ () => [ 'flex min-h-0 min-w-0 flex-1 flex-col gap-2 bg-void transition-[padding] duration-200', sheetVisible && !sideways && !chatWide ? 'pb-[48dvh]' : '', cardOpen ? (chatWide ? 'pe-[31.5rem]' : 'pe-[24.5rem]') : '' ].filter(Boolean).join(' ') }
+                        class={ () => [ 'flex min-h-0 min-w-0 flex-1 flex-col gap-2 bg-void', sheetVisible && !sideways && !chatWide ? 'pb-[48dvh]' : '', cardOpen ? (chatWide ? 'pe-[31.5rem]' : 'pe-[24.5rem]') : '' ].filter(Boolean).join(' ') }
                     >
                         <PlayHeader
                             table={ table! }

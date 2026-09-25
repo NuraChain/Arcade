@@ -61,6 +61,26 @@ export function attachGestures(element: HTMLElement, hooks: GestureHooks): () =>
         lastMain = 0;
         speed = 0;
         mode = 'idle';
+
+        const fromEdge = hooks.rtl() ? startX >= element.clientWidth - BACK_EDGE : startX <= BACK_EDGE;
+        const could = (hooks.back !== undefined && fromEdge) || (hooks.refresh !== undefined && element.scrollTop <= 0);
+
+        if (could && !watching)
+        {
+            watching = true;
+            element.addEventListener('touchmove', onMove, { passive: false });
+        }
+    };
+
+    let watching = false;
+
+    const unwatch = (): void =>
+    {
+        if (watching)
+        {
+            watching = false;
+            element.removeEventListener('touchmove', onMove);
+        }
     };
 
     const find = (event: TouchEvent): Touch | null =>
@@ -136,6 +156,7 @@ export function attachGestures(element: HTMLElement, hooks: GestureHooks): () =>
 
     const onEnd = (): void =>
     {
+        unwatch();
         const settled = mode;
         const stale = runtime().clock.now() - lastAt > 160;
         const flick = !stale && speed >= 0.5;
@@ -162,16 +183,21 @@ export function attachGestures(element: HTMLElement, hooks: GestureHooks): () =>
         }
     };
 
+    const cancel = (): void =>
+    {
+        unwatch();
+        reset();
+    };
+
     element.addEventListener('touchstart', onStart, { passive: true });
-    element.addEventListener('touchmove', onMove, { passive: false });
     element.addEventListener('touchend', onEnd, { passive: true });
-    element.addEventListener('touchcancel', reset, { passive: true });
+    element.addEventListener('touchcancel', cancel, { passive: true });
 
     return () =>
     {
+        unwatch();
         element.removeEventListener('touchstart', onStart);
-        element.removeEventListener('touchmove', onMove);
         element.removeEventListener('touchend', onEnd);
-        element.removeEventListener('touchcancel', reset);
+        element.removeEventListener('touchcancel', cancel);
     };
 }

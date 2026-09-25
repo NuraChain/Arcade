@@ -4482,6 +4482,19 @@ The client half of the same audits, each a thing that outlived what it belonged 
   files only, because the other pages share `index.html`.
 - **Hidden and offline tabs stop polling** the live counts and the watch list.
 - **Hokm's gather reads every card's box before it moves any**, instead of a read and a write per card.
+- **A scroll waits on no script unless it could become a gesture.** The pull-to-refresh and back-swipe
+  listener has to be non-passive to cancel the scroll, so it is attached only for a touch that starts
+  at the leading edge or on a list already at its top, and removed when that touch ends.
+- **The message hover toolbar is not built on a touch screen**, where it can never show - several
+  tooltip-wrapped buttons per message, hidden.
+- **The table no longer animates its padding when the chat sheet opens.** The stage is a size container,
+  so a 200ms padding transition re-laid-out the whole board on every frame; the sheet slides and the
+  board resizes once.
+- **The app catalogue is NOT split by language, and the reason is measured.** Loading Persian only for a
+  Persian reader takes about 18 KB off the lazy app catalogue, but the bundler re-partitions the chunks
+  the landing shares with it and the landing's initial set grows by 1.1 KB and two chunks - over its
+  60 KB budget. Neither a dynamic import of the Persian landing strings nor dropping the top-level
+  await changed that. The landing is the budget that matters.
 
 ## Mobile first, and what a wide-first layout hides
 

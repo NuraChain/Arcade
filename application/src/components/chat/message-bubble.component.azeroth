@@ -335,7 +335,7 @@ export default component MessageBubble(props: {
                             </span>
                         }
                     </Show>
-                    <Show when={ props.onActions !== undefined && locked === null }>
+                    <Show when={ props.onActions !== undefined && locked === null && !device.coarse() }>
                         { () =>
                             <div
                                 ref={ (element) => toolbar = element }
