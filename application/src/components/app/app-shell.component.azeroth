@@ -1,4 +1,6 @@
-import { Outlet, untrack, useHead, useMatch, useRoute, type MountNode } from 'azerothjs';
+import { Outlet, untrack, useHead, useMatch, useNavigate, useRoute, type MountNode } from 'azerothjs';
+
+import { startCues, type CuesHand } from '../../stores/cues-loader.ts';
 
 import '../../icons/all.ts';
 import '../../locales/app-catalogue.ts';
@@ -47,6 +49,9 @@ export default component AppShell(props: { children?: MountNode })
     const locale = useLocale();
     const route = useRoute();
     const match = useMatch();
+    const { navigate } = useNavigate();
+
+    const cues: CuesHand = { current: null };
 
     useHead({ titleTemplate: `%s · ${ locale.t('app.title') }` });
 
@@ -109,8 +114,12 @@ export default component AppShell(props: { children?: MountNode })
         ];
 
         void useDevices().look();
+
+        startCues(cues, navigate, stops);
+
         return () =>
         {
+            cues.current = null;
             for (const stop of [...stops].reverse())
             {
                 try

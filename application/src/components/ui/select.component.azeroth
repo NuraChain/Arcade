@@ -2,7 +2,6 @@ import { Portal } from 'azerothjs';
 
 import Icon from '../../icons/icon.component.azeroth';
 import { boxOf, place, viewportOf } from '../../lib/anchor.ts';
-import { useLocale } from '../../stores/locale.store.ts';
 
 export interface SelectOption
 {
@@ -22,8 +21,6 @@ export default component Select(props: {
     onChange: (value: string) => void;
 })
 {
-    const locale = useLocale();
-
     serial += 1;
     const id = `select-${ serial }`;
 

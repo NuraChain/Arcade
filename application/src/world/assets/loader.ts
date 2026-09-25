@@ -1,11 +1,11 @@
 import {
-    Material,
     Mesh,
     MeshBasicMaterial,
     Texture,
     type AnimationClip,
     type BufferGeometry,
     type Group,
+    type Material,
     type Object3D
 } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';

@@ -93,7 +93,7 @@ describe('PokerBoard', () =>
 
     it('offers fold and call when there is a bet to meet, and sends each as its verb', () =>
     {
-        const play = vi.spyOn(useBoard(), 'play').mockResolvedValue(undefined);
+        const play = vi.spyOn(useBoard(), 'play').mockResolvedValue('now');
         const { container } = renderTest(() => PokerBoard({ match: match({ toCall: 20 }) }) as Rendered);
 
         fire(button(container, 'Fold')!, 'click');
@@ -108,7 +108,10 @@ describe('PokerBoard', () =>
     it('puts the call in front of the reader at the press, and takes it back if the server refuses', async () =>
     {
         let answer: (outcome: 'stale') => void = () => undefined;
-        vi.spyOn(useBoard(), 'play').mockReturnValue(new Promise((resolve) => { answer = resolve; }));
+        vi.spyOn(useBoard(), 'play').mockReturnValue(new Promise((resolve) =>
+        {
+            answer = resolve;
+        }));
         const { container } = renderTest(() => PokerBoard({ match: match({ toCall: 20 }) }) as Rendered);
 
         fire(button(container, 'Call 20')!, 'click');
@@ -124,7 +127,7 @@ describe('PokerBoard', () =>
 
     it('raises to what the reader chose, and to the pot on the pot button', () =>
     {
-        const play = vi.spyOn(useBoard(), 'play').mockResolvedValue(undefined);
+        const play = vi.spyOn(useBoard(), 'play').mockResolvedValue('now');
         const { container } = renderTest(() => PokerBoard({
             match: match({ toCall: 20, minRaiseTo: 40, maxRaiseTo: 1500, pot: 50, seats: Array.from({ length: 6 }, (_, seat) => ({ seat, stack: 1500, bet: seat === 4 ? 20 : 0, folded: false, allIn: false, out: false })) })
         }) as Rendered);
@@ -143,7 +146,7 @@ describe('PokerBoard', () =>
 
     it('goes all in rather than raising when the whole stack is the only raise left', () =>
     {
-        const play = vi.spyOn(useBoard(), 'play').mockResolvedValue(undefined);
+        const play = vi.spyOn(useBoard(), 'play').mockResolvedValue('now');
         const { container } = renderTest(() => PokerBoard({ match: match({ toCall: 20, minRaiseTo: 300, maxRaiseTo: 300 }) }) as Rendered);
 
         fire(button(container, 'All in, 300')!, 'click');

@@ -84,7 +84,7 @@ describe('composing the registry write', () =>
 });
 
 const played = (game: string, played: number, won: number, rating: number): PersonRecord['games'][number] => ({
-    game, rating, peak: rating + 12, played, won, abandoned: 0, streak: 1, bestStreak: 3, tallies: { rolls: 40 }
+    game, rating, peak: rating + 12, played, won, abandoned: 0, streak: 1, bestStreak: 3, tallies: { rolls: 40 }, xp: rating * 8
 } as PersonRecord['games'][number]);
 
 const recordOf = (games: PersonRecord['games']): PersonRecord => ({

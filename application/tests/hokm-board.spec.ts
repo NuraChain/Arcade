@@ -302,7 +302,7 @@ describe('playing a card with a finger', () =>
     it('lifts the card on the first tap and plays it on the second, so a slip of the thumb costs nothing', () =>
     {
         useDevice().overrideCoarse(true);
-        const play = vi.spyOn(useBoard(), 'play').mockResolvedValue(undefined);
+        const play = vi.spyOn(useBoard(), 'play').mockResolvedValue('now');
         const { container } = renderTest(() => HokmBoard({ match: turn() }) as Rendered);
 
         fire(cardButton(container, 14), 'click');
@@ -319,7 +319,7 @@ describe('playing a card with a finger', () =>
     it('offers a button that plays the lifted card, and moves the lift when another card is tapped', () =>
     {
         useDevice().overrideCoarse(true);
-        const play = vi.spyOn(useBoard(), 'play').mockResolvedValue(undefined);
+        const play = vi.spyOn(useBoard(), 'play').mockResolvedValue('now');
         const { container } = renderTest(() => HokmBoard({ match: turn() }) as Rendered);
 
         fire(cardButton(container, 0), 'click');
@@ -337,7 +337,7 @@ describe('playing a card with a finger', () =>
     it('plays on the first click with a mouse, where a hover already lifts the card', () =>
     {
         useDevice().overrideCoarse(false);
-        const play = vi.spyOn(useBoard(), 'play').mockResolvedValue(undefined);
+        const play = vi.spyOn(useBoard(), 'play').mockResolvedValue('now');
         const { container } = renderTest(() => HokmBoard({ match: turn() }) as Rendered);
 
         fire(cardButton(container, 0), 'click');
@@ -384,7 +384,10 @@ describe('playing ahead of the server', () =>
         vi.spyOn(useBoard(), 'play').mockReturnValue(new Promise(() => undefined));
         const animate = vi.spyOn(Element.prototype, 'animate');
         const [current, setCurrent] = createSignal(turn());
-        const { container } = renderTest(() => HokmBoard({ get match() { return current(); } }) as Rendered);
+        const { container } = renderTest(() => HokmBoard({ get match()
+        {
+            return current();
+        } }) as Rendered);
 
         press(container, 14);
         setCurrent({ ...match({ phase: 'tricks', trump: 'spades', turn: 1, lead: 0, trick: [14], hand: [0, 30], plays: [] }, 0), rev: 4 });
@@ -428,7 +431,7 @@ describe('the game helpers', () =>
     it('lights the playable cards, and with the lighting off leaves every card at rest while an illegal one still refuses', () =>
     {
         useDevice().overrideCoarse(false);
-        const play = vi.spyOn(useBoard(), 'play').mockResolvedValue(undefined);
+        const play = vi.spyOn(useBoard(), 'play').mockResolvedValue('now');
         const { container } = renderTest(() => HokmBoard({ match: following() }) as Rendered);
 
         expect(cardButton(container, 38).dataset.legal).toBe('true');

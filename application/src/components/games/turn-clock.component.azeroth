@@ -38,11 +38,48 @@ export default component TurnClock(props: { remainingMs?: number; over: boolean;
     {
         sound = createSound(untrack(() => settings.settings().sound));
 
-        const stop = runtime().clock.every(1000, () => now = runtime().clock.now());
+        let stop: (() => void) | null = null;
+
+        const tick = (): void =>
+        {
+            now = runtime().clock.now();
+        };
+
+        const run = (): void =>
+        {
+            stop ??= runtime().clock.every(1000, tick);
+        };
+
+        const rest = (): void =>
+        {
+            stop?.();
+            stop = null;
+        };
+
+        if (typeof document === 'undefined' || document.visibilityState === 'visible')
+        {
+            run();
+        }
+
+        const watch = (): void =>
+        {
+            if (document.visibilityState === 'visible')
+            {
+                tick();
+                run();
+            }
+            else
+            {
+                rest();
+            }
+        };
+
+        document.addEventListener('visibilitychange', watch);
 
         return () =>
         {
-            stop();
+            document.removeEventListener('visibilitychange', watch);
+            rest();
             sound?.dispose();
             sound = null;
         };

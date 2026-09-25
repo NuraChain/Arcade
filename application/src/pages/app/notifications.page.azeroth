@@ -14,13 +14,11 @@ import { targetOf } from '../../lib/notifications.ts';
 import { runtime } from '../../lib/runtime.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useNotifications } from '../../stores/notifications.store.ts';
-import { usePresence } from '../../stores/presence.store.ts';
 
 export default component NotificationsPage()
 {
     const locale = useLocale();
     const notifications = useNotifications();
-    const presence = usePresence();
     const { navigate } = useNavigate();
 
     useHead({ title: () => locale.t('app.nav.notifications') });
@@ -65,7 +63,7 @@ export default component NotificationsPage()
         }
     };
 
-    <Page label={ locale.t('app.nav.notifications') } onRefresh={ () => presence.refresh() }>
+    <Page label={ locale.t('app.nav.notifications') } onRefresh={ () => void notifications.refresh() }>
         <PageHeader
             title={ locale.t('app.nav.notifications') }
             lead={ locale.t('notifications.lead') }

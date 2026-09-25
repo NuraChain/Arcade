@@ -312,7 +312,10 @@ describe('voice at a table', () =>
             getUserMedia: () => new Promise<MediaStream>((resolve) =>
             {
                 const held = { stopped: false };
-                const live = { stop: () => { held.stopped = true; } } as unknown as MediaStreamTrack;
+                const live = { stop: () =>
+                {
+                    held.stopped = true;
+                } } as unknown as MediaStreamTrack;
 
                 granted.push(held);
                 answers.push(() => resolve({ getTracks: () => [live], getAudioTracks: () => [live] } as unknown as MediaStream));

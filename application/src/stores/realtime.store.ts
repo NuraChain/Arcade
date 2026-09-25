@@ -573,6 +573,7 @@ export const useRealtime = createStore((): RealtimeApi =>
 
             if (document.visibilityState === 'hidden')
             {
+                active.send({ t: 'presence', state: 'away' });
                 cancelSleep = runtime().clock.after(IDLE_MS, () =>
                 {
                     cancelSleep = null;
@@ -581,6 +582,7 @@ export const useRealtime = createStore((): RealtimeApi =>
                 return;
             }
 
+            active.send({ t: 'presence', state: 'online' });
             resume();
         };
 

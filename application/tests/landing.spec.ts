@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { RouterProvider, createMemoryHistory, createRouter } from 'azerothjs';
+import { RouterProvider, createMemoryHistory, createRouter, type MountNode } from 'azerothjs';
 import { cleanup, fire, renderTest } from '@azerothjs/testing';
 
 import LandingGameCard from '../src/components/games/landing-game-card.component.azeroth';
@@ -17,7 +17,7 @@ const original = window.matchMedia;
 const routed = (build: () => unknown): HTMLElement =>
 {
     const router = createRouter({ routes: [{ path: '/', component: (): HTMLElement => document.createElement('div') }], history: createMemoryHistory('/'), scroll: false });
-    return renderTest(() => RouterProvider({ router, children: () => build() }) as Rendered).container;
+    return renderTest(() => RouterProvider({ router, children: () => build() as MountNode }) as Rendered).container;
 };
 
 const settle = async (): Promise<void> =>

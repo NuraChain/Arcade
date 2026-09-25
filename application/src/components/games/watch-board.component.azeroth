@@ -27,11 +27,14 @@ export default component WatchBoard(props: { watch: MatchWatch })
 
     state drawn = '';
 
+    state attempt = 0;
+
     derived game = props.watch.match.game;
 
     effect
     {
         const want = game;
+        void attempt;
         const load = BOARDS[want];
 
         if (load === undefined || want === untrack(() => drawn))
@@ -50,6 +53,12 @@ export default component WatchBoard(props: { watch: MatchWatch })
             drawn = want;
         }).catch(() => undefined);
     }
+
+    const retry = (): void =>
+    {
+        drawn = '';
+        attempt += 1;
+    };
 
     const MINUTE = 60;
 
@@ -85,7 +94,7 @@ export default component WatchBoard(props: { watch: MatchWatch })
                     title={ locale.t('match.cannotDraw') }
                     lead={ locale.t('match.cannotDrawLead') }
                     action={ locale.t('match.cannotDrawAction') }
-                    onAction={ () => window.location.reload() }
+                    onAction={ retry }
                     class="py-12"
                 />
             }

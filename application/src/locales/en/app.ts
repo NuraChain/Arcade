@@ -68,6 +68,12 @@ export const app = {
 
     'app.refreshing': 'Refreshing…',
 
+    'cue.chatBody': '{who} sent a message',
+    'cue.requestBody': '{who} wants to be your friend',
+    'cue.open': 'Open',
+    'cue.view': 'View',
+    'cue.requests': 'Requests',
+
     'overlay.handle': 'Drag down to close',
 
     'connection.offline': 'You’re offline. Live tables keep playing without you.',

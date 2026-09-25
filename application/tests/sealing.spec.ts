@@ -299,7 +299,7 @@ describe('what leaves the browser when somebody signs out', () =>
         const source = createApiSource();
 
         await source.post(said('something private'));
-        (await source.thread(THREAD, scope, new AbortController().signal)).messages;
+        await source.thread(THREAD, scope, new AbortController().signal);
 
         expect(source.archive(scope).map((one) => one.text)).toContain('something private');
 
@@ -318,7 +318,7 @@ describe('what leaves the browser when somebody signs out', () =>
         const source = createApiSource();
 
         await source.post(said('for alex only'));
-        (await source.thread(THREAD, scope, new AbortController().signal)).messages;
+        await source.thread(THREAD, scope, new AbortController().signal);
 
         // Belt to `forgetArchive`'s braces. If a source somehow outlives the account it was filled
         // for, it answers nothing rather than handing one person's messages to another.
@@ -331,7 +331,7 @@ describe('what leaves the browser when somebody signs out', () =>
         const source = createApiSource();
 
         await source.post(said('not for long'));
-        (await source.thread(THREAD, scope, new AbortController().signal)).messages;
+        await source.thread(THREAD, scope, new AbortController().signal);
 
         expect(source.archive(scope)).toHaveLength(1);
 
@@ -341,7 +341,7 @@ describe('what leaves the browser when somebody signs out', () =>
         server.messages[0].expiresAt = new Date(1_600_000_000_000).toISOString();
         forgetSigners();
 
-        (await source.thread(THREAD, scope, new AbortController().signal)).messages;
+        await source.thread(THREAD, scope, new AbortController().signal);
         expect(source.archive(scope)).toEqual([]);
     });
 });
@@ -467,7 +467,7 @@ describe('replies, reactions and deletions, all inside the seal', () =>
         await source.post(said('regrettable'));
         const id = server.messages[0].id;
 
-        (await source.thread(THREAD, scope, new AbortController().signal)).messages;
+        await source.thread(THREAD, scope, new AbortController().signal);
         expect(source.archive(scope).map((message) => message.text)).toContain('regrettable');
 
         await source.remove(THREAD, id);

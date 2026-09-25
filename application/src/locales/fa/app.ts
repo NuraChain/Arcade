@@ -71,6 +71,12 @@ export const app: Pick<Dictionary, keyof typeof reference> = {
 
     'app.refreshing': 'در حال تازه‌سازی…',
 
+    'cue.chatBody': '{who} پیامی فرستاد',
+    'cue.requestBody': '{who} می‌خواهد دوست تو باشد',
+    'cue.open': 'باز کردن',
+    'cue.view': 'دیدن',
+    'cue.requests': 'درخواست‌ها',
+
     'overlay.handle': 'برای بستن به پایین بکش',
 
     'connection.offline': 'آفلاین هستی. میزهای زنده بدون تو ادامه می‌دهند.',

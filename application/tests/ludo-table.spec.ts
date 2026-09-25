@@ -90,7 +90,7 @@ describe('the ludo table', () =>
     it('puts the die in the middle of the board when the reader can roll, and rolls when it is tapped', async () =>
     {
         const container = await show(ludo({}));
-        const roll = vi.spyOn(useBoard(), 'roll').mockResolvedValue(undefined);
+        const roll = vi.spyOn(useBoard(), 'roll').mockResolvedValue('now');
         const die = container.querySelector<HTMLButtonElement>('.board-stage .board-roll');
 
         expect(die?.getAttribute('aria-label')).toBe('Roll the dice');

@@ -90,7 +90,7 @@ export const LINGER_MS = 15_000;
 export const EDGES_TTL_MS = 60_000;
 
 /** Deltas inside one window collapse into one frame. */
-export const TICK_MS = 500;
+export const TICK_MS = 150;
 
 export const VIEWED_MAX = 4;
 

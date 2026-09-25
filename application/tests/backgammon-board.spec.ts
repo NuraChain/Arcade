@@ -140,7 +140,7 @@ describe('BackgammonBoard', () =>
 
     it('stages a whole turn one checker at a time, and sends it only when it is complete', () =>
     {
-        const play = vi.spyOn(useBoard(), 'play').mockResolvedValue(undefined);
+        const play = vi.spyOn(useBoard(), 'play').mockResolvedValue('now');
         const { container } = renderTest(() => BackgammonBoard({ match: match({}) }) as Rendered);
         const confirm = (): HTMLButtonElement => button(container, 'Play the move');
 
@@ -177,7 +177,10 @@ describe('BackgammonBoard', () =>
     it('keeps a half-staged turn through a re-read of the same board, and drops it once the board moves', () =>
     {
         const [current, setCurrent] = createSignal(match({}));
-        const { container } = renderTest(() => BackgammonBoard({ get match() { return current(); } }) as Rendered);
+        const { container } = renderTest(() => BackgammonBoard({ get match()
+        {
+            return current();
+        } }) as Rendered);
         const undo = (): HTMLButtonElement => button(container, 'Undo');
 
         fire(button(container, 'Move a checker from 13 to 7'), 'click');
@@ -190,7 +193,7 @@ describe('BackgammonBoard', () =>
 
     it('offers roll and a double before the dice are thrown, and sends each as its verb', () =>
     {
-        const play = vi.spyOn(useBoard(), 'play').mockResolvedValue(undefined);
+        const play = vi.spyOn(useBoard(), 'play').mockResolvedValue('now');
         const { container } = renderTest(() => BackgammonBoard({ match: match({ phase: 'roll', dice: [], doubling: true }) }) as Rendered);
 
         fire(button(container, 'Roll'), 'click');

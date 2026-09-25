@@ -372,8 +372,6 @@ export default component PlayPage()
 
     state boardFailed = false;
 
-    let failures = 0;
-
     const draw = (want: string): void =>
     {
         boardFailed = false;
@@ -396,8 +394,6 @@ export default component PlayPage()
             drawn = want;
         }).catch(() =>
         {
-            failures += 1;
-
             if (playing === want)
             {
                 boardFailed = true;
@@ -407,12 +403,6 @@ export default component PlayPage()
 
     const redraw = (): void =>
     {
-        if (failures > 1)
-        {
-            window.location.reload();
-            return;
-        }
-
         draw(playing);
     };
 
@@ -696,7 +686,7 @@ export default component PlayPage()
                                     title={ locale.t('match.cannotDraw') }
                                     lead={ locale.t('match.cannotDrawLead') }
                                     action={ locale.t('match.cannotDrawAction') }
-                                    onAction={ () => window.location.reload() }
+                                    onAction={ () => draw(playing) }
                                     class="py-12"
                                 />
                             }

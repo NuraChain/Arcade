@@ -191,13 +191,25 @@ export const useSocial = createStore((): SocialApi =>
 
     let inFlight: Promise<void> = Promise.resolve();
 
+    /**
+     * Re-reads the graph always, and the lazily-asked lists only when they were asked for.
+     *
+     * The directory and the suggestions are `want()`-gated reads; when they HAVE been asked for
+     * they must follow the graph, or a block would leave a person sitting in a directory already
+     * on screen.
+     */
     const revalidate = (): Promise<void> =>
     {
         inFlight = inFlight
             .catch(() => undefined)
             .then(async () =>
             {
-                await Promise.all([graph.refetch(), suggested.refetch(), directory.refetch()]);
+                const asks = untrack(wanted);
+                await Promise.all([
+                    graph.refetch(),
+                    ...(asks.people === true ? [directory.refetch()] : []),
+                    ...(asks.suggestions === true ? [suggested.refetch()] : [])
+                ]);
             });
         return inFlight;
     };

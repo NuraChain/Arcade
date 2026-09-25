@@ -457,7 +457,7 @@ export function createApiSource(): ChatSource
 
             do
             {
-                const answer = await client.chat.list(cursor === undefined ? {} : { query: { cursor } });
+                const answer = await client.chat.list({ query: cursor === undefined ? {} : { cursor } });
 
                 wires.push(...answer.conversations.filter((row) => !wires.some((held) => held.id === row.id)));
                 cursor = answer.cursor;
@@ -485,7 +485,7 @@ export function createApiSource(): ChatSource
             {
                 const wires: ChatMessage[] = [];
                 let cursor: string | undefined;
-                let earlier = false;
+                let earlier: boolean;
 
                 do
                 {

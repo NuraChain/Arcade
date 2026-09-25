@@ -105,7 +105,12 @@ export const ACK_MS = 3000;
 
 export const POLL_MS = 3000;
 
-type Answer = { match: MatchView; applied: 'now' | 'already' | 'stale'; events: readonly MatchEvent[] };
+interface Answer
+{
+    match: MatchView;
+    applied: 'now' | 'already' | 'stale';
+    events: readonly MatchEvent[];
+}
 
 export const useBoard = createStore((): BoardApi =>
 {
