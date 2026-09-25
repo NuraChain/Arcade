@@ -3977,6 +3977,13 @@ unprompted - so the product's answer to "why can nobody hear me" was a screen yo
 know about. `absent` gets the button, because enrolling is one step and it happens there; `waiting`
 gets a LINK to the devices page, because confirming needs a device that already holds keys or the
 recovery phrase, and a button that cannot finish the job is worse than a signpost to where it can.
+The banner is the house's two branch rules at once, and it broke both: it read `TEXT[gap!]` inside a
+branch guarded by `asking()`, and the text binding re-ran with `gap` already null in the tick before
+the branch went, so `locale.t(undefined)` fell through every lookup into the plural path and the
+error boundary took the whole page the moment enrolment finished; and it chose the button or the link
+with a ternary, which a branch builds once, so a browser that went from `absent` to `waiting` kept a
+button that could not finish the job. `seal-pass.mjs` saw the first as one console error per cell;
+`keys-banner.spec.ts` walks absent, waiting and gone and fails on the old component.
 
 **The routine behind that button lives in `enrolment.store.ts`, and it lives there because there are
 now two of them.** It is a sequence of DECISIONS - a locked wallet says something different from a

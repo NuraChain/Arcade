@@ -46,25 +46,32 @@ export default component KeysBanner()
             >
                 <span class="flex min-w-0 items-center gap-2 font-semibold">
                     <Icon name="key" size={ 16 } class="shrink-0" />
-                    <span class="min-w-0">{ locale.t(TEXT[gap!]) }</span>
+                    <span class="min-w-0">{ gap === null ? '' : locale.t(TEXT[gap]) }</span>
                 </span>
 
                 <span class="flex shrink-0 items-center gap-1">
-                    { gap === 'absent'
-                        ? <Button
-                            variant="primary"
-                            size="sm"
-                            loading={ devices.busy() }
-                            onClick={ () => void enrolment.give() }
-                        >
-                            { locale.t(ACTION.absent) }
-                        </Button>
-                        : <Link
-                            to="/app/me/devices"
-                            class="rounded-control px-2.5 py-1.5 font-semibold text-gold underline decoration-gold/40 underline-offset-4 transition-colors hover:decoration-gold coarse:min-h-11 coarse:flex coarse:items-center"
-                        >
-                            { locale.t(ACTION.waiting) }
-                        </Link> }
+                    <Show
+                        when={ gap === 'absent' }
+                        fallback={
+                            <Link
+                                to="/app/me/devices"
+                                class="rounded-control px-2.5 py-1.5 font-semibold text-gold underline decoration-gold/40 underline-offset-4 transition-colors hover:decoration-gold coarse:min-h-11 coarse:flex coarse:items-center"
+                            >
+                                { locale.t(ACTION.waiting) }
+                            </Link>
+                        }
+                    >
+                        { () =>
+                            <Button
+                                variant="primary"
+                                size="sm"
+                                loading={ devices.busy() }
+                                onClick={ () => void enrolment.give() }
+                            >
+                                { locale.t(ACTION.absent) }
+                            </Button>
+                        }
+                    </Show>
 
                     <IconButton
                         icon="close"

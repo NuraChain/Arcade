@@ -5,9 +5,9 @@ import type { OverlayProps } from '../../stores/overlay.store.ts';
 import { useToasts } from '../../stores/toasts.store.ts';
 import Button from '../ui/button.component.azeroth';
 import Field from '../ui/field.component.azeroth';
-import IconButton from '../ui/icon-button.component.azeroth';
 import Input from '../ui/input.component.azeroth';
 import TextArea from '../ui/text-area.component.azeroth';
+import SheetHeader from '../ui/sheet-header.component.azeroth';
 
 /** The column bounds, stated in `schemas.ts` and repeated here so the box stops before the server does. */
 const NAME_MAX = 40;
@@ -85,13 +85,7 @@ export default component ProfileSheet(props: OverlayProps)
     };
 
     <div class="flex flex-col gap-5 p-5">
-        <header class="flex items-start justify-between gap-3">
-            <div class="min-w-0">
-                <h2 class="title text-ui-xl text-text">{ locale.t('profile.title') }</h2>
-                <p class="mt-2 text-ui-base text-muted">{ locale.t('profile.lead') }</p>
-            </div>
-            <IconButton icon="close" label={ locale.t('common.close') } variant="ghost" onClick={ () => props.close(false) } />
-        </header>
+        <SheetHeader title={ locale.t('profile.title') } lead={ locale.t('profile.lead') } onClose={ () => props.close(false) } />
 
         <Field id="profile-name" label={ locale.t('profile.name') } hint={ locale.t('profile.nameHint') }>
             <Input

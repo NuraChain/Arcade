@@ -6,6 +6,7 @@ import BrandMark from '../src/components/layout/brand-mark.component.azeroth';
 import Button from '../src/components/ui/button.component.azeroth';
 import Panel from '../src/components/ui/panel.component.azeroth';
 import SectionHeading from '../src/components/ui/section-heading.component.azeroth';
+import SheetHeader from '../src/components/ui/sheet-header.component.azeroth';
 import { ALL_ICONS, type IconName } from '../src/icons/all.ts';
 import Icon from '../src/icons/icon.component.azeroth';
 import { ICONS } from '../src/icons/registry.ts';
@@ -34,6 +35,25 @@ describe('SectionHeading', () =>
 
         expect(container.textContent).toContain('Your groups');
         expect(container.querySelector('button')?.textContent).toContain('New group');
+    });
+});
+
+describe('SheetHeader', () =>
+{
+    it('names the sheet, says what it is for only when told, and closes it', () =>
+    {
+        let closed = 0;
+        const { container } = renderTest(() => SheetHeader({ title: 'Your profile', lead: 'What people see.', onClose: () => closed += 1 }) as Rendered);
+
+        expect(container.querySelector('h2')?.textContent).toBe('Your profile');
+        expect(container.querySelector('p')?.textContent).toBe('What people see.');
+
+        fire(container.querySelector('header button')!, 'click');
+        expect(closed).toBe(1);
+
+        cleanup();
+        const bare = renderTest(() => SheetHeader({ title: 'Invite', onClose: () => undefined }) as Rendered);
+        expect(bare.container.querySelector('p')).toBeNull();
     });
 });
 

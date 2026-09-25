@@ -2,8 +2,8 @@ import Icon from '../../icons/icon.component.azeroth';
 import { useChat } from '../../stores/chat.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import type { OverlayProps } from '../../stores/overlay.store.ts';
-import IconButton from '../ui/icon-button.component.azeroth';
 import { attempt } from '../../lib/attempt.ts';
+import SheetHeader from '../ui/sheet-header.component.azeroth';
 
 /**
  * How long a message in this room lasts.
@@ -34,32 +34,37 @@ export default component ExpirySheet(props: OverlayProps & { conversationId: str
 
     derived current = chat.expireAfter(props.conversationId);
 
+    state busy = false;
+
     const choose = async (seconds: number | null): Promise<void> =>
     {
-        if (await attempt(chat.setExpiry(props.conversationId, seconds)))
+        if (busy)
+        {
+            return;
+        }
+        busy = true;
+        const done = await attempt(chat.setExpiry(props.conversationId, seconds));
+        busy = false;
+        if (done)
         {
             props.close(true);
         }
     };
 
     <div class="flex flex-col gap-5 p-5">
-        <header class="flex items-start justify-between gap-3">
-            <div>
-                <h2 class="title text-ui-xl text-text">{ locale.t('expiry.title') }</h2>
-                <p class="mt-2 text-ui-base text-muted">{ locale.t('expiry.lead') }</p>
-            </div>
-            <IconButton icon="close" label={ locale.t('common.close') } variant="ghost" onClick={ () => props.close(false) } />
-        </header>
+        <SheetHeader title={ locale.t('expiry.title') } lead={ locale.t('expiry.lead') } onClose={ () => props.close(false) } />
 
         <ul class="flex flex-col gap-2">
             <For each={ CHOICES } key={ (choice) => choice.id } let={ choice }>
                 <li>
                     <button
                         type="button"
-                        class={ [
-                            'flex w-full items-center gap-3 rounded-tile border px-3 py-3 text-start text-ui-base coarse:py-4',
+                        class={ () => [
+                            'flex w-full cursor-pointer items-center gap-3 rounded-tile border px-3 py-3 text-start text-ui-base disabled:cursor-wait disabled:opacity-60 coarse:py-4',
                             choice.seconds === current ? 'border-accent bg-accent/10 text-text' : 'border-line bg-field text-muted'
                         ].join(' ') }
+                        disabled={ busy }
+                        aria-pressed={ choice.seconds === current }
                         onClick={ () => void choose(choice.seconds) }
                     >
                         <Icon name={ choice.seconds === null ? 'close' : 'timer' } size={ 16 } class="shrink-0" />

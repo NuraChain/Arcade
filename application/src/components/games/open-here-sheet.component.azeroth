@@ -1,7 +1,6 @@
 import { useNavigate } from 'azerothjs';
 
 import Button from '../ui/button.component.azeroth';
-import IconButton from '../ui/icon-button.component.azeroth';
 import Segmented from '../ui/segmented.component.azeroth';
 import { openTable } from '../../lib/open-table.ts';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
@@ -10,6 +9,7 @@ import { useLobby } from '../../stores/lobby.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import type { Game, GameId } from '../../data/games.ts';
 import type { OverlayProps } from '../../stores/overlay.store.ts';
+import SheetHeader from '../ui/sheet-header.component.azeroth';
 
 /** The widest table any game in this product plays, used only while the room's size is unknown. */
 const MOST_SEATS = 8;
@@ -118,13 +118,7 @@ export default component OpenHereSheet(props: OverlayProps & { conversationId: s
     };
 
     <div class="flex flex-col gap-5 p-5">
-        <header class="flex items-start justify-between gap-3">
-            <div class="min-w-0">
-                <h2 class="title text-ui-xl text-text">{ locale.t('openHere.title') }</h2>
-                <p class="mt-2 text-ui-base text-muted">{ locale.t('openHere.lead') }</p>
-            </div>
-            <IconButton icon="close" label={ locale.t('common.close') } variant="ghost" onClick={ () => props.close(false) } />
-        </header>
+        <SheetHeader title={ locale.t('openHere.title') } lead={ locale.t('openHere.lead') } onClose={ () => props.close(false) } />
 
         <fieldset class="flex flex-col gap-2">
             <legend class="label mb-2 text-ui-sm text-muted">{ locale.t('openHere.game') }</legend>
