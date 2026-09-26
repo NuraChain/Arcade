@@ -29,7 +29,7 @@ import { SESSION_TTL_SECONDS } from './http/auth.ts';
 
 try
 {
-    process.loadEnvFile();
+    process.loadEnvFile(new URL('../../.env', import.meta.url));
 }
 catch
 {
@@ -156,7 +156,7 @@ if (!serving)
             ? `SERVE_PAGES=${ process.env.SERVE_PAGES } is set explicitly`
             : 'NODE_ENV is not production',
         env: config.env,
-        fix: 'remove SERVE_PAGES from backend/.env and set NODE_ENV=production, or run vite for the browser half'
+        fix: 'remove SERVE_PAGES from the root .env and set NODE_ENV=production, or run vite for the browser half'
     });
 }
 

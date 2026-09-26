@@ -48,7 +48,7 @@ That failure is worth knowing because of how it presents: a browser tab still ho
 the dev server keeps working while a fresh one gets nothing, so whichever browser you open second
 looks broken. It was reported as "it does not work on Firefox" and had nothing to do with Firefox.
 
-**What production needs in `backend/.env`**, beyond the database: `NODE_ENV=production`, a real
+**What production needs in the root `.env`**, beyond the database: `NODE_ENV=production`, a real
 `SESSION_SECRET`, and `PUBLIC_ORIGIN` set to the origin the browser actually uses. That last one is
 the SIWE `domain`, the WebSocket origin check and the cookie's site all at once - point it anywhere
 else and every wallet signature is a claim about somewhere else while the realtime gate refuses
@@ -56,10 +56,10 @@ every socket.
 
 **On a VPS it runs under systemd.** `scripts/service-install.sh` writes the unit and enables it;
 `service-start|stop|restart|status|uninstall.sh` are the rest. The unit runs `dist/main.js` with
-`WorkingDirectory` set to `backend/`, because `main.ts` reads `.env` from the working directory and
-`CLIENT_DIR`/`SSR_ENTRY` are relative to it. The install script refuses to be quiet about a missing
-build, a missing `dist/`, a missing SSR bundle, an unset `PUBLIC_ORIGIN` or an empty
-`SESSION_SECRET` - each of those is a restart loop or a silent misconfiguration otherwise.
+`WorkingDirectory` set to `backend/`, because `CLIENT_DIR`/`SSR_ENTRY` are relative to it; `main.ts`
+reads `.env` from the repository root whatever the working directory is. The install script refuses
+to be quiet about a missing build, a missing `dist/`, a missing SSR bundle, an unset `PUBLIC_ORIGIN`
+or an empty `SESSION_SECRET` - each of those is a restart loop or a silent misconfiguration otherwise.
 
 **The one thing that differs from the Explorer service**: this backend COMPILES. Explorer runs
 `src/main.ts` directly; here `typeorm` in `dependencies` flips the project to emitting `dist/`, and
@@ -86,7 +86,7 @@ is a claim about the DATABASE lives there - mirrored writes, partial unique inde
 constraints, the races - because a fake DataSource can only prove that the fake agrees with the
 code.
 
-**The database is Postgres, and the ENTITIES are the only description of it.** `backend/.env`
+**The database is Postgres, and the ENTITIES are the only description of it.** The root `.env`
 carries `DATABASE_URL` and is the one place the name is written down; `tools/qa/db.mjs` reads it so
 the browser passes cannot drift from the server the way they once did. There are no migrations.
 `backend/src/db/schema.ts` builds the schema with `syncSchema()`: the `citext` and `pgcrypto`
@@ -222,13 +222,13 @@ bugs" table so nobody re-investigates it.
 private goes in the tree - ever, not even briefly, because a later commit does not unpublish it.
 
 - **Real values live in `.env`**, which `.gitignore` refuses at every depth, and there is one per
-  half: `backend/.env` for the api and `.env` at the root for the browser's `VITE_*`. Neither has
+  half: `.env` at the root for the api and `frontend/.env` for the browser's `VITE_*`. Neither has
   ever been committed, and `git log --diff-filter=A -- '*.env'` is how that was checked rather than
   assumed.
-- **Dummy values live in `.env.example`**, which IS committed: `.env.example` at the root and
-  `backend/.env.example` beside it. Every variable the code reads appears there with a placeholder or
-  an empty value and a sentence saying what it is for - `SESSION_SECRET` and the three VAPID keys
-  are empty on purpose, with the `node -e` line that mints one written above them.
+- **Dummy values live in `.env.example`**, which IS committed: `.env.example` at the root for the
+  api and `frontend/.env.example` for the browser. Every variable the code reads appears there with
+  a placeholder or an empty value and a sentence saying what it is for - `SESSION_SECRET` and the
+  three VAPID keys are empty on purpose, with the `node -e` line that mints one written above them.
 - **No absolute path naming a machine.** `frontend/vite.config.ts` carried
   `C:/Users/<name>/Documents/Projects/AzerothJS` while the framework was a `file:` junction, and
   this file carried the path to the framework register. Both are gone. A path under `~` is fine; a
@@ -660,7 +660,7 @@ in every other copy on the page. `public/favicon.svg` is the same drawing, and `
 renders it to the PNG sizes, draws `share.jpg` (the 1200x630 link preview) from the logo and the
 four game scenes, and writes `site.webmanifest`. It needs Chrome, so it takes `QA_CHROME` the way
 the matrix does. `og:image` is written absolute by the build when `VITE_PUBLIC_ORIGIN` is set in
-the root `.env`, because a link preview needs one; left empty it stays relative, which is right for
+`frontend/.env`, because a link preview needs one; left empty it stays relative, which is right for
 localhost and wrong for a share.
 
 **Achievements are medals and empty states are illustrations, both in CSS.** `.medal[data-tier]`

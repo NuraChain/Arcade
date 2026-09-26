@@ -45,8 +45,8 @@ if [ ! -f "$ROOT/frontend/dist-server/entry.server.js" ]; then
   echo "warning: frontend/dist-server/entry.server.js is missing - there is no SSR bundle to render with" >&2
 fi
 
-if [ ! -f "$SERVICE_PATH/.env" ]; then
-  echo "warning: backend/.env is missing - the service would boot against the defaults" >&2
+if [ ! -f "$ROOT/.env" ]; then
+  echo "warning: .env is missing at the repository root - the service would boot against the defaults" >&2
 else
   # Three values decide whether this process is a SERVER or half of a development pair, and every
   # one of them is silent when wrong. `SERVE_PAGES=false` answers the api and 404s every page;
@@ -57,13 +57,13 @@ else
   # Only an EXPLICIT false is worth saying anything about: absent means "serve them", because under
   # NODE_ENV=production this process is the server. Warning on absent would fire for the correct
   # configuration, which is the same noise the schema note above was fixed for.
-  ! grep -q '^SERVE_PAGES=false' "$SERVICE_PATH/.env" ||
+  ! grep -q '^SERVE_PAGES=false' "$ROOT/.env" ||
     echo "warning: SERVE_PAGES=false - this process answers the api and 404s every page unless something else serves the client" >&2
 
-  grep -q '^PUBLIC_ORIGIN=https\?://' "$SERVICE_PATH/.env" ||
+  grep -q '^PUBLIC_ORIGIN=https\?://' "$ROOT/.env" ||
     echo "warning: PUBLIC_ORIGIN is unset - the realtime origin gate refuses every socket without it" >&2
 
-  grep -qE '^SESSION_SECRET=.+' "$SERVICE_PATH/.env" ||
+  grep -qE '^SESSION_SECRET=.+' "$ROOT/.env" ||
     echo "warning: SESSION_SECRET is empty - sessions cannot be signed" >&2
 fi
 

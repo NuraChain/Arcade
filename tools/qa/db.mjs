@@ -3,13 +3,13 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
-const ENV_FILE = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'backend', '.env');
+const ENV_FILE = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '.env');
 
 /**
  * Where the server keeps its rows, read from the server's own `DATABASE_URL`.
  *
  * The two hand-run passes each carried their own copy of the database name, and the copy drifted:
- * `backend/.env` said `nuragames` while both scripts said `nura_games`, and both databases existed.
+ * the server's `.env` said `nuragames` while both scripts said `nura_games`, and both databases existed.
  * So every SQL assertion in `social-pass` ran against an empty database and answered 0 while the
  * product, sitting on the other one, was doing exactly what the assertion asked about. Three checks
  * reported a broken friend request, a missing friendship and an unconfirmed device, and all three
