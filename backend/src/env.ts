@@ -88,7 +88,7 @@ export function loadServerConfig()
         voiceTurnUrls: str('VOICE_TURN_URLS', { default: '' }),
         voiceTurnSecret: str('VOICE_TURN_SECRET', { default: '', secret: true }),
 
-        clientDir: str('CLIENT_DIR', { default: '../frontend/dist' }),
+        clientDir: str('CLIENT_DIR', { default: '../.dist-frontend' }),
         ssrEntry: str('SSR_ENTRY', { default: '../frontend/dist-server/entry.server.js' }),
 
         /** Serve the built client from this process. Off in dev, where vite owns the browser. */

@@ -29,7 +29,7 @@ import { SESSION_TTL_SECONDS } from './http/auth.ts';
 
 try
 {
-    process.loadEnvFile(new URL('../../.env', import.meta.url));
+    process.loadEnvFile(new URL('../.env', import.meta.url));
 }
 catch
 {

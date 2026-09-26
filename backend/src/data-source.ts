@@ -9,7 +9,7 @@ import { oneAtATime } from './lib/one-at-a-time.ts';
 // .env is not an error here: the ambient environment is a valid way to configure a deployment.
 try
 {
-    process.loadEnvFile(new URL('../../.env', import.meta.url));
+    process.loadEnvFile(new URL('../.env', import.meta.url));
 }
 catch
 {

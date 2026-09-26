@@ -70,6 +70,9 @@ export default defineConfig(({ isSsrBuild }) => ({
         // a warning nobody can act on is one that hides the ones they can.
         chunkSizeWarningLimit: 1500,
 
+        outDir: '../.dist-frontend',
+        emptyOutDir: true,
+
         assetsInlineLimit: (file: string) => file.endsWith('.cues') ? false : undefined,
 
         rolldownOptions: isSsrBuild === true ? {} : {

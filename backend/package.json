@@ -11,14 +11,14 @@
     "build": "tsc -p tsconfig.json",
     "check": "azeroth check",
     "check:tests": "tsc --noEmit -p tsconfig.test.json",
-    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
-    "start": "node --enable-source-maps dist/main.js",
+    "clean": "node -e \"require('node:fs').rmSync('../.dist-backend',{recursive:true,force:true})\"",
+    "start": "node --enable-source-maps ../.dist-backend/main.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:shuffle": "vitest run --sequence.shuffle",
     "test:db": "vitest run --no-file-parallelism .db.spec. seat-race.spec.",
     "test:ws": "vitest run --config vitest.socket.config.ts",
-    "schema:sync": "npm run build && node dist/db/sync-cli.js"
+    "schema:sync": "npm run build && node ../.dist-backend/db/sync-cli.js"
   },
   "dependencies": {
     "@azerothjs/cron": "2.1.0",

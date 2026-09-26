@@ -5,7 +5,7 @@ import { dirname, extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { brotliCompressSync, constants, gzipSync } from 'node:zlib';
 
-const DIST = join(dirname(fileURLToPath(import.meta.url)), '..', 'frontend', 'dist');
+const DIST = join(dirname(fileURLToPath(import.meta.url)), '..', '.dist-frontend');
 
 const TEXT = new Set(['.js', '.mjs', '.css', '.svg', '.json', '.webmanifest', '.txt', '.xml']);
 

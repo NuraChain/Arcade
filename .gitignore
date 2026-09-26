@@ -1,6 +1,8 @@
 node_modules/
 dist/
 dist-server/
+/.dist-backend/
+/.dist-frontend/
 .azeroth/
 coverage/
 logs/

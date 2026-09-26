@@ -12,7 +12,11 @@
            Node's TypeScript support is strip-only and rejects decorator syntax outright, so
            there is no other way to run an @Entity file. */
         "noEmit": false,
-        "outDir": "dist",
+
+        /* Emits to `.dist-backend/` at the repository root. Spelled `./../` on purpose: the CLI
+           reads outDir with a regex that strips ONE leading `.` or `./`, so a bare `../` would be
+           read as `./.dist-backend` and `azeroth dev` would poll a file that never appears. */
+        "outDir": "./../.dist-backend",
 
         /* MANDATORY, and the most expensive line to omit. The CLI hard-codes builtEntry as a
            FLAT `<outDir>/main.js`. tsc infers rootDir from the common directory of the program,

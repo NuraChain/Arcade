@@ -10,7 +10,7 @@ stands — if a rule here disagrees with the code, the code is right and this fi
 ## Commands
 
 ```sh
-npm run dev            # the conductor: tsc -w on the server, node --watch on dist, vite on 3100
+npm run dev            # the conductor: tsc -w on the server, node --watch on .dist-backend, vite on 3100
 npm run check          # api typecheck + server test typecheck + azeroth-tsc + eslint — the gate
 npm run build          # server tsc, then client bundle, SSR bundle, prerender
 npm test               # every suite, both workspaces
@@ -27,7 +27,7 @@ npm run poster         # capture the landing's first frame from the built server
 Two shapes, and the difference is how many processes answer the browser.
 
 **Development — two processes.** `npm run dev` is the conductor: `tsc -w` on the server, `node
---watch` on `dist`, and vite on **3100**. The browser talks to vite, which proxies `/api`, `/ws` and
+--watch` on `.dist-backend`, and vite on **3100**. The browser talks to vite, which proxies `/api`, `/ws` and
 `/_image` to the api on **3200**. Open `http://localhost:3100`. The api on 3200 answers no pages at
 all in this mode and is not meant to: vite owns the browser, and a second process answering `/`
 would be two copies of the client.
@@ -38,6 +38,12 @@ would be two copies of the client.
 npm run build                       # server tsc, client bundle, SSR bundle, prerender, budgets
 npm start                           # serves the api AND the built client on ONE origin
 ```
+
+Both builds land at the repository root: the api in `.dist-backend/`, the client in `.dist-frontend/`
+(the SSR bundle stays in `frontend/dist-server/`). That is why `npm run build` does not call
+`azeroth build`: the kit prerender step it runs takes no arguments and always reads `frontend/dist`,
+so the root script runs the same steps itself - the backend's `tsc`, then `vite build`, the SSR
+bundle and `azeroth-kit-prerender --client ../.dist-frontend` from the frontend's own `build`.
 
 Open `http://localhost:3200`. Nothing has to be overridden for this to work, and that is recent:
 `SERVE_PAGES` used to default to false everywhere, so the documented deploy answered the api and
@@ -55,14 +61,14 @@ else and every wallet signature is a claim about somewhere else while the realti
 every socket.
 
 **On a VPS it runs under systemd.** `scripts/service-install.sh` writes the unit and enables it;
-`service-start|stop|restart|status|uninstall.sh` are the rest. The unit runs `dist/main.js` with
+`service-start|stop|restart|status|uninstall.sh` are the rest. The unit runs `.dist-backend/main.js` with
 `WorkingDirectory` set to `backend/`, because `CLIENT_DIR`/`SSR_ENTRY` are relative to it; `main.ts`
 reads `.env` from the repository root whatever the working directory is. The install script refuses
-to be quiet about a missing build, a missing `dist/`, a missing SSR bundle, an unset `PUBLIC_ORIGIN`
+to be quiet about a missing build, a missing `.dist-backend/`, a missing SSR bundle, an unset `PUBLIC_ORIGIN`
 or an empty `SESSION_SECRET` - each of those is a restart loop or a silent misconfiguration otherwise.
 
 **The one thing that differs from the Explorer service**: this backend COMPILES. Explorer runs
-`src/main.ts` directly; here `typeorm` in `dependencies` flips the project to emitting `dist/`, and
+`src/main.ts` directly; here `typeorm` in `dependencies` flips the project to emitting `.dist-backend/`, and
 Node's TypeScript support is strip-only and rejects decorator syntax, so there is no way to run an
 `@Entity` file. `npm run build` before `npm start`, always.
 
@@ -359,13 +365,18 @@ and class fields staying off the instance - precisely the surface `experimentalD
 
 **This backend compiles.** `typeorm` in `dependencies` is what decides that — the CLI carries
 `DECORATOR_PACKAGES = ['typeorm', '@mikro-orm/core']` and the name alone flips the project from
-running `src/` directly to emitting `dist/`. Node's TypeScript support is strip-only and rejects
+running `src/` directly to emitting `.dist-backend/`. Node's TypeScript support is strip-only and rejects
 decorator syntax outright, so there is no other way to run an `@Entity` file. Consequences that
 are not obvious, each of which costs an afternoon to rediscover:
 
-- **`rootDir: "src"` is mandatory.** The CLI hard-codes `builtEntry` as a flat `dist/main.js`. One
-  file pulled in from outside `src/` moves emit to `dist/src/main.js`, and `azeroth dev` then polls
-  `existsSync` forever with no error and no timeout. Stating `rootDir` turns that into a TS6059.
+- **`rootDir: "src"` is mandatory.** The CLI builds `builtEntry` as a flat `<outDir>/main.js`. One
+  file pulled in from outside `src/` moves emit to `.dist-backend/src/main.js`, and `azeroth dev`
+  then polls `existsSync` forever with no error and no timeout. Stating `rootDir` turns that into a
+  TS6059.
+- **`outDir` is spelled `./../.dist-backend`, and the `./` is load-bearing.** The CLI reads outDir
+  from the tsconfig TEXT with a regex that strips one leading `.` or `./`, so a tidy `../.dist-backend`
+  is read as `./.dist-backend` and `azeroth dev` waits on `backend/.dist-backend/main.js`, which never
+  appears. The same silent hang as above, from the other end.
 - **`useDefineForClassFields: false`, explicitly.** At the ES2022 default every declared entity
   field installs `undefined` over the accessors TypeORM attaches for relations. Silent corruption,
   never a crash.
@@ -2028,7 +2039,7 @@ switching tables never has to unlock audio again. The spec is
   trump, trick, bonus, pass and deny are synthesised. A recording that failed to load falls back to its
   synthesised voice or to silence and never throws, which keeps "nothing can 404 halfway through a game"
   true in behaviour. `assetsInlineLimit` refuses to inline the pack, and `tools/budgets.mjs` requires
-  exactly one pack in `dist/assets`, at most 160 KB, and no file there with a media extension at all.
+  exactly one pack in `.dist-frontend/assets`, at most 160 KB, and no file there with a media extension at all.
 - **Mixed like a game, not like a web page.** Three buses (foley 0.9, interface 0.45, jingles 0.6) into
   a 0.7 master and a limiter; each play varies its rate by up to 10% and its level by 1.5 dB, rotates
   through the takes, is panned by where it happens, and the same cue is not started more than three
@@ -4333,7 +4344,7 @@ interactively must be written back into a script; the scripts stay the source of
 
 ## Performance
 
-**`npm run build` fails on these now.** `tools/budgets.mjs` runs after `azeroth build`, gzips the
+**`npm run build` fails on these now.** `tools/budgets.mjs` runs after the build steps, gzips the
 chunks the prerendered `index.html` actually pulls, and exits 1 over budget - so the table below is
 a gate rather than a paragraph. It also asserts the chunks that must NOT be in that initial set:
 three.js, the app catalogue, `session.store` behind `lib/guards.ts`, `connect-dialog` behind the
@@ -4358,7 +4369,7 @@ server.
 **What leaves the server is compressed, and brotli is never spent on the fly.** The framework compresses
 nothing by default, so for a long time the built server sent every chunk raw - the world chunk as
 643 KB where gzip makes 158. `tools/precompress.mjs` writes brotli-11 and gzip-9 siblings for
-`dist/assets` and `dist/world` after the build, `backend/src/http/compression.ts` serves them with
+`.dist-frontend/assets` and `.dist-frontend/world` after the build, `backend/src/http/compression.ts` serves them with
 the original content type, `Vary` and a coding-suffixed ETag, and gzips everything else on the way
 out. Brotli 11 is 0.75 s of CPU on that chunk and `compressResponse` has no quality knob, so the
 on-the-fly path offers gzip only. The GLBs compress too - the phone scene is 931 KB raw and 505 KB

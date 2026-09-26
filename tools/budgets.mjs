@@ -28,7 +28,7 @@ import { fileURLToPath } from 'node:url';
 import { POSTERS, fingerprint } from './art/poster.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const DIST = join(ROOT, 'frontend', 'dist');
+const DIST = join(ROOT, '.dist-frontend');
 const ASSETS = join(DIST, 'assets');
 const SSR_ASSETS = join(ROOT, 'frontend', 'dist-server', 'assets');
 

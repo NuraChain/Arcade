@@ -25,20 +25,21 @@ SERVICE_PATH="$ROOT/backend"
 # This backend COMPILES, which is the one thing that differs from the Explorer service and the one
 # thing that will strand a deploy silently. `typeorm` sitting in `dependencies` is what decides it:
 # the CLI carries DECORATOR_PACKAGES and the name alone flips the project from running `src/` to
-# emitting `dist/`. Node's own TypeScript support is strip-only and rejects decorator syntax
-# outright, so there is no way to run an `@Entity` file directly - `dist/main.js` or nothing.
-SERVICE_PATH_APP="dist/main.js"
+# emitting `.dist-backend/` at the repository root. Node's own TypeScript support is strip-only and
+# rejects decorator syntax outright, so there is no way to run an `@Entity` file directly - the
+# compiled `main.js` or nothing.
+SERVICE_PATH_APP="../.dist-backend/main.js"
 
 SERVICE_DIR="${SERVICE_DIR:-/etc/systemd/system}"
 SERVICE_FILE="$SERVICE_DIR/${SERVICE_NAME}.service"
 
 # Three things a missing build turns into a restart loop at 3am. Say so here instead.
 if [ ! -f "$SERVICE_PATH/$SERVICE_PATH_APP" ]; then
-  echo "warning: backend/$SERVICE_PATH_APP is missing - run 'npm run build' before starting" >&2
+  echo "warning: .dist-backend/main.js is missing - run 'npm run build' before starting" >&2
 fi
 
-if [ ! -f "$ROOT/frontend/dist/index.html" ]; then
-  echo "warning: frontend/dist is missing - the server would answer the api and 404 every page" >&2
+if [ ! -f "$ROOT/.dist-frontend/index.html" ]; then
+  echo "warning: .dist-frontend is missing - the server would answer the api and 404 every page" >&2
 fi
 
 if [ ! -f "$ROOT/frontend/dist-server/entry.server.js" ]; then
