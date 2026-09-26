@@ -21,6 +21,8 @@ const shareOrigin = (): Plugin =>
 export default defineConfig(({ isSsrBuild }) => ({
     plugins: [azeroth(), tailwindcss(), shareOrigin()],
 
+    cacheDir: '../node_modules/.vite',
+
     resolve:
     {
         // THE failure this prevents is silent. Every compiled .azeroth module imports
