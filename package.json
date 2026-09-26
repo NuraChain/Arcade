@@ -7,18 +7,18 @@
         "node": ">=24.11.0"
     },
     "workspaces": [
-        "application",
-        "server"
+        "frontend",
+        "backend"
     ],
     "scripts": {
         "dev": "azeroth dev",
         "build": "azeroth build && node tools/prerender-locales.mjs && node tools/precompress.mjs && node tools/budgets.mjs",
-        "check": "azeroth check && npm run check:tests --workspace server",
+        "check": "azeroth check && npm run check:tests --workspace backend",
         "test": "azeroth test",
-        "test:watch": "npm run test:watch --workspace application",
+        "test:watch": "npm run test:watch --workspace frontend",
         "test:shuffle": "npm run test:shuffle --workspaces --if-present",
-        "start": "npm start --workspace server",
-        "schema:sync": "npm run schema:sync --workspace server",
+        "start": "npm start --workspace backend",
+        "schema:sync": "npm run schema:sync --workspace backend",
         "assets": "node tools/blender/build.mjs",
         "poster": "node tools/art/poster.mjs",
         "art": "node tools/art/games.mjs && node tools/art/boards.mjs && node tools/art/poker.mjs && node tools/art/deck.mjs && node tools/art/raster.mjs",

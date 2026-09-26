@@ -14,14 +14,14 @@ ROOT = os.path.abspath(os.path.join(HERE, '..', '..'))
 SCRATCH = os.path.join(HERE, 'scratch')
 TEXTURES = os.path.join(SCRATCH, 'textures')
 ART = os.path.join(SCRATCH, 'art')
-TOKENS = os.path.join(ROOT, 'application', 'src', 'styles', 'tokens.css')
-STUDIO = os.path.join(ROOT, 'application', 'src', 'world', 'render', 'studio.json')
+TOKENS = os.path.join(ROOT, 'frontend', 'src', 'styles', 'tokens.css')
+STUDIO = os.path.join(ROOT, 'frontend', 'src', 'world', 'render', 'studio.json')
 
 
 def output_dir():
     base = os.environ.get('NURA_OUT')
     if base is None:
-        base = os.path.join(ROOT, 'application', 'public', 'world')
+        base = os.path.join(ROOT, 'frontend', 'public', 'world')
     os.makedirs(base, exist_ok=True)
     return os.path.abspath(base)
 

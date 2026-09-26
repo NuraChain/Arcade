@@ -41,11 +41,11 @@
 
 | file | responsibility after this plan |
 |---|---|
-| `application/index.html` | pre-paint direction script only; one `theme-color` |
-| `application/src/styles.css` | Tailwind + Inter + Vazirmatn + the three style files |
-| `application/src/styles/tokens.css` | the ONE palette, the fill/ink tokens, the `@theme inline` map |
-| `application/src/styles/base.css` | sans headings, `live-dot` with a size, utilities |
-| `application/src/styles/app.css` | shell/nav CSS: solid active row, hero surface utility |
+| `frontend/index.html` | pre-paint direction script only; one `theme-color` |
+| `frontend/src/styles.css` | Tailwind + Inter + Vazirmatn + the three style files |
+| `frontend/src/styles/tokens.css` | the ONE palette, the fill/ink tokens, the `@theme inline` map |
+| `frontend/src/styles/base.css` | sans headings, `live-dot` with a size, utilities |
+| `frontend/src/styles/app.css` | shell/nav CSS: solid active row, hero surface utility |
 | `components/ui/variants.ts` | fills use `accent-fill`/`danger-fill`/`bright-ink`; no `live` button variant |
 | `components/ui/section-heading` | sentence-case title + "See all ›" |
 | `components/ui/badge` | also the status pill (dot + label) |
@@ -62,9 +62,9 @@
 ### Task 1: One theme
 
 **Files:**
-- Delete: `application/src/stores/theme.store.ts`, `application/src/components/layout/theme-switch.component.azeroth`
-- Modify: `application/index.html`, `application/src/styles/tokens.css:133-230`, `components/layout/site-header.component.azeroth:9,82,112-117`, `pages/app/settings.page.azeroth:6,321-324`, `components/world/world-canvas.component.azeroth:4,10,169-173`, `world/bridge.ts:17`, `world/world.ts:392-405`, `world/scene/market.ts:33,42,131,164,251,261,401-415`, `world/scene/procedural.ts:26-39`, `world/scene/lamps.ts:19,114-118`, `icons/registry.ts:45,62,147-148`, `locales/en/landing.ts:71-73`, `locales/fa/landing.ts:74-76`, `locales/en/me.ts:89`, `locales/fa/me.ts:92`, `tools/qa/seal-pass.mjs:146`, `tools/qa/regression-pass.mjs:52-90,380`, and the dead `nura-games.theme` writes in `tools/qa/{chat,hokm-play,play,social}-pass.mjs`
-- Test: `application/tests/stores.spec.ts:5,10,77-105`
+- Delete: `frontend/src/stores/theme.store.ts`, `frontend/src/components/layout/theme-switch.component.azeroth`
+- Modify: `frontend/index.html`, `frontend/src/styles/tokens.css:133-230`, `components/layout/site-header.component.azeroth:9,82,112-117`, `pages/app/settings.page.azeroth:6,321-324`, `components/world/world-canvas.component.azeroth:4,10,169-173`, `world/bridge.ts:17`, `world/world.ts:392-405`, `world/scene/market.ts:33,42,131,164,251,261,401-415`, `world/scene/procedural.ts:26-39`, `world/scene/lamps.ts:19,114-118`, `icons/registry.ts:45,62,147-148`, `locales/en/landing.ts:71-73`, `locales/fa/landing.ts:74-76`, `locales/en/me.ts:89`, `locales/fa/me.ts:92`, `tools/qa/seal-pass.mjs:146`, `tools/qa/regression-pass.mjs:52-90,380`, and the dead `nura-games.theme` writes in `tools/qa/{chat,hokm-play,play,social}-pass.mjs`
+- Test: `frontend/tests/stores.spec.ts:5,10,77-105`
 
 - [ ] **Step 1:** In `stores.spec.ts` delete the `useTheme` import, the `useTheme().setTheme('dark')` line in `beforeEach`, and the `describe('theme store')` block. Move its "survives storage being blocked" case onto the locale store so blocked storage stays covered:
 
@@ -94,14 +94,14 @@ it('survives storage being blocked', () =>
 - [ ] **Step 4:** Remove every `ThemeSwitch` import and usage. In `site-header`'s mobile menu the Panel now holds only `<LanguageSwitch />`, so drop `justify-between`. Delete the settings "Theme" row.
 - [ ] **Step 5:** Delete the relight chain: the world-canvas effect and `useTheme`; `relight` from `WorldHandle`, `world.ts`, `Market`; `tinted` and its pushes; `repaintGeometry`; `lamps.setColour`; the `Moon`/`Sun` imports and `theme-dawn`/`theme-dusk` entries; the four catalogue keys in both languages.
 - [ ] **Step 6:** QA passes: `seal-pass.mjs` iterates `['dark']` → remove the theme loop entirely; `regression-pass.mjs` drops the `theme` option and the light cell; the four other passes drop the dead `nura-games.theme` write.
-- [ ] **Step 7:** Run `npm run check` then `npm test`. Expected: both PASS; `grep -rn "data-theme\|useTheme\|theme-switch\|relight" application/src tools` finds nothing.
+- [ ] **Step 7:** Run `npm run check` then `npm test`. Expected: both PASS; `grep -rn "data-theme\|useTheme\|theme-switch\|relight" frontend/src tools` finds nothing.
 - [ ] **Step 8:** Commit: `refactor(theme): one theme, and the machinery for a second one is gone`.
 
 ### Task 2: Palette, Inter and the ink rule
 
 **Files:**
-- Modify: `application/package.json:22-24`, `application/src/styles.css`, `application/src/styles/tokens.css`, `application/src/styles/base.css:22-40,111-115`, `application/src/styles/app.css:126-140`, `application/public/favicon.svg`, `components/ui/variants.ts`, and the 13 hand-spelled `bg-accent text-accent-ink` sites: `nav-rail:22`, `sidebar:39,56`, `top-bar:66`, `message-bubble:193`, `create-game-form:217`, `match-result:103`, `quick-play-button:20`, `public-shell:51`, `site-header:75`, `pagination:54`, `switch` knob; plus `home.page:129` (`bg-live text-accent-ink` → `text-bright-ink`)
-- Test: `application/tests/components.spec.ts`
+- Modify: `frontend/package.json:22-24`, `frontend/src/styles.css`, `frontend/src/styles/tokens.css`, `frontend/src/styles/base.css:22-40,111-115`, `frontend/src/styles/app.css:126-140`, `frontend/public/favicon.svg`, `components/ui/variants.ts`, and the 13 hand-spelled `bg-accent text-accent-ink` sites: `nav-rail:22`, `sidebar:39,56`, `top-bar:66`, `message-bubble:193`, `create-game-form:217`, `match-result:103`, `quick-play-button:20`, `public-shell:51`, `site-header:75`, `pagination:54`, `switch` knob; plus `home.page:129` (`bg-live text-accent-ink` → `text-bright-ink`)
+- Test: `frontend/tests/components.spec.ts`
 
 **Interfaces — Produces:** utilities `bg-accent-fill`, `bg-danger-fill`, `text-bright-ink` (new), `text-accent-ink` now white; `BUTTON_VARIANT.primary = 'bg-accent-fill text-accent-ink …'`; `TONE_FILL` per the ink rule; `ButtonVariant` without `live`.
 
@@ -118,8 +118,8 @@ it('fills a primary button with the AA blue, never the text blue', () =>
 });
 ```
 
-- [ ] **Step 2:** `npm test --workspace application -- components` → FAIL (`bg-accent` found).
-- [ ] **Step 3:** Swap the fonts: `npm uninstall @fontsource-variable/fraunces @fontsource-variable/hanken-grotesk --workspace application` then `npm install @fontsource-variable/inter@5 --save-exact=false --workspace application` (caret like its siblings). `styles.css` imports `@fontsource-variable/inter` in place of the two removed ones.
+- [ ] **Step 2:** `npm test --workspace frontend -- components` → FAIL (`bg-accent` found).
+- [ ] **Step 3:** Swap the fonts: `npm uninstall @fontsource-variable/fraunces @fontsource-variable/hanken-grotesk --workspace frontend` then `npm install @fontsource-variable/inter@5 --save-exact=false --workspace frontend` (caret like its siblings). `styles.css` imports `@fontsource-variable/inter` in place of the two removed ones.
 - [ ] **Step 4:** In `tokens.css` set `--font-display` and `--font-ui` to `'Inter Variable', 'Segoe UI', system-ui, ui-sans-serif, sans-serif`, then replace the `:root` palette values with the Global Constraints values (hex is fine; keep `color-scheme: dark`, `--glass`, `--scrim`), add `--accent-fill: #2563EB; --danger-fill: #DC2626; --bright-ink: #0B1220;` and change `--accent-ink` to `#FFFFFF`. World: `--world-sky: #0B1220; --world-fog: #131C2E; --world-fill: #22324D; --world-stone: #2A3852;` (rest unchanged). Delete `--board-plate/line/safe/hint` (no consumer). Add to `@theme inline`: `--color-accent-fill: var(--accent-fill); --color-danger-fill: var(--danger-fill); --color-bright-ink: var(--bright-ink);`. Add `--radius-hero: 1rem;` to `@theme`.
 - [ ] **Step 5:** `base.css` headings: drop `font-variation-settings: 'WONK' 1`, weight `700`, keep `-0.02em`, `line-height: 1.12`. `live-dot` gains its own box so a bare use is a circle: `width: 0.5rem; height: 0.5rem; border-radius: 9999px; flex-shrink: 0;`.
 - [ ] **Step 6:** `variants.ts`: `primary: 'bg-accent-fill text-accent-ink shadow-[inset_0_1px_0_rgb(255_255_255/0.12)] hover:brightness-110 active:brightness-95'`; delete `live` from `ButtonVariant` and `BUTTON_VARIANT` (0 callers — grep `variant="live"` first; if any exist, point them at `primary`); `TONE_FILL.accent = 'bg-accent-fill text-accent-ink'`, `danger = 'bg-danger-fill text-accent-ink'`, `live/gold/win/madder = 'bg-X text-bright-ink'`; delete the docblock.
@@ -134,7 +134,7 @@ it('fills a primary button with the AA blue, never the text blue', () =>
 **Files:**
 - Modify: `components/ui/section-heading.component.azeroth`, `components/ui/badge.component.azeroth`, `components/ui/avatar.component.azeroth`, `components/ui/chip.component.azeroth:20`, `icons/registry.ts` (add `play: Play`)
 - Delete: `components/ui/list-item.component.azeroth`, `components/ui/list-item-body.component.azeroth` (0 importers)
-- Test: `application/tests/primitives.spec.ts`, `application/tests/components.spec.ts`
+- Test: `frontend/tests/primitives.spec.ts`, `frontend/tests/components.spec.ts`
 
 **Interfaces — Produces:**
 - `SectionHeading(props: { title: string; more?: string; to?: NavigateTarget; actions?: Child; id?: string; class?: string })` — unchanged props, new look.
@@ -189,7 +189,7 @@ it('titles a section in sentence case at reading size', () =>
 The client carries a `'playing'` state and a `game` field the server never sends (`frames.ts:1`). Delete the dead branches rather than light them up.
 
 **Files:** `stores/presence.store.ts:7-15,52,62`, `components/app/social-panel:89-91`, `components/social/friend-row:39-40`, `components/social/people-strip:23-26`, `pages/app/chat.page:189-192`, `pages/app/discover.page:46-48,93-98`, `pages/app/game.page:60-71,106-114`
-- Test: `application/tests/social.spec.ts` (or the presence spec that exists)
+- Test: `frontend/tests/social.spec.ts` (or the presence spec that exists)
 
 - [ ] **Step 1: failing test**: `usePresence().of('x')` has no `game` key (`expect('game' in presence.of('x')).toBe(false)`).
 - [ ] **Step 2:** `PresenceState = 'online' | 'away' | 'offline'`; `Presence = { state, since, known }`; `up` = `state === 'online'`.
@@ -200,7 +200,7 @@ The client carries a `'playing'` state and a `game` field the server never sends
 ### Task 5: The shell
 
 **Files:** `components/app/nav-items.ts`, `lib/route-meta.ts:5`, `components/app/app-shell.component.azeroth:135-163`, `sidebar`, `nav-rail`, `top-bar`, `bottom-nav`, `social-panel`, `components/layout/brand-mark.component.azeroth:10`, locales `en/app.ts` + `fa/app.ts`
-- Test: `application/tests/shell.spec.ts`
+- Test: `frontend/tests/shell.spec.ts`
 
 **Interfaces — Produces:**
 - `NAV: NavItem[]` (phone): home, games, friends, chats, me — `me` labelled `app.nav.profile`.
@@ -247,7 +247,7 @@ Also: bottom nav still 5 links, the fifth reads "Profile"; the social panel with
 ### Task 6: Home
 
 **Files:** `pages/app/home.page.azeroth`, `components/games/game-card.component.azeroth`, `components/games/game-grid.component.azeroth:15`, new `components/games/game-tile.component.azeroth`, new `components/games/table-row.component.azeroth`, locales `en/play.ts` + `fa/play.ts`
-- Test: `application/tests/play.spec.ts`, new cases in `application/tests/home.spec.ts` (create; follow `settings.spec.ts` for rendering a page with `fake-api`)
+- Test: `frontend/tests/play.spec.ts`, new cases in `frontend/tests/home.spec.ts` (create; follow `settings.spec.ts` for rendering a page with `fake-api`)
 
 **Interfaces — Produces:**
 - `GameTile(props: { game: Game; onPick: (game: GameId) => void })` — 1:1 tile, square art, name, seats, "Coming soon" when not available.
@@ -284,7 +284,7 @@ GameCard: art `ratio="card"`; pill top-start `Badge dot text={games.livePill} to
 ### Task 7: Leaderboard page
 
 **Files:** Create `pages/app/leaderboard.page.azeroth`; modify `routes.ts` (add `{ path: 'leaderboard', lazy: () => import('./pages/app/leaderboard.page.azeroth'), meta: defineMeta({ title: 'app.nav.leaderboard', tab: 'leaderboard' }) }`), `tools/qa/matrix.mjs` ROUTES (add `leaderboard`), locales `en/play.ts`, `fa/play.ts`
-- Test: `application/tests/leaderboard.spec.ts` (create)
+- Test: `frontend/tests/leaderboard.spec.ts` (create)
 
 - [ ] **Step 1: failing test**: the page offers exactly the `available` games as `Segmented` items (hokm, ludo with the fake catalogue) and renders `<Leaderboard game>` for the first one; switching the segment re-renders the board for the other game. And every sidebar destination is a declared route:
 
@@ -365,7 +365,7 @@ Page kit applied everywhere from here on:
 - [ ] `npm run check` · `npm test` · `npm run test:shuffle` · `npm run build` — all PASS.
 - [ ] Built server on 5300: `PORT=5300 PUBLIC_ORIGIN=http://localhost:5300 API_RATE_MAX=20000 SERVE_PAGES=true NODE_ENV=production npm start`; `QA_BASE=http://localhost:5300 npm run qa` → 0 failing cells; the hand-run passes → PASS.
 - [ ] Playwright MCP: every route at 390 / 1280 / 1440, `en` and `fa`, screenshots compared with `design.jpg`; console clean.
-- [ ] ui-ux-suite `uiux_audit_run` over `application/src/styles` and `index.html`; MDVP CLI `npx @mdvp/cli@1.36.1 audit http://localhost:5300/app` via `MDVP_BROWSER_URL`; every contrast pair in the palette table re-checked with `uiux_check_contrast`.
+- [ ] ui-ux-suite `uiux_audit_run` over `frontend/src/styles` and `index.html`; MDVP CLI `npx @mdvp/cli@1.36.1 audit http://localhost:5300/app` via `MDVP_BROWSER_URL`; every contrast pair in the palette table re-checked with `uiux_check_contrast`.
 - [ ] Findings fixed, each in its own commit.
 
 ### Task 15 (after the redesign): every game has its own achievements, leaderboard and record

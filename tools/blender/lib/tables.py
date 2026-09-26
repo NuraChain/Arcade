@@ -8,7 +8,7 @@ from lib.kit import texture
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ROOT = os.path.abspath(os.path.join(HERE, '..', '..'))
-OUT = os.path.join(ROOT, 'application', 'public', 'board')
+OUT = os.path.join(ROOT, 'frontend', 'public', 'board')
 SAMPLES = int(os.environ.get('NURA_SAMPLES', '256'))
 
 

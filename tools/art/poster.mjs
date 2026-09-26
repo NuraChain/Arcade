@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { launchChrome } from '../chrome.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const WORLD = join(ROOT, 'application', 'public', 'world');
+const WORLD = join(ROOT, 'frontend', 'public', 'world');
 const BASE = process.env.QA_BASE ?? 'http://localhost:5300';
 
 export const POSTERS = [
@@ -28,8 +28,8 @@ export function inputs()
     return [
         join(WORLD, 'showcase-desktop.glb'),
         join(WORLD, 'showcase-phone.glb'),
-        join(ROOT, 'application', 'src', 'data', 'games.ts'),
-        ...filesUnder(join(ROOT, 'application', 'src', 'world'))
+        join(ROOT, 'frontend', 'src', 'data', 'games.ts'),
+        ...filesUnder(join(ROOT, 'frontend', 'src', 'world'))
     ].map((path) => relative(ROOT, path).replaceAll('\\', '/')).sort();
 }
 
@@ -41,7 +41,7 @@ export function fingerprint()
         hash.update(input);
         hash.update(readFileSync(join(ROOT, input)));
     }
-    const stage = readFileSync(join(ROOT, 'application', 'src', 'components', 'world', 'world-canvas.component.azeroth'), 'utf8');
+    const stage = readFileSync(join(ROOT, 'frontend', 'src', 'components', 'world', 'world-canvas.component.azeroth'), 'utf8');
     hash.update(stage.split('\n').filter((line) => line.includes('--subject-') || line.includes('/world/poster-')).join('\n'));
     return hash.digest('hex');
 }

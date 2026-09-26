@@ -28,9 +28,9 @@ import { fileURLToPath } from 'node:url';
 import { POSTERS, fingerprint } from './art/poster.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const DIST = join(ROOT, 'application', 'dist');
+const DIST = join(ROOT, 'frontend', 'dist');
 const ASSETS = join(DIST, 'assets');
-const SSR_ASSETS = join(ROOT, 'application', 'dist-server', 'assets');
+const SSR_ASSETS = join(ROOT, 'frontend', 'dist-server', 'assets');
 
 const KB = 1024;
 
@@ -142,7 +142,7 @@ for (const name of all)
 // The scenes come from the registry rather than from a filename, so a second game's renderer is
 // measured by the same rule. Each one is a dynamic import inside `mount`: it has to land in a chunk of
 // its own, never in the landing page's initial set and never folded into a route or a component.
-const SCENES = join(ROOT, 'application', 'src', 'game', 'scenes.ts');
+const SCENES = join(ROOT, 'frontend', 'src', 'game', 'scenes.ts');
 
 let boardChunk = null;
 
@@ -164,7 +164,7 @@ if (existsSync(SCENES))
 
     for (const specifier of modules)
     {
-        const file = join(ROOT, 'application', 'src', 'game', specifier.replace(/^\.\//, ''));
+        const file = join(ROOT, 'frontend', 'src', 'game', specifier.replace(/^\.\//, ''));
 
         if (!existsSync(file))
         {
@@ -300,7 +300,7 @@ const posterBytes = POSTERS.map((poster) =>
     return bytes;
 });
 
-const stamp = join(ROOT, 'application', 'public', 'world', 'poster.json');
+const stamp = join(ROOT, 'frontend', 'public', 'world', 'poster.json');
 const captured = existsSync(stamp) ? JSON.parse(readFileSync(stamp, 'utf8')).inputs : null;
 if (captured !== fingerprint())
 {

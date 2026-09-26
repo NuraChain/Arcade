@@ -1,7 +1,7 @@
 import { createPublicClient, http, parseAbi } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 
-import { WALLET_FIXTURES } from '../../server/src/db/wallet-fixtures.ts';
+import { WALLET_FIXTURES } from '../../backend/src/db/wallet-fixtures.ts';
 import { BASE, clearTables, guestSeat, launch, recorder, seat } from './seats.mjs';
 
 const RPC = process.env.QA_RPC ?? 'http://127.0.0.1:8645';

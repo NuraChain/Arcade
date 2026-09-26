@@ -83,7 +83,7 @@ const PARTNER_HANDLE = 'mina';
 async function signedIn(browser, handle = TOUR_HANDLE)
 {
     const { privateKeyToAccount } = await import('viem/accounts');
-    const { WALLET_FIXTURES } = await import('../../server/src/db/wallet-fixtures.ts');
+    const { WALLET_FIXTURES } = await import('../../backend/src/db/wallet-fixtures.ts');
 
     const fixture = WALLET_FIXTURES.find((one) => one.handle === handle);
     if (fixture === undefined)

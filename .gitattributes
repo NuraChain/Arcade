@@ -8,4 +8,4 @@
 *.blend binary
 
 package-lock.json -diff
-application/public/world/* linguist-generated
+frontend/public/world/* linguist-generated

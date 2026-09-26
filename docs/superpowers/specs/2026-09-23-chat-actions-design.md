@@ -101,12 +101,12 @@ chat page, where there is room for the sheets they open.
 
 ## Testing
 
-- `server/tests/chat.db.spec.ts`: a reaction needs a text target in the same room; the page never
+- `backend/tests/chat.db.spec.ts`: a reaction needs a text target in the same room; the page never
   carries a reaction and carries them on their target; deleting is author-only, leaves a tombstone,
   takes the reactions with it; unread and the list's last line ignore both kinds.
-- `application/tests/body.spec.ts`: encode/decode round trip, a mismatched `on` is refused, a
+- `frontend/tests/body.spec.ts`: encode/decode round trip, a mismatched `on` is refused, a
   document that is not an object is refused.
-- `application/tests/markdown.spec.ts`: every syntax, nesting, an unterminated marker left as text,
+- `frontend/tests/markdown.spec.ts`: every syntax, nesting, an unterminated marker left as text,
   a `javascript:` url never becomes a link.
 - The browser: reply, react, forward and delete between two wallet fixtures, in both languages, at
   390 and 1280.

@@ -4,9 +4,9 @@ import { existsSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { GAMES } from '../../application/src/data/games.ts';
+import { GAMES } from '../../frontend/src/data/games.ts';
 
-const OUT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', 'application', 'public', 'world');
+const OUT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', 'frontend', 'public', 'world');
 
 const ALLOWED = new Set([
     'EXT_meshopt_compression',

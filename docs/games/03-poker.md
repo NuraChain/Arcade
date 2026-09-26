@@ -29,7 +29,7 @@ other game.
 
 ## Domain
 
-`server/src/domains/match/poker/`, pure: it imports only itself and `../cards/`, with no clock and
+`backend/src/domains/match/poker/`, pure: it imports only itself and `../cards/`, with no clock and
 no randomness except the `Die` it is handed. `ludo-purity.spec.ts` reads every directory under
 `match/` and allows exactly those two import prefixes.
 
@@ -153,7 +153,7 @@ A play is `{ kind: 'poker', verb: 'fold' | 'check' | 'call' | 'raise' | 'allin',
 
 ## The table
 
-`application/src/components/games/poker-board.component.azeroth`: an oval felt with the seats placed
+`frontend/src/components/games/poker-board.component.azeroth`: an oval felt with the seats placed
 round it from the reader's chair, clockwise - the next player to act after the reader sits to their
 LEFT, which is the opposite of hokm's rotation and the direction a real poker table deals. Each bet is
 drawn between its seat and the pot, the button is a "D" on its seat, and the community cards and the

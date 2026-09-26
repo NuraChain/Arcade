@@ -9,9 +9,9 @@ import { rasterise } from './art.mjs';
 import { BUDGETS, inspect } from './inspect.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const OUT = resolve(HERE, '..', '..', 'application', 'public', 'world');
-const ART = resolve(HERE, '..', '..', 'application', 'public', 'art', 'games');
-const BOARD = resolve(HERE, '..', '..', 'application', 'public', 'board');
+const OUT = resolve(HERE, '..', '..', 'frontend', 'public', 'world');
+const ART = resolve(HERE, '..', '..', 'frontend', 'public', 'art', 'games');
+const BOARD = resolve(HERE, '..', '..', 'frontend', 'public', 'board');
 
 const ART_BUDGET_BYTES = 32 * 1024;
 const SURFACE_BUDGET_BYTES = { 'ludo-table.webp': 320 * 1024, 'hokm-table-wide.webp': 200 * 1024, 'hokm-table-tall.webp': 200 * 1024 };
@@ -27,7 +27,7 @@ const blender = CANDIDATES.find((candidate) => existsSync(candidate));
 if (blender === undefined)
 {
     console.error('Blender was not found. Set BLENDER to its executable, or install Blender 5.2.');
-    console.error('The committed GLBs in application/public/world are still usable without it.');
+    console.error('The committed GLBs in frontend/public/world are still usable without it.');
     process.exit(1);
 }
 

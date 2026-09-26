@@ -20,7 +20,7 @@ three, and it is the only work that can break Ludo.
 
 ## The finding
 
-CLAUDE.md calls `server/src/domains/match/` "the first real game engine in this product". It is —
+CLAUDE.md calls `backend/src/domains/match/` "the first real game engine in this product". It is —
 and the layer *above* the engine was written for exactly one engine. There is a `ludo/` folder, and
 everything around it names Ludo directly.
 
@@ -379,7 +379,7 @@ service no longer imports `apply`/`create`/`legalMoves`, and the action vocabula
 answers false without anybody writing a special case.
 
 **Two source-text rules hold the seam**, both proved to fail against the defect they exist for
-before being trusted. `server/tests/engine-seam.spec.ts` fails if `services.ts` imports anything
+before being trusted. `backend/tests/engine-seam.spec.ts` fails if `services.ts` imports anything
 under `ludo/` or names a part of a board, and asserts by PARSING that the shared envelope drops a
 colour and that `matchView` has no `die`, `moves` or `tokens` - the wire being what the parser lets
 through rather than what the declaration says.

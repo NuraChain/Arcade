@@ -93,7 +93,7 @@ targets ≥ 44px on touch; one h1; the canvas and the image are decorative.
 
 **Assets (`tools/blender/`)**
 - Delete: all 14 `assets/*.py`, `lib/atlas.py`, `lib/wood.py`, `lib/figure.py`, `atlas.py`,
-  `preview.py`, and every file in `application/public/world/` (14 GLBs, atlas, wood maps).
+  `preview.py`, and every file in `frontend/public/world/` (14 GLBs, atlas, wood maps).
 - Rewrite: `build.mjs` (fix the syntax error; first rasterise `public/board/deck.svg` and
   `card-back.svg` at 2× and `ludo-board.svg` at 2048² with Playwright into git-ignored
   `scratch/art/`), `inspect.mjs` (new gates), `lib/kit.py` (PBR `material()`, `token()` reading
@@ -125,7 +125,7 @@ targets ≥ 44px on touch; one h1; the canvas and the image are decorative.
   art; AgX would shift them). No punctual lights, no shadow maps: a floor decal (lit pool graded to
   exactly `#0B1220` at its border) and a contact decal (Cycles shadow catcher) per vignette.
 
-**Runtime (`application/src/world/`)**
+**Runtime (`frontend/src/world/`)**
 
 | file | fate |
 |---|---|

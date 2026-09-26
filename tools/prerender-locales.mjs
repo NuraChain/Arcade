@@ -4,12 +4,12 @@ import { pathToFileURL } from 'node:url';
 
 import { prerender } from '@azerothjs/kit/prerender';
 
-const application = resolve(import.meta.dirname, '..', 'application');
-const entry = await import(pathToFileURL(resolve(application, 'dist-server', 'entry.server.js')).href);
+const frontend = resolve(import.meta.dirname, '..', 'frontend');
+const entry = await import(pathToFileURL(resolve(frontend, 'dist-server', 'entry.server.js')).href);
 
 const written = await prerender({
     routes: entry.routes,
-    clientDir: resolve(application, 'dist'),
+    clientDir: resolve(frontend, 'dist'),
     renderer: entry.renderPage,
     locales: ['en', 'fa']
 });
@@ -22,7 +22,7 @@ const UPRIGHT = '(max-width: 63.99rem) and (not ((orientation: landscape) and (m
 
 for (const [locale, wide] of [['en', 'poster-wide-ltr'], ['fa', 'poster-wide-rtl']])
 {
-    const file = resolve(application, 'dist', `index.${ locale }.html`);
+    const file = resolve(frontend, 'dist', `index.${ locale }.html`);
     const page = readFileSync(file, 'utf8');
     const preload = [
         `<link rel="preload" as="image" href="/world/poster-portrait.webp" type="image/webp" media="${ UPRIGHT }" fetchpriority="high"/>`,

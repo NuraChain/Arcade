@@ -53,7 +53,7 @@ Anything else is taken exactly as the spec states it, including the three-player
 
 ## Domain
 
-`server/src/domains/match/hokm/`, pure and import-free like `ludo/` — no `typeorm`, no `node:`, no
+`backend/src/domains/match/hokm/`, pure and import-free like `ludo/` — no `typeorm`, no `node:`, no
 clock, no randomness. `ludo-purity.spec.ts` gets a sibling.
 
 ```
@@ -113,7 +113,7 @@ other, then apply the same delta to both members. Confirm before building.*
 
 ## Client
 
-`application/src/game/hokm/` — framework-free, Phaser behind a dynamic import, registered in the
+`frontend/src/game/hokm/` — framework-free, Phaser behind a dynamic import, registered in the
 scene registry the seam adds.
 
 - **4 players:** partner top, opponents left and right, you at the bottom.

@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { launchChrome } from '../chrome.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const BOARD = join(HERE, '..', '..', 'application', 'public', 'board');
+const BOARD = join(HERE, '..', '..', 'frontend', 'public', 'board');
 const OUT = join(HERE, 'scratch', 'art');
 
 export const CARD_CODES = ['AH', 'KH', 'QH', 'JH', '10H', 'AS', 'KS', 'QS', 'JS', 'AD', 'KD', '10D', '7D'];

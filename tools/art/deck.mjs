@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 import { SUIT_PATH } from './suits.mjs';
 
-const OUT = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'application', 'public', 'board');
+const OUT = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'frontend', 'public', 'board');
 const W = 204;
 const H = 288;
 const CX = W / 2;

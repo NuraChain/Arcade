@@ -1,5 +1,5 @@
 import { BASE, clearTables, launch, pressable, recorder, seat, waitFor } from './seats.mjs';
-import { turns } from '../../server/src/domains/match/backgammon/moves.ts';
+import { turns } from '../../backend/src/domains/match/backgammon/moves.ts';
 
 const CLICKED_TURNS = 8;
 

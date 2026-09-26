@@ -26,7 +26,7 @@ Thumbs.db
 tools/blender/scratch/
 
 # Cycles review renders and browser screenshots. Every asset script writes previews here so a
-# model can be judged before it ships; the GLBs in application/public/world are the deliverable.
+# model can be judged before it ships; the GLBs in frontend/public/world are the deliverable.
 tools/blender/out/
 tools/blender/preview.png
 *-browser.png

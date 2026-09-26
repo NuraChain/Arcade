@@ -22,11 +22,11 @@ server's and the client only mirrors it.
 ## The rules are the server's
 
 Every helper is computed from the SERVER's own pure rules, imported the way the backgammon board
-already imports `stage` from `server/src/domains/match/backgammon/moves.ts`: Ludo's board geometry,
+already imports `stage` from `backend/src/domains/match/backgammon/moves.ts`: Ludo's board geometry,
 Hokm's `trickWinner`, backgammon's `stage`, poker's evaluator. A second copy of any rule in the browser
 would agree with the server right up until the position where it mattered.
 
-Each game has one pure module, `application/src/game/helpers/<game>.ts`, which imports nothing from
+Each game has one pure module, `frontend/src/game/helpers/<game>.ts`, which imports nothing from
 AzerothJS and nothing from `lib/`, and answers two questions: what each legal move DOES, and which
 `Tip` (`game/helpers/tip.ts`: a message key and its params) applies now. `coachOf` returns null when
 nothing is worth saying - a tip that is always there is a tip nobody reads.
@@ -60,5 +60,5 @@ have no moves.
 
 ## Tests
 
-`application/tests/helpers-<game>.spec.ts` for each pure module, table-driven over real positions, and
+`frontend/tests/helpers-<game>.spec.ts` for each pure module, table-driven over real positions, and
 the board specs pin that each switch turns its helper off.

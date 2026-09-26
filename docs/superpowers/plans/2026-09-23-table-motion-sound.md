@@ -3,7 +3,7 @@
 Spec: `docs/superpowers/specs/2026-09-23-table-motion-sound-design.md`. Each task ends with
 `npm run check`, the affected suites, and a look in a real browser; each is its own commit.
 
-- [ ] **Task 1 - audio engine.** Rewrite `application/src/game/sound.ts`: one context per page,
+- [ ] **Task 1 - audio engine.** Rewrite `frontend/src/game/sound.ts`: one context per page,
       unlocked on pointerup/touchend/click/keydown, `resuming` window for the first cue, statechange
       re-arming, 300 ms recreate, ambient audio session, counted acquire/release with suspend,
       hidden-tab filter, sample loading with offset scan, round-robin, rate/gain variation, voice cap,
@@ -11,7 +11,7 @@ Spec: `docs/superpowers/specs/2026-09-23-table-motion-sound-design.md`. Each tas
       default (D12).
 - [ ] **Task 2 - sample pipeline.** `tools/art/sound.mjs` (ffmpeg): Kenney CC0 sources under
       `tools/art/sound-src/` with LICENSE, trimmed 96 kbps mono MP3 into
-      `application/src/game/sound/`, imported through Vite so they are hashed and immutable. Budgets in
+      `frontend/src/game/sound/`, imported through Vite so they are hashed and immutable. Budgets in
       `tools/budgets.mjs`. Remove the unused `gsap` and `lenis`.
 - [ ] **Task 3 - haptics.** New patterns and the activation/visibility/rate guards in
       `lib/haptics.ts`; haptics follow the setting, not reduced motion.

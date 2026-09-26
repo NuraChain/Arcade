@@ -20,7 +20,7 @@ SERVICE_NAME="nura-games"
 # realtime gateway and the background sweeps, and in production serves the built client itself, so
 # there is only ever one unit.
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-SERVICE_PATH="$ROOT/server"
+SERVICE_PATH="$ROOT/backend"
 
 # This backend COMPILES, which is the one thing that differs from the Explorer service and the one
 # thing that will strand a deploy silently. `typeorm` sitting in `dependencies` is what decides it:
@@ -34,19 +34,19 @@ SERVICE_FILE="$SERVICE_DIR/${SERVICE_NAME}.service"
 
 # Three things a missing build turns into a restart loop at 3am. Say so here instead.
 if [ ! -f "$SERVICE_PATH/$SERVICE_PATH_APP" ]; then
-  echo "warning: server/$SERVICE_PATH_APP is missing - run 'npm run build' before starting" >&2
+  echo "warning: backend/$SERVICE_PATH_APP is missing - run 'npm run build' before starting" >&2
 fi
 
-if [ ! -f "$ROOT/application/dist/index.html" ]; then
-  echo "warning: application/dist is missing - the server would answer the api and 404 every page" >&2
+if [ ! -f "$ROOT/frontend/dist/index.html" ]; then
+  echo "warning: frontend/dist is missing - the server would answer the api and 404 every page" >&2
 fi
 
-if [ ! -f "$ROOT/application/dist-server/entry.server.js" ]; then
-  echo "warning: application/dist-server/entry.server.js is missing - there is no SSR bundle to render with" >&2
+if [ ! -f "$ROOT/frontend/dist-server/entry.server.js" ]; then
+  echo "warning: frontend/dist-server/entry.server.js is missing - there is no SSR bundle to render with" >&2
 fi
 
 if [ ! -f "$SERVICE_PATH/.env" ]; then
-  echo "warning: server/.env is missing - the service would boot against the defaults" >&2
+  echo "warning: backend/.env is missing - the service would boot against the defaults" >&2
 else
   # Three values decide whether this process is a SERVER or half of a development pair, and every
   # one of them is silent when wrong. `SERVE_PAGES=false` answers the api and 404s every page;
@@ -75,7 +75,7 @@ fi
 # Said unconditionally rather than behind a marker file. The first version of this checked for a
 # `.schema-synced` that nothing anywhere writes, so the note fired on every install - and a warning
 # that always fires is one people stop reading, which is worse than not printing it.
-echo "note: run 'npm run schema:sync --workspace server' before the first start, and after any entity change" >&2
+echo "note: run 'npm run schema:sync --workspace backend' before the first start, and after any entity change" >&2
 
 # systemd does not create the directory it is told to log into.
 mkdir -p "$SERVICE_PATH/logs"

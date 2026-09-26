@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 import { chromium } from 'playwright';
 
-const PUBLIC = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'application', 'public');
+const PUBLIC = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'frontend', 'public');
 const ICON = readFileSync(join(PUBLIC, 'favicon.svg'), 'utf8');
 const ART = ['hokm', 'ludo', 'backgammon', 'poker'].map((game) => readFileSync(join(PUBLIC, 'art', 'games', `${ game }.svg`), 'utf8'));
 

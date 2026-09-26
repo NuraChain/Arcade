@@ -1,4 +1,4 @@
-import { turns } from '../../server/src/domains/match/backgammon/moves.ts';
+import { turns } from '../../backend/src/domains/match/backgammon/moves.ts';
 
 const BASE = process.env.QA_BASE ?? 'http://localhost:5300';
 

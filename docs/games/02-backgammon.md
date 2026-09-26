@@ -29,7 +29,7 @@ Canonical ruleset: [bkgm.com rules](https://bkgm.com/rules.html) and
 
 ## Domain
 
-`server/src/domains/match/backgammon/` is pure: it imports only `./` files, takes its dice from the
+`backend/src/domains/match/backgammon/` is pure: it imports only `./` files, takes its dice from the
 `Draws` it is handed, reads no clock, and `ludo-purity.spec.ts` finds it by walking the directory.
 
 ```
@@ -41,7 +41,7 @@ state.ts      the state, the actions, the events, the refusals
 engine.ts     create, apply, legalMoves, autoplay
 ```
 
-`server/src/domains/match/engines/backgammon.ts` is the adapter behind `Engine`, registered in
+`backend/src/domains/match/engines/backgammon.ts` is the adapter behind `Engine`, registered in
 `ENGINES` in `service.ts`.
 
 ### Coordinates
@@ -174,22 +174,22 @@ about the same as a ludo or hokm win.
 
 ## Tests
 
-- `server/tests/backgammon-rules.spec.ts`: each rule above by name, the opening counts, the naive
+- `backend/tests/backgammon-rules.spec.ts`: each rule above by name, the opening counts, the naive
   enumerator cross-check, checker conservation after every single hop of four hundred plies,
   scoring times the cube, the dead cube, no beavers, and the Crawford sequence played for real.
-- `server/tests/backgammon-engine.spec.ts`: the opening roll and its tie, automatic rolling, the pass,
+- `backend/tests/backgammon-engine.spec.ts`: the opening roll and its tie, automatic rolling, the pass,
   every refusal, walkouts and the two-action threshold, autoplay, the tallies, and seeded whole
   matches at 1, 3 and 5 points, cube on and off, with every invariant checked after every action.
-- `server/tests/backgammon-seam.spec.ts`: every reader gets the same board and log all match long,
+- `backend/tests/backgammon-seam.spec.ts`: every reader gets the same board and log all match long,
   the wire round-trips through the shared unions, and `parse` refuses other games' plays.
-- `server/tests/engine-contract.spec.ts` plays random 1-point matches under its 3,000-action bound.
+- `backend/tests/engine-contract.spec.ts` plays random 1-point matches under its 3,000-action bound.
 
 ---
 
 ## The board
 
-`application/src/components/games/backgammon-board.component.azeroth` draws the board as one inline
-SVG from `application/src/game/backgammon-layout.ts`, with the reader's home bottom right whatever
+`frontend/src/components/games/backgammon-board.component.azeroth` draws the board as one inline
+SVG from `frontend/src/game/backgammon-layout.ts`, with the reader's home bottom right whatever
 their seat. A turn is staged one hop at a time - tap a checker, then where it goes, or pick a move
 from the list of buttons under the board - and `stage()` from the server's own `moves.ts` decides
 which hops are left after each one. Undo takes a staged hop back; "Play the move" sends the whole

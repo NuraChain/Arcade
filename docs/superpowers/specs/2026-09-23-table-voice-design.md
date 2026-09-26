@@ -69,9 +69,9 @@ for a product whose players include minors.
 
 ## Testing
 
-- `server/tests/voice.spec.ts`: frame parsing (sizes, kinds, unknown keys), room membership, relay
+- `backend/tests/voice.spec.ts`: frame parsing (sizes, kinds, unknown keys), room membership, relay
   only within a room, the pair policy refusing a minor and a stranger.
-- `application/tests/voice.spec.ts`: the store against a fake RTC layer - join, listen-only on a
+- `frontend/tests/voice.spec.ts`: the store against a fake RTC layer - join, listen-only on a
   refused mic, a peer leaving tears its connection down, mute is sent and shown.
 - The browser: two real browsers at one table, join, hear the tone of a fake microphone
   (`--use-fake-device-for-media-stream`), mute, leave.

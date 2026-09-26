@@ -25,7 +25,7 @@ import { join } from 'node:path';
 import { chromium } from 'playwright';
 import { privateKeyToAccount } from 'viem/accounts';
 
-import { WALLET_FIXTURES } from '../../server/src/db/wallet-fixtures.ts';
+import { WALLET_FIXTURES } from '../../backend/src/db/wallet-fixtures.ts';
 
 function cachedChromium()
 {

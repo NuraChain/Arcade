@@ -14,7 +14,7 @@ corrected report, re-checked against the repository.
 | D3 | **MP3, 96 kbps, mono, 44.1 kHz, imported through Vite** (`new URL('./sound/x.mp3', import.meta.url)`) so each file lands hashed in `/assets/` and is cached as `immutable`. | Safari decodes Ogg only from 18.4. Files in `public/` are revalidated on every load. |
 | D4 | **Haptics through `navigator.vibrate`, which in practice means Chromium on Android.** No iOS workaround. | Firefox removed or no-oped it. The only path left on iOS 26.5 needs an invisible switch under every tap target. |
 | D5 | **Haptics follow the haptics setting, not reduced motion.** Drop `!device.reducedMotion()` at `app-shell.component.azeroth:52`. | Reduced motion concerns visual movement. Vibration is a different channel. |
-| D6 | **DOM games (Hokm) use the Web Animations API with FLIP. Canvas games (Ludo) use Phaser tweens.** Remove the unused `gsap` and `lenis` from `application/package.json`. | Built in, costs no bytes, runs off the main thread. Nothing imports either library (checked). |
+| D6 | **DOM games (Hokm) use the Web Animations API with FLIP. Canvas games (Ludo) use Phaser tweens.** Remove the unused `gsap` and `lenis` from `frontend/package.json`. | Built in, costs no bytes, runs off the main thread. Nothing imports either library (checked). |
 | D7 | **No View Transitions for game events.** | Full-page snapshots, one at a time, and each new one skips the running one. |
 | D8 | **Animate from the server's event log, not from comparing views.** Use `since` for nudges, and events carried on the action reply for the player's own moves. | Views lose the steps in between (merged nudges). Ludo pass rolls, forfeits and repeated dice are invisible today. |
 | D9 | **The action reply carries events** (a server change), so a move costs one round trip. | Today it is two, and removing one without events would lose what happened. |
@@ -24,7 +24,7 @@ corrected report, re-checked against the repository.
 
 ## 1. What exists now
 
-### 1.1 Ludo (Phaser 4.2.1 canvas): `application/src/game/board/ludo-board.ts`
+### 1.1 Ludo (Phaser 4.2.1 canvas): `frontend/src/game/board/ludo-board.ts`
 
 | Event | Current behaviour |
 |---|---|
@@ -161,7 +161,7 @@ These curves were computed from the under-damped spring equations, then sampled 
 
 ### 2.5 Bundle sizes today
 
-Measured from the `application/dist` build at 10:06 today, gzip level 6 (Node's default).
+Measured from the `frontend/dist` build at 10:06 today, gzip level 6 (Node's default).
 
 | Chunk | gzip | Budget (`tools/budgets.mjs`) |
 |---|---|---|
@@ -310,7 +310,7 @@ Synthesised cues, in the existing `Voice` format `{ wave, from→to Hz, hold s, 
 
 ### Step 0: audio engine
 
-File: `application/src/game/sound.ts`, rewritten with no comments. Its reasoning moves to a new CLAUDE.md section, "The table's sounds", which replaces the paragraph around line 1573 and the board-canvas docblock.
+File: `frontend/src/game/sound.ts`, rewritten with no comments. Its reasoning moves to a new CLAUDE.md section, "The table's sounds", which replaces the paragraph around line 1573 and the board-canvas docblock.
 
 - **One context per page, created lazily** in the first `pointerup`, `touchend`, `click` or `keydown`. Those listeners stay installed until the state is `running`, and a `statechange` listener re-installs them on `suspended` or `interrupted`.
 - **Resuming:** set `resuming` while a gesture's `resume()` is pending, and let cues be scheduled during it. Otherwise `play()` does nothing unless the state is `running`. If the context has not reached `running` within 300 ms of a tap, recreate it.
@@ -326,34 +326,34 @@ File: `application/src/game/sound.ts`, rewritten with no comments. Its reasoning
   - round-robin variants, rate and gain variation, the voice cap and panning;
   - a missing buffer falls back to its synthesised voice or silence.
 - **API:** `createSound(enabled)`, `play(cue, { pan?, rate? })`, `setEnabled`, `dispose`, with the same shape as today.
-- **Sample files:** `application/src/game/sound/*.mp3`, referenced with `new URL('./sound/<name>.mp3', import.meta.url)` so they are hashed into `/assets/` and cached as `immutable`.
+- **Sample files:** `frontend/src/game/sound/*.mp3`, referenced with `new URL('./sound/<name>.mp3', import.meta.url)` so they are hashed into `/assets/` and cached as `immutable`.
 
 ### Step 1: haptics
 
-- `application/src/lib/haptics.ts`: the new patterns and guards.
-- `application/src/components/app/app-shell.component.azeroth:52`: drop `&& !device.reducedMotion()`.
+- `frontend/src/lib/haptics.ts`: the new patterns and guards.
+- `frontend/src/components/app/app-shell.component.azeroth:52`: drop `&& !device.reducedMotion()`.
 
 ### Step 2: events on the wire, and one round trip per move
 
-- **`server/src/schemas.ts`:** `matchAck` gains `events: array(matchEvent)`.
-- **`server/src/domains/match/service.ts`:**
+- **`backend/src/schemas.ts`:** `matchAck` gains `events: array(matchEvent)`.
+- **`backend/src/domains/match/service.ts`:**
   - Pull the rows-and-log half of `since` (lines 409–450) into a shared helper. It uses the repository `find` with `MoreThan(rev)` and `order: { rev: 'ASC' }`, so it stays TypeORM.
   - `act` returns events since `want.rev` when the caller sent one, composed with `engine.log(events, reader)`.
   - `resign` sends no rev, so its events are empty.
-- **`server/src/services.ts`:** the `play` and `resign` projections map `events` exactly as `since` does, and name no part of a board, as `engine-seam.spec.ts` requires.
-- **`server/tests/redaction.db.spec.ts`:** extend the search for the fixture engine's per-seat secret to the reply payload, because it is a new way out for the log.
-- **`application/src/stores/match.store.ts`:**
+- **`backend/src/services.ts`:** the `play` and `resign` projections map `events` exactly as `since` does, and name no part of a board, as `engine-seam.spec.ts` requires.
+- **`backend/tests/redaction.db.spec.ts`:** extend the search for the fixture engine's per-seat secret to the reply payload, because it is a new way out for the log.
+- **`frontend/src/stores/match.store.ts`:**
   - `act` keeps `ack.match` in a `latest` signal, updated with the updater form: `setLatest((held) => held !== null && held.rev >= next.rev ? held : next)`. The board shows whichever of `latest` and `viewing.data()` has the higher rev.
   - `ack.events` is pushed to an `events` signal holding the last batch plus a `jump` flag.
   - Nudges and `onBack` call `client.matches.since({ params: { id }, query: { rev: String(held) } })` when a board is held, and fall back to `view` when none is.
   - This is still not optimistic, because what renders is still the server's answer.
-- **`application/src/locales/{en,fa}/play.ts`:** `match.rolled.none` and `hokm.kot`. No "+n" key.
+- **`frontend/src/locales/{en,fa}/play.ts`:** `match.rolled.none` and `hokm.kot`. No "+n" key.
 
 ### Step 3: Ludo
 
-- **`application/src/game/bridge.ts`:** `BoardView` gains `rev: number` and `beats: readonly LudoBeat[]`, with `LudoBeat` declared locally by shape. `game/` imports nothing from `api.ts`.
-- **`application/src/components/games/match-board.component.azeroth`:** maps `board.events()` into `view.beats`. There is no new prop and no `anticipate()`.
-- **`application/src/game/board/ludo-board.ts`:**
+- **`frontend/src/game/bridge.ts`:** `BoardView` gains `rev: number` and `beats: readonly LudoBeat[]`, with `LudoBeat` declared locally by shape. `game/` imports nothing from `api.ts`.
+- **`frontend/src/components/games/match-board.component.azeroth`:** maps `board.events()` into `view.beats`. There is no new prop and no `anticipate()`.
+- **`frontend/src/game/board/ludo-board.ts`:**
   - Beats with a `rev` at or below the last one seen are ignored.
   - L3, L4, L10 and L14.
   - The capture is sequenced after the attacker lands.
@@ -363,14 +363,14 @@ File: `application/src/game/sound.ts`, rewritten with no comments. Its reasoning
   - Settle on hidden or on a gap.
   - Under reduced motion, keep the cues.
   - Idle sleep.
-- **`application/src/components/games/yard-badge.component.azeroth` and `app.css`:** the `.yard-die` pop and the `.ludo-pip[data-home]` pop. Remove the `.yard-name` `backdrop-filter`.
-- **`application/src/components/games/turn-clock.component.azeroth`:** a `yours` prop; ticks at 5 to 1 s, live mode only.
+- **`frontend/src/components/games/yard-badge.component.azeroth` and `app.css`:** the `.yard-die` pop and the `.ludo-pip[data-home]` pop. Remove the `.yard-name` `backdrop-filter`.
+- **`frontend/src/components/games/turn-clock.component.azeroth`:** a `yours` prop; ticks at 5 to 1 s, live mode only.
 
 ### Step 4: Hokm
 
-- **New `application/src/game/motion.ts`** (§3.1).
-- **New `application/src/game/hokm-beats.ts`:** a pure mapping from log events plus the previous shown state to timed steps. It covers own and opponent cards, several cards in one batch, trick plus next lead, trump, deal, hand end, kot, a change of Hâkem, forfeit, finish and the jump.
-- **`application/src/components/games/hokm-board.component.azeroth`:**
+- **New `frontend/src/game/motion.ts`** (§3.1).
+- **New `frontend/src/game/hokm-beats.ts`:** a pure mapping from log events plus the previous shown state to timed steps. It covers own and opponent cards, several cards in one batch, trick plus next lead, trump, deal, hand end, kot, a change of Hâkem, forfeit, finish and the jump.
+- **`frontend/src/components/games/hokm-board.component.azeroth`:**
   - the flight-layer element as the root's last child;
   - an `origins` map by card, recorded in `touchCard` and `playCard`;
   - a `shown` state that `laid` reads, fed by the queue;
@@ -379,26 +379,26 @@ File: `application/src/game/sound.ts`, rewritten with no comments. Its reasoning
   - haptics;
   - the reduced-motion branch;
   - FLIP for sorting, keyed across both rows.
-- **`application/src/styles/app.css`:**
+- **`frontend/src/styles/app.css`:**
   - remove `hokm-lay` and the `backdrop-filter` on `.hokm-plate`;
   - `.hokm-hand > li`: position with `left: 50%` plus a `translate` built from `--i`, `--n`, `--step` and the arc, with `transition: translate 500ms var(--ease-snap), rotate 500ms var(--ease-snap)`;
   - `.board-flight`; `.hokm-trick[data-landing] { opacity: 0 }`;
   - `.hokm-plate.is-turn::after` using `ring-seek`;
   - the glow and the dimming of illegal cards as pseudo-elements with opacity transitions, replacing the `filter` and `box-shadow` transitions;
   - the `@supports linear()` block.
-- **`application/src/styles/tokens.css`:** `--ease-snap` and `--ease-pop`.
+- **`frontend/src/styles/tokens.css`:** `--ease-snap` and `--ease-pop`.
 
 ### Step 5: asset pipeline and cleanup
 
 - **New `tools/art/sound.mjs`** (no comments; needs ffmpeg, the way `raster.mjs` needs Chrome).
   - Sources: the chosen CC0 OGGs committed under `tools/art/sound-src/` (about 150 KB), with `LICENSE.txt` crediting Kenney.
   - Command per file: `ffmpeg -i in.ogg -ac 1 -ar 44100 -af "silenceremove=start_periods=1:start_threshold=-50dB:start_silence=0.002,atrim=0:<max>,afade=t=out:st=<max-0.06>:d=0.06" -c:a libmp3lame -b:a 96k out.mp3`
-  - Output: `application/src/game/sound/`.
-- **Remove `gsap` and `lenis`** from `application/package.json`.
+  - Output: `frontend/src/game/sound/`.
+- **Remove `gsap` and `lenis`** from `frontend/package.json`.
 
 ## 5. Testing
 
-- **`application/tests/game.spec.ts`:** rewrite the sound suite. The one-shot and `pointerdown` assertions are removed. The fake context gains `state`, `resume`, `suspend` and `statechange`.
+- **`frontend/tests/game.spec.ts`:** rewrite the sound suite. The one-shot and `pointerdown` assertions are removed. The fake context gains `state`, `resume`, `suspend` and `statechange`.
   - A touch `pointerdown` creates nothing; `pointerup`, `touchend` and `keydown` do.
   - A cue in the same handler as the resume is scheduled.
   - While `suspended` or `interrupted` with no resume pending, nothing is scheduled.
@@ -407,27 +407,27 @@ File: `application/src/game/sound.ts`, rewritten with no comments. Its reasoning
   - A missing buffer uses the synthesised fallback.
   - The offset scan returns the first loud sample.
   - `audioSession.type` becomes `'ambient'` where it exists.
-- **`application/tests/touch.spec.ts`:** no vibration without user activation or while hidden; the 80 ms limit; haptics still on under reduced motion, via the shell.
-- **New `application/tests/hokm-beats.spec.ts`:**
+- **`frontend/tests/touch.spec.ts`:** no vibration without user activation or while hidden; the 80 ms limit; haptics still on under reduced motion, via the shell.
+- **New `frontend/tests/hokm-beats.spec.ts`:**
   - one case per H1–H18;
   - a trick taken plus the next lead in one batch;
   - a hand end followed by a deal to a new Hâkem;
   - a gap jumps to the state.
-- **New `application/tests/motion.spec.ts`:**
+- **New `frontend/tests/motion.spec.ts`:**
   - `flightFrames` maths (rotation, scale from rects, centre of the bounding box);
   - the `linear()` tokens start with `linear(0` and end with `1)`;
   - the fallback applies when `CSS.supports` is false;
   - the pacing thresholds.
-- **`application/tests/hokm-board.spec.ts`** (spy on `Element.animate`, manual clock):
+- **`frontend/tests/hokm-board.spec.ts`** (spy on `Element.animate`, manual clock):
   - playing a card starts a flight from the recorded origin;
   - under reduced motion, opacity keyframes only;
   - the gather waits 900 ms, or 450 ms with a lead queued;
   - removing a card leaves the sibling `<li>`s as the same objects, with no re-insertion (a `MutationObserver` sees only the removal).
-- **`application/tests/app-stores.spec.ts`:**
+- **`frontend/tests/app-stores.spec.ts`:**
   - `act` renders from the reply's match, with the higher rev winning over a late refetch;
   - a nudge calls `since` with the held rev;
   - a gap sets `jump`.
-- **`application/tests/play.spec.ts:515`:** update only if D12 is accepted.
+- **`frontend/tests/play.spec.ts:515`:** update only if D12 is accepted.
 - **Server:**
   - reply events come back in rev order and are composed per reader;
   - the `redaction.db.spec.ts` extension above;

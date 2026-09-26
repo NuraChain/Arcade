@@ -1,0 +1,821 @@
+import { Dynamic, type MountNode, onCleanup, untrack, useHead, useNavigate, useParams, useRoute } from 'azerothjs';
+
+import ConfirmSheet from '../../components/app/confirm-sheet.component.azeroth';
+import Page from '../../components/app/page.component.azeroth';
+import InviteSheet from '../../components/games/invite-sheet.component.azeroth';
+import LobbyPanel from '../../components/games/lobby-panel.component.azeroth';
+import PlayHeader from '../../components/games/play-header.component.azeroth';
+import WatchBoard from '../../components/games/watch-board.component.azeroth';
+import TableDock from '../../components/games/table-dock.component.azeroth';
+import Button from '../../components/ui/button.component.azeroth';
+import EmptyState from '../../components/ui/empty-state.component.azeroth';
+import ErrorState from '../../components/ui/error-state.component.azeroth';
+import Skeleton from '../../components/ui/skeleton.component.azeroth';
+import type { GameId } from '../../data/games.ts';
+import Icon from '../../icons/icon.component.azeroth';
+import Badge from '../../components/ui/badge.component.azeroth';
+import { runtime } from '../../lib/runtime.ts';
+import { useCatalogue } from '../../stores/catalogue.store.ts';
+import { useChat } from '../../stores/chat.store.ts';
+import { usePeople } from '../../stores/people.store.ts';
+import { SHORT_MAX, useDevice } from '../../stores/device.store.ts';
+import { useVoice } from '../../stores/voice.store.ts';
+import { useLobby } from '../../stores/lobby.store.ts';
+import { useRealtime } from '../../stores/realtime.store.ts';
+import { useBoard } from '../../stores/match.store.ts';
+import { useSettings } from '../../stores/settings.store.ts';
+import { useWatch } from '../../stores/watch.store.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import { useOverlay } from '../../stores/overlay.store.ts';
+import { useShell } from '../../stores/shell.store.ts';
+import { useToasts } from '../../stores/toasts.store.ts';
+import Panel from '../../components/ui/panel.component.azeroth';
+import type { MatchView } from '../../api.ts';
+import { plainOf } from '../../lib/markdown.ts';
+import { holdScreen } from '../../lib/wake-lock.ts';
+import { seatedMax } from '../../lib/open-table.ts';
+import { copyText } from '../../lib/clipboard.ts';
+import { BOARDS, drawable, type BoardComponent } from '../../components/games/boards.ts';
+import { turnMs } from '../../../../backend/src/domains/match/turns.ts';
+
+export default component PlayPage()
+{
+    const locale = useLocale();
+    const lobby = useLobby();
+    const voice = useVoice();
+    const board = useBoard();
+    const settings = useSettings();
+    const catalogue = useCatalogue();
+    const device = useDevice();
+    const watch = useWatch();
+    const overlay = useOverlay();
+    const shell = useShell();
+    const toasts = useToasts();
+    const params = useParams();
+    const { navigate } = useNavigate();
+    const chat = useChat();
+    const people = usePeople();
+
+    const mine = untrack(() => params().id ?? '');
+
+    state chatOpen = false;
+
+    state chatWide = false;
+
+    let arena: HTMLElement | null = null;
+
+    state starting = false;
+
+    let Board: BoardComponent | null = null;
+
+    let Chat: ((props: { conversationId: string; class?: string; closeIcon?: 'panel-close' | 'close'; wide?: boolean; onResize?: () => void; onClose?: () => void }) => MountNode) | null = null;
+
+    state chatReady = false;
+
+    let talk: Record<string, string> = {};
+
+    let version = 0;
+
+    state stamp = 0;
+
+    const publish = (): void =>
+    {
+        version += 1;
+        stamp = version;
+    };
+
+    derived speech = ((): Record<string, string> => (stamp >= 0 ? { ...talk } : {}))();
+
+    let heard = new Set<string>();
+
+    let primed = false;
+
+    let hush: (() => void)[] = [];
+
+    state drawn = '';
+
+    const route = useRoute();
+
+    effect
+    {
+        const here = route().pathname;
+        const id = params().id ?? '';
+
+        if (id !== '' && here.startsWith('/app/play/'))
+        {
+            lobby.open(id);
+        }
+    }
+
+    mount
+    {
+        const release = shell.claimTitle(() => title);
+
+        void import('../../components/games/table-chat.component.azeroth').then((module) =>
+        {
+            Chat = module.default;
+            chatReady = true;
+        });
+
+        return () =>
+        {
+            release();
+
+            if (untrack(voice.table) === mine)
+            {
+                voice.leave();
+            }
+
+            for (const stop of hush)
+            {
+                stop();
+            }
+            hush = [];
+
+            const held = untrack(lobby.openId);
+
+            if (held === mine || held === '')
+            {
+                lobby.close();
+                board.close();
+                watch.close();
+            }
+        };
+    }
+
+    derived table = lobby.table();
+
+    derived loading = lobby.loading() && table === null;
+
+    derived failed = lobby.failed() !== undefined && table === null && !lobby.loading();
+
+    derived seated = table?.mine !== undefined;
+
+    derived talkable = seated && table?.voice === true && table.status !== 'closed';
+
+    effect
+    {
+        const id = talkable ? table!.id : null;
+        const joined = voice.table();
+
+        if (joined !== null && joined !== id)
+        {
+            voice.leave();
+            return;
+        }
+
+        if (id !== null && joined === null && untrack(settings.settings).voiceAutoJoin)
+        {
+            void voice.join(id);
+        }
+    }
+
+    derived amHost = table?.chairs.find((chair) => chair.seat === table!.mine)?.host === true;
+
+    let offered = '';
+
+    effect
+    {
+        if (!talkable)
+        {
+            offered = '';
+            return;
+        }
+
+        const id = table!.id;
+
+        if (voice.table() === null && !untrack(settings.settings).voiceAutoJoin && id !== offered)
+        {
+            offered = id;
+            toasts.show({
+                kind: 'info',
+                icon: 'voice',
+                text: locale.t('voice.offered'),
+                action: { label: locale.t('voice.join'), run: () => void voice.join(id) },
+                dedupe: `voice-offer-${ id }`
+            });
+        }
+    }
+
+    const switchVoice = (): void =>
+    {
+        const current = untrack(lobby.table);
+
+        if (current === null)
+        {
+            return;
+        }
+
+        const on = !current.voice;
+
+        void lobby.setVoice(current.id, on)
+            .then(() => toasts.show({ kind: 'success', text: locale.t(on ? 'voice.turnedOn' : 'voice.turnedOff'), dedupe: 'table-voice' }))
+            .catch(() => toasts.show({ kind: 'warning', text: locale.t('voice.switchFailed'), dedupe: 'table-voice' }));
+    };
+
+    derived showing = board.match() !== null && board.match()!.tableId === table?.id;
+
+    derived awake = showing && board.match()!.finishedAt === undefined;
+
+    effect
+    {
+        if (awake)
+        {
+            onCleanup(holdScreen());
+            onCleanup(useRealtime().hold());
+        }
+    }
+
+    derived ready = table !== null
+        && table.status === 'ready'
+        && table.chairs.every((chair) => chair.ready);
+
+    derived title = table !== null
+        ? locale.t(catalogue.byId(table.game as GameId).nameKey)
+        : (loading ? locale.t('common.loading') : locale.t('play.notFound'));
+
+    useHead({ title: () => title });
+
+    derived sideways = device.landscape() && device.height() <= SHORT_MAX;
+
+    derived floating = !sideways && (device.posture() === 'sidebar' || (device.posture() === 'rail' && device.landscape()));
+
+    derived hasChat = seated && table?.conversationId !== undefined;
+
+    derived room = table?.conversationId ?? '';
+
+    derived railOpen = settings.settings().railOpen;
+
+    derived cardOpen = floating && hasChat && railOpen;
+
+    derived sheetVisible = !floating && hasChat && chatOpen;
+
+    derived chatShown = cardOpen || sheetVisible;
+
+    derived openChat = hasChat && !chatShown
+        ? (): void =>
+        {
+            if (floating)
+            {
+                settings.update({ railOpen: true });
+                return;
+            }
+
+            chatOpen = true;
+        }
+        : undefined;
+
+    const closeChat = (): void =>
+    {
+        if (floating)
+        {
+            settings.update({ railOpen: false });
+            return;
+        }
+
+        chatOpen = false;
+    };
+
+    derived said = chat.openId() === room ? chat.messages() : [];
+
+    derived unread = room === '' ? 0 : chat.unread(room);
+
+    derived preview = ((): string =>
+    {
+        if (unread === 0)
+        {
+            return '';
+        }
+
+        const last = [...said].reverse().find((message) => message.kind === 'text' && message.from !== lobby.me());
+
+        if (last === undefined)
+        {
+            return '';
+        }
+
+        const person = people.byHandle(last.from);
+
+        return `${ person === null ? last.from : locale.text(person.displayName) }: ${ plainOf(locale.text(last.text), locale.t('chat.spoilerPreview')) }`;
+    })();
+
+    effect
+    {
+        const lines = said;
+        const settled = chat.openId() === room && room !== '' && !chat.threadLoading();
+        const fresh = lines.filter((message) => message.kind === 'text' && !heard.has(message.id));
+
+        if (!primed)
+        {
+            if (settled)
+            {
+                primed = true;
+                heard = new Set(lines.map((message) => message.id));
+            }
+            return;
+        }
+
+        heard = new Set([...heard, ...lines.map((message) => message.id)]);
+
+        for (const message of fresh)
+        {
+            const who = message.from;
+            const text = plainOf(locale.text(message.text), locale.t('chat.spoilerPreview'));
+
+            talk = { ...talk, [who]: text };
+            publish();
+
+            hush.push(runtime().clock.after(4500, () =>
+            {
+                if (talk[who] === text)
+                {
+                    talk = Object.fromEntries(Object.entries(talk).filter(([key]) => key !== who));
+                    publish();
+                }
+            }));
+        }
+    }
+
+    effect
+    {
+        const open = chatShown;
+        const waiting = unread;
+
+        if (open && waiting > 0 && room !== '')
+        {
+            void chat.markRead(room);
+        }
+    }
+
+    derived resigning = seated && showing && board.match()?.finishedAt === undefined;
+
+    const resign = async (): Promise<void> =>
+    {
+        const yes = await overlay.open(
+            ConfirmSheet,
+            {
+                title: locale.t('match.resign.title'),
+                lead: locale.t('match.resign.lead'),
+                confirm: locale.t('match.resign.confirm'),
+                destructive: true
+            },
+            { label: locale.t('match.resign.title') }
+        ).closed;
+
+        if (yes === true)
+        {
+            await board.resign();
+        }
+    };
+
+    derived playing = showing ? (board.match()?.game ?? '') : '';
+
+    state boardFailed = false;
+
+    const draw = (want: string): void =>
+    {
+        boardFailed = false;
+
+        const load = BOARDS[want];
+
+        if (load === undefined)
+        {
+            return;
+        }
+
+        void load().then((module) =>
+        {
+            if (playing !== want)
+            {
+                return;
+            }
+
+            Board = module.default;
+            drawn = want;
+        }).catch(() =>
+        {
+            if (playing === want)
+            {
+                boardFailed = true;
+            }
+        });
+    };
+
+    const redraw = (): void =>
+    {
+        draw(playing);
+    };
+
+    effect
+    {
+        const want = playing;
+
+        if (want === '' || want === drawn)
+        {
+            return;
+        }
+
+        draw(want);
+    }
+
+    const boardProps = (): { match: MatchView; starting: boolean; onAgain?: () => void; speech: Record<string, string>; turnMs: number } => ({
+        match: board.match()!,
+        starting,
+        onAgain: seated ? () => void begin() : undefined,
+        speech,
+        turnMs: turnMs(table?.mode ?? 'live')
+    });
+
+    effect
+    {
+        const id = table?.matchId;
+
+        if (id !== undefined && seated)
+        {
+            if (board.openId() !== id)
+            {
+                board.open(id);
+            }
+
+            return;
+        }
+
+        const held = board.match();
+
+        if (held === null || held.tableId !== table?.id)
+        {
+            board.close();
+        }
+    }
+
+    effect
+    {
+        const id = table?.matchId;
+
+        if (id !== undefined && !seated)
+        {
+            watch.open(id);
+        }
+        else
+        {
+            watch.close();
+        }
+    }
+
+    const begin = async (): Promise<void> =>
+    {
+        if (table === null || starting)
+        {
+            return;
+        }
+
+        starting = true;
+
+        try
+        {
+            await lobby.begin(table.id);
+        }
+        catch
+        {
+            toasts.show({ kind: 'warning', text: locale.t('state.errorLead') });
+        }
+        finally
+        {
+            starting = false;
+        }
+    };
+
+    const copyLink = async (): Promise<void> =>
+    {
+        if (table === null)
+        {
+            return;
+        }
+        await copyText(`${ window.location.origin }/app/play/${ table.id }`, 'play.lobby.copied');
+    };
+
+    const sitDown = async (): Promise<void> =>
+    {
+        if (table === null)
+        {
+            return;
+        }
+        try
+        {
+            const seat = await lobby.claim(table.id);
+
+            toasts.show(seat === null
+                ? { kind: 'warning', text: locale.t('play.table.tooLate') }
+                : { kind: 'success', text: locale.t('play.table.satDown') });
+        }
+        catch (error)
+        {
+            toasts.show({ kind: 'warning', text: locale.t(seatedMax(error) ? 'play.seatedMax' : 'common.actionFailed'), dedupe: 'sit-down' });
+        }
+    };
+
+    const leave = async (): Promise<void> =>
+    {
+        if (table === null)
+        {
+            return;
+        }
+        const last = table.taken <= 1;
+        const yes = await overlay.open(
+            ConfirmSheet,
+            {
+                title: locale.t('play.leave.title'),
+                lead: locale.t(last ? 'play.leave.last' : 'play.leave.lead'),
+                confirm: locale.t('play.lobby.leave'),
+                destructive: true
+            },
+            { label: locale.t('play.leave.title') }
+        ).closed;
+
+        if (yes === true)
+        {
+            await lobby.leave(table.id);
+            navigate('/app/games');
+        }
+    };
+
+    const end = async (): Promise<void> =>
+    {
+        if (table === null)
+        {
+            return;
+        }
+        const yes = await overlay.open(
+            ConfirmSheet,
+            {
+                title: locale.t('play.close.title'),
+                lead: locale.t('play.close.lead'),
+                confirm: locale.t('play.close.confirm'),
+                destructive: true
+            },
+            { label: locale.t('play.close.title') }
+        ).closed;
+
+        if (yes === true)
+        {
+            try
+            {
+                await lobby.end(table.id);
+                navigate('/app/games');
+            }
+            catch
+            {
+                toasts.show({ kind: 'warning', text: locale.t('play.close.refused') });
+            }
+        }
+    };
+
+    <Page label={ title } fill class="page-table">
+        <Show when={ loading }>
+            { () =>
+                <div class="flex flex-col gap-4 pt-4">
+                    <Skeleton class="h-8 w-48" />
+                    <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                        <Skeleton class="h-[9.5rem] rounded-panel" />
+                        <Skeleton class="h-[9.5rem] rounded-panel" />
+                        <Skeleton class="h-[9.5rem] rounded-panel" />
+                        <Skeleton class="h-[9.5rem] rounded-panel" />
+                    </div>
+                </div>
+            }
+        </Show>
+
+        <Show when={ failed }>
+            { () => <ErrorState title={ locale.t('state.errorTitle') } lead={ locale.t('state.errorLead') } onRetry={ () => void lobby.refresh() } class="py-12" /> }
+        </Show>
+
+        <Show when={ !loading && !failed && table === null }>
+            { () =>
+                <EmptyState
+                    icon="seat"
+                    title={ locale.t('play.notFound') }
+                    lead={ locale.t('play.notFoundLead') }
+                    action={ locale.t('app.nav.games') }
+                    to="/app/games"
+                    class="py-12"
+                />
+            }
+        </Show>
+
+        <Show when={ table?.status === 'closed' }>
+            { () =>
+                <EmptyState
+                    icon="clock"
+                    title={ locale.t('play.closed') }
+                    lead={ locale.t('play.closedLead') }
+                    action={ locale.t('app.nav.games') }
+                    to="/app/games"
+                    class="py-12"
+                />
+            }
+        </Show>
+
+        <Show when={ table !== null && table.status !== 'closed' }>
+            { () =>
+                <div class="flex min-h-0 flex-1 gap-4">
+                    <div
+                        ref={ (element) => arena = element }
+                        class={ () => [ 'flex min-h-0 min-w-0 flex-1 flex-col gap-2 bg-void', sheetVisible && !sideways && !chatWide ? 'pb-[48dvh]' : '', cardOpen ? (chatWide ? 'pe-[31.5rem]' : 'pe-[24.5rem]') : '' ].filter(Boolean).join(' ') }
+                    >
+                        <PlayHeader
+                            table={ table! }
+                            others={ lobby.seated().filter((one) => one.id !== table!.id) }
+                            tools={
+                                <span class="flex items-center gap-2">
+                                    <TableDock
+                                        code={ table!.code }
+                                        target={ arena }
+                                        upright={ playing === 'ludo' }
+                                        onChat={ floating ? undefined : openChat }
+                                        onResign={ resigning ? () => void resign() : undefined }
+                                        voice={ talkable ? table!.id : undefined }
+                                        hostVoice={ amHost && table!.status !== 'closed' ? table!.voice : undefined }
+                                        onHostVoice={ switchVoice }
+                                    />
+                                    <Show when={ !seated && table?.matchId !== undefined && (table?.taken ?? 0) < (table?.seats ?? 0) }>
+                                        { () =>
+                                            <Button variant="primary" size="sm" leading="seat" onClick={ () => void sitDown() }>
+                                                { locale.t('play.table.sitDown') }
+                                            </Button>
+                                        }
+                                    </Show>
+                                    <Show when={ floating && hasChat && !cardOpen }>
+                                        { () =>
+                                            <button
+                                                type="button"
+                                                class="table-pill flex min-h-11 max-w-[16rem] cursor-pointer items-center gap-2.5 rounded-full border border-line-strong bg-lifted py-1 ps-1 pe-4 text-start"
+                                                aria-label={ locale.t('play.table.chatShow') }
+                                                onClick={ () => openChat?.() }
+                                            >
+                                                <span class="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent-fill text-accent-ink">
+                                                    <Icon name="chats" size={ 18 } />
+                                                    <Show when={ unread > 0 }>
+                                                        { () => <Badge count={ unread } tone="danger" class="absolute -end-1 -top-1" /> }
+                                                    </Show>
+                                                </span>
+                                                <span class="flex min-w-0 flex-col">
+                                                    <span class="text-ui-sm font-semibold text-text">{ locale.t('play.tab.chat') }</span>
+                                                    <Show when={ preview !== '' }>
+                                                        { () => <span class="truncate text-ui-xs text-muted" dir="auto">{ preview }</span> }
+                                                    </Show>
+                                                </span>
+                                            </button>
+                                        }
+                                    </Show>
+                                </span>
+                            }
+                        />
+
+                        <Show when={ playing !== '' && drawn === playing }>
+                            { () => <Dynamic component={ Board! } props={ boardProps } /> }
+                        </Show>
+
+                        <Show when={ playing !== '' && drawn !== playing && boardFailed }>
+                            { () => <ErrorState title={ locale.t('state.errorTitle') } lead={ locale.t('state.errorLead') } onRetry={ redraw } class="py-12" /> }
+                        </Show>
+
+                        <Show when={ playing !== '' && !drawable(playing) }>
+                            { () =>
+                                <EmptyState
+                                    icon="dice"
+                                    title={ locale.t('match.cannotDraw') }
+                                    lead={ locale.t('match.cannotDrawLead') }
+                                    action={ locale.t('match.cannotDrawAction') }
+                                    onAction={ () => draw(playing) }
+                                    class="py-12"
+                                />
+                            }
+                        </Show>
+
+                        <Show when={ playing !== '' && drawable(playing) && drawn !== playing && !boardFailed }>
+                            { () =>
+                                <div class="flex flex-col gap-3" aria-busy="true">
+                                    <Skeleton class="aspect-[16/10] w-full rounded-hero" />
+                                    <Skeleton class="h-24 w-full rounded-panel" />
+                                </div>
+                            }
+                        </Show>
+
+                        <Show when={ !showing && ready && seated }>
+                            { () =>
+                                <Panel pad="md" stack="sm" class="items-center text-center">
+                                    <p class="text-ui-base text-muted">{ locale.t('match.startHint') }</p>
+                                    <Button variant="primary" size="lg" leading="play" loading={ starting } onClick={ () => void begin() }>
+                                        { locale.t('match.start') }
+                                    </Button>
+                                </Panel>
+                            }
+                        </Show>
+
+                        <Show when={ !seated && table?.matchId !== undefined }>
+                            { () =>
+                                <div class="flex min-h-0 flex-1 flex-col gap-3">
+                                    <Show when={ watch.view() !== null }>
+                                        { () => <WatchBoard watch={ watch.view()! } /> }
+                                    </Show>
+                                    <Show when={ watch.view() === null && !watch.loading() && !watch.failed() }>
+                                        { () =>
+                                            <Panel pad="lg" class="items-center text-center">
+                                                <p class="text-ui-base text-muted">{ locale.t('watch.waiting') }</p>
+                                            </Panel>
+                                        }
+                                    </Show>
+                                    <Show when={ watch.failed() }>
+                                        { () => <ErrorState title={ locale.t('state.errorTitle') } lead={ locale.t('state.errorLead') } onRetry={ () => watch.retry() } class="py-12" /> }
+                                    </Show>
+                                </div>
+                            }
+                        </Show>
+
+                        <Show
+                            when={ !showing && seated }
+                            fallback={ table === null || showing || table.matchId !== undefined ? null :
+                                <Panel pad="lg" stack="md" class="items-center text-center">
+                                    <p class="text-ui-lg text-text">{ locale.t('play.table.watching') }</p>
+                                    <p class="max-w-[44ch] text-ui-base text-muted">
+                                        { locale.plural('play.lobby.emptySeats', table.seats - table.taken) }
+                                    </p>
+                                    <Button
+                                        variant="primary"
+                                        size="lg"
+                                        leading="seat"
+                                        disabled={ table.taken >= table.seats }
+                                        onClick={ () => void sitDown() }
+                                    >
+                                        { locale.t('play.table.sitDown') }
+                                    </Button>
+                                </Panel>
+                            }
+                        >
+                            { () =>
+                                <LobbyPanel
+                                    table={ table! }
+                                    onInvite={ () => overlay.open(InviteSheet, { tableId: table!.id }, { label: locale.t('play.lobby.invite') }) }
+                                    onCopyLink={ () => void copyLink() }
+                                    onLeave={ () => void leave() }
+                                />
+                            }
+                        </Show>
+
+                        <Show when={ amHost && !showing }>
+                            { () =>
+                                <div class="flex">
+                                    <Button variant="destructive" size="sm" leading="close" onClick={ () => void end() }>
+                                        { locale.t('play.close.confirm') }
+                                    </Button>
+                                </div>
+                            }
+                        </Show>
+
+                    </div>
+
+                    <Show when={ hasChat }>
+                        { () =>
+                            <div
+                                class={ () => [
+                                    'flex flex-col overflow-hidden bg-field',
+                                    floating
+                                        ? [
+                                            'table-card fixed bottom-5 end-5 z-30 rounded-panel border border-line-strong',
+                                            chatWide ? 'w-[min(30rem,calc(100vw-2.5rem))] h-[calc(100dvh-6.5rem)]' : 'w-[min(23rem,calc(100vw-2.5rem))] h-[min(34rem,calc(100dvh-6.5rem))]'
+                                        ].join(' ')
+                                        : (sideways
+                                            ? [
+                                                'table-sheet fixed inset-y-0 end-0 z-30 border-s border-line-strong',
+                                                chatWide ? 'w-[min(30rem,85vw)]' : 'w-[min(23rem,60vw)]'
+                                            ]
+                                            : [
+                                                'table-sheet fixed inset-x-0 bottom-0 z-30 rounded-t-sheet border-t border-line-strong',
+                                                chatWide ? 'top-3' : 'h-[48dvh]'
+                                            ]).join(' '),
+                                    chatShown ? '' : 'hidden'
+                                ].filter(Boolean).join(' ') }
+                            >
+                                <Show when={ chatReady }>
+                                    { () =>
+                                        <Dynamic
+                                            component={ Chat! }
+                                            props={ () => ({
+                                                conversationId: room,
+                                                class: 'min-h-0 flex-1',
+                                                closeIcon: 'close' as const,
+                                                wide: chatWide,
+                                                onResize: () => chatWide = !chatWide,
+                                                onClose: closeChat
+                                            }) }
+                                        />
+                                    }
+                                </Show>
+                            </div>
+                        }
+                    </Show>
+                </div>
+            }
+        </Show>
+    </Page>
+}

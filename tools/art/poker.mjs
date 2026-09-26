@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 import { SUIT_PATH } from './suits.mjs';
 
-const OUT = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'application', 'public', 'board');
+const OUT = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'frontend', 'public', 'board');
 
 const MARGIN = 0.012;
 const RAIL = 0.085;

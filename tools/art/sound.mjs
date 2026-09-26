@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SOURCE = join(HERE, 'sound-src');
-const OUT = join(HERE, '..', '..', 'application', 'src', 'game', 'sound');
+const OUT = join(HERE, '..', '..', 'frontend', 'src', 'game', 'sound');
 const FFMPEG = process.env.FFMPEG ?? 'ffmpeg';
 
 export const SOUNDS = [

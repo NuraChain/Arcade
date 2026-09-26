@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 import { SUIT_DEFS } from './suits.mjs';
 
-const OUT = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'application', 'public', 'art', 'games');
+const OUT = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'frontend', 'public', 'art', 'games');
 const W = 480;
 const H = 320;
 

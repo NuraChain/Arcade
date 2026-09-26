@@ -3,7 +3,7 @@ import { createPublicClient, createWalletClient, encodeFunctionData, http } from
 import { privateKeyToAccount } from 'viem/accounts';
 import { hardhat } from 'viem/chains';
 
-import { WALLET_FIXTURES } from '../../server/src/db/wallet-fixtures.ts';
+import { WALLET_FIXTURES } from '../../backend/src/db/wallet-fixtures.ts';
 
 const RPC = process.env.RPC ?? 'http://127.0.0.1:8645';
 const ROOT = process.env.QA_CONTRACTS ?? '../SmartContract/artifacts/contracts/profile';

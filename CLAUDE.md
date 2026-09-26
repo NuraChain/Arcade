@@ -2,7 +2,7 @@
 
 A social gaming platform: a cinematic 3D landing page at `/`, and the signed-in product —
 matchmaking, tables, friends, chat, groups, search, notifications, profile and settings — at
-`/app/*`. **Two npm workspaces**, `application/` (the browser) and `server/` (the api, the
+`/app/*`. **Two npm workspaces**, `frontend/` (the browser) and `backend/` (the api, the
 database and the realtime gateway), plus `tools/blender/` where the 3D assets come from and
 `tools/qa/` which is the responsive gate. Everything below is drawn from the repository as it
 stands — if a rule here disagrees with the code, the code is right and this file needs fixing.
@@ -48,7 +48,7 @@ That failure is worth knowing because of how it presents: a browser tab still ho
 the dev server keeps working while a fresh one gets nothing, so whichever browser you open second
 looks broken. It was reported as "it does not work on Firefox" and had nothing to do with Firefox.
 
-**What production needs in `server/.env`**, beyond the database: `NODE_ENV=production`, a real
+**What production needs in `backend/.env`**, beyond the database: `NODE_ENV=production`, a real
 `SESSION_SECRET`, and `PUBLIC_ORIGIN` set to the origin the browser actually uses. That last one is
 the SIWE `domain`, the WebSocket origin check and the cookie's site all at once - point it anywhere
 else and every wallet signature is a claim about somewhere else while the realtime gate refuses
@@ -56,7 +56,7 @@ every socket.
 
 **On a VPS it runs under systemd.** `scripts/service-install.sh` writes the unit and enables it;
 `service-start|stop|restart|status|uninstall.sh` are the rest. The unit runs `dist/main.js` with
-`WorkingDirectory` set to `server/`, because `main.ts` reads `.env` from the working directory and
+`WorkingDirectory` set to `backend/`, because `main.ts` reads `.env` from the working directory and
 `CLIENT_DIR`/`SSR_ENTRY` are relative to it. The install script refuses to be quiet about a missing
 build, a missing `dist/`, a missing SSR bundle, an unset `PUBLIC_ORIGIN` or an empty
 `SESSION_SECRET` - each of those is a restart loop or a silent misconfiguration otherwise.
@@ -70,7 +70,7 @@ Node's TypeScript support is strip-only and rejects decorator syntax, so there i
 change is done.
 
 **Run `npm run check`, never `azeroth check` on its own.** The gate is
-`azeroth check && npm run check:tests --workspace server`, and the second half is a whole
+`azeroth check && npm run check:tests --workspace backend`, and the second half is a whole
 tsc program over `tests/` that the first half never looks at. Skipping it is not a smaller
 gate, it is a different one: vitest transforms specs with oxc, which strips types without
 checking them, so a spec can import a name that does not exist and still "pass" - which is
@@ -78,7 +78,7 @@ exactly how `realtime.socket.spec.ts` came to compare every frame against `OPCOD
 (undefined), match nothing, and report eight green tests while reading no frames at all.
 
 `npm test` runs with **no Postgres**, and that promise is why the database-backed suite is opt-in:
-`npm run test:db --workspace server` with `TEST_DATABASE_URL` pointing at a database you do not
+`npm run test:db --workspace backend` with `TEST_DATABASE_URL` pointing at a database you do not
 mind losing. It truncates before every test, so it owns whatever it is pointed at - which is also
 why it runs `--no-file-parallelism`: two spec files truncating the same tables from two workers
 deadlock each other, and the failure reads like a product bug rather than a test one. Everything that
@@ -86,13 +86,13 @@ is a claim about the DATABASE lives there - mirrored writes, partial unique inde
 constraints, the races - because a fake DataSource can only prove that the fake agrees with the
 code.
 
-**The database is Postgres, and the ENTITIES are the only description of it.** `server/.env`
+**The database is Postgres, and the ENTITIES are the only description of it.** `backend/.env`
 carries `DATABASE_URL` and is the one place the name is written down; `tools/qa/db.mjs` reads it so
 the browser passes cannot drift from the server the way they once did. There are no migrations.
-`server/src/db/schema.ts` builds the schema with `syncSchema()`: the `citext` and `pgcrypto`
+`backend/src/db/schema.ts` builds the schema with `syncSchema()`: the `citext` and `pgcrypto`
 extensions, then TypeORM's `synchronize()` from the entity metadata, then the indexes no
 decorator can express. `main.ts` runs it on every DEVELOPMENT boot; a production start does not,
-and `npm run schema:sync --workspace server` is the same code as a deliberate act. `DATABASE_SYNC`
+and `npm run schema:sync --workspace backend` is the same code as a deliberate act. `DATABASE_SYNC`
 overrides either way when it is set. A sync cannot apply a NOT NULL column or a new CHECK to rows
 that predate it - a VPS database from before `tables.chat` failed exactly that way - so boot names
 the rebuild (`drop schema public cascade; create schema public`) instead of dumping the stack,
@@ -151,7 +151,7 @@ fails rather than passing quietly.
 **There is no `npm run preview` and no `tools/preview.mjs`.** The server serves the built client
 itself through `mountPages`, so the preview path and the production path are the same code:
 `npm run build && SERVE_PAGES=true NODE_ENV=production npm start`. The old script kept its own MIME
-table and its own copy of the client route list, which drifted from `application/src/routes.ts`
+table and its own copy of the client route list, which drifted from `frontend/src/routes.ts`
 silently.
 
 `npm run qa` drives a real browser over every route at 320–1920, portrait and landscape, in both
@@ -189,7 +189,7 @@ address, so anything metered per IP will refuse it - and now that a page load ma
 calls, it does. Run it against a server started with `API_RATE_MAX` raised
 (`API_RATE_MAX=20000 SERVE_PAGES=true NODE_ENV=production npm start`); the limit is configuration
 for exactly this reason, rather than the product shipping a limit shaped around a test. That is why the rate limit is scoped to
-`/api` and `/ws` in `server/src/http/rate-limit.ts` rather than wrapped around the whole handler:
+`/api` and `/ws` in `backend/src/http/rate-limit.ts` rather than wrapped around the whole handler:
 a page load pulls forty static assets, a file served from disk with an ETag costs almost nothing,
 and one budget cannot be right for both. Metering the cheap thing at the rate the expensive thing
 needs is how a normal visitor ends up taking 429s on their own JavaScript — which is exactly what
@@ -222,14 +222,14 @@ bugs" table so nobody re-investigates it.
 private goes in the tree - ever, not even briefly, because a later commit does not unpublish it.
 
 - **Real values live in `.env`**, which `.gitignore` refuses at every depth, and there is one per
-  half: `server/.env` for the api and `.env` at the root for the browser's `VITE_*`. Neither has
+  half: `backend/.env` for the api and `.env` at the root for the browser's `VITE_*`. Neither has
   ever been committed, and `git log --diff-filter=A -- '*.env'` is how that was checked rather than
   assumed.
 - **Dummy values live in `.env.example`**, which IS committed: `.env.example` at the root and
-  `server/.env.example` beside it. Every variable the code reads appears there with a placeholder or
+  `backend/.env.example` beside it. Every variable the code reads appears there with a placeholder or
   an empty value and a sentence saying what it is for - `SESSION_SECRET` and the three VAPID keys
   are empty on purpose, with the `node -e` line that mints one written above them.
-- **No absolute path naming a machine.** `application/vite.config.ts` carried
+- **No absolute path naming a machine.** `frontend/vite.config.ts` carried
   `C:/Users/<name>/Documents/Projects/AzerothJS` while the framework was a `file:` junction, and
   this file carried the path to the framework register. Both are gone. A path under `~` is fine; a
   path under `/c/Users/<somebody>` is a person's name in a public file.
@@ -327,11 +327,11 @@ What did NOT change:
 
 ## The server
 
-`server/` owns the wire shape. A new field starts in `server/src/schemas.ts`; the browser's type is
+`backend/` owns the wire shape. A new field starts in `backend/src/schemas.ts`; the browser's type is
 inferred from that declaration, so it is decided in exactly one place.
 
 ```
-server/src/
+backend/src/
   main.ts          composition root: env, logger, DataSource, pipeline, serve, shutdown
   app.ts           the App: /api/healthz, register(api), mountPages LAST
   api.ts           every route, declared once   <- CLIENT-SAFE
@@ -343,9 +343,9 @@ server/src/
   env.ts logger.ts entities/ domains/ realtime/ jobs/ lib/
 ```
 
-**The client-safe triangle is load-bearing.** `application/src/api.ts` does
-`import type { Api } from '../../server/src/api.ts'`, which pulls `api.ts`, `schemas.ts` and
-`ports.ts` into the WEB typecheck program — and that program is `application/tsconfig.json`, which
+**The client-safe triangle is load-bearing.** `frontend/src/api.ts` does
+`import type { Api } from '../../backend/src/api.ts'`, which pulls `api.ts`, `schemas.ts` and
+`ports.ts` into the WEB typecheck program — and that program is `frontend/tsconfig.json`, which
 has no `experimentalDecorators`. One entity reached from those three files, even as a type, is
 parsed as an ES decorator instead of a legacy one and fails `azeroth check`. That is why route
 handlers are **injected** through `Ports` rather than imported: `api.ts` names what it needs,
@@ -373,17 +373,17 @@ are not obvious, each of which costs an afternoon to rediscover:
   and real emit would otherwise be TS5096.
 - **No `incremental`/`composite`**: `azeroth check` (`--noEmit`) and `azeroth build` share one
   tsconfig and would share one `.tsbuildinfo`.
-- **`server/vitest.config.ts`, never `vite.config.ts`.** A vite config in a directory that declares
+- **`backend/vitest.config.ts`, never `vite.config.ts`.** A vite config in a directory that declares
   no vite drops it to `kind: 'none'` and every `azeroth` command exits 2.
 - **Two compilers transform this workspace, and both are configured.** `tsc` builds it from
   `tsconfig.json`; **vitest transforms it with oxc**, which does NOT read that tsconfig for files
-  under `tests/`, so `server/vitest.config.ts` states the decorator transform itself
+  under `tests/`, so `backend/vitest.config.ts` states the decorator transform itself
   (`oxc.decorator.legacy`, `oxc.decorator.emitDecoratorMetadata`,
   `oxc.typescript.removeClassFieldsWithoutInitializer` — oxc's spelling of
   `useDefineForClassFields: false`). An `esbuild` block there is silently ignored with a warning.
   Without this, a spec importing an entity dies with a bare `SyntaxError: Invalid or unexpected
   token` that names neither decorators nor the config that fixes them.
-  `server/tests/decorator-metadata.spec.ts` pins all three properties — registration,
+  `backend/tests/decorator-metadata.spec.ts` pins all three properties — registration,
   `design:type`, and class fields staying off the instance — so none of it can regress quietly.
 
 **The entities had drifted from the schema, and nothing could see it.** Every query in this server
@@ -436,14 +436,14 @@ out a DIFFERENT pooled connection, so the write would land outside the transacti
 locks - which for the seat claim means outside the advisory lock, and for the epoch mint means
 outside the primary key that arbitrates the race.
 
-**No application test may reach the network.** `application/src/api.ts` fetches the route manifest
-at module load, so importing any store from a spec opens a real socket. `application/tests/setup.ts`
+**No application test may reach the network.** `frontend/src/api.ts` fetches the route manifest
+at module load, so importing any store from a spec opens a real socket. `frontend/tests/setup.ts`
 mocks that module globally with `tests/fake-api.ts`, an in-memory server that records its calls
 and can be told to refuse; specs that assert on those calls import `server` from it. The fake
 derives handles with the REAL `handleFromName`, imported from the server, so the two cannot drift.
 
 Ports: server **3200**, vite **3100**. 3000/3001 belong to Explorer. In development the two halves
-are two processes and `application/vite.config.ts` proxies `/api`, `/ws` and `/_image`; in
+are two processes and `frontend/vite.config.ts` proxies `/api`, `/ws` and `/_image`; in
 production one process answers everything, so there is no CORS between halves in either mode.
 
 ## Frontend architecture
@@ -452,7 +452,7 @@ production one process answers everything, so there is no CORS between halves in
 `effect`), `<Show>` and `<For>`. There are no hooks, no VDOM, no JSX runtime.
 
 ```
-application/src/
+frontend/src/
   world/            THE 3D SHOWCASE. Zero AzerothJS imports.
     gate.ts           who gets 3D at all - its own tiny chunk, loaded before three.js
     world.ts          lifecycle: the gate's context in, render on demand, dispose
@@ -646,7 +646,7 @@ and Discover takes its slot. The phone has the bottom nav (`NAV`: Home, Games, F
 Profile) with counts on Friends (incoming requests) and Chats (unread). The right panel is the
 reader's own notifications and their online friends - nothing the server does not record.
 
-**Game art is illustration, not a render.** `application/public/art/games/<game>.svg` (a 3:2 scene)
+**Game art is illustration, not a render.** `frontend/public/art/games/<game>.svg` (a 3:2 scene)
 and `<game>-icon.svg` (the tile) are hand-built vector: sharp at any width and a few kilobytes each.
 `tools/art/games.mjs` composes the scenes, because a board in perspective with pieces standing on it
 is geometry; the icons are hand-authored. `npm run art` regenerates the scenes. The Blender art
@@ -716,7 +716,7 @@ synchronized schema had no constraint for `on conflict (endpoint)` to find and e
 subscription was a 500.
 
 **Reference data** is content the product cannot run without: the games, their rules, the
-achievement definitions, and the three demo personas. `server/src/db/seed-reference.ts` upserts it on every boot, so a changed
+achievement definitions, and the three demo personas. `backend/src/db/seed-reference.ts` upserts it on every boot, so a changed
 blurb ships without a schema change. It is not development fixtures — those are a separate file that
 refuses to run outside development.
 
@@ -734,11 +734,11 @@ That makes the `status` in the seed an INITIAL value only — changing it on a d
 has the row is `update games set status = …`, not a redeploy.
 
 **The catalogue is split, and the split is the point.** The server owns what a game IS — seats,
-modes, targets, fairness, whether it can be opened. `application/src/data/games.ts` keeps where its
+modes, targets, fairness, whether it can be opened. `frontend/src/data/games.ts` keeps where its
 game STANDS in the landing's showcase — `anchor`, one row 1.6 m apart — because that is scene
 geometry and the landing route is `render: 'static'`: it must paint with no JavaScript and no
 server. The two merge by id, the server wins where both hold a field, and
-`server/tests/reference-parity.spec.ts` fails if they ever drift.
+`backend/tests/reference-parity.spec.ts` fails if they ever drift.
 
 **The live counts on the home page are SIMULATED, and deliberately not zero.** No table has ever
 been opened — tables arrive with the play domain — so `BASE` and `seededStats` in
@@ -755,7 +755,7 @@ fine: by click time the answer is in.
 
 ## The social graph, and the privacy over it
 
-`server/src/domains/social/` is two files and the split matters. `policy.ts` is PURE - it decides
+`backend/src/domains/social/` is two files and the split matters. `policy.ts` is PURE - it decides
 who may write to whom, who may see somebody online, who may knock, and what a minor is allowed to
 hold - and `service.ts` resolves two accounts and a relation from the database and then does
 nothing but call it. Four places ask the same question (starting a chat, sending a message,
@@ -852,7 +852,7 @@ The server still keys everything on uuid internally. Handles are the EDGE.
 
 `contracts/profile` in the SmartContract project is the Nura identity primitive — one profile per
 address, a global username namespace, and values addressed by `(profile, key, language)` with no
-schema of its own — and it is live on Nurachain. `server/src/chain/profile.ts` is the half of this
+schema of its own — and it is live on Nurachain. `backend/src/chain/profile.ts` is the half of this
 product that talks to it, and `/app/me` is where a person sees the two agree or disagree.
 
 **The ABI is the SERVER's, and so is the calldata.** The read path needs it anyway, and `viem` is
@@ -934,7 +934,7 @@ what it is.
 
 ## Groups
 
-`server/src/domains/group/` owns them, and three of its rules are INDEXES rather than application
+`backend/src/domains/group/` owns them, and three of its rules are INDEXES rather than application
 code — because each one is a state that has to be impossible, not merely unlikely.
 
 **The slug is claimed by INSERT.** `groups.slug` is `citext` and unique, and `create` walks
@@ -1018,7 +1018,7 @@ view route into `null`, so the page says "No such group" rather than offering to
 missing thing. Every other status still surfaces as an error.
 
 **A group is a row, and nothing in the browser holds a copy of one.** `GROUP_FIXTURES` in
-`application/tests/fixtures.ts` is what the browser specs arrange, and nothing else reads it. The
+`frontend/tests/fixtures.ts` is what the browser specs arrange, and nothing else reads it. The
 crest is a closed set the CLIENT owns (`data/crests.ts`): the server sends a string, `Icon` takes an
 `IconName`, and a value from a newer server draws the first crest instead of a blank square.
 
@@ -1396,7 +1396,7 @@ the voice pass is what found it, as "turning them back up" failing after "turnin
 
 ## Playing a game
 
-`server/src/domains/match/` is the first real game engine in this product, and it is what the table
+`backend/src/domains/match/` is the first real game engine in this product, and it is what the table
 domain always said it was stopping short of. A table is still a seat container; a **match** is one
 game played at one, and the two are joined by `matches.table_id` with a partial unique index over
 `(table_id) where finished_at is null` - one live game per table, enforced rather than assumed.
@@ -1788,7 +1788,7 @@ naive enumerator written inside the spec, over hundreds of self-played positions
 `moves.ts` exports `stage(side, roll, staged)`, which answers, for any prefix of hops in any order,
 the hops some complete legal turn still continues with - so the board highlights only checkers that
 can move, only destinations they can reach, and enables "Play the move" exactly when the turn is
-whole. The browser imports it from `server/src/domains/match/backgammon/`, the way ludo's path code
+whole. The browser imports it from `backend/src/domains/match/backgammon/`, the way ludo's path code
 imports `ludo/board.ts`: a second copy of the forced-move rules in the client would agree with the
 server right up until the position where it mattered. A staged turn is local until it is sent, so
 Undo costs nothing and nothing is ever half-played on the wire.
@@ -1852,10 +1852,10 @@ touring a lobby for the rest of the run.
 ## Drawing the board
 
 The Ludo board and its pieces are **vector art drawn from the rules' own geometry**, all of it by
-`tools/art/boards.mjs` (`npm run art`). It imports `application/src/game/layout.ts` for where the
-grid sits and `server/src/domains/match/ludo/board.ts` for the ring, the home runs, the starts and the
+`tools/art/boards.mjs` (`npm run art`). It imports `frontend/src/game/layout.ts` for where the
+grid sits and `backend/src/domains/match/ludo/board.ts` for the ring, the home runs, the starts and the
 safe squares, and writes `ludo-board.svg`, four `pawn-<colour>.svg`, `pawn-shadow.svg` and
-`ludo-dice.svg` into `application/public/board/`. So a start square, a star or an arrow cannot sit
+`ludo-dice.svg` into `frontend/public/board/`. So a start square, a star or an arrow cannot sit
 anywhere the rules do not put one, and the generator throws if the ring stops being 52 cells.
 
 The board has been a Blender photograph, a glossy vector board, a satin render and the vector board
@@ -1926,7 +1926,7 @@ host sits inside `.board-plate`, which is an inline-size container, so a piece a
 container units stays on its square at every size with no resize code at all, and the browser draws
 the images at device resolution for free. A walk is one animation of the piece through every square
 it crosses plus an arc on its lift; the idle hop of a movable pawn and the turning dashes of its ring
-are CSS keyframes. `application/src/game/` stays framework-free exactly as `world/` is, and
+are CSS keyframes. `frontend/src/game/` stays framework-free exactly as `world/` is, and
 `tools/budgets.mjs` requires every registered renderer to sit in a lazy chunk of its own under 16 KB.
 
 **`components/games/boards.ts` decides which BOARD COMPONENT draws which game**, and the play page
@@ -2094,7 +2094,7 @@ rather than spelling one child in physical properties and hoping the next one re
 **The two fractions are derived once.** `.board-token` carried `--rim` and `--cell` as percentage
 literals beside the ones `game/layout.ts` derives from the art - two descriptions of where the grid
 sits inside the plate, agreeing exactly until somebody edited one. The component sets them from
-`layout.ts` now, and `application/tests/game.spec.ts` pins that the fallback's own box arithmetic
+`layout.ts` now, and `frontend/tests/game.spec.ts` pins that the fallback's own box arithmetic
 (`rim + col * cell + cell * 0.10`, `cell * 0.80` across) lands exactly where `centreOf` and
 `tokenRadius` put the drawn one.
 
@@ -2108,7 +2108,7 @@ difference exists nowhere else, so it is on the reader.
 
 ## Chat is the server's
 
-`server/src/domains/chat/` owns conversations, membership and messages; the browser reads them
+`backend/src/domains/chat/` owns conversations, membership and messages; the browser reads them
 through `createApiSource()` and nothing else. The local source that stood in for it is gone.
 
 **`pinned` and `last_read_at` are per MEMBER.** The mock kept both on the conversation, which
@@ -2160,7 +2160,7 @@ from people who were not there, and a per-send timer that typed a reply back; bo
 Until the realtime work lands, the only thing that produces a message is somebody sending one, and
 the list refreshes when the app asks it to.
 
-**The browser's mock is gone.** `application/src/data/mock/` held twenty-four invented people, the
+**The browser's mock is gone.** `frontend/src/data/mock/` held twenty-four invented people, the
 threads between them, a script of replies to type back, and a copy of the achievement definitions.
 Every name on every screen came out of it - including for accounts that really exist - through
 `personById`, and `account.store.ts` synthesised the rest. What replaces it is `people.store.ts`: a
@@ -2175,7 +2175,7 @@ The chat view types moved to `data/chat.ts`, which is where they always belonged
 client's view of a `ConversationSummary` and a `ChatMessage`, not fixture shapes. `Message.text` is
 a plain string now, because a message is what somebody typed.
 
-**Development fixtures are six REAL accounts.** `server/src/db/seed-wallets.ts` is the whole seed:
+**Development fixtures are six REAL accounts.** `backend/src/db/seed-wallets.ts` is the whole seed:
 six wallet accounts, each holding a device whose attestation verifies, with friendships written
 both ways, three direct threads and one group. They sign in through the real wallet route, so
 everything a development database contains is something the product's own code path produced.
@@ -2183,7 +2183,7 @@ everything a development database contains is something the product's own code p
 The twenty-four invented guests that used to fill it are gone, and so is `seed-fixtures.ts`. That
 file did two jobs: it defined the arrangement the browser specs are written against, and it seeded
 those invented people into a database the product then rendered as its population. The first job is
-honest and now lives in `application/tests/fixtures.ts`, beside `fake-api.ts`, which is the
+honest and now lives in `frontend/tests/fixtures.ts`, beside `fake-api.ts`, which is the
 browser's server. The second job was the problem.
 
 The seed runs on EVERY boot and is idempotent about the device as well as the account: P-256 keys
@@ -2404,8 +2404,8 @@ what was built on top of it.
 computed by the client and recomputed by the server, which refuses a mismatch. An id the SERVER
 hands out is an id the server can mint for keys it holds itself and quietly wrap an epoch key to;
 this one can only be claimed by whoever published those two public keys. There are two
-implementations of the formula — `server/src/domains/device/id.ts` over `node:crypto` and
-`application/src/lib/device-id.ts` over WebCrypto — and `tests/devices.spec.ts` runs both over the
+implementations of the formula — `backend/src/domains/device/id.ts` over `node:crypto` and
+`frontend/src/lib/device-id.ts` over WebCrypto — and `tests/devices.spec.ts` runs both over the
 same real P-256 keys, because two implementations of one formula are two chances to disagree and a
 disagreement means every enrolment on one side is refused by the other.
 
@@ -2469,7 +2469,7 @@ against.
 `attested_message` and `attested_signature` hold the address that signed, the exact bytes it
 signed, and the signature. PR 11 verified those and threw them away, which was enough while this
 server was the only one asking. A peer recovers the address ITSELF -
-`application/src/lib/attestation.ts`, over `@noble/curves` - and checks that the message names that
+`frontend/src/lib/attestation.ts`, over `@noble/curves` - and checks that the message names that
 device in its EIP-4361 `Resources` line. Two CHECK constraints make the proof non-optional: all
 three columns together or none, and `attested in ('wallet','contract')` requires them. A
 wallet-attested device with no proof beside it is not a row this database can hold.
@@ -2767,7 +2767,7 @@ the moment anything a player needs is below the fold.
   that runs from `remainingMs` over the turn's full length, a marker (crown, dealer, checker colour,
   seat initial), the game's facts, a one-line tag for what is unusual (`plate-tag.ts`), a trailing
   slot (the ludo die) and the chat bubble. The turn length is `turnMs(mode)` from
-  `server/src/domains/match/turns.ts`, a zero-import module the server's deadline and the browser's
+  `backend/src/domains/match/turns.ts`, a zero-import module the server's deadline and the browser's
   ring both read. A watcher is sent no `remainingMs`, so a watcher sees no ring.
 - Hokm decides one row of cards or two from the stage's measured size (`room`), because two rows are
   only worth their height when one row would squeeze each card below a readable strip.
@@ -3175,7 +3175,7 @@ nothing calls. Nothing says so now - see *The rules no test holds any more*.
 
 ## The wallet fixtures, and why a happy path has to be reachable
 
-`server/src/db/seed-wallets.ts` seeds the six accounts that ARE the development population, their
+`backend/src/db/seed-wallets.ts` seeds the six accounts that ARE the development population, their
 friendships, three direct conversations and one group. They sign in with a wallet through the real
 challenge-sign-post round trip, and five of the six hold a confirmed device whose attestation really
 verifies.
@@ -3196,7 +3196,7 @@ nobody has the keys to.
 bytes for a live enrolment AND for the fixture, so the two cannot drift; `deviceResource` lives in
 `domains/device/resource.ts`, a module with NO imports, because the browser needs that one string
 too and would otherwise carry `node:crypto` or `viem` into its bundle for a template literal.
-`application/tests/wallet-fixtures.spec.ts` runs the seed's own `enrolMessage` through the browser's
+`frontend/tests/wallet-fixtures.spec.ts` runs the seed's own `enrolMessage` through the browser's
 own `verifyPeerDevice`, which is what makes "the browser accepts what the seed writes" a claim
 rather than a hope.
 
@@ -3733,7 +3733,7 @@ exists — with the same membership check, the same block rules, the same read w
 delivery path carrying message bodies would be a second place to get all three wrong, and it would
 have to be rewritten again the moment a body becomes ciphertext.
 
-`server/src/realtime/frames.ts` is the whole wire. Server frames: `hello`, `presence`, `nudge`,
+`backend/src/realtime/frames.ts` is the whole wire. Server frames: `hello`, `presence`, `nudge`,
 `typing`, `voice`, `signal`, `game`, `ack`, `refused`, `pong`. Client frames: `sync`, `presence`,
 `typing`, `voice`, `signal`, `play`, `resume`, `ping`. And
 `parseClientFrame` is total and strict — **unknown keys are refused**, because a frame carrying a
@@ -4193,7 +4193,7 @@ impersonated anyone.
 
 `lib/guards.ts` is therefore a **courtesy**, not the enforcement: it exists so a signed-out visitor
 lands on `/sign-in` instead of on a page of empty states. The enforcement is `requireSession` in
-`server/src/http/auth.ts`, which answers 401. Both guards await `session.ready()`, which resolves
+`backend/src/http/auth.ts`, which answers 401. Both guards await `session.ready()`, which resolves
 after the first `/auth/me`; one request on boot, every navigation after it synchronous. They reach
 the store through a **dynamic import** — see Performance for why that import must stay dynamic.
 
@@ -4288,7 +4288,7 @@ a wallet that is not installed.
 
 `tools/blender/` is the source of truth. `npm run assets` rasterises the product's own `deck.svg`,
 `card-back.svg` and `ludo-board.svg` with Chrome, runs `showcase.py` in Blender headless, and writes
-`showcase-desktop.glb` and `showcase-phone.glb` into `application/public/world/`. **The GLBs are
+`showcase-desktop.glb` and `showcase-phone.glb` into `frontend/public/world/`. **The GLBs are
 committed**, so `npm run build` and CI never need Blender.
 
 - Four vignettes (`vignettes/{hokm,poker,backgammon,ludo}.py`), each built at the origin on a plinth
@@ -4358,7 +4358,7 @@ server.
 **What leaves the server is compressed, and brotli is never spent on the fly.** The framework compresses
 nothing by default, so for a long time the built server sent every chunk raw - the world chunk as
 643 KB where gzip makes 158. `tools/precompress.mjs` writes brotli-11 and gzip-9 siblings for
-`dist/assets` and `dist/world` after the build, `server/src/http/compression.ts` serves them with
+`dist/assets` and `dist/world` after the build, `backend/src/http/compression.ts` serves them with
 the original content type, `Vary` and a coding-suffixed ETag, and gzips everything else on the way
 out. Brotli 11 is 0.75 s of CPU on that chunk and `compressResponse` has no quality knob, so the
 on-the-fly path offers gzip only. The GLBs compress too - the phone scene is 931 KB raw and 505 KB
@@ -4799,7 +4799,7 @@ content script in every other tab at once.
 
 ## The rules no test holds any more
 
-`application/tests/markup.spec.ts` was deleted on 2026-09-20. It read every file under `src/` as
+`frontend/tests/markup.spec.ts` was deleted on 2026-09-20. It read every file under `src/` as
 TEXT and refused sixteen shapes that no type can hold - the technique `lines.spec.ts` still uses
 against `services.ts`. Every one of them was written because the real thing shipped with all gates
 green, so the shapes are worth keeping here even though nothing checks them now.
