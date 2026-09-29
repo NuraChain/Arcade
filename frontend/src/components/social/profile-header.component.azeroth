@@ -1,8 +1,10 @@
 import { Link, type Child } from 'azerothjs';
 
+import type { Progress } from '../../api.ts';
 import Icon from '../../icons/icon.component.azeroth';
 import { useLocale } from '../../stores/locale.store.ts';
 import Avatar, { type Facade, type Presence } from '../ui/avatar.component.azeroth';
+import Tooltip from '../ui/tooltip.component.azeroth';
 
 export interface ProfileStat
 {
@@ -15,63 +17,124 @@ export default component ProfileHeader(props: {
     person: Facade & { handle: string };
     presence: Presence;
     stats: ProfileStat[];
+    progress?: Progress | null;
+    mine?: boolean;
     bio?: string;
+    eyebrow?: Child;
     badges?: Child;
+    corner?: Child;
     actions?: Child;
     onEditBio?: () => void;
 })
 {
     const locale = useLocale();
 
-    <section class="hero-surface relative overflow-hidden rounded-hero p-5 @xl:p-7" aria-labelledby="profile-name">
-        <Icon name="games" size={ 300 } class="pointer-events-none absolute -end-16 -top-20 text-accent opacity-[0.07] icon-flip" />
-        <div class="relative grid gap-6 @2xl:grid-cols-[minmax(0,1fr)_auto] @2xl:items-center">
-            <div class="flex min-w-0 flex-col gap-4">
-                <div class="flex min-w-0 items-center gap-4">
-                    <span class="shrink-0 rounded-full bg-gradient-to-br from-accent to-accent-fill p-[3px] shadow-[0_0_28px_-6px_var(--accent)]">
-                        <Avatar person={ props.person } size="xl" presence={ props.presence } class="ring-4 ring-void" />
-                    </span>
+    derived progress = props.progress ?? null;
+
+    derived title = props.person.displayName === '' ? props.person.handle : props.person.displayName;
+
+    derived through = progress === null || progress.span <= 0
+        ? 0
+        : Math.min(100, Math.round((progress.into / progress.span) * 100));
+
+    <section class="hero-surface relative overflow-hidden rounded-hero" aria-labelledby="profile-name">
+        <div
+            class="relative h-24 overflow-hidden @xl:h-32 [background:linear-gradient(120deg,hsl(var(--hue)_62%_42%/0.55),hsl(var(--hue)_55%_28%/0.25)_55%,transparent),radial-gradient(90%_140%_at_85%_0%,color-mix(in_oklab,var(--accent)_30%,transparent),transparent_65%)]"
+            style={ `--hue: ${ props.person.hue }` }
+            aria-hidden="true"
+        >
+            <Icon name="games" size={ 260 } class="pointer-events-none absolute -end-10 -top-16 text-text opacity-[0.07] icon-flip" />
+        </div>
+
+        <Show when={ props.corner !== undefined }>
+            <div class="absolute end-3 top-3 z-1 flex items-center gap-1 rounded-full border border-line/70 bg-void/50 p-1 backdrop-blur-md">{ props.corner }</div>
+        </Show>
+
+        <div class="relative flex flex-col gap-4 px-4 pb-5 @xl:px-7 @xl:pb-7">
+            <div class="-mt-12 flex items-end justify-between gap-3 @xl:-mt-14">
+                <span class="shrink-0 rounded-full bg-gradient-to-br from-accent to-accent-fill p-[3px] shadow-[0_0_28px_-6px_var(--accent)]">
+                    <Avatar person={ { ...props.person, displayName: title } } size="2xl" presence={ props.presence } class="ring-4 ring-field @xl:h-28 @xl:w-28" />
+                </span>
+            </div>
+
+            <div class="grid gap-5 @2xl:grid-cols-[minmax(0,1fr)_auto] @2xl:items-start">
+                <div class="flex min-w-0 flex-col gap-4">
                     <div class="flex min-w-0 flex-col gap-1">
-                        <h1 id="profile-name" class="title truncate text-ui-2xl @xl:text-ui-3xl" dir="auto">{ props.person.displayName }</h1>
-                        <p class="truncate text-ui-sm text-muted" dir="ltr">@{ props.person.handle }</p>
+                        <Show when={ props.eyebrow !== undefined }>
+                            <div class="hidden pb-1 has-[*]:flex">{ props.eyebrow }</div>
+                        </Show>
+                        <h1 id="profile-name" class="title truncate text-ui-2xl @xl:text-ui-3xl" dir="auto">{ title }</h1>
+                        <Show when={ props.person.displayName !== '' }>
+                            <p class="truncate text-ui-sm text-muted" dir="ltr">@{ props.person.handle }</p>
+                        </Show>
                         <div class="mt-1 flex flex-wrap items-center gap-2">{ props.badges }</div>
+                    </div>
+
+                    <Show when={ (props.bio ?? '') !== '' }>
+                        <p class="flex max-w-[56ch] items-start gap-2 text-ui-md text-text">
+                            <span class="min-w-0" dir="auto">{ props.bio ?? '' }</span>
+                            <Show when={ props.onEditBio !== undefined }>
+                                <button
+                                    type="button"
+                                    class="-my-2 flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-control text-accent transition-colors hover:text-text coarse:h-11 coarse:w-11"
+                                    aria-label={ locale.t('profile.editBio') }
+                                    onClick={ () => props.onEditBio?.() }
+                                >
+                                    <Icon name="edit" size={ 15 } />
+                                </button>
+                            </Show>
+                        </p>
+                    </Show>
+
+                    <div class="flex flex-col gap-4 @2xl:flex-row @2xl:items-center @2xl:gap-6">
+                        <Show when={ progress !== null }>
+                            { () =>
+                                <div class="flex min-w-0 flex-col gap-1.5 @2xl:w-48 @2xl:shrink-0 @2xl:border-e @2xl:border-line @2xl:pe-6">
+                                    <div class="flex items-baseline justify-between gap-3">
+                                        <Tooltip label={ locale.t(props.mine === true ? 'level.honestMine' : 'level.honest') } side="bottom">
+                                            <span class="text-ui-xl font-bold text-text">{ locale.t('level.title', { level: locale.n(progress!.level) }) }</span>
+                                        </Tooltip>
+                                        <span class="shrink-0 text-ui-xs text-muted"><span class="tally">{ locale.n(progress!.xp) }</span> { locale.t('level.xp') }</span>
+                                    </div>
+                                    <span
+                                        class="block h-1.5 w-full overflow-hidden rounded-full bg-sunk"
+                                        role="progressbar"
+                                        aria-label={ locale.t('level.title', { level: locale.n(progress!.level) }) }
+                                        aria-valuemin={ 0 }
+                                        aria-valuemax={ progress!.span }
+                                        aria-valuenow={ progress!.into }
+                                        aria-valuetext={ locale.t('level.toNext', {
+                                            xp: locale.n(Math.max(0, progress!.span - progress!.into)),
+                                            level: locale.n(progress!.level + 1)
+                                        }) }
+                                    >
+                                        <span class="block h-full rounded-full bg-accent transition-[width] duration-500" style={ `width: ${ through }%` }></span>
+                                    </span>
+                                    <span class="sr-only">{ locale.t(props.mine === true ? 'level.honestMine' : 'level.honest') }</span>
+                                </div>
+                            }
+                        </Show>
+
+                        <dl class="grid min-w-0 auto-cols-fr grid-flow-col @2xl:flex @2xl:flex-wrap @2xl:gap-y-3">
+                            <For each={ props.stats } key={ (stat) => stat.label } let={ stat }>
+                                <div class="group relative flex min-w-0 flex-col gap-0.5 border-line pe-3 [&:not(:first-child)]:border-s [&:not(:first-child)]:ps-3 @2xl:min-w-[5.5rem] @2xl:pe-6 @2xl:[&:not(:first-child)]:ps-6">
+                                    <dt class="order-2 truncate text-ui-xs text-muted group-has-[a]:text-accent">{ stat.label }</dt>
+                                    <dd class="tally order-1 text-ui-2xl font-bold text-text transition-colors group-has-[a:hover]:text-accent">
+                                        { locale.n(stat.value) }
+                                        <Show when={ stat.to !== undefined }>
+                                            <Link to={ stat.to! } class="absolute -inset-y-1 inset-x-0 rounded-tile" aria-label={ `${ locale.n(stat.value) } ${ stat.label }` }></Link>
+                                        </Show>
+                                    </dd>
+                                </div>
+                            </For>
+                        </dl>
                     </div>
                 </div>
 
-                <Show when={ (props.bio ?? '') !== '' || props.onEditBio !== undefined }>
-                    <p class="flex max-w-[56ch] items-start gap-2 text-ui-md text-text">
-                        <span class="min-w-0" dir="auto">{ props.bio ?? '' }</span>
-                        <Show when={ props.onEditBio !== undefined }>
-                            <button
-                                type="button"
-                                class="-my-2 flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-control text-accent transition-colors hover:bg-accent/10 coarse:h-11 coarse:w-11"
-                                aria-label={ locale.t('profile.editBio') }
-                                onClick={ () => props.onEditBio?.() }
-                            >
-                                <Icon name="edit" size={ 15 } />
-                            </button>
-                        </Show>
-                    </p>
+                <Show when={ props.actions !== undefined }>
+                    <div class="grid grid-cols-2 gap-2 @2xl:flex @2xl:w-56 @2xl:flex-col">{ props.actions }</div>
                 </Show>
-
-                <dl class="flex flex-wrap items-stretch gap-y-3">
-                    <For each={ props.stats } key={ (stat) => stat.label } let={ stat }>
-                        <div class="group relative flex min-w-[5.5rem] flex-col gap-0.5 border-line pe-6 [&:not(:first-child)]:border-s [&:not(:first-child)]:ps-6">
-                            <dt class="order-2 text-ui-xs text-muted group-has-[a]:text-accent">{ stat.label }</dt>
-                            <dd class="tally order-1 text-ui-2xl font-bold text-text transition-colors group-has-[a:hover]:text-accent">
-                                { locale.n(stat.value) }
-                                <Show when={ stat.to !== undefined }>
-                                    <Link to={ stat.to! } class="absolute -inset-y-1 inset-x-0 rounded-tile" aria-label={ `${ locale.n(stat.value) } ${ stat.label }` }></Link>
-                                </Show>
-                            </dd>
-                        </div>
-                    </For>
-                </dl>
             </div>
-
-            <Show when={ props.actions !== undefined }>
-                <div class="grid grid-cols-2 gap-2 @2xl:flex @2xl:w-56 @2xl:flex-col">{ props.actions }</div>
-            </Show>
         </div>
     </section>
 }

@@ -7,25 +7,18 @@ import Badge from '../../components/ui/badge.component.azeroth';
 import Tabs from '../../components/ui/tabs.component.azeroth';
 import ProfileSheet from '../../components/app/profile-sheet.component.azeroth';
 import Panel from '../../components/ui/panel.component.azeroth';
-import Button from '../../components/ui/button.component.azeroth';
 import EmptyState from '../../components/ui/empty-state.component.azeroth';
 import IconButton from '../../components/ui/icon-button.component.azeroth';
-import SectionHeading from '../../components/ui/section-heading.component.azeroth';
-import Tooltip from '../../components/ui/tooltip.component.azeroth';
 import { client } from '../../api.ts';
-import { NURA_CHAIN } from '../../data/chain.ts';
 import Icon from '../../icons/icon.component.azeroth';
 import { shortAddress } from '../../lib/wallet.ts';
 import { copyText } from '../../lib/clipboard.ts';
 
 import { useAccount } from '../../stores/account.store.ts';
-import { PUBLISH_COPY, useChain } from '../../stores/chain.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useOverlay } from '../../stores/overlay.store.ts';
-import { useRealtime } from '../../stores/realtime.store.ts';
 import { useRecord } from '../../stores/record.store.ts';
 import { useSocial } from '../../stores/social.store.ts';
-import { useToasts } from '../../stores/toasts.store.ts';
 
 export default component MePage()
 {
@@ -33,23 +26,18 @@ export default component MePage()
     const overlay = useOverlay();
     const account = useAccount();
     const social = useSocial();
-    const toasts = useToasts();
-    const chain = useChain();
-    const live = useRealtime();
     const record = useRecord();
 
-    state tab = 'overview';
+    state tab = 'achievements';
 
     const PARTS: Record<string, RecordPart[]> = {
-        overview: ['level', 'achievements', 'history'],
-        games: ['record', 'history'],
         achievements: ['achievements'],
-        about: []
+        games: ['record', 'history']
     };
 
     const editProfile = (): void =>
     {
-        void overlay.open(ProfileSheet, {}, { label: locale.t('profile.title') }).closed;
+        void overlay.open(ProfileSheet, {}, { label: locale.t('profile.title') }).closed.then(() => face.refetch());
     };
 
     const copyAddress = async (): Promise<void> =>
@@ -66,7 +54,13 @@ export default component MePage()
 
     derived user = account.user();
 
-    derived bio = user === null ? '' : user.bio;
+    const face = createResource(
+        () => user === null ? null : { handle: user.handle, lang: locale.locale() },
+        (asked) => client.chain.person({ params: { handle: asked.handle }, query: { lang: asked.lang } }),
+        { name: 'chain.person' }
+    );
+
+    derived shown = face.data()?.profile;
 
     derived held = record.record();
 
@@ -87,41 +81,13 @@ export default component MePage()
         ...nftStat
     ];
 
-    derived connected = live.status() === 'connected';
-
     const share = async (): Promise<void> =>
     {
         const link = `${ window.location.origin }/app/people/${ user?.handle ?? '' }`;
         await copyText(link, 'me.shared');
     };
 
-    derived showChain = account.isWallet() && (chain.sync() !== 'off' || chain.failed());
-
-    derived chainNote = chain.failed()
-        ? 'chain.failed'
-        : chain.sync() === 'absent'
-            ? 'chain.absent'
-            : chain.sync() === 'synced' ? 'chain.synced' : 'chain.drifted';
-
-    derived publishLabel = chain.sync() === 'absent' ? 'chain.create' : 'chain.publish';
-
-    derived publishable = chain.sync() === 'absent' || chain.sync() === 'drifted' || chain.record() === 'stale';
-
-    derived registryName = (chain.profile()?.username ?? '') === ''
-        ? locale.t('chain.noUsername')
-        : chain.profile()!.username;
-
-    const publish = async (): Promise<void> =>
-    {
-        const outcome = await chain.publish();
-        toasts.show({ kind: outcome === 'published' ? 'success' : 'warning', text: locale.t(PUBLISH_COPY[outcome], { chain: NURA_CHAIN.name }) });
-    };
-
-    const adopt = async (): Promise<void> =>
-    {
-        const taken = await chain.adopt();
-        toasts.show({ kind: taken ? 'success' : 'warning', text: locale.t(taken ? 'chain.adopted' : 'profile.failed') });
-    };
+    derived unpublished = account.isWallet() && face.data()?.configured === true && shown === undefined;
 
     <Page label={ locale.t('app.nav.profile') }>
         <Show
@@ -131,29 +97,39 @@ export default component MePage()
             { () =>
                 <div class="flex flex-col gap-6">
                     <ProfileHeader
-                        person={ { displayName: locale.text(user!.displayName), hue: user!.hue, handle: user!.handle } }
-                        presence={ connected ? 'online' : null }
-                        bio={ bio }
+                        person={ { displayName: shown?.displayName ?? '', hue: user!.hue, handle: user!.handle, avatar: shown?.avatar ?? '' } }
+                        presence={ null }
+                        bio={ shown?.bio ?? '' }
                         stats={ stats }
+                        progress={ held?.progress ?? null }
+                        mine
                         onEditBio={ editProfile }
+                        eyebrow={
+                            <Show when={ account.isWallet() }>
+                                <button
+                                    type="button"
+                                    class="relative inline-flex h-6 cursor-pointer items-center gap-1.5 rounded-full border border-line bg-raised px-2.5 text-ui-xs font-semibold text-muted transition-colors hover:border-accent hover:text-text coarse:before:absolute coarse:before:-inset-y-2.5 coarse:before:inset-x-0 coarse:before:content-['']"
+                                    aria-label={ locale.t('wallet.address.copy') }
+                                    onClick={ () => void copyAddress() }
+                                >
+                                    <Icon name="key" size={ 12 } class="text-live" />
+                                    <span class="tally">{ shortAddress(account.address() ?? '') }</span>
+                                    <Icon name="copy" size={ 12 } class="text-accent" />
+                                </button>
+                            </Show>
+                        }
                         badges={
                             <span class="contents">
-                                <Show when={ connected }>
-                                    <Badge dot text={ locale.t('common.online') } tone="live" />
-                                </Show>
-                                <Show when={ account.isWallet() }>
-                                    <span class="inline-flex h-6 items-center gap-1.5 rounded-full border border-line bg-raised px-2.5 text-ui-xs font-semibold text-muted">
-                                        <Icon name="key" size={ 12 } class="text-live" />
-                                        <span class="tally">{ shortAddress(account.address() ?? '') }</span>
-                                    </span>
+                                <Show when={ unpublished }>
+                                    <Badge dot text={ locale.t('me.chain.absent') } tone="gold" />
                                 </Show>
                             </span>
                         }
-                        actions={
+                        corner={
                             <span class="contents">
-                                <Button variant="primary" leading="edit" block class="col-span-2" onClick={ editProfile }>{ locale.t('me.edit') }</Button>
-                                <Button variant="secondary" leading="settings" block to="/app/me/settings">{ locale.t('me.settings') }</Button>
-                                <Button variant="secondary" leading="share" block onClick={ () => void share() }>{ locale.t('me.share') }</Button>
+                                <IconButton icon="settings" label={ locale.t('me.settings') } variant="bare" to="/app/me/settings" />
+                                <IconButton icon="edit" label={ locale.t('me.edit') } variant="bare" onClick={ editProfile } />
+                                <IconButton icon="share" label={ locale.t('me.share') } variant="bare" onClick={ () => void share() } />
                             </span>
                         }
                     />
@@ -170,106 +146,19 @@ export default component MePage()
                         }
                     </Show>
 
-                    <Tabs
-                        label={ locale.t('me.tabs') }
-                        value={ tab }
-                        onChange={ (id) => tab = id }
-                        items={ [
-                            { id: 'overview', label: locale.t('me.tab.overview') },
-                            { id: 'games', label: locale.t('me.tab.games') },
-                            { id: 'achievements', label: locale.t('me.tab.achievements') },
-                            { id: 'about', label: locale.t('me.tab.about') }
-                        ] }
-                    />
+                    <div class="sticky top-[calc(var(--page-pad)*-1)] z-10 bleed bleed-pad -mb-2 bg-void/85 backdrop-blur-md backdrop-saturate-150">
+                        <Tabs
+                            label={ locale.t('me.tabs') }
+                            value={ tab }
+                            onChange={ (id) => tab = id }
+                            items={ [
+                                { id: 'achievements', label: locale.t('me.tab.achievements') },
+                                { id: 'games', label: locale.t('me.tab.games') }
+                            ] }
+                        />
+                    </div>
 
                     <PersonRecord handle={ user!.handle } history mine show={ PARTS[tab] } />
-
-                    <Show when={ tab === 'about' }>
-                    <section>
-                        <SectionHeading title={ locale.t('person.friends') } />
-                        <Panel class="text-ui-md text-text">
-                            { locale.plural('friends.count', social.friends().length) }
-                        </Panel>
-                    </section>
-
-                    <Show when={ showChain }>
-                        { () =>
-                            <section>
-                                <SectionHeading title={ locale.t('chain.title') } />
-                                <Panel class="flex flex-col gap-3">
-                                    <p class="text-ui-sm text-muted">{ locale.t('chain.lead', { chain: NURA_CHAIN.name }) }</p>
-                                    <p class="text-ui-base text-text">{ locale.t(chainNote) }</p>
-                                    <Show when={ chain.record() === 'current' || chain.record() === 'stale' }>
-                                        { () =>
-                                            <p class="flex items-start gap-2 text-ui-sm text-muted">
-                                                <Icon name={ chain.record() === 'current' ? 'check-circle' : 'history' } size={ 16 } class={ chain.record() === 'current' ? 'mt-0.5 shrink-0 text-live' : 'mt-0.5 shrink-0 text-gold' } />
-                                                { locale.t(chain.record() === 'current' ? 'chain.recordCurrent' : 'chain.recordStale') }
-                                            </p>
-                                        }
-                                    </Show>
-
-                                    <Show when={ chain.profile() !== null }>
-                                        { () =>
-                                            <dl class="flex flex-col gap-1 border-t border-line pt-3 text-ui-sm">
-                                                <div class="flex flex-wrap items-baseline gap-x-2">
-                                                    <dt class="text-muted">{ locale.t('chain.username') }</dt>
-                                                    <dd class="min-w-0 text-text" dir="auto">{ registryName }</dd>
-                                                </div>
-                                                <div class="text-ui-xs text-faint">
-                                                    { locale.t('chain.number', { id: chain.profile()?.id ?? '' }) }
-                                                </div>
-                                            </dl>
-                                        }
-                                    </Show>
-
-                                    <div class="flex flex-wrap gap-2">
-                                        <Show when={ publishable }>
-                                            { () =>
-                                                <Button variant="primary" leading="send" loading={ chain.busy() } onClick={ () => void publish() }>
-                                                    { locale.t(publishLabel) }
-                                                </Button>
-                                            }
-                                        </Show>
-
-                                        <Show when={ chain.sync() === 'drifted' }>
-                                            { () =>
-                                                <Button variant="outline" leading="refresh" loading={ chain.busy() } onClick={ () => void adopt() }>
-                                                    { locale.t('chain.adopt') }
-                                                </Button>
-                                            }
-                                        </Show>
-                                    </div>
-                                </Panel>
-                            </section>
-                        }
-                    </Show>
-
-                    <Show when={ account.isWallet() }>
-                        { () =>
-                            <section>
-                                <SectionHeading title={ locale.t('wallet.address') } />
-                                <Panel class="flex items-center gap-3">
-                                    <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-live/15 text-live">
-                                        <Icon name="key" size={ 18 } />
-                                    </span>
-                                    <span class="flex min-w-0 flex-1 flex-col">
-                                        <Tooltip label={ account.address() ?? '' } side="bottom" class="min-w-0 max-w-full">
-                                            <code class="tally truncate text-ui-base text-text">{ account.address() }</code>
-                                        </Tooltip>
-                                        <span class="text-ui-xs text-muted">{ locale.t('wallet.chainReady', { chain: NURA_CHAIN.name }) }</span>
-                                    </span>
-                                    <IconButton
-                                        icon="copy"
-                                        label={ locale.t('wallet.address.copy') }
-                                        variant="ghost"
-                                        onClick={ () => void copyAddress() }
-                                    />
-                                </Panel>
-                                <p class="mt-2 text-ui-xs text-faint">{ locale.t('wallet.address.compare') }</p>
-                            </section>
-                        }
-                    </Show>
-                    </Show>
                 </div>
             }
         </Show>

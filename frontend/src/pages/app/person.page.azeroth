@@ -56,7 +56,17 @@ export default component PersonPage()
 
     derived person = view.data()?.person ?? people.byHandle(params().handle ?? '') ?? null;
 
-    derived name = person === null ? locale.t('person.notFound') : person.displayName;
+    const face = createResource(
+        () => params().handle === undefined ? null : { handle: params().handle!, lang: locale.locale() },
+        (asked) => client.chain.person({ params: { handle: asked.handle }, query: { lang: asked.lang } }),
+        { name: 'chain.person' }
+    );
+
+    derived shown = face.data()?.profile;
+
+    derived name = person === null
+        ? locale.t('person.notFound')
+        : (shown?.displayName ?? '') === '' ? person.handle : shown!.displayName;
 
     useHead({ title: () => name });
 
@@ -106,10 +116,11 @@ export default component PersonPage()
             { () =>
                 <div class="flex flex-col gap-6">
                     <ProfileHeader
-                        person={ person! }
+                        person={ { ...person!, displayName: shown?.displayName ?? '', avatar: shown?.avatar ?? '' } }
                         presence={ dot }
-                        bio={ locale.text(person!.bio) }
+                        bio={ shown?.bio ?? '' }
                         stats={ stats }
+                        progress={ held?.progress ?? null }
                         badges={
                             <span class="contents">
                                 <Show when={ dot === 'online' || dot === 'away' }>
@@ -162,22 +173,22 @@ export default component PersonPage()
                     <Show when={ relation === 'blocked' }>
                         { () =>
                             <Panel tone="danger" class="text-center">
-                                <p class="text-ui-md font-semibold text-text">{ locale.t('person.blockedTitle', { name: locale.text(person!.displayName).split(' ')[0] }) }</p>
+                                <p class="text-ui-md font-semibold text-text">{ locale.t('person.blockedTitle', { name: name.split(' ')[0] }) }</p>
                                 <p class="mt-1 text-ui-sm text-muted">{ locale.t('person.blockedLead') }</p>
                                 <Button
                                     variant="outline"
                                     size="sm"
                                     class="mt-3"
                                     loading={ social.working(person!.id) }
-                                    onClick={ () => void attempt(social.unblock(person!.id), locale.t('actions.unblocked', { name: locale.text(person!.displayName).split(' ')[0] })) }
+                                    onClick={ () => void attempt(social.unblock(person!.id), locale.t('actions.unblocked', { name: name.split(' ')[0] })) }
                                 >
-                                    { locale.t('actions.unblock', { name: locale.text(person!.displayName).split(' ')[0] }) }
+                                    { locale.t('actions.unblock', { name: name.split(' ')[0] }) }
                                 </Button>
                             </Panel>
                         }
                     </Show>
 
-                    <PersonRecord handle={ person!.id } />
+                    <PersonRecord handle={ person!.id } show={ ['record', 'achievements'] } />
                 </div>
             }
         </Show>

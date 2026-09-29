@@ -15,7 +15,6 @@ export const social = {
     'friends.requests.outgoing': 'Sent',
     'friends.reason.mutual': { one: '{count} mutual friend', other: '{count} mutual friends' },
     'friends.reason.new': 'New to the tables',
-    'friends.count': { one: '{count} friend', other: '{count} friends' },
 
     'person.play': 'Play',
     'person.message': 'Message',
@@ -180,6 +179,7 @@ export const social = {
     'emoji.symbols': 'Symbols',
     'emoji.flags': 'Flags',
     'chat.loadFailed': 'Could not load this conversation.',
+    'level.xp': 'XP',
     'level.short': 'LVL',
     'level.title': 'Level {level}',
     'level.total': '{xp} XP in total',

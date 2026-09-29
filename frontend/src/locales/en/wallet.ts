@@ -7,7 +7,6 @@ export const wallet = {
     'wallet.signing': 'Sign the message in {wallet}',
     'wallet.signingLead': 'One signature proves the wallet is yours. It is free and moves nothing.',
     'wallet.disconnect': 'Disconnect wallet',
-    'wallet.chainReady': 'On {chain}',
     'wallet.chainSwitch': 'We’ll ask your wallet to switch to {chain}.',
     'wallet.chainExplainer': 'Nura Games runs on {chain}. Signing in costs nothing: your wallet signs a message, never a transaction, and no {token} leaves it.',
     'wallet.chainUnset': 'Network details not set yet — we’ll use whatever network your wallet is on.',
@@ -30,7 +29,6 @@ export const wallet = {
     'wallet.address': 'Wallet address',
     'wallet.address.copy': 'Copy wallet address',
     'wallet.address.copied': 'Wallet address copied',
-    'wallet.address.compare': 'Read it out to somebody to check you are talking to who you think. Nothing on our side can change what your own wallet signs.',
 
     'wallet.choose': 'Connect a wallet',
     'wallet.chooseLead': 'Pick the one you use. Signing is free, and it is the only step.',

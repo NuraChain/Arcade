@@ -10,7 +10,6 @@ export const wallet: Pick<Dictionary, keyof typeof reference> = {
     'wallet.signing': 'پیام را در {wallet} امضا کن',
     'wallet.signingLead': 'یک امضا ثابت می‌کند کیف پول مال توست. رایگان است و چیزی جابه‌جا نمی‌شود.',
     'wallet.disconnect': 'قطع کیف پول',
-    'wallet.chainReady': 'روی {chain}',
     'wallet.chainSwitch': 'از کیف پولت می‌خواهیم به {chain} سوییچ کند.',
     'wallet.chainExplainer': 'نورا گیمز روی {chain} اجرا می‌شود. ورود هیچ هزینه‌ای ندارد: کیف پولت یک پیام را امضا می‌کند، نه تراکنشی، و هیچ {token} از آن خارج نمی‌شود.',
     'wallet.chainUnset': 'مشخصات شبکه هنوز تنظیم نشده — از همان شبکه‌ای که کیف پولت روی آن است استفاده می‌کنیم.',
@@ -33,7 +32,6 @@ export const wallet: Pick<Dictionary, keyof typeof reference> = {
     'wallet.address': 'نشانی کیف پول',
     'wallet.address.copy': 'کپی نشانی کیف پول',
     'wallet.address.copied': 'نشانی کیف پول کپی شد',
-    'wallet.address.compare': 'آن را برای کسی بخوان تا مطمئن شوی با همان کسی حرف می‌زنی که فکر می‌کنی. سمت ما نمی‌تواند چیزی را که کیف پول خودت امضا می‌کند عوض کند.',
 
     'wallet.choose': 'یک کیف پول وصل کن',
     'wallet.chooseLead': 'همانی را انتخاب کن که استفاده می‌کنی. امضا رایگان است و تنها قدم همین است.',

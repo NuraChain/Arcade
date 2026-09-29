@@ -30,6 +30,7 @@ import {
     cursorQuery,
     notificationQuery,
     threadQuery,
+    chainPerson,
     chainProfileState,
     chainPublish,
     nftPage,
@@ -325,6 +326,16 @@ export function buildApi(ports: Ports)
                     record: ports.chain.configured ? await ports.chain.record(context.principal.userId) : '',
                     ...(profile === null ? {} : { profile })
                 };
+            }),
+
+            person: routes.get('/people/:handle', { output: chainPerson, query: langQuery }, async (context) =>
+            {
+                const face = await ports.chain.person(context.params.handle, context.query.lang ?? '');
+                if (face === undefined)
+                {
+                    throw new NotFoundError('No account with that name.');
+                }
+                return { configured: ports.chain.configured, ...(face === null ? {} : { profile: face }) };
             }),
 
             publish: routes.post('/profile/publish', { output: chainPublish }, async (context) => ({

@@ -11,6 +11,8 @@ export type {
     Attestation,
     Challenge,
     ChainCall,
+    ChainFace,
+    ChainPerson,
     ChainProfile,
     ChainProfileState,
     ChatMessage,

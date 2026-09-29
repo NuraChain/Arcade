@@ -25,6 +25,7 @@ import { createTableService, type TableRow } from './domains/table/service.ts';
 import { createChainProfiles, recordValue } from './chain/profile.ts';
 import { createNftReader } from './chain/nfts.ts';
 import { createIdentityService } from './domains/identity/service.ts';
+import { avatarHashOf } from './domains/identity/avatar.ts';
 import { maySeeOnline } from './domains/social/policy.ts';
 import { createSocialService, type PersonRow } from './domains/social/service.ts';
 import type { ServerConfig } from './env.ts';
@@ -1269,6 +1270,27 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             {
                 const row = await identity.profileFor(userId);
                 return row === null || row.address === null ? null : chain.profile(row.address, lang);
+            },
+
+            async person(handle, lang)
+            {
+                const subject = await social.personByHandle(handle);
+                if (subject === null)
+                {
+                    return undefined;
+                }
+                const row = await identity.profileFor(subject.id);
+                const held = row === null || row.address === null ? null : await chain.profile(row.address, lang);
+                if (held === null)
+                {
+                    return null;
+                }
+                return {
+                    username: held.username,
+                    displayName: held.displayName,
+                    bio: held.bio,
+                    avatar: avatarHashOf(config.origin, held.avatar) === null ? '' : held.avatar
+                };
             },
 
             async record(userId)

@@ -11,6 +11,7 @@ import type {
     Account,
     Challenge,
     ChainCall,
+    ChainFace,
     ChainProfile,
     GameList,
     MuteSubject,
@@ -516,6 +517,8 @@ export interface ChainPort
     readonly chainId: string;
 
     profile(userId: string, lang: string): Promise<ChainProfile | null>;
+
+    person(handle: string, lang: string): Promise<ChainFace | null | undefined>;
 
     record(userId: string): Promise<string>;
 

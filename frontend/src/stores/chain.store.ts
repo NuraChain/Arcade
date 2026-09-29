@@ -72,9 +72,6 @@ export interface ChainApi
     /** Sends what the server composed, waits for the chain to agree, then re-reads it. */
     publish(): Promise<PublishOutcome>;
 
-    /** Takes the registry's display name and bio as this account's own. */
-    adopt(): Promise<boolean>;
-
     ready(): Promise<void>;
 
     refresh(): void;
@@ -279,32 +276,6 @@ export const useChain = createStore((): ChainApi =>
             catch
             {
                 return 'unavailable';
-            }
-            finally
-            {
-                setBusy(false);
-            }
-        },
-
-        async adopt()
-        {
-            const held = state.data()?.profile;
-            if (held === undefined || busy())
-            {
-                return false;
-            }
-
-            const ours = held.avatar === '' || held.avatar.startsWith(`${ window.location.origin }/avatars/`);
-
-            setBusy(true);
-            try
-            {
-                await account.setProfile({ displayName: held.displayName, bio: held.bio, ...(ours ? { avatar: held.avatar } : {}) });
-                return true;
-            }
-            catch
-            {
-                return false;
             }
             finally
             {

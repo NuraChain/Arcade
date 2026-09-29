@@ -166,6 +166,7 @@ export const server =
     uploaded: null as string | null,
     chain: { configured: false, profile: null as ChainProfile | null },
     nfts: { configured: false, items: [] as NftItem[] },
+    chainFaces: {} as Record<string, { username: string; displayName: string; bio: string; avatar: string }>,
     calls: [] as string[],
     sessions: 3,
 
@@ -180,6 +181,7 @@ export const server =
     live: [] as { game: string; playing: number; tables: number }[],
     games: [] as unknown[],
     achievements: { scopes: [], families: [], recent: [] } as unknown,
+    progress: { xp: 0, level: 1, into: 0, span: 100 },
     ladders: {} as Record<string, unknown>,
 
     /** A game's leaderboard. Empty by default, which is what a game nobody has played looks like. */
@@ -351,6 +353,7 @@ export const server =
         server.watching = [];
         server.games = [];
         server.achievements = { scopes: [], families: [], recent: [] };
+        server.progress = { xp: 0, level: 1, into: 0, span: 100 };
         server.ladders = {};
         server.groups = GROUP_FIXTURES.map((group) => ({
             id: group.slug,
@@ -390,6 +393,7 @@ export const server =
         server.uploaded = null;
         server.chain = { configured: false, profile: null };
         server.nfts = { configured: false, items: [] };
+        server.chainFaces = {};
         server.calls = [];
         server.sessions = 3;
         server.mutes = [];
@@ -622,6 +626,13 @@ export const client =
                 return { calls: [] };
             }
             return { calls: [{ to: CHAIN_REGISTRY, kind: server.chain.profile === null ? 'create' as const : 'fields' as const, data: '0x5e1f' }] };
+        },
+
+        async person({ params }: { params: { handle: string } })
+        {
+            server.calls.push('chain.person');
+            const face = server.chainFaces[params.handle];
+            return { configured: server.chain.configured, ...(face === undefined ? {} : { profile: { ...face } }) };
         },
 
         async nfts(input: { query: { offset?: string; limit?: string } })
@@ -1566,7 +1577,7 @@ export const client =
         async record({ params }: { params: { handle: string } })
         {
             server.calls.push('social.record');
-            return { handle: params.handle, games: [], achievements: server.achievements };
+            return { handle: params.handle, progress: { ...server.progress }, games: [], achievements: server.achievements };
         },
 
         async ladder({ params, query }: { params: { handle: string; family: string }; query: { game?: string } })

@@ -361,6 +361,22 @@ export const chainProfileState = object({
 
 export type ChainProfileState = Infer<typeof chainProfileState>;
 
+export const chainFace = object({
+    username: string(),
+    displayName: string(),
+    bio: string(),
+    avatar: string()
+});
+
+export type ChainFace = Infer<typeof chainFace>;
+
+export const chainPerson = object({
+    configured: boolean(),
+    profile: chainFace.optional()
+});
+
+export type ChainPerson = Infer<typeof chainPerson>;
+
 export const chainCall = object({
     to: string(),
     data: string(),

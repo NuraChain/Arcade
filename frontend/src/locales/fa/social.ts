@@ -18,7 +18,6 @@ export const social: Pick<Dictionary, keyof typeof reference> = {
     'friends.requests.outgoing': 'فرستاده شد',
     'friends.reason.mutual': { one: '{count} دوست مشترک', other: '{count} دوست مشترک' },
     'friends.reason.new': 'تازه به میزها آمده',
-    'friends.count': { one: '{count} دوست', other: '{count} دوست' },
 
     'person.play': 'بازی',
     'person.message': 'پیام',
@@ -183,6 +182,7 @@ export const social: Pick<Dictionary, keyof typeof reference> = {
     'emoji.symbols': 'نمادها',
     'emoji.flags': 'پرچم‌ها',
     'chat.loadFailed': 'این گفتگو بارگذاری نشد.',
+    'level.xp': 'تجربه',
     'level.short': 'سطح',
     'level.title': 'سطح {level}',
     'level.total': 'در مجموع {xp} تجربه',
