@@ -1,0 +1,281 @@
+---
+paths:
+  - "backend/src/domains/identity/**"
+  - "backend/src/chain/**"
+  - "frontend/src/lib/wallet.ts"
+  - "frontend/src/stores/wallet.store.ts"
+  - "frontend/src/stores/account.store.ts"
+  - "frontend/src/stores/session.store.ts"
+  - "frontend/src/stores/chain.store.ts"
+  - "frontend/src/stores/connect.store.ts"
+  - "frontend/src/components/layout/connect-dialog.component.azeroth"
+  - "frontend/src/components/app/wallet-panel.component.azeroth"
+  - "frontend/src/components/app/profile-sheet.component.azeroth"
+  - "frontend/src/pages/sign-in.page.azeroth"
+  - "frontend/src/pages/app/me.page.azeroth"
+---
+
+# Signing in, and the Nura Profile
+
+## The profile the ecosystem holds
+
+`contracts/profile` in the SmartContract project is the Nura identity primitive — one profile per
+address, a global username namespace, and values addressed by `(profile, key, language)` with no
+schema of its own — and it is live on Nurachain. `backend/src/chain/profile.ts` is the half of this
+product that talks to it, and `/app/me` is where a person sees the two agree or disagree.
+
+**The ABI is the SERVER's, and so is the calldata.** The read path needs it anyway, and `viem` is
+already a server dependency and NOT an application one — so composing `setFields` in the browser
+would be a second description of one contract AND a new dependency inside the landing budget. It is
+written as human-readable ABI rather than a compiled artifact: five signatures a reader can compare
+against `ProfileTypes.sol` by eye, against fifty kilobytes of JSON nothing here can check. Nothing
+on this server signs; `publish` answers with an UNSENT transaction the browser hands its wallet,
+which is what keeps a key that could write to anybody's profile out of this process.
+
+**Unconfigured is a state, not a failure.** `NURA_RPC_URL`, `NURA_PROFILE_ADDRESS` and
+`NURA_PROFILE_LENS_ADDRESS` are needed together and default to empty, so a deployment pointed at no
+chain answers `configured: false` without opening a transport and the panel renders nothing — the
+shape push already has without VAPID keys. What it must never do is answer "nobody has a profile"
+for a read it could not MAKE: a dropped rpc throws and the page renders the failure, which is the
+rule the second audit wrote down when the leaderboard rendered a refused fetch as an empty world.
+
+**The @handle and the on-chain username are two namespaces and stay that way.** A handle is 2..32 in
+any script — Persian handles are a feature this file describes and `naming.db.spec.ts` pins — and a
+registry username is 3..32 of `[a-z0-9_]`, lower-cased, never starting with `0x`. They cannot be one
+identifier without one of them losing, so Games writes NO username: `createProfile` passes the empty
+string, the registry name is rendered beside the handle, and claiming one is Nura Wallet's job. It
+is also a claim against a global index that can be REFUSED, which is a second refusal path the
+profile sheet deliberately does not have — the same argument that gives `/handle` its own route.
+
+**Every field goes under the default language.** An account holds one bio here, not one per language.
+Writing it under `en` would hide it from a Persian reader resolving `fa` with fallback, while
+claiming to be the English of something nobody ever localized.
+
+**A profile page shows what the registry holds, and nothing else.** The owner's rule: the name,
+the bio and the picture on `/app/me` and on anybody's `/app/people/:handle` are read from the Nura
+Profile or are empty - the games, the achievements and the friends are this server's. So there is no
+drift to show and nothing to adopt: the sync panel, the "differs" tag and `chain.adopt` are gone.
+`GET /api/chain/people/:handle` answers `configured` and, when the person's wallet holds a profile,
+`{ username, displayName, bio, avatar }` - never the owner address or the record - and 404s a handle
+nobody holds, like the person route. A guest has no wallet and so no profile. With no name the header
+shows the handle as the title. The picture is kept only when it is one stored HERE
+(`avatarHashOf`), because the registry is written by other applications too and a link to anywhere
+else would point every viewer's browser at a stranger's host. Everywhere else a person is drawn -
+lists, chat, tables - still uses this server's copy.
+
+**Saving the profile sheet IS the publish.** The owner updated a profile, saw it saved, and found
+the chain unchanged: Save wrote this server only and the chain write was a separate button on
+`/app/me` that nobody reached. Now Save uploads a new picture, claims the @handle, writes the server
+copy, and for a wallet account on a deployment with a registry hands the wallet one transaction -
+`createProfile` or `setFields` with `displayName`, `bio`, `avatar` and the record - and says "saved"
+only once it is mined. The @handle never goes to the chain; it is this server's namespace. The
+wallet is asked for nothing only when the save changes nothing the chain holds AND the registry
+already agrees - a registry still holding an older name is written on the next Save, edited or not,
+because skipping it there is the original complaint again. The server copy is written FIRST because
+`publish` composes from the stored row, so a wallet that says no leaves the server ahead of the
+chain, the sheet says exactly that, and the `/app/me` panel shows the drift with Publish beside it.
+A wallet account on a deployment with no registry is told the profile stayed on this server, since a
+plain "saved" there is how the original complaint happened.
+
+**The picture is a link on the chain and a file on this server.** The registry never holds an
+image - `avatar` is a URI and every value is capped at 4096 bytes - so the browser crops to a 256px
+square on a canvas (WebP, or JPEG where the canvas cannot encode WebP, never PNG, which can outgrow
+the cap), and `POST /api/auth/avatar` takes it as base64. The server reads the type from the BYTES
+(`sniffAvatar`: WebP, JPEG or PNG, never SVG), caps it at 64 KB, stores it in `avatars` under its
+SHA-256 and answers `${PUBLIC_ORIGIN}/avatars/<hash>.<ext>`. `GET /avatars/:file` serves it with the
+stored type, `nosniff`, an immutable cache and the hash as the ETag, and vite proxies `/avatars` in
+development. `profileInput.avatar` accepts only `''` or a link to a picture stored here, so nothing
+this product renders points a reader's browser at a third party. The link is ABSOLUTE and on a
+public chain: a development save writes `http://localhost:3100/avatars/...` into the live registry
+for good. `users.avatar` is the server copy, nullable with no default, and every person payload
+carries it, so `Avatar` draws the picture and falls back to the initials when it will not load.
+
+**A publish answers with the outcome that happened, not a boolean.** Declining in a wallet is not a
+failure, a revert is the contract refusing, and a transaction nobody has mined yet is neither. This
+repository has twice recorded a screen reporting success before the answer landed; one boolean
+could say none of it, so `settled` reports three states and the store waits through
+`runtime().clock`. A send that fails reads WHY from `wallet.failure()` - a locked Nura Wallet answers
+4100 rather than prompting, and it used to be reported as "you declined it"; a locked Nura Wallet
+also answers `eth_accounts` with nothing, so an unknown address is asked for with `wallet.reach()`
+before anything is concluded from it; any other send failure points at the wallet, most often gas,
+rather than at the registry - and the store refuses
+to send at all when the wallet's active account is not the signed-in one, because `createProfile`
+from the wrong address creates somebody else's profile and the chain calls that success.
+
+**A guest sees nothing at all.** No wallet means no address means no profile and nothing a button
+could fix, and a strip explaining an absence nobody can act on is furniture. That is the branch this
+file already records as structurally unrendered by every gate, so it was checked by hand.
+
+**`callsFor` is pure and exported because it is the half that fails SILENTLY.** A read that goes
+wrong throws; a write with the wrong selector or a mistyped field key lands in storage nobody reads,
+costs real gas, and the chain reports success — the registry stores any key that validates and has
+nothing on its side to refuse `displayNmae` with. `tests/chain-profile.spec.ts` decodes both
+branches back out with no chain in the room.
+
+**Testing it needs a chain, and a local one is the honest bed.** Live Nurachain holds the contracts
+and no profiles, and the wallet fixtures have no gas there. `npx hardhat node` in the SmartContract
+project gives accounts 0–5, which ARE `dana.w` through `leila.a`; deploy the implementation, the
+proxy and the lens onto it and point the three variables at those addresses. A browser provider can
+then be a plain fetch proxy to `127.0.0.1:8545` — the node holds the keys, so `personal_sign` and
+`eth_sendTransaction` both work unlocked, and it sets `Access-Control-Allow-Origin: *`. One catch
+worth writing down: it wants the message HEX-encoded, which is the step MetaMask does for you.
+
+**The node does not have to be on 8545**, and on this machine it cannot be: Windows reserves a port
+range that includes it and `listen` fails with -4092. `npx hardhat node --port 8645`, then
+`node tools/qa/chain-deploy.mjs` deploys the implementation, the proxy and the lens from the
+SmartContract project's artifacts (`QA_CONTRACTS` moves where it looks) and prints the three
+addresses to set, with `NURA_CHAIN_ID=31337`. `tools/qa/chain-pass.mjs` then drives /app/me as
+`dana.w` with a provider whose requests Playwright forwards to the node - through the test process
+rather than a page `fetch`, so the page's own policies cannot stand between the wallet and the chain.
+
+**The game record is a field the profile holds, written by the person's own wallet.**
+`games.nura.record` sits beside the display name and the bio in the same `setFields`, so publishing
+is still one signature. A new profile is `createProfile` first, and the record needs the id that
+creates, so the store asks for a second round once the first has landed. The value is compact JSON
+(`v`, the level, the XP, each played game's rating, peak, played and won, and the medal count) and
+nothing else: no tallies and no streaks, because the registry is public and permanent and a record
+there should be the one somebody would put on a card. `recordValue` refuses anything over the
+registry's 4096 bytes before a wallet is asked, and answers the empty string for somebody who has
+finished nothing - a record of zeroes is not an achievement. It is read back with `getField`, and
+/app/me says whether what the registry holds is what this product would publish now. Nothing here
+claims the record is verified: the server composed it and the person signed it, which is exactly
+what it is.
+
+## The NFTs a wallet holds
+
+`/app/me` counts them and the count links to `/app/me/nfts`, a grid of every token the signed-in
+wallet holds. Nothing here is a claim the product makes about the tokens; it is a reading of the chain.
+
+**Holdings come from the explorer, and everything else from the chain.** `NURA_EXPLORER_API` is the
+explorer's Etherscan-compatible api: `backend/src/chain/nfts.ts` pages `tokennfttx` and `token1155tx`
+for the address and REPLAYS them - an ERC-721 token is held when its last transfer landed here, an
+ERC-1155 balance is what came in minus what went out - because the chain itself cannot list what an
+address owns without an indexer. The name and the picture are `tokenURI`/`uri` read through
+`NURA_RPC_URL`, then the metadata JSON. With the explorer unset the answer is `configured: false`, the
+stat is not drawn and the page says the server reads no NFTs - never "this wallet is empty".
+
+**A picture is fetched by this server and never by the reader's browser.** Metadata points anywhere
+its minter liked, so a browser told to load it would hand every viewer's address to a stranger's
+host. `GET /api/nfts/image/:contract/:tokenId` answers only a token the signed-in wallet HOLDS - with
+a bare session check it was an open fetch proxy, since anybody can sit down as a guest and anybody can
+deploy a contract whose `tokenURI` names any host - and the fetch behind it is the SSRF-guarded one: `https` only (`ipfs://` and `ar://` go through public gateways), a DNS
+lookup that refuses any private, loopback, link-local or mapped address, the same refusal for an IP
+written into the url itself (`allowedUrl` - `request` skips the lookup for a literal), three
+redirects at most, size caps and timeouts. The bytes are sniffed and only PNG, JPEG, WebP and GIF
+come back, never SVG, served `nosniff` with `default-src 'none'`. `tests/nfts.spec.ts` in each half
+pins the replay, the guard and the page.
+
+## The admin
+
+`/admin` opens for one wallet: `ADMIN_WALLET_ADDRESS` in the root `.env`, compared without regard to
+case by `isAdminAddress`, and empty means nobody. The server decides it - the account payload carries
+`admin: true` for that wallet and omits the field for everybody else - and `requireAdmin` only reads
+the answer. Anybody else, signed in or not, is refused by the guard and shown the ordinary not-found
+page, never a "forbidden" one. The page holds nothing yet; whatever an admin can DO has to be a
+server route that checks `isAdminAddress` itself, because the guard is a courtesy like every other.
+
+## Signing in
+
+**The session belongs to the server.** It is a row in `sessions` addressed by an HttpOnly cookie
+the browser cannot read, and identity is whatever `GET /api/auth/me` says it is.
+`stores/session.store.ts` is a CACHE of that answer, never the source of it. The version this
+replaces kept the answer in `localStorage` and trusted it, which meant editing one key in devtools
+impersonated anyone.
+
+`lib/guards.ts` is therefore a **courtesy**, not the enforcement: it exists so a signed-out visitor
+lands on `/sign-in` instead of on a page of empty states. The enforcement is `requireSession` in
+`backend/src/http/auth.ts`, which answers 401. Both guards await `session.ready()`, which resolves
+after the first `/auth/me`; one request on boot, every navigation after it synchronous. They reach
+the store through a **dynamic import** — see Performance for why that import must stay dynamic.
+
+**The landing page's way in is a wallet chooser, and it is a dynamic import.**
+`stores/connect.store.ts` is one boolean shared by the site header and the two landing CTAs;
+`components/layout/connect-dialog.component.azeroth` is fetched the first time somebody asks for
+it. That import MUST stay dynamic for the same reason `lib/guards.ts`'s is — see Performance.
+
+The chooser lists Nura Wallet, MetaMask and Trust Wallet, in that order, matched against EIP-6963
+announcements by `rdns` (a prefix match, so `io.metamask.flask` is still MetaMask). **A provider
+keeps the first identity it announces.** Nura Wallet announces its own `net.nurachain.wallet` and
+then the SAME provider again as `io.metamask`, `com.trustwallet.app` and three more, so a dApp's
+MetaMask button works inside its browser - which here made every row open Nura, and a real MetaMask
+lost its entry to whichever extension announced last. `discoverWallets` drops an announcement whose
+provider is already known under another `rdns`, and `detect()` prefers Nura. A wallet that did not announce
+itself is shown as missing with a link to its own download page — **except Nura Wallet, which has
+no download link on purpose**: it injects its provider only inside its own in-app browser and
+registers no url scheme, so there is nowhere to send a desktop browser. Its row expands into a
+panel with a QR of this page and a copy button instead. A row that offered to install it, or that
+called connect and waited, would be a button that lies.
+
+`/sign-in` stays, wears the same `SiteHeader` (with `cta={ false }`, because that page IS the
+connect surface) and `SiteFooter`, and remains what `lib/guards.ts` redirects to and where guest
+and demo entry live.
+
+Two ways in, and the account says which one was used through `kind`:
+
+- **Wallet** (`kind: 'wallet'`). `stores/wallet.store.ts` asks an EIP-1193 provider for accounts,
+  switches to NuraChain when `data/chain.ts` is configured, then asks the SERVER for the message
+  to sign. The client never composes it: the site and the nonce are claims the server
+  relies on when it verifies, so a client that writes its own is a client that can sign "for"
+  somewhere else. The
+  signature goes back and is CHECKED (`viem`'s `verifyMessage`, with an ERC-1271 `eth_call`
+  branch for contract wallets). The version this replaces awaited `personal_sign` and threw the
+  result away, which made the whole prompt theatre.
+- **Guest** (`kind: 'guest'`). A typed name, no proof of anything, and the actual onboarding for
+  most people. `handleFromName` folds the name into a handle.
+
+**`/sign-in` offers the chooser too, and for a while only the landing page did.** `WalletPanel`
+connects to whichever provider EIP-6963 announced first, which is the right default and was the only
+option: somebody holding both MetaMask and Trust Wallet had no way to say which, and somebody holding
+neither was pointed at MetaMask specifically. The same `connect-dialog` the landing uses opens from
+the sign-in page now — **still behind a dynamic import**, because that component reaches
+`wallet.store.ts` and therefore `api.ts`, and the landing chunk must not grow by a byte for it.
+
+**There is no demo account and no `/auth/demo`.** Three seeded personas used to be offered on the
+sign-in page so somebody could look around without connecting anything - but a guest already does
+that, and does it as a REAL account nobody else can sign into. What `demo` added was precisely the
+shared-identity property: several people in one account, whose profile the product then rendered
+exactly like a person's. `users_kind_known` names `('wallet','guest')` and nothing else, rather
+than leaving the value legal with nothing writing it.
+
+**Nothing signed in as a GUEST had ever been rendered by a gate**, and that is the same structural
+blind spot the wallet fixtures exist to close, seen from the other end. `tools/qa` tours 640 cells
+as `dana.w` and `seal-pass.mjs` signs in with a wallet, so every control behind
+`!account.isWallet()` shipped without once being drawn. What it hid was a PRIMARY button on settings
+reading "Connect a wallet", sitting directly above "Sign out" and carrying the identical handler:
+there is no wallet-link route on this server - `/auth/wallet` mints a NEW user from the address and
+never reads the session - and a guest handle is claimed by INSERT, so signing out of a guest account
+is the end of it. The button destroyed the account while the card that steered people to it promised
+"this profile, these friends and every result follow you to any device".
+
+The copy now says what happens, and `tests/settings.spec.ts` renders both pages as a guest so the
+branch has something looking at it. Building the link instead is a real project - a schema change, a
+route, and a decision about whether a guest's `attested: 'server'` devices become wallet-attested -
+and it is not smuggled in under a copy fix.
+
+**The QA matrix signs in with a WALLET**, through the real challenge-sign-post round trip, as the
+`dana.w` fixture. It used to POST `/auth/demo`, which meant the one sign-in path exercised on every
+run was the one no real person used. It now needs `seedWalletFixtures` to have run, exactly as it
+used to need the demo rows.
+
+**The nonce is single use, and it is burned FIRST.** `signInWithWallet` runs a conditional UPDATE
+that only matches an unconsumed, unexpired row and takes the stored message from its `returning`
+clause. Two requests replaying one signature race in the database and exactly one wins. Verifying
+first would leave a window where both passed.
+
+**A handle is claimed by INSERT, never by "check then insert."** `insertUser` loops over
+`candidatesFor` and lets the unique index arbitrate, moving on only for a genuine 23505.
+
+`personFor` in `stores/account.store.ts` turns the server's account into the `Person` the app
+renders: identity from the account, and — until the profile and social domains land — statistics,
+achievements and a favourite game from the mock dataset, joined on the handle for a `demo` account
+only. The four mock-backed stores read `account.user()?.id`, not the raw account id, because that
+join is what keeps a demo tour's friends and chats attached to it.
+
+Chain details come from `VITE_NURA_*` env vars (see `.env.example`); with none set the app signs
+in on whatever network the wallet is already on and skips the switch. The sign-in text names no
+chain; `NURA_CHAIN_ID` is what a wallet row records and what a contract wallet is checked on.
+
+`lib/wallet.ts` discovers providers through **EIP-6963** and falls back to `window.ethereum`.
+It does not believe `isMetaMask` — any injector can set that flag — so with no announcement it
+takes the first injected provider, and `walletName(null)` says "Browser wallet" rather than naming
+a wallet that is not installed.
