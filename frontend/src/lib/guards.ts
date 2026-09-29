@@ -23,6 +23,14 @@ export async function requireSession(context: GuardContext): Promise<GuardVerdic
     return redirect({ pathname: '/sign-in', query: { next: context.pathname } });
 }
 
+export async function requireAdmin(): Promise<GuardVerdict>
+{
+    const { useSession } = await import('../stores/session.store.ts');
+    const session = useSession();
+    await session.ready();
+    return session.account()?.admin === true;
+}
+
 export async function requireAnonymous(context: GuardContext): Promise<GuardVerdict>
 {
     if (!(await settled()).signedIn())

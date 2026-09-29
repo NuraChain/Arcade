@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 import { manualClock, type ManualClock } from '../src/lib/clock.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
-import { requireAnonymous, requireSession, safeNext } from '../src/lib/guards.ts';
+import { requireAdmin, requireAnonymous, requireSession, safeNext } from '../src/lib/guards.ts';
 import { RESTORED_MS, useConnection } from '../src/stores/connection.store.ts';
 import { bareFor, postureFor, useDevice } from '../src/stores/device.store.ts';
 import { OVERLAY_SETTLE, useOverlay } from '../src/stores/overlay.store.ts';
@@ -211,6 +211,18 @@ describe('guards', () =>
         await useAccount().signIn('Alex');
         expect(await requireSession(context('/app'))).toBe(true);
         expect(await requireAnonymous(context('/sign-in', '/app/chats'))).toMatchObject({ to: '/app/chats' });
+    });
+
+    it('opens /admin only for the account the server calls the admin', async () =>
+    {
+        expect(await requireAdmin()).toBe(false);
+
+        await useAccount().signIn('Alex');
+        expect(await requireAdmin()).toBe(false);
+
+        const admin = { id: 'u-admin', handle: 'admin.w', displayName: '', bio: '', hue: 1, kind: 'wallet' as const, isMinor: false, address: '0x9965507d1a55bcc2695c58ba16fb37d819b0a4dc', admin: true };
+        useSession().establish(admin);
+        expect(await requireAdmin()).toBe(true);
     });
 
     it('never follows a next that leaves the app', () =>

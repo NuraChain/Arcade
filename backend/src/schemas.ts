@@ -265,7 +265,8 @@ export const account = object({
      * for a wallet account only while the link is being written - the UI renders it as
      * "no wallet linked" rather than assuming.
      */
-    address: string().optional()
+    address: string().optional(),
+    admin: boolean().optional()
 });
 
 export type Account = Infer<typeof account>;

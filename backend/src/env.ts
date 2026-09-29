@@ -46,6 +46,8 @@ export function loadServerConfig()
         /** The explorer's Etherscan-compatible api, where a wallet's NFT transfers are read. */
         explorerApi: str('NURA_EXPLORER_API', { default: '' }),
 
+        adminWallet: str('ADMIN_WALLET_ADDRESS', { default: '' }),
+
         /**
          * Requests per minute per address, for `/api` and `/ws`.
          *

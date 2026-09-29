@@ -1,0 +1,20 @@
+import { Link, useHead } from 'azerothjs';
+
+import '../locales/app-catalogue.ts';
+import { useLocale } from '../stores/locale.store.ts';
+import { useSession } from '../stores/session.store.ts';
+
+export default component AdminPage()
+{
+    const locale = useLocale();
+    const session = useSession();
+
+    useHead({ title: () => locale.t('admin.title') });
+
+    <main class="mx-auto flex min-h-dvh w-full max-w-3xl flex-col gap-3 bg-void px-4 py-10 sm:px-6">
+        <h1 class="title text-ui-3xl text-text">{ locale.t('admin.title') }</h1>
+        <p class="text-ui-md text-muted">{ locale.t('admin.lead') }</p>
+        <code class="tally break-all text-ui-sm text-text">{ session.account()?.address ?? '' }</code>
+        <Link to="/app" class="inline-flex min-h-11 items-center self-start text-ui-sm font-semibold text-accent">{ locale.t('admin.back') }</Link>
+    </main>
+}

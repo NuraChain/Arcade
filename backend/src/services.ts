@@ -25,6 +25,7 @@ import { createTableService, type TableRow } from './domains/table/service.ts';
 import { createChainProfiles, recordValue } from './chain/profile.ts';
 import { createNftReader } from './chain/nfts.ts';
 import { createIdentityService } from './domains/identity/service.ts';
+import { isAdminAddress } from './domains/identity/admin.ts';
 import { avatarHashOf } from './domains/identity/avatar.ts';
 import { maySeeOnline } from './domains/social/policy.ts';
 import { createSocialService, type PersonRow } from './domains/social/service.ts';
@@ -1107,7 +1108,8 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         hue: row.hue,
         kind: row.kind,
         isMinor: row.is_minor,
-        address: row.address ?? undefined
+        address: row.address ?? undefined,
+        ...(isAdminAddress(row.address, config.adminWallet) ? { admin: true } : {})
     });
 
     /**
