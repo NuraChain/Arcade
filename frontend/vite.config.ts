@@ -3,6 +3,8 @@ import tailwindcss from '@tailwindcss/vite';
 import type { Plugin } from 'vite';
 import { defineConfig } from 'vitest/config';
 
+process.env.VITE_USER_NODE_ENV ??= '';
+
 const shareOrigin = (): Plugin =>
 {
     let origin = '';
@@ -22,6 +24,8 @@ export default defineConfig(({ isSsrBuild }) => ({
     plugins: [azeroth(), tailwindcss(), shareOrigin()],
 
     cacheDir: '../node_modules/.vite',
+
+    envDir: '..',
 
     resolve:
     {
