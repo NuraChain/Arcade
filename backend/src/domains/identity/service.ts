@@ -12,19 +12,11 @@ import { SiweNonce } from '../../entities/siwe-nonce.entity.ts';
 import { User } from '../../entities/user.entity.ts';
 import { AVATAR_MAX_BYTES, avatarHashOf, avatarUrl, sniffAvatar } from './avatar.ts';
 import { candidatesFor, checkHandle, handleFromAddress, handleFromName, normalizeHandle } from './handle.ts';
-import { buildSiweMessage, verifySignature } from './siwe.ts';
+import { signInText, verifySignature } from './signature.ts';
 
 /** Five minutes. A signature older than this is refused however valid it is. */
 const NONCE_TTL_MS = 5 * 60 * 1000;
 
-/**
- * The one line a wallet puts above the details.
- *
- * "It costs nothing and moves nothing" is there because the prompt a wallet shows for a signature
- * looks very like the one it shows for a transaction, and somebody who cannot tell the difference
- * learns to click through both.
- */
-const SIGN_IN_STATEMENT = 'Sign in to Nura Games. This proves the seat is yours. It costs nothing and moves nothing.';
 
 /** How many suffixed handles to try before giving up and telling the caller to pick another. */
 const HANDLE_ATTEMPTS = 8;
@@ -62,6 +54,14 @@ export interface SignedIn
 {
     token: string;
     principal: Principal;
+}
+
+export interface WalletProof
+{
+    attested: 'wallet' | 'contract';
+    address: string;
+    message: string;
+    signature: string;
 }
 
 export function createIdentityService(db: DataSource, config: IdentityConfig)
@@ -173,7 +173,7 @@ export function createIdentityService(db: DataSource, config: IdentityConfig)
          * The message is built and STORED here, so verification compares against the exact bytes
          * that were offered rather than rebuilding them and hoping every field agrees.
          */
-        async challenge(rawAddress: string): Promise<{ nonce: string; message: string; expiresAt: string }>
+        async challenge(rawAddress: string, deviceId?: string): Promise<{ nonce: string; message: string; expiresAt: string }>
         {
             const address = normalizeAddress(rawAddress);
             if (!isAddress(address))
@@ -185,16 +185,7 @@ export function createIdentityService(db: DataSource, config: IdentityConfig)
             const issuedAt = new Date();
             const expiresAt = new Date(issuedAt.getTime() + NONCE_TTL_MS);
 
-            const message = buildSiweMessage({
-                domain,
-                uri: config.origin,
-                address,
-                chainId: config.chainId,
-                nonce,
-                issuedAt,
-                expiresAt,
-                statement: SIGN_IN_STATEMENT
-            });
+            const message = signInText(domain, nonce, deviceId);
 
             await db.getRepository(SiweNonce).insert({ nonce, address, message, issuedAt, expiresAt });
 
@@ -215,7 +206,7 @@ export function createIdentityService(db: DataSource, config: IdentityConfig)
             signature: string;
             providerRdns?: string;
             userAgent: string;
-        }): Promise<SignedIn>
+        }): Promise<SignedIn & { proof: WalletProof }>
         {
             const address = normalizeAddress(input.address);
             if (!isAddress(address))
@@ -283,7 +274,11 @@ export function createIdentityService(db: DataSource, config: IdentityConfig)
             }
 
             const { token, sessionId } = await openSession(user.id, input.userAgent);
-            return { token, principal: principalOf(user, sessionId) };
+            return {
+                token,
+                principal: principalOf(user, sessionId),
+                proof: { attested: verdict.attestation, address, message: challenge.message, signature: input.signature }
+            };
         },
 
         /**

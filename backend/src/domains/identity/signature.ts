@@ -1,70 +1,34 @@
 import { createPublicClient, http, type Address, type Hex } from 'viem';
 
 import { normalizeAddress } from '../../lib/crypto.ts';
+import { deviceLine } from '../device/resource.ts';
 
 /**
- * Sign-In With Ethereum, EIP-4361.
+ * The words a wallet is asked to sign, composed HERE and stored with the nonce.
  *
- * The message is built HERE, on the server, and stored with the nonce. The client is handed the
- * finished text to sign and never composes it, because every field in it is a claim the server
- * later relies on: the domain the signature is valid for, the chain, the moment, the nonce. A
- * client that composes its own message is a client that can sign "for" a different site.
+ * Plain text, not EIP-4361: the site's name, what the signature is for, the device it names and
+ * the nonce. The nonce is what makes a signature single-use - without it one captured signature
+ * would sign in forever - and the device line is what a peer checks, so both are in the signed
+ * bytes. The address and the expiry are not: the signature recovers the address, and the server
+ * holds the expiry beside the nonce.
  */
+const body = (statement: string, nonce: string, deviceId?: string): string =>
+    [statement, '', ...(deviceId === undefined ? [] : [deviceLine(deviceId)]), `Nonce: ${ nonce }`].join('\n');
 
-export interface ChallengeInput
+export function signInText(site: string, nonce: string, deviceId?: string): string
 {
-    /** The host the browser is really on, from configuration - never from a request header. */
-    domain: string;
-    uri: string;
-    address: string;
-    chainId: string;
-    nonce: string;
-    issuedAt: Date;
-    expiresAt: Date;
-
-    /** The one line a wallet shows above the details: what this signature is FOR, in plain words. */
-    statement: string;
-
-    /**
-     * EIP-4361's resource list, which is where a signature is bound to something specific.
-     *
-     * Device enrolment puts `nura:device:<id>` here, so the signature cannot be replayed to
-     * authorise a different device - the id it names is inside the bytes that were signed. Signing
-     * in names no resource, because signing in is about the account rather than about one thing.
-     */
-    resources?: string[];
+    return body(
+        deviceId === undefined
+            ? `Sign in to Nura Games (${ site }).`
+            : `Sign in to Nura Games (${ site }) and let this browser read and send your messages.`,
+        nonce,
+        deviceId
+    );
 }
 
-/**
- * EIP-4361's exact shape. The field order and the blank lines are part of the format, not
- * styling: wallets parse this to show a readable prompt, and a wallet that cannot parse it falls
- * back to showing raw bytes, which is what trains people to sign things they have not read.
- *
- * `Chain ID` must be the decimal EIP-155 number. The version this replaces passed the chain NAME
- * when no chain was configured - `Chain ID: NuraChain` - which no parser accepts.
- */
-export function buildSiweMessage(input: ChallengeInput): string
+export function deviceText(site: string, nonce: string, deviceId: string): string
 {
-    const lines = [
-        `${ input.domain } wants you to sign in with your Ethereum account:`,
-        normalizeAddress(input.address),
-        '',
-        input.statement,
-        '',
-        `URI: ${ input.uri }`,
-        'Version: 1',
-        `Chain ID: ${ input.chainId }`,
-        `Nonce: ${ input.nonce }`,
-        `Issued At: ${ input.issuedAt.toISOString() }`,
-        `Expiration Time: ${ input.expiresAt.toISOString() }`
-    ];
-
-    if (input.resources !== undefined && input.resources.length > 0)
-    {
-        lines.push('Resources:', ...input.resources.map((resource) => `- ${ resource }`));
-    }
-
-    return lines.join('\n');
+    return body(`Let this browser read and send your messages on Nura Games (${ site }).`, nonce, deviceId);
 }
 
 export interface VerifyInput

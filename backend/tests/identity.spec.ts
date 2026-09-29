@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { privateKeyToAccount } from 'viem/accounts';
 
-import { buildSiweMessage, verifySignature } from '../src/domains/identity/siwe.ts';
+import { signInText, verifySignature } from '../src/domains/identity/signature.ts';
 import { candidatesFor, checkHandle, handleFromAddress, handleFromName, normalizeHandle } from '../src/domains/identity/handle.ts';
 import { hashToken, isAddress, mintNonce, mintToken, normalizeAddress, secretsMatch } from '../src/lib/crypto.ts';
 
@@ -12,49 +12,33 @@ import { hashToken, isAddress, mintNonce, mintToken, normalizeAddress, secretsMa
 const KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
 const signer = privateKeyToAccount(KEY);
 
-const challenge = (overrides: Partial<Parameters<typeof buildSiweMessage>[0]> = {}): string =>
-    buildSiweMessage({
-        domain: 'nura.games',
-        uri: 'https://nura.games',
-        address: signer.address,
-        chainId: '1',
-        nonce: 'a'.repeat(32),
-        issuedAt: new Date('2026-01-01T00:00:00.000Z'),
-        expiresAt: new Date('2026-01-01T00:05:00.000Z'),
-        statement: 'Sign in to Nura Games. This proves the seat is yours. It costs nothing and moves nothing.',
-        ...overrides
-    });
+const challenge = (site = 'nura.games', deviceId?: string): string => signInText(site, 'a'.repeat(32), deviceId);
 
-describe('the SIWE message', () =>
+describe('the sign-in text', () =>
 {
-    it('is EIP-4361 shaped, with the address on its own second line', () =>
+    it('is a plain sentence naming the site, with no Ethereum, no chain and no address', () =>
     {
-        const lines = challenge().split('\n');
-        expect(lines[0]).toBe('nura.games wants you to sign in with your Ethereum account:');
-        expect(lines[1]).toBe(signer.address.toLowerCase());
-        expect(lines[2]).toBe('');
+        const text = challenge();
+
+        expect(text.split('\n')[0]).toBe('Sign in to Nura Games (nura.games).');
+        expect(text).not.toMatch(/ethereum/i);
+        expect(text).not.toContain('Chain ID');
+        expect(text).not.toContain(signer.address.toLowerCase());
     });
 
-    it('carries a DECIMAL chain id, never a chain name', () =>
+    it('carries the nonce on its own line, so a captured signature signs in once', () =>
     {
-        // The version this replaces sent `Chain ID: NuraChain` whenever no chain was configured.
-        // No SIWE parser accepts that, so wallets fell back to showing raw bytes.
-        const line = challenge({ chainId: '1' }).split('\n').find((one) => one.startsWith('Chain ID:'));
-        expect(line).toBe('Chain ID: 1');
-
-        // The VALUE must be digits. The label is words, so the assertion is on what follows it.
-        expect(line!.slice('Chain ID: '.length)).toMatch(/^\d+$/);
+        expect(challenge().split('\n').at(-1)).toBe(`Nonce: ${ 'a'.repeat(32) }`);
     });
 
-    it('states an expiry, so a captured message cannot be signed a week later', () =>
+    it('names a browser that is new to the account, and asks for its messages in the same sentence', () =>
     {
-        expect(challenge()).toContain('Expiration Time: 2026-01-01T00:05:00.000Z');
-    });
-
-    it('lowercases the address it binds, whatever casing the provider handed over', () =>
-    {
-        const upper = challenge({ address: signer.address.toUpperCase().replace('0X', '0x') });
-        expect(upper.split('\n')[1]).toBe(signer.address.toLowerCase());
+        expect(challenge('nura.games', 'abcdefghijklmnopqrstuv').split('\n')).toEqual([
+            'Sign in to Nura Games (nura.games) and let this browser read and send your messages.',
+            '',
+            'Browser key: abcdefghijklmnopqrstuv',
+            `Nonce: ${ 'a'.repeat(32) }`
+        ]);
     });
 });
 
@@ -72,7 +56,7 @@ describe('signature verification', () =>
     it('refuses a signature over a DIFFERENT message', async () =>
     {
         // The attack this stops: a signature harvested from some other site, replayed here.
-        const signature = await signer.signMessage({ message: challenge({ domain: 'evil.example' }) });
+        const signature = await signer.signMessage({ message: challenge('evil.example') });
 
         const verdict = await verifySignature({ address: signer.address, message: challenge(), signature });
         expect(verdict).toEqual({ ok: false, reason: 'bad-signature' });

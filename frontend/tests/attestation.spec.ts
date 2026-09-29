@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { privateKeyToAccount } from 'viem/accounts';
 
 import { deviceIdFrom, toBase64Url } from '../src/lib/device-id.ts';
-import { addressFromPersonalSign, deviceResource, verifyPeerDevice } from '../src/lib/attestation.ts';
+import { addressFromPersonalSign, deviceLine, verifyPeerDevice } from '../src/lib/attestation.ts';
 import type { PeerDevice } from '../src/api.ts';
 
 /**
@@ -28,21 +28,12 @@ async function realKeys(): Promise<{ exchangeKey: string; signingKey: string }>
     };
 }
 
-/** An enrolment the way the server really composes one: EIP-4361, with the device in Resources. */
-const enrolMessage = (id: string, address: string): string => [
-    'nura.games wants you to sign in with your Ethereum account:',
-    address.toLowerCase(),
+/** An enrolment the way the server really composes one: plain text, with the device on its own line. */
+const enrolMessage = (id: string, _address: string): string => [
+    'Let this browser read and send your messages on Nura Games (nura.games).',
     '',
-    'Authorise a device to read your messages on Nura Games. Only do this on a device you own. It costs nothing and moves nothing.',
-    '',
-    'URI: https://nura.games',
-    'Version: 1',
-    'Chain ID: 1',
-    `Nonce: ${ 'a'.repeat(32) }`,
-    'Issued At: 2026-01-01T00:00:00.000Z',
-    'Expiration Time: 2026-01-01T00:05:00.000Z',
-    'Resources:',
-    `- ${ deviceResource(id) }`
+    deviceLine(id),
+    `Nonce: ${ 'a'.repeat(32) }`
 ].join('\n');
 
 async function peerDevice(

@@ -4,6 +4,7 @@ import { cleanup, fire, renderTest } from '@azerothjs/testing';
 import ConnectDialog from '../src/components/layout/connect-dialog.component.azeroth';
 import { manualClock } from '../src/lib/clock.ts';
 import { qrOf } from '../src/lib/qr.ts';
+import { keyStore } from '../src/lib/device-keys.ts';
 import { discoverWallets, forgetWallets, type Eip1193Provider } from '../src/lib/wallet.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import { useConnect } from '../src/stores/connect.store.ts';
@@ -239,6 +240,47 @@ describe('the wallet chooser', () =>
 
         expect(server.received?.providerRdns).toBe('net.nurachain.wallet');
         expect(navigate).toHaveBeenCalledWith('/app');
+    });
+
+    it('signs in and hands this browser its keys with one signature', async () =>
+    {
+        const provider = fakeProvider();
+        const asked: string[] = [];
+        const request = provider.request.bind(provider);
+        provider.request = async (args) =>
+        {
+            asked.push(args.method);
+            return request(args);
+        };
+        announce('net.nurachain.wallet', 'Nura Wallet', provider);
+
+        open();
+        await settle();
+        fire(dialog().querySelector('li button')!, 'click');
+        await vi.waitFor(() => expect(server.calls).toContain('auth.wallet'));
+
+        const keys = await keyStore().load();
+        expect(asked.filter((method) => method === 'personal_sign')).toHaveLength(1);
+        expect(server.issued?.device).toBe(keys!.id);
+        expect(server.issued?.message).toContain(`Browser key: ${ keys!.id }`);
+        expect(server.issued?.message).not.toMatch(/ethereum/i);
+        expect(server.received?.device).toEqual({ ...keys, label: 'This browser' });
+    });
+
+    it('asks nothing about devices of a browser that cannot hold keys', async () =>
+    {
+        const unavailable = vi.spyOn(keyStore(), 'available').mockReturnValue(false);
+        announce('net.nurachain.wallet', 'Nura Wallet', fakeProvider());
+
+        open();
+        await settle();
+        fire(dialog().querySelector('li button')!, 'click');
+        await settle();
+
+        expect(server.issued?.device).toBeUndefined();
+        expect(server.received?.device).toBeUndefined();
+        expect(server.calls).toContain('auth.wallet');
+        unavailable.mockRestore();
     });
 
     it('says the server is out of reach, and logs which step failed and why', async () =>

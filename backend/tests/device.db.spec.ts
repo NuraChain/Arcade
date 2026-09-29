@@ -315,6 +315,19 @@ describe.skipIf(!active)('devices, against a real database', () =>
             expect(row.attested).toBe('wallet');
         });
 
+        it('confirms every browser the account wallet signs for, not only the first', async () =>
+        {
+            const userId = await makeWalletUser();
+            const laptop = await keypair();
+            await device.enrol(userId, await openSession(userId), { ...laptop, ...await sign(userId, laptop.id), label: 'Laptop', userAgent: '' });
+
+            const phone = await keypair();
+            const second = await device.enrol(userId, await openSession(userId), { ...phone, ...await sign(userId, phone.id), label: 'Phone', userAgent: '' });
+
+            expect(second.attested).toBe('wallet');
+            expect(second.confirmed_at).not.toBeNull();
+        });
+
         it('will not enrol a device with no signature at all', async () =>
         {
             const userId = await makeWalletUser();

@@ -1,7 +1,7 @@
 import { secp256k1 } from '@noble/curves/secp256k1.js';
 import { keccak_256 } from '@noble/hashes/sha3.js';
 
-import { deviceResource } from '../../../backend/src/domains/device/resource.ts';
+import { deviceLine, namesDevice } from '../../../backend/src/domains/device/resource.ts';
 import type { PeerDevice } from '../api.ts';
 import { deviceVerifies } from './device-id.ts';
 
@@ -18,7 +18,7 @@ import { deviceVerifies } from './device-id.ts';
  * from it without asking anybody. Three things have to line up:
  *
  *   1. the id really is the hash of the two keys,
- *   2. the signed message names THAT device in its EIP-4361 `Resources` line,
+ *   2. the signed message names THAT device on a `Browser key:` line of its own,
  *   3. the signature recovers to the address published beside it.
  *
  * What this cannot do is tell you the address is the right PERSON's. That is not a gap in the
@@ -30,7 +30,7 @@ import { deviceVerifies } from './device-id.ts';
  * magnitude larger for the one thing needed here - recovering a public key from a signature.
  */
 
-export { deviceResource };
+export { deviceLine };
 
 export type PeerVerdict =
     | 'ok'
@@ -162,7 +162,7 @@ export async function verifyPeerDevice(device: PeerDevice): Promise<PeerVerdict>
         return 'keys-swapped';
     }
 
-    if (!device.message.includes(deviceResource(device.id)))
+    if (!namesDevice(device.message, device.id))
     {
         return 'wrong-device';
     }

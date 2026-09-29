@@ -145,7 +145,7 @@ export const me = {
     'recovery.copy': 'Copy the phrase',
     'recovery.copied': 'Copied. Paste it somewhere safe.',
     'recovery.saved': 'I have written it down',
-    'recovery.useLead': 'This browser is waiting to be confirmed. Confirm it from a device you already trust, or enter your recovery phrase.',
+    'recovery.useLead': 'This browser cannot read your earlier messages yet. Enter your recovery phrase to bring them back.',
     'recovery.field': 'Recovery phrase',
     'recovery.use': 'Confirm with the phrase',
     'recovery.wrong': 'That is not the recovery phrase for this account.',

@@ -4,7 +4,7 @@ import { privateKeyToAccount } from 'viem/accounts';
 
 import type { ConversationDevices, PeerDevice } from '../src/api.ts';
 import SealNotice from '../src/components/chat/seal-notice.component.azeroth';
-import { deviceResource } from '../src/lib/attestation.ts';
+import { deviceLine } from '../src/lib/attestation.ts';
 import { deviceIdFrom, toBase64Url } from '../src/lib/device-id.ts';
 import { sealabilityOf, sendBlockOf, type BlockedMember, type Sealability } from '../src/lib/seal-state.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
@@ -37,19 +37,10 @@ async function device(signer: typeof alice, overrides: Partial<PeerDevice> = {})
     const id = await deviceIdFrom(keys.exchangeKey, keys.signingKey);
 
     const message = [
-        'nura.games wants you to sign in with your Ethereum account:',
-        signer.address.toLowerCase(),
+        'Let this browser read and send your messages on Nura Games (nura.games).',
         '',
-        'Authorise a device.',
-        '',
-        'URI: https://nura.games',
-        'Version: 1',
-        'Chain ID: 1',
-        `Nonce: ${ 'a'.repeat(32) }`,
-        'Issued At: 2026-01-01T00:00:00.000Z',
-        'Expiration Time: 2026-01-01T00:05:00.000Z',
-        'Resources:',
-        `- ${ deviceResource(id) }`
+        deviceLine(id),
+        `Nonce: ${ 'a'.repeat(32) }`
     ].join('\n');
 
     return {

@@ -1,14 +1,15 @@
 /**
- * The EIP-4361 `Resources` line that binds an enrolment signature to ONE device.
+ * The line that binds a signature to ONE device, and the check that a message carries it.
  *
- * Deliberately a module with NO imports. Three places need this string and they are on different
- * sides of two lines: the device service composes the challenge, the development wallet fixtures
- * sign one, and `frontend/src/lib/attestation.ts` checks one IN THE BROWSER. A copy on the
- * client would be a second definition of the thing the whole attestation hangs on, and the two
- * would agree right up until somebody changed one of them.
+ * Deliberately a module with NO imports. Three places need this and they are on different sides of
+ * two lines: the server composes the text, the development wallet fixtures sign one, and
+ * `frontend/src/lib/attestation.ts` checks one IN THE BROWSER. A copy on the client would be a
+ * second definition of the thing the whole attestation hangs on.
  *
- * It cannot live in `id.ts` (which reaches `node:crypto`) or beside the SIWE builder (which reaches
- * `viem`), because the browser would carry either of those into its bundle for one template
- * string.
+ * A whole LINE is compared, never a substring: a device id inside some other line, or a longer id
+ * that starts with this one, is not this device.
  */
-export const deviceResource = (id: string): string => `nura:device:${ id }`;
+export const deviceLine = (id: string): string => `Browser key: ${ id }`;
+
+export const namesDevice = (message: string, id: string): boolean =>
+    message.split('\n').includes(deviceLine(id));

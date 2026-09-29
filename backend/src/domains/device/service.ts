@@ -7,10 +7,9 @@ import { Device, type Attestation } from '../../entities/device.entity.ts';
 import { Session } from '../../entities/session.entity.ts';
 import { SiweNonce } from '../../entities/siwe-nonce.entity.ts';
 import { Wallet } from '../../entities/wallet.entity.ts';
-import { verifySignature } from '../identity/siwe.ts';
-import { enrolMessage } from './enrol-message.ts';
+import { deviceText, verifySignature } from '../identity/signature.ts';
 import { deviceIdMatches, isDeviceId } from './id.ts';
-import { deviceResource } from './resource.ts';
+import { namesDevice } from './resource.ts';
 
 /** Five minutes, the same window a sign-in challenge gets. Long enough to read the prompt. */
 const NONCE_TTL_MS = 5 * 60 * 1000;
@@ -127,7 +126,7 @@ export function createDeviceService(db: DataSource, config: DeviceConfig)
         // The signed bytes must name THIS device. A challenge issued for another device - or for
         // signing in, which names none - is a valid signature over the wrong statement, and
         // accepting it is how one prompt authorises anything.
-        if (!challenge.message.includes(deviceResource(input.id)))
+        if (!namesDevice(challenge.message, input.id))
         {
             throw new UnauthorizedError('That authorisation was for a different device.');
         }
@@ -179,12 +178,32 @@ export function createDeviceService(db: DataSource, config: DeviceConfig)
         },
 
         /**
-         * The message a wallet is asked to sign to authorise one device.
+         * Whether a device is a live device of the account this wallet signs in to.
          *
-         * The device id goes in EIP-4361's `Resources`, which is the field that exists for exactly
-         * this: binding a signature to a specific thing. Without it, a signature collected for one
-         * device - or for signing in - would authorise any device somebody chose to name, because
-         * the bytes that were signed would not mention which.
+         * Sign-in asks before it composes its text: a browser whose keys are already this account's
+         * signs the short sentence, and only a browser that is new to the account is named in it.
+         */
+        async liveFor(address: string, deviceId: string): Promise<boolean>
+        {
+            if (!isDeviceId(deviceId))
+            {
+                return false;
+            }
+
+            return db.getRepository(Device).createQueryBuilder('d')
+                .innerJoin(Wallet, 'w', 'w.user_id = d.user_id')
+                .where('d.id = :deviceId', { deviceId })
+                .andWhere('w.address = :address', { address: normalizeAddress(address) })
+                .andWhere('d.revoked_at is null')
+                .getExists();
+        },
+
+        /**
+         * The message a wallet is asked to sign to authorise one device after sign-in.
+         *
+         * The device id is a line of its own in the signed text. Without it, a signature collected
+         * for one device - or for signing in - would authorise any device somebody chose to name,
+         * because the bytes that were signed would not mention which.
          */
         async challenge(userId: string, deviceId: string): Promise<{ nonce: string; message: string; expiresAt: string }>
         {
@@ -203,16 +222,7 @@ export function createDeviceService(db: DataSource, config: DeviceConfig)
             const issuedAt = new Date();
             const expiresAt = new Date(issuedAt.getTime() + NONCE_TTL_MS);
 
-            const message = enrolMessage({
-                domain,
-                uri: config.origin,
-                address,
-                chainId: config.chainId,
-                nonce,
-                issuedAt,
-                expiresAt,
-                deviceId
-            });
+            const message = deviceText(domain, nonce, deviceId);
 
             await db.getRepository(SiweNonce).insert({ nonce, address, message, issuedAt, expiresAt });
 
@@ -228,12 +238,25 @@ export function createDeviceService(db: DataSource, config: DeviceConfig)
          * the "is this the first device?" test and the insert together, so two browsers enrolling
          * at the same moment cannot both decide they are the first and both arrive confirmed.
          */
-        async enrol(userId: string, sessionId: string, input: EnrolInput): Promise<DeviceRow>
+        async enrol(userId: string, sessionId: string, input: EnrolInput, signedIn?: AttestationProof): Promise<DeviceRow>
         {
             if (!deviceIdMatches(input.id, input.exchangeKey, input.signingKey))
             {
                 throw new BadRequestError('Those keys do not match that device id.');
             }
+
+            const prove = async (address: string): Promise<AttestationProof> =>
+            {
+                if (signedIn === undefined)
+                {
+                    return proveWallet(address, input);
+                }
+                if (!namesDevice(signedIn.message, input.id) || normalizeAddress(signedIn.address) !== normalizeAddress(address))
+                {
+                    throw new UnauthorizedError('That sign-in did not name this browser.');
+                }
+                return signedIn;
+            };
 
             const existing = firstRow<DeviceRow & { user_id: string }>(await db.query(
                 `select ${ COLUMNS }, user_id from devices where id = $1`,
@@ -264,8 +287,8 @@ export function createDeviceService(db: DataSource, config: DeviceConfig)
                 // in place rather than forcing a revoke-and-re-enrol that would burn working keys
                 // for bookkeeping. A device that ALREADY has a proof is never re-attested here, so
                 // this cannot be used to move one address's claim onto another's device.
-                const upgrade = existing.attested === 'server' && address !== null && input.signature !== undefined
-                    ? await proveWallet(address, input)
+                const upgrade = existing.attested === 'server' && address !== null && (input.signature !== undefined || signedIn !== undefined)
+                    ? await prove(address)
                     : null;
 
                 const touched = await db.query(
@@ -299,7 +322,7 @@ export function createDeviceService(db: DataSource, config: DeviceConfig)
             // A wallet account signs for its devices. Letting it skip that would make every device
             // on a wallet account server-attested by simply not sending a signature, which is a
             // downgrade nobody would see.
-            const proof = address === null ? null : await proveWallet(address, input);
+            const proof = address === null ? null : await prove(address);
 
             return db.transaction(async (tx) =>
             {
@@ -309,7 +332,7 @@ export function createDeviceService(db: DataSource, config: DeviceConfig)
                     `insert into devices (id, user_id, label, exchange_key, signing_key, attested, user_agent, last_seen_at, confirmed_at,
                                           attested_address, attested_message, attested_signature)
                      select $1, $2, $3, $4, $5, $6, $7, now(),
-                            case when not exists (
+                            case when $6 <> 'server' or not exists (
                                 select 1 from devices d where d.user_id = $2 and d.revoked_at is null
                             ) then now() end,
                             $8::citext, $9::text, $10::text

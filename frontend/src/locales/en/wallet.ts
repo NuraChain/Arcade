@@ -42,5 +42,7 @@ export const wallet = {
     'wallet.qrOf': 'QR code for {url}',
     'wallet.copyLink': 'Copy link',
     'wallet.linkCopied': 'Link copied',
-    'wallet.otherWays': 'Sit down as a guest instead'
+    'wallet.otherWays': 'Sit down as a guest instead',
+    'wallet.thisPhone': 'This phone',
+    'wallet.thisBrowser': 'This browser'
 };

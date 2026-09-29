@@ -206,7 +206,7 @@ describe.skipIf(!active)('recovery, against a real database', () =>
         expect(rowsOf<{ n: number }>(rows)[0].n).toBe(1);
     });
 
-    it('confirms a waiting device for a signature over its own challenge', async () =>
+    it('hands a browser the archive for a signature over its own challenge', async () =>
     {
         const { userId, keys } = await withVault();
         const replacement = await enrol(userId, alice);
@@ -227,7 +227,7 @@ describe.skipIf(!active)('recovery, against a real database', () =>
         expect(rowsOf<{ confirmed_at: Date | null }>(rows)[0].confirmed_at).not.toBeNull();
     });
 
-    it('refuses a signature that is not this account phrase, and leaves the device waiting', async () =>
+    it('refuses a signature that is not this account phrase, and hands nothing back', async () =>
     {
         const { userId } = await withVault();
         const replacement = await enrol(userId, alice);
@@ -241,12 +241,9 @@ describe.skipIf(!active)('recovery, against a real database', () =>
             nonce,
             await impostor.sign(recoveryChallenge(userId, replacement, nonce))
         )).rejects.toThrow(/not the recovery phrase/);
-
-        const rows = await db.query('select confirmed_at from devices where id = $1', [replacement]);
-        expect(rowsOf<{ confirmed_at: Date | null }>(rows)[0].confirmed_at).toBeNull();
     });
 
-    it('will not let a signature for one browser confirm another', async () =>
+    it('will not let a signature for one browser restore another', async () =>
     {
         const { userId, keys } = await withVault();
 
@@ -263,9 +260,6 @@ describe.skipIf(!active)('recovery, against a real database', () =>
             nonce,
             await keys.sign(recoveryChallenge(userId, other, nonce))
         )).rejects.toThrow(/different browser/);
-
-        const rows = await db.query('select confirmed_at from devices where id = $1', [other]);
-        expect(rowsOf<{ confirmed_at: Date | null }>(rows)[0].confirmed_at).toBeNull();
     });
 
     it('burns the nonce, so one signature cannot be replayed', async () =>
@@ -316,16 +310,16 @@ describe.skipIf(!active)('recovery, against a real database', () =>
         )).rejects.toThrow(/expired/);
     });
 
-    it('will not issue a challenge for a device that is already confirmed, or somebody else', async () =>
+    it('issues a challenge for a confirmed browser of the account, and never for somebody else', async () =>
     {
         const { userId, first } = await withVault();
 
-        await expect(recovery.challenge(userId, first)).rejects.toThrow(/waiting to be confirmed/);
+        await expect(recovery.challenge(userId, first)).resolves.toMatchObject({ salt: 'c2FsdHk' });
 
         const stranger = await makeUser(bob);
         const theirs = await enrol(stranger, bob);
 
-        await expect(recovery.challenge(userId, theirs)).rejects.toThrow(/waiting to be confirmed/);
+        await expect(recovery.challenge(userId, theirs)).rejects.toThrow(/no browser of yours/);
     });
 
     it('archives an epoch key only for a conversation this account is in', async () =>
@@ -373,7 +367,7 @@ describe.skipIf(!active)('recovery, against a real database', () =>
             .rejects.toThrow(/No conversation with that id/);
 
         await expect(recovery.challenge(userId, 'not-a-device-id'))
-            .rejects.toThrow(/waiting to be confirmed/);
+            .rejects.toThrow(/no browser of yours/);
     });
 
     it('refuses to turn recovery off from a browser the account has not confirmed', async () =>

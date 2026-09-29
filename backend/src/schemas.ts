@@ -277,7 +277,7 @@ export const sessionState = object({
 
 export type SessionState = Infer<typeof sessionState>;
 
-export const challengeInput = object({ address: string() });
+export const challengeInput = object({ address: string(), device: string({ max: 22 }).optional() });
 
 /**
  * The exact bytes to sign. The client renders them for the wallet and never composes its own -
@@ -295,7 +295,13 @@ export const walletSignIn = object({
     address: string(),
     nonce: string(),
     signature: string(),
-    providerRdns: string().optional()
+    providerRdns: string().optional(),
+    device: object({
+        id: string({ max: 22 }),
+        exchangeKey: string({ max: 512 }),
+        signingKey: string({ max: 512 }),
+        label: string({ trim: true, max: 64 })
+    }).optional()
 });
 
 export const guestSignIn = object({ name: string({ trim: true, nonempty: true, max: 64 }) });

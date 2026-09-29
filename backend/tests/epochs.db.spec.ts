@@ -435,19 +435,14 @@ describe.skipIf(!active)('the epoch a conversation is sealed under', () =>
      */
     describe('rotation', () =>
     {
-        it('goes stale when a second device is confirmed, and the new epoch includes it', async () =>
+        it('goes stale when the wallet signs for a second device, and the new epoch includes it', async () =>
         {
             const { left, right, conversationId } = await pair();
 
             await epochs.mint(left.id, conversationId, await mintOf(left.device, [left.device, right.device]));
             expect((await epochs.state(conversationId, left.device)).stale).toBe(false);
 
-            // A second device of the same account. It arrives pending, so nothing changes until
-            // somebody confirms it - which is the whole point of the confirmation step.
             const second = await enrol(left.id, alice);
-            expect((await epochs.state(conversationId, left.device)).stale).toBe(false);
-
-            await devices.confirm(left.id, left.device, second);
 
             const after = await epochs.state(conversationId, left.device);
             expect(after.stale).toBe(true);

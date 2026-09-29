@@ -187,6 +187,13 @@ export async function recallArchiveKey(): Promise<Uint8Array | null>
     }
 }
 
+export async function holdsArchiveKey(): Promise<boolean>
+{
+    const key = await recallArchiveKey();
+    key?.fill(0);
+    return key !== null;
+}
+
 export async function rememberArchiveKey(key: Uint8Array): Promise<boolean>
 {
     const vault = await vaultKey();

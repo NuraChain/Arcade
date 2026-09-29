@@ -199,7 +199,7 @@ export function buildApi(ports: Ports)
             challenge: routes.post(
                 '/challenge',
                 { input: challengeInput, output: challenge },
-                (context) => ports.identity.challenge(context.input.address)
+                (context) => ports.identity.challenge(context.input.address, context.input.device)
             ),
 
             /** Verifies the signature, burns the nonce, and sets the session cookie. */
@@ -213,7 +213,8 @@ export function buildApi(ports: Ports)
                         nonce: context.input.nonce,
                         signature: context.input.signature,
                         providerRdns: context.input.providerRdns,
-                        userAgent: context.request.headers.get('user-agent') ?? ''
+                        userAgent: context.request.headers.get('user-agent') ?? '',
+                        device: context.input.device
                     });
 
                     return reply(200, { account: established.account }, {

@@ -1,5 +1,5 @@
 import { createHmac } from 'node:crypto';
-import { ForbiddenError, NotFoundError } from '@azerothjs/http';
+import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '@azerothjs/http';
 import type { DataSource } from 'typeorm';
 
 import { createCatalogueService } from './domains/catalogue/service.ts';
@@ -8,7 +8,9 @@ import { createFranking, discloses } from './domains/chat/franking.ts';
 import { affectedBy } from './lib/rows.ts';
 import { createEpochService } from './domains/chat/epochs.ts';
 import { threadSize } from './domains/chat/pages.ts';
+import { isDeviceId } from './domains/device/id.ts';
 import { createPeerDevices, type PeerDeviceRow } from './domains/device/peers.ts';
+import { namesDevice } from './domains/device/resource.ts';
 import { createRecoveryService } from './domains/device/recovery-service.ts';
 import { createDeviceService, type DeviceRow } from './domains/device/service.ts';
 import { createGroupService, type GroupRow } from './domains/group/service.ts';
@@ -1158,12 +1160,38 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 return row === null ? null : present(row);
             },
 
-            challenge: (address) => identity.challenge(address),
+            async challenge(address, deviceId)
+            {
+                if (deviceId !== undefined && !isDeviceId(deviceId))
+                {
+                    throw new BadRequestError('That is not a device id.');
+                }
+                const named = deviceId !== undefined && !(await device.liveFor(address, deviceId)) ? deviceId : undefined;
+                return identity.challenge(address, named);
+            },
 
             async signInWithWallet(input)
             {
                 const result = await identity.signInWithWallet(input);
-                const row = await identity.profileFor(result.principal.userId);
+                const { userId, sessionId } = result.principal;
+
+                if (input.device !== undefined && namesDevice(result.proof.message, input.device.id))
+                {
+                    try
+                    {
+                        await device.enrol(userId, sessionId, { ...input.device, userAgent: input.userAgent }, result.proof);
+                        await ringRooms(userId);
+                    }
+                    catch (error)
+                    {
+                        if (!(error instanceof ConflictError))
+                        {
+                            throw error;
+                        }
+                    }
+                }
+
+                const row = await identity.profileFor(userId);
                 return { token: result.token, account: present(row!) };
             },
 

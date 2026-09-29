@@ -1,7 +1,7 @@
 import { privateKeyToAccount } from 'viem/accounts';
 
 import type { PeerDevice } from '../src/api.ts';
-import { deviceResource } from '../src/lib/attestation.ts';
+import { deviceLine } from '../src/lib/attestation.ts';
 import type { DeviceSecrets } from '../src/lib/crypto.ts';
 import { deviceIdFrom, toBase64Url } from '../src/lib/device-id.ts';
 import type { DeviceKeys, KeyStore } from '../src/lib/device-keys.ts';
@@ -10,7 +10,7 @@ import type { DeviceKeys, KeyStore } from '../src/lib/device-keys.ts';
  * A device with real keys, for specs that have to actually seal something.
  *
  * Every part of this is genuine - a real P-256 keypair for exchange, another for signing, a real
- * EIP-191 signature by a real account over a real EIP-4361 message naming the derived id. A fake
+ * EIP-191 signature by a real account over the real device text naming the derived id. A fake
  * that stubbed any of it would prove only that the fake agrees with itself, and the whole point of
  * the sealing specs is that the browser's own verification accepts what the browser's own sealing
  * produces.
@@ -36,20 +36,11 @@ export const TEST_ACCOUNTS = {
     third: privateKeyToAccount('0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a')
 };
 
-const enrolMessage = (address: string, id: string): string => [
-    'nura.games wants you to sign in with your Ethereum account:',
-    address,
+const enrolMessage = (_address: string, id: string): string => [
+    'Let this browser read and send your messages on Nura Games (nura.games).',
     '',
-    'Authorise a device.',
-    '',
-    'URI: https://nura.games',
-    'Version: 1',
-    'Chain ID: 1',
-    `Nonce: ${ 'a'.repeat(32) }`,
-    'Issued At: 2026-01-01T00:00:00.000Z',
-    'Expiration Time: 2026-01-01T00:05:00.000Z',
-    'Resources:',
-    `- ${ deviceResource(id) }`
+    deviceLine(id),
+    `Nonce: ${ 'a'.repeat(32) }`
 ].join('\n');
 
 export async function makeDevice(account: typeof TEST_ACCOUNTS.alex): Promise<TestDevice>

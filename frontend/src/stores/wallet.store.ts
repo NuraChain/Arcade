@@ -1,6 +1,7 @@
 import { createStore, createSignal, untrack, type Getter } from 'azerothjs';
 
 import { NURA_CHAIN, chainIsConfigured } from '../data/chain.ts';
+import { keyStore, type DeviceKeys } from '../lib/device-keys.ts';
 import {
     detect,
     discoverWallets,
@@ -18,6 +19,8 @@ import {
     type WalletFailure
 } from '../lib/wallet.ts';
 import { client, ApiError, type Account } from '../api.ts';
+import { useDevice } from './device.store.ts';
+import { useLocale } from './locale.store.ts';
 
 export type WalletStatus = 'idle' | 'connecting' | 'signing' | 'connected' | 'error';
 
@@ -102,6 +105,24 @@ export const useWallet = createStore((): WalletApi =>
     const why = (step: string, reason: unknown): void =>
     {
         console.warn('[wallet]', step, reason);
+    };
+
+    const browserKeys = async (): Promise<DeviceKeys | null> =>
+    {
+        const store = keyStore();
+        if (!store.available())
+        {
+            return null;
+        }
+        try
+        {
+            return await store.load() ?? await store.mint();
+        }
+        catch (error)
+        {
+            why('keys', error);
+            return null;
+        }
     };
 
     const release = (): void =>
@@ -242,10 +263,12 @@ export const useWallet = createStore((): WalletApi =>
 
             setStatus('signing');
 
+            const keys = await browserKeys();
+
             let challenge;
             try
             {
-                challenge = await client.auth.challenge({ input: { address: account } });
+                challenge = await client.auth.challenge({ input: { address: account, ...(keys === null ? {} : { device: keys.id }) } });
             }
             catch (error)
             {
@@ -270,12 +293,14 @@ export const useWallet = createStore((): WalletApi =>
 
             try
             {
+                const label = useLocale().t(useDevice().posture() === 'phone' ? 'wallet.thisPhone' : 'wallet.thisBrowser');
                 const established = await client.auth.wallet({
                     input: {
                         address: account,
                         nonce: challenge.nonce,
                         signature,
-                        providerRdns: rdnsOf(wallet)
+                        providerRdns: rdnsOf(wallet),
+                        ...(keys === null ? {} : { device: { ...keys, label } })
                     }
                 });
 

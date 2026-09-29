@@ -100,7 +100,7 @@ export const useEnrolment = createStore((): EnrolmentApi =>
             // A locked extension has no address to sign with, and `sign` answers null rather than
             // throwing - which `publish` turns into "the wallet did not sign", blaming a refusal
             // that never happened. Say the true thing instead.
-            if (wallet.address() === null)
+            if (wallet.address() === null && await wallet.reach() === null)
             {
                 toasts.show({ kind: 'warning', text: locale.t('wallet.error.noWallet'), dedupe: 'devices.enrol' });
                 return;

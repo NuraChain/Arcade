@@ -96,7 +96,7 @@ export interface IdentityPort
 
     me(userId: string): Promise<Account | null>;
 
-    challenge(address: string): Promise<Challenge>;
+    challenge(address: string, deviceId?: string | undefined): Promise<Challenge>;
 
     signInWithWallet(input: {
         address: string;
@@ -104,6 +104,7 @@ export interface IdentityPort
         signature: string;
         providerRdns?: string | undefined;
         userAgent: string;
+        device?: { id: string; exchangeKey: string; signingKey: string; label: string } | undefined;
     }): Promise<Established>;
 
     signInAsGuest(input: { name: string; userAgent: string }): Promise<Established>;

@@ -3,7 +3,7 @@ import type { DataSource } from 'typeorm';
 import { privateKeyToAccount } from 'viem/accounts';
 
 import { pairKeyOf } from '../domains/chat/service.ts';
-import { enrolMessage } from '../domains/device/enrol-message.ts';
+import { deviceText } from '../domains/identity/signature.ts';
 import { deviceIdFrom } from '../domains/device/id.ts';
 import { firstRow, rowsOf } from '../lib/rows.ts';
 import { WALLET_FIXTURES, WALLET_FRIENDSHIPS, WALLET_GROUP } from './wallet-fixtures.ts';
@@ -93,9 +93,7 @@ export async function seedWalletFixtures(db: DataSource, config: WalletSeedConfi
 
     const domain = new URL(config.origin).host;
 
-    // A SIWE message must carry a decimal chain id, and development usually configures none. The
-    // fixture says 1 rather than emitting an empty field that no parser would accept - see the
-    // note in `siwe.ts` about `Chain ID: NuraChain`, which is the same mistake from the other end.
+    // A wallet row records a decimal chain id, and development usually configures none.
     const chainId = config.chainId === '' ? '1' : config.chainId;
 
     for (const fixture of WALLET_FIXTURES)
@@ -142,19 +140,9 @@ export async function seedWalletFixtures(db: DataSource, config: WalletSeedConfi
 
         const keys = await mintDeviceKeys();
 
-        // The same builder a live enrolment uses, with the device named in Resources. Anything
+        // The same builder a live enrolment uses, with the device named on its own line. Anything
         // hand-rolled here would be a message the real verifier has never seen.
-        const issuedAt = new Date();
-        const message = enrolMessage({
-            domain,
-            uri: config.origin,
-            address,
-            chainId,
-            nonce: b64url(webcrypto.getRandomValues(new Uint8Array(16)).buffer),
-            issuedAt,
-            expiresAt: new Date(issuedAt.getTime() + 5 * 60 * 1000),
-            deviceId: keys.id
-        });
+        const message = deviceText(domain, b64url(webcrypto.getRandomValues(new Uint8Array(16)).buffer), keys.id);
 
         await db.query(
             `insert into devices (id, user_id, label, exchange_key, signing_key, attested,

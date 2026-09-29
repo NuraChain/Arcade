@@ -274,18 +274,18 @@ export function createRecoveryService(db: DataSource)
 
             if (!DEVICE_ID.test(deviceId))
             {
-                throw new NotFoundError('There is no device waiting to be confirmed under that id.');
+                throw new NotFoundError('There is no browser of yours under that id.');
             }
 
             const device = await db.query(
                 `select 1 as ok from devices
-                 where id = $1 and user_id = $2 and revoked_at is null and confirmed_at is null`,
+                 where id = $1 and user_id = $2 and revoked_at is null`,
                 [deviceId, userId]
             );
 
             if (firstRow<{ ok: number }>(device) === null)
             {
-                throw new NotFoundError('There is no device waiting to be confirmed under that id.');
+                throw new NotFoundError('There is no browser of yours under that id.');
             }
 
             const nonce = mintToken();
@@ -344,15 +344,15 @@ export function createRecoveryService(db: DataSource)
             }
 
             const confirmed = await db.query(
-                `update devices set confirmed_at = now()
-                  where id = $1 and user_id = $2 and revoked_at is null and confirmed_at is null
+                `update devices set confirmed_at = coalesce(confirmed_at, now())
+                  where id = $1 and user_id = $2 and revoked_at is null
                  returning id`,
                 [deviceId, userId]
             );
 
             if (firstRow<{ id: string }>(confirmed) === null)
             {
-                throw new NotFoundError('There is no device waiting to be confirmed under that id.');
+                throw new NotFoundError('There is no browser of yours under that id.');
             }
 
             return { wrapped: vault.wrapped };

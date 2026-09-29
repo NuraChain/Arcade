@@ -2,8 +2,8 @@ import { webcrypto } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 
 import { deviceIdFrom, deviceIdMatches, isDeviceId } from '../src/domains/device/id.ts';
-import { deviceResource } from '../src/domains/device/resource.ts';
-import { buildSiweMessage } from '../src/domains/identity/siwe.ts';
+import { deviceLine, namesDevice } from '../src/domains/device/resource.ts';
+import { deviceText, signInText } from '../src/domains/identity/signature.ts';
 
 /**
  * The device id, and the one property it exists for.
@@ -88,42 +88,41 @@ describe('a device id', () =>
     });
 });
 
-describe('the message a wallet signs to authorise a device', () =>
+describe('the text a wallet signs to authorise a device', () =>
 {
-    const message = (resources?: string[]): string =>
-        buildSiweMessage({
-            domain: 'nura.games',
-            uri: 'https://nura.games',
-            address: '0x1111111111111111111111111111111111111111',
-            chainId: '1',
-            nonce: 'b'.repeat(32),
-            issuedAt: new Date('2026-01-01T00:00:00.000Z'),
-            expiresAt: new Date('2026-01-01T00:05:00.000Z'),
-            statement: 'Authorise a device.',
-            ...(resources === undefined ? {} : { resources })
-        });
+    const ID = 'abcdefghijklmnopqrstuv';
 
-    it('names the device in EIP-4361 Resources, so the signature cannot be moved to another one', () =>
+    it('names the device on a line of its own, so the signature cannot be moved to another one', () =>
     {
-        const lines = message([deviceResource('abcdefghijklmnopqrstuv')]).split('\n');
-
-        expect(lines.at(-2)).toBe('Resources:');
-        expect(lines.at(-1)).toBe('- nura:device:abcdefghijklmnopqrstuv');
+        expect(deviceText('nura.games', 'b'.repeat(32), ID).split('\n')).toEqual([
+            'Let this browser read and send your messages on Nura Games (nura.games).',
+            '',
+            'Browser key: abcdefghijklmnopqrstuv',
+            `Nonce: ${ 'b'.repeat(32) }`
+        ]);
     });
 
-    it('writes no Resources block at all when there is nothing to bind', () =>
+    it('is recognised as naming that device, and only that device', () =>
     {
-        // Signing in is about the account, not about one thing, and an empty `Resources:` header
-        // with nothing under it is not a valid EIP-4361 message.
-        expect(message()).not.toContain('Resources');
-        expect(message([])).not.toContain('Resources');
+        const text = deviceText('nura.games', 'b'.repeat(32), ID);
+
+        expect(namesDevice(text, ID)).toBe(true);
+        expect(namesDevice(text, 'bcdefghijklmnopqrstuvw')).toBe(false);
     });
 
-    it('keeps the statement on its own line between the blank lines, where a wallet reads it', () =>
+    it('does not name a device the text merely contains, which a substring check would accept', () =>
     {
-        const lines = message().split('\n');
-        expect(lines[3]).toBe('Authorise a device.');
-        expect(lines[2]).toBe('');
-        expect(lines[4]).toBe('');
+        const longer = `${ deviceLine(ID) }x`;
+        const buried = `Nonce: ${ deviceLine(ID) }`;
+
+        expect(`a\n${ longer }\nb`.includes(deviceLine(ID))).toBe(true);
+        expect(namesDevice(`a\n${ longer }\nb`, ID)).toBe(false);
+        expect(namesDevice(`a\n${ buried }`, ID)).toBe(false);
+    });
+
+    it('never names a device in a sign-in that did not ask for one', () =>
+    {
+        expect(namesDevice(signInText('nura.games', 'b'.repeat(32)), ID)).toBe(false);
+        expect(namesDevice(signInText('nura.games', 'b'.repeat(32), ID), ID)).toBe(true);
     });
 });

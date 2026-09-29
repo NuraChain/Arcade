@@ -159,8 +159,8 @@ const CHAIN_REGISTRY = '0x8CFbcEf737BE3C67A52A20Ae3DCC685ACF759460';
 export const server =
 {
     account: null as Account | null,
-    issued: null as { nonce: string; message: string; address: string } | null,
-    received: null as { address: string; nonce: string; signature: string; providerRdns?: string } | null,
+    issued: null as { nonce: string; message: string; address: string; device?: string } | null,
+    received: null as { address: string; nonce: string; signature: string; providerRdns?: string; device?: { id: string; exchangeKey: string; signingKey: string; label: string } } | null,
     refuse: null as Refusal | null,
     uploaded: null as string | null,
     chain: { configured: false, profile: null as ChainProfile | null },
@@ -1098,12 +1098,12 @@ export const client =
             server.calls.push('devices.challenge');
             return {
                 nonce: 'n-' + input.id,
-                message: 'Authorise a device.\nResources:\n- nura:device:' + input.id,
+                message: `Let this browser read and send your messages on Nura Games (nura.games).\n\nBrowser key: ${ input.id }\nNonce: n-${ input.id }`,
                 expiresAt: new Date(1_700_000_300_000).toISOString()
             };
         },
 
-        async enrol({ input }: { input: { id: string; exchangeKey: string; signingKey: string; label: string } })
+        async enrol({ input }: { input: { id: string; exchangeKey: string; signingKey: string; label: string; signature?: string } })
         {
             server.calls.push('devices.enrol');
 
@@ -1118,7 +1118,7 @@ export const client =
             {
                 throw new ApiError(401, 'unauthorized', 'That signature did not match.', undefined);
             }
-            const device = server.addDevice({ ...input });
+            const device = server.addDevice({ ...input, ...(input.signature === undefined ? {} : { attested: 'wallet' as const, confirmed: true }) });
             server.currentDevice = device.id;
             return device;
         },
@@ -1730,22 +1730,26 @@ export const client =
             return server.account === null ? {} : { account: server.account };
         },
 
-        async challenge({ input }: { input: { address: string } })
+        async challenge({ input }: { input: { address: string; device?: string } })
         {
             server.calls.push('auth.challenge');
             if (server.refuse === 'challenge-unreachable')
             {
                 throw new ApiError(503, 'unavailable', 'The server is not answering.', undefined);
             }
+            const nonce = `nonce-${ server.calls.length }`;
             server.issued = {
                 address: input.address,
-                nonce: `nonce-${ server.calls.length }`,
-                message: `nura.games wants you to sign in with your Ethereum account:\n${ input.address }`
+                nonce,
+                ...(input.device === undefined ? {} : { device: input.device }),
+                message: input.device === undefined
+                    ? `Sign in to Nura Games (nura.games).\n\nNonce: ${ nonce }`
+                    : `Sign in to Nura Games (nura.games) and let this browser read and send your messages.\n\nBrowser key: ${ input.device }\nNonce: ${ nonce }`
             };
             return { ...server.issued, expiresAt: '2026-01-01T00:00:00.000Z' };
         },
 
-        async wallet({ input }: { input: { address: string; nonce: string; signature: string; providerRdns?: string } })
+        async wallet({ input }: { input: { address: string; nonce: string; signature: string; providerRdns?: string; device?: { id: string; exchangeKey: string; signingKey: string; label: string } } })
         {
             server.calls.push('auth.wallet');
             server.received = input;

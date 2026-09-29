@@ -17,6 +17,9 @@ export interface DevicesApi
     /** The id of the device this browser is signed in on, according to the server. */
     current: Getter<string | null>;
 
+    /** The id of the keys this browser holds, whatever the server says. */
+    mine: Getter<string | null>;
+
     loading: Getter<boolean>;
     failed: Getter<unknown>;
     busy: Getter<boolean>;
@@ -203,6 +206,8 @@ export const useDevices = createStore((): DevicesApi =>
          *
          * It is only an answer once `known()` is true. Before that every browser reports `absent`.
          */
+        mine: () => local()?.id ?? null,
+
         readiness: () => readinessOf({
             supported: keyStore().available(),
             current: local()?.id ?? null,

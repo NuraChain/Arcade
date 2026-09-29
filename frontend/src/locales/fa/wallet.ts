@@ -45,5 +45,7 @@ export const wallet: Pick<Dictionary, keyof typeof reference> = {
     'wallet.qrOf': 'کد QR برای {url}',
     'wallet.copyLink': 'کپی نشانی',
     'wallet.linkCopied': 'نشانی کپی شد',
-    'wallet.otherWays': 'به‌جایش مهمان بنشین'
+    'wallet.otherWays': 'به‌جایش مهمان بنشین',
+    'wallet.thisPhone': 'این گوشی',
+    'wallet.thisBrowser': 'این مرورگر'
 };

@@ -18,7 +18,7 @@ import { copyText } from '../../lib/clipboard.ts';
  * until somebody works out that whoever holds it reads everything, forever, with no way to take it
  * back; that sentence is on the screen before the button, not buried under it.
  */
-export default component RecoveryPanel(props: { waitingDevice?: string })
+export default component RecoveryPanel(props: { device?: string })
 {
     const locale = useLocale();
     const recovery = useRecovery();
@@ -61,7 +61,7 @@ export default component RecoveryPanel(props: { waitingDevice?: string })
 
     const use = async (): Promise<void> =>
     {
-        const deviceId = props.waitingDevice;
+        const deviceId = props.device;
 
         if (deviceId === undefined)
         {
@@ -91,7 +91,7 @@ export default component RecoveryPanel(props: { waitingDevice?: string })
             when={ recovery.freshPhrase() !== null }
             fallback={
                 <Show
-                    when={ props.waitingDevice !== undefined && configured }
+                    when={ props.device !== undefined && configured && recovery.holdsArchive() === false }
                     fallback={
                         <div class="flex flex-col gap-3">
                             <p class="text-ui-sm text-muted">

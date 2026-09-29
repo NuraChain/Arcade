@@ -43,7 +43,7 @@ export default component DevicesPage()
 
     derived retired = rows.filter((one) => one.revoked);
 
-    derived waiting = devices.readiness() === 'waiting' ? devices.current() ?? undefined : undefined;
+    derived mine = devices.readiness() === 'waiting' || devices.readiness() === 'ready' ? devices.mine() ?? undefined : undefined;
 
     derived suggestion = locale.t(device.posture() === 'phone' ? 'devices.namePhone' : 'devices.nameDesktop');
 
@@ -83,7 +83,7 @@ export default component DevicesPage()
 
             <section aria-labelledby="devices-recovery">
                 <SectionHeading id="devices-recovery" title={ locale.t('recovery.title') } />
-                <RecoveryPanel waitingDevice={ waiting } />
+                <RecoveryPanel device={ mine } />
             </section>
 
             <section aria-labelledby="devices-live">

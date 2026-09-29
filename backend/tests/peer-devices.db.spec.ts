@@ -266,10 +266,12 @@ describe.skipIf(!active)('what a peer may learn about somebody devices', () =>
             await enrolWithWallet(bob.id, second, 'first');
             const pending = await enrolWithWallet(bob.id, second, 'second');
 
+            // A wallet confirms what it signs for, so an unconfirmed row can only be written by
+            // hand - which is exactly the row this filter exists to keep out of every recipient set.
+            await db.query('update devices set confirmed_at = null where id = $1', [pending]);
+
             const rows = await peers.forConversation(await conversationOf(alice, bob));
 
-            // This is the ghost-device defence. A device the server fabricates re-derives its id
-            // correctly; what it cannot do is get another of Bob's devices to confirm it.
             expect(rows.filter((row) => row.device_id === pending)).toHaveLength(0);
         });
 

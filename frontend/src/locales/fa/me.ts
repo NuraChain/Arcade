@@ -148,7 +148,7 @@ export const me: Pick<Dictionary, keyof typeof reference> = {
     'recovery.copy': 'رونوشت عبارت',
     'recovery.copied': 'رونوشت شد. جای امنی بچسبانش.',
     'recovery.saved': 'نوشتمش',
-    'recovery.useLead': 'این مرورگر منتظر تأیید است. از دستگاهی که به آن اعتماد داری تأییدش کن، یا عبارت بازیابی‌ات را وارد کن.',
+    'recovery.useLead': 'این مرورگر هنوز پیام‌های قبلی‌ات را نمی‌تواند بخواند. عبارت بازیابی‌ات را وارد کن تا برگردند.',
     'recovery.field': 'عبارت بازیابی',
     'recovery.use': 'تأیید با عبارت',
     'recovery.wrong': 'این عبارت بازیابی این حساب نیست.',

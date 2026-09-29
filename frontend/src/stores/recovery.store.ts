@@ -1,7 +1,7 @@
 import { createResource, createSignal, createStore, type Getter } from 'azerothjs';
 
 import { client, type RecoveryState } from '../api.ts';
-import { forgetArchiveKey, heldEpochKeys, recallArchiveKey, rememberArchiveKey, rememberEpochKey } from '../lib/epoch-keys.ts';
+import { forgetArchiveKey, heldEpochKeys, holdsArchiveKey, recallArchiveKey, rememberArchiveKey, rememberEpochKey } from '../lib/epoch-keys.ts';
 import { forget } from '../lib/crypto.ts';
 import {
     checkValueOf,
@@ -52,6 +52,9 @@ export interface RecoveryApi
     /** How many epoch keys the last restore brought back. */
     restored: Getter<number>;
 
+    /** Whether this browser holds the archive key. Null until `refresh()` has looked. */
+    holdsArchive: Getter<boolean | null>;
+
     dismissPhrase(): void;
     setUp(): Promise<boolean>;
     turnOff(): Promise<void>;
@@ -66,6 +69,7 @@ export const useRecovery = createStore((): RecoveryApi =>
     const [busy, setBusy] = createSignal(false);
     const [freshPhrase, setFreshPhrase] = createSignal<string | null>(null);
     const [restored, setRestored] = createSignal(0);
+    const [holdsArchive, setHoldsArchive] = createSignal<boolean | null>(null);
 
     const answer = createResource<RecoveryState, boolean>(
         () => (session.account() === null ? null : true),
@@ -79,6 +83,7 @@ export const useRecovery = createStore((): RecoveryApi =>
         busy,
         freshPhrase,
         restored,
+        holdsArchive,
 
         dismissPhrase()
         {
@@ -87,6 +92,7 @@ export const useRecovery = createStore((): RecoveryApi =>
 
         async refresh()
         {
+            setHoldsArchive(await holdsArchiveKey().catch(() => false));
             await answer.refetch();
         },
 
@@ -155,6 +161,7 @@ export const useRecovery = createStore((): RecoveryApi =>
                 forget(archiveKey);
 
                 setFreshPhrase(groupPhrase(phrase));
+                setHoldsArchive(true);
                 await answer.refetch();
                 return true;
             }
@@ -276,6 +283,7 @@ export const useRecovery = createStore((): RecoveryApi =>
 
                 forget(archiveKey);
                 setRestored(back);
+                setHoldsArchive(true);
                 await answer.refetch();
                 return 'ok';
             }

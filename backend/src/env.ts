@@ -31,11 +31,7 @@ export function loadServerConfig()
          */
         origin: str('PUBLIC_ORIGIN', { default: 'http://localhost:3100' }),
 
-        /**
-         * The chain a wallet signature is made against, DECIMAL EIP-155. It lands in the SIWE
-         * message's `Chain ID` field, which parsers read as a number - the version this replaces
-         * put the chain NAME there when nothing was configured, which no parser accepts.
-         */
+        /** The chain, DECIMAL EIP-155: what a wallet row records and what a contract wallet is checked on. */
         chainId: str('NURA_CHAIN_ID', { default: '' }),
 
         /**
