@@ -102,7 +102,8 @@ export default defineConfig(({ isSsrBuild }) => ({
         {
             '/api': { target: 'http://localhost:3200', changeOrigin: false },
             '/ws': { target: 'ws://localhost:3200', ws: true },
-            '/_image': { target: 'http://localhost:3200', changeOrigin: false }
+            '/_image': { target: 'http://localhost:3200', changeOrigin: false },
+            '/avatars': { target: 'http://localhost:3200', changeOrigin: false }
         },
         fs:
         {

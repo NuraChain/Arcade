@@ -307,6 +307,29 @@ describe('Avatar', () =>
         expect(container.querySelector('.ring-void')).not.toBeNull();
         expect(container.querySelector('.ring-field')).toBeNull();
     });
+
+    it('draws the picture when there is one, and the initials when it will not load', async () =>
+    {
+        const { container } = renderTest(() => Avatar({ person: { displayName: 'Ana Ray', hue: 10, avatar: '/avatars/x.webp' } }) as Rendered);
+
+        const picture = container.querySelector('img')!;
+        expect(picture.getAttribute('src')).toBe('/avatars/x.webp');
+        expect(container.textContent).not.toContain('AR');
+
+        picture.dispatchEvent(new Event('error'));
+        await Promise.resolve();
+
+        expect(container.querySelector('img')).toBeNull();
+        expect(container.textContent).toContain('AR');
+    });
+
+    it('draws the initials when there is no picture at all', () =>
+    {
+        const { container } = renderTest(() => Avatar({ person: { displayName: 'Ana Ray', hue: 10 } }) as Rendered);
+
+        expect(container.querySelector('img')).toBeNull();
+        expect(container.textContent).toContain('AR');
+    });
 });
 
 describe('Pagination', () =>

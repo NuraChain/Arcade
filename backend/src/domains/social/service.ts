@@ -17,6 +17,7 @@ export interface PersonRow
     handle: string;
     display_name: string;
     bio: string;
+    avatar: string | null;
     hue: number;
     is_minor: boolean;
     allow_stranger_messages: boolean;
@@ -39,7 +40,7 @@ const partyOf = (row: PersonRow): Party => ({
     showOnline: row.show_online
 });
 
-const PERSON_COLUMNS = 'u.id, u.handle, u.display_name, u.bio, u.hue, u.is_minor, u.allow_stranger_messages, u.show_online, u.last_seen_at';
+const PERSON_COLUMNS = 'u.id, u.handle, u.display_name, u.bio, u.avatar, u.hue, u.is_minor, u.allow_stranger_messages, u.show_online, u.last_seen_at';
 
 /** Whether a path parameter could be an id at all. A malformed one is 22P02, which is a 500. */
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -126,7 +127,7 @@ export function createSocialService(db: DataSource)
         personByHandle,
         relationOf,
 
-        async namesOf(handles: readonly string[]): Promise<Pick<PersonRow, 'handle' | 'display_name' | 'bio' | 'hue' | 'is_minor'>[]>
+        async namesOf(handles: readonly string[]): Promise<Pick<PersonRow, 'handle' | 'display_name' | 'bio' | 'avatar' | 'hue' | 'is_minor'>[]>
         {
             if (handles.length === 0)
             {
@@ -134,11 +135,11 @@ export function createSocialService(db: DataSource)
             }
 
             const found = await db.getRepository(User).find({
-                select: { handle: true, displayName: true, bio: true, hue: true, isMinor: true },
+                select: { handle: true, displayName: true, bio: true, avatar: true, hue: true, isMinor: true },
                 where: { handle: In([...handles]), isSuspended: false }
             });
 
-            return found.map((user) => ({ handle: user.handle, display_name: user.displayName, bio: user.bio, hue: user.hue, is_minor: user.isMinor }));
+            return found.map((user) => ({ handle: user.handle, display_name: user.displayName, bio: user.bio, avatar: user.avatar, hue: user.hue, is_minor: user.isMinor }));
         },
 
         async friends(me: string): Promise<PersonRow[]>

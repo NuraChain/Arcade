@@ -1,4 +1,5 @@
 import { Achievement } from './achievement.entity.ts';
+import { Avatar } from './avatar.entity.ts';
 import { Block } from './block.entity.ts';
 import { ConversationEpoch } from './conversation-epoch.entity.ts';
 import { ConversationMember } from './conversation-member.entity.ts';
@@ -32,7 +33,7 @@ import { UserAchievement } from './user-achievement.entity.ts';
 import { Wallet } from './wallet.entity.ts';
 
 export {
-    Achievement, Block, Conversation, ConversationEpoch, ConversationMember, Device, EpochKey,
+    Achievement, Avatar, Block, Conversation, ConversationEpoch, ConversationMember, Device, EpochKey,
     EpochArchive, FriendRequest, Friendship,
     Game, GameRule, Group, GroupMember, Match, MatchAction, MatchPlayer, Message, Mute,
     Notification, PlayerStats, PushSubscription,
@@ -52,7 +53,7 @@ export {
  */
 export const entities: Function[] = [
     Game, GameRule, Achievement,
-    User, Wallet, Session, SiweNonce, Device,
+    User, Avatar, Wallet, Session, SiweNonce, Device,
     Friendship, FriendRequest, Block, Mute, Report,
     Conversation, ConversationMember, Message, ConversationEpoch, EpochKey, EpochArchive,
     RecoveryVault, RecoveryNonce,

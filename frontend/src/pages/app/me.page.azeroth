@@ -16,25 +16,15 @@ import { NURA_CHAIN } from '../../data/chain.ts';
 import Icon from '../../icons/icon.component.azeroth';
 import { shortAddress } from '../../lib/wallet.ts';
 import { copyText } from '../../lib/clipboard.ts';
-import type { MessageKey } from '../../locales/en/index.ts';
 
 import { useAccount } from '../../stores/account.store.ts';
-import { useChain, type PublishOutcome } from '../../stores/chain.store.ts';
+import { PUBLISH_COPY, useChain } from '../../stores/chain.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useOverlay } from '../../stores/overlay.store.ts';
 import { useRealtime } from '../../stores/realtime.store.ts';
 import { useRecord } from '../../stores/record.store.ts';
 import { useSocial } from '../../stores/social.store.ts';
 import { useToasts } from '../../stores/toasts.store.ts';
-
-const OUTCOME: Record<PublishOutcome, MessageKey> = {
-    published: 'chain.published',
-    rejected: 'chain.rejected',
-    reverted: 'chain.reverted',
-    pending: 'chain.pending',
-    unavailable: 'chain.unavailable',
-    'wrong-chain': 'chain.wrongChain'
-};
 
 export default component MePage()
 {
@@ -112,7 +102,7 @@ export default component MePage()
     const publish = async (): Promise<void> =>
     {
         const outcome = await chain.publish();
-        toasts.show({ kind: outcome === 'published' ? 'success' : 'warning', text: locale.t(OUTCOME[outcome], { chain: NURA_CHAIN.name }) });
+        toasts.show({ kind: outcome === 'published' ? 'success' : 'warning', text: locale.t(PUBLISH_COPY[outcome], { chain: NURA_CHAIN.name }) });
     };
 
     const adopt = async (): Promise<void> =>

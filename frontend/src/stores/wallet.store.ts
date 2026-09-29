@@ -50,6 +50,8 @@ export interface WalletApi
 
     /** Whether a sent transaction landed. Null means the chain has not mined it yet. */
     settled(hash: string): Promise<boolean | null>;
+
+    reach(): Promise<string | null>;
     adopt(provider: Eip1193Provider | null): void;
     disconnect(): void;
     start(): () => void;
@@ -285,6 +287,31 @@ export const useWallet = createStore((): WalletApi =>
                 why('auth.wallet', error);
                 setFailure(error instanceof ApiError && error.status === 401 ? 'rejected' : 'unavailable');
                 setStatus('error');
+                return null;
+            }
+        },
+
+        async reach()
+        {
+            const wallet = provider();
+            if (wallet === null)
+            {
+                why('reach', 'no provider');
+                setFailure('no-wallet');
+                return null;
+            }
+
+            try
+            {
+                const first = (await requestAccounts(wallet))[0] ?? null;
+                setAddress(first);
+                setFailure(first === null ? 'rejected' : null);
+                return first;
+            }
+            catch (error)
+            {
+                why('eth_requestAccounts', error);
+                setFailure(failureOf(error));
                 return null;
             }
         },

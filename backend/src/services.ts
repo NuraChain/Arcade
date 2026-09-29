@@ -1087,6 +1087,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         handle: string;
         display_name: string;
         bio: string;
+        avatar: string | null;
         hue: number;
         kind: 'wallet' | 'guest';
         is_minor: boolean;
@@ -1096,6 +1097,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         handle: row.handle,
         displayName: row.display_name,
         bio: row.bio,
+        ...(row.avatar === null ? {} : { avatar: row.avatar }),
         hue: row.hue,
         kind: row.kind,
         isMinor: row.is_minor,
@@ -1120,6 +1122,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             handle: row.handle,
             displayName: row.display_name,
             bio: row.bio,
+            ...(row.avatar === null ? {} : { avatar: row.avatar }),
             hue: row.hue,
             isMinor: row.is_minor
         };
@@ -1197,7 +1200,14 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 const row = await identity.setProfile(userId, input);
                 await ringProfile(userId);
                 return present(row);
-            }
+            },
+
+            async uploadAvatar(data)
+            {
+                return { url: await identity.uploadAvatar(data) };
+            },
+
+            avatar: (hash) => identity.avatar(hash)
         },
 
         voice: {
@@ -1247,6 +1257,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                     address: row.address,
                     displayName: row.display_name,
                     bio: row.bio,
+                    avatar: row.avatar ?? '',
                     record: recordValue(await achieve.recordOf(row.handle))
                 });
             }
@@ -1332,6 +1343,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                     handle: row.handle,
                     displayName: row.display_name,
                     bio: row.bio,
+                    ...(row.avatar === null ? {} : { avatar: row.avatar }),
                     hue: row.hue,
                     isMinor: row.is_minor
                 }));

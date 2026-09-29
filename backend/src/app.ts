@@ -5,6 +5,7 @@ import type { Logger } from '@azerothjs/logger';
 import type { DataSource } from 'typeorm';
 
 import { buildApi } from './api.ts';
+import { avatarFile } from './domains/identity/avatar.ts';
 import type { Ports } from './ports.ts';
 import type { ServerConfig } from './env.ts';
 import { buildPorts } from './services.ts';
@@ -107,7 +108,8 @@ export function buildApp(deps: AppDeps): App
         );
     });
 
-    const api = buildApi(deps.ports ?? buildPorts(deps.db, deps.config));
+    const ports = deps.ports ?? buildPorts(deps.db, deps.config);
+    const api = buildApi(ports);
 
     register(app, api, { prefix: '/api' });
 
@@ -116,6 +118,29 @@ export function buildApp(deps: AppDeps): App
     // served page, which is why this route is only the fallback for a client that boots without
     // one (vite in development serves the page, so there is nothing to embed into).
     app.get('/api/_manifest', () => json(manifestOf(api)));
+
+    app.get('/avatars/:file', async (context) =>
+    {
+        const hash = avatarFile(context.params.file);
+        const found = hash === null ? null : await ports.identity.avatar(hash);
+        if (hash === null || found === null)
+        {
+            return new Response(null, { status: 404 });
+        }
+
+        const headers = {
+            'cache-control': 'public, max-age=31536000, immutable',
+            'etag': `"${ hash }"`,
+            'x-content-type-options': 'nosniff',
+            'content-security-policy': "default-src 'none'"
+        };
+
+        if (context.request.headers.get('if-none-match') === headers.etag)
+        {
+            return new Response(null, { status: 304, headers });
+        }
+        return new Response(new Uint8Array(found.bytes), { headers: { ...headers, 'content-type': found.type } });
+    });
 
     // LAST. Its catch-all would otherwise shadow every route above it.
     if (deps.pages !== undefined)

@@ -37,6 +37,7 @@ export function personFor(account: Account | null): Person | null
         handle: account.handle,
         displayName,
         bio: account.bio,
+        ...(account.avatar === undefined ? {} : { avatar: account.avatar }),
         hue: account.hue,
         isMinor: account.isMinor
     };
@@ -56,7 +57,9 @@ export interface AccountApi
      * The ANSWER is adopted rather than the input: the server trims and bounds both fields, and a
      * store that kept what was typed would disagree with every other surface the moment it did.
      */
-    setProfile(input: { displayName: string; bio: string }): Promise<void>;
+    setProfile(input: { displayName: string; bio: string; avatar?: string }): Promise<void>;
+
+    uploadAvatar(data: string): Promise<string>;
 
     /**
      * Claims a different @handle, separately, because this one can be REFUSED.
@@ -87,6 +90,11 @@ export const useAccount = createStore((): AccountApi =>
         async setProfile(input)
         {
             session.establish(await client.auth.profile({ input }));
+        },
+
+        async uploadAvatar(data)
+        {
+            return (await client.auth.avatar({ input: { data } })).url;
         },
 
         async claimHandle(handle)

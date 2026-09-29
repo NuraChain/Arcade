@@ -118,7 +118,11 @@ export interface IdentityPort
      * Separate from `claimHandle` because a handle can be REFUSED - it is claimed against a unique
      * index - and one request that half-succeeds is worse than two that each say what happened.
      */
-    setProfile(userId: string, input: { displayName: string; bio: string }): Promise<Account>;
+    setProfile(userId: string, input: { displayName: string; bio: string; avatar?: string | undefined }): Promise<Account>;
+
+    uploadAvatar(data: string): Promise<{ url: string }>;
+
+    avatar(hash: string): Promise<{ type: string; bytes: Uint8Array } | null>;
 
     /** Whether cookies must carry Secure. Decided by configuration, never by a request. */
     readonly secureCookies: boolean;

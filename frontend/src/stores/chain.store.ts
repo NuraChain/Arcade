@@ -2,6 +2,8 @@ import { createResource, createSignal, createStore, type Getter } from 'azerothj
 
 import { client, type ChainProfile } from '../api.ts';
 import { runtime } from '../lib/runtime.ts';
+import type { WalletFailure } from '../lib/wallet.ts';
+import type { MessageKey } from '../locales/en.ts';
 import { useAccount } from './account.store.ts';
 import { useLocale } from './locale.store.ts';
 import { useWallet } from './wallet.store.ts';
@@ -26,7 +28,33 @@ export type RecordSync = 'off' | 'none' | 'current' | 'stale';
  * this, and a sheet that reports success before the chain agrees is the defect this product has
  * already recorded twice.
  */
-export type PublishOutcome = 'published' | 'rejected' | 'reverted' | 'pending' | 'unavailable' | 'wrong-chain';
+export type PublishOutcome =
+    | 'published' | 'rejected' | 'reverted' | 'pending' | 'unavailable' | 'wrong-chain'
+    | 'locked' | 'asking' | 'no-wallet' | 'wrong-account' | 'wallet-failed';
+
+export const PUBLISH_COPY: Record<PublishOutcome, MessageKey> = {
+    published: 'chain.published',
+    rejected: 'chain.rejected',
+    reverted: 'chain.reverted',
+    pending: 'chain.pending',
+    unavailable: 'chain.unavailable',
+    'wrong-chain': 'chain.wrongChain',
+    locked: 'chain.locked',
+    asking: 'chain.asking',
+    'no-wallet': 'chain.noWallet',
+    'wrong-account': 'chain.wrongAccount',
+    'wallet-failed': 'chain.walletFailed'
+};
+
+const REFUSAL: Record<WalletFailure, PublishOutcome> = {
+    'no-wallet': 'no-wallet',
+    rejected: 'rejected',
+    unauthorized: 'locked',
+    pending: 'asking',
+    chain: 'wrong-chain',
+    unavailable: 'unavailable',
+    unknown: 'wallet-failed'
+};
 
 const RECEIPT_WAIT_MS = 1_500;
 const RECEIPT_TRIES = 40;
@@ -46,6 +74,8 @@ export interface ChainApi
 
     /** Takes the registry's display name and bio as this account's own. */
     adopt(): Promise<boolean>;
+
+    ready(): Promise<void>;
 
     refresh(): void;
     reset(): void;
@@ -161,7 +191,8 @@ export const useChain = createStore((): ChainApi =>
             const user = account.user();
             const same = user !== null
                 && held.displayName === user.displayName
-                && held.bio === user.bio;
+                && held.bio === user.bio
+                && held.avatar === (user.avatar ?? '');
 
             return same ? 'synced' : 'drifted';
         },
@@ -198,6 +229,17 @@ export const useChain = createStore((): ChainApi =>
             setBusy(true);
             try
             {
+                const signer = wallet.address() ?? await wallet.reach();
+                const owner = account.address();
+                if (signer === null)
+                {
+                    return REFUSAL[wallet.failure() ?? 'no-wallet'];
+                }
+                if (owner !== null && signer.toLowerCase() !== owner.toLowerCase())
+                {
+                    return 'wrong-account';
+                }
+
                 for (let round = 0; round < 2; round += 1)
                 {
                     const { calls } = await client.chain.publish();
@@ -211,7 +253,7 @@ export const useChain = createStore((): ChainApi =>
                         const hash = await wallet.send(call.to, call.data);
                         if (hash === null)
                         {
-                            return 'rejected';
+                            return REFUSAL[wallet.failure() ?? 'unknown'];
                         }
 
                         const ok = await settled(hash);
@@ -252,10 +294,12 @@ export const useChain = createStore((): ChainApi =>
                 return false;
             }
 
+            const ours = held.avatar === '' || held.avatar.startsWith(`${ window.location.origin }/avatars/`);
+
             setBusy(true);
             try
             {
-                await account.setProfile({ displayName: held.displayName, bio: held.bio });
+                await account.setProfile({ displayName: held.displayName, bio: held.bio, ...(ours ? { avatar: held.avatar } : {}) });
                 return true;
             }
             catch
@@ -271,6 +315,14 @@ export const useChain = createStore((): ChainApi =>
         refresh()
         {
             void state.refetch();
+        },
+
+        async ready()
+        {
+            if (state.data() === undefined)
+            {
+                await state.refetch();
+            }
         },
 
         reset()

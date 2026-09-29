@@ -255,6 +255,7 @@ export const account = object({
     handle: string(),
     displayName: string(),
     bio: string(),
+    avatar: string().optional(),
     hue: number(),
     kind: accountKind,
     isMinor: boolean(),
@@ -314,8 +315,13 @@ export const handleInput = object({ handle: string({ trim: true, min: 2, max: 32
  */
 export const profileInput = object({
     displayName: string({ trim: true, min: 1, max: 40 }),
-    bio: string({ trim: true, max: 240 })
+    bio: string({ trim: true, max: 240 }),
+    avatar: string({ trim: true, max: 256 }).optional()
 });
+
+export const avatarInput = object({ data: string({ nonempty: true, max: 87_384 }) });
+
+export const avatarResult = object({ url: string() });
 
 export const handleResult = object({ handle: string() });
 
@@ -637,6 +643,7 @@ export const personSummary = object({
      */
     bio: string(),
 
+    avatar: string().optional(),
     hue: number(),
     isMinor: boolean(),
     lastSeenAt: string().optional()

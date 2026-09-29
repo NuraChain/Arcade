@@ -47,6 +47,7 @@ export const me = {
 
     'profile.title': 'Your profile',
     'profile.lead': 'This is what people see at the table. Change it whenever you like.',
+    'profile.leadChain': 'This is what people see at the table. Your name, picture and bio are also written to your Nura Profile on the chain; your handle stays here.',
     'profile.name': 'Display name',
     'profile.nameHint': 'What people read first. It does not have to be unique.',
     'profile.handle': 'Handle',
@@ -57,6 +58,15 @@ export const me = {
     'profile.save': 'Save',
     'profile.saved': 'Profile updated.',
     'profile.failed': 'That did not save. Check your connection and try again.',
+    'profile.picture': 'Picture',
+    'profile.pictureHint': 'A square crop of what you choose, shown beside your name everywhere.',
+    'profile.pictureChoose': 'Choose a picture',
+    'profile.pictureRemove': 'Remove picture',
+    'profile.pictureFailed': 'That picture could not be read. Try a PNG, JPEG or WebP image.',
+    'profile.publishing': 'Confirm in your wallet, then wait while {chain} writes it.',
+    'profile.savedChain': 'Saved, and written to your Nura Profile on {chain}.',
+    'profile.savedHere': 'Saved on this server. No Nura Profile registry is set up here, so nothing went to the chain.',
+    'profile.savedNotChain': 'Saved on this server, but not on the chain. {reason}',
 
     'me.shared': 'Profile link copied',
     'me.settings': 'Settings',
@@ -195,5 +205,10 @@ export const me = {
     'chain.wrongChain': 'Your wallet is on another network. Switch it to {chain} and try again.',
     'chain.adopted': 'Your profile now says what the registry does.',
     'chain.recordCurrent': 'Your game record on the profile is up to date: your level, and your rating and results at each game you have played.',
-    'chain.recordStale': 'You have played since your record was last published. Publishing writes the latest one with your own wallet.'
+    'chain.recordStale': 'You have played since your record was last published. Publishing writes the latest one with your own wallet.',
+    'chain.locked': 'Your wallet is locked. Unlock it and try again.',
+    'chain.asking': 'Your wallet is already asking you something. Open it and answer.',
+    'chain.noWallet': 'Your wallet is not connected to this site. Open it, connect this site and try again.',
+    'chain.wrongAccount': 'Your wallet is on a different account from the one you signed in with. Switch to that account and try again.',
+    'chain.walletFailed': 'Your wallet could not send it, most often because there is not enough for gas. Check your wallet and try again.'
 };

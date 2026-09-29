@@ -67,8 +67,8 @@ export const REGISTRY_ABI = parseAbi([
  * mistyped field key writes somewhere nobody reads and the chain reports success. A test can
  * decode what comes out of here; nothing can decode what a person's wallet already sent.
  *
- * `createProfile` carries the display name and the bio itself, so a first publish is one
- * signature rather than a create followed by a write. The username is deliberately left empty:
+ * `createProfile` carries the display name, the bio and the picture itself, so a first publish is
+ * one signature rather than a create followed by a write. The username is deliberately left empty:
  * an on-chain name is claimed against a global index and can be refused, which is a second
  * refusal path this product's profile sheet does not have - and the @handle beside it is a
  * different namespace that accepts scripts the registry's alphabet does not.
@@ -77,7 +77,15 @@ export const REGISTRY_ABI = parseAbi([
  * and writing it under `en` would hide it from a Persian reader while claiming to be the
  * English of something nobody localized.
  */
-export function callsFor(registry: string, profileId: bigint, displayName: string, bio: string, record = ''): ChainCall[]
+export interface ProfileFields
+{
+    displayName: string;
+    bio: string;
+    avatar: string;
+    record: string;
+}
+
+export function callsFor(registry: string, profileId: bigint, fields: ProfileFields): ChainCall[]
 {
     if (profileId === 0n)
     {
@@ -87,7 +95,7 @@ export function callsFor(registry: string, profileId: bigint, displayName: strin
             data: encodeFunctionData({
                 abi: REGISTRY_ABI,
                 functionName: 'createProfile',
-                args: ['', displayName, bio, '']
+                args: ['', fields.displayName, fields.bio, fields.avatar]
             })
         }];
     }
@@ -99,9 +107,10 @@ export function callsFor(registry: string, profileId: bigint, displayName: strin
             abi: REGISTRY_ABI,
             functionName: 'setFields',
             args: [profileId, [
-                { key: 'displayName', lang: '', value: displayName },
-                { key: 'bio', lang: '', value: bio },
-                ...(record === '' ? [] : [{ key: RECORD_KEY, lang: '', value: record }])
+                { key: 'displayName', lang: '', value: fields.displayName },
+                { key: 'bio', lang: '', value: fields.bio },
+                { key: 'avatar', lang: '', value: fields.avatar },
+                ...(fields.record === '' ? [] : [{ key: RECORD_KEY, lang: '', value: fields.record }])
             ]]
         })
     }];
@@ -124,7 +133,7 @@ export interface ChainProfiles
 
     profile(address: string, lang: string): Promise<ChainProfile | null>;
 
-    publish(input: { address: string; displayName: string; bio: string; record: string }): Promise<ChainCall[]>;
+    publish(input: { address: string } & ProfileFields): Promise<ChainCall[]>;
 }
 
 /**
@@ -215,7 +224,7 @@ export function createChainProfiles(settings: ChainSettings): ChainProfiles
                 args: [input.address]
             });
 
-            return callsFor(registry, profileId, input.displayName, input.bio, input.record);
+            return callsFor(registry, profileId, input);
         }
     };
 }

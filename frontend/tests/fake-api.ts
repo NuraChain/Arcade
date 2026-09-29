@@ -5,6 +5,7 @@ import { NOTICE_OF } from '../../backend/src/domains/notify/notices.ts';
 import { candidatesFor, handleFromAddress, handleFromName } from '../../backend/src/domains/identity/handle.ts';
 import type {
     Account,
+    ChainProfile,
     ChatMessage,
     ConversationDevices,
     ConversationSummary,
@@ -153,12 +154,16 @@ function mustDevice(id: string): Device
     return found;
 }
 
+const CHAIN_REGISTRY = '0x8CFbcEf737BE3C67A52A20Ae3DCC685ACF759460';
+
 export const server =
 {
     account: null as Account | null,
     issued: null as { nonce: string; message: string; address: string } | null,
     received: null as { address: string; nonce: string; signature: string; providerRdns?: string } | null,
     refuse: null as Refusal | null,
+    uploaded: null as string | null,
+    chain: { configured: false, profile: null as ChainProfile | null },
     calls: [] as string[],
     sessions: 3,
 
@@ -380,6 +385,8 @@ export const server =
         server.issued = null;
         server.received = null;
         server.refuse = null;
+        server.uploaded = null;
+        server.chain = { configured: false, profile: null };
         server.calls = [];
         server.sessions = 3;
         server.mutes = [];
@@ -590,6 +597,31 @@ export function walletAccount(address: string): Account
 
 export const client =
 {
+    chain:
+    {
+        async profile()
+        {
+            server.calls.push('chain.profile');
+            return {
+                configured: server.chain.configured,
+                registry: server.chain.configured ? CHAIN_REGISTRY : '',
+                chainId: '',
+                record: '',
+                ...(server.chain.profile === null ? {} : { profile: server.chain.profile })
+            };
+        },
+
+        async publish()
+        {
+            server.calls.push('chain.publish');
+            if (!server.chain.configured || server.account?.address === undefined)
+            {
+                return { calls: [] };
+            }
+            return { calls: [{ to: CHAIN_REGISTRY, kind: server.chain.profile === null ? 'create' as const : 'fields' as const, data: '0x5e1f' }] };
+        }
+    },
+
     voice:
     {
         async ice()
@@ -1782,7 +1814,7 @@ export const client =
             return { handle: input.handle };
         },
 
-        async profile({ input }: { input: { displayName: string; bio: string } })
+        async profile({ input }: { input: { displayName: string; bio: string; avatar?: string } })
         {
             server.calls.push('auth.profile');
             if (server.account === null)
@@ -1792,12 +1824,22 @@ export const client =
 
             // Trimmed and bounded the way the wire shape says, so a store that adopted the INPUT
             // rather than the answer would visibly disagree here.
+            const { avatar: _dropped, ...rest } = server.account;
+            const avatar = input.avatar === undefined ? server.account.avatar : input.avatar;
             server.account = {
-                ...server.account,
+                ...rest,
                 displayName: input.displayName.trim().slice(0, 40),
-                bio: input.bio.trim().slice(0, 240)
+                bio: input.bio.trim().slice(0, 240),
+                ...(avatar === undefined || avatar === '' ? {} : { avatar })
             };
             return server.account;
+        },
+
+        async avatar({ input }: { input: { data: string } })
+        {
+            server.calls.push('auth.avatar');
+            server.uploaded = input.data;
+            return { url: `${ window.location.origin }/avatars/${ 'ab'.repeat(32) }.webp` };
         }
     }
 };

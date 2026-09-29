@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import { BadRequestError, ConflictError, UnauthorizedError } from '@azerothjs/http';
 import type { DataSource } from 'typeorm';
 
@@ -5,8 +7,10 @@ import type { Principal } from '../../http/auth.ts';
 import { hashToken, isAddress, mintNonce, mintToken, normalizeAddress } from '../../lib/crypto.ts';
 import type { AccountKind } from '../../entities/user.entity.ts';
 import { firstRow, rowsOf } from '../../lib/rows.ts';
+import { Avatar } from '../../entities/avatar.entity.ts';
 import { SiweNonce } from '../../entities/siwe-nonce.entity.ts';
 import { User } from '../../entities/user.entity.ts';
+import { AVATAR_MAX_BYTES, avatarHashOf, avatarUrl, sniffAvatar } from './avatar.ts';
 import { candidatesFor, checkHandle, handleFromAddress, handleFromName, normalizeHandle } from './handle.ts';
 import { buildSiweMessage, verifySignature } from './siwe.ts';
 
@@ -48,6 +52,8 @@ interface UserRow
 
 export interface ProfileRow extends UserRow
 {
+    avatar: string | null;
+
     /** The most recently used linked wallet, or null. A guest has none. */
     address: string | null;
 }
@@ -378,16 +384,50 @@ export function createIdentityService(db: DataSource, config: IdentityConfig)
          */
         async profileFor(userId: string): Promise<ProfileRow | null>
         {
-            const rows = await db.query(
-                `select u.id, u.handle, u.display_name, u.bio, u.hue, u.kind, u.is_minor, u.is_suspended,
-                        (select w.address from wallets w
-                          where w.user_id = u.id
-                          order by w.last_used_at desc nulls last
-                          limit 1) as address
-                 from users u where u.id = $1`,
-                [userId]
-            );
-            return firstRow<ProfileRow>(rows);
+            const row = await db.getRepository(User).createQueryBuilder('u')
+                .select('u.id', 'id')
+                .addSelect('u.handle', 'handle')
+                .addSelect('u.display_name', 'display_name')
+                .addSelect('u.bio', 'bio')
+                .addSelect('u.avatar', 'avatar')
+                .addSelect('u.hue', 'hue')
+                .addSelect('u.kind', 'kind')
+                .addSelect('u.is_minor', 'is_minor')
+                .addSelect('u.is_suspended', 'is_suspended')
+                .addSelect('(select w.address from wallets w where w.user_id = u.id order by w.last_used_at desc nulls last limit 1)', 'address')
+                .where('u.id = :userId', { userId })
+                .getRawOne<ProfileRow>();
+            return row ?? null;
+        },
+
+        async uploadAvatar(data: string): Promise<string>
+        {
+            const bytes = Buffer.from(data, 'base64');
+            if (bytes.length === 0 || bytes.length > AVATAR_MAX_BYTES)
+            {
+                throw new BadRequestError('A picture is at most 64 KB.');
+            }
+
+            const type = sniffAvatar(bytes);
+            if (type === null)
+            {
+                throw new BadRequestError('A picture is a WebP, JPEG or PNG image.');
+            }
+
+            const hash = createHash('sha256').update(bytes).digest('hex');
+            await db.getRepository(Avatar).createQueryBuilder()
+                .insert()
+                .into(Avatar)
+                .values({ hash, type, bytes })
+                .orIgnore()
+                .execute();
+
+            return avatarUrl(config.origin, hash, type);
+        },
+
+        async avatar(hash: string): Promise<{ type: string; bytes: Uint8Array } | null>
+        {
+            return db.getRepository(Avatar).findOne({ select: { type: true, bytes: true }, where: { hash } });
         },
 
         /**
@@ -397,11 +437,26 @@ export function createIdentityService(db: DataSource, config: IdentityConfig)
          * query that joins the wallet address in, and a second composition here would be a second
          * chance to disagree with it.
          */
-        async setProfile(userId: string, input: { displayName: string; bio: string }): Promise<ProfileRow>
+        async setProfile(userId: string, input: { displayName: string; bio: string; avatar?: string | undefined }): Promise<ProfileRow>
         {
+            let avatar: string | null | undefined;
+            if (input.avatar !== undefined && input.avatar !== '')
+            {
+                const hash = avatarHashOf(config.origin, input.avatar);
+                if (hash === null || !(await db.getRepository(Avatar).existsBy({ hash })))
+                {
+                    throw new BadRequestError('That picture was not uploaded here.');
+                }
+                avatar = input.avatar;
+            }
+            else if (input.avatar === '')
+            {
+                avatar = null;
+            }
+
             await db.getRepository(User).update(
                 { id: userId },
-                { displayName: input.displayName, bio: input.bio, updatedAt: new Date() }
+                { displayName: input.displayName, bio: input.bio, ...(avatar === undefined ? {} : { avatar }), updatedAt: new Date() }
             );
 
             const row = await this.profileFor(userId);

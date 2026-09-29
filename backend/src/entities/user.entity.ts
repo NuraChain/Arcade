@@ -37,6 +37,9 @@ export class User
     @Column({ type: 'text', default: '' })
     bio!: string;
 
+    @Column({ type: 'text', nullable: true })
+    avatar!: string | null;
+
     /** The avatar hue, 0-359. Derived once at creation so a face does not change colour later. */
     @Column({ type: 'smallint' })
     hue!: number;

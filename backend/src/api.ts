@@ -53,6 +53,8 @@ import {
     groupSummary,
     guestSignIn,
     account,
+    avatarInput,
+    avatarResult,
     handleInput,
     handleResult,
     profileInput,
@@ -285,6 +287,12 @@ export function buildApi(ports: Ports)
                 '/profile',
                 { input: profileInput, output: account },
                 (context) => ports.identity.setProfile(context.principal.userId, context.input)
+            ),
+
+            avatar: routes.with(session).post(
+                '/avatar',
+                { input: avatarInput, output: avatarResult },
+                (context) => ports.identity.uploadAvatar(context.input.data)
             )
         })),
 

@@ -25,6 +25,7 @@ export interface Facade
 {
     displayName: string;
     hue: number;
+    avatar?: string | undefined;
 }
 
 export default component Avatar(props: {
@@ -41,6 +42,10 @@ export default component Avatar(props: {
     derived name = props.person === null ? '' : props.person.displayName;
 
     derived hue = props.person === null ? 200 : props.person.hue;
+
+    derived picture = props.person?.avatar ?? '';
+
+    state broken = '';
 
     derived dotClass = props.presence === 'online'
         ? 'bg-live'
@@ -63,7 +68,18 @@ export default component Avatar(props: {
             class="flex h-full w-full items-center justify-center overflow-hidden rounded-full"
             style="background: color-mix(in oklab, hsl(var(--hue) 52% 38%) 85%, var(--field))"
         >
-            <span aria-hidden="true">{ initialsOf(name) }</span>
+            <Show when={ picture !== '' && picture !== broken } fallback={ <span aria-hidden="true">{ initialsOf(name) }</span> }>
+                { () =>
+                    <img
+                        src={ picture }
+                        alt=""
+                        class="h-full w-full object-cover"
+                        loading="lazy"
+                        decoding="async"
+                        onError={ () => broken = picture }
+                    />
+                }
+            </Show>
         </span>
         <Show when={ props.presence !== undefined && props.presence !== null }>
             { () =>

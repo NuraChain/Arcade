@@ -1,8 +1,12 @@
 import { ApiError } from '../../api.ts';
+import { NURA_CHAIN } from '../../data/chain.ts';
+import { shrinkPicture } from '../../lib/picture.ts';
 import { useAccount } from '../../stores/account.store.ts';
+import { PUBLISH_COPY, useChain } from '../../stores/chain.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import type { OverlayProps } from '../../stores/overlay.store.ts';
 import { useToasts } from '../../stores/toasts.store.ts';
+import Avatar from '../ui/avatar.component.azeroth';
 import Button from '../ui/button.component.azeroth';
 import Field from '../ui/field.component.azeroth';
 import Input from '../ui/input.component.azeroth';
@@ -15,13 +19,13 @@ const BIO_MAX = 240;
 const HANDLE_MAX = 32;
 
 /**
- * The three things about an account that are its own to write.
+ * The things about an account that are its own to write.
  *
- * Two requests, not one, and the sheet is honest about which is which: the display name and the
- * bio are simply STORED, while the @handle is CLAIMED against a unique index and can come back
- * refused. Sending them together would make one request that half-succeeds, with nothing on the
- * screen able to say which half - so the handle goes first, and if it is taken nothing else is
- * written and the box says so with the value still in it.
+ * The @handle is CLAIMED on this server against a unique index and can come back refused, so it
+ * goes first and a refusal leaves everything else unwritten with the value still in the box. The
+ * name, the picture and the bio are then stored here and, for a wallet account on a deployment
+ * with a registry, written to the person's Nura Profile by their own wallet - and the sheet says
+ * which of those happened, because "saved" when the chain said no is the complaint this answers.
  *
  * What is deliberately NOT here: anything to buy or earn. A profile effect somebody can unlock is
  * a claim about an economy this product does not have - no inventory, no balance, nothing that
@@ -32,6 +36,7 @@ export default component ProfileSheet(props: OverlayProps)
 {
     const locale = useLocale();
     const account = useAccount();
+    const chain = useChain();
     const toasts = useToasts();
 
     const current = account.user();
@@ -39,14 +44,70 @@ export default component ProfileSheet(props: OverlayProps)
     state displayName = current?.displayName ?? '';
     state handle = current?.handle ?? '';
     state bio = current?.bio ?? '';
+    state picture = current?.avatar ?? '';
+    state picked = '';
+    state preview = '';
     state busy = false;
+    state publishing = false;
     state refusal = '';
+    state pictureRefusal = '';
+
+    let chooser: HTMLInputElement | null = null;
 
     derived trimmedName = displayName.trim();
 
     derived changedHandle = handle.trim().toLowerCase() !== (current?.handle ?? '').toLowerCase();
 
     derived valid = trimmedName.length > 0 && handle.trim().length >= 2;
+
+    derived changedOnChain = trimmedName !== (current?.displayName ?? '')
+        || bio.trim() !== (current?.bio ?? '')
+        || picked !== ''
+        || picture !== (current?.avatar ?? '');
+
+    derived lead = account.isWallet() && chain.configured() ? 'profile.leadChain' : 'profile.lead';
+
+    derived face = {
+        displayName: trimmedName === '' ? (current?.displayName ?? '') : trimmedName,
+        hue: current?.hue ?? 200,
+        avatar: preview !== '' ? preview : picture
+    };
+
+    const choose = async (file: File | undefined): Promise<void> =>
+    {
+        if (file === undefined)
+        {
+            return;
+        }
+
+        pictureRefusal = '';
+        try
+        {
+            const shrunk = await shrinkPicture(file);
+            picked = shrunk.data;
+            preview = shrunk.preview;
+        }
+        catch
+        {
+            pictureRefusal = locale.t('profile.pictureFailed');
+        }
+    };
+
+    const remove = (): void =>
+    {
+        picture = '';
+        picked = '';
+        preview = '';
+        pictureRefusal = '';
+    };
+
+    const finish = (kind: 'success' | 'warning', text: string): void =>
+    {
+        busy = false;
+        publishing = false;
+        toasts.show({ kind, text });
+        props.close(true);
+    };
 
     const save = async (): Promise<void> =>
     {
@@ -60,15 +121,18 @@ export default component ProfileSheet(props: OverlayProps)
 
         try
         {
-            // The handle first, because it is the half that can be refused. Writing the name and
-            // then failing here would leave the sheet open over an account that had already
-            // half-changed.
+            if (picked !== '')
+            {
+                picture = await account.uploadAvatar(picked);
+                picked = '';
+            }
+
             if (changedHandle)
             {
                 await account.claimHandle(handle.trim());
             }
 
-            await account.setProfile({ displayName: trimmedName, bio: bio.trim() });
+            await account.setProfile({ displayName: trimmedName, bio: bio.trim(), avatar: picture });
         }
         catch (error)
         {
@@ -79,13 +143,86 @@ export default component ProfileSheet(props: OverlayProps)
             return;
         }
 
-        busy = false;
-        toasts.show({ kind: 'success', text: locale.t('profile.saved') });
-        props.close(true);
+        if (!account.isWallet())
+        {
+            finish('success', locale.t('profile.saved'));
+            return;
+        }
+
+        try
+        {
+            await chain.ready();
+        }
+        catch
+        {
+            finish('warning', locale.t('profile.savedNotChain', { reason: locale.t('chain.unavailable') }));
+            return;
+        }
+
+        if (chain.failed())
+        {
+            finish('warning', locale.t('profile.savedNotChain', { reason: locale.t('chain.unavailable') }));
+            return;
+        }
+
+        if (!chain.configured())
+        {
+            finish('success', locale.t('profile.savedHere'));
+            return;
+        }
+
+        if (!changedOnChain && chain.sync() === 'synced')
+        {
+            finish('success', locale.t('profile.saved'));
+            return;
+        }
+
+        publishing = true;
+        const outcome = await chain.publish();
+
+        if (outcome === 'published')
+        {
+            finish('success', locale.t('profile.savedChain', { chain: NURA_CHAIN.name }));
+            return;
+        }
+
+        finish('warning', locale.t('profile.savedNotChain', { reason: locale.t(PUBLISH_COPY[outcome], { chain: NURA_CHAIN.name }) }));
     };
 
     <div class="flex flex-col gap-5 p-5">
-        <SheetHeader title={ locale.t('profile.title') } lead={ locale.t('profile.lead') } onClose={ () => props.close(false) } />
+        <SheetHeader title={ locale.t('profile.title') } lead={ locale.t(lead) } onClose={ () => props.close(false) } />
+
+        <Field id="profile-picture" label={ locale.t('profile.picture') } hint={ locale.t('profile.pictureHint') } error={ pictureRefusal === '' ? undefined : pictureRefusal }>
+            <div class="flex items-center gap-4">
+                <Avatar person={ face } size="xl" />
+                <div class="flex flex-wrap gap-2">
+                    <input
+                        id="profile-picture"
+                        ref={ (element) => chooser = element }
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp"
+                        class="sr-only"
+                        tabindex="-1"
+                        onChange={ (event) =>
+                        {
+                            const input = event.currentTarget as HTMLInputElement;
+                            void choose(input.files?.[0]);
+                            input.value = '';
+                        } }
+                    />
+                    <Button variant="outline" size="sm" leading="edit" disabled={ busy } onClick={ () => chooser?.click() }>
+                        { locale.t('profile.pictureChoose') }
+                    </Button>
+                    <Show when={ picture !== '' || preview !== '' }>
+                        { () =>
+                            <Button variant="ghost" size="sm" leading="trash" disabled={ busy } onClick={ remove }>
+                                { locale.t('profile.pictureRemove') }
+                            </Button>
+                        }
+                    </Show>
+                </div>
+            </div>
+        </Field>
 
         <Field id="profile-name" label={ locale.t('profile.name') } hint={ locale.t('profile.nameHint') }>
             <Input
@@ -126,8 +263,16 @@ export default component ProfileSheet(props: OverlayProps)
             />
         </Field>
 
+        <Show when={ publishing }>
+            { () =>
+                <p role="status" class="rounded-tile bg-accent/10 px-3 py-2 text-ui-sm text-text">
+                    { locale.t('profile.publishing', { chain: NURA_CHAIN.name }) }
+                </p>
+            }
+        </Show>
+
         <div class="flex justify-end gap-2">
-            <Button variant="ghost" onClick={ () => props.close(false) }>{ locale.t('common.cancel') }</Button>
+            <Button variant="ghost" disabled={ busy } onClick={ () => props.close(false) }>{ locale.t('common.cancel') }</Button>
             <Button variant="primary" leading="check-circle" loading={ busy } disabled={ !valid } onClick={ () => void save() }>
                 { locale.t('profile.save') }
             </Button>

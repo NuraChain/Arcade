@@ -7,6 +7,10 @@ import type { PersonRecord } from '../src/schemas.ts';
 const REGISTRY = '0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512';
 const LENS = '0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0';
 const RPC = 'http://127.0.0.1:1';
+const PICTURE = `http://localhost:3100/avatars/${ 'ab'.repeat(32) }.webp`;
+
+const fieldsOf = (displayName: string, bio: string, record = '', avatar = ''): { displayName: string; bio: string; avatar: string; record: string } =>
+    ({ displayName, bio, avatar, record });
 
 const decode = (data: string): { functionName: string; args: readonly unknown[] } =>
 {
@@ -25,15 +29,15 @@ const decode = (data: string): { functionName: string; args: readonly unknown[] 
  */
 describe('composing the registry write', () =>
 {
-    it('creates the profile, carrying both fields, when the address has none', () =>
+    it('creates the profile, carrying the name, the bio and the picture, when the address has none', () =>
     {
-        const [call] = callsFor(REGISTRY, 0n, 'Dana Whitfield', 'Backgammon, mostly.');
+        const [call] = callsFor(REGISTRY, 0n, fieldsOf('Dana Whitfield', 'Backgammon, mostly.', '', PICTURE));
 
         expect(call.kind).toBe('create');
         expect(call.to).toBe(REGISTRY);
         expect(decode(call.data)).toEqual({
             functionName: 'createProfile',
-            args: ['', 'Dana Whitfield', 'Backgammon, mostly.', '']
+            args: ['', 'Dana Whitfield', 'Backgammon, mostly.', PICTURE]
         });
     });
 
@@ -44,23 +48,32 @@ describe('composing the registry write', () =>
      */
     it('claims no username on the way past', () =>
     {
-        const [call] = callsFor(REGISTRY, 0n, 'تخته‌باز', '');
+        const [call] = callsFor(REGISTRY, 0n, fieldsOf('تخته‌باز', ''));
 
         expect(decode(call.data).args[0]).toBe('');
     });
 
     it('writes the fields of a profile that already exists', () =>
     {
-        const [call] = callsFor(REGISTRY, 7n, 'Dana Whitfield', 'Backgammon, mostly.');
+        const [call] = callsFor(REGISTRY, 7n, fieldsOf('Dana Whitfield', 'Backgammon, mostly.', '', PICTURE));
 
         expect(call.kind).toBe('fields');
         expect(decode(call.data)).toEqual({
             functionName: 'setFields',
             args: [7n, [
                 { key: 'displayName', lang: '', value: 'Dana Whitfield' },
-                { key: 'bio', lang: '', value: 'Backgammon, mostly.' }
+                { key: 'bio', lang: '', value: 'Backgammon, mostly.' },
+                { key: 'avatar', lang: '', value: PICTURE }
             ]]
         });
+    });
+
+    it('writes an empty picture, which is how the registry removes one', () =>
+    {
+        const [call] = callsFor(REGISTRY, 7n, fieldsOf('Dana', 'Hello'));
+        const fields = decode(call.data).args[1] as { key: string; value: string }[];
+
+        expect(fields.find((field) => field.key === 'avatar')).toEqual({ key: 'avatar', lang: '', value: '' });
     });
 
     /**
@@ -68,18 +81,18 @@ describe('composing the registry write', () =>
      * under `en` would hide it from a Persian reader resolving `fa` with fallback, while claiming
      * to be the English of something nobody ever localized.
      */
-    it('writes both fields under the default language', () =>
+    it('writes every field under the default language', () =>
     {
-        const [call] = callsFor(REGISTRY, 7n, 'Dana', 'Hello');
+        const [call] = callsFor(REGISTRY, 7n, fieldsOf('Dana', 'Hello', '', PICTURE));
         const fields = decode(call.data).args[1] as { lang: string }[];
 
-        expect(fields.map((field) => field.lang)).toEqual(['', '']);
+        expect(fields.map((field) => field.lang)).toEqual(['', '', '']);
     });
 
     it('always answers with exactly one transaction, so a publish is one signature', () =>
     {
-        expect(callsFor(REGISTRY, 0n, 'a', 'b')).toHaveLength(1);
-        expect(callsFor(REGISTRY, 9n, 'a', 'b')).toHaveLength(1);
+        expect(callsFor(REGISTRY, 0n, fieldsOf('a', 'b'))).toHaveLength(1);
+        expect(callsFor(REGISTRY, 9n, fieldsOf('a', 'b'))).toHaveLength(1);
     });
 });
 
@@ -103,11 +116,11 @@ describe('the game record on the profile', () =>
     it('writes the record beside the name and the bio, in the one signature a publish already is', () =>
     {
         const record = recordValue(recordOf([played('ludo', 9, 4, 1232)]));
-        const [call] = callsFor(REGISTRY, 7n, 'Dana', 'Hello', record);
+        const [call] = callsFor(REGISTRY, 7n, fieldsOf('Dana', 'Hello', record));
         const fields = decode(call.data).args[1] as { key: string; lang: string; value: string }[];
 
-        expect(fields.map((field) => field.key)).toEqual(['displayName', 'bio', RECORD_KEY]);
-        expect(fields[2]).toEqual({ key: 'games.nura.record', lang: '', value: record });
+        expect(fields.map((field) => field.key)).toEqual(['displayName', 'bio', 'avatar', RECORD_KEY]);
+        expect(fields[3]).toEqual({ key: 'games.nura.record', lang: '', value: record });
     });
 
     it('says what a finished game counts and nothing else: no tallies, no streaks, no games never played', () =>
@@ -128,8 +141,8 @@ describe('the game record on the profile', () =>
         expect(recordValue(null)).toBe('');
         expect(recordValue(recordOf([played('ludo', 0, 0, 1200)]))).toBe('');
 
-        const [call] = callsFor(REGISTRY, 7n, 'Dana', 'Hello', '');
-        expect((decode(call.data).args[1] as { key: string }[]).map((field) => field.key)).toEqual(['displayName', 'bio']);
+        const [call] = callsFor(REGISTRY, 7n, fieldsOf('Dana', 'Hello'));
+        expect((decode(call.data).args[1] as { key: string }[]).map((field) => field.key)).toEqual(['displayName', 'bio', 'avatar']);
     });
 
     it('fits the value limit of the registry with every game played', () =>
@@ -175,7 +188,7 @@ describe('a deployment with no registry behind it', () =>
         const chain = createChainProfiles({ rpcUrl: RPC, registry: '', lens: '' });
 
         await expect(chain.profile('0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266', 'en')).resolves.toBeNull();
-        await expect(chain.publish({ address: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266', displayName: 'Dana', bio: '', record: '' })).resolves.toEqual([]);
+        await expect(chain.publish({ address: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266', ...fieldsOf('Dana', '') })).resolves.toEqual([]);
         expect(chain.registry).toBe('');
     });
 
@@ -185,6 +198,6 @@ describe('a deployment with no registry behind it', () =>
         const chain = createChainProfiles({ rpcUrl: RPC, registry: REGISTRY, lens: LENS });
 
         await expect(chain.profile('', 'en')).resolves.toBeNull();
-        await expect(chain.publish({ address: '', displayName: 'Dana', bio: '', record: '' })).resolves.toEqual([]);
+        await expect(chain.publish({ address: '', ...fieldsOf('Dana', '') })).resolves.toEqual([]);
     });
 });
