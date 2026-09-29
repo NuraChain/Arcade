@@ -37,7 +37,8 @@ import type {
     TablePrivacy,
     TableSummary,
     MatchPlay,
-    MatchView
+    MatchView,
+    NftPage
 } from './schemas.ts';
 import type { Infer } from '@azerothjs/schema';
 import type { matchEvent } from './schemas.ts';
@@ -519,6 +520,10 @@ export interface ChainPort
     record(userId: string): Promise<string>;
 
     publish(userId: string): Promise<ChainCall[]>;
+
+    nfts(userId: string, offset: number, limit: number): Promise<NftPage>;
+
+    nftImage(userId: string, contract: string, tokenId: string): Promise<{ type: string; bytes: Uint8Array } | null>;
 }
 
 /** Every port the API declaration may reach. One member per domain. */

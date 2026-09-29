@@ -119,6 +119,28 @@ export function buildApp(deps: AppDeps): App
     // one (vite in development serves the page, so there is nothing to embed into).
     app.get('/api/_manifest', () => json(manifestOf(api)));
 
+    app.get('/api/nfts/image/:contract/:tokenId', async (context) =>
+    {
+        const principal = await ports.identity.principal(context.request);
+        if (principal === null)
+        {
+            return new Response(null, { status: 401 });
+        }
+        const found = await ports.chain.nftImage(principal.userId, context.params.contract, context.params.tokenId);
+        if (found === null)
+        {
+            return new Response(null, { status: 404 });
+        }
+        return new Response(new Uint8Array(found.bytes), {
+            headers: {
+                'content-type': found.type,
+                'cache-control': 'private, max-age=86400',
+                'x-content-type-options': 'nosniff',
+                'content-security-policy': "default-src 'none'"
+            }
+        });
+    });
+
     app.get('/avatars/:file', async (context) =>
     {
         const hash = avatarFile(context.params.file);

@@ -43,6 +43,9 @@ export function loadServerConfig()
         profileRegistry: str('NURA_PROFILE_ADDRESS', { default: '' }),
         profileLens: str('NURA_PROFILE_LENS_ADDRESS', { default: '' }),
 
+        /** The explorer's Etherscan-compatible api, where a wallet's NFT transfers are read. */
+        explorerApi: str('NURA_EXPLORER_API', { default: '' }),
+
         /**
          * Requests per minute per address, for `/api` and `/ws`.
          *

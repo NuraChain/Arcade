@@ -1,4 +1,4 @@
-import type { Child } from 'azerothjs';
+import { Link, type Child } from 'azerothjs';
 
 import Icon from '../../icons/icon.component.azeroth';
 import { useLocale } from '../../stores/locale.store.ts';
@@ -8,6 +8,7 @@ export interface ProfileStat
 {
     label: string;
     value: number;
+    to?: string;
 }
 
 export default component ProfileHeader(props: {
@@ -55,9 +56,14 @@ export default component ProfileHeader(props: {
 
                 <dl class="flex flex-wrap items-stretch gap-y-3">
                     <For each={ props.stats } key={ (stat) => stat.label } let={ stat }>
-                        <div class="flex min-w-[5.5rem] flex-col gap-0.5 border-line pe-6 [&:not(:first-child)]:border-s [&:not(:first-child)]:ps-6">
-                            <dt class="order-2 text-ui-xs text-muted">{ stat.label }</dt>
-                            <dd class="tally order-1 text-ui-2xl font-bold text-text">{ locale.n(stat.value) }</dd>
+                        <div class="group relative flex min-w-[5.5rem] flex-col gap-0.5 border-line pe-6 [&:not(:first-child)]:border-s [&:not(:first-child)]:ps-6">
+                            <dt class="order-2 text-ui-xs text-muted group-has-[a]:text-accent">{ stat.label }</dt>
+                            <dd class="tally order-1 text-ui-2xl font-bold text-text transition-colors group-has-[a:hover]:text-accent">
+                                { locale.n(stat.value) }
+                                <Show when={ stat.to !== undefined }>
+                                    <Link to={ stat.to! } class="absolute -inset-y-1 inset-x-0 rounded-tile" aria-label={ `${ locale.n(stat.value) } ${ stat.label }` }></Link>
+                                </Show>
+                            </dd>
                         </div>
                     </For>
                 </dl>

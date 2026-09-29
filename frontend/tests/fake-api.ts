@@ -11,6 +11,7 @@ import type {
     ConversationSummary,
     Device,
     MuteSubject,
+    NftItem,
     PersonSummary,
     Privacy
 } from '../../backend/src/schemas.ts';
@@ -164,6 +165,7 @@ export const server =
     refuse: null as Refusal | null,
     uploaded: null as string | null,
     chain: { configured: false, profile: null as ChainProfile | null },
+    nfts: { configured: false, items: [] as NftItem[] },
     calls: [] as string[],
     sessions: 3,
 
@@ -387,6 +389,7 @@ export const server =
         server.refuse = null;
         server.uploaded = null;
         server.chain = { configured: false, profile: null };
+        server.nfts = { configured: false, items: [] };
         server.calls = [];
         server.sessions = 3;
         server.mutes = [];
@@ -619,6 +622,19 @@ export const client =
                 return { calls: [] };
             }
             return { calls: [{ to: CHAIN_REGISTRY, kind: server.chain.profile === null ? 'create' as const : 'fields' as const, data: '0x5e1f' }] };
+        },
+
+        async nfts(input: { query: { offset?: string; limit?: string } })
+        {
+            server.calls.push('chain.nfts');
+            const offset = Number(input.query.offset ?? '0');
+            const limit = Number(input.query.limit ?? '24');
+            const held = server.account?.address === undefined ? [] : server.nfts.items;
+            return {
+                configured: server.nfts.configured,
+                total: server.nfts.configured ? held.length : 0,
+                items: server.nfts.configured ? held.slice(offset, offset + limit).map((item) => ({ ...item })) : []
+            };
         }
     },
 

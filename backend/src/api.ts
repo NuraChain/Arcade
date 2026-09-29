@@ -32,6 +32,8 @@ import {
     threadQuery,
     chainProfileState,
     chainPublish,
+    nftPage,
+    nftQuery,
     challenge,
     challengeInput,
     langQuery,
@@ -327,7 +329,14 @@ export function buildApi(ports: Ports)
 
             publish: routes.post('/profile/publish', { output: chainPublish }, async (context) => ({
                 calls: await ports.chain.publish(context.principal.userId)
-            }))
+            })),
+
+            nfts: routes.get('/nfts', { output: nftPage, query: nftQuery }, (context) =>
+                ports.chain.nfts(
+                    context.principal.userId,
+                    Math.max(0, Number.parseInt(context.query.offset ?? '0', 10) || 0),
+                    Math.min(48, Math.max(0, Number.parseInt(context.query.limit ?? '24', 10) || 0))
+                ))
         })),
 
         voice: feature('/voice', [session], (routes) => ({

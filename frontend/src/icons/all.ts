@@ -53,6 +53,7 @@ import {
     MicOff,
     Eye,
     Headphones,
+    Image,
     HeadphoneOff,
     Minimize2,
     MessageCircle,
@@ -201,7 +202,8 @@ export const ALL_ICONS = {
     'listen': Headphones,
     'deafen': HeadphoneOff,
     'watch': Eye,
-    'undo': Undo2
+    'undo': Undo2,
+    'image': Image
 } satisfies Record<string, IconNode>;
 
 export type IconName = keyof typeof ALL_ICONS;

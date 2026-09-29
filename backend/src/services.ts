@@ -23,6 +23,7 @@ import { createMatchService, type MatchLoad } from './domains/match/service.ts';
 import { WATCH_DELAY_MS, createWatchService } from './domains/match/watch.ts';
 import { createTableService, type TableRow } from './domains/table/service.ts';
 import { createChainProfiles, recordValue } from './chain/profile.ts';
+import { createNftReader } from './chain/nfts.ts';
 import { createIdentityService } from './domains/identity/service.ts';
 import { maySeeOnline } from './domains/social/policy.ts';
 import { createSocialService, type PersonRow } from './domains/social/service.ts';
@@ -1077,6 +1078,8 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         lens: config.profileLens
     });
 
+    const nfts = createNftReader({ rpcUrl: config.rpcUrl, explorerApi: config.explorerApi });
+
     const identity = createIdentityService(db, {
         origin: config.origin,
         chainId: config.chainId,
@@ -1288,6 +1291,40 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                     avatar: row.avatar ?? '',
                     record: recordValue(await achieve.recordOf(row.handle))
                 });
+            },
+
+            async nfts(userId, offset, limit)
+            {
+                const row = await identity.profileFor(userId);
+                if (!nfts.configured || row === null || row.address === null)
+                {
+                    return { configured: nfts.configured, total: 0, items: [] };
+                }
+                const held = await nfts.holdings(row.address);
+                const slice = held.slice(offset, offset + limit);
+                const items = await Promise.all(slice.map(async (one) =>
+                {
+                    const meta = await nfts.meta(one);
+                    return {
+                        ...one,
+                        name: meta.name,
+                        image: meta.image === '' ? '' : `/api/nfts/image/${ one.contract }/${ one.tokenId }`
+                    };
+                }));
+                return { configured: true, total: held.length, items };
+            },
+
+            async nftImage(userId, contract, tokenId)
+            {
+                const row = await identity.profileFor(userId);
+                if (!nfts.configured || row === null || row.address === null)
+                {
+                    return null;
+                }
+                const wanted = contract.toLowerCase();
+                const holding = (await nfts.holdings(row.address))
+                    .find((one) => one.contract.toLowerCase() === wanted && one.tokenId === tokenId);
+                return holding === undefined ? null : nfts.image(holding);
             }
         },
 

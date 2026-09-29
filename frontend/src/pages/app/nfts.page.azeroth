@@ -1,0 +1,168 @@
+import { createResource, useHead } from 'azerothjs';
+
+import { client, type NftItem } from '../../api.ts';
+import Page from '../../components/app/page.component.azeroth';
+import PageHeader from '../../components/app/page-header.component.azeroth';
+import EmptyState from '../../components/ui/empty-state.component.azeroth';
+import ErrorState from '../../components/ui/error-state.component.azeroth';
+import LoadMore from '../../components/ui/load-more.component.azeroth';
+import Skeleton from '../../components/ui/skeleton.component.azeroth';
+import { NURA_CHAIN } from '../../data/chain.ts';
+import Icon from '../../icons/icon.component.azeroth';
+import { shortAddress } from '../../lib/wallet.ts';
+import { useAccount } from '../../stores/account.store.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+
+const PAGE = 24;
+
+const keyOf = (item: NftItem): string => `${ item.contract }:${ item.tokenId }`;
+
+export default component NftsPage()
+{
+    const locale = useLocale();
+    const account = useAccount();
+
+    useHead({ title: () => locale.t('nfts.title') });
+
+    const first = createResource(
+        () => account.isWallet() ? account.address() : null,
+        () => client.chain.nfts({ query: { limit: String(PAGE) } }),
+        { name: 'chain.nfts.page' }
+    );
+
+    state extra = [] as NftItem[];
+
+    state paging = false;
+
+    state pageFailed = false;
+
+    effect
+    {
+        void first.data();
+
+        extra = [];
+        pageFailed = false;
+    }
+
+    derived items = [...(first.data()?.items ?? []), ...extra];
+
+    derived total = first.data()?.total ?? 0;
+
+    derived failed = first.error() !== null && items.length === 0;
+
+    derived offline = first.data()?.configured === false;
+
+    const more = async (): Promise<void> =>
+    {
+        if (paging)
+        {
+            return;
+        }
+
+        paging = true;
+        pageFailed = false;
+
+        try
+        {
+            const page = await client.chain.nfts({ query: { offset: String(items.length), limit: String(PAGE) } });
+            const held = new Set(items.map(keyOf));
+
+            extra = [...extra, ...page.items.filter((item) => !held.has(keyOf(item)))];
+        }
+        catch
+        {
+            pageFailed = true;
+        }
+        finally
+        {
+            paging = false;
+        }
+    };
+
+    const nameOf = (item: NftItem): string => item.name !== '' ? item.name : `#${ item.tokenId }`;
+
+    const hide = (event: Event): void =>
+    {
+        (event.currentTarget as HTMLElement).remove();
+    };
+
+    <Page label={ locale.t('nfts.title') } onRefresh={ () => first.refetch() }>
+        <PageHeader
+            title={ locale.t('nfts.title') }
+            { ...(account.isWallet() ? { lead: locale.t('nfts.lead', { address: shortAddress(account.address() ?? ''), chain: NURA_CHAIN.name }) } : {}) }
+        />
+
+        <Show when={ !account.isWallet() }>
+            { () => <EmptyState icon="wallet" title={ locale.t('nfts.guest') } action={ locale.t('app.nav.profile') } to="/app/me" /> }
+        </Show>
+
+        <Show when={ offline }>
+            { () => <EmptyState icon="image" title={ locale.t('nfts.off') } action={ locale.t('app.nav.profile') } to="/app/me" /> }
+        </Show>
+
+        <Show when={ first.loading() && items.length === 0 }>
+            { () =>
+                <div class="grid grid-cols-2 gap-3 @xl:grid-cols-3 @4xl:grid-cols-4 @6xl:grid-cols-5" aria-hidden="true">
+                    <Skeleton class="aspect-[4/5] w-full rounded-panel" />
+                    <Skeleton class="aspect-[4/5] w-full rounded-panel" />
+                    <Skeleton class="aspect-[4/5] w-full rounded-panel" />
+                    <Skeleton class="aspect-[4/5] w-full rounded-panel" />
+                </div>
+            }
+        </Show>
+
+        <Show when={ !first.loading() && failed }>
+            { () => <ErrorState title={ locale.t('nfts.failed') } onRetry={ () => first.refetch() } /> }
+        </Show>
+
+        <Show when={ !first.loading() && !failed && !offline && account.isWallet() && items.length === 0 }>
+            { () => <EmptyState icon="image" title={ locale.t('nfts.empty') } lead={ locale.t('nfts.emptyLead', { chain: NURA_CHAIN.name }) } /> }
+        </Show>
+
+        <Show when={ items.length > 0 }>
+            { () =>
+                <div class="flex flex-col gap-3">
+                    <p class="text-ui-sm text-muted"><span class="tally">{ locale.n(total) }</span> { locale.t('nfts.held') }</p>
+
+                    <ul class="grid grid-cols-2 gap-3 @xl:grid-cols-3 @4xl:grid-cols-4 @6xl:grid-cols-5">
+                        <For each={ items } key={ keyOf } let={ item }>
+                            <li class="flex min-w-0 flex-col overflow-hidden rounded-panel border border-line bg-field">
+                                <div class="relative flex aspect-square items-center justify-center bg-sunk text-faint">
+                                    <Icon name="image" size={ 32 } />
+                                    <Show when={ item.image !== '' }>
+                                        <img
+                                            src={ item.image }
+                                            alt=""
+                                            loading="lazy"
+                                            decoding="async"
+                                            class="absolute inset-0 h-full w-full object-cover"
+                                            onError={ hide }
+                                        />
+                                    </Show>
+                                    <Show when={ item.standard === 'erc1155' && item.amount !== '1' }>
+                                        <span class="absolute end-2 top-2 rounded-full bg-void/80 px-2 py-0.5 text-ui-xs font-semibold text-text backdrop-blur"><span class="tally">{ locale.n(Number(item.amount)) }</span> { locale.t('nfts.copies') }</span>
+                                    </Show>
+                                </div>
+                                <div class="flex min-w-0 flex-col gap-0.5 p-3">
+                                    <p class="truncate text-ui-sm font-semibold text-text" dir="auto">{ nameOf(item) }</p>
+                                    <p class="flex min-w-0 gap-1 text-ui-xs text-muted">
+                                        <span class="min-w-0 truncate" dir="auto">{ item.collection !== '' ? item.collection : shortAddress(item.contract) }</span>
+                                        <span class="tally max-w-[45%] shrink-0 truncate">#{ item.tokenId }</span>
+                                    </p>
+                                </div>
+                            </li>
+                        </For>
+                    </ul>
+
+                    <Show when={ pageFailed }>
+                        { () => <p class="text-center text-ui-xs text-danger">{ locale.t('nfts.moreFailed') }</p> }
+                    </Show>
+
+                    <Show when={ items.length < total }>
+                        { () => <LoadMore label={ locale.t('nfts.more') } loading={ paging } onMore={ () => void more() } /> }
+                    </Show>
+                </div>
+            }
+        </Show>
+    </Page>
+}

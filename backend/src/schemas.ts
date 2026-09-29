@@ -371,6 +371,28 @@ export type ChainCall = Infer<typeof chainCall>;
 
 export const chainPublish = object({ calls: array(chainCall) });
 
+export const nftItem = object({
+    contract: string(),
+    tokenId: string(),
+    standard: enumOf(['erc721', 'erc1155']),
+    amount: string(),
+    collection: string(),
+    name: string(),
+    image: string()
+});
+
+export type NftItem = Infer<typeof nftItem>;
+
+export const nftPage = object({
+    configured: boolean(),
+    total: number(),
+    items: array(nftItem)
+});
+
+export type NftPage = Infer<typeof nftPage>;
+
+export const nftQuery = object({ offset: string({ max: 6 }).optional(), limit: string({ max: 3 }).optional() });
+
 export const langQuery = object({ lang: string({ trim: true, max: 32 }).optional() });
 
 

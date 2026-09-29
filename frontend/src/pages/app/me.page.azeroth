@@ -1,4 +1,4 @@
-import { useHead } from 'azerothjs';
+import { createResource, useHead } from 'azerothjs';
 
 import Page from '../../components/app/page.component.azeroth';
 import PersonRecord, { type RecordPart } from '../../components/social/person-record.component.azeroth';
@@ -12,6 +12,7 @@ import EmptyState from '../../components/ui/empty-state.component.azeroth';
 import IconButton from '../../components/ui/icon-button.component.azeroth';
 import SectionHeading from '../../components/ui/section-heading.component.azeroth';
 import Tooltip from '../../components/ui/tooltip.component.azeroth';
+import { client } from '../../api.ts';
 import { NURA_CHAIN } from '../../data/chain.ts';
 import Icon from '../../icons/icon.component.azeroth';
 import { shortAddress } from '../../lib/wallet.ts';
@@ -69,10 +70,21 @@ export default component MePage()
 
     derived held = record.record();
 
+    const nfts = createResource(
+        () => account.isWallet() ? account.address() : null,
+        () => client.chain.nfts({ query: { limit: '0' } }),
+        { name: 'chain.nfts' }
+    );
+
+    derived nftStat = nfts.data()?.configured === true
+        ? [{ label: locale.t('profile.stat.nfts'), value: nfts.data()!.total, to: '/app/me/nfts' }]
+        : [];
+
     derived stats = [
         { label: locale.t('profile.stat.friends'), value: social.friends().length },
         { label: locale.t('profile.stat.games'), value: (held?.games ?? []).reduce((sum, one) => sum + one.played, 0) },
-        { label: locale.t('profile.stat.achievements'), value: (held?.achievements.scopes ?? []).reduce((total, one) => total + one.earned, 0) }
+        { label: locale.t('profile.stat.achievements'), value: (held?.achievements.scopes ?? []).reduce((total, one) => total + one.earned, 0) },
+        ...nftStat
     ];
 
     derived connected = live.status() === 'connected';

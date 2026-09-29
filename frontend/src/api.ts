@@ -36,6 +36,8 @@ export type {
     MatchWatch,
     WatchableTables,
     MuteSubject,
+    NftItem,
+    NftPage,
     Notification,
     NotificationKind,
     PeerDevice,
