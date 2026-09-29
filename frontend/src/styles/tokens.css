@@ -60,6 +60,7 @@
     --duration-toast: 220ms;
 
     --nav-h: 3.75rem;
+    --nav-room: calc(var(--nav-h) + 1rem + env(safe-area-inset-bottom, 0px));
     --topbar-h: 3.75rem;
     --rail-w: 4.5rem;
     --sidebar-w: 15rem;

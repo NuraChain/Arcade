@@ -107,7 +107,7 @@ export default component ToastHost()
 
     <Portal>
         <div
-            class="fixed inset-x-0 z-(--z-toast) flex flex-col items-center gap-2 px-3 pointer-events-none data-[placement=bottom]:inset-be-[calc(var(--nav-h)+env(safe-area-inset-bottom,0px)+0.75rem)] data-[placement=top]:inset-bs-[calc(env(safe-area-inset-top,0px)+0.75rem)] data-[placement=top]:flex-col-reverse rail:data-[placement=bottom]:inset-be-4 rail:data-[placement=bottom]:items-end rail:data-[placement=bottom]:px-4 sidebar:data-[placement=bottom]:inset-be-4 sidebar:data-[placement=bottom]:items-end sidebar:data-[placement=bottom]:px-4"
+            class="fixed inset-x-0 z-(--z-toast) flex flex-col items-center gap-2 px-3 pointer-events-none data-[placement=bottom]:inset-be-[calc(var(--nav-room)+0.75rem)] data-[placement=top]:inset-bs-[calc(env(safe-area-inset-top,0px)+0.75rem)] data-[placement=top]:flex-col-reverse rail:data-[placement=bottom]:inset-be-4 rail:data-[placement=bottom]:items-end rail:data-[placement=bottom]:px-4 sidebar:data-[placement=bottom]:inset-be-4 sidebar:data-[placement=bottom]:items-end sidebar:data-[placement=bottom]:px-4"
             data-placement={ toasts.placement() }
             data-posture={ device.posture() }
             role="region"

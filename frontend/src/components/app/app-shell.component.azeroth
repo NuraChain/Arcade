@@ -5,7 +5,7 @@ import { startCues, type CuesHand } from '../../stores/cues-loader.ts';
 import '../../icons/all.ts';
 import '../../locales/app-catalogue.ts';
 import { setHaptics } from '../../lib/haptics.ts';
-import { routeMeta } from '../../lib/route-meta.ts';
+import { parentOf, routeMeta } from '../../lib/route-meta.ts';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useChat } from '../../stores/chat.store.ts';
 import { useSeal } from '../../stores/seal.store.ts';
@@ -146,6 +146,8 @@ export default component AppShell(props: { children?: MountNode })
 
     derived bare = bareFor(immersive, posture, device.height());
 
+    derived showTopBar = !bare && (posture !== 'phone' || parentOf(match()) !== undefined);
+
     derived folded = immersive && !messenger ? !settings.settings().tableSidebarOpen : !settings.settings().sidebarOpen;
 
     derived compact = !bare && (posture === 'rail' || (posture === 'sidebar' && folded));
@@ -154,6 +156,7 @@ export default component AppShell(props: { children?: MountNode })
         <div
             id="app-shell"
             data-posture={ posture }
+            data-nav={ showBottomNav ? 'island' : 'none' }
             inert={ overlay.blocking() }
             class={ () => [
                 'grid h-dvh min-h-0 bg-void text-text',
@@ -163,8 +166,8 @@ export default component AppShell(props: { children?: MountNode })
             <Show when={ compact }>{ () => <NavRail /> }</Show>
             <Show when={ posture === 'sidebar' && !compact && !bare }>{ () => <Sidebar /> }</Show>
 
-            <div class="flex h-dvh min-h-0 min-w-0 flex-col">
-                <Show when={ !bare }>{ () => <TopBar /> }</Show>
+            <div class={ () => [ 'relative flex h-dvh min-h-0 min-w-0 flex-col', !bare && !showTopBar ? 'safe-t' : '' ].filter(Boolean).join(' ') }>
+                <Show when={ showTopBar }>{ () => <TopBar /> }</Show>
                 <Show when={ !immersive }>{ () => <ConnectionBanner /> }</Show>
                 <Show when={ !immersive }>{ () => <KeysBanner /> }</Show>
                 <div class="flex min-h-0 flex-1">

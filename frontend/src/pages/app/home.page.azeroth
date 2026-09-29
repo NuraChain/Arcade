@@ -2,11 +2,14 @@ import { Link, useHead, useNavigate } from 'azerothjs';
 
 import type { MatchHistoryEntry } from '../../api.ts';
 import Page from '../../components/app/page.component.azeroth';
+import BrandLogo from '../../components/layout/brand-logo.component.azeroth';
+import BrandMark from '../../components/layout/brand-mark.component.azeroth';
 import GameCard from '../../components/games/game-card.component.azeroth';
 import GameTile from '../../components/games/game-tile.component.azeroth';
 import TableRow from '../../components/games/table-row.component.azeroth';
 import Avatar from '../../components/ui/avatar.component.azeroth';
 import Button from '../../components/ui/button.component.azeroth';
+import IconButton from '../../components/ui/icon-button.component.azeroth';
 import SectionHeading from '../../components/ui/section-heading.component.azeroth';
 import type { Game, GameId } from '../../data/games.ts';
 import type { Person } from '../../data/person.ts';
@@ -17,6 +20,7 @@ import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useDevice } from '../../stores/device.store.ts';
 import { useLobby } from '../../stores/lobby.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
+import { useNotifications } from '../../stores/notifications.store.ts';
 import { usePeople } from '../../stores/people.store.ts';
 import { usePresence } from '../../stores/presence.store.ts';
 import { useRecord } from '../../stores/record.store.ts';
@@ -38,6 +42,7 @@ export default component HomePage()
     const social = useSocial();
     const record = useRecord();
     const device = useDevice();
+    const notifications = useNotifications();
     const { navigate } = useNavigate();
 
     useHead({ title: () => locale.t('app.nav.home') });
@@ -87,6 +92,19 @@ export default component HomePage()
         } }
     >
         <div class="flex flex-col gap-8">
+            <Show when={ device.posture() === 'phone' }>
+                { () =>
+                    <div class="-mb-4 flex items-center gap-1.5">
+                        <span class="flex min-w-0 flex-1 items-center gap-2.5">
+                            <BrandLogo size="md" />
+                            <BrandMark class="truncate text-ui-lg text-text" />
+                        </span>
+                        <IconButton icon="search" label={ locale.t('app.nav.search') } to="/app/search" />
+                        <IconButton icon="bell" label={ locale.t('app.nav.notifications') } to="/app/notifications" count={ notifications.unread() } />
+                    </div>
+                }
+            </Show>
+
             <section class="hero-surface relative overflow-hidden rounded-hero px-5 py-6 @xl:px-7 @xl:py-7" aria-labelledby="home-hero">
                 <div class="grid gap-6 @3xl:grid-cols-[minmax(0,1fr)_auto] @3xl:items-center">
                     <div class="min-w-0">

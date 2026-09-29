@@ -1887,3 +1887,13 @@ html:has(.site-drawer[open])
         transform: scaleX(0);
     }
 }
+
+[data-nav='island'] .page
+{
+    padding-block-end: var(--nav-room);
+}
+
+[data-nav='island'] .page.page-pad
+{
+    padding-block-end: calc(var(--nav-room) + 1rem);
+}

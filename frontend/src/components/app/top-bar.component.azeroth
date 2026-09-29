@@ -128,9 +128,6 @@ export default component TopBar()
                 }
             </Show>
 
-            <Show when={ phone }>
-                { () => <IconButton icon="search" label={ locale.t('app.nav.search') } to="/app/search" current={ meta.tab === 'search' } /> }
-            </Show>
             <Show when={ !phone }>
                 { () =>
                     <span class="glow-cta me-1 hidden rounded-control lg:flex">
@@ -138,10 +135,16 @@ export default component TopBar()
                     </span>
                 }
             </Show>
-            <IconButton icon="bell" label={ locale.t('app.nav.notifications') } to="/app/notifications" count={ unread } current={ meta.tab === 'notifications' } />
-            <Link to="/app/me" aria-current={ meta.tab === 'me' ? 'page' : undefined } class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full ring-accent ring-offset-2 ring-offset-void aria-[current=page]:ring-2" aria-label={ locale.t('app.nav.profile') }>
-                <Avatar person={ account.user() } size="sm" />
-            </Link>
+            <Show when={ !phone }>
+                { () =>
+                    <>
+                        <IconButton icon="bell" label={ locale.t('app.nav.notifications') } to="/app/notifications" count={ unread } current={ meta.tab === 'notifications' } />
+                        <Link to="/app/me" aria-current={ meta.tab === 'me' ? 'page' : undefined } class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full ring-accent ring-offset-2 ring-offset-void aria-[current=page]:ring-2" aria-label={ locale.t('app.nav.profile') }>
+                            <Avatar person={ account.user() } size="sm" />
+                        </Link>
+                    </>
+                }
+            </Show>
         </div>
     </header>
 }
