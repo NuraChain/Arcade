@@ -40,6 +40,14 @@ export default component WalletPanel(props: { onConnected: (account: Account) =>
         {
             return 'wallet.error.chain';
         }
+        if (failure === 'unauthorized')
+        {
+            return 'wallet.error.unauthorized';
+        }
+        if (failure === 'unavailable')
+        {
+            return 'wallet.error.unavailable';
+        }
         return failure === 'no-wallet' ? 'wallet.error.noWallet' : 'wallet.error.unknown';
     })();
 

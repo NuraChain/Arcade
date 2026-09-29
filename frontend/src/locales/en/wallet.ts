@@ -1,7 +1,7 @@
 export const wallet = {
     'wallet.title': 'Your wallet is your seat.',
     'wallet.lead': 'Nura Games runs on {chain}. Connect a wallet, sign once, and the table knows you. No email, no password, no signup form.',
-    'wallet.connect': 'Connect {wallet}',
+    'wallet.connect': 'Connect wallet',
     'wallet.other': 'Use a different wallet',
     'wallet.connecting': 'Waiting for {wallet}…',
     'wallet.signing': 'Sign the message in {wallet}',
@@ -21,6 +21,8 @@ export const wallet = {
     'wallet.error.pending': 'Your wallet is already asking. Open it and answer.',
     'wallet.error.chain': 'Couldn’t switch network. Add {chain} in your wallet and try again.',
     'wallet.error.noWallet': 'No wallet found in this browser.',
+    'wallet.error.unauthorized': 'Your wallet is locked or hasn’t allowed this site. Open it, unlock it and try again.',
+    'wallet.error.unavailable': 'Couldn’t reach the server. Try again in a moment.',
     'wallet.error.unknown': 'That didn’t work. Try again.',
     'wallet.retry': 'Try again',
     'wallet.guestTitle': 'Just looking around?',

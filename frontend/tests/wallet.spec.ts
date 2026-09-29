@@ -170,6 +170,7 @@ describe('provider detection', () =>
     it('names the wallet it found, and does not invent one it did not', () =>
     {
         expect(walletName(fakeProvider())).toBe('MetaMask');
+        expect(walletName({ ...fakeProvider(), isNuraWallet: true })).toBe('Nura Wallet');
         expect(walletName({ ...fakeProvider({ isMetaMask: false }), isRabby: true })).toBe('Rabby');
         expect(walletName(fakeProvider({ isMetaMask: false }))).toBe('Browser wallet');
         expect(walletName(null)).toBe('Browser wallet');
@@ -178,6 +179,7 @@ describe('provider detection', () =>
     it('reads the standard provider error codes', () =>
     {
         expect(failureOf({ code: 4001 })).toBe('rejected');
+        expect(failureOf({ code: 4100 })).toBe('unauthorized');
         expect(failureOf({ code: -32002 })).toBe('pending');
         expect(failureOf({ code: 4902 })).toBe('chain');
         expect(failureOf(new Error('boom'))).toBe('unknown');

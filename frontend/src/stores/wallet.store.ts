@@ -97,6 +97,11 @@ export const useWallet = createStore((): WalletApi =>
         setChainId(typeof args[0] === 'string' ? args[0] : '');
     };
 
+    const why = (step: string, reason: unknown): void =>
+    {
+        console.warn('[wallet]', step, reason);
+    };
+
     const release = (): void =>
     {
         listening?.();
@@ -126,6 +131,7 @@ export const useWallet = createStore((): WalletApi =>
 
             if (wallet === null || account === null)
             {
+                why('sign', wallet === null ? 'no provider' : 'no connected address');
                 setFailure('no-wallet');
                 return null;
             }
@@ -136,6 +142,7 @@ export const useWallet = createStore((): WalletApi =>
             }
             catch (error)
             {
+                why('sign', error);
                 setFailure(failureOf(error));
                 return null;
             }
@@ -155,6 +162,7 @@ export const useWallet = createStore((): WalletApi =>
 
             if (wallet === null || account === null)
             {
+                why('send', wallet === null ? 'no provider' : 'no connected address');
                 setFailure('no-wallet');
                 return null;
             }
@@ -166,6 +174,7 @@ export const useWallet = createStore((): WalletApi =>
             }
             catch (error)
             {
+                why('send', error);
                 setFailure(failureOf(error));
                 return null;
             }
@@ -183,6 +192,7 @@ export const useWallet = createStore((): WalletApi =>
             const wallet = provider();
             if (wallet === null)
             {
+                why('connect', 'no provider');
                 setFailure('no-wallet');
                 setStatus('error');
                 return null;
@@ -197,6 +207,7 @@ export const useWallet = createStore((): WalletApi =>
                 const accounts = await requestAccounts(wallet);
                 if (accounts.length === 0)
                 {
+                    why('eth_requestAccounts', 'the wallet answered with no accounts');
                     setFailure('rejected');
                     setStatus('error');
                     return null;
@@ -205,6 +216,7 @@ export const useWallet = createStore((): WalletApi =>
             }
             catch (error)
             {
+                why('eth_requestAccounts', error);
                 setFailure(failureOf(error));
                 setStatus('error');
                 return null;
@@ -215,7 +227,10 @@ export const useWallet = createStore((): WalletApi =>
 
             if (chainIsConfigured())
             {
-                await switchChain(wallet, NURA_CHAIN);
+                if (!(await switchChain(wallet, NURA_CHAIN)))
+                {
+                    why('wallet_switchEthereumChain', `could not move to ${ NURA_CHAIN.name } (${ NURA_CHAIN.chainId })`);
+                }
                 const switched = await readChainId(wallet).catch(() => null);
                 if (switched !== null)
                 {
@@ -230,8 +245,9 @@ export const useWallet = createStore((): WalletApi =>
             {
                 challenge = await client.auth.challenge({ input: { address: account } });
             }
-            catch
+            catch (error)
             {
+                why('auth.challenge', error);
                 setFailure('unavailable');
                 setStatus('error');
                 return null;
@@ -244,6 +260,7 @@ export const useWallet = createStore((): WalletApi =>
             }
             catch (error)
             {
+                why('personal_sign', error);
                 setFailure(failureOf(error));
                 setStatus('error');
                 return null;
@@ -265,6 +282,7 @@ export const useWallet = createStore((): WalletApi =>
             }
             catch (error)
             {
+                why('auth.wallet', error);
                 setFailure(error instanceof ApiError && error.status === 401 ? 'rejected' : 'unavailable');
                 setStatus('error');
                 return null;

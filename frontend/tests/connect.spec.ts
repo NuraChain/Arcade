@@ -217,6 +217,48 @@ describe('the wallet chooser', () =>
         expect(navigate).toHaveBeenCalledWith('/app');
     });
 
+    it('lists Nura Wallet first and keeps it to its own identity when it also answers for MetaMask', async () =>
+    {
+        const nura = fakeProvider();
+        announce('net.nurachain.wallet', 'Nura Wallet', nura);
+        announce('io.metamask', 'MetaMask', nura);
+        announce('com.trustwallet.app', 'Trust Wallet', nura);
+
+        const { navigate } = open();
+        await settle();
+
+        const rows = [...dialog().querySelectorAll('li')];
+        expect(rows[0].textContent).toContain('Nura Wallet');
+        expect(rows[0].querySelector('button[aria-expanded]')).toBeNull();
+        expect(rows[1].textContent).toContain('MetaMask');
+        expect(rows[1].textContent).toContain('Not in this browser');
+        expect(rows[2].textContent).toContain('Not in this browser');
+
+        fire(rows[0].querySelector('button')!, 'click');
+        await settle();
+
+        expect(server.received?.providerRdns).toBe('net.nurachain.wallet');
+        expect(navigate).toHaveBeenCalledWith('/app');
+    });
+
+    it('says the server is out of reach, and logs which step failed and why', async () =>
+    {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        server.refuse = 'challenge-unreachable';
+        announce('net.nurachain.wallet', 'Nura Wallet', fakeProvider());
+
+        const { navigate } = open();
+        await settle();
+
+        fire(dialog().querySelector('li button')!, 'click');
+        await settle();
+
+        expect(dialog().querySelector('[role="alert"]')!.textContent).toContain('Couldn’t reach the server');
+        expect(warn).toHaveBeenCalledWith('[wallet]', 'auth.challenge', expect.anything());
+        expect(navigate).not.toHaveBeenCalled();
+        warn.mockRestore();
+    });
+
     it('recognises a variant of a wallet it knows, like MetaMask Flask', async () =>
     {
         announce('io.metamask.flask', 'MetaMask Flask', fakeProvider());

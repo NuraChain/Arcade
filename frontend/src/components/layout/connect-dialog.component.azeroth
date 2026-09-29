@@ -9,6 +9,7 @@ import { qrOf } from '../../lib/qr.ts';
 import {
     announcedWallets,
     discoverWallets,
+    NURA_RDNS,
     type AnnouncedWallet,
     type WalletFailure
 } from '../../lib/wallet.ts';
@@ -45,20 +46,19 @@ interface Choice
  * "install" it, or that called connect and waited, would be a button that lies. It expands into a
  * panel explaining how to reach it instead.
  */
-const NURA = 'net.nurachain.wallet';
-
 const CHOICES: Choice[] = [
+    { rdns: NURA_RDNS, name: 'Nura Wallet', glyph: 'games', site: '' },
     { rdns: 'io.metamask', name: 'MetaMask', glyph: 'wallet', site: 'https://metamask.io/download/' },
-    { rdns: 'com.trustwallet.app', name: 'Trust Wallet', glyph: 'wallet', site: 'https://trustwallet.com/download' },
-    { rdns: NURA, name: 'Nura Wallet', glyph: 'games', site: '' }
+    { rdns: 'com.trustwallet.app', name: 'Trust Wallet', glyph: 'wallet', site: 'https://trustwallet.com/download' }
 ];
 
 const ERRORS: Record<WalletFailure, MessageKey> = {
     'no-wallet': 'wallet.error.noWallet',
     'rejected': 'wallet.error.rejected',
+    'unauthorized': 'wallet.error.unauthorized',
     'pending': 'wallet.error.pending',
     'chain': 'wallet.error.chain',
-    'unavailable': 'wallet.error.unknown',
+    'unavailable': 'wallet.error.unavailable',
     'unknown': 'wallet.error.unknown'
 };
 
@@ -198,7 +198,7 @@ export default component ConnectDialog(props: { close: () => void; navigate: (to
                     aria-modal="true"
                     aria-label={ locale.t('wallet.choose') }
                     tabindex="-1"
-                    class={ () => [ OVERLAY_PANEL.modal, entering || leaving ? OVERLAY_HIDDEN.modal : '' ].filter(Boolean).join(' ') }
+                    class={ () => [ OVERLAY_PANEL.modal, 'max-inline-[28rem]', entering || leaving ? OVERLAY_HIDDEN.modal : '' ].filter(Boolean).join(' ') }
                     onTransitionEnd={ (event) =>
                     {
                         if (event.target !== panel || !leaving || gone)
@@ -218,6 +218,14 @@ export default component ConnectDialog(props: { close: () => void; navigate: (to
                     </header>
 
                     <div class="overflow-y-auto overscroll-contain [touch-action:pan-y] min-block-0 flex flex-col gap-3 p-5">
+                        <Show when={ failure !== null }>
+                            { () =>
+                                <p role="alert" class="rounded-tile bg-danger/10 px-3 py-2 text-ui-sm text-danger">
+                                    { locale.t(ERRORS[failure!], { chain: NURA_CHAIN.name }) }
+                                </p>
+                            }
+                        </Show>
+
                         <ul class="flex flex-col gap-2.5">
                             <For each={ CHOICES } key={ (choice) => choice.rdns } let={ choice }>
                                 <li>
@@ -251,7 +259,7 @@ export default component ConnectDialog(props: { close: () => void; navigate: (to
                                         }
                                     </Show>
 
-                                    <Show when={ found(choice) === undefined && choice.rdns === NURA }>
+                                    <Show when={ found(choice) === undefined && choice.rdns === NURA_RDNS }>
                                         { () =>
                                             <button
                                                 type="button"
@@ -276,7 +284,7 @@ export default component ConnectDialog(props: { close: () => void; navigate: (to
                                         }
                                     </Show>
 
-                                    <Show when={ found(choice) === undefined && choice.rdns !== NURA }>
+                                    <Show when={ found(choice) === undefined && choice.rdns !== NURA_RDNS }>
                                         { () =>
                                             <div class={ ROW }>
                                                 <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-control bg-sunk text-faint">
@@ -320,18 +328,10 @@ export default component ConnectDialog(props: { close: () => void; navigate: (to
                                 </Panel>
                             }
                         </Show>
-
-                        <Show when={ failure !== null }>
-                            { () =>
-                                <p role="alert" class="rounded-tile bg-danger/10 px-3 py-2 text-ui-sm text-danger">
-                                    { locale.t(ERRORS[failure!], { chain: NURA_CHAIN.name }) }
-                                </p>
-                            }
-                        </Show>
                     </div>
 
                     <footer class="border-t border-line p-4">
-                        <Button href="/sign-in" variant="ghost" size="md" block leading="people">
+                        <Button href="/sign-in" variant="secondary" size="md" block leading="people">
                             { locale.t('wallet.otherWays') }
                         </Button>
                     </footer>

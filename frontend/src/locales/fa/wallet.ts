@@ -4,7 +4,7 @@ import type { wallet as reference } from '../en/wallet.ts';
 export const wallet: Pick<Dictionary, keyof typeof reference> = {
     'wallet.title': 'کیف پولت، صندلی توست.',
     'wallet.lead': 'بازی‌های نورا روی {chain} اجرا می‌شود. کیف پول را وصل کن، یک بار امضا کن، و میز تو را می‌شناسد. نه ایمیل، نه رمز، نه فرم ثبت‌نام.',
-    'wallet.connect': 'اتصال {wallet}',
+    'wallet.connect': 'اتصال کیف پول',
     'wallet.other': 'با کیف پول دیگری وارد شو',
     'wallet.connecting': 'منتظر {wallet}…',
     'wallet.signing': 'پیام را در {wallet} امضا کن',
@@ -24,6 +24,8 @@ export const wallet: Pick<Dictionary, keyof typeof reference> = {
     'wallet.error.pending': 'کیف پولت همین حالا پرسیده. بازش کن و جواب بده.',
     'wallet.error.chain': 'سوییچ شبکه نشد. {chain} را در کیف پولت اضافه کن و دوباره امتحان کن.',
     'wallet.error.noWallet': 'کیف پولی در این مرورگر پیدا نشد.',
+    'wallet.error.unauthorized': 'کیف پولت قفل است یا به این سایت اجازه نداده. بازش کن، قفلش را باز کن و دوباره امتحان کن.',
+    'wallet.error.unavailable': 'به سرور وصل نشد. کمی بعد دوباره امتحان کن.',
     'wallet.error.unknown': 'نشد. دوباره امتحان کن.',
     'wallet.retry': 'دوباره',
     'wallet.guestTitle': 'فقط سر می‌زنی؟',

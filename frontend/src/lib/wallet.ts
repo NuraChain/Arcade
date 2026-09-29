@@ -5,6 +5,7 @@ export interface Eip1193Provider
     request(args: { method: string; params?: unknown[] }): Promise<unknown>;
     on?(event: string, listener: (...args: unknown[]) => void): void;
     removeListener?(event: string, listener: (...args: unknown[]) => void): void;
+    isNuraWallet?: boolean;
     isMetaMask?: boolean;
     isRabby?: boolean;
     isCoinbaseWallet?: boolean;
@@ -12,7 +13,7 @@ export interface Eip1193Provider
     providers?: Eip1193Provider[];
 }
 
-export type WalletFailure = 'no-wallet' | 'rejected' | 'pending' | 'chain' | 'unavailable' | 'unknown';
+export type WalletFailure = 'no-wallet' | 'rejected' | 'unauthorized' | 'pending' | 'chain' | 'unavailable' | 'unknown';
 
 export interface AnnouncedWallet
 {
@@ -21,6 +22,8 @@ export interface AnnouncedWallet
     icon: string;
     provider: Eip1193Provider;
 }
+
+export const NURA_RDNS = 'net.nurachain.wallet';
 
 const announced = new Map<string, AnnouncedWallet>();
 
@@ -41,6 +44,10 @@ export function discoverWallets(onChange?: () => void): () => void
         const detail = (event as AnnounceEvent).detail;
         const rdns = detail?.info?.rdns;
         if (rdns === undefined || detail?.provider === undefined)
+        {
+            return;
+        }
+        if ([...announced.values()].some((one) => one.provider === detail.provider && one.rdns !== rdns))
         {
             return;
         }
@@ -92,6 +99,7 @@ export interface ProviderError
 }
 
 const REJECTED = 4001;
+const UNAUTHORIZED = 4100;
 const UNRECOGNISED_CHAIN = 4902;
 const ALREADY_PENDING = -32002;
 
@@ -102,10 +110,10 @@ export function detect(): Eip1193Provider | null
         return null;
     }
 
-    const first = announced.values().next();
-    if (first.done !== true)
+    const chosen = announced.get(NURA_RDNS) ?? announced.values().next().value;
+    if (chosen !== undefined)
     {
-        return first.value.provider;
+        return chosen.provider;
     }
 
     const injected = (window as unknown as { ethereum?: Eip1193Provider }).ethereum;
@@ -132,6 +140,10 @@ export function walletName(provider: Eip1193Provider | null): string
     {
         return wallet.name;
     }
+    if (provider.isNuraWallet === true)
+    {
+        return 'Nura Wallet';
+    }
     if (provider.isRabby === true)
     {
         return 'Rabby';
@@ -153,6 +165,10 @@ export function failureOf(error: unknown): WalletFailure
     if (code === REJECTED)
     {
         return 'rejected';
+    }
+    if (code === UNAUTHORIZED)
+    {
+        return 'unauthorized';
     }
     if (code === ALREADY_PENDING)
     {
@@ -254,6 +270,7 @@ export async function switchChain(provider: Eip1193Provider, chain: ChainConfig)
     {
         if (failureOf(error) !== 'chain')
         {
+            console.warn('[wallet]', 'wallet_switchEthereumChain', error);
             return false;
         }
     }
@@ -272,8 +289,9 @@ export async function switchChain(provider: Eip1193Provider, chain: ChainConfig)
         });
         return true;
     }
-    catch
+    catch (error)
     {
+        console.warn('[wallet]', 'wallet_addEthereumChain', error);
         return false;
     }
 }
