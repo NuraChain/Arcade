@@ -205,7 +205,7 @@ const app = buildApp({
 const handler = pipeline(
     app,
     requestId(),
-    securityHeaders(),
+    securityHeaders({ crossOriginResourcePolicy: false, crossOriginOpenerPolicy: false }),
     gzipOnTheWay,
     ...(ssr === undefined ? [] : [precompressed(config.clientDir, ['/assets/', '/world/'])]),
 
@@ -214,7 +214,7 @@ const handler = pipeline(
     apiRateLimit({ limit: config.apiRateMax, trustProxy: config.env === 'production' })
 );
 
-const served = await serve(handler, { port: config.port });
+const served = await serve(handler, { port: config.port, hostname: '127.0.0.1' });
 
 // IMMEDIATELY after `serve`, with nothing awaited in between: until the upgrade listener is
 // registered, an Upgrade-flagged request falls through to `mountPages`' catch-all, and every
