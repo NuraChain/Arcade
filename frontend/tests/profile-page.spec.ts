@@ -3,6 +3,7 @@ import { cleanup, renderTest } from '@azerothjs/testing';
 import { createMemoryHistory, createRouter, RouterProvider, type Route } from 'azerothjs';
 
 import ProfileHeader from '../src/components/social/profile-header.component.azeroth';
+import AchievementTile from '../src/components/social/achievement-tile.component.azeroth';
 import MePage from '../src/pages/app/me.page.azeroth';
 import '../src/locales/app-catalogue.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
@@ -174,5 +175,29 @@ describe('my profile page', () =>
 
         expect(tabs).toEqual(['Achievements', 'Games']);
         expect(container.textContent).not.toContain('Nura Profile differs');
+    });
+});
+
+describe('an achievement tile', () =>
+{
+    const tile = (rarity: 'normal' | 'rare' | 'legendary', holders: number): Promise<HTMLElement> => render(() => AchievementTile({
+        achievement: {
+            name: { en: 'Winner 20', fa: 'برنده ۲۰' },
+            blurb: { en: 'Win 20 games.', fa: 'بیست بازی ببر.' },
+            icon: 'trophy',
+            tier: 'diamond',
+            rarity,
+            holders
+        }
+    }) as unknown as HTMLElement, '/app/me');
+
+    it('says how rare it is and how many players hold it', async () =>
+    {
+        expect((await tile('legendary', 0.004)).textContent).toContain('Legendary');
+        cleanup();
+        const rare = (await tile('rare', 0.12)).textContent ?? '';
+        expect(rare).toContain('Rare');
+        expect(rare).toContain('12%');
+        expect(rare).toContain('of players have it');
     });
 });

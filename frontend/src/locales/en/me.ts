@@ -45,6 +45,10 @@ export const me = {
     'achievements.complete': 'Every rung climbed.',
     'achievements.recent': 'Recently earned',
     'achievements.scopes': 'Achievements by game',
+    'rarity.normal': 'Normal',
+    'rarity.rare': 'Rare',
+    'rarity.legendary': 'Legendary',
+    'rarity.holders': 'of players have it',
     'achievements.locked': 'Not earned yet',
     'achievements.earnedOne': 'Earned',
 

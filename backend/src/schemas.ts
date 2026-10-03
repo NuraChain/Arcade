@@ -1,4 +1,5 @@
 import { array, boolean, enumOf, literal, number, object, record, string, union, type Infer } from '@azerothjs/schema';
+import { RARITY_IDS } from './domains/achieve/rarity.ts';
 
 /**
  * The wire shape, declared once.
@@ -70,12 +71,18 @@ export const achievementTier = enumOf(['bronze', 'silver', 'gold', 'platinum', '
 
 export type AchievementTier = Infer<typeof achievementTier>;
 
+export const achievementRarity = enumOf(RARITY_IDS);
+
+export type AchievementRarity = Infer<typeof achievementRarity>;
+
 export const earnedAchievement = object({
     id: string(),
     name: localizedText,
     blurb: localizedText,
     icon: string(),
     tier: achievementTier,
+    rarity: achievementRarity,
+    holders: number(),
     game: string().optional(),
     earnedAt: string()
 });
@@ -173,6 +180,8 @@ export const achievementRung = object({
     step: number(),
     need: number(),
     tier: achievementTier,
+    rarity: achievementRarity,
+    holders: number(),
     name: localizedText,
     blurb: localizedText,
     earnedAt: string().optional()

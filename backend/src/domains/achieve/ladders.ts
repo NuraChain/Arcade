@@ -1,3 +1,5 @@
+import { rarityAt, type Rarity } from './rarity.ts';
+
 export type Tier = 'bronze' | 'silver' | 'gold' | 'platinum' | 'diamond';
 
 export type Pace = 'live' | 'turns';
@@ -52,6 +54,7 @@ export interface Rung
     step: number;
     need: number;
     tier: Tier;
+    rarity: Rarity;
     icon: string;
     nameEn: string;
     nameFa: string;
@@ -148,6 +151,7 @@ export function rungsOf(game: string | null, families: readonly Family[]): Rung[
         step: index + 1,
         need,
         tier: tierAt(index, family.steps.length),
+        rarity: rarityAt(index, family.steps.length),
         icon: family.icon,
         nameEn: `${ family.title.en } ${ EN.format(index + 1) }`,
         nameFa: `${ family.title.fa } ${ FA.format(index + 1) }`,

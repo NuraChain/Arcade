@@ -1497,6 +1497,15 @@ most recent medals; `GET /social/people/:handle/achievements/:family?game=` is o
 ladder, fetched when its card is opened. The profile shows the recent medals and a chip per scope
 over the family cards; a game page shows that game's families and nothing else.
 
+**Every rung has a rarity, and beside it how many players really hold it.** Rarity is fixed by the
+rung's place in its ladder - the first 60% `normal`, the next 30% `rare`, the last 10% `legendary`,
+so a ladder's top rung is always legendary and rarity never falls as a ladder climbs. It lives in
+`achieve/rarity.ts`, a zero-import module the wire schema reads too: `RARITY_IDS` is the order and
+`RARITY_SHARE` the cut, so a new rarity is one id and one share. Like scope and step it comes from the
+generated list in memory, so it has no column and needs no rebuild. The SHARE is live: `holders` on a
+rung and on a recent medal is the fraction of players (anybody with a `player_stats` row) who hold it,
+counted per request for the ids on screen. The tile shows both - "Rare - 12% of players have it".
+
 **A RECORD is anybody's to read and a HISTORY is your own.** The aggregate is what a profile has
 always shown. A list of the games somebody sat at, with who else was there and when, is a
 description of their week - the social graph is already the thing E2EE cannot hide, and this would

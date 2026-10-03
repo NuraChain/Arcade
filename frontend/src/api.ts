@@ -6,6 +6,7 @@ export type {
     Account,
     AchievementFamily,
     AchievementLadder,
+    AchievementRarity,
     AchievementSummary,
     AchievementTier,
     Attestation,

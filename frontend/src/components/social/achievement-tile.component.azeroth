@@ -1,9 +1,17 @@
 import Icon from '../../icons/icon.component.azeroth';
 import type { IconName } from '../../icons/registry.ts';
 import { useLocale } from '../../stores/locale.store.ts';
-import type { AchievementTier } from '../../api.ts';
+import type { AchievementRarity, AchievementTier } from '../../api.ts';
+import type { MessageKey } from '../../locales/en.ts';
 import type { LocalizedText } from '../../lib/text.ts';
+import Badge from '../ui/badge.component.azeroth';
 import { MEDAL } from '../ui/variants.ts';
+
+const RARITY: Record<AchievementRarity, { key: MessageKey; tone: 'neutral' | 'accent' | 'gold' }> = {
+    normal: { key: 'rarity.normal', tone: 'neutral' },
+    rare: { key: 'rarity.rare', tone: 'accent' },
+    legendary: { key: 'rarity.legendary', tone: 'gold' }
+};
 
 export interface Medal
 {
@@ -11,6 +19,8 @@ export interface Medal
     blurb: LocalizedText;
     icon: string;
     tier: AchievementTier;
+    rarity?: AchievementRarity;
+    holders?: number;
     earnedAt?: string;
 }
 
@@ -30,6 +40,12 @@ export default component AchievementTile(props: { achievement: Medal; class?: st
                 { locale.text(props.achievement.name) }
             </p>
             <p class="line-clamp-2 text-ui-2xs text-muted">{ locale.text(props.achievement.blurb) }</p>
+            <Show when={ props.achievement.rarity !== undefined }>
+                <p class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-ui-2xs text-faint">
+                    <Badge dot size="sm" text={ locale.t(RARITY[props.achievement.rarity ?? 'normal'].key) } tone={ RARITY[props.achievement.rarity ?? 'normal'].tone } />
+                    <span><span class="tally">{ locale.n(props.achievement.holders ?? 0, { style: 'percent', maximumFractionDigits: (props.achievement.holders ?? 0) < 0.01 ? 1 : 0 }) }</span> { locale.t('rarity.holders') }</span>
+                </p>
+            </Show>
         </div>
 
         <Show

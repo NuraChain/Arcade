@@ -187,17 +187,24 @@ function summaryOf(facts: Facts, game: string | null, family: Family, held: Read
     };
 }
 
-const asEarned = (rung: Rung, earnedAt: Date): EarnedAchievement => ({
+const asEarned = (rung: Rung, earnedAt: Date, holders: ReadonlyMap<string, number>): EarnedAchievement => ({
     id: rung.id,
     name: { en: rung.nameEn, fa: rung.nameFa },
     blurb: { en: rung.blurbEn, fa: rung.blurbFa },
     icon: rung.icon,
     tier: rung.tier,
+    rarity: rung.rarity,
+    holders: holders.get(rung.id) ?? 0,
     ...(rung.game === null ? {} : { game: rung.game }),
     earnedAt: new Date(earnedAt).toISOString()
 });
 
-function summarise(facts: Facts, held: readonly HeldRow[]): AchievementSummary
+const recentOf = (held: readonly HeldRow[]): HeldRow[] => held
+    .filter((row) => RUNG_BY_ID.has(row.achievementId))
+    .sort((a, b) => new Date(b.earnedAt).getTime() - new Date(a.earnedAt).getTime() || b.achievementId.localeCompare(a.achievementId))
+    .slice(0, RECENT);
+
+function summarise(facts: Facts, held: readonly HeldRow[], holders: ReadonlyMap<string, number>): AchievementSummary
 {
     const when = new Map(held.map((row) => [row.achievementId, row.earnedAt]));
     const known = held.filter((row) => RUNG_BY_ID.has(row.achievementId));
@@ -214,10 +221,7 @@ function summarise(facts: Facts, held: readonly HeldRow[]): AchievementSummary
             };
         }),
         families: SCOPES.flatMap((game) => familiesOf(game).map((family) => summaryOf(facts, game, family, when))),
-        recent: [...known]
-            .sort((a, b) => new Date(b.earnedAt).getTime() - new Date(a.earnedAt).getTime() || b.achievementId.localeCompare(a.achievementId))
-            .slice(0, RECENT)
-            .map((row) => asEarned(RUNG_BY_ID.get(row.achievementId)!, row.earnedAt))
+        recent: recentOf(known).map((row) => asEarned(RUNG_BY_ID.get(row.achievementId)!, row.earnedAt, holders))
     };
 }
 
@@ -342,6 +346,29 @@ export function createAchieveService(db: DataSource)
             where: ids === undefined ? { userId } : { userId, achievementId: In([...ids]) }
         });
 
+    const holdersOf = async (ids: readonly string[]): Promise<Map<string, number>> =>
+    {
+        if (ids.length === 0)
+        {
+            return new Map();
+        }
+
+        const [counts, players] = await Promise.all([
+            db.getRepository(UserAchievement).createQueryBuilder('ua')
+                .select('ua.achievement_id', 'id')
+                .addSelect('count(*)::int', 'n')
+                .where('ua.achievement_id in (:...ids)', { ids: [...ids] })
+                .groupBy('ua.achievement_id')
+                .getRawMany<{ id: string; n: number }>(),
+            db.getRepository(PlayerStats).createQueryBuilder('ps')
+                .select('count(distinct ps.user_id)::int', 'n')
+                .getRawOne<{ n: number }>()
+        ]);
+
+        const total = Math.max(1, players?.n ?? 0);
+        return new Map(counts.map((row) => [row.id, Math.min(1, row.n / total)]));
+    };
+
     return {
         async record(tx: EntityManager, userId: string, matchId: string, game: string): Promise<void>
         {
@@ -383,7 +410,7 @@ export function createAchieveService(db: DataSource)
             }
 
             const rungs = family.steps.map((_, index) => RUNG_BY_ID.get(rungId(game, family.id, index + 1))!);
-            const held = await heldBy(who.id, rungs.map((rung) => rung.id));
+            const [held, holders] = await Promise.all([heldBy(who.id, rungs.map((rung) => rung.id)), holdersOf(rungs.map((rung) => rung.id))]);
             const when = new Map(held.map((row) => [row.achievementId, row.earnedAt]));
 
             return {
@@ -392,6 +419,8 @@ export function createAchieveService(db: DataSource)
                     step: rung.step,
                     need: rung.need,
                     tier: rung.tier,
+                    rarity: rung.rarity,
+                    holders: holders.get(rung.id) ?? 0,
                     name: { en: rung.nameEn, fa: rung.nameFa },
                     blurb: { en: rung.blurbEn, fa: rung.blurbFa },
                     ...(when.has(rung.id) ? { earnedAt: new Date(when.get(rung.id)!).toISOString() } : {})
@@ -500,6 +529,9 @@ export function createAchieveService(db: DataSource)
                 order: { played: 'DESC', game: 'ASC' }
             });
 
+            const held = await heldBy(who.id);
+            const holders = await holdersOf(recentOf(held).map((row) => row.achievementId));
+
             return {
                 handle: who.handle,
                 progress: levelOf(games.reduce((total, row) => total + row.xp, 0)),
@@ -515,7 +547,7 @@ export function createAchieveService(db: DataSource)
                     tallies: row.tallies,
                     xp: row.xp
                 })),
-                achievements: summarise(await factsOf(db.manager, who.id), await heldBy(who.id))
+                achievements: summarise(await factsOf(db.manager, who.id), held, holders)
             };
         }
     };

@@ -48,6 +48,10 @@ export const me: Pick<Dictionary, keyof typeof reference> = {
     'achievements.complete': 'همهٔ پله‌ها را بالا رفتی.',
     'achievements.recent': 'تازه به دست آمده',
     'achievements.scopes': 'دستاوردها به تفکیک بازی',
+    'rarity.normal': 'معمولی',
+    'rarity.rare': 'کمیاب',
+    'rarity.legendary': 'افسانه‌ای',
+    'rarity.holders': 'از بازیکنان دارند',
     'achievements.locked': 'هنوز گرفته نشده',
     'achievements.earnedOne': 'به دست آمده',
 
