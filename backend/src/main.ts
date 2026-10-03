@@ -14,7 +14,7 @@ import { dataSource } from './data-source.ts';
 import { seedWalletFixtures } from './db/seed-wallets.ts';
 import { seedReference } from './db/seed-reference.ts';
 import { syncSchema } from './db/schema.ts';
-import { loadServerConfig, servesPages, syncsSchema } from './env.ts';
+import { loadServerConfig } from './env.ts';
 import { gzipOnTheWay, precompressed } from './http/compression.ts';
 import { apiRateLimit } from './http/rate-limit.ts';
 import { createServerLogger } from './logger.ts';
@@ -31,9 +31,9 @@ try
 {
     process.loadEnvFile(new URL('../.env', import.meta.url));
 }
-catch
+catch (error)
 {
-    // No .env file - the ambient environment is the configuration.
+    throw new Error('There is no .env at the repository root. Copy .env.example to .env and fill it in.', { cause: error });
 }
 
 const config = loadServerConfig();
@@ -42,7 +42,7 @@ const log = createServerLogger(config);
 await dataSource.initialize();
 log.info('database ready', { pool: config.databasePoolMax });
 
-if (syncsSchema(config))
+if (config.databaseSync)
 {
     try
     {
@@ -135,28 +135,14 @@ const hub = createHub({
 // the manifest and once inside `buildApp`, and neither survived the expression it was created in.
 const ports = buildPorts(dataSource, config, hub);
 
-/**
- * Whether this process serves the client, and - when it does not - WHY, at boot.
- *
- * Getting this wrong is silent and total: the api answers perfectly while every page is
- * `{"error":{"code":"not-found","message":"Nothing is served at GET /."}}`. It has now been hit
- * twice, once locally and once on a deploy, and both times the server started cleanly and said
- * nothing, so the first guess was the browser rather than the configuration.
- *
- * `process.loadEnvFile()` puts `.env` into `process.env`, so a `SERVE_PAGES=false` left in a
- * deployed `.env` from an older template still wins over the production default - which is correct
- * (an explicit setting should win) and is exactly the case worth naming out loud.
- */
-const serving = servesPages(config);
+const serving = config.servePages;
 
 if (!serving)
 {
     log.warn('not serving pages - this process answers the api only', {
-        reason: process.env.SERVE_PAGES !== undefined
-            ? `SERVE_PAGES=${ process.env.SERVE_PAGES } is set explicitly`
-            : 'NODE_ENV is not production',
+        reason: 'SERVE_PAGES=false',
         env: config.env,
-        fix: 'remove SERVE_PAGES from the root .env and set NODE_ENV=production, or run vite for the browser half'
+        fix: 'set SERVE_PAGES=true in the root .env, or run vite for the browser half'
     });
 }
 

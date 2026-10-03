@@ -5,15 +5,14 @@ import { DataSource } from 'typeorm';
 import { entities } from './entities/index.ts';
 import { oneAtATime } from './lib/one-at-a-time.ts';
 
-// The TypeORM CLI never goes through main.ts, so it loads the environment itself. A missing
-// .env is not an error here: the ambient environment is a valid way to configure a deployment.
+// The TypeORM CLI never goes through main.ts, so it loads the environment itself.
 try
 {
     process.loadEnvFile(new URL('../.env', import.meta.url));
 }
-catch
+catch (error)
 {
-    // No .env file - the ambient environment is the configuration.
+    throw new Error('There is no .env at the repository root. Copy .env.example to .env and fill it in.', { cause: error });
 }
 
 /**
@@ -35,7 +34,7 @@ export const dataSource = new DataSource({
     synchronize: false,
 
     extra: {
-        max: Math.max(1, Number.parseInt(process.env.DATABASE_POOL_MAX ?? '10', 10) || 10),
+        max: Math.max(1, Number.parseInt(process.env.DATABASE_POOL_MAX ?? '', 10)),
         connectionTimeoutMillis: 5000,
         idleTimeoutMillis: 30_000,
         statement_timeout: 30_000

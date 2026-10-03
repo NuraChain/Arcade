@@ -36,12 +36,13 @@ because two files truncating the same tables deadlock. Every claim about the DAT
 `http://localhost:3100`.
 
 **Production is one process.** `npm run build` then `npm start`: the api in `.dist-backend/`, the client
-in `.dist-frontend/`, the SSR bundle in `frontend/dist-server/`. `SERVE_PAGES` defaults on under
-`NODE_ENV=production`; `SERVE_PAGES=false` is for a CDN in front. There is no `npm run preview` - the
+in `.dist-frontend/`, the SSR bundle in `frontend/dist-server/`. `SERVE_PAGES=true` makes this process
+serve the client (false in development, where vite owns the browser). There is no `npm run preview` - the
 server's `mountPages` IS the preview. The backend COMPILES (`typeorm` in `dependencies` flips it to
 emitting, and Node cannot run decorators), so always build before `npm start`.
 
-**Production `.env`** needs `NODE_ENV=production`, a real `SESSION_SECRET`, and `PUBLIC_ORIGIN` set to
+**Production `.env`** needs `NODE_ENV=production`, `SERVE_PAGES=true`, `DATABASE_SYNC=false`, a real
+`SESSION_SECRET`, and `PUBLIC_ORIGIN` set to
 the origin the browser uses - it is the site in every sign-in text, the WebSocket origin check and the
 cookie's site at once.
 
@@ -58,7 +59,7 @@ only, always, and speaks plain HTTP. It sends no CORS, `Cross-Origin-Resource-Po
 build, SSR bundle, `PUBLIC_ORIGIN` or `SESSION_SECRET`.
 
 **The database** is Postgres and the ENTITIES are its only description: no migrations, `syncSchema()`
-on every development boot, never TypeORM's own `synchronize: true`. A schema change is: drop the
+whenever `DATABASE_SYNC=true` (development), never TypeORM's own `synchronize: true`. A schema change is: drop the
 database, boot, let `syncSchema` build it. Details, the hand-built indexes and the tests that hold the
 schema are in `backend/CLAUDE.md`.
 
@@ -81,6 +82,11 @@ the third so nobody re-investigates it.
 - Real values live in the ONE root `.env` (gitignored at every depth). The api loads it; vite reads it
   through `envDir: '..'` and exposes only `VITE_*`. `process.env.VITE_USER_NODE_ENV ??= ''` in the
   vite config stops the api's `NODE_ENV=development` turning a build into a development bundle.
+- **No variable has a default in code.** Every name in `.env.example` must be present in `.env`: the
+  api (`loadServerConfig`) and vite (`requireEnv` in its config) refuse to start without the file or
+  without any one name, listing every missing one. An EMPTY value is a deliberate off switch for an
+  optional feature (push, TURN, the chain, the explorer, the admin); a value the product needs
+  (`SESSION_SECRET`, `PUBLIC_ORIGIN`, the ports and limits) refuses empty too.
 - `.env.example` is committed: every variable the code reads, with a placeholder and a sentence. Only
   public values are real there (the Nurachain id, rpc and contract addresses). A personal value - an
   admin wallet included - goes in `.env` only.

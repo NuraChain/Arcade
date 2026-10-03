@@ -86,7 +86,7 @@ export interface WalletSeedConfig
  */
 export async function seedWalletFixtures(db: DataSource, config: WalletSeedConfig): Promise<void>
 {
-    if ((process.env.NODE_ENV ?? 'development') !== 'development')
+    if (process.env.NODE_ENV !== 'development')
     {
         throw new Error('seedWalletFixtures is development-only: it holds published private keys.');
     }

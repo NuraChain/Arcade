@@ -8,23 +8,27 @@ export interface ChainConfig
     site: string;
 }
 
-function fromEnv(key: string, fallback: string): string
+function fromEnv(key: string): string
 {
     const value = (import.meta.env as Record<string, string | undefined>)[key];
-    return value === undefined || value === '' ? fallback : value;
+    if (value === undefined)
+    {
+        throw new Error(`${ key } is not set in the root .env.`);
+    }
+    return value;
 }
 
 export const NURA_CHAIN: ChainConfig = {
-    chainId: fromEnv('VITE_NURA_CHAIN_ID', ''),
-    name: fromEnv('VITE_NURA_CHAIN_NAME', 'NuraChain'),
+    chainId: fromEnv('VITE_NURA_CHAIN_ID'),
+    name: fromEnv('VITE_NURA_CHAIN_NAME'),
     currency: {
-        name: fromEnv('VITE_NURA_CURRENCY_NAME', 'Nura'),
-        symbol: fromEnv('VITE_NURA_CURRENCY_SYMBOL', 'NURA'),
+        name: fromEnv('VITE_NURA_CURRENCY_NAME'),
+        symbol: fromEnv('VITE_NURA_CURRENCY_SYMBOL'),
         decimals: 18
     },
-    rpcUrls: fromEnv('VITE_NURA_RPC_URL', '').split(',').filter(Boolean),
-    explorerUrls: fromEnv('VITE_NURA_EXPLORER_URL', '').split(',').filter(Boolean),
-    site: fromEnv('VITE_NURA_SITE', 'https://nurachain.net')
+    rpcUrls: fromEnv('VITE_NURA_RPC_URL').split(',').filter(Boolean),
+    explorerUrls: fromEnv('VITE_NURA_EXPLORER_URL').split(',').filter(Boolean),
+    site: fromEnv('VITE_NURA_SITE')
 };
 
 export function chainIsConfigured(chain: ChainConfig = NURA_CHAIN): boolean

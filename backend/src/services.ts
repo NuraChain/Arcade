@@ -1146,7 +1146,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         jobs: { sweepTurns, tidy },
 
         meta: {
-            info: () => ({ wire: 'nura-e2ee/v1', env: process.env.NODE_ENV ?? 'development' })
+            info: () => ({ wire: 'nura-e2ee/v1', env: config.env })
         },
 
         catalogue: createCatalogueService(db),
