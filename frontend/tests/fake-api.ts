@@ -274,13 +274,12 @@ export const server =
     currentDevice: null as string | null,
     refuseEnrol: null as 'burned' | 'unauthorized' | null,
 
-    /** Records a device the way the server would, including who is confirmed. */
+    /** Records a device the way the server would. */
     addDevice(input: {
         exchangeKey: string;
         signingKey: string;
         label?: string;
         attested?: Device['attested'];
-        confirmed?: boolean;
         revoked?: boolean;
         id: string;
     }): Device
@@ -291,7 +290,6 @@ export const server =
             exchangeKey: input.exchangeKey,
             signingKey: input.signingKey,
             attested: input.attested ?? 'server',
-            confirmed: input.confirmed ?? server.devices.filter((one) => !one.revoked).length === 0,
             revoked: input.revoked ?? false,
             createdAt: new Date(1_700_000_000_000 + server.devices.length * 1000).toISOString()
         };
@@ -1145,17 +1143,9 @@ export const client =
             {
                 throw new ApiError(401, 'unauthorized', 'That signature did not match.', undefined);
             }
-            const device = server.addDevice({ ...input, ...(input.signature === undefined ? {} : { attested: 'wallet' as const, confirmed: true }) });
+            const device = server.addDevice({ ...input, ...(input.signature === undefined ? {} : { attested: 'wallet' as const }) });
             server.currentDevice = device.id;
             return device;
-        },
-
-        async confirm({ params }: { params: { id: string } })
-        {
-            server.calls.push('devices.confirm');
-            const found = mustDevice(params.id);
-            found.confirmed = true;
-            return found;
         },
 
         async rename({ params, input }: { params: { id: string }; input: { label: string } })
@@ -1237,21 +1227,15 @@ export const client =
             };
         },
 
-        async recoverDevice({ input }: { input: { deviceId: string; nonce: string; signature: string } })
+        async restore({ input }: { input: { deviceId: string; nonce: string; signature: string } })
         {
-            server.calls.push('devices.recoverDevice');
+            server.calls.push('devices.restore');
 
             if (server.vault === null || input.signature === '')
             {
                 throw new ApiError(401, 'unauthorized', 'That is not the recovery phrase for this account.', undefined);
             }
 
-            const row = server.devices.find((one) => one.id === input.deviceId);
-
-            if (row !== undefined)
-            {
-                row.confirmed = true;
-            }
             return { wrapped: server.vault.wrapped };
         },
 

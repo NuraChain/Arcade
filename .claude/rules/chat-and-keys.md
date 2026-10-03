@@ -299,7 +299,7 @@ disagreement means every enrolment on one side is refused by the other.
 
 **The browser re-derives every id it is shown.** A server that swapped a device's exchange key for
 its own would produce a row that no longer adds up, and the client can see that without trusting
-anybody. Such a row renders as `tampered`: no trust badge, no confirm, no rename, and the single
+anybody. Such a row renders as `tampered`: no trust badge, no rename, and the single
 offered action is to sign it out.
 
 **A revoked id never comes back.** The row stays forever with `revoked_at` set and enrolment
@@ -312,24 +312,19 @@ abandoned keys.
 possible, and `services.ts` closes the sockets afterwards. A revoke that leaves the browser signed
 in is a button that lies, and this is the column that stops it being one.
 
-**A browser the account's wallet signs for is confirmed at birth.** The owner asked for one
-signature and no second approval, so the wallet's own signature over `Browser key: <id>` IS the
-confirmation: `enrol` writes `confirmed_at` for any wallet- or contract-attested insert, and the
-proof's address has to be the account's wallet, which is now the only thing standing between a
-signature and a confirmed device. What that costs, stated plainly: one phished signature or one
-stolen wallet yields a browser that reads every FUTURE message at once, where it used to need a
-second approval; the recovery phrase still guards the past. A GUEST device keeps the old rule - the
-first is confirmed, every later one arrives `pending` - because nobody vouched for it; the "am I the
-first?" test and the insert are held under `pg_advisory_xact_lock(hashtext(userId))` together, so
-two browsers enrolling at the same instant cannot both decide they are the first. A device cannot
-vouch for itself, and an UNCONFIRMED device cannot vouch for another.
+**There is no confirmation step: a browser is live the moment it enrols.** The owner asked for it
+twice - first for wallet browsers, then for everyone - so `devices` has no `confirmed_at`, there is
+no confirm route, no `pending` or `waiting` state, and nothing asks one browser to vouch for another.
+What that costs, stated plainly: one phished wallet signature or one stolen wallet yields a browser
+that reads every FUTURE message at once; the recovery phrase still guards the past. Sealing loses
+nothing by it - a peer only ever wraps to wallet-attested devices, and for those the attestation
+anchored to the account's wallet is the ghost-device defence, not an approval from another browser.
+A guest's devices are server-attested and never reach a recipient set either way.
 
-**Five states, and the same database fact reads two ways.** `ready`, `pending` (unconfirmed, and
-NOT this browser — you can act), `waiting` (unconfirmed, and it IS this browser — you cannot),
-`locked` (revoked), `tampered` (does not verify). Separately, `Readiness` says what THIS browser
-can do: `unsupported` (no WebCrypto or no IndexedDB — an insecure origin, or a private mode),
-`absent`, `waiting`, `ready`. Both are exhaustive `Record`s over the union, so a state added later
-cannot render as nothing.
+**Three device states and three readiness states.** A row is `ready`, `locked` (revoked) or
+`tampered` (does not verify). `Readiness` says what THIS browser can do: `unsupported` (no WebCrypto
+or no IndexedDB - an insecure origin, or a private mode), `absent`, `ready`. Both are exhaustive
+`Record`s over the union, so a state added later cannot render as nothing.
 
 **`attested` is a required prop on the trust badge.** `'wallet' | 'contract' | 'server'`, where
 `server` means NOBODY vouched — a guest has no wallet to sign with. Required, with no default, so a
@@ -351,7 +346,7 @@ is already a live device of the account the address signs in to. If it is, the t
 browser read and send your messages.` with the `Browser key:` line. Either way the last line is
 `Nonce: <nonce>`, which is what makes the signature single-use. After the signature verifies and the
 session opens, the SAME verified proof records the device through `device.enrol`'s ordinary path -
-confirmed, because the wallet signed for it, and the session bound - but only when `namesDevice` holds
+live, attested by the wallet that signed, and the session bound - but only when `namesDevice` holds
 and the proof's address is the account's wallet, so a sign-in that named no device is never stored
 as an attestation. A `ConflictError` there (keys revoked, or somebody else's) does not fail the
 sign-in; the browser falls back to the separate enrolment, which mints fresh keys. The standalone
@@ -363,7 +358,7 @@ name and nothing a person has to decode. The address is not in it (the signature
 neither is the expiry (the server holds it beside the nonce). One thing went with the format:
 MetaMask checks a SIWE message's domain against the page asking and warns on a mismatch, and it does
 not do that for plain text - so a phished signature is caught only by the person reading the site
-name, and it now yields a session AND a confirmed device that reads future messages - nothing
+name, and it now yields a session AND a live device that reads future messages - nothing
 contains that any more but the person reading what they sign. Signing out surrenders the device
 keys, so the short sign-in text appears only when a session ended without a sign-out.
 
@@ -377,8 +372,8 @@ rather than replacing it.
 
 The self-certifying device id answers "were these keys swapped in transit?" and nothing else. It
 does NOT answer "is this device really Bob's", and the difference is the whole of end-to-end
-encryption: a device this server fabricates hashes its own keys, so it re-derives perfectly. PR 11's
-confirmation covers devices of your OWN account. Without something more, "wrap the epoch key to
+encryption: a device this server fabricates hashes its own keys, so it re-derives perfectly. Without
+something more, "wrap the epoch key to
 every member device" means wrapping it to whatever list this server hands over, and the product
 would be end-to-end encrypted against everyone except the one party it is supposed to be encrypted
 against.
@@ -407,18 +402,16 @@ compared out of band, the way a safety number is. A server that swapped a peer's
 to swap it everywhere that person's address appears, and one comparison catches it.
 
 **`GET /chat/:id/devices` is a separate wire shape, not `devices.list` with a different WHERE.**
-The owner's list carries a label somebody typed, a last-seen time and a confirmation state; handing
+The owner's list carries a label somebody typed and a last-seen time; handing
 those to anybody who can open a conversation publishes a device count and a description of
 somebody's life for a feature that needs two public keys. `peerDevice` is the keys, the id, and the
 proof. Membership is the authorisation, exactly as it is for reading the messages, so a conversation
 you are not in answers precisely as one that does not exist.
 
-**Three filters, each a rule rather than a tidy-up**, and `peer-devices.db.spec.ts` owns all three
-against a real Postgres: revoked devices are absent (wrapping to a signed-out device is what
-revocation exists to prevent), UNCONFIRMED devices are absent (a wallet confirms what it signs
-for, so an unconfirmed row is one nothing vouched for - a guest's later device, or a row written by
-hand - and it must never reach a recipient set), and server-attested devices are absent (there is no
-proof to travel, so a peer cannot check them at all). For a wallet device the ghost-device defence is
+**Two filters, each a rule rather than a tidy-up**, and `peer-devices.db.spec.ts` owns both against
+a real Postgres: revoked devices are absent (wrapping to a signed-out device is what revocation
+exists to prevent), and server-attested devices are absent (there is no proof to travel, so a peer
+cannot check them at all). For a wallet device the ghost-device defence is
 the attestation itself: a device the server fabricates cannot carry the account wallet's signature.
 
 **A member with no sealable device comes back as an EMPTY ARRAY, never omitted.** "Nobody on the
@@ -469,7 +462,7 @@ pushed that chunk from 5.7 KB to 19.8 KB, past its budget, for code that would n
 
 `backend/src/db/seed-wallets.ts` seeds the six accounts that ARE the development population, their
 friendships, three direct conversations and one group. They sign in with a wallet through the real
-challenge-sign-post round trip, and five of the six hold a confirmed device whose attestation really
+challenge-sign-post round trip, and five of the six hold a live device whose attestation really
 verifies.
 
 They exist because without them **the sealed half of this product had no reachable happy path in
@@ -567,7 +560,7 @@ wrong key finds out at the first message it cannot open, where a failed AES-GCM 
 key" and "corrupt ciphertext" and "edited row" all at once.
 
 **Rotation is client-driven and server-detected.** `GET /chat/:id/epoch` reports `stale` when the
-recipient set no longer equals the eligible set — which is what confirming a device or revoking one
+recipient set no longer equals the eligible set — which is what enrolling a device or revoking one
 changes — and the next sender mints the next epoch. The server cannot do it: it holds no key it
 could re-wrap with, which is the point.
 
@@ -595,7 +588,7 @@ again in each epoch, because a counter shared across epochs would make a message
 meaningless the first time anybody rotated.
 
 **The server's eligibility test is a SUBSET, deliberately.** Its idea of who can be sealed to is
-"confirmed, unrevoked, attested by a wallet or a contract"; the client's is narrower, because it
+"unrevoked, attested by a wallet or a contract"; the client's is narrower, because it
 refuses a contract wallet it cannot check without a chain call it does not make. Demanding they
 match would refuse an honest client for being more careful than the server. So the server bounds the
 set from above — nothing unknown gets wrapped in — and the signed commitment bounds it exactly, from
@@ -635,12 +628,9 @@ built from nothing and reseeds as empty threads.
 
 **One wallet fixture deliberately has no device.** The seed mints device keys and throws the private
 halves away, which is the honest shape for modelling the far end of a conversation and exactly wrong
-for the near end: a browser signing in as an account that already has a device enrols a SECOND one,
-and every device after the first arrives `pending` — confirmable only by an existing device whose
-keys nobody holds. `dana.w` is the account a person and the QA matrix sign in as, so `enrolled` is
-false for it and the browser's own enrolment is its first. (A second browser would be confirmed by
-its own signature now; the fixture still keeps `dana.w` empty so the first enrolment is the one a
-person and the matrix actually exercise.)
+for the near end: a seeded device on the account a person signs in as would be one nobody holds the
+keys to, sitting beside the browser actually in use. `dana.w` is that account, so `enrolled` is false
+for it and the browser's own enrolment is its first.
 
 **Signing out surrenders the keyring.** `surrenderKeys` in `session.store.ts` drops the epoch keys,
 the archive key and the device's own keypairs. A session ends but IndexedDB does not, and
@@ -790,11 +780,10 @@ attestation and then restores what it can read. The working copy of the archive 
 browser's vault beside the epoch keys, because otherwise archiving a key learned today would need
 somebody to type twenty-four characters first.
 
-**Recovery is for HISTORY now.** A replacement browser is confirmed by the wallet signature that
-signed it in, so what it lacks is the archive key, not a confirmation. The phrase is offered on any
-live browser of the account that does not hold the archive key (`recovery.holdsArchive()`), the
-server issues a challenge for any of the account's live devices, and a correct answer hands back the
-wrapped archive key and confirms the device if it somehow was not. The client signs a one-shot
+**Recovery is for HISTORY.** A replacement browser is live the moment it enrols, so what it lacks is
+the archive key. The phrase is offered on any live browser of the account that does not hold the
+archive key (`recovery.holdsArchive()`), the server issues a challenge for any of the account's live
+devices, and a correct answer to `POST /devices/recovery/restore` hands back the wrapped archive key. The client signs a one-shot
 challenge naming the account and the device, and the server checks it against a stored public key.
 The nonce names the DEVICE for the same reason the enrolment message does, and is burned FIRST by a
 conditional UPDATE, so two replays of one signature race in the database and one wins.
@@ -804,14 +793,13 @@ verifies and decrypts nothing, and the wrapped archive key and its check value a
 phrase that has never been here. Holding the whole table gets an attacker no closer to a message
 than holding none of it.
 
-**Writing a vault needs a CONFIRMED device.** A pending device that could write its own vault would
-then present its own phrase to confirm itself, and the confirmation step would mean nothing at all —
-the same reasoning that stops an unconfirmed device vouching for another.
+**Writing a vault needs a live device of the account on the session**, so a stolen cookie alone
+cannot replace somebody's phrase.
 
 **Rolling a phrase keeps the archive key** and re-seals it, so everything already backed up stays
 readable and only the outer wrapping changes. Minting a fresh archive key instead would silently
-orphan every row in the archive — and a browser confirmed the ordinary way never receives the archive
-key at all, so that was the COMMON case, not the exotic one. `setUp` refuses to roll when it cannot
+orphan every row in the archive — and a browser that enrolled the ordinary way never receives the
+archive key at all, so that was the COMMON case, not the exotic one. `setUp` refuses to roll when it cannot
 produce the existing key rather than quietly destroying the backup.
 
 **An archived key is bound to its slot.** `sealForArchive` authenticates `(conversation, epoch)`
@@ -822,7 +810,7 @@ evicted, so it does not heal.
 
 **An archive write replaces what is in the slot.** `do nothing` meant a slot could be poisoned once —
 junk written for an epoch before the real browser got there made every honest write afterwards a
-silent no-op. **Turning recovery off needs a confirmed device**, like writing a vault: it destroys
+silent no-op. **Turning recovery off needs a live device**, like writing a vault: it destroys
 the vault AND the archive irreversibly, and it was reachable by any session at all, so a stolen
 cookie could throw away somebody's only way back into their own history in one request.
 

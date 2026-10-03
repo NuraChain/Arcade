@@ -48,7 +48,6 @@ export interface DevicesApi
     stateOf(device: Device): DeviceState;
 
     enrol(label: string): Promise<void>;
-    confirm(id: string): Promise<void>;
     rename(id: string, label: string): Promise<void>;
     revoke(id: string): Promise<void>;
 
@@ -215,7 +214,6 @@ export const useDevices = createStore((): DevicesApi =>
         }),
 
         stateOf: (device) => deviceState(device, {
-            current: local()?.id ?? null,
             verified: listing.data()?.verified.has(device.id) ?? false
         }),
 
@@ -265,7 +263,6 @@ export const useDevices = createStore((): DevicesApi =>
             }
         },
 
-        confirm: (id) => write(() => client.devices.confirm({ params: { id } })),
         rename: (id, label) => write(() => client.devices.rename({ params: { id }, input: { label } })),
         revoke: (id) => write(() => client.devices.revoke({ params: { id } })),
 

@@ -405,30 +405,23 @@ browser because it is the one the reader can fix, then everybody else - and a sp
 
 **Enrolment is offered where somebody is stuck, not only where it lives.** The seal notice carries a
 button when this browser is what is in the way, and `enrol` NEVER rejects - it reports through
-`failure()` - so every outcome is read back and spoken. A wallet browser lands ready, because the
-wallet's signature confirms it; only a guest's later browser lands `waiting`, and that one is offered
-the devices page instead of a button that would not finish the job.
+`failure()` - so every outcome is read back and spoken. A browser is live the moment it enrols, so
+there is no second step to point anybody at.
 
 **And it is offered before anybody is stuck, because both other doors need you to already be
 there.** `keys-banner.component.azeroth` sits in the shell where `ConnectionBanner` does, on every
 route, and says this browser cannot read your messages yet. The seal notice is above a composer
 somebody with no keys cannot reach the point of using, and the devices page is a page nobody opens
 unprompted - so the product's answer to "why can nobody hear me" was a screen you had to already
-know about. `absent` gets the button, because enrolling is one step and it happens there; `waiting`
-gets a LINK to the devices page, because confirming needs a device that already holds keys or the
-recovery phrase, and a button that cannot finish the job is worse than a signpost to where it can.
-The banner is the house's two branch rules at once, and it broke both: it read `TEXT[gap!]` inside a
-branch guarded by `asking()`, and the text binding re-ran with `gap` already null in the tick before
-the branch went, so `locale.t(undefined)` fell through every lookup into the plural path and the
-error boundary took the whole page the moment enrolment finished; and it chose the button or the link
-with a ternary, which a branch builds once, so a browser that went from `absent` to `waiting` kept a
-button that could not finish the job. `seal-pass.mjs` saw the first as one console error per cell;
-`keys-banner.spec.ts` walks absent, waiting and gone and fails on the old component.
+know about. It carries the button, because enrolling is one step and it happens there. It once read
+`TEXT[gap!]` inside a branch guarded by `asking()`, and the text binding re-ran with `gap` already
+null in the tick before the branch went, so `locale.t(undefined)` fell through every lookup into the
+plural path and the error boundary took the whole page the moment enrolment finished.
+`keys-banner.spec.ts` walks absent and gone.
 
 **The routine behind that button lives in `enrolment.store.ts`, and it lives there because there are
 now two of them.** It is a sequence of DECISIONS - a locked wallet says something different from a
-refused signature, a second browser lands `waiting` and must not be told "done" - and it was written
-out inside `chat.page`. The moment a second surface offered the same button, a second copy of those
+refused signature - and it was written out inside `chat.page`. The moment a second surface offered the same button, a second copy of those
 decisions would have been a second chance to say the wrong one, which is the argument `policy.ts`
 makes about the social rules and the same shape.
 

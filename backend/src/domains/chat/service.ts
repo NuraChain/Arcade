@@ -1,5 +1,5 @@
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '@azerothjs/http';
-import type { DataSource } from 'typeorm';
+import { IsNull, type DataSource } from 'typeorm';
 
 import type { Franking } from './franking.ts';
 import { THREAD_PAGE } from './pages.ts';
@@ -7,6 +7,7 @@ import { THREAD_PAGE } from './pages.ts';
 import { affectedBy, firstRow, rowsOf } from '../../lib/rows.ts';
 import { ConversationMember } from '../../entities/conversation-member.entity.ts';
 import { Conversation } from '../../entities/conversation.entity.ts';
+import { Device } from '../../entities/device.entity.ts';
 import { Table } from '../../entities/table.entity.ts';
 import { Message, type MessageKind } from '../../entities/message.entity.ts';
 import { User } from '../../entities/user.entity.ts';
@@ -439,7 +440,7 @@ export function createChatService(db: DataSource, social: SocialService, frankin
                 throw new ForbiddenError('Chat is off at this table.');
             }
 
-            // The device has to be THIS ACCOUNT's, confirmed and unrevoked. It used to have to be
+            // The device has to be THIS ACCOUNT's and unrevoked. It used to have to be
             // the one bound to this session, which sounds stricter and was in practice a lockout:
             // `sessions.device_id` is written only by an enrolment, so signing out and back in left
             // a browser with perfectly good keys unable to send at all - and never offered the
@@ -449,13 +450,9 @@ export function createChatService(db: DataSource, social: SocialService, frankin
             // authorship is the per-message SIGNATURE, which every recipient verifies against the
             // named device's published key. A caller naming a device it cannot sign for produces a
             // message that fails to open for everybody, including itself.
-            const owned = await db.query(
-                `select 1 as ok from devices
-                 where id = $1 and user_id = $2 and revoked_at is null and confirmed_at is not null`,
-                [input.senderDeviceId, me]
-            );
+            const owned = await db.getRepository(Device).existsBy({ id: input.senderDeviceId, userId: me, revokedAt: IsNull() });
 
-            if (firstRow<{ ok: number }>(owned) === null)
+            if (!owned)
             {
                 throw new ForbiddenError('That is not a device this account can seal with.');
             }

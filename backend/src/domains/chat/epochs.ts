@@ -1,6 +1,6 @@
 import { BadRequestError, ForbiddenError, NotFoundError } from '@azerothjs/http';
 import { webcrypto } from 'node:crypto';
-import { In, IsNull, Not, type DataSource } from 'typeorm';
+import { In, IsNull, type DataSource } from 'typeorm';
 
 import { firstRow, rowsOf } from '../../lib/rows.ts';
 import { ConversationEpoch } from '../../entities/conversation-epoch.entity.ts';
@@ -124,9 +124,8 @@ export function createEpochService(db: DataSource)
     /**
      * The devices a key may be wrapped to in this conversation.
      *
-     * The same three filters `peers.ts` applies, and for the same three reasons - revoked devices
-     * are what revocation exists to exclude, unconfirmed ones are the ghost-device defence, and
-     * server-attested ones carry no proof a peer could check. Written out here rather than shared
+     * The same two filters `peers.ts` applies, and for the same two reasons - revoked devices are
+     * what revocation exists to exclude, and server-attested ones carry no proof a peer could check. Written out here rather than shared
      * with the peer read because this one answers a different question: that one is "what may I
      * show a peer", this one is "what will I accept as a recipient".
      */
@@ -138,7 +137,6 @@ export function createEpochService(db: DataSource)
              join devices d
                on d.user_id = cm.user_id
               and d.revoked_at is null
-              and d.confirmed_at is not null
               and d.attested in ('wallet', 'contract')
              where cm.conversation_id = $1
              order by d.id`,
@@ -156,7 +154,6 @@ export function createEpochService(db: DataSource)
                 id: deviceId,
                 userId,
                 revokedAt: IsNull(),
-                confirmedAt: Not(IsNull()),
                 attested: In(['wallet', 'contract'])
             }
         });

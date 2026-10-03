@@ -443,9 +443,6 @@ export const device = object({
     signingKey: string(),
     attested: attestation,
 
-    /** Whether one of the account's other devices has vouched for it. */
-    confirmed: boolean(),
-
     /** Revoked devices stay in the list. A signed-out device that vanished would look like a bug. */
     revoked: boolean(),
 
@@ -546,14 +543,14 @@ export const recoveryChallengeOut = object({
     expiresAt: string()
 });
 
-export const recoveryConfirmInput = object({
+export const recoveryRestoreInput = object({
     deviceId: string(),
     nonce: string(),
     signature: string()
 });
 
 /** What a browser gets for proving the phrase: the sealed archive key, and nothing else. */
-export const recoveryConfirmOut = object({ wrapped: string() });
+export const recoveryRestoreOut = object({ wrapped: string() });
 
 /**
  * A device of somebody ELSE, as a peer may see it.

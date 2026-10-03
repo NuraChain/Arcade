@@ -239,7 +239,7 @@ export const useRecovery = createStore((): RecoveryApi =>
 
                 const keys = await deriveRecovery(phrase, challenge.salt);
 
-                const confirmed = await client.devices.recoverDevice({
+                const restored = await client.devices.restore({
                     input: {
                         deviceId,
                         nonce: challenge.nonce,
@@ -247,12 +247,12 @@ export const useRecovery = createStore((): RecoveryApi =>
                     }
                 }).catch(() => null);
 
-                if (confirmed === null)
+                if (restored === null)
                 {
                     return 'bad-phrase';
                 }
 
-                const archiveKey = await openArchiveKey(keys, confirmed.wrapped);
+                const archiveKey = await openArchiveKey(keys, restored.wrapped);
 
                 if (archiveKey === null)
                 {

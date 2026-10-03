@@ -88,8 +88,6 @@ export const app: Pick<Dictionary, keyof typeof reference> = {
 
     'keys.banner.absent': 'این مرورگر هنوز نمی‌تواند پیام‌هایت را بخواند.',
     'keys.banner.absentAction': 'کلید بگیرد',
-    'keys.banner.waiting': 'این مرورگر منتظر تأیید است.',
-    'keys.banner.waitingAction': 'تأییدش کن',
     'keys.banner.dismiss': 'الان نه',
 
     'state.errorTitle': 'این بخش بارگذاری نشد.',

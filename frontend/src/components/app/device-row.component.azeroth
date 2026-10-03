@@ -9,32 +9,24 @@ import TrustBadge from './trust-badge.component.azeroth';
 
 const ICON: Record<DeviceState, IconName> = {
     ready: 'check-circle',
-    pending: 'clock',
-    waiting: 'clock',
     locked: 'lock',
     tampered: 'alert'
 };
 
 const SAYS: Record<DeviceState, MessageKey> = {
     ready: 'devices.state.ready',
-    pending: 'devices.state.pending',
-    waiting: 'devices.state.waiting',
     locked: 'devices.state.locked',
     tampered: 'devices.state.tampered'
 };
 
 const LEAD: Record<DeviceState, MessageKey> = {
     ready: 'devices.state.readyLead',
-    pending: 'devices.state.pendingLead',
-    waiting: 'devices.state.waitingLead',
     locked: 'devices.state.lockedLead',
     tampered: 'devices.state.tamperedLead'
 };
 
 const TONE: Record<DeviceState, string> = {
     ready: 'text-live',
-    pending: 'text-gold',
-    waiting: 'text-muted',
     locked: 'text-faint',
     tampered: 'text-danger'
 };
@@ -42,10 +34,7 @@ const TONE: Record<DeviceState, string> = {
 /**
  * One device, and what is true about it.
  *
- * The four degraded states are drawn here rather than added when sealing arrives, so the row has
- * already had to hold a long alarm sentence and a disabled action before anything depends on it.
- *
- * A `tampered` row is deliberately stripped: no trust badge, no confirm, no rename. Its id does
+ * A `tampered` row is deliberately stripped: no trust badge, no rename. Its id does
  * not match the keys published beside it, which means the list is not a truthful statement about
  * this account - and the one thing that is safe to offer about a device you cannot identify is to
  * get rid of it.
@@ -55,7 +44,6 @@ export default component DeviceRow(props: {
     state: DeviceState;
     current: boolean;
     busy: boolean;
-    onConfirm: (id: string) => void;
     onRevoke: (id: string) => void;
 })
 {
@@ -88,20 +76,6 @@ export default component DeviceRow(props: {
         </div>
 
         <div class="flex shrink-0 flex-wrap gap-2">
-            <Show when={ props.state === 'pending' }>
-                { () =>
-                    <Button
-                        variant="primary"
-                        size="sm"
-                        leading="check-circle"
-                        loading={ props.busy }
-                        onClick={ () => props.onConfirm(props.device.id) }
-                    >
-                        { locale.t('devices.confirm') }
-                    </Button>
-                }
-            </Show>
-
             <Show when={ props.state !== 'locked' }>
                 { () =>
                     <Button

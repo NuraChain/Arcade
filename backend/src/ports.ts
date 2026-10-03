@@ -301,9 +301,6 @@ export interface DevicePort
         userAgent: string;
     }): Promise<Device>;
 
-    /** One of the account's confirmed devices vouching for another. Never for itself. */
-    confirm(me: string, sessionId: string, deviceId: string): Promise<Device>;
-
     /* ------------------------------------------------------------ recovery */
 
     /** Whether this account has a phrase, and the public half of what it needs to use one. */
@@ -312,9 +309,8 @@ export interface DevicePort
     /**
      * Writes or replaces the vault.
      *
-     * Needs a CONFIRMED device on this session. A pending device that could write its own vault
-     * would then present its own phrase to confirm itself, and the confirmation step would mean
-     * nothing at all.
+     * Needs a live device of this account on the session, so a stolen cookie alone cannot write
+     * or clear it.
      */
     setRecovery(me: string, sessionId: string, input: {
         salt: string;
@@ -332,16 +328,11 @@ export interface DevicePort
     /** Everything archived, for a browser that has just proved the phrase. */
     archived(me: string): Promise<ArchiveList>;
 
-    /**
-     * A one-shot challenge for one device.
-     *
-     * Deliberately reachable from a device this account has NOT confirmed, because that is the
-     * situation recovery exists for - the confirmer was what got lost.
-     */
+    /** A one-shot challenge for one of this account's live devices. */
     recoveryChallenge(me: string, deviceId: string): Promise<{ nonce: string; salt: string; expiresAt: string }>;
 
-    /** Confirms a device on the strength of the phrase, and returns the sealed archive key. */
-    recoverDevice(me: string, input: { deviceId: string; nonce: string; signature: string }): Promise<{ wrapped: string }>;
+    /** The sealed archive key, for a browser that proves it holds the phrase. */
+    restore(me: string, input: { deviceId: string; nonce: string; signature: string }): Promise<{ wrapped: string }>;
 
     rename(me: string, deviceId: string, label: string): Promise<Device>;
 

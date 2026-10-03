@@ -315,7 +315,6 @@ export const social = {
      * time somebody opens the product on a second browser.
      */
     'seal.noKeysHere': 'This browser has no keys of its own, so it cannot send here yet. Your other browsers are unaffected.',
-    'seal.deviceWaiting': 'These messages are not sealed. This browser is waiting to be confirmed from one you already use, and until then it can neither open nor seal anything here.',
     'seal.deviceUnsupported': 'These messages are not sealed. This browser has nowhere secure to keep keys, so nothing can be sealed from it.',
     'seal.needsChain': 'These messages are not sealed. {who} uses a contract wallet, and this browser cannot check one without reaching the network.',
     'seal.needsChainMine': 'These messages are not sealed. Yours is a contract wallet, and this browser cannot check one without reaching the network.',

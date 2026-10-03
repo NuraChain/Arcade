@@ -1,5 +1,5 @@
 import { BadRequestError, ConflictError, NotFoundError, UnauthorizedError } from '@azerothjs/http';
-import { IsNull, type DataSource } from 'typeorm';
+import type { DataSource } from 'typeorm';
 
 import { mintNonce, normalizeAddress } from '../../lib/crypto.ts';
 import { firstRow, rowsOf } from '../../lib/rows.ts';
@@ -29,7 +29,6 @@ export interface DeviceRow
     signing_key: string;
     attested: Attestation;
     created_at: Date;
-    confirmed_at: Date | null;
     last_seen_at: Date | null;
     revoked_at: Date | null;
 
@@ -49,7 +48,7 @@ export interface AttestationProof
 }
 
 const COLUMNS = `id, label, exchange_key, signing_key, attested,
-                 created_at, confirmed_at, last_seen_at, revoked_at,
+                 created_at, last_seen_at, revoked_at,
                  attested_address, attested_message, attested_signature`;
 
 export interface EnrolInput
@@ -232,11 +231,8 @@ export function createDeviceService(db: DataSource, config: DeviceConfig)
         /**
          * Records a device, or says why it cannot be recorded.
          *
-         * The order inside the transaction matters twice. The nonce is burned BEFORE the signature
-         * is checked, for the same reason sign-in burns it first: two requests replaying one
-         * signature race in the database and exactly one wins. And the advisory lock is held over
-         * the "is this the first device?" test and the insert together, so two browsers enrolling
-         * at the same moment cannot both decide they are the first and both arrive confirmed.
+         * The nonce is burned BEFORE the signature is checked, for the same reason sign-in burns it
+         * first: two requests replaying one signature race in the database and exactly one wins.
          */
         async enrol(userId: string, sessionId: string, input: EnrolInput, signedIn?: AttestationProof): Promise<DeviceRow>
         {
@@ -326,70 +322,28 @@ export function createDeviceService(db: DataSource, config: DeviceConfig)
 
             return db.transaction(async (tx) =>
             {
-                await tx.query('select pg_advisory_xact_lock(hashtext($1))', [userId]);
-
-                const inserted = await tx.query(
-                    `insert into devices (id, user_id, label, exchange_key, signing_key, attested, user_agent, last_seen_at, confirmed_at,
-                                          attested_address, attested_message, attested_signature)
-                     select $1, $2, $3, $4, $5, $6, $7, now(),
-                            case when $6 <> 'server' or not exists (
-                                select 1 from devices d where d.user_id = $2 and d.revoked_at is null
-                            ) then now() end,
-                            $8::citext, $9::text, $10::text
-                     returning ${ COLUMNS }`,
-                    [
-                        input.id, userId, input.label.slice(0, 64), input.exchangeKey, input.signingKey,
-                        proof?.attested ?? 'server', input.userAgent.slice(0, 256),
-                        proof?.address ?? null, proof?.message ?? null, proof?.signature ?? null
-                    ]
-                );
+                const inserted = await tx.createQueryBuilder()
+                    .insert()
+                    .into(Device)
+                    .values({
+                        id: input.id,
+                        userId,
+                        label: input.label.slice(0, 64),
+                        exchangeKey: input.exchangeKey,
+                        signingKey: input.signingKey,
+                        attested: proof?.attested ?? 'server',
+                        userAgent: input.userAgent.slice(0, 256),
+                        lastSeenAt: () => 'now()',
+                        attestedAddress: proof?.address ?? null,
+                        attestedMessage: proof?.message ?? null,
+                        attestedSignature: proof?.signature ?? null
+                    })
+                    .returning(COLUMNS)
+                    .execute();
 
                 await tx.getRepository(Session).update({ id: sessionId }, { deviceId: input.id });
-                return firstRow<DeviceRow>(inserted)!;
+                return (inserted.raw as DeviceRow[])[0]!;
             });
-        },
-
-        /**
-         * One device vouching for another.
-         *
-         * The caller's own device must be confirmed, or `pending` means nothing: an attacker who
-         * enrolled one device could confirm it from itself and then confirm every device after it.
-         * The first device of an account is confirmed at birth because there is nobody to ask.
-         */
-        async confirm(userId: string, callerDeviceId: string | null, targetId: string): Promise<DeviceRow>
-        {
-            if (callerDeviceId === null)
-            {
-                throw new BadRequestError('Enrol this device before it can vouch for another.');
-            }
-            if (callerDeviceId === targetId)
-            {
-                throw new BadRequestError('A device cannot vouch for itself.');
-            }
-
-            const caller = await db.getRepository(Device).findOne({
-                select: { confirmedAt: true },
-                where: { id: callerDeviceId, userId, revokedAt: IsNull() }
-            });
-
-            if (caller === null || caller.confirmedAt === null)
-            {
-                throw new BadRequestError('This device is not confirmed yet, so it cannot confirm another.');
-            }
-
-            const updated = await db.query(
-                `update devices set confirmed_at = now()
-                  where id = $1 and user_id = $2 and revoked_at is null and confirmed_at is null
-                 returning ${ COLUMNS }`,
-                [targetId, userId]
-            );
-
-            const row = firstRow<DeviceRow>(updated);
-            if (row === null)
-            {
-                throw new NotFoundError('There is no device waiting to be confirmed under that id.');
-            }
-            return row;
         },
 
         /** Renames one. The label is theirs to write and is never parsed. */

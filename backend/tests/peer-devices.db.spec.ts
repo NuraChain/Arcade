@@ -22,9 +22,9 @@ import { syncSchema } from '../src/db/schema.ts';
  * Every test here is a filter, and every filter is the difference between an end-to-end encrypted
  * product and one that says it is. A device the server fabricates re-derives its own id perfectly -
  * the self-certifying id proves the keys were not swapped and says nothing about whose device it
- * is - so what stops a fabricated device being wrapped into a conversation is exactly this: it is
- * not confirmed by another device of that account, and it carries no signature from that account's
- * wallet. Both of those are WHERE clauses, and a fake DataSource cannot prove a WHERE clause.
+ * is - so what stops a fabricated device being wrapped into a conversation is exactly this: it
+ * carries no signature from that account's wallet. That is a WHERE clause, and a fake DataSource
+ * cannot prove a WHERE clause.
  *
  * OPT-IN, like the other `.db.spec` suites.
  */
@@ -255,24 +255,6 @@ describe.skipIf(!active)('what a peer may learn about somebody devices', () =>
             // Wrapping a key to a device somebody signed out is the one thing revocation exists to
             // prevent, and a filter somewhere else is a filter somebody forgets.
             expect((await peers.forConversation(conversation)).filter((r) => r.device_id === gone)).toHaveLength(0);
-        });
-
-        it('leaves out a device nothing has vouched for', async () =>
-        {
-            const alice = await makeUser('wallet', signer);
-            const bob = await makeUser('wallet', second);
-            await enrolWithWallet(alice.id, signer);
-
-            await enrolWithWallet(bob.id, second, 'first');
-            const pending = await enrolWithWallet(bob.id, second, 'second');
-
-            // A wallet confirms what it signs for, so an unconfirmed row can only be written by
-            // hand - which is exactly the row this filter exists to keep out of every recipient set.
-            await db.query('update devices set confirmed_at = null where id = $1', [pending]);
-
-            const rows = await peers.forConversation(await conversationOf(alice, bob));
-
-            expect(rows.filter((row) => row.device_id === pending)).toHaveLength(0);
         });
 
         it('leaves out a device only this server vouches for', async () =>

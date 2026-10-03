@@ -24,7 +24,7 @@ export default component DevicesPage()
 
     useHead({ title: () => locale.t('devices.title') });
 
-    const act = async (work: Promise<void>, said: 'devices.confirmed' | 'devices.revoked'): Promise<void> =>
+    const act = async (work: Promise<void>, said: 'devices.revoked'): Promise<void> =>
     {
         try
         {
@@ -43,7 +43,7 @@ export default component DevicesPage()
 
     derived retired = rows.filter((one) => one.revoked);
 
-    derived mine = devices.readiness() === 'waiting' || devices.readiness() === 'ready' ? devices.mine() ?? undefined : undefined;
+    derived mine = devices.readiness() === 'ready' ? devices.mine() ?? undefined : undefined;
 
     derived suggestion = locale.t(device.posture() === 'phone' ? 'devices.namePhone' : 'devices.nameDesktop');
 
@@ -109,7 +109,6 @@ export default component DevicesPage()
                                         state={ devices.stateOf(one) }
                                         current={ one.id === devices.current() }
                                         busy={ devices.busy() }
-                                        onConfirm={ (id) => void act(devices.confirm(id), 'devices.confirmed') }
                                         onRevoke={ (id) => void act(devices.revoke(id), 'devices.revoked') }
                                     />
                                 </li>
@@ -132,7 +131,6 @@ export default component DevicesPage()
                                     state={ devices.stateOf(one) }
                                     current={ false }
                                     busy={ devices.busy() }
-                                    onConfirm={ (id) => void act(devices.confirm(id), 'devices.confirmed') }
                                     onRevoke={ (id) => void act(devices.revoke(id), 'devices.revoked') }
                                 />
                             </li>

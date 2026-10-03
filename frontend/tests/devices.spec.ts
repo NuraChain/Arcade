@@ -43,7 +43,6 @@ async function realDevice(overrides: Partial<Device> = {}): Promise<Device>
         label: 'A browser',
         ...keys,
         attested: 'server',
-        confirmed: true,
         revoked: false,
         createdAt: new Date(1_700_000_000_000).toISOString(),
         ...overrides
@@ -166,7 +165,6 @@ describe('what a device row is', () =>
         exchangeKey: '',
         signingKey: '',
         attested: 'server' as const,
-        confirmed: true,
         revoked: false,
         createdAt: new Date(0).toISOString()
     };
@@ -174,26 +172,18 @@ describe('what a device row is', () =>
     it('is tampered before it is anything else, even before revoked', () =>
     {
         // A row that does not add up is not a trustworthy statement about being revoked either.
-        const state = deviceState({ ...base, revoked: true }, { current: null, verified: false });
+        const state = deviceState({ ...base, revoked: true }, { verified: false });
         expect(state).toBe('tampered');
-    });
-
-    it('reads the same unconfirmed row two different ways depending on who is looking', () =>
-    {
-        const row = { ...base, confirmed: false };
-
-        expect(deviceState(row, { current: base.id, verified: true })).toBe('waiting');
-        expect(deviceState(row, { current: 'other', verified: true })).toBe('pending');
     });
 
     it('is locked once it has been signed out', () =>
     {
-        expect(deviceState({ ...base, revoked: true }, { current: null, verified: true })).toBe('locked');
+        expect(deviceState({ ...base, revoked: true }, { verified: true })).toBe('locked');
     });
 
-    it('is ready when it is live, confirmed and adds up', () =>
+    it('is ready when it is live and adds up', () =>
     {
-        expect(deviceState(base, { current: null, verified: true })).toBe('ready');
+        expect(deviceState(base, { verified: true })).toBe('ready');
     });
 });
 
@@ -205,7 +195,6 @@ describe('what this browser can do', () =>
         exchangeKey: '',
         signingKey: '',
         attested: 'server',
-        confirmed: true,
         revoked: false,
         createdAt: new Date(0).toISOString(),
         ...overrides
@@ -223,12 +212,7 @@ describe('what this browser can do', () =>
         expect(readinessOf({ supported: true, current: 'mine', devices: [device({ revoked: true })] })).toBe('absent');
     });
 
-    it('waits while nothing has vouched for it', () =>
-    {
-        expect(readinessOf({ supported: true, current: 'mine', devices: [device({ confirmed: false })] })).toBe('waiting');
-    });
-
-    it('is ready when it is enrolled and confirmed', () =>
+    it('is ready as soon as it is enrolled', () =>
     {
         expect(readinessOf({ supported: true, current: 'mine', devices: [device({})] })).toBe('ready');
     });
@@ -236,30 +220,26 @@ describe('what this browser can do', () =>
 
 describe('the devices store', () =>
 {
-    it('enrols this browser and makes it the first, confirmed, device', async () =>
+    it('enrols this browser as a live device', async () =>
     {
         const devices = useDevices();
         await devices.enrol('This browser');
 
         expect(devices.devices()).toHaveLength(1);
-        expect(devices.devices()[0].confirmed).toBe(true);
         expect(devices.readiness()).toBe('ready');
         expect(devices.stateOf(devices.devices()[0])).toBe('ready');
     });
 
-    it('leaves the second device waiting, and lets the first vouch for it', async () =>
+    it('lists a second browser as live the moment it enrols', async () =>
     {
         const devices = useDevices();
         await devices.enrol('First');
 
-        const other = await realDevice({ confirmed: false, label: 'Second' });
+        const other = await realDevice({ label: 'Second' });
         server.addDevice({ ...other });
         await devices.refresh();
 
-        expect(devices.stateOf(devices.devices().find((one) => one.id === other.id)!)).toBe('pending');
-
-        await devices.confirm(other.id);
-        expect(devices.devices().find((one) => one.id === other.id)?.confirmed).toBe(true);
+        expect(devices.stateOf(devices.devices().find((one) => one.id === other.id)!)).toBe('ready');
     });
 
     it('renders a row whose id does not match its keys as tampered', async () =>
@@ -363,22 +343,13 @@ describe('what a degraded state looks like', () =>
             state,
             current: false,
             busy: false,
-            onConfirm: () => undefined,
             onRevoke: () => undefined
         }) as HTMLElement).container;
     };
 
-    /** The ACTIONS, not the prose - the lead for `waiting` says the word "confirm" too. */
+    /** The ACTIONS, not the prose. */
     const actions = (container: HTMLElement): string[] =>
         [...container.querySelectorAll('button')].map((button) => (button.textContent ?? '').trim());
-
-    it('offers to confirm a device that is waiting for you, and not one waiting for somebody else', async () =>
-    {
-        expect(actions(await row('pending'))).toContain('Confirm');
-
-        cleanup();
-        expect(actions(await row('waiting'))).not.toContain('Confirm');
-    });
 
     it('never draws a trust badge on a row that does not add up', async () =>
     {
@@ -403,7 +374,7 @@ describe('the notice at the top of the panel', () =>
     {
         useLocale().setLocale('en');
 
-        for (const state of ['unsupported', 'absent', 'waiting', 'ready'] as const)
+        for (const state of ['unsupported', 'absent', 'ready'] as const)
         {
             cleanup();
             const { container } = renderTest(() => KeyNotice({ state }) as HTMLElement);

@@ -27,14 +27,12 @@ const SAYS: Record<Blocked, MessageKey> = {
 
 const BROWSER: Record<Exclude<Readiness, 'ready'>, MessageKey> = {
     unsupported: 'seal.deviceUnsupported',
-    absent: 'seal.noKeysHere',
-    waiting: 'seal.deviceWaiting'
+    absent: 'seal.noKeysHere'
 };
 
 const BROWSER_ICON: Record<Exclude<Readiness, 'ready'>, IconName> = {
     unsupported: 'error-circle',
-    absent: 'key',
-    waiting: 'clock'
+    absent: 'key'
 };
 
 const SAYS_MINE: Record<Blocked, MessageKey> = {

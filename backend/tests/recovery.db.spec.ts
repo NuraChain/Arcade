@@ -19,7 +19,7 @@ import { syncSchema } from '../src/db/schema.ts';
  *
  * This is the most dangerous feature in the product: the phrase cannot be revoked, and whoever
  * holds it reads everything the account has ever received. So the tests that earn their keep are
- * the refusals - a pending device writing its own vault, a challenge issued for somebody else's
+ * the refusals - a vault written without a live browser, a challenge issued for somebody else's
  * device, a signature replayed onto a different browser, a nonce used twice.
  *
  * The signing half is real WebCrypto rather than a stub. `exportKey('raw')` on a P-256 public key
@@ -148,7 +148,7 @@ describe.skipIf(!active)('recovery, against a real database', () =>
         recovery = createRecoveryService(db);
     });
 
-    /** An account with one confirmed device and a vault, which is where every recovery starts. */
+    /** An account with one live device and a vault, which is where every recovery starts. */
     const withVault = async (): Promise<{
         userId: string;
         first: string;
@@ -174,21 +174,18 @@ describe.skipIf(!active)('recovery, against a real database', () =>
         expect(await recovery.vaultOf(userId)).toBeNull();
     });
 
-    it('refuses to write a vault from a device the account has not confirmed', async () =>
+    it('refuses to write a vault without a live browser of this account', async () =>
     {
         const userId = await makeUser(alice);
-        await enrol(userId, alice);
-
-        // The second device arrives pending. If it could write its own vault it would then present
-        // its own phrase to confirm itself, and confirmation would mean nothing whatsoever.
-        const pending = await enrol(userId, alice);
+        const gone = await enrol(userId, alice);
+        await devices.revoke(userId, gone);
         const keys = await phraseKeys();
 
-        await expect(recovery.setVault(userId, pending, vaultOf(keys.publicKey)))
-            .rejects.toThrow(/confirmed/);
+        await expect(recovery.setVault(userId, gone, vaultOf(keys.publicKey)))
+            .rejects.toThrow(/holds keys/);
 
         await expect(recovery.setVault(userId, null, vaultOf(keys.publicKey)))
-            .rejects.toThrow(/confirmed/);
+            .rejects.toThrow(/holds keys/);
     });
 
     it('replaces a vault in place, which is how a phrase is rolled', async () =>
@@ -214,7 +211,7 @@ describe.skipIf(!active)('recovery, against a real database', () =>
         const { nonce, salt } = await recovery.challenge(userId, replacement);
         expect(salt).toBe('c2FsdHk');
 
-        const answer = await recovery.confirm(
+        const answer = await recovery.restore(
             userId,
             replacement,
             nonce,
@@ -222,9 +219,6 @@ describe.skipIf(!active)('recovery, against a real database', () =>
         );
 
         expect(answer.wrapped).toBe('the-archive-key-under-the-phrase');
-
-        const rows = await db.query('select confirmed_at from devices where id = $1', [replacement]);
-        expect(rowsOf<{ confirmed_at: Date | null }>(rows)[0].confirmed_at).not.toBeNull();
     });
 
     it('refuses a signature that is not this account phrase, and hands nothing back', async () =>
@@ -235,7 +229,7 @@ describe.skipIf(!active)('recovery, against a real database', () =>
         const { nonce } = await recovery.challenge(userId, replacement);
         const impostor = await phraseKeys();
 
-        await expect(recovery.confirm(
+        await expect(recovery.restore(
             userId,
             replacement,
             nonce,
@@ -254,7 +248,7 @@ describe.skipIf(!active)('recovery, against a real database', () =>
 
         // A perfectly good signature by the real phrase, over a challenge naming a different
         // device. The nonce remembers which browser it was issued for.
-        await expect(recovery.confirm(
+        await expect(recovery.restore(
             userId,
             other,
             nonce,
@@ -270,9 +264,9 @@ describe.skipIf(!active)('recovery, against a real database', () =>
         const { nonce } = await recovery.challenge(userId, replacement);
         const signature = await keys.sign(recoveryChallenge(userId, replacement, nonce));
 
-        await recovery.confirm(userId, replacement, nonce, signature);
+        await recovery.restore(userId, replacement, nonce, signature);
 
-        await expect(recovery.confirm(userId, replacement, nonce, signature))
+        await expect(recovery.restore(userId, replacement, nonce, signature))
             .rejects.toThrow(/expired or has already been used/);
     });
 
@@ -287,8 +281,8 @@ describe.skipIf(!active)('recovery, against a real database', () =>
         // Burned FIRST, by a conditional UPDATE that only matches an unconsumed row, so the race
         // happens in the database. Verifying first would leave a window where both passed.
         const results = await Promise.allSettled([
-            recovery.confirm(userId, replacement, nonce, signature),
-            recovery.confirm(userId, replacement, nonce, signature)
+            recovery.restore(userId, replacement, nonce, signature),
+            recovery.restore(userId, replacement, nonce, signature)
         ]);
 
         expect(results.filter((one) => one.status === 'fulfilled')).toHaveLength(1);
@@ -302,7 +296,7 @@ describe.skipIf(!active)('recovery, against a real database', () =>
         const { nonce } = await recovery.challenge(userId, replacement);
         await db.query('update recovery_nonces set expires_at = now() - interval \'1 minute\' where nonce = $1', [nonce]);
 
-        await expect(recovery.confirm(
+        await expect(recovery.restore(
             userId,
             replacement,
             nonce,
@@ -310,7 +304,7 @@ describe.skipIf(!active)('recovery, against a real database', () =>
         )).rejects.toThrow(/expired/);
     });
 
-    it('issues a challenge for a confirmed browser of the account, and never for somebody else', async () =>
+    it('issues a challenge for a live browser of the account, and never for somebody else', async () =>
     {
         const { userId, first } = await withVault();
 
@@ -370,15 +364,16 @@ describe.skipIf(!active)('recovery, against a real database', () =>
             .rejects.toThrow(/no browser of yours/);
     });
 
-    it('refuses to turn recovery off from a browser the account has not confirmed', async () =>
+    it('refuses to turn recovery off without a live browser of this account', async () =>
     {
         const { userId } = await withVault();
-        const pending = await enrol(userId, alice);
+        const gone = await enrol(userId, alice);
+        await devices.revoke(userId, gone);
 
         // It destroys the vault AND the whole archive, irreversibly. Reachable by any session at
         // all, a stolen cookie could throw away somebody's only way back into their own history.
-        await expect(recovery.clearVault(userId, pending)).rejects.toThrow(/confirmed/);
-        await expect(recovery.clearVault(userId, null)).rejects.toThrow(/confirmed/);
+        await expect(recovery.clearVault(userId, gone)).rejects.toThrow(/holds keys/);
+        await expect(recovery.clearVault(userId, null)).rejects.toThrow(/holds keys/);
 
         expect(await recovery.vaultOf(userId)).not.toBeNull();
     });

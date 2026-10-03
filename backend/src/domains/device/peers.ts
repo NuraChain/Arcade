@@ -7,8 +7,8 @@ import { rowsOf } from '../../lib/rows.ts';
  * The devices of the people in a conversation, as a PEER may see them.
  *
  * This is deliberately not `devices.list` with a different WHERE. That route answers "what are my
- * devices", and it carries a label somebody typed, when each was last seen, and whether it is
- * confirmed - which is a reasonable thing to show an owner and an unreasonable thing to hand to
+ * devices", and it carries a label somebody typed and when each was last seen - which is a
+ * reasonable thing to show an owner and an unreasonable thing to hand to
  * anybody who can open a conversation with them. "This phone", a device count and a last-seen
  * timestamp is a description of somebody's life, and `privacy is enforced by what the server does
  * not SEND` applies here as much as it does to `lastSeenAt`.
@@ -16,14 +16,10 @@ import { rowsOf } from '../../lib/rows.ts';
  * So the shape is the minimum sealing needs and nothing else: the two public keys, the id they
  * hash to, and the proof that the wallet on that account authorised them.
  *
- * Three filters, and each one is a rule rather than a tidy-up:
+ * Two filters, and each one is a rule rather than a tidy-up:
  *
  * - **Revoked devices are absent.** Wrapping a key to a device somebody has signed out is the one
  *   thing revocation exists to prevent.
- * - **Unconfirmed devices are absent.** A device id is self-certifying, which proves the keys were
- *   not swapped and proves nothing about whose device it is - so a device this server fabricates
- *   re-derives perfectly. Confirmation is an assertion by another device of that ACCOUNT, and it
- *   is what makes the confirm button on the devices panel mean something.
  * - **Server-attested devices are absent.** There is no proof to travel with them, so a peer
  *   cannot check them at all. A guest has no wallet, so a guest has no sealable device - that is
  *   a product decision, and the empty array is how the client learns it and says so.
@@ -126,7 +122,6 @@ export function createPeerDevices(db: DataSource)
                  left join devices d
                         on d.user_id = cm.user_id
                        and d.revoked_at is null
-                       and d.confirmed_at is not null
                        and d.attested in ('wallet', 'contract')
                  where cm.conversation_id = $1
                  order by u.handle, d.created_at`,
@@ -138,10 +133,8 @@ export function createPeerDevices(db: DataSource)
         /**
          * Every device that could legitimately have signed in this conversation, revoked included.
          *
-         * Confirmation is still required: an unconfirmed device was never vouched for by the
-         * account, so a signature from one proves nothing whether it is revoked or not, and
-         * confirmation is never withdrawn once given. Revocation is the only filter that is
-         * relaxed, and the flag travels so the client can say WHICH signer it is looking at.
+         * Revocation is the one filter relaxed here, and the flag travels so the client can say WHICH
+         * signer it is looking at.
          */
         async signersFor(conversationId: string): Promise<SignerRow[]>
         {
@@ -158,8 +151,7 @@ export function createPeerDevices(db: DataSource)
                         d.attested_signature
                  from devices d
                  join users u on u.id = d.user_id
-                 where d.confirmed_at is not null
-                   and d.attested in ('wallet', 'contract')
+                 where d.attested in ('wallet', 'contract')
                    -- Anybody seated here now, plus anybody who ever signed here. The same argument
                    -- that relaxes the revocation filter relaxes this one: a device that signed in
                    -- March still signed it, and a reader who cannot check that has a thread whose

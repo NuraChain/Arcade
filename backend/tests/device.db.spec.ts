@@ -111,22 +111,14 @@ describe.skipIf(!active)('devices, against a real database', () =>
         device = createDeviceService(db, config);
     });
 
-    it('confirms the first device at birth, because there is nobody to ask', async () =>
+    it('enrols every browser live, the first and every one after it', async () =>
     {
         const userId = await makeUser();
         const first = await enrol(userId, await openSession(userId));
-
-        expect(first.confirmed_at).not.toBeNull();
-        expect(first.attested).toBe('server');
-    });
-
-    it('leaves every device after the first waiting to be vouched for', async () =>
-    {
-        const userId = await makeUser();
-        await enrol(userId, await openSession(userId));
         const second = await enrol(userId, await openSession(userId), 'A phone');
 
-        expect(second.confirmed_at).toBeNull();
+        expect(first.attested).toBe('server');
+        expect((await device.list(userId)).map((row) => [row.id, row.revoked_at])).toEqual([[first.id, null], [second.id, null]]);
     });
 
     it('refuses an id that does not belong to the keys sent with it', async () =>
@@ -205,7 +197,7 @@ describe.skipIf(!active)('devices, against a real database', () =>
         expect(listed[0].revoked_at).not.toBeNull();
     });
 
-    it('lets exactly one of two simultaneous enrolments believe it is the first', async () =>
+    it('records two browsers enrolling at the same moment as two devices', async () =>
     {
         const userId = await makeUser();
 
@@ -214,10 +206,7 @@ describe.skipIf(!active)('devices, against a real database', () =>
             enrol(userId, await openSession(userId), 'Two')
         ]);
 
-        // Without the advisory lock both read "no devices yet" and both arrive confirmed, which
-        // would mean an account could never have an unconfirmed device to notice.
-        const confirmed = [one, two].filter((row) => row.confirmed_at !== null);
-        expect(confirmed).toHaveLength(1);
+        expect(new Set((await device.list(userId)).map((row) => row.id))).toEqual(new Set([one.id, two.id]));
     });
 
     it('re-enrolling the same device is a touch, not a second device', async () =>
@@ -255,43 +244,6 @@ describe.skipIf(!active)('devices, against a real database', () =>
             .rejects.toThrow(/already belong/i);
     });
 
-    describe('a device cannot vouch for itself', () =>
-    {
-        it('refuses confirmation from the device being confirmed', async () =>
-        {
-            const userId = await makeUser();
-            const session = await openSession(userId);
-            const row = await enrol(userId, session);
-
-            await expect(device.confirm(userId, row.id, row.id)).rejects.toThrow(/cannot vouch for itself/i);
-        });
-
-        it('refuses confirmation from a device that is not confirmed itself', async () =>
-        {
-            const userId = await makeUser();
-            await enrol(userId, await openSession(userId));
-
-            const second = await enrol(userId, await openSession(userId), 'Second');
-            const third = await enrol(userId, await openSession(userId), 'Third');
-
-            // Otherwise one enrolled device could bless a chain of others and `pending` would
-            // mean nothing at all.
-            await expect(device.confirm(userId, second.id, third.id)).rejects.toThrow(/not confirmed yet/i);
-        });
-
-        it('lets a confirmed device vouch for a waiting one, once', async () =>
-        {
-            const userId = await makeUser();
-            const first = await enrol(userId, await openSession(userId));
-            const second = await enrol(userId, await openSession(userId), 'Second');
-
-            const confirmed = await device.confirm(userId, first.id, second.id);
-            expect(confirmed.confirmed_at).not.toBeNull();
-
-            await expect(device.confirm(userId, first.id, second.id)).rejects.toThrow();
-        });
-    });
-
     describe('an account with a wallet on it', () =>
     {
         const sign = async (userId: string, deviceId: string): Promise<{ nonce: string; signature: string }> =>
@@ -315,7 +267,7 @@ describe.skipIf(!active)('devices, against a real database', () =>
             expect(row.attested).toBe('wallet');
         });
 
-        it('confirms every browser the account wallet signs for, not only the first', async () =>
+        it('attests every browser the account wallet signs for, not only the first', async () =>
         {
             const userId = await makeWalletUser();
             const laptop = await keypair();
@@ -325,7 +277,6 @@ describe.skipIf(!active)('devices, against a real database', () =>
             const second = await device.enrol(userId, await openSession(userId), { ...phone, ...await sign(userId, phone.id), label: 'Phone', userAgent: '' });
 
             expect(second.attested).toBe('wallet');
-            expect(second.confirmed_at).not.toBeNull();
         });
 
         it('will not enrol a device with no signature at all', async () =>

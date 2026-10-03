@@ -68,9 +68,8 @@ function cachedChromium()
 /**
  * Puts the two accounts back to "two strangers with no keys".
  *
- * Every fresh context has an empty keyring, so it always enrols. That has to be the account's
- * FIRST device or it arrives `pending` - confirmable only by a device whose keys nobody holds -
- * and a pending device cannot be sealed to, which would look exactly like the feature being broken.
+ * Every fresh context has an empty keyring, so it always enrols; emptying the accounts first keeps
+ * each run from piling up devices nobody holds the keys to.
  */
 function reset()
 {
@@ -238,7 +237,7 @@ async function asPerson(person)
     return { person, context, page, errors, address: wallet.address };
 }
 
-/** Gives this browser its keys. The account's first device is confirmed at birth. */
+/** Gives this browser its keys. */
 async function enrol(who)
 {
     await who.page.goto(`${ BASE }/app/me/devices`, { waitUntil: 'networkidle' });
@@ -273,7 +272,7 @@ try
     record('Mina gives her browser keys', await enrol(bob), '');
 
     const deviceCount = sql(`select count(*) from devices d join users u on u.id = d.user_id
-        where u.handle in ('${ ALICE.handle }', '${ BOB.handle }') and d.confirmed_at is not null and d.revoked_at is null`);
+        where u.handle in ('${ ALICE.handle }', '${ BOB.handle }') and d.revoked_at is null`);
     record('both devices are confirmed and wallet-attested', deviceCount === '2', `${ deviceCount } confirmed`);
 
     // ---------------------------------------------------------------- add friend

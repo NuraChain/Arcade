@@ -47,10 +47,6 @@ export class Device
     @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
     createdAt!: Date;
 
-    /** Null until one of the account's other devices vouches for it. */
-    @Column({ name: 'confirmed_at', type: 'timestamptz', nullable: true })
-    confirmedAt!: Date | null;
-
     @Column({ name: 'last_seen_at', type: 'timestamptz', nullable: true })
     lastSeenAt!: Date | null;
 

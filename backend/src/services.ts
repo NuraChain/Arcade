@@ -1058,9 +1058,9 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
      * A device as the browser reads it.
      *
      * Both public keys go out, because the client re-derives the id from them on every read and a
-     * row it cannot check is a row it has to take on trust. `confirmed` and `revoked` are booleans
-     * rather than the timestamps behind them: nothing renders when a device was confirmed, and a
-     * date on the wire is a date somebody eventually displays in the wrong timezone.
+     * row it cannot check is a row it has to take on trust. `revoked` is a boolean rather than the
+     * timestamp behind it: a date on the wire is a date somebody eventually displays in the wrong
+     * timezone.
      */
     const asDevice = (row: DeviceRow): Device => ({
         id: row.id,
@@ -1068,7 +1068,6 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         exchangeKey: row.exchange_key,
         signingKey: row.signing_key,
         attested: row.attested,
-        confirmed: row.confirmed_at !== null,
         revoked: row.revoked_at !== null,
         createdAt: row.created_at.toISOString(),
         ...(row.last_seen_at === null ? {} : { lastSeenAt: row.last_seen_at.toISOString() })
@@ -2191,38 +2190,13 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             challenge: (me, deviceId) => device.challenge(me, deviceId),
 
             /**
-             * Enrolling can make an account sealable, so it rings the rooms too.
-             *
-             * An account's FIRST device is confirmed at birth, which is exactly the change `confirm`
-             * below rings for - the account goes from "nothing to wrap a key to" to eligible. Without
-             * this, a peer with the thread open goes on being told this person has not given any of
-             * their browsers keys until something else makes them refetch, and the person who just
-             * enrolled cannot be written to in the meantime.
-             *
-             * A later device arrives pending and changes nothing anybody can seal to, so the doorbell
-             * is redundant rather than wrong: whoever hears it re-reads and finds the same set.
+             * Enrolling changes who this account can be sealed to, so it rings every room it is in:
+             * a peer with the thread open re-reads the epoch, sees `stale`, and the next thing anybody
+             * says is sealed to the new browser too.
              */
             async enrol(me, sessionId, input)
             {
                 const row = await device.enrol(me, sessionId, input);
-
-                await ringRooms(me);
-                return asDevice(row);
-            },
-
-            /**
-             * Confirming a device makes it ELIGIBLE, which changes every room this account is in.
-             *
-             * Rotation is the client's to perform and the server's to notice, so all this can do is
-             * ring the doorbell: everybody with one of these threads open re-reads the epoch, sees
-             * `stale`, and the next person to say something mints. Without it a peer would go on
-             * sealing to a set that no longer includes this device until something else happened to
-             * make them refetch, and the new device would be unable to read any of it.
-             */
-            async confirm(me, sessionId, deviceId)
-            {
-                const caller = await device.deviceOfSession(sessionId);
-                const row = await device.confirm(me, caller, deviceId);
 
                 await ringRooms(me);
                 return asDevice(row);
@@ -2310,18 +2284,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 return recovery.challenge(me, deviceId);
             },
 
-            /**
-             * Confirming by phrase changes who this account can be sealed to, exactly as confirming
-             * by another device does - so it rings the same rooms. A recovered browser that nobody
-             * had been told about would sit there unable to read anything new.
-             */
-            async recoverDevice(me, input)
-            {
-                const answer = await recovery.confirm(me, input.deviceId, input.nonce, input.signature);
-
-                await ringRooms(me);
-                return answer;
-            }
+            restore: (me, input) => recovery.restore(me, input.deviceId, input.nonce, input.signature)
         },
 
         chat: {

@@ -56,10 +56,8 @@ const SETTLE_MS = 3000;
 /**
  * Both accounts start with no device, which is the only way BOTH browsers can seal.
  *
- * Every device after an account's first arrives `pending`, and a pending device is in nobody's
- * recipient set - it can neither seal nor open. A fresh browser context has an empty keyring, so
- * without this the second run of this pass enrols a second device and the composer stays disabled;
- * the first run passes and every run after it fails, which is the worst kind of harness.
+ * A fresh browser context has an empty keyring and enrols a new device every run; emptying the
+ * accounts first keeps old devices nobody holds the keys to out of every recipient set.
  *
  * `omid.k` is emptied as well as `dana.w`, and that is the difference from `seal-pass`. That one
  * only ever needs the near end to seal; this one needs the far end to OPEN what arrives, and a

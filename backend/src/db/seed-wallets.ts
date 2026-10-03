@@ -11,8 +11,7 @@ import { WALLET_FIXTURES, WALLET_FRIENDSHIPS, WALLET_GROUP } from './wallet-fixt
 /**
  * DEVELOPMENT FIXTURES: six accounts that sign in with a wallet. Five hold a device whose
  * attestation really verifies; `dana.w` deliberately holds none, because it is the account a
- * person and the QA matrix sign in as, and a browser joining an account that already has a device
- * enrols a SECOND one - pending, and confirmable only by keys nobody holds.
+ * person and the QA matrix sign in as, so its devices are the browsers that sign in to it.
  *
  * They exist because without them the sealed half of this product has no reachable happy path in
  * any development database. Everybody who used to be here was a guest, so `attested` was `server`,
@@ -38,10 +37,8 @@ import { WALLET_FIXTURES, WALLET_FRIENDSHIPS, WALLET_GROUP } from './wallet-fixt
  * shape: nobody holds these devices. They are somebody else's device as far as any browser is
  * concerned, which is exactly what the sealing path needs to have in front of it.
  *
- * Which is also why `dana.w` gets none. A browser signing in as an account that already has a
- * device enrols a second one, and every device after the first arrives `pending` - confirmable only
- * by an existing device of that account, whose keys nobody has. The account a person actually signs
- * in as has to be the one whose first device is theirs. See `enrolled` in `wallet-fixtures.ts`.
+ * Which is also why `dana.w` gets none: a seeded device there would be one nobody holds the keys
+ * to, sitting beside the browser a person actually uses. See `enrolled` in `wallet-fixtures.ts`.
  */
 
 /** The direct conversations in the development database. */
@@ -146,8 +143,8 @@ export async function seedWalletFixtures(db: DataSource, config: WalletSeedConfi
 
         await db.query(
             `insert into devices (id, user_id, label, exchange_key, signing_key, attested,
-                                  confirmed_at, last_seen_at, attested_address, attested_message, attested_signature)
-             values ($1, $2, $3, $4, $5, 'wallet', now(), now(), $6, $7, $8)
+                                  last_seen_at, attested_address, attested_message, attested_signature)
+             values ($1, $2, $3, $4, $5, 'wallet', now(), $6, $7, $8)
              on conflict (id) do nothing`,
             [
                 keys.id, userId, fixture.label, keys.exchangeKey, keys.signingKey,

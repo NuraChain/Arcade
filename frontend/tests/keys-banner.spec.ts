@@ -7,7 +7,7 @@ import '../src/locales/app-catalogue.ts';
 import * as enrolment from '../src/stores/enrolment.store.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
 
-type Gap = 'absent' | 'waiting' | null;
+type Gap = 'absent' | null;
 
 vi.mock('../src/stores/enrolment.store.ts', async () =>
 {
@@ -45,7 +45,7 @@ afterEach(() =>
 
 describe('the keys banner', () =>
 {
-    it('follows the gap from a button to a link, and leaves without throwing when it closes', async () =>
+    it('offers keys while this browser has none, and leaves without throwing when it closes', async () =>
     {
         useLocale().setLocale('en');
         const router = createRouter({ routes: [{ path: '/', component: () => document.createElement('div') }], history: createMemoryHistory('/'), scroll: false });
@@ -53,12 +53,6 @@ describe('the keys banner', () =>
         await settle();
 
         expect(container.querySelector('[role="status"] button')?.textContent).toContain(useLocale().t('keys.banner.absentAction'));
-
-        setGap('waiting');
-        await settle();
-
-        expect(container.querySelector('a[href="/app/me/devices"]')).not.toBeNull();
-        expect(container.textContent).toContain(useLocale().t('keys.banner.waiting'));
 
         setGap(null);
         await settle();

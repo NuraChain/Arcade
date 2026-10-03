@@ -1,8 +1,9 @@
 import { BadRequestError, ForbiddenError, NotFoundError, UnauthorizedError } from '@azerothjs/http';
 import { webcrypto } from 'node:crypto';
-import type { DataSource } from 'typeorm';
+import { IsNull, type DataSource } from 'typeorm';
 
 import { firstRow } from '../../lib/rows.ts';
+import { Device } from '../../entities/device.entity.ts';
 import { EpochArchive } from '../../entities/epoch-archive.entity.ts';
 import { RecoveryNonce } from '../../entities/recovery-nonce.entity.ts';
 import { RecoveryVault } from '../../entities/recovery-vault.entity.ts';
@@ -19,11 +20,9 @@ import { recoveryChallenge } from './recovery.ts';
  *
  * Two rules carry the weight, and both are about who may write:
  *
- * - **Setting up a vault needs a CONFIRMED device.** A pending device that could write its own
- *   vault would then present its own phrase to confirm itself, and the confirmation step would mean
- *   nothing at all. That is the same reasoning that stops an unconfirmed device vouching for
- *   another one.
- * - **A nonce names the device it may confirm**, and is burned before the signature is checked.
+ * - **Writing or clearing a vault needs a live device of this account on the session**, so a
+ *   stolen cookie alone cannot throw somebody's only way back into their history away.
+ * - **A nonce names the device it may restore**, and is burned before the signature is checked.
  *   Verifying first would leave a window where two replays of one signature both passed, which is
  *   the mistake `signInWithWallet` documents at length.
  */
@@ -122,19 +121,8 @@ export function createRecoveryService(db: DataSource)
         };
     };
 
-    const confirmedDevice = async (userId: string, deviceId: string | null): Promise<boolean> =>
-    {
-        if (deviceId === null)
-        {
-            return false;
-        }
-
-        const rows = await db.query(
-            'select 1 as ok from devices where id = $1 and user_id = $2 and confirmed_at is not null and revoked_at is null',
-            [deviceId, userId]
-        );
-        return firstRow<{ ok: number }>(rows) !== null;
-    };
+    const liveDevice = async (userId: string, deviceId: string | null): Promise<boolean> =>
+        deviceId !== null && await db.getRepository(Device).existsBy({ id: deviceId, userId, revokedAt: IsNull() });
 
     return {
         vaultOf,
@@ -149,9 +137,9 @@ export function createRecoveryService(db: DataSource)
          */
         async setVault(userId: string, sessionDevice: string | null, input: VaultInput): Promise<VaultRow>
         {
-            if (!await confirmedDevice(userId, sessionDevice))
+            if (!await liveDevice(userId, sessionDevice))
             {
-                throw new ForbiddenError('Set up recovery from a browser this account has confirmed.');
+                throw new ForbiddenError('Set up recovery from a browser that holds keys for this account.');
             }
 
             await db.query(
@@ -187,9 +175,9 @@ export function createRecoveryService(db: DataSource)
             // Gated like writing one. This destroys the vault AND the whole archive irreversibly,
             // and it was reachable by any session at all - so a stolen cookie could throw away
             // somebody's only way back into their own history, permanently, in one request.
-            if (!await confirmedDevice(userId, sessionDevice))
+            if (!await liveDevice(userId, sessionDevice))
             {
-                throw new ForbiddenError('Turn recovery off from a browser this account has confirmed.');
+                throw new ForbiddenError('Turn recovery off from a browser that holds keys for this account.');
             }
 
             await db.getRepository(EpochArchive).delete({ userId });
@@ -259,9 +247,8 @@ export function createRecoveryService(db: DataSource)
         /**
          * A one-shot challenge for one device.
          *
-         * Deliberately reachable from a device that is NOT confirmed, because that is the entire
-         * situation recovery exists for. What it is not reachable from is another account: the
-         * device has to be one of this account's, and unconfirmed, and not revoked.
+         * What it is not reachable from is another account: the device has to be one of this
+         * account's, and not revoked.
          */
         async challenge(userId: string, deviceId: string): Promise<{ nonce: string; salt: string; expiresAt: string }>
         {
@@ -277,13 +264,7 @@ export function createRecoveryService(db: DataSource)
                 throw new NotFoundError('There is no browser of yours under that id.');
             }
 
-            const device = await db.query(
-                `select 1 as ok from devices
-                 where id = $1 and user_id = $2 and revoked_at is null`,
-                [deviceId, userId]
-            );
-
-            if (firstRow<{ ok: number }>(device) === null)
+            if (!await liveDevice(userId, deviceId))
             {
                 throw new NotFoundError('There is no browser of yours under that id.');
             }
@@ -297,14 +278,14 @@ export function createRecoveryService(db: DataSource)
         },
 
         /**
-         * Confirms a device on the strength of the phrase, and hands back the sealed archive key.
+         * Hands back the sealed archive key to a browser that proves it holds the phrase.
          *
          * The nonce is burned FIRST, by a conditional UPDATE that only matches an unconsumed,
          * unexpired row - so two requests replaying one signature race in the database and exactly
          * one wins. Verifying first would leave a window where both passed, which is the failure
          * `signInWithWallet` documents and the reason it is written the same way.
          */
-        async confirm(userId: string, deviceId: string, nonce: string, signature: string): Promise<{ wrapped: string }>
+        async restore(userId: string, deviceId: string, nonce: string, signature: string): Promise<{ wrapped: string }>
         {
             const vault = await vaultOf(userId);
 
@@ -341,18 +322,6 @@ export function createRecoveryService(db: DataSource)
             if (!good)
             {
                 throw new UnauthorizedError('That is not the recovery phrase for this account.');
-            }
-
-            const confirmed = await db.query(
-                `update devices set confirmed_at = coalesce(confirmed_at, now())
-                  where id = $1 and user_id = $2 and revoked_at is null
-                 returning id`,
-                [deviceId, userId]
-            );
-
-            if (firstRow<{ id: string }>(confirmed) === null)
-            {
-                throw new NotFoundError('There is no browser of yours under that id.');
             }
 
             return { wrapped: vault.wrapped };

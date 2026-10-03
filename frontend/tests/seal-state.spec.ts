@@ -242,12 +242,6 @@ describe('what stands in the way of sending', () =>
         expect(stop).toEqual({ reason: 'member', member: member('no-wallet', true) });
     });
 
-    it('still counts a browser waiting to be confirmed as in the way', () =>
-    {
-        expect(sendBlockOf({ sealability: room(null), readiness: 'waiting', known: true, isWallet: true }))
-            .toEqual({ reason: 'browser', readiness: 'waiting' });
-    });
-
     it('is nothing at all when the room and the browser both answer yes', () =>
     {
         expect(sendBlockOf({ sealability: room(null), readiness: 'ready', known: true, isWallet: true })).toBeNull();
@@ -321,9 +315,9 @@ describe('what the thread says about it', () =>
         expect(render(seal('no-wallet'))).toContain('مهروموم نشده‌اند');
     });
 
-    it('tells a keyless browser which of the three it is, and offers only what would help', () =>
+    it('tells a keyless browser which of the two it is, and offers only what would help', () =>
     {
-        const said = (readiness: 'absent' | 'waiting' | 'unsupported'): string =>
+        const said = (readiness: 'absent' | 'unsupported'): string =>
         {
             cleanup();
             return renderTest(() => SealNotice({ stop: { reason: 'browser', readiness } }) as unknown as HTMLElement)
@@ -331,7 +325,6 @@ describe('what the thread says about it', () =>
         };
 
         expect(said('absent')).toContain('no keys of its own');
-        expect(said('waiting')).toContain('waiting to be confirmed');
         expect(said('unsupported')).toContain('nowhere secure');
     });
 
@@ -353,7 +346,7 @@ describe('what the thread says about it', () =>
 
     it('is never an alarm for anything about this browser', () =>
     {
-        for (const readiness of ['absent', 'waiting', 'unsupported'] as const)
+        for (const readiness of ['absent', 'unsupported'] as const)
         {
             cleanup();
             const { container } = renderTest(() => SealNotice({ stop: { reason: 'browser', readiness } }) as unknown as HTMLElement);

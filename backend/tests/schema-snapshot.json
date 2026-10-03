@@ -70,7 +70,6 @@
         "devices.attested_address USER-DEFINED YES -",
         "devices.attested_message text YES -",
         "devices.attested_signature text YES -",
-        "devices.confirmed_at timestamp with time zone YES -",
         "devices.created_at timestamp with time zone NO now()",
         "devices.exchange_key text NO -",
         "devices.id character varying NO -",

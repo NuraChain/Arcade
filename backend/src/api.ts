@@ -42,8 +42,8 @@ import {
     deviceLabelInput,
     recoveryChallengeInput,
     recoveryChallengeOut,
-    recoveryConfirmInput,
-    recoveryConfirmOut,
+    recoveryRestoreInput,
+    recoveryRestoreOut,
     recoveryState,
     recoveryVaultInput,
     deviceList,
@@ -821,9 +821,6 @@ export function buildApi(ports: Ports)
                     userAgent: context.request.headers.get('user-agent') ?? ''
                 })),
 
-            confirm: routes.post('/:id/confirm', { output: device },
-                (context) => ports.device.confirm(context.principal.userId, context.principal.sessionId, context.params.id)),
-
             rename: routes.post('/:id/label', { input: deviceLabelInput, output: device },
                 (context) => ports.device.rename(context.principal.userId, context.params.id, context.input.label)),
 
@@ -854,18 +851,11 @@ export function buildApi(ports: Ports)
             archived: routes.get('/recovery/archive', { output: archiveList },
                 (context) => ports.device.archived(context.principal.userId)),
 
-            /**
-             * A challenge a device this account has NOT confirmed may ask for.
-             *
-             * That is the whole point: the device that would have confirmed it is the one that was
-             * lost. The session says which account is asking, and the device has to be one of its
-             * own, unconfirmed and unrevoked.
-             */
             recoveryChallenge: routes.post('/recovery/challenge', { input: recoveryChallengeInput, output: recoveryChallengeOut },
                 (context) => ports.device.recoveryChallenge(context.principal.userId, context.input.deviceId)),
 
-            recoverDevice: routes.post('/recovery/confirm', { input: recoveryConfirmInput, output: recoveryConfirmOut },
-                (context) => ports.device.recoverDevice(context.principal.userId, context.input))
+            restore: routes.post('/recovery/restore', { input: recoveryRestoreInput, output: recoveryRestoreOut },
+                (context) => ports.device.restore(context.principal.userId, context.input))
         })),
 
         /**

@@ -11,11 +11,9 @@ import { useWallet } from './wallet.store.ts';
 /**
  * What this browser is missing, when it is something a person can act on.
  *
- * `absent` is no keys at all: nothing sealed can be read or sent here. `waiting` is keys that
- * exist but are unconfirmed, which needs a device that already holds keys - or the recovery
- * phrase - and so belongs on the devices page rather than behind a button.
+ * `absent` is no keys at all: nothing sealed can be read or sent here.
  */
-export type KeyGap = 'absent' | 'waiting';
+export type KeyGap = 'absent';
 
 export interface EnrolmentApi
 {
@@ -30,9 +28,8 @@ export interface EnrolmentApi
  * Giving this browser device keys, from wherever somebody notices it has none.
  *
  * The routine below lived in `chat.page` and was the right thing in the wrong place. It is a
- * sequence of DECISIONS - a locked wallet says something different from a refused signature, a
- * second browser lands `waiting` rather than ready and must not be told "done" - and the moment a
- * second surface offers the same button, a second copy of those decisions is a second chance to
+ * sequence of DECISIONS - a locked wallet says something different from a refused signature - and
+ * the moment a second surface offers the same button, a second copy of those decisions is a second chance to
  * say the wrong one. The seal notice offers it at the composer, where somebody is stuck; the
  * banner offers it anywhere, because a person who has not opened a chat yet has no way to learn
  * that this browser cannot read one.
@@ -77,7 +74,7 @@ export const useEnrolment = createStore((): EnrolmentApi =>
         // `unsupported` is deliberately absent. There is nothing behind the button on a browser
         // with no secure storage - a private window, or an insecure origin - and a strip that
         // cannot be acted on is furniture that never goes away.
-        return readiness === 'absent' || readiness === 'waiting' ? readiness : null;
+        return readiness === 'absent' ? readiness : null;
     };
 
     return {
@@ -123,14 +120,7 @@ export const useEnrolment = createStore((): EnrolmentApi =>
             // device that did not exist a moment ago.
             await seal.refresh();
 
-            // On a SECOND browser the new device arrives pending, so nothing was unblocked and
-            // saying "done" would be a lie. Confirming it needs a device that already exists,
-            // which lives on the devices page.
-            toasts.show({
-                kind: devices.readiness() === 'ready' ? 'success' : 'warning',
-                text: locale.t(devices.readiness() === 'ready' ? 'devices.enrolled' : 'devices.enrolledWaiting'),
-                dedupe: 'devices.enrol'
-            });
+            toasts.show({ kind: 'success', text: locale.t('devices.enrolled'), dedupe: 'devices.enrol' });
         },
 
         reset()

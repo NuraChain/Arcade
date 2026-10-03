@@ -10,28 +10,24 @@ import Panel from '../ui/panel.component.azeroth';
 const ICON: Record<Readiness, IconName> = {
     unsupported: 'error-circle',
     absent: 'key',
-    waiting: 'clock',
     ready: 'check-circle'
 };
 
 const TITLE: Record<Readiness, MessageKey> = {
     unsupported: 'devices.self.unsupported',
     absent: 'devices.self.absent',
-    waiting: 'devices.self.waiting',
     ready: 'devices.self.ready'
 };
 
 const LEAD: Record<Readiness, MessageKey> = {
     unsupported: 'devices.self.unsupportedLead',
     absent: 'devices.self.absentLead',
-    waiting: 'devices.self.waitingLead',
     ready: 'devices.self.readyLead'
 };
 
 const TONE: Record<Readiness, string> = {
     unsupported: 'text-danger',
     absent: 'text-accent',
-    waiting: 'text-gold',
     ready: 'text-live'
 };
 

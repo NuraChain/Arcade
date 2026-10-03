@@ -68,8 +68,8 @@ async function say(userId: string, conversationId: string, body: string, reactTo
     {
         device = `dev${ deviceOf.size.toString().padStart(19, '0') }`;
         await db.query(
-            `insert into devices (id, user_id, label, exchange_key, signing_key, attested, confirmed_at)
-             values ($1, $2, 'Test', 'exchange', 'signing', 'server', now())`,
+            `insert into devices (id, user_id, label, exchange_key, signing_key, attested)
+             values ($1, $2, 'Test', 'exchange', 'signing', 'server')`,
             [device, userId]
         );
         deviceOf.set(userId, device);

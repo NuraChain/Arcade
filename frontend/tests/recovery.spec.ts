@@ -24,7 +24,7 @@ import {
  * Everything else here can be revoked. This cannot: whoever holds the phrase can read every message
  * the account has ever received, for as long as the account exists. So the tests that matter are
  * the ones about what it does NOT do - a wrong phrase must be told apart from a corrupt archive, a
- * signature for one device must not confirm another, and the server must never be given anything it
+ * signature for one device must not restore another, and the server must never be given anything it
  * could open the archive with.
  *
  * PBKDF2 at 600,000 iterations is slow on purpose, so the derivations here are shared rather than
@@ -230,14 +230,14 @@ describe('proving the phrase to the server', () =>
             .toBe(true);
     });
 
-    it('does not confirm a device it was not made for', async () =>
+    it('does not restore to a device it was not made for', async () =>
     {
         await ready();
 
         const signature = await signRecovery(keys, 'u-1', 'device-1', 'nonce-1');
 
         // The attack the enrolment message's `Resources` line exists to stop, arriving by another
-        // door: a signature captured while confirming one browser must not confirm another.
+        // door: a signature captured while restoring one browser must not restore another.
         expect(await holds(keys.signer.publicKey, signature, recoveryChallenge('u-1', 'device-2', 'nonce-1')))
             .toBe(false);
     });
