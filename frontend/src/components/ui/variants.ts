@@ -1,5 +1,5 @@
 export type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'bare' | 'destructive' | 'live';
-export type ButtonSize = 'sm' | 'md' | 'lg';
+export type ButtonSize = 'xs' | 'sm' | 'md' | 'lg';
 export type Tone = 'neutral' | 'accent' | 'live' | 'gold' | 'win' | 'danger' | 'madder';
 export type AvatarSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl' | '2xl';
 export type BadgeVariant = 'solid' | 'soft' | 'outline';
@@ -20,12 +20,14 @@ export const BUTTON_VARIANT: Record<ButtonVariant, string> = {
 };
 
 export const BUTTON_SIZE: Record<ButtonSize, string> = {
+    xs: 'h-8 gap-1.5 px-3 text-ui-sm coarse:before:absolute coarse:before:-inset-y-1.5 coarse:before:inset-x-0',
     sm: 'h-8 coarse:h-11 gap-1.5 px-3 text-ui-sm',
     md: 'h-10 coarse:h-11 gap-2 px-4 text-ui-base',
     lg: 'h-12 gap-2.5 px-6 text-ui-md'
 };
 
 export const ICON_BUTTON_SIZE: Record<ButtonSize, string> = {
+    xs: 'h-8 w-8 coarse:before:absolute coarse:before:-inset-1.5',
     sm: 'h-8 w-8 coarse:h-11 coarse:w-11',
     md: 'h-10 w-10 coarse:h-11 coarse:w-11',
     lg: 'h-12 w-12'

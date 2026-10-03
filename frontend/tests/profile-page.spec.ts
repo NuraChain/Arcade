@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, renderTest } from '@azerothjs/testing';
 import { createMemoryHistory, createRouter, RouterProvider, type Route } from 'azerothjs';
 
+import ProfileSheet from '../src/components/app/profile-sheet.component.azeroth';
 import ProfileHeader from '../src/components/social/profile-header.component.azeroth';
 import AchievementTile from '../src/components/social/achievement-tile.component.azeroth';
 import MePage from '../src/pages/app/me.page.azeroth';
@@ -73,11 +74,13 @@ describe('the profile header', () =>
         expect(container.textContent).not.toContain('Level');
     });
 
-    it('leaves out an empty bio rather than drawing a lone pencil', async () =>
+    it('shows the bio as plain text, with nothing to press beside it', async () =>
     {
-        const container = await header({ bio: '', onEditBio: () => undefined });
+        const container = await header({ bio: 'Backgammon, mostly.' });
+        const bio = [...container.querySelectorAll('p')].find((one) => one.textContent === 'Backgammon, mostly.');
 
-        expect(container.querySelector('button[aria-label="Edit your bio"]')).toBeNull();
+        expect(bio).toBeDefined();
+        expect(bio!.querySelector('button')).toBeNull();
     });
 });
 
@@ -175,6 +178,34 @@ describe('my profile page', () =>
 
         expect(tabs).toEqual(['Achievements', 'Games']);
         expect(container.textContent).not.toContain('Nura Profile differs');
+    });
+});
+
+describe('the edit sheet', () =>
+{
+    const sheet = (only?: 'picture'): Promise<HTMLElement> =>
+    {
+        const account: Account = { id: 'u-dana', handle: 'dana.w', displayName: 'Dana', bio: '', hue: 12, kind: 'guest', isMinor: false };
+        server.account = account;
+        useSession().establish(account);
+        return render(() => ProfileSheet({ overlayId: 'sheet', close: () => undefined, ...(only === undefined ? {} : { only }) }) as unknown as HTMLElement, '/app/me');
+    };
+
+    it('asks for the handle, then the name, then the bio, and leaves the picture to its own dialog', async () =>
+    {
+        const container = await sheet();
+        const fields = [...container.querySelectorAll('input[id^="profile-"], textarea[id^="profile-"]')].map((one) => one.id);
+
+        expect(fields).toEqual(['profile-handle', 'profile-name', 'profile-bio']);
+    });
+
+    it('holds nothing but the picture when opened from the picture', async () =>
+    {
+        const container = await sheet('picture');
+        const fields = [...container.querySelectorAll('input[id^="profile-"], textarea[id^="profile-"]')].map((one) => one.id);
+
+        expect(fields).toEqual(['profile-picture']);
+        expect(container.textContent).toContain('Profile picture');
     });
 });
 

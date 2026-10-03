@@ -1098,6 +1098,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         kind: 'wallet' | 'guest';
         is_minor: boolean;
         address: string | null;
+        created_at: Date;
     }): Account => ({
         id: row.id,
         handle: row.handle,
@@ -1107,6 +1108,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         hue: row.hue,
         kind: row.kind,
         isMinor: row.is_minor,
+        joinedAt: row.created_at.toISOString(),
         address: row.address ?? undefined,
         ...(isAdminAddress(row.address, config.adminWallet) ? { admin: true } : {})
     });
@@ -1453,6 +1455,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                     person: seenBy(viewer, subject, relation),
                     relation,
                     mutual,
+                    joinedAt: subject.created_at.toISOString(),
                     ...(refusal === null ? {} : { refusal })
                 };
             },

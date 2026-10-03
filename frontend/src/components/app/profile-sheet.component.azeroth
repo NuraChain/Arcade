@@ -32,7 +32,7 @@ const HANDLE_MAX = 32;
  * grants one - and the same judgement that removed the invented levels and the provably-fair
  * badge applies to a shop with nothing behind it.
  */
-export default component ProfileSheet(props: OverlayProps)
+export default component ProfileSheet(props: OverlayProps & { only?: 'picture' })
 {
     const locale = useLocale();
     const account = useAccount();
@@ -53,6 +53,8 @@ export default component ProfileSheet(props: OverlayProps)
     state pictureRefusal = '';
 
     let chooser: HTMLInputElement | null = null;
+
+    derived pictureOnly = props.only === 'picture';
 
     derived trimmedName = displayName.trim();
 
@@ -190,78 +192,84 @@ export default component ProfileSheet(props: OverlayProps)
     };
 
     <div class="flex flex-col gap-5 p-5">
-        <SheetHeader title={ locale.t('profile.title') } lead={ locale.t(lead) } onClose={ () => props.close(false) } />
+        <SheetHeader title={ locale.t(pictureOnly ? 'profile.pictureTitle' : 'profile.title') } lead={ locale.t(lead) } onClose={ () => props.close(false) } />
 
-        <Field id="profile-picture" label={ locale.t('profile.picture') } hint={ locale.t('profile.pictureHint') } error={ pictureRefusal === '' ? undefined : pictureRefusal }>
-            <div class="flex items-center gap-4">
-                <Avatar person={ face } size="xl" />
-                <div class="flex flex-wrap gap-2">
-                    <input
-                        id="profile-picture"
-                        ref={ (element) => chooser = element }
-                        type="file"
-                        accept="image/png,image/jpeg,image/webp"
-                        class="sr-only"
-                        tabindex="-1"
-                        onChange={ (event) =>
-                        {
-                            const input = event.currentTarget as HTMLInputElement;
-                            void choose(input.files?.[0]);
-                            input.value = '';
-                        } }
-                    />
-                    <Button variant="outline" size="sm" leading="edit" disabled={ busy } onClick={ () => chooser?.click() }>
-                        { locale.t('profile.pictureChoose') }
-                    </Button>
-                    <Show when={ picture !== '' || preview !== '' }>
-                        { () =>
-                            <Button variant="ghost" size="sm" leading="trash" disabled={ busy } onClick={ remove }>
-                                { locale.t('profile.pictureRemove') }
-                            </Button>
-                        }
-                    </Show>
+        <Show when={ pictureOnly }>
+            <Field id="profile-picture" label={ locale.t('profile.picture') } hint={ locale.t('profile.pictureHint') } error={ pictureRefusal === '' ? undefined : pictureRefusal }>
+                <div class="flex items-center gap-4">
+                    <Avatar person={ face } size="xl" />
+                    <div class="flex flex-wrap gap-2">
+                        <input
+                            id="profile-picture"
+                            ref={ (element) => chooser = element }
+                            type="file"
+                            accept="image/png,image/jpeg,image/webp"
+                            class="sr-only"
+                            tabindex="-1"
+                            onChange={ (event) =>
+                            {
+                                const input = event.currentTarget as HTMLInputElement;
+                                void choose(input.files?.[0]);
+                                input.value = '';
+                            } }
+                        />
+                        <Button variant="outline" size="sm" leading="edit" disabled={ busy } onClick={ () => chooser?.click() }>
+                            { locale.t('profile.pictureChoose') }
+                        </Button>
+                        <Show when={ picture !== '' || preview !== '' }>
+                            { () =>
+                                <Button variant="ghost" size="sm" leading="trash" disabled={ busy } onClick={ remove }>
+                                    { locale.t('profile.pictureRemove') }
+                                </Button>
+                            }
+                        </Show>
+                    </div>
                 </div>
+            </Field>
+        </Show>
+
+        <Show when={ !pictureOnly }>
+            <div class="flex flex-col gap-5">
+                <Field
+                    id="profile-handle"
+                    label={ locale.t('profile.handle') }
+                    hint={ locale.t('profile.handleHint') }
+                    error={ refusal === '' ? undefined : refusal }
+                >
+                    <Input
+                        id="profile-handle"
+                        value={ handle }
+                        onInput={ (value) => handle = value }
+                        maxlength={ HANDLE_MAX }
+                        leading="me"
+                        invalid={ refusal !== '' }
+                        autocomplete="username"
+                        label={ locale.t('profile.handle') }
+                    />
+                </Field>
+
+                <Field id="profile-name" label={ locale.t('profile.name') } hint={ locale.t('profile.nameHint') }>
+                    <Input
+                        id="profile-name"
+                        value={ displayName }
+                        onInput={ (value) => displayName = value }
+                        maxlength={ NAME_MAX }
+                        autocomplete="nickname"
+                        label={ locale.t('profile.name') }
+                    />
+                </Field>
+
+                <Field id="profile-bio" label={ locale.t('profile.bio') } hint={ locale.plural('profile.bioLeft', BIO_MAX - bio.length) }>
+                    <TextArea
+                        id="profile-bio"
+                        value={ bio }
+                        onInput={ (value) => bio = value }
+                        maxlength={ BIO_MAX }
+                        label={ locale.t('profile.bio') }
+                    />
+                </Field>
             </div>
-        </Field>
-
-        <Field id="profile-name" label={ locale.t('profile.name') } hint={ locale.t('profile.nameHint') }>
-            <Input
-                id="profile-name"
-                value={ displayName }
-                onInput={ (value) => displayName = value }
-                maxlength={ NAME_MAX }
-                autocomplete="nickname"
-                label={ locale.t('profile.name') }
-            />
-        </Field>
-
-        <Field
-            id="profile-handle"
-            label={ locale.t('profile.handle') }
-            hint={ locale.t('profile.handleHint') }
-            error={ refusal === '' ? undefined : refusal }
-        >
-            <Input
-                id="profile-handle"
-                value={ handle }
-                onInput={ (value) => handle = value }
-                maxlength={ HANDLE_MAX }
-                leading="me"
-                invalid={ refusal !== '' }
-                autocomplete="username"
-                label={ locale.t('profile.handle') }
-            />
-        </Field>
-
-        <Field id="profile-bio" label={ locale.t('profile.bio') } hint={ locale.plural('profile.bioLeft', BIO_MAX - bio.length) }>
-            <TextArea
-                id="profile-bio"
-                value={ bio }
-                onInput={ (value) => bio = value }
-                maxlength={ BIO_MAX }
-                label={ locale.t('profile.bio') }
-            />
-        </Field>
+        </Show>
 
         <Show when={ publishing }>
             { () =>

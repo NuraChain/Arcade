@@ -23,6 +23,7 @@ export interface PersonRow
     allow_stranger_messages: boolean;
     show_online: boolean;
     last_seen_at: Date | null;
+    created_at: Date;
 }
 
 export interface RequestRow
@@ -40,7 +41,7 @@ const partyOf = (row: PersonRow): Party => ({
     showOnline: row.show_online
 });
 
-const PERSON_COLUMNS = 'u.id, u.handle, u.display_name, u.bio, u.avatar, u.hue, u.is_minor, u.allow_stranger_messages, u.show_online, u.last_seen_at';
+const PERSON_COLUMNS = 'u.id, u.handle, u.display_name, u.bio, u.avatar, u.hue, u.is_minor, u.allow_stranger_messages, u.show_online, u.last_seen_at, u.created_at';
 
 /** Whether a path parameter could be an id at all. A malformed one is 22P02, which is a 500. */
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

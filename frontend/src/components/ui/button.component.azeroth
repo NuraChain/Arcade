@@ -8,6 +8,7 @@ import { BUTTON_SIZE, BUTTON_VARIANT, type ButtonSize, type ButtonVariant } from
 export default component Button(props: {
     children?: Child;
     href?: string;
+    download?: string;
     to?: NavigateTarget;
     variant?: ButtonVariant;
     size?: ButtonSize;
@@ -74,7 +75,7 @@ export default component Button(props: {
                 }
             >
                 { () =>
-                    <a href={ props.href } class={ shell } aria-label={ props.label }>
+                    <a href={ props.href } download={ props.download } class={ shell } aria-label={ props.label }>
                         <Show when={ props.leading !== undefined }>
                             { () => <Icon name={ props.leading! } size={ 16 } /> }
                         </Show>

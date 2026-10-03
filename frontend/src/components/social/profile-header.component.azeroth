@@ -2,6 +2,7 @@ import { Link, type Child } from 'azerothjs';
 
 import type { Progress } from '../../api.ts';
 import Icon from '../../icons/icon.component.azeroth';
+import { copyText } from '../../lib/clipboard.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import Avatar, { type Facade, type Presence } from '../ui/avatar.component.azeroth';
 import Tooltip from '../ui/tooltip.component.azeroth';
@@ -23,8 +24,10 @@ export default component ProfileHeader(props: {
     eyebrow?: Child;
     badges?: Child;
     corner?: Child;
+    joined?: string;
+    pictureLabel?: string;
+    onPicture?: () => void;
     actions?: Child;
-    onEditBio?: () => void;
 })
 {
     const locale = useLocale();
@@ -53,7 +56,19 @@ export default component ProfileHeader(props: {
         <div class="relative flex flex-col gap-4 px-4 pb-5 @xl:px-7 @xl:pb-7">
             <div class="-mt-12 flex items-end justify-between gap-3 @xl:-mt-14">
                 <span class="shrink-0 rounded-full bg-gradient-to-br from-accent to-accent-fill p-[3px] shadow-[0_0_28px_-6px_var(--accent)]">
-                    <Avatar person={ { ...props.person, displayName: title } } size="2xl" presence={ props.presence } class="ring-4 ring-field @xl:h-28 @xl:w-28" />
+                    <Show
+                        when={ props.onPicture !== undefined }
+                        fallback={ <Avatar person={ { ...props.person, displayName: title } } size="2xl" presence={ props.presence } class="ring-4 ring-field @xl:h-28 @xl:w-28" /> }
+                    >
+                        <button
+                            type="button"
+                            class="block cursor-pointer rounded-full"
+                            aria-label={ props.pictureLabel ?? title }
+                            onClick={ () => props.onPicture?.() }
+                        >
+                            <Avatar person={ { ...props.person, displayName: title } } size="2xl" presence={ props.presence } class="ring-4 ring-field @xl:h-28 @xl:w-28" />
+                        </button>
+                    </Show>
                 </span>
             </div>
 
@@ -63,28 +78,30 @@ export default component ProfileHeader(props: {
                         <Show when={ props.eyebrow !== undefined }>
                             <div class="hidden pb-1 has-[*]:flex">{ props.eyebrow }</div>
                         </Show>
-                        <h1 id="profile-name" class="title truncate text-ui-2xl @xl:text-ui-3xl" dir="auto">{ title }</h1>
-                        <Show when={ props.person.displayName !== '' }>
-                            <p class="truncate text-ui-sm text-muted" dir="ltr">@{ props.person.handle }</p>
+                        <div class="flex pb-1">
+                            <button
+                                type="button"
+                                class="relative inline-flex h-6 min-w-0 max-w-full cursor-pointer items-center gap-1.5 rounded-full border border-line bg-raised px-2.5 text-ui-xs font-semibold text-muted transition-colors hover:border-accent hover:text-text coarse:before:absolute coarse:before:-inset-y-2.5 coarse:before:inset-x-0"
+                                aria-label={ locale.t('profile.handleCopy') }
+                                onClick={ () => void copyText(`@${ props.person.handle }`, 'profile.handleCopied', { dedupe: 'profile.handle' }) }
+                            >
+                                <Icon name="at" size={ 12 } class="shrink-0 text-live" />
+                                <span class="truncate" dir="ltr">{ props.person.handle }</span>
+                                <Icon name="copy" size={ 12 } class="shrink-0 text-accent" />
+                            </button>
+                        </div>
+                        <Show when={ (props.joined ?? '') !== '' }>
+                            <p class="flex items-center gap-1.5 text-ui-xs text-muted">
+                                <Icon name="calendar" size={ 13 } class="shrink-0" />
+                                { locale.t('profile.joined', { date: locale.date(new Date(props.joined ?? 0), { month: 'long', year: 'numeric' }) }) }
+                            </p>
                         </Show>
-                        <div class="mt-1 flex flex-wrap items-center gap-2">{ props.badges }</div>
+                        <h1 id="profile-name" class={ () => [ 'title mt-2 truncate text-ui-2xl @xl:text-ui-3xl', props.person.displayName === '' ? 'sr-only' : '' ].filter(Boolean).join(' ') } dir="auto">{ title }</h1>
+                        <Show when={ (props.bio ?? '') !== '' }>
+                            <p class="mt-2 max-w-[56ch] text-ui-md text-text" dir="auto">{ props.bio ?? '' }</p>
+                        </Show>
+                        <div class="mt-1 flex flex-wrap items-center gap-2 empty:hidden">{ props.badges }</div>
                     </div>
-
-                    <Show when={ (props.bio ?? '') !== '' }>
-                        <p class="flex max-w-[56ch] items-start gap-2 text-ui-md text-text">
-                            <span class="min-w-0" dir="auto">{ props.bio ?? '' }</span>
-                            <Show when={ props.onEditBio !== undefined }>
-                                <button
-                                    type="button"
-                                    class="-my-2 flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-control text-accent transition-colors hover:text-text coarse:h-11 coarse:w-11"
-                                    aria-label={ locale.t('profile.editBio') }
-                                    onClick={ () => props.onEditBio?.() }
-                                >
-                                    <Icon name="edit" size={ 15 } />
-                                </button>
-                            </Show>
-                        </p>
-                    </Show>
 
                     <div class="flex flex-col gap-4 @2xl:flex-row @2xl:items-center @2xl:gap-6">
                         <Show when={ progress !== null }>

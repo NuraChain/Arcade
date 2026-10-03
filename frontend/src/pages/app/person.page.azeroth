@@ -5,6 +5,7 @@ import { client } from '../../api.ts';
 import Page from '../../components/app/page.component.azeroth';
 import PersonActions from '../../components/social/person-actions.component.azeroth';
 import ProfileHeader from '../../components/social/profile-header.component.azeroth';
+import PicturePreview from '../../components/social/picture-preview.component.azeroth';
 import Badge from '../../components/ui/badge.component.azeroth';
 import Button from '../../components/ui/button.component.azeroth';
 import EmptyState from '../../components/ui/empty-state.component.azeroth';
@@ -91,6 +92,15 @@ export default component PersonPage()
         { label: locale.t('profile.stat.achievements'), value: (held?.achievements.scopes ?? []).reduce((total, one) => total + one.earned, 0) }
     ];
 
+    const viewPicture = (): void =>
+    {
+        const src = shown?.avatar ?? '';
+        if (src !== '')
+        {
+            void overlay.open(PicturePreview, { src, name }, { label: locale.t('profile.pictureOf', { name }) });
+        }
+    };
+
     const play = (): void =>
     {
         if (person !== null)
@@ -121,6 +131,9 @@ export default component PersonPage()
                         bio={ shown?.bio ?? '' }
                         stats={ stats }
                         progress={ held?.progress ?? null }
+                        joined={ view.data()?.joinedAt ?? '' }
+                        pictureLabel={ locale.t('profile.pictureView') }
+                        onPicture={ (shown?.avatar ?? '') === '' ? undefined : viewPicture }
                         badges={
                             <span class="contents">
                                 <Show when={ dot === 'online' || dot === 'away' }>

@@ -268,6 +268,7 @@ export const account = object({
     hue: number(),
     kind: accountKind,
     isMinor: boolean(),
+    joinedAt: string().optional(),
 
     /**
      * The wallet this account signs in with, when it has one. Absent for a guest, and absent
@@ -863,6 +864,7 @@ export const personView = object({
     person: personSummary,
     relation,
     mutual: number(),
+    joinedAt: string().optional(),
     refusal: messageRefusal.optional()
 });
 

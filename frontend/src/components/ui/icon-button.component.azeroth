@@ -37,7 +37,7 @@ export default component IconButton(props: {
         props.class ?? ''
     ].filter(Boolean).join(' ');
 
-    derived iconSize = props.size === 'sm' ? 17 : (props.size === 'lg' ? 22 : 19);
+    derived iconSize = props.size === 'sm' || props.size === 'xs' ? 17 : (props.size === 'lg' ? 22 : 19);
 
     derived counted = props.count !== undefined && props.count > 0;
 

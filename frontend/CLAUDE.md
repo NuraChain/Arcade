@@ -178,8 +178,13 @@ overlapping it, then the name, the badges, a level row (the XP bar, with the "a 
 nothing" sentence as its tooltip and in the accessibility tree) and the counts. On a phone the level
 is a row of its own and the counts are equal columns, because four counts beside a level wrapped one
 onto a second line with a stray divider. `corner` floats on the cover: `/app/me` puts three icon buttons there - Settings,
-Edit profile and Share, in that order, so nothing wraps at 390. `eyebrow` sits above the name, and on `/app/me` it is the wallet
-address chip, which copies the whole address. Your own profile shows no
+Edit profile and Share, in that order, so nothing wraps at 390. Top to bottom it reads the owner's order: the wallet
+chip (`eyebrow`, `/app/me` only), the @handle chip, the join date, the name, the bio - both chips
+look alike and copy on a tap, and a name that is empty is kept only as the screen reader's heading.
+The picture is a button when the page passes `onPicture`: on `/app/me` it opens the profile sheet in
+`only: 'picture'` mode, which holds nothing but the picture, and on somebody else's page it opens
+`PicturePreview` with Download and Close when there is a picture to show. The ordinary Edit sheet
+asks for the handle, then the name, then the bio, and has no picture in it. Your own profile shows no
 presence at all - no dot, no "Online" - because it only means something to somebody else. `/app/me`
 has two tabs, Achievements and then Games; the Overview repeated them and About held the chain panel and
 the address, which is now the copy chip in the header. Its tabs are pinned under it; a sticky child of `.page` is pinned below the page's own

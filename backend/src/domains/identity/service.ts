@@ -46,6 +46,8 @@ export interface ProfileRow extends UserRow
 {
     avatar: string | null;
 
+    created_at: Date;
+
     /** The most recently used linked wallet, or null. A guest has none. */
     address: string | null;
 }
@@ -389,6 +391,7 @@ export function createIdentityService(db: DataSource, config: IdentityConfig)
                 .addSelect('u.kind', 'kind')
                 .addSelect('u.is_minor', 'is_minor')
                 .addSelect('u.is_suspended', 'is_suspended')
+                .addSelect('u.created_at', 'created_at')
                 .addSelect('(select w.address from wallets w where w.user_id = u.id order by w.last_used_at desc nulls last limit 1)', 'address')
                 .where('u.id = :userId', { userId })
                 .getRawOne<ProfileRow>();

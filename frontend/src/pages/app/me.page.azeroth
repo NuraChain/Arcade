@@ -18,6 +18,7 @@ import { useAccount } from '../../stores/account.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useOverlay } from '../../stores/overlay.store.ts';
 import { useRecord } from '../../stores/record.store.ts';
+import { useSession } from '../../stores/session.store.ts';
 import { useSocial } from '../../stores/social.store.ts';
 
 export default component MePage()
@@ -27,6 +28,7 @@ export default component MePage()
     const account = useAccount();
     const social = useSocial();
     const record = useRecord();
+    const session = useSession();
 
     state tab = 'achievements';
 
@@ -38,6 +40,11 @@ export default component MePage()
     const editProfile = (): void =>
     {
         void overlay.open(ProfileSheet, {}, { label: locale.t('profile.title') }).closed.then(() => face.refetch());
+    };
+
+    const editPicture = (): void =>
+    {
+        void overlay.open(ProfileSheet, { only: 'picture' as const }, { label: locale.t('profile.pictureTitle') }).closed.then(() => face.refetch());
     };
 
     const copyAddress = async (): Promise<void> =>
@@ -102,8 +109,10 @@ export default component MePage()
                         bio={ shown?.bio ?? '' }
                         stats={ stats }
                         progress={ held?.progress ?? null }
+                        joined={ session.account()?.joinedAt ?? '' }
+                        pictureLabel={ locale.t('profile.pictureChange') }
+                        onPicture={ editPicture }
                         mine
-                        onEditBio={ editProfile }
                         eyebrow={
                             <Show when={ account.isWallet() }>
                                 <button
@@ -127,9 +136,9 @@ export default component MePage()
                         }
                         corner={
                             <span class="contents">
-                                <IconButton icon="settings" label={ locale.t('me.settings') } variant="bare" to="/app/me/settings" />
-                                <IconButton icon="edit" label={ locale.t('me.edit') } variant="bare" onClick={ editProfile } />
-                                <IconButton icon="share" label={ locale.t('me.share') } variant="bare" onClick={ () => void share() } />
+                                <IconButton icon="settings" label={ locale.t('me.settings') } variant="bare" size="xs" to="/app/me/settings" />
+                                <IconButton icon="edit" label={ locale.t('me.edit') } variant="bare" size="xs" onClick={ editProfile } />
+                                <IconButton icon="share" label={ locale.t('me.share') } variant="bare" size="xs" onClick={ () => void share() } />
                             </span>
                         }
                     />
