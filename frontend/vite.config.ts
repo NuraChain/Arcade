@@ -110,7 +110,7 @@ export default defineConfig(({ isSsrBuild, mode }) =>
             exclude: ['azerothjs', '@azerothjs/kit', '@azerothjs/devtools']
         },
 
-        // The SSR bundle (src/entry.server.ts) inlines its dependencies so dist-server is ONE
+        // The SSR bundle (src/entry.server.ts) inlines its dependencies so .dist-server is ONE
         // self-contained file the prerenderer can run with no client node_modules.
         ssr:
         {

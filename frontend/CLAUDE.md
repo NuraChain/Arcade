@@ -868,6 +868,10 @@ in view is left alone. And **`Slider`'s thumb mixed a logical inset with a physi
 (`inset-inline-start` with `-translate-x-1/2`), so in Persian it sat a full thumb-width off the
 track; a logical `-ms-2.5` centres it in both directions.
 
+Three sizing traps: a grid item needs `min-w-0` to shrink around `truncate`; an `<input>`'s wrapper
+needs `min-w-0` too; and a `<button>` shrink-wraps even at `display: flex`, so a class list shared with
+a `<div>` must state `w-full`.
+
 ## RTL
 
 English and Persian. **Logical properties only** — `ms-`/`me-`, `ps-`/`pe-`, `start-`/`end-`,
@@ -911,3 +915,25 @@ character as content** — group identity is a crest (`components/social/group-c
 `rounded-full` span, not a `·`. `·` and `–` inside translated sentences are punctuation and stay.
 The one exception is an emoji a PERSON put there - typed, picked from the picker, or reacted with -
 which is their content rather than the product's chrome.
+
+## The rules no test holds any more
+
+`frontend/tests/markup.spec.ts` (deleted 2026-09-20) refused these shapes by reading `src/` as text.
+Each once shipped with every gate green; they are still house style:
+
+- a `lobby.quick`/`lobby.host` call inside a play url, or HOLDING one of those promises in a variable
+- a `fallback` or a `when` that asserts non-null on something the surrounding guard owns
+- a send path that does not ask what stands in the way
+- a store mutator that writes a signal from a value it read out of that same signal
+- an `effect` whose only signal read hides behind an optional call (it subscribes to nothing)
+- a hand-written panel surface instead of `Panel`
+- a primitive in `components/ui/` with no caller anywhere
+- one element asked to both grow and be visually hidden
+- a loading flag derived straight from a resource rather than gated on having nothing to show
+- a block comment inside the markup region
+- `madder` used for something merely wrong rather than a table playing for something
+- an invisible control character anywhere in `src/`
+- an element that is only a display name and lacks `dir="auto"`
+- a `to`/`href` naming a path `routes.ts` never declares
+- a ternary choosing between two ELEMENTS inside a control-flow branch (built once, untracked - see
+  *The product shell* above)

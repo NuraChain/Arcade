@@ -3,9 +3,11 @@ dist/
 dist-server/
 /.dist-backend/
 /.dist-frontend/
+/.dist-server/
 .azeroth/
 coverage/
 logs/
+/.logs/
 *.tsbuildinfo
 # Real values, at any depth and under any suffix - `.env`, `.env.local`, `.env.production`. The
 # committed template is the root `.env.example` and nothing else: this repository is public,

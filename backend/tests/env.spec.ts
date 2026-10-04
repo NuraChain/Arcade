@@ -27,7 +27,7 @@ const FULL: Record<string, string> = {
     VOICE_TURN_URLS: '',
     VOICE_TURN_SECRET: '',
     CLIENT_DIR: '../.dist-frontend',
-    SSR_ENTRY: '../frontend/dist-server/entry.server.js',
+    SSR_ENTRY: '../.dist-server/entry.server.js',
     SERVE_PAGES: 'false'
 };
 

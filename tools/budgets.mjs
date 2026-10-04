@@ -30,7 +30,7 @@ import { POSTERS, fingerprint } from './art/poster.mjs';
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const DIST = join(ROOT, '.dist-frontend');
 const ASSETS = join(DIST, 'assets');
-const SSR_ASSETS = join(ROOT, 'frontend', 'dist-server', 'assets');
+const SSR_ASSETS = join(ROOT, '.dist-server', 'assets');
 
 const KB = 1024;
 

@@ -9,7 +9,7 @@
     "scripts": {
         "dev": "azeroth dev",
         "check": "azeroth check",
-        "build": "vite build && vite build --ssr src/entry.server.ts --outDir dist-server && azeroth-kit-prerender --client ../.dist-frontend",
+        "build": "vite build && vite build --ssr src/entry.server.ts --outDir ../.dist-server && azeroth-kit-prerender --entry ../.dist-server/entry.server.js --client ../.dist-frontend",
         "test": "vitest run",
         "test:watch": "vitest",
         "test:shuffle": "vitest run --sequence.shuffle",

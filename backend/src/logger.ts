@@ -40,7 +40,7 @@ export function createServerLogger(config: ServerConfig)
 {
     return createLogger({
         level: config.env === 'production' ? 'info' : 'debug',
-        sink: teeSink(terminalSink(), fileSink('logs/')),
+        sink: teeSink(terminalSink(), fileSink(new URL('../.logs/', import.meta.url))),
         redact: REDACT,
         fields: { service: 'nura-games-server', env: config.env }
     });
