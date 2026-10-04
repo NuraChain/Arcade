@@ -12,7 +12,6 @@ import { nura } from '../tools/eslint/return-types.ts';
 const config: ReturnType<typeof defineConfig> = defineConfig([
     globalIgnores([
         '**/dist/**',
-        '**/dist-server/**',
         '**/node_modules/**',
         '**/build/**',
         // Generated .azeroth type mirror (the Vite plugin's emitDeclarations output).

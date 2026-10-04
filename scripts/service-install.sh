@@ -42,8 +42,8 @@ if [ ! -f "$ROOT/.dist-frontend/index.html" ]; then
   echo "warning: .dist-frontend is missing - the server would answer the api and 404 every page" >&2
 fi
 
-if [ ! -f "$ROOT/frontend/dist-server/entry.server.js" ]; then
-  echo "warning: frontend/dist-server/entry.server.js is missing - there is no SSR bundle to render with" >&2
+if [ ! -f "$ROOT/.dist-server/entry.server.js" ]; then
+  echo "warning: .dist-server/entry.server.js is missing - there is no SSR bundle to render with" >&2
 fi
 
 if [ ! -f "$ROOT/.env" ]; then

@@ -5,7 +5,7 @@ import { pathToFileURL } from 'node:url';
 import { prerender } from '@azerothjs/kit/prerender';
 
 const client = resolve(import.meta.dirname, '..', '.dist-frontend');
-const entry = await import(pathToFileURL(resolve(import.meta.dirname, '..', 'frontend', 'dist-server', 'entry.server.js')).href);
+const entry = await import(pathToFileURL(resolve(import.meta.dirname, '..', '.dist-server', 'entry.server.js')).href);
 
 const written = await prerender({
     routes: entry.routes,

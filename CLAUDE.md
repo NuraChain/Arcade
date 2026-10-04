@@ -36,7 +36,7 @@ because two files truncating the same tables deadlock. Every claim about the DAT
 `http://localhost:3100`.
 
 **Production is one process.** `npm run build` then `npm start`: the api in `.dist-backend/`, the client
-in `.dist-frontend/`, the SSR bundle in `frontend/dist-server/`. `SERVE_PAGES=true` makes this process
+in `.dist-frontend/`, the SSR bundle in `.dist-server/`. `SERVE_PAGES=true` makes this process
 serve the client (false in development, where vite owns the browser). There is no `npm run preview` - the
 server's `mountPages` IS the preview. The backend COMPILES (`typeorm` in `dependencies` flips it to
 emitting, and Node cannot run decorators), so always build before `npm start`.

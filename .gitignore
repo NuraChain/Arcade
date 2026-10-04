@@ -3,6 +3,7 @@ dist/
 dist-server/
 /.dist-backend/
 /.dist-frontend/
+/.dist-server/
 .azeroth/
 coverage/
 logs/

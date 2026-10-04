@@ -153,7 +153,7 @@ const ssr = serving
             /*
              * The SSR bundle is built by `npm run build` and imported here at boot. Missing, this
              * throw is the whole of what a deploy sees - so it says which file and which command,
-             * rather than leaving an ERR_MODULE_NOT_FOUND pointing into `dist-server`.
+             * rather than leaving an ERR_MODULE_NOT_FOUND pointing into `.dist-server`.
              */
             log.error('the SSR bundle is missing - run `npm run build` before starting', {
                 path: config.ssrEntry,
