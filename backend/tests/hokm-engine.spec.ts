@@ -537,12 +537,15 @@ describe('refusing what is not a move', () =>
             .toEqual({ ok: false, reason: 'not-the-hakem' });
     });
 
-    it('refuses a card before trump is named', () =>
+    it('refuses a card before trump is named, as the tricks not having started', () =>
     {
         const state = opened();
+        const other = (state.hakem + 1) % state.seats;
 
-        expect(apply(state, { kind: 'card', seat: state.hakem, card: state.hands[state.hakem][0] }, seeded(1)).ok)
-            .toBe(false);
+        expect(apply(state, { kind: 'card', seat: state.hakem, card: state.hands[state.hakem][0] }, seeded(1)))
+            .toEqual({ ok: false, reason: 'tricks-not-started' });
+        expect(apply(state, { kind: 'card', seat: other, card: state.hands[state.hakem][0] }, seeded(1)))
+            .toEqual({ ok: false, reason: 'tricks-not-started' });
     });
 
     it('refuses a card the player does not hold', () =>

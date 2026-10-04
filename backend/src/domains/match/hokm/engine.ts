@@ -284,7 +284,7 @@ export function apply(state: HokmState, action: HokmAction, deal: Deal): Outcome
 
     if (state.phase !== 'tricks')
     {
-        return { ok: false, reason: 'must-follow-suit' };
+        return { ok: false, reason: 'tricks-not-started' };
     }
 
     if (action.seat !== state.turn)

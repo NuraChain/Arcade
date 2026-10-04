@@ -118,6 +118,7 @@ export type HokmRefusal =
     | 'not-your-turn'
     | 'not-playing'
     | 'trump-already-set'
+    | 'tricks-not-started'
     | 'not-the-hakem'
     | 'must-follow-suit'
     | 'no-such-card'
