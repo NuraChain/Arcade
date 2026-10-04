@@ -13,5 +13,6 @@ export function mayDouble(state: BackgammonState, seat: number)
         && state.winner === null
         && state.crawford !== 'now'
         && state.cube < MAX_CUBE
+        && state.score[seat] + state.cube < state.target
         && (state.owner === null || state.owner === seat);
 }

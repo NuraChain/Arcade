@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import { BAR, CHECKERS, OFF, START, facing, type Hop, type Side } from '../src/domains/match/backgammon/board.ts';
-import { mayDouble } from '../src/domains/match/backgammon/cube.ts';
+import { MAX_CUBE, mayDouble } from '../src/domains/match/backgammon/cube.ts';
 import { apply, create, legalMoves } from '../src/domains/match/backgammon/engine.ts';
 import { canStep, longest, settle, stage, step, turns } from '../src/domains/match/backgammon/moves.ts';
 import { crawfordAfter, kindOf } from '../src/domains/match/backgammon/scoring.ts';
 import type { BackgammonState } from '../src/domains/match/backgammon/state.ts';
+import { backgammonEngine } from '../src/domains/match/engines/backgammon.ts';
 
 interface Layout
 {
@@ -649,7 +650,8 @@ describe('the doubling cube', () =>
 
     it('stops at sixty-four, the highest face it has', () =>
     {
-        expect(mayDouble(stateWith({ phase: 'roll', owner: 0, cube: 64 }), 0)).toBe(false);
+        expect(mayDouble(stateWith({ phase: 'roll', owner: 0, cube: MAX_CUBE / 2, target: 1000 }), 0)).toBe(true);
+        expect(mayDouble(stateWith({ phase: 'roll', owner: 0, cube: MAX_CUBE, target: 1000 }), 0)).toBe(false);
     });
 
     it('offers no beaver: the answer to a double is take or drop and nothing else', () =>
@@ -704,5 +706,79 @@ describe('the Crawford rule', () =>
 
         expect(second.ok && second.state.crawford).toBe('after');
         expect(second.ok && second.state.round).toBe(2);
+    });
+});
+
+describe('the dead cube', () =>
+{
+    const waiting = (overrides: Partial<BackgammonState>) =>
+        stateWith({ phase: 'roll', dice: [], crawford: 'after', owner: null, cube: 1, ...overrides });
+
+    const offers = (state: BackgammonState, seat: number) =>
+        legalMoves(state, seat).some((action) => action.kind === 'double');
+
+    it('is dead for the leader after the Crawford game, one point from the match, and live for the trailer', () =>
+    {
+        const leader = waiting({ target: 3, score: [2, 0], turn: 0 });
+
+        expect(mayDouble(leader, 0)).toBe(false);
+        expect(offers(leader, 0)).toBe(false);
+        expect(backgammonEngine.view(leader, 0)).toMatchObject({ kind: 'backgammon', doubling: false });
+        expect(apply(leader, { kind: 'double', seat: 0 }, scripted([6, 1]))).toEqual({ ok: false, reason: 'cannot-double' });
+
+        const trailer = waiting({ target: 3, score: [2, 0], turn: 1 });
+
+        expect(mayDouble(trailer, 1)).toBe(true);
+        expect(offers(trailer, 1)).toBe(true);
+        expect(backgammonEngine.view(trailer, 1)).toMatchObject({ kind: 'backgammon', doubling: true });
+    });
+
+    it('stays out of the Crawford game for both players, the trailer included', () =>
+    {
+        const crawford = waiting({ target: 5, score: [4, 1], crawford: 'now', turn: 1 });
+
+        expect(mayDouble(crawford, 1)).toBe(false);
+        expect(offers(crawford, 1)).toBe(false);
+        expect(apply(crawford, { kind: 'double', seat: 1 }, scripted([6, 1]))).toEqual({ ok: false, reason: 'cannot-double' });
+    });
+
+    it('is dead for an owner whose cube already wins them the match, and a redouble is refused', () =>
+    {
+        const enough = waiting({ target: 5, score: [1, 0], owner: 0, cube: 4, turn: 0 });
+
+        expect(mayDouble(enough, 0)).toBe(false);
+        expect(offers(enough, 0)).toBe(false);
+        expect(apply(enough, { kind: 'double', seat: 0 }, scripted([6, 1]))).toEqual({ ok: false, reason: 'cannot-double' });
+
+        expect(mayDouble(waiting({ target: 5, score: [3, 0], owner: 0, cube: 2, turn: 0 }), 0)).toBe(false);
+        expect(mayDouble(waiting({ target: 5, score: [0, 3], owner: 0, cube: 4, turn: 0 }), 0)).toBe(true);
+    });
+
+    it('is live before the Crawford game while a single game at the cube cannot end the match', () =>
+    {
+        const early = waiting({ target: 5, score: [3, 2], crawford: 'before', turn: 0 });
+
+        expect(mayDouble(early, 0)).toBe(true);
+        expect(mayDouble(early, 1)).toBe(true);
+        expect(mayDouble({ ...early, owner: 1, cube: 2 }, 1)).toBe(true);
+        expect(mayDouble({ ...early, owner: 0, cube: 2 }, 0)).toBe(false);
+    });
+
+    it('is dead in a one-point match even on a state that claims a cube', () =>
+    {
+        const single = waiting({ target: 1, cubed: true, score: [0, 0], crawford: 'before', turn: 0 });
+
+        expect(mayDouble(single, 0)).toBe(false);
+        expect(mayDouble(single, 1)).toBe(false);
+    });
+
+    it('rolls for a player whose cube is dead inside the move that ended the last turn', () =>
+    {
+        const moving = waiting({ target: 3, score: [2, 0], turn: 1, phase: 'move', dice: [6, 5], checkers: [[...START], [...START]] });
+        const played = apply(moving, { kind: 'move', seat: 1, hops: [{ from: 24, to: 18 }, { from: 18, to: 13 }] }, scripted([3, 1]));
+
+        expect(played.ok && played.state.turn).toBe(0);
+        expect(played.ok && played.state.phase).toBe('move');
+        expect(played.ok && played.events).toContainEqual({ e: 'roll', seat: 0, dice: [3, 1] });
     });
 });

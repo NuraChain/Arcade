@@ -842,7 +842,8 @@ overwritten on conflict, so it reached a database built from nothing.
 The third engine, and the first one somebody plays by PLACING things rather than by choosing one of a
 handful: a turn is up to four checker moves whose legality depends on each other. `docs/games/02-backgammon.md`
 is the rulebook - standard match play to one, three or five points, the cube dead in a one-point
-match, Crawford, no Jacoby and no beavers - and `backgammon-rules.spec.ts` holds the move generator to a
+match and for any player the current cube would already carry to the target (USBGF's dead cube),
+Crawford, no Jacoby and no beavers - and `backgammon-rules.spec.ts` holds the move generator to a
 naive enumerator written inside the spec, over hundreds of self-played positions.
 
 **The board stages a turn one hop at a time, and the SERVER's rules say which hops are left.**

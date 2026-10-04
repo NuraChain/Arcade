@@ -564,6 +564,11 @@ describe('a match always ends', () =>
                             faults.push('a double offered in the Crawford game');
                         }
 
+                        if (state.score[seat] + state.cube >= target && legal.some((action) => action.kind === 'double'))
+                        {
+                            faults.push(`a double offered with a dead cube at ${ state.score.join('-') } on ${ state.cube }`);
+                        }
+
                         seen.crawford += state.crawford === 'now' ? 1 : 0;
 
                         const chosen: BackgammonAction = random() < 0.003

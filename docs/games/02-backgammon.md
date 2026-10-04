@@ -18,6 +18,7 @@ Canonical ruleset: [bkgm.com rules](https://bkgm.com/rules.html) and
 | targets | 1, 3 and 5; a table with target 0 plays to 1 | an 11-point match at 30-second turns runs over an hour on a phone |
 | cube | on when `table.cube` and the target is above 1; dead in a 1-point match | a cube in a 1-point match changes nothing but the wait |
 | Crawford | yes: no doubling in the game after a player first reaches target − 1, allowed again after it | standard match play |
+| dead cube | a player may not double when winning this game at the current cube would already win them the match (`score + cube ≥ target`); the opponent still may | the [USBGF 2025 rules](https://usbgf.org/wp-content/uploads/2024/06/USBGF-rules-2025.pdf), the WBGF rendition, under *Crawford Game; Dead Cubes*: "The cube is dead for a player who would win the match by winning the game at the current cube level. Any cube action during the Crawford game or with a dead cube is void." |
 | Jacoby, beavers, automatic doubles | none | match play, where Jacoby does not apply and beavers are a money-game convention |
 | cube ceiling | 64, the highest face a cube has | also what bounds every number on the wire |
 | rolling | the engine rolls for a player who has no cube decision, inside the action that ended the previous turn | one action per turn; the dice appear with the turn |
@@ -112,7 +113,11 @@ cube is centred, the Crawford state steps (`before → now` when the winner is a
 `now → after` after the Crawford game) and the next game opens.
 
 `mayDouble` is: the cube is live, the match is not over, this is not the Crawford game, the cube is
-below 64, and the cube is centred or owned by the player asking.
+below 64, the cube is not dead for the player asking (their score plus the cube is below the
+target), and the cube is centred or owned by the player asking. A dead cube is why the leader after
+the Crawford game is rolled for while the trailer is asked, why an owner whose cube already covers
+the match cannot redouble, and why a 1-point match never offers a double. `view.doubling`, `legal`,
+the automatic roll and the `cannot-double` refusal all read this one function.
 
 ### Refusals
 
