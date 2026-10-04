@@ -236,6 +236,10 @@ async function audit(page)
                     return true;
                 }
                 const hit = document.elementFromPoint(x, y);
+                if (hit !== null && hit.closest('[data-island]') !== null && control.closest('[data-island]') === null)
+                {
+                    return true;
+                }
                 return hit !== null && (hit === control || control.contains(hit));
             });
         };
