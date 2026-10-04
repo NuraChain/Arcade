@@ -1024,7 +1024,9 @@ one file.
 it, the turn is an `aria-live` region, and the pieces are `aria-hidden` inside a labelled host. That
 is what makes the game playable by keyboard and readable by a screen reader. Pointing at a token is a
 shortcut to the move list and nothing more: a tap anywhere near a token the server called legal picks
-it (`pickNear`), and a tap on anything else does nothing.
+it (`pickNear`), and a tap on anything else does nothing. On a six every token still in the yard is
+playable, because they are interchangeable: `pieceFor` turns a tap on any of them into the one entry
+the move list offers, and the engine accepts any yard token for it (D12).
 
 **`/app/play/:id` is in the matrix now**, and was not for a long time - so the one route carrying a
 board was the one route the 640-cell gate never toured. `matrix.mjs` seats a second wallet fixture,

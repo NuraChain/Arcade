@@ -19,7 +19,7 @@ import type { BoardView, LudoBeat } from '../../game/bridge.ts';
 import { chairsOf, ludoOf } from '../../data/match.ts';
 import { seatsFor } from './seats.ts';
 import { CELL, MARGIN } from '../../game/layout.ts';
-import { coachOf, movedTo, outcomeOf } from '../../game/helpers/ludo.ts';
+import { coachOf, movedTo, outcomeOf, pieceFor } from '../../game/helpers/ludo.ts';
 
 const STAGE = `--cell-cq: ${ (CELL * 100).toFixed(4) }cqi; --margin-cq: ${ (MARGIN * 100).toFixed(4) }cqi`;
 
@@ -135,13 +135,14 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
     const pick = async (key: string) =>
     {
         const [seat, piece] = key.split('-').map(Number);
+        const legal = seat === mine ? pieceFor(untrack(() => ludo), seat, piece) : null;
 
-        if (seat !== mine || !board.moves().includes(piece))
+        if (legal === null || !board.moves().includes(legal))
         {
             return;
         }
 
-        await moveNow(piece);
+        await moveNow(legal);
     };
 
     const moveNow = async (piece: number) =>

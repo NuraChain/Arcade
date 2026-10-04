@@ -83,6 +83,33 @@ describe('leaving the yard', () =>
         expect(legalMoves(state)).toEqual([0]);
     });
 
+    it('accepts any yard token on a six and brings out the first one in the yard', () =>
+    {
+        const start = withDie(place(table(2), 0, [YARD, 10, YARD, YARD]), 6);
+
+        expect(legalMoves(start)).toEqual([0, 1]);
+
+        for (const piece of [0, 2, 3])
+        {
+            const { state, events } = ok(apply(start, { kind: 'move', seat: 0, piece }));
+
+            expect(state.players[0].pieces, `naming token ${ piece }`).toEqual([0, 10, YARD, YARD]);
+            expect(events.find((event) => event.e === 'enter')).toEqual({ e: 'enter', seat: 0, piece: 0 });
+        }
+    });
+
+    it('still refuses every yard token without a six', () =>
+    {
+        const start = withDie(place(table(2), 0, [10, YARD, YARD, YARD]), 4);
+
+        for (const piece of [1, 2, 3])
+        {
+            const outcome = apply(start, { kind: 'move', seat: 0, piece });
+
+            expect(outcome.ok ? null : outcome.reason, `naming token ${ piece }`).toBe('illegal-move');
+        }
+    });
+
     it('puts the token on its own entry square', () =>
     {
         const start = withDie(table(4), 6);

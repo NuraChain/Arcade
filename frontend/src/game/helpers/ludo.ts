@@ -37,6 +37,23 @@ const landing = (seat: LudoSeat, piece: number, die: number): number | null =>
     return token.at === YARD ? 0 : token.at + die;
 };
 
+export function pieceFor(board: LudoBoard, seat: number, piece: number)
+{
+    if (board.moves.includes(piece))
+    {
+        return piece;
+    }
+
+    const tokens = board.seats.find((one) => one.seat === seat)?.tokens ?? [];
+
+    if (tokens.find((token) => token.piece === piece)?.at !== YARD)
+    {
+        return null;
+    }
+
+    return tokens.find((token) => token.at === YARD && board.moves.includes(token.piece))?.piece ?? null;
+}
+
 export function movedTo(board: LudoBoard, seat: number, piece: number): LudoBoard | null
 {
     const mover = board.seats.find((one) => one.seat === seat);

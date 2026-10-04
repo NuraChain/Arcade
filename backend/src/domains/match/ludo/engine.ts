@@ -168,6 +168,13 @@ export function legalMoves(state: LudoState): number[]
     return moves;
 }
 
+function entering(state: LudoState, piece: number)
+{
+    const pieces = state.players[state.turn].pieces;
+
+    return pieces[piece] === YARD ? pieces.indexOf(YARD) : piece;
+}
+
 function captureAt(state: LudoState, mover: number, moving: number, progress: number, events: GameEvent[])
 {
     if (progress >= RING_STEPS)
@@ -364,7 +371,9 @@ export function apply(state: LudoState, action: EngineAction): Outcome
         return { ok: false, reason: 'must-roll-first' };
     }
 
-    if (!legalMoves(state).includes(action.piece))
+    const piece = entering(state, action.piece);
+
+    if (!legalMoves(state).includes(piece))
     {
         return { ok: false, reason: 'illegal-move' };
     }
@@ -372,7 +381,7 @@ export function apply(state: LudoState, action: EngineAction): Outcome
     const next = clone(state);
     const events: GameEvent[] = [];
 
-    move(next, action.seat, action.piece, events);
+    move(next, action.seat, piece, events);
     next.rev = state.rev + 1;
 
     return { ok: true, state: next, events };

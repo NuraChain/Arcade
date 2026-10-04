@@ -11,6 +11,9 @@ import { useBoard, type EventBatch } from '../src/stores/match.store.ts';
 import { usePeople } from '../src/stores/people.store.ts';
 import { useSettings } from '../src/stores/settings.store.ts';
 import type { MatchView } from '../src/api.ts';
+import { ludoOf } from '../src/data/match.ts';
+import { seatsFor } from '../src/components/games/seats.ts';
+import { CELL, centreOf } from '../src/game/layout.ts';
 import { ludoEngine } from '../../backend/src/domains/match/engines/ludo.ts';
 import type { LudoState } from '../../backend/src/domains/match/ludo/state.ts';
 import { client } from './fake-api.ts';
@@ -187,6 +190,38 @@ describe('the ludo helpers, and the switch for each', () =>
         await settle();
 
         expect(note()).toBeNull();
+    });
+
+    it('takes a tap on any yard token as bringing one out', async () =>
+    {
+        const animate = Element.prototype.animate;
+
+        vi.spyOn(Element.prototype, 'animate').mockImplementation(function (this: Element, ...args: Parameters<Element['animate']>)
+        {
+            const running = animate.apply(this, args);
+
+            running.finished.catch(() => undefined);
+            return running;
+        });
+
+        const move = vi.spyOn(useBoard(), 'move').mockResolvedValue('now');
+        const match = ludo(position([-1, -1, -1, -1], [-1, -1, -1, -1], 6));
+        const container = await show(match);
+
+        for (let wait = 0; wait < 20 && container.querySelector('.lp') === null; wait += 1)
+        {
+            await settle();
+        }
+
+        const host = container.querySelector('.board-canvas') as HTMLElement;
+        const last = seatsFor(ludoOf(match)!, 0).find((token) => token.key === '0-3')!;
+        const spot = centreOf(last.col, last.row, 1000);
+
+        vi.spyOn(host, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, right: 1000, bottom: 1000, width: 1000, height: 1000, x: 0, y: 0, toJSON: () => ({}) });
+        host.dispatchEvent(new MouseEvent('pointerup', { clientX: spot.x, clientY: spot.y - CELL * 1000 * 0.3, bubbles: true }));
+        await settle();
+
+        expect(move).toHaveBeenCalledWith(0);
     });
 
     it('tells somebody watching nothing about moves they do not have', async () =>

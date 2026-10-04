@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { coachOf, movedTo, outcomeOf, type LudoHappened, type LudoOutcome } from '../src/game/helpers/ludo.ts';
+import { coachOf, movedTo, outcomeOf, pieceFor, type LudoHappened, type LudoOutcome } from '../src/game/helpers/ludo.ts';
 import type { LudoBoard } from '../src/data/match.ts';
 import { ludoEngine } from '../../backend/src/domains/match/engines/ludo.ts';
 import { apply, create } from '../../backend/src/domains/match/ludo/engine.ts';
@@ -205,5 +205,32 @@ describe('the rule that matters now', () =>
         const state = position([YARD, YARD], null);
 
         expect(coachOf(boardOf(state, null), undefined, 0, [{ e: 'pass', seat: 0, why: 'three-sixes' }])).toBeNull();
+    });
+});
+
+describe('a tap on any yard token means the yard token the server offered', () =>
+{
+    it('maps every yard token to the one entry on offer', () =>
+    {
+        const board = boardOf(position([[-1, 10, -1, -1], YARD], 6));
+
+        expect(board.moves).toEqual([0, 1]);
+        expect([0, 2, 3].map((piece) => pieceFor(board, 0, piece))).toEqual([0, 0, 0]);
+    });
+
+    it('keeps a token the server offered and refuses one it did not', () =>
+    {
+        const board = boardOf(position([[-1, 10, 54, -1], YARD], 6));
+
+        expect(pieceFor(board, 0, 1)).toBe(1);
+        expect(pieceFor(board, 0, 2)).toBeNull();
+    });
+
+    it('maps no yard token without a six, and none for somebody watching', () =>
+    {
+        const six = position([[-1, 10, -1, -1], YARD], 6);
+
+        expect(pieceFor(boardOf(position([[-1, 10, -1, -1], YARD], 4)), 0, 2)).toBeNull();
+        expect(pieceFor(boardOf(six, null), 0, 2)).toBeNull();
     });
 });

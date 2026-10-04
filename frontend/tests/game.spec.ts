@@ -611,9 +611,23 @@ describe('the two halves of a chair', () =>
         const board = ludoOf(match([seat(0, 'red'), seat(1, 'green')], [0, 1]))!;
 
         expect(seatsFor(board, 0).filter((token) => token.playable).map((token) => token.key))
-            .toEqual(['0-1']);
+            .toEqual(['0-0', '0-1', '0-2', '0-3']);
 
         expect(seatsFor(board).some((token) => token.playable)).toBe(false);
+    });
+
+    it('lights every yard token while an entry is on offer, and only the offered moves otherwise', () =>
+    {
+        const red: LudoSeat = {
+            ...seat(0, 'red'),
+            tokens: [{ piece: 0, at: -1 }, { piece: 1, at: 10, cell: { col: 6, row: 2 } }, { piece: 2, at: -1 }, { piece: 3, at: -1 }]
+        };
+        const lit = (moves: number[]) => seatsFor({ kind: 'ludo', die: 6, moves, seats: [red] }, 0)
+            .filter((token) => token.playable)
+            .map((token) => token.key);
+
+        expect(lit([0, 1])).toEqual(['0-0', '0-1', '0-2', '0-3']);
+        expect(lit([1])).toEqual(['0-1']);
     });
 });
 

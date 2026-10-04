@@ -1,6 +1,7 @@
 import type { BoardToken } from '../../game/bridge.ts';
 import { HOME_SLOTS, NEST, NEST_SPREAD, NEST_WELLS } from '../../game/layout.ts';
 import type { LudoBoard } from '../../data/match.ts';
+import { pieceFor } from '../../game/helpers/ludo.ts';
 
 /**
  * Where every token on a board stands, from the match the server sent.
@@ -53,7 +54,7 @@ export function seatsFor(board: LudoBoard, mine?: number)
         for (const token of player.tokens)
         {
             const key = `${ player.seat }-${ token.piece }`;
-            const playable = mine !== undefined && player.seat === mine && board.moves.includes(token.piece);
+            const playable = mine !== undefined && player.seat === mine && pieceFor(board, mine, token.piece) !== null;
 
             if (token.cell !== undefined)
             {
