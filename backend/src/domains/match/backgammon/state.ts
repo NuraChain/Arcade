@@ -19,7 +19,7 @@ export interface BackgammonState
     dice: number[];
     cube: number;
     owner: number | null;
-    acted: number[];
+    turns: number;
     winner: number | null;
 }
 

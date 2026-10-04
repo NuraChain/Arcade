@@ -39,7 +39,9 @@ const SCOPES: readonly (string | null)[] = [null, ...Object.keys(GAME_FAMILIES)]
 
 const RECENT = 12;
 
-const FINISHED = 'p.user_id = :userId and p.result is not null and m.finished_at is not null';
+const COUNTED = `p.result in ('won', 'lost', 'abandoned')`;
+
+const FINISHED = `p.user_id = :userId and ${ COUNTED } and m.finished_at is not null`;
 
 const blank = (): LadderFacts => ({
     played: 0,
@@ -500,6 +502,7 @@ export function createAchieveService(db: DataSource)
                     .leftJoin(PlayerStats, 's', 's.user_id = p.user_id and s.game = m.game')
                     .where('m.game = :game', { game })
                     .andWhere('m.finished_at is not null')
+                    .andWhere(COUNTED)
                     .andWhere(
                         `m.finished_at >= (date_trunc(:span, (now() at time zone 'utc')) at time zone 'utc')`,
                         { span: SPANS[window] }

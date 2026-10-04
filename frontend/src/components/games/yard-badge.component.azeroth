@@ -56,6 +56,11 @@ export default component YardBadge(props: {
             return locale.t('card.lost');
         }
 
+        if (props.player.result === 'void')
+        {
+            return locale.t('card.void');
+        }
+
         if (props.player.timeouts > 0)
         {
             return warned

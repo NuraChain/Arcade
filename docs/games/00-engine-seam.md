@@ -108,10 +108,24 @@ Engine<State, Action>
     view(state, seat | null)       -> unknown        // per viewer. the whole redaction story
     turnOf(state)                  -> number | null
     autoplay(state, seat)          -> Action | null  // what the timeout sweep plays
-    finish(state)                  -> { winners: number[], outcome } | null
-    standings(state)               -> Placement[]    // feeds rating
+    finish(state)                  -> { winners: number[], unsettled: number[] } | null   // facts only
+    standings(state)               -> Placement[]    // competition-ranked; feeds the judge
+    sideOf(seat, seats)            -> number         // who plays together; teams only in 4P hokm
+    engagement(seats)              -> { verbs, after }  // which own decisions count, and how many
+    turnKey(state)                 -> string         // with turnOf, says whether a turn is the same one
     tally(events)                  -> per-seat counters   // feeds stats and XP
 ```
+
+**An engine reports facts and never decides what a result is worth.** `finish` used to return an
+`outcome` - `won` or `abandoned` - and each engine had its own threshold for when a forfeit counted
+(`RATED_AFTER`, backgammon's `acted`, poker's "anybody resigned"). Now `finish` names the winners and
+the seats the game stopped before ordering (`unsettled`, which only hokm ever fills, at a forfeit),
+and the one pure `domains/match/judge.ts` decides every game's results from those facts plus the
+ledger: a quitter always takes a rated loss (and is never rated against a seat that quit before it),
+a survivor is rated against a quitter only if both
+played `engagement(seats).after` decisions of their own, and a seat with no counted pair is `void`.
+`record.ts` is the database adapter around it. The rule and its cases are in `.claude/rules/games.md`
+under *What a game leaves behind*.
 
 Two contracts the existing code already imposes and the seam must state explicitly:
 
@@ -256,6 +270,8 @@ beside `ludoEngine.finish`, which read the same board and gave the same answer. 
 rule, and the third game would have had to remember to add a third copy. It is gone; `finish` and
 `standings` come off the engine, so nothing in the file that records every game's result knows what
 was played. `commit` takes the engine too, rather than reading `next.winner` out of ludo's state.
+(Later the outcome left the engines as well: `finish` reports facts and `judge.ts` decides - see
+*The interface* above.)
 
 **The tallies were three integer columns on a table every game shares.** `captures`, `rolls` and
 `tokens_home`, counted by `count(*) filter (where e ->> 'e' = 'capture')` - ludo's event names, in
@@ -326,8 +342,8 @@ Two schema changes fell out, both re-recorded as part of this:
   file deletes everywhere else.
 
 **`asMatch` stopped reading the state at all.** The seats come from `match_players`, the turn from
-`engine.turnOf`, and the winner from `matches.winner_seat` - which `commit` already writes from the
-engine's own `Ending`. It was walking an engine's internal player array to find a handle.
+`engine.turnOf`, and the winner from `matches.winner_seat` - which the recorder writes from the
+judge's plan. It was walking an engine's internal player array to find a handle.
 
 `engine-seam.spec.ts` now covers the whole shared path - `services.ts`, `watch.ts`, `record.ts` -
 and fails if any of them imports anything under `ludo/`. `service.ts` is deliberately absent: it

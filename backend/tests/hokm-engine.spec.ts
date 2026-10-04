@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { rankOf, suitOf } from '../src/domains/match/cards/cards.ts';
 import { deckFor } from '../src/domains/match/hokm/cards.ts';
+import { hokmEngine } from '../src/domains/match/engines/hokm.ts';
 import { SEATS, apply, autoplay, create, dealerSeat, legalMoves } from '../src/domains/match/hokm/engine.ts';
 import { GAME_SEEDS } from '../src/db/seed-reference.ts';
 import { trickCount } from '../src/domains/match/hokm/scoring.ts';
@@ -529,11 +530,6 @@ describe('refusing what is not a move', () =>
 
 describe('walking away', () =>
 {
-    /**
-     * Four-handed hokm cannot be played three-handed, so a forfeit ends the match rather than the
-     * hand - and the side that is left is NAMED so the board can stop, while `finish` reports it as
-     * abandoned so no rating moves. That is ludo's rule and the reason it exists is the same.
-     */
     it('ends the whole match, not the hand', () =>
     {
         const state = create(4, 7, seeded(13));
@@ -557,6 +553,97 @@ describe('walking away', () =>
         expect(sideCount(3)).toBe(3);
         expect(sideCount(2)).toBe(2);
         expect([0, 1, 2, 3].map((seat) => sideOf(seat, 4))).toEqual([0, 1, 0, 1]);
+        expect([0, 1, 2, 3].map((seat) => hokmEngine.sideOf(seat, 4))).toEqual([0, 1, 0, 1]);
+        expect([0, 1, 2].map((seat) => hokmEngine.sideOf(seat, 3))).toEqual([0, 1, 2]);
+    });
+});
+
+describe('what a finished match reports', () =>
+{
+    const forfeited = (state: HokmState, seat: number) =>
+    {
+        const quit = apply(state, { kind: 'forfeit', seat, reason: 'resign' }, seeded(1));
+
+        if (!quit.ok)
+        {
+            throw new Error(quit.reason);
+        }
+
+        return quit.state;
+    };
+
+    const placesOf = (state: HokmState) =>
+        hokmEngine.standings(state).sort((a, b) => a.seat - b.seat).map((one) => one.place);
+
+    it('places a side that walked out last, however many points it had', () =>
+    {
+        const ended = forfeited({ ...create(3, 7, seeded(5)), points: [1, 5, 2] }, 1);
+
+        expect(placesOf(ended)).toEqual([2, 3, 1]);
+    });
+
+    it('lets two sides level on points share a place', () =>
+    {
+        const ended: HokmState = { ...create(3, 7, seeded(5)), points: [7, 3, 3], winner: 0 };
+
+        expect(placesOf(ended)).toEqual([1, 2, 2]);
+    });
+
+    it('names both partners at the target and leaves nobody unsettled', () =>
+    {
+        const ended: HokmState = { ...create(4, 7, seeded(5)), points: [7, 4], winner: 0 };
+
+        expect(hokmEngine.finish(ended)).toEqual({ winners: [0, 2], unsettled: [] });
+        expect(placesOf(ended)).toEqual([1, 2, 1, 2]);
+    });
+
+    it('leaves everybody still at the table unsettled when a forfeit stopped it', () =>
+    {
+        const four = forfeited({ ...create(4, 7, seeded(5)), points: [2, 4] }, 1);
+        const three = forfeited({ ...create(3, 7, seeded(5)), points: [1, 5, 2] }, 1);
+
+        expect(hokmEngine.finish(four)).toEqual({ winners: [0, 2], unsettled: [0, 2, 3] });
+        expect(placesOf(four)).toEqual([1, 2, 1, 2]);
+        expect(hokmEngine.finish(three)).toEqual({ winners: [2], unsettled: [0, 2] });
+    });
+
+    it('counts a hand of cards as engagement: seven at three and four, a whole hand at two', () =>
+    {
+        expect(hokmEngine.engagement(4)).toEqual({ verbs: ['card'], after: 7 });
+        expect(hokmEngine.engagement(3)).toEqual({ verbs: ['card'], after: 7 });
+        expect(hokmEngine.engagement(2)).toEqual({ verbs: ['card'], after: 13 });
+    });
+});
+
+describe('one turn on the clock', () =>
+{
+    it('keeps the trump call and the lead on one key, and gives every trick a fresh one', () =>
+    {
+        let state = create(4, 7, seeded(21));
+        const keys: string[] = [hokmEngine.turnKey(state)];
+        const deal = seeded(3);
+
+        for (let action = 0; action < 40 && state.winner === null; action += 1)
+        {
+            const seat = hokmEngine.turnOf(state)!;
+            const before = state;
+            const step = apply(state, autoplay(state, seat, deal)!, deal);
+
+            if (!step.ok)
+            {
+                throw new Error(step.reason);
+            }
+
+            state = step.state;
+
+            const played = (one: HokmState) => one.tricks.reduce((total, count) => total + count, 0);
+            const fresh = state.round !== before.round || played(state) !== played(before);
+
+            expect(hokmEngine.turnKey(state) !== hokmEngine.turnKey(before), `action ${ action }`).toBe(fresh);
+            keys.push(hokmEngine.turnKey(state));
+        }
+
+        expect(keys[1]).toBe(keys[0]);
     });
 });
 

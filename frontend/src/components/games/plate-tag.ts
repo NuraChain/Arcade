@@ -32,6 +32,11 @@ export function plateTag(locale: ReturnType<typeof useLocale>, player: MatchPlay
         return { text: locale.t('card.lost'), tone: 'neutral' };
     }
 
+    if (player.result === 'void')
+    {
+        return { text: locale.t('card.void'), tone: 'neutral' };
+    }
+
     if (player.timeouts > 0 && !finished)
     {
         return nextMissForfeits(player.timeouts)

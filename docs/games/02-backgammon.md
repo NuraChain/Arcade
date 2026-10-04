@@ -124,14 +124,24 @@ fails to compile if a reason in `BackgammonRefusal` has no words.
 
 ### Walkouts, and what counts as a win
 
-A forfeit ends the match and names the other seat. Whether that is **won** or **abandoned** is the
-new-game rule for two seats: once both seats have taken at least two actions (`acted` in the state,
-counting every applied action but a forfeit), a forfeit is a rated win for the other seat; before
-that it is abandoned and unrated. A match played to its target is always won.
+A forfeit ends the match and names the other seat. `finish` reports that fact and nothing more -
+`{ winners: [other], unsettled: [] }` - and the platform's one rule (`domains/match/judge.ts`)
+decides what it is worth. Engagement for backgammon is **4 own moves or cube actions**
+(`move`, `double`, `take`, `drop`): rolls are not choices, and they roll themselves whenever the cube
+is dead.
 
-`acted` counts what the engine was asked to apply, so a turn the sweep plays for somebody who timed
-out counts as theirs. A seat that never acts is played twice by the sweep and forfeited on the
-third miss, which crosses the threshold if the opponent has also acted twice.
+| | quitter | the other seat |
+|---|---|---|
+| played to the target | — | `won`, rated; the loser `lost`, rated |
+| a forfeit, both seats engaged | `abandoned`, a rated loss | `won`, rated |
+| a forfeit, either seat short of 4 | `abandoned`, a rated loss | `void`: no rating, no XP, nothing recorded |
+
+A timeout forfeit is the same rated loss as a resignation (it keeps its XP if the seat had made 4
+decisions of its own first; a resignation never does).
+Engagement is counted from the ledger's rows that name a person, so a turn the sweep played for an
+absent seat never counts as theirs. The state carries `turns` - one per turn begun, the opening
+included - which is the engine's `turnKey`: it stays the same from a roll to the move it allows, and
+changes when a dance passes the dice back round or a new game opens on the same seat.
 
 ### Autoplay
 
@@ -178,11 +188,15 @@ about the same as a ludo or hokm win.
   enumerator cross-check, checker conservation after every single hop of four hundred plies,
   scoring times the cube, the dead cube, no beavers, and the Crawford sequence played for real.
 - `backend/tests/backgammon-engine.spec.ts`: the opening roll and its tie, automatic rolling, the pass,
-  every refusal, walkouts and the two-action threshold, autoplay, the tallies, and seeded whole
+  every refusal, walkouts reported as facts, the turn counter and its key, autoplay, the tallies, and seeded whole
   matches at 1, 3 and 5 points, cube on and off, with every invariant checked after every action.
 - `backend/tests/backgammon-seam.spec.ts`: every reader gets the same board and log all match long,
   the wire round-trips through the shared unions, and `parse` refuses other games' plays.
 - `backend/tests/engine-contract.spec.ts` plays random 1-point matches under its 3,000-action bound.
+- `backend/tests/backgammon.db.spec.ts` (opt-in, a real Postgres) plays through the match service: a
+  resignation at the opening is a rated loss and leaves the other seat `void` with nothing recorded,
+  four moves each and then a resignation is a rated win, and a turn the sweep played never counts as
+  a move of the seat it played for.
 
 ---
 

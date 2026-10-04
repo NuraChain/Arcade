@@ -1,5 +1,5 @@
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@azerothjs/http';
-import { In, IsNull, MoreThan, type DataSource, type EntityManager } from 'typeorm';
+import { IsNull, MoreThan, type DataSource, type EntityManager } from 'typeorm';
 
 import { MatchAction } from '../../entities/match-action.entity.ts';
 import { MatchPlayer, type MatchResult } from '../../entities/match-player.entity.ts';
@@ -291,8 +291,6 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
     ) =>
     {
         const ending = engine.finish(next);
-        const over = ending !== null;
-        const winnerSeat = ending?.winners[0] ?? null;
 
         const written = await tx.getRepository(Match).update(
             { id: match.id, rev: match.rev },
@@ -300,10 +298,7 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
                 state: next as Record<string, unknown>,
                 ...(match.opening === null ? { opening: match.state as Record<string, unknown> } : {}),
                 rev: revOf(next),
-                deadlineAt: over ? null : deadlineFrom(mode),
-                winnerSeat,
-                outcome: ending?.outcome ?? null,
-                finishedAt: over ? () => 'now()' : null
+                ...(ending === null ? { deadlineAt: deadlineFrom(mode) } : {})
             }
         );
 
@@ -331,34 +326,14 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
             await players.update({ matchId: match.id, seat: action.seat }, { timeouts: 0 });
         }
 
-        /**
-         * Every result is written here and nowhere else, and that ordering is load-bearing.
-         *
-         * A forfeit used to be recorded by the CALLER, after `commit` returned - so a resignation
-         * that ended the game had this function write `lost` over the resigner and the caller write
-         * `abandoned` back afterwards. `record.finish` reads those rows to decide who walked out, so
-         * it would have run in the window where the loser and the quitter were indistinguishable.
-         * A quitter must not be able to launder a walkout into an ordinary loss.
-         */
         if (action.kind === 'forfeit')
         {
             await players.update({ matchId: match.id, seat: action.seat, result: IsNull() }, { result: 'abandoned' });
         }
 
-        if (ending !== null && ending.winners.length > 0)
+        if (ending !== null)
         {
-            await players.update({ matchId: match.id, seat: In(ending.winners), result: IsNull() }, { result: 'won' });
-            await players.createQueryBuilder()
-                .update(MatchPlayer)
-                .set({ result: 'lost' })
-                .where('match_id = :matchId and result is null', { matchId: match.id })
-                .execute();
-
-            await recorder.finish(tx, match.id, engine, next);
-        }
-
-        if (over)
-        {
+            await recorder.finish(tx, match.id, engine, next, ending);
             await tx.getRepository(TableSeat).update({ tableId: match.tableId, ready: true }, { ready: false });
         }
     };

@@ -8,8 +8,8 @@ describe('what a game is worth', () =>
 {
     it('pays for finishing, and more for winning', () =>
     {
-        expect(xpFor({ walked: false, won: false, bonus: 0 })).toBe(XP_FINISH);
-        expect(xpFor({ walked: false, won: true, bonus: 0 })).toBe(XP_FINISH + XP_WIN);
+        expect(xpFor({ won: false, bonus: 0 })).toBe(XP_FINISH);
+        expect(xpFor({ won: true, bonus: 0 })).toBe(XP_FINISH + XP_WIN);
     });
 
     /**
@@ -22,7 +22,7 @@ describe('what a game is worth', () =>
         const bonus = ludoEngine.points({ captures: 3, home: 2 });
 
         expect(bonus).toBeGreaterThan(0);
-        expect(xpFor({ walked: false, won: false, bonus })).toBe(XP_FINISH + bonus);
+        expect(xpFor({ won: false, bonus })).toBe(XP_FINISH + bonus);
     });
 
     it('pays a backgammon match three a game and three a gammon, and never more than twenty-five on top', () =>
@@ -32,27 +32,12 @@ describe('what a game is worth', () =>
         const bonus = backgammonEngine.points({ games: 5, gammons: 5, backgammons: 5, hits: 30, borneOff: 75 });
 
         expect(bonus).toBe(25);
-        expect(xpFor({ walked: false, won: true, bonus })).toBe(XP_FINISH + XP_WIN + 25);
+        expect(xpFor({ won: true, bonus })).toBe(XP_FINISH + XP_WIN + 25);
     });
 
     it('never pays a negative bonus, whatever an engine says', () =>
     {
-        expect(xpFor({ walked: false, won: false, bonus: -50 })).toBe(XP_FINISH);
-    });
-
-    /**
-     * The hole this closes is the one `outcomeOf` closes for the rating. If a walkout banked the
-     * captures it had already made, leaving a game you are losing would be the profitable move -
-     * you would keep the good half of it and skip the loss.
-     */
-    it('pays a walkout nothing at all, however well it was going', () =>
-    {
-        expect(xpFor({ walked: true, won: false, bonus: ludoEngine.points({ captures: 9, home: 3 }) })).toBe(0);
-    });
-
-    it('cannot be won and walked at once, and the walkout wins that argument', () =>
-    {
-        expect(xpFor({ walked: true, won: true, bonus: ludoEngine.points({ home: 4 }) })).toBe(0);
+        expect(xpFor({ won: false, bonus: -50 })).toBe(XP_FINISH);
     });
 });
 

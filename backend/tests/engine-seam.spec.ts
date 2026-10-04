@@ -36,7 +36,18 @@ const read = (name: string) => readFileSync(join(HERE, '..', 'src', name), 'utf8
  * to be added to rather than plugged in. `service.ts` is deliberately absent: it names
  * `ludoEngine` once, as the default engine list, which is composition rather than coupling.
  */
-const SHARED = ['services.ts', 'domains/match/watch.ts', 'domains/match/record.ts'];
+const SHARED = ['services.ts', 'domains/match/watch.ts', 'domains/match/record.ts', 'domains/match/judge.ts'];
+
+const importsOf = (name: string) => [...read(name).matchAll(/from '([^']+)'/g)].map(([, specifier]) => specifier);
+
+describe('the judge', () =>
+{
+    it('decides from facts alone, and reaches for nothing but the rating arithmetic', () =>
+    {
+        expect(importsOf('domains/match/judge.ts')).toEqual(['./rating.ts']);
+        expect(importsOf('domains/match/rating.ts')).toEqual([]);
+    });
+});
 
 describe('the shared path', () =>
 {

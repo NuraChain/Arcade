@@ -506,11 +506,15 @@ is over the serialised payload rather than over named fields. Checking one field
 through the field somebody thought to check; searching the JSON for another seat's secret catches it
 through any field at all, including one added later by somebody who never read the test.
 
-**Nothing that records a result knows what was played.** `record.ts` carried `outcomeOf`, reading
-ludo's board to tell a played win from an emptied room, beside a `ludoEngine.finish` that read the
-same board and answered the same way - two copies of one rule, and the third game would have added a
-third. The outcome and the standings come off the engine now, and so does `commit`'s idea of whether
-a game is over.
+**Nothing that records a result knows what was played, and no engine decides what a result is
+worth.** `record.ts` carried `outcomeOf`, reading ludo's board to tell a played win from an emptied
+room, beside a `ludoEngine.finish` that read the same board and answered the same way - two copies of
+one rule. That moved into the engines for a while, and then each engine had its own idea of when a
+forfeit was rated (`RATED_AFTER` in two of them, every resignation at a poker table of three, never in
+ludo). Engines report FACTS now - `finish` is `{ winners, unsettled }`, `standings` is competition-
+ranked, `sideOf` says who plays together and `engagement` names the verbs that count as a decision -
+and the one pure `judge.ts` decides every game's results from those facts and the ledger. See *What a
+game leaves behind*.
 
 **`player_stats.tallies` is jsonb because `captures`, `rolls` and `tokens_home` were ludo's words on
 a table every game shares.** The row is keyed `(user_id, game)`, so a counter's name only has to
@@ -529,10 +533,11 @@ them. The rating never reads a tally, and XP reads one only through the engine's
 **A jsonb counter cannot be incremented the way an integer one can**, and this is the trap. Postgres
 has no operator that adds two jsonb objects of numbers: `||` REPLACES a key, so two games finishing
 for one person record the second and forget the first - the read-modify-write defect the second
-audit closed, reintroduced by the storage changing shape. The upsert sums both key sets through
-`jsonb_each_text` and re-aggregates inside the one statement the unique index serialises, and
-`record.db.spec.ts` plays two matches expecting five rolls. Also: **`both` is a reserved word**
-(`trim(both ...)`), so a subquery aliased that way is a syntax error only a real Postgres reports.
+audit closed, reintroduced by the storage changing shape. The update sums every key of
+`tallies || new` with `jsonb_object_agg` inside one statement, on a row the finish already holds
+`for update`, and `record.db.spec.ts` plays two matches expecting five rolls. Also: **`both` is a
+reserved word** (`trim(both ...)`), so a subquery aliased that way is a syntax error only a real
+Postgres reports.
 
 **XP is split where the knowledge is.** `levels.ts` keeps the finish and the win, which are facts
 about a match; `Engine.points(tally)` is what a game's own doings are worth, because a capture being
@@ -559,15 +564,16 @@ reads `schemas.ts` and `api.ts` as text to keep it that way.
 **`match_actions.kind` is `play` or `forfeit`, and nothing else.** It was `roll | move | forfeit`,
 which is ludo's vocabulary on the ledger every game writes to. What the platform actually reads is
 whether somebody STOPPED - `record.ts` tells a walkout from a timeout by asking whether a forfeit
-names a person - and nothing branches on the others, so the verb lives in `payload` where an engine's
-own words belong.
+names a person - and how many decisions a seat made itself, which it counts from `payload ->> 'verb'`
+on the rows that name a person, so the verb lives in `payload` where an engine's own words belong.
 
 **`asMatch` reads no state at all.** The seats come from `match_players`, the turn from
-`engine.turnOf`, and the winner from `matches.winner_seat`, which `commit` writes from the engine's
-own `Ending`. `match_players.colour` went with it: its docblock said it was what the table is joined
+`engine.turnOf`, and the winner from `matches.winner_seat`, which the recorder writes from the judge's
+plan. `match_players.colour` went with it: its docblock said it was what the table is joined
 on to draw a board, which stopped being true the moment the board became the engine's to compose, and
 nothing had read it since. `tests/engine-seam.spec.ts` covers the whole shared path now -
-`services.ts`, `watch.ts`, `record.ts` - and fails if any of them imports anything under `ludo/`.
+`services.ts`, `watch.ts`, `record.ts`, `judge.ts` - and fails if any of them imports anything under
+`ludo/`; `judge.ts` may import `rating.ts` and nothing else, and `rating.ts` nothing at all.
 
 **The die is `randomInt` from `node:crypto`, and the product says only that the server rolls it.**
 Not `randomBytes(1) % 6`, which quietly favours the low faces. What cannot be claimed is fairness: a
@@ -657,9 +663,10 @@ never `MoreThan(new Date())`, because the deadline is written by Postgres too (`
 `autoplay`, and bumps `timeouts`. The third miss IN A ROW (`MISSES_ALLOWED`, asked through
 `nextMissForfeits`) forfeits that seat: any action a person takes puts their count back to zero,
 because a count that only ever grew forfeited somebody for three misses spread across a whole match,
-and a Sit & Go is two hundred decisions a seat. When forfeits leave one player standing the match
-ends `abandoned`. The server's own actions are written with `user_id = null`, which is what
-distinguishes them in the ledger.
+and a Sit & Go is two hundred decisions a seat. A timeout forfeit is a rated loss for that seat like
+any other forfeit, and the match is `won` or `abandoned` by the judge's rule (see *What a game leaves
+behind*). The server's own actions are written with `user_id = null`, which is what distinguishes
+them in the ledger, and is why no turn the sweep played ever counts towards a seat's engagement.
 
 **The clock is the SERVER's, counted from the moment its answer arrived.** `matchView.remainingMs` is
 worked out when the response is composed, and `TurnClock` counts down from the instant it lands -
@@ -741,8 +748,16 @@ dealing ritual with no decision in them, and a state nobody can act in only exis
 past. There is no `deal.ts` and no `rotation.ts` for the same reason.
 
 **A forfeit ends the MATCH, not the hand.** Four-handed hokm cannot be played three-handed, so there
-is nothing to continue with; the side left standing is named so the board can stop and `finish`
-reports `abandoned`, which keeps it out of the rating. Ludo's rule, for ludo's reason.
+is nothing to continue with; the side left standing is named so the board can stop, and `finish`
+reports every seat still at the table as `unsettled`, because the game stopped before it decided
+their order. The judge never rates two unsettled sides against each other: the three-handed survivors
+are not rated against one another, and a four-handed quitter's PARTNER - unsettled against both
+opponents and on the quitter's own side - has nobody counted against them and is `void`, neither
+punished for a teammate's walkout nor paid for a win their side did not have. The quitter takes a
+rated loss, team against team; the opponents win only if they and the quitter had each played a
+hand's worth of cards (`engagement`: 7 at three and four, 13 at two). `standings` puts a side with a
+seat out LAST whatever its points and lets sides level on points share a place (HOKM-03: a 3P tie
+used to be broken by seat number).
 
 **The log needs no filtering and that is a fact about what is LOGGED.** A card is played face up, a
 trump is called aloud, a trick is taken in front of the table and a hand is written on a score sheet.
@@ -1447,20 +1462,59 @@ disagreeing about the same game.
 The table was called `game_ratings` while `rating` was the only thing in it. Played, won, captures
 and a streak are not ratings.
 
-**Being the last one left in an empty room is not a win, and until `record.ts` existed it paid like
-one.** The engine declares a winner in two quite different situations - somebody brought four
-tokens home, or everybody else walked out - and `commit` recorded both as `outcome: 'won'`. That is
-a rating farm: three accounts sit down, two leave, the third is handed the win. `outcomeOf` tells
-them apart by looking at the board, the second is `abandoned`, and an abandoned match moves the
-counts and the streaks and nothing else. `record.db.spec.ts` owns it against a real Postgres.
+**One forfeit and rating rule for all four games, in one pure file.** Each engine used to decide for
+itself whether a forfeit was rated - backgammon and heads-up poker after two actions each (counting
+the turns the SWEEP played for an absent seat), poker at three seats whenever anybody resigned, hokm
+and ludo never - so the same walkout cost a different amount at every table, a trailing player could
+stop and be timed out to dodge a loss, and four-handed partners were rated against each other.
+`judge.ts` imports only `rating.ts` and decides from facts:
 
-**A rating is Elo over a FIELD.** Two players is ordinary Elo; three and four score every pair and
-average over the opponents faced, so beating a strong field is worth more than beating a weak one
-and the answer does not depend on how the seats were numbered. Ludo only ever declares a first, so
+- **Facts per seat.** `side` (the engine's `sideOf`; teams only in four-handed hokm), `place`
+  (`standings`, competition-ranked), `quitter` (a forfeit row in the ledger; it WALKED if the row
+  names a person, was timed out if it is null, and its `rev` is the exit order), `own` (the seat's
+  play rows that name a person and carry one of the engine's `engagement` verbs - the sweep writes
+  `user_id = null`, so autoplay never counts) and `unsettled` (hokm only: everybody still at the table
+  when a forfeit stopped it).
+- **A quitter always takes a rated loss**, below everybody still playing when they left, a later
+  leaver above an earlier one. That includes a TIMEOUT, or waiting out the clock would dodge the loss.
+  A quitter is never rated against a seat that had quit BEFORE it: the first cut rated it against
+  everybody, so the last of three to walk out of a four-seat ludo table beat the two who went first
+  and moved from 1200 to 1205 without a decision, and a main account could climb by leaving after its
+  alts. The earlier quitter is still rated against the later one, as the loss it is.
+- **Only a seat that is paid earns XP** (`paid` on the verdict; `levels.ts` only prices it). A
+  walkout and a `void` seat are never paid. A TIMED-OUT seat is paid only if it had played its share
+  (the `engagement` below) before the clock took it, because missing three turns after playing is a
+  dropped connection, while sitting down and letting the sweep play three turns is not playing - and
+  its tally would have been the moves the SWEEP made for it.
+- **Everybody else is rated against a quitter only if they and the quitter are both ENGAGED** - own
+  decisions at least `engagement(seats).after`: ludo 6 rolls, backgammon 4 moves or cube actions,
+  hokm one hand's cards (7 at three and four, 13 at two), poker 3 betting actions with the blinds
+  excluded. Against a side with no quitter a seat is always rated, unless both are unsettled.
+- **A seat with no counted pair is `void`**: no rating move, no XP, nothing written to
+  `player_stats`, streak untouched, no achievements. A seat that beat every side it was counted
+  against is `won`, a quitter is `abandoned`, anybody else `lost`. The match is `won` if anybody won,
+  and `winner_seat` is the engine's first winner if they won, else the lowest seat that did.
+
+Being the last one left in an empty room is therefore no contest rather than a win, which is the
+rating farm `outcomeOf` used to close: three accounts sit down, two leave at once, and the third gets
+nothing, while the two who left are each charged a loss. `judge.spec.ts` holds one test per case,
+`record.db.spec.ts` holds it against a real Postgres over a hand-written ledger, and
+`backgammon.db.spec.ts` plays real moves and sweeps through the match service, so the engagement
+count is read off the rows the service actually writes.
+
+**A rating is Elo over SIDES.** Two players is ordinary Elo; three and four score every pair of sides
+and average over the sides counted, so beating a strong field is worth more than beating a weak one
+and the answer does not depend on how the seats were numbered. A side is rated as one player at its
+members' MEAN rating and every member moves by the same amount, so four-handed partners are never
+scored against each other (HOKM-02: they used to be, as a draw, which moved a strong partner down for
+sitting beside a weak one); equal teams move ±16 each. `rateField(standings, counts)` takes a mask of
+which (seat, side) pairs count, and a seat with none gets no move. Ludo only ever declares a first, so
 `placementsOf` reads the rest off the board - tokens home, then distance travelled - and anybody who
 forfeited is last whatever their position says, or walking out while ahead would be a placement
-somebody earned by leaving. K is 32 and the result is clamped to what the column takes, because a
-write Postgres refuses after a match has finished strands the match rather than the rating.
+somebody earned by leaving; `engine-contract.spec.ts` holds every engine to competition ranking, to
+partners sharing a place and to every forfeiter placed below every seat still playing when it left.
+K is 32 and the result is clamped to what the column takes, because a write Postgres refuses after a
+match has finished strands the match rather than the rating.
 
 **A peak is the highest rating somebody has ever HELD**, which includes the 1200 they started at.
 Taking it from the new rating alone recorded a personal best of 1184 for a player who had never been
@@ -1552,6 +1606,13 @@ left. `rematchOf` in `boards.ts` reads all of that off the table's chairs and tr
 the table still names the finished match as live, because that readiness is from before the finish.
 `match-result.spec.ts` walks the states and `play.spec.ts` presses the button through the page.
 
+**The panel says what the judge decided and nothing it did not.** It used to read every match nobody
+won as "The table emptied" and "Nobody won this one, so no rating moved", which stopped being true the
+moment a quitter's loss became rated. A match with no winner now reads "Ended too early to count" and
+"It counts only against whoever stopped playing"; a seat whose own result is `void` in a match
+somebody else won is told "This one did not count for you"; and a void seat's row, plate tag and yard
+badge say "No contest" with no rating swing, in English and Persian.
+
 ## Levels, and a board a new player can reach
 
 `domains/match/levels.ts` is pure and import-free, like `ludo/` and for the same reasons: it runs in
@@ -1568,8 +1629,11 @@ in as many words rather than leaving it to be inferred.
 Finishing is 10, winning is 25 more, a capture is 2 and a token home is 3, and every one of those is
 countable from `match_actions` — which is already an append-only record of what happened, so nothing
 new is written to produce them. **A walkout earns nothing at all**, not even the captures it made on
-the way: otherwise leaving a game you are losing banks the good half of it, which is the hole
-`outcomeOf` closes for the rating from the other side.
+the way: otherwise leaving a game you are losing banks the good half of it, which is the hole the
+judge closes for the rating from the other side. A seat timed out of the game after playing its share
+keeps the finish and its bonus, one timed out before that earns nothing, and a `void` seat earns
+nothing, because nothing about that game is written for it. Whether a seat is paid at all is the
+judge's `paid`; `xpFor` only says how much.
 
 A level costs `100 + 50 * (n - 1)`, so the total to reach level n is a quadratic in n and `levelOf`
 is its positive root floored rather than a loop — a very large total costs what a small one does.
@@ -1581,7 +1645,9 @@ answers "who has the most" perfectly well; what a running total cannot answer is
 this month", because it has no dates in it. The per-seat column does, through `matches.finished_at`,
 and it is written on every finish rather than only when a rating moved — the two shared a branch for
 one commit and every abandoned match recorded nothing, which made the windowed board quietly blind to
-a whole class of game.
+a whole class of game. A `void` row is written too (xp 0, no rating pair) and counted by NOTHING:
+`FINISHED` in `achieve/service.ts` and the windowed board both read `result in ('won', 'lost',
+'abandoned')`, so a game that did not count for somebody is neither a game played nor a game won.
 
 **An account's XP is the SUM of its per-game rows and is never stored.** A stored account total is a
 second copy of a derivable fact, which is the mistake `tables.status` exists to avoid; six rows
@@ -1642,8 +1708,8 @@ suffix and never appear whole in the source.
 `declareResult` writes the result line into the table's own thread, and it lives in its own
 zero-import module because a game ends TWO ways - somebody plays the last move, or the sweep
 forfeits the last player holding a turn - and both have to say it identically. A game somebody won
-names them; a room that emptied does not, and must not, because the engine calls the last player
-standing a winner so the board can stop.
+names them; a game nobody won (`matches.outcome = 'abandoned'`, every survivor `void`) does not, and
+must not, because the engine calls the last player standing a winner so the board can stop.
 
 The invite line goes in the TABLE's thread rather than into a direct message. A line in a DM would
 create a conversation between two people as a side effect of an invitation, which is a thing nobody
@@ -1733,14 +1799,36 @@ a quitter is charged. The ledger already knew - the sweep writes its forfeits wi
 because the server took that action rather than a person - so the question is asked of
 `match_actions` rather than of the result column. And the survivor of a room that emptied was being
 paid the finish and the tokens they happened to get home, which is the alt-account farm `outcomeOf`
-exists to close, reopened at a slower rate. A game only pays when a game was played.
+exists to close, reopened at a slower rate. A game only pays when a game was played. Since the judge,
+the timeout is still not a walkout for XP, but it IS a rated loss: otherwise a player losing badly
+could stop moving and be forfeited by the clock for free. And it is paid only if it had played its
+share first, or a seat that never acted would bank the finish and whatever the sweep did for it, at
+a table where nobody else's game counted. The survivor of an opening walkout is `void`, which writes
+nothing at all to their record.
 
-**Counters are added by the database, never by the process.** `player_stats` was a read-modify-write
-over rows read once before the loop, and nothing serialises two matches finishing for the same
-person: each holds `for update` on its OWN match row, and the timeout sweep can finish several due
-matches in one tick. Two games ending together recorded one. `on conflict do update set played =
-player_stats.played + 1` is arithmetic the row does to itself under the unique index. The three that
-are not counters stay absolute - a rating is a position, a peak is a maximum, a streak is a run.
+**Counters are added by the database, never by the process, and the rows are locked first.**
+`player_stats` was a read-modify-write over rows read once before the loop, and nothing serialises
+two matches finishing for the same person: each holds `for update` on its OWN match row, and the
+timeout sweep can finish several due matches in one tick. Two games ending together recorded one
+game; then, once the counters were arithmetic the row did to itself, they recorded both games and
+ONE rating move, because each finish rated from the 1200 it read before the other wrote. The finish
+now inserts any missing `player_stats` row with `orIgnore`, then takes every counted player's row
+`pessimistic_write` in user-id order before reading a rating, so the second finish waits and rates
+from where the first left it (`record.db.spec.ts`: two wins at once are 1200, 1216, 1231). That test
+seeds the player's row first and releases both finishes together from a gate on their match rows:
+for somebody with no row yet, the insert-or-ignore already waits on the other transaction's insert and
+the test passed with the lock deleted, and without the gate a fresh pool connection let one finish
+commit before the other began. With both, deleting the lock fails it every run. Counters
+still move by `played + 1` in the statement. The three that are not counters stay absolute - a rating
+is a position, a peak is a maximum, a streak is a run - and the streak comes from the locked row.
+
+**The finish is written BEFORE the achievements, in two updates.** `achieve.record` reads
+`m.outcome = 'won'` for the hosted ladder and `m.finished_at` for everything, and the outcome is only
+known once the judge has run - so a match whose row was finished afterwards would never count
+towards its own rungs. `matches_live_has_deadline` and `matches_finished_has_outcome` require
+`finished_at`, a null deadline and an outcome in ONE statement, so `commit` writes the state and rev
+first (keeping the deadline) and the recorder writes the finish once the plan exists, then the
+`player_stats` rows, then the achievements for non-void seats, and `commit` clears readiness last.
 
 **A public route publishes everything on it.** The leaderboard is unguarded with the rest of the
 catalogue, which is right - a board nobody can see until they sign in cannot say what the place is

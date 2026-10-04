@@ -13,22 +13,6 @@ import { ludoEngine } from '../src/domains/match/engines/ludo.ts';
 import { FINISHED, YARD } from '../src/domains/match/ludo/board.ts';
 import type { LudoState } from '../src/domains/match/ludo/state.ts';
 
-/**
- * What a finished match does to everybody's record, against a real database.
- *
- * The arithmetic is already pinned in `rating.spec.ts` with no Postgres anywhere near it. These are
- * the claims that are only true of the DATABASE: that the rating a match records and the rating the
- * profile reads are the same number, that awarding the same achievement twice writes one row
- * because the primary key says so, that a `player_stats` upsert accumulates rather than replaces,
- * and that every CHECK on the way in accepts what the recorder actually writes. A fake DataSource
- * could only prove the fake agrees with the code.
- *
- * The board states here are BUILT rather than played. `ludo-pass.mjs` plays hundreds of real turns
- * over the api and is where "the rules work" is settled; what this needs is a finished position of
- * a precise shape - a genuine win, a room that emptied - reached in one line rather than in four
- * hundred rolls of a real die.
- */
-
 const url = process.env.TEST_DATABASE_URL;
 
 const active = url !== undefined && url !== '';
@@ -38,6 +22,8 @@ let db: DataSource;
 let seq = 0;
 
 const HOME = [FINISHED, FINISHED, FINISHED, FINISHED];
+
+const ENGAGED = ludoEngine.engagement(2).after;
 
 const makeUser = async () =>
 {
@@ -67,16 +53,23 @@ const board = (pieces: number[][], winner: number | null, out: boolean[] = []): 
     winner
 });
 
-/** A finished match with its players already resulted, exactly as `commit` leaves one. */
-const finished = async (
-    state: LudoState,
-    results: ('won' | 'lost' | 'abandoned')[],
-    outcome: 'won' | 'abandoned'
-): Promise<{ matchId: string; players: string[] }> =>
-{
-    const players: string[] = [];
+const WON = () => board([HOME, [12, YARD, YARD, YARD]], 0);
 
-    for (let index = 0; index < state.players.length; index += 1)
+const EMPTIED = () => board([[3, YARD, YARD, YARD], [YARD, YARD, YARD, YARD]], 0, [false, true]);
+
+interface Ledger
+{
+    own?: number[];
+    auto?: number[];
+    quits?: { seat: number; walked: boolean }[];
+    players?: string[];
+}
+
+const played = async (state: LudoState, ledger: Ledger = {}): Promise<{ matchId: string; players: string[] }> =>
+{
+    const players = [...(ledger.players ?? [])];
+
+    while (players.length < state.players.length)
     {
         players.push(await makeUser());
     }
@@ -89,26 +82,51 @@ const finished = async (
     ))[0].id;
 
     const matchId = rowsOf<{ id: string }>(await db.query(
-        `insert into matches (table_id, game, variant, seats, state, rev, winner_seat, outcome, finished_at)
-         values ($1, 'ludo', 'standard', $2, $3::jsonb, $4, $5, $6, now())
+        `insert into matches (table_id, game, variant, seats, state, rev, deadline_at)
+         values ($1, 'ludo', 'standard', $2, $3::jsonb, $4, now() + interval '1 hour')
          returning id`,
-        [
-            tableId,
-            state.players.length,
-            JSON.stringify(state),
-            state.rev,
-            state.winner === null ? null : state.players[state.winner].seat,
-            outcome
-        ]
+        [tableId, state.players.length, JSON.stringify(state), state.rev]
     ))[0].id;
+
+    const quits = ledger.quits ?? [];
 
     for (const [seat, userId] of players.entries())
     {
         await db.query(
-            `insert into match_players (match_id, seat, user_id, result)
-             values ($1, $2, $3, $4)`,
-            [matchId, seat, userId, results[seat]]
+            `insert into match_players (match_id, seat, user_id, result) values ($1, $2, $3, $4)`,
+            [matchId, seat, userId, quits.some((one) => one.seat === seat) ? 'abandoned' : null]
         );
+    }
+
+    let rev = 0;
+
+    const write = async (seat: number, userId: string | null, kind: 'play' | 'forfeit', payload: Record<string, unknown>) =>
+    {
+        rev += 1;
+
+        await db.query(
+            `insert into match_actions (match_id, rev, seat, user_id, kind, payload, events, state)
+             values ($1, $2, $3, $4, $5, $6::jsonb, '[]'::jsonb, $7::jsonb)`,
+            [matchId, rev, seat, userId, kind, JSON.stringify(payload), JSON.stringify(state)]
+        );
+    };
+
+    for (const [seat, userId] of players.entries())
+    {
+        for (let roll = 0; roll < (ledger.own?.[seat] ?? 0); roll += 1)
+        {
+            await write(seat, userId, 'play', { kind: 'ludo', verb: 'roll' });
+        }
+
+        for (let roll = 0; roll < (ledger.auto?.[seat] ?? 0); roll += 1)
+        {
+            await write(seat, null, 'play', { kind: 'ludo', verb: 'roll' });
+        }
+    }
+
+    for (const quit of quits)
+    {
+        await write(quit.seat, quit.walked ? players[quit.seat] : null, 'forfeit', { verb: quit.walked ? 'resign' : 'timeout' });
     }
 
     return { matchId, players };
@@ -124,13 +142,26 @@ interface Stats
     streak: number;
     best_streak: number;
     tallies: Record<string, number>;
+    xp: number;
 }
 
 const statsOf = async (userId: string): Promise<Stats | undefined> =>
     rowsOf<Stats>(await db.query(
-        `select rating, peak_rating, played, won, abandoned, streak, best_streak, tallies
+        `select rating, peak_rating, played, won, abandoned, streak, best_streak, tallies, xp
            from player_stats where user_id = $1 and game = 'ludo'`,
         [userId]
+    ))[0];
+
+const seatOf = async (matchId: string, seat: number) =>
+    rowsOf<{ result: string; xp: number; rating_before: number | null; rating_after: number | null }>(await db.query(
+        `select result, xp, rating_before, rating_after from match_players where match_id = $1 and seat = $2`,
+        [matchId, seat]
+    ))[0];
+
+const matchOf = async (matchId: string) =>
+    rowsOf<{ outcome: string; winner_seat: number | null; finished: boolean; deadline_at: Date | null }>(await db.query(
+        `select outcome, winner_seat, finished_at is not null as finished, deadline_at from matches where id = $1`,
+        [matchId]
     ))[0];
 
 const heldBy = async (userId: string): Promise<string[]> =>
@@ -138,6 +169,40 @@ const heldBy = async (userId: string): Promise<string[]> =>
         `select achievement_id from user_achievements where user_id = $1 order by achievement_id`,
         [userId]
     )).map((row) => row.achievement_id);
+
+const seedStats = async (userId: string, row: { rating: number; played: number; won: number; streak: number }) =>
+{
+    await db.query(
+        `insert into player_stats (user_id, game, rating, peak_rating, played, won, streak, best_streak)
+         values ($1, 'ludo', $2, $2, $3, $4, $5, $5)`,
+        [userId, row.rating, row.played, row.won, row.streak]
+    );
+};
+
+const waitingOnLocks = async () =>
+    rowsOf<{ count: number }>(await db.query(
+        `select count(*)::int as count from pg_stat_activity where datname = current_database() and wait_event_type = 'Lock'`
+    ))[0].count;
+
+const atOnce = async (matchIds: string[], run: () => Promise<unknown>) =>
+{
+    const gate = db.createQueryRunner();
+
+    await gate.connect();
+    await gate.startTransaction();
+    await gate.query('select id from matches where id = any($1) for update', [matchIds]);
+
+    const running = run();
+
+    while (await waitingOnLocks() < matchIds.length)
+    {
+        await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+
+    await gate.commitTransaction();
+    await gate.release();
+    await running;
+};
 
 describe.skipIf(!active)('a record, against a real database', () =>
 {
@@ -165,14 +230,19 @@ describe.skipIf(!active)('a record, against a real database', () =>
 
     const recorder = () => createRecorder(createAchieveService(db));
 
+    const finish = async (matchId: string, state: LudoState) =>
+    {
+        await db.transaction((tx) => recorder().finish(tx, matchId, ludoEngine, state, ludoEngine.finish(state)!));
+    };
+
     describe('a game somebody won', () =>
     {
         it('moves both ratings, in opposite directions, by the same amount', async () =>
         {
-            const state = board([HOME, [12, YARD, YARD, YARD]], 0);
-            const { matchId, players } = await finished(state, ['won', 'lost'], 'won');
+            const state = WON();
+            const { matchId, players } = await played(state);
 
-            await db.transaction((tx) => recorder().finish(tx, matchId, ludoEngine, state));
+            await finish(matchId, state);
 
             const winner = await statsOf(players[0]);
             const loser = await statsOf(players[1]);
@@ -182,27 +252,28 @@ describe.skipIf(!active)('a record, against a real database', () =>
             expect(winner?.won).toBe(1);
             expect(loser?.won).toBe(0);
             expect(winner?.streak).toBe(1);
-
-            /**
-             * A peak is the highest rating somebody has ever HELD, and everybody starts at 1200 -
-             * so a first game that ends in a loss records a peak of 1200, not of the number they
-             * dropped to. Taking it from the new rating alone gave a new player a personal best
-             * they had never once been below.
-             */
             expect(loser?.peak_rating).toBe(1200);
             expect(winner?.peak_rating).toBe(1216);
         });
 
-        /**
-         * The number the profile shows and the number the history row shows have to be the same
-         * one, or a person reading their own games back finds a rating that never adds up.
-         */
+        it('finishes the match row itself, with the outcome and the seat that won', async () =>
+        {
+            const state = WON();
+            const { matchId } = await played(state);
+
+            await finish(matchId, state);
+
+            expect(await matchOf(matchId)).toEqual({ outcome: 'won', winner_seat: 0, finished: true, deadline_at: null });
+            expect((await seatOf(matchId, 0)).result).toBe('won');
+            expect((await seatOf(matchId, 1)).result).toBe('lost');
+        });
+
         it('writes the same move onto the match row it wrote into the record', async () =>
         {
-            const state = board([HOME, [12, YARD, YARD, YARD]], 0);
-            const { matchId, players } = await finished(state, ['won', 'lost'], 'won');
+            const state = WON();
+            const { matchId, players } = await played(state);
 
-            await db.transaction((tx) => recorder().finish(tx, matchId, ludoEngine, state));
+            await finish(matchId, state);
 
             const rows = rowsOf<{ seat: number; rating_before: number; rating_after: number }>(await db.query(
                 `select seat, rating_before, rating_after from match_players where match_id = $1 order by seat`,
@@ -216,12 +287,12 @@ describe.skipIf(!active)('a record, against a real database', () =>
 
         it('tallies what the ledger says each seat did', async () =>
         {
-            const state = board([HOME, [12, YARD, YARD, YARD]], 0);
-            const { matchId, players } = await finished(state, ['won', 'lost'], 'won');
+            const state = WON();
+            const { matchId, players } = await played(state);
 
             await db.query(
                 `insert into match_actions (match_id, rev, seat, kind, payload, events, state)
-                 values ($1, 1, 0, 'play', '{"die": 6}'::jsonb, $2::jsonb, $3::jsonb)`,
+                 values ($1, 900, 0, 'play', '{"die": 6}'::jsonb, $2::jsonb, $3::jsonb)`,
                 [matchId, JSON.stringify([
                     { e: 'roll', seat: 0, die: 6 },
                     { e: 'capture', seat: 0, piece: 1, victim: 1, victimPiece: 0 },
@@ -230,7 +301,7 @@ describe.skipIf(!active)('a record, against a real database', () =>
                 ]), JSON.stringify(state)]
             );
 
-            await db.transaction((tx) => recorder().finish(tx, matchId, ludoEngine, state));
+            await finish(matchId, state);
 
             const winner = await statsOf(players[0]);
 
@@ -240,14 +311,14 @@ describe.skipIf(!active)('a record, against a real database', () =>
 
         it('awards the first rung of every ladder the game climbed, and the same award twice is one row', async () =>
         {
-            const state = board([HOME, [12, YARD, YARD, YARD]], 0);
-            const { matchId, players } = await finished(state, ['won', 'lost'], 'won');
+            const state = WON();
+            const { matchId, players } = await played(state);
 
-            await db.transaction((tx) => recorder().finish(tx, matchId, ludoEngine, state));
+            await finish(matchId, state);
 
             const once = await heldBy(players[0]);
 
-            await db.transaction((tx) => recorder().finish(tx, matchId, ludoEngine, state));
+            await finish(matchId, state);
 
             expect(once).toEqual(expect.arrayContaining([
                 'all-won-1', 'all-played-1', 'all-days-1', 'all-hosted-1', 'all-opponents-1', 'all-won-live-1', 'all-won-duel-1',
@@ -266,10 +337,10 @@ describe.skipIf(!active)('a record, against a real database', () =>
 
         it('reads back as families, scopes and a ladder that agree with what was awarded', async () =>
         {
-            const state = board([HOME, [12, YARD, YARD, YARD]], 0);
-            const { matchId, players } = await finished(state, ['won', 'lost'], 'won');
+            const state = WON();
+            const { matchId, players } = await played(state);
 
-            await db.transaction((tx) => recorder().finish(tx, matchId, ludoEngine, state));
+            await finish(matchId, state);
 
             const [{ handle }] = rowsOf<{ handle: string }>(await db.query('select handle::text from users where id = $1', [players[0]]));
             const achieve = createAchieveService(db);
@@ -303,46 +374,151 @@ describe.skipIf(!active)('a record, against a real database', () =>
         });
     });
 
-    describe('a room that emptied', () =>
+    describe('a room that emptied before anybody played', () =>
     {
-        /**
-         * The rating farm this exists to close: two accounts sit down, one walks out, and the
-         * engine declares the other the winner because they are the last one playing. Paying a
-         * rating for that makes quitting a service somebody performs for a friend.
-         */
-        it('moves no rating at all', async () =>
+        it('rates the quitter down and writes nothing at all for the seat left behind', async () =>
         {
-            const state = board([[3, YARD, YARD, YARD], [YARD, YARD, YARD, YARD]], 0, [false, true]);
-            const { matchId, players } = await finished(state, ['won', 'abandoned'], 'abandoned');
+            const state = EMPTIED();
+            const { matchId, players } = await played(state, { own: [2, 1], quits: [{ seat: 1, walked: true }] });
 
-            await db.transaction((tx) => recorder().finish(tx, matchId, ludoEngine, state));
+            await finish(matchId, state);
 
-            expect((await statsOf(players[0]))?.rating).toBe(1200);
-            expect((await statsOf(players[1]))?.rating).toBe(1200);
+            const quitter = await statsOf(players[1]);
+
+            expect(quitter?.rating).toBe(1184);
+            expect(quitter?.abandoned).toBe(1);
+            expect(quitter?.played).toBe(1);
+            expect(await statsOf(players[0])).toBeUndefined();
+            expect(await seatOf(matchId, 0)).toEqual({ result: 'void', xp: 0, rating_before: null, rating_after: null });
+            expect(await seatOf(matchId, 1)).toMatchObject({ result: 'abandoned', xp: 0, rating_before: 1200, rating_after: 1184 });
+            expect(await matchOf(matchId)).toMatchObject({ outcome: 'abandoned', winner_seat: null, finished: true });
         });
 
-        it('still records that it happened, and who walked out', async () =>
+        it('leaves the survivor streak of three exactly where it was', async () =>
         {
-            const state = board([[3, YARD, YARD, YARD], [YARD, YARD, YARD, YARD]], 0, [false, true]);
-            const { matchId, players } = await finished(state, ['won', 'abandoned'], 'abandoned');
+            const state = EMPTIED();
+            const survivor = await makeUser();
 
-            await db.transaction((tx) => recorder().finish(tx, matchId, ludoEngine, state));
+            await seedStats(survivor, { rating: 1310, played: 9, won: 6, streak: 3 });
 
-            expect((await statsOf(players[0]))?.played).toBe(1);
-            expect((await statsOf(players[0]))?.won).toBe(0);
-            expect((await statsOf(players[1]))?.abandoned).toBe(1);
+            const { matchId } = await played(state, { players: [survivor], quits: [{ seat: 1, walked: true }] });
+
+            await finish(matchId, state);
+
+            expect(await statsOf(survivor)).toMatchObject({ rating: 1310, played: 9, won: 6, streak: 3, best_streak: 3, xp: 0 });
         });
 
-        it('gives nobody a win that never happened', async () =>
+        it('gives the survivor no rung of any ladder', async () =>
         {
-            const state = board([[3, YARD, YARD, YARD], [YARD, YARD, YARD, YARD]], 0, [false, true]);
-            const { matchId, players } = await finished(state, ['won', 'abandoned'], 'abandoned');
+            const state = EMPTIED();
+            const { matchId, players } = await played(state, { quits: [{ seat: 1, walked: true }] });
 
-            await db.transaction((tx) => recorder().finish(tx, matchId, ludoEngine, state));
+            await finish(matchId, state);
 
-            expect(await heldBy(players[0])).not.toContain('ludo-won-1');
-            expect(await heldBy(players[0])).not.toContain('all-won-1');
-            expect(await heldBy(players[0])).not.toContain('all-hosted-1');
+            expect(await heldBy(players[0])).toEqual([]);
+        });
+
+        it('charges a seat timed out of the game the rated loss, and lets it keep what it earned by playing', async () =>
+        {
+            const state = EMPTIED();
+            const timeout = await played(state, { own: [0, ENGAGED], quits: [{ seat: 1, walked: false }] });
+            const resign = await played(state, { own: [0, ENGAGED], quits: [{ seat: 1, walked: true }] });
+
+            await finish(timeout.matchId, state);
+            await finish(resign.matchId, state);
+
+            expect(await seatOf(timeout.matchId, 1)).toMatchObject({ result: 'abandoned', xp: 10, rating_after: 1184 });
+            expect(await seatOf(resign.matchId, 1)).toMatchObject({ result: 'abandoned', xp: 0, rating_after: 1184 });
+        });
+
+        it('pays a seat timed out before it had played its share nothing, whatever the server played for it', async () =>
+        {
+            const state = EMPTIED();
+            const { matchId, players } = await played(state, { own: [0, ENGAGED - 1], auto: [0, ENGAGED], quits: [{ seat: 1, walked: false }] });
+
+            await finish(matchId, state);
+
+            expect(await seatOf(matchId, 1)).toMatchObject({ result: 'abandoned', xp: 0, rating_after: 1184 });
+            expect(await statsOf(players[1])).toMatchObject({ xp: 0, played: 1, abandoned: 1 });
+        });
+    });
+
+    describe('a forfeit by somebody who had been playing', () =>
+    {
+        it('is a rated win for a survivor who had been playing too', async () =>
+        {
+            const state = EMPTIED();
+            const { matchId, players } = await played(state, { own: [ENGAGED, ENGAGED], quits: [{ seat: 1, walked: true }] });
+
+            await finish(matchId, state);
+
+            expect(await seatOf(matchId, 0)).toMatchObject({ result: 'won', rating_before: 1200, rating_after: 1216 });
+            expect((await statsOf(players[0]))?.won).toBe(1);
+            expect((await statsOf(players[1]))?.rating).toBe(1184);
+            expect(await matchOf(matchId)).toMatchObject({ outcome: 'won', winner_seat: 0 });
+            expect(await heldBy(players[0])).toContain('ludo-won-1');
+        });
+
+        it('counts no turn the server played for somebody as theirs', async () =>
+        {
+            const state = EMPTIED();
+            const { matchId, players } = await played(state, {
+                own: [ENGAGED, 1],
+                auto: [0, ENGAGED],
+                quits: [{ seat: 1, walked: false }]
+            });
+
+            await finish(matchId, state);
+
+            expect((await seatOf(matchId, 0)).result).toBe('void');
+            expect(await statsOf(players[0])).toBeUndefined();
+        });
+    });
+
+    describe('two games finishing at once for one person', () =>
+    {
+        it('rates the second from where the first left the rating', async () =>
+        {
+            const state = WON();
+            const me = await makeUser();
+
+            await seedStats(me, { rating: 1200, played: 0, won: 0, streak: 0 });
+
+            const first = await played(state, { players: [me] });
+            const second = await played(state, { players: [me] });
+
+            await atOnce([first.matchId, second.matchId], () => Promise.all([finish(first.matchId, state), finish(second.matchId, state)]));
+
+            const mine = await statsOf(me);
+
+            expect(mine?.played).toBe(2);
+            expect(mine?.won).toBe(2);
+            expect(mine?.streak).toBe(2);
+            expect(mine?.rating).toBe(1231);
+        });
+    });
+
+    describe('a board over a window', () =>
+    {
+        it('counts no game that was no contest', async () =>
+        {
+            const me = await makeUser();
+            const won = WON();
+            const counted = await played(won, { players: [me] });
+
+            await finish(counted.matchId, won);
+
+            const emptied = EMPTIED();
+            const voided = await played(emptied, { players: [me], quits: [{ seat: 1, walked: true }] });
+
+            await finish(voided.matchId, emptied);
+
+            const [{ handle }] = rowsOf<{ handle: string }>(await db.query('select handle::text from users where id = $1', [me]));
+            const today = await createAchieveService(db).leaderboardOf('ludo', 'today');
+            const row = today.standings.find((one) => one.handle === handle);
+
+            expect(row?.played).toBe(1);
+            expect(row?.won).toBe(1);
         });
     });
 
@@ -444,25 +620,22 @@ describe.skipIf(!active)('a record, against a real database', () =>
     {
         it('adds to the row rather than replacing it, and remembers the peak', async () =>
         {
-            const winning = board([HOME, [12, YARD, YARD, YARD]], 0);
-            const first = await finished(winning, ['won', 'lost'], 'won');
+            const winning = WON();
+            const first = await played(winning);
 
-            await db.transaction((tx) => recorder().finish(tx, first.matchId, ludoEngine, winning));
+            await finish(first.matchId, winning);
 
             const after = await statsOf(first.players[0]);
 
             await db.query(
-                `insert into player_stats (user_id, game, rating, peak_rating, played, won)
-                 values ($1, 'ludo', 1400, 1400, 9, 9)
-                 on conflict (user_id, game) do update set rating = 1400, peak_rating = 1400, played = 9, won = 9`,
+                `update player_stats set rating = 1400, peak_rating = 1400, played = 9, won = 9 where user_id = $1 and game = 'ludo'`,
                 [first.players[0]]
             );
 
             const losing = board([[12, YARD, YARD, YARD], HOME], 1);
-            const second = await finished(losing, ['lost', 'won'], 'won');
+            const second = await played(losing, { players: [first.players[0]] });
 
-            await db.query(`update match_players set user_id = $1 where match_id = $2 and seat = 0`, [first.players[0], second.matchId]);
-            await db.transaction((tx) => recorder().finish(tx, second.matchId, ludoEngine, losing));
+            await finish(second.matchId, losing);
 
             const now = await statsOf(first.players[0]);
 
@@ -473,27 +646,15 @@ describe.skipIf(!active)('a record, against a real database', () =>
             expect(now?.streak).toBe(0);
         });
 
-        /**
-         * The property the three integer columns had for free and a jsonb object does NOT.
-         *
-         * Postgres has no operator that adds two jsonb objects of numbers: `||` replaces a key
-         * rather than summing it, so two games finishing for one person would record the second and
-         * forget the first - the same defect the read-modify-write had, reintroduced by the storage
-         * changing shape. Summing both key sets inside the one statement the unique index
-         * serialises is what keeps it addition.
-         *
-         * Each match writes an event ledger of its own, so the expected total is the sum across
-         * both rather than either one.
-         */
         it('adds the tallies up rather than overwriting them', async () =>
         {
-            const state = board([HOME, [12, YARD, YARD, YARD]], 0);
+            const state = WON();
 
             const rolls = async (matchId: string, count: number) =>
             {
                 await db.query(
                     `insert into match_actions (match_id, rev, seat, kind, payload, events, state)
-                     values ($1, 1, 0, 'play', '{}'::jsonb, $2::jsonb, $3::jsonb)`,
+                     values ($1, 900, 0, 'play', '{}'::jsonb, $2::jsonb, $3::jsonb)`,
                     [
                         matchId,
                         JSON.stringify(Array.from({ length: count }, () => ({ e: 'roll', seat: 0, die: 4 }))),
@@ -502,18 +663,17 @@ describe.skipIf(!active)('a record, against a real database', () =>
                 );
             };
 
-            const first = await finished(state, ['won', 'lost'], 'won');
+            const first = await played(state);
 
             await rolls(first.matchId, 3);
-            await db.transaction((tx) => recorder().finish(tx, first.matchId, ludoEngine, state));
+            await finish(first.matchId, state);
 
             expect((await statsOf(first.players[0]))?.tallies).toEqual({ rolls: 3 });
 
-            const second = await finished(state, ['won', 'lost'], 'won');
+            const second = await played(state, { players: [first.players[0]] });
 
-            await db.query(`update match_players set user_id = $1 where match_id = $2 and seat = 0`, [first.players[0], second.matchId]);
             await rolls(second.matchId, 2);
-            await db.transaction((tx) => recorder().finish(tx, second.matchId, ludoEngine, state));
+            await finish(second.matchId, state);
 
             expect((await statsOf(first.players[0]))?.tallies).toEqual({ rolls: 5 });
         });

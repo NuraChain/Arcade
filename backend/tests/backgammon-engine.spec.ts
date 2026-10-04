@@ -62,11 +62,9 @@ function layout(points: Record<number, number>)
 
 const opened = (target: number, cube: boolean, faces: number[] = [6, 1]) => create(target, cube, scripted(faces));
 
-function outcomeAfter(state: BackgammonState, seat: number): string | undefined
+function finishAfter(state: BackgammonState, seat: number)
 {
-    const forfeited = applied(apply(state, { kind: 'forfeit', seat, reason: 'resign' }, scripted([1])));
-
-    return backgammonEngine.finish(forfeited.state)?.outcome;
+    return backgammonEngine.finish(applied(apply(state, { kind: 'forfeit', seat, reason: 'resign' }, scripted([1]))).state);
 }
 
 describe('the opening roll', () =>
@@ -316,55 +314,91 @@ describe('walking out', () =>
         expect(backgammonEngine.finish(gone.state)?.winners).toEqual([1]);
     });
 
-    it('is abandoned, and unrated, until both seats have taken two actions', () =>
+    it('names the other seat however little was played, and leaves what that is worth to the judge', () =>
     {
         const state = opened(5, true);
 
-        expect(outcomeAfter(state, 0)).toBe('abandoned');
-        expect(outcomeAfter({ ...state, acted: [2, 1] }, 0)).toBe('abandoned');
-        expect(outcomeAfter({ ...state, acted: [1, 2] }, 1)).toBe('abandoned');
+        expect(finishAfter(state, 0)).toEqual({ winners: [1], unsettled: [] });
+        expect(finishAfter(state, 1)).toEqual({ winners: [0], unsettled: [] });
+        expect(backgammonEngine.standings(applied(apply(state, { kind: 'forfeit', seat: 0, reason: 'left' }, scripted([1]))).state))
+            .toEqual([{ seat: 0, place: 2 }, { seat: 1, place: 1 }]);
     });
 
-    it('is a rated win for the other seat once both have taken two actions', () =>
+    it('counts moves and cube actions as engagement, and four of them', () =>
     {
-        const state = opened(5, true);
-
-        expect(outcomeAfter({ ...state, acted: [2, 2] }, 0)).toBe('won');
-        expect(outcomeAfter({ ...state, acted: [7, 3] }, 1)).toBe('won');
+        expect(backgammonEngine.engagement(2)).toEqual({ verbs: ['move', 'double', 'take', 'drop'], after: 4 });
     });
 
-    it('counts the actions a seat really took, and nothing the engine did for it', () =>
-    {
-        let state = opened(1, false);
-
-        state = applied(apply(state, { kind: 'move', seat: 0, hops: [{ from: 13, to: 7 }, { from: 8, to: 7 }] }, scripted([3, 5]))).state;
-
-        expect(state.acted).toEqual([1, 0]);
-
-        state = applied(apply(state, legalMoves(state, 1)[0], scripted([6, 5]))).state;
-
-        expect(state.acted).toEqual([1, 1]);
-        expect(apply(state, { kind: 'roll', seat: 1 }, scripted([1])).ok).toBe(false);
-        expect(state.acted).toEqual([1, 1]);
-    });
-
-    it('is always won when the match was played to its target', () =>
+    it('names the winner of a match played to its target', () =>
     {
         const state: BackgammonState = {
             ...opened(1, false),
             checkers: [layout({ 1: 1 }), layout({ 6: 1 })],
             turn: 0,
             phase: 'move',
-            dice: [6, 5],
-            acted: [0, 0]
+            dice: [6, 5]
         };
 
         const won = applied(apply(state, { kind: 'move', seat: 0, hops: [{ from: 1, to: 0 }] }, scripted([1])));
 
         expect(won.state.winner).toBe(0);
         expect(won.events.at(-1)).toEqual({ e: 'finish', seat: 0 });
-        expect(backgammonEngine.finish(won.state)).toEqual({ winners: [0], outcome: 'won' });
+        expect(backgammonEngine.finish(won.state)).toEqual({ winners: [0], unsettled: [] });
         expect(backgammonEngine.standings(won.state)).toEqual([{ seat: 0, place: 1 }, { seat: 1, place: 2 }]);
+    });
+});
+
+describe('one turn on the clock', () =>
+{
+    const closed = layout({ 1: 2, 2: 2, 3: 2, 4: 2, 5: 2, 6: 2, [BAR]: 1 });
+
+    it('counts a turn each time one begins, from the opening', () =>
+    {
+        let state = opened(1, false);
+
+        expect(state.turns).toBe(1);
+
+        state = applied(apply(state, { kind: 'move', seat: 0, hops: [{ from: 13, to: 7 }, { from: 8, to: 7 }] }, scripted([3, 5]))).state;
+
+        expect(state.turns).toBe(2);
+        expect(backgammonEngine.turnOf(state)).toBe(1);
+    });
+
+    it('keeps one key from the roll to the move it allows', () =>
+    {
+        const waiting = applied(apply(opened(3, true), { kind: 'move', seat: 0, hops: [{ from: 13, to: 7 }, { from: 8, to: 7 }] }, scripted([1]))).state;
+        const rolled = applied(apply(waiting, { kind: 'roll', seat: 1 }, scripted([6, 5]))).state;
+
+        expect(waiting.phase).toBe('roll');
+        expect(rolled.phase).toBe('move');
+        expect(backgammonEngine.turnOf(rolled)).toBe(backgammonEngine.turnOf(waiting));
+        expect(backgammonEngine.turnKey(rolled)).toBe(backgammonEngine.turnKey(waiting));
+    });
+
+    it('gives the same seat a fresh key when both dance and the dice come back round', () =>
+    {
+        const stuck: BackgammonState = { ...opened(1, false), checkers: [closed, [...closed]], turn: 0, phase: 'roll', dice: [] };
+        const after = applied(apply(stuck, { kind: 'roll', seat: 0 }, scripted([3, 4]))).state;
+
+        expect(backgammonEngine.turnOf(after)).toBe(0);
+        expect(backgammonEngine.turnKey(after)).not.toBe(backgammonEngine.turnKey(stuck));
+    });
+
+    it('gives the same seat a fresh key when it wins a game and opens the next', () =>
+    {
+        const state: BackgammonState = {
+            ...opened(3, false),
+            checkers: [layout({ 1: 1 }), layout({ 6: 1 })],
+            turn: 0,
+            phase: 'move',
+            dice: [6, 5]
+        };
+        const next = applied(apply(state, { kind: 'move', seat: 0, hops: [{ from: 1, to: 0 }] }, scripted([6, 5]))).state;
+
+        expect(next.winner).toBeNull();
+        expect(next.round).toBe(2);
+        expect(backgammonEngine.turnOf(next)).toBe(0);
+        expect(backgammonEngine.turnKey(next)).not.toBe(backgammonEngine.turnKey(state));
     });
 });
 

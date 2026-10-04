@@ -84,23 +84,31 @@ everybody.
 
 ### Walkouts, and what counts as a win
 
-A forfeit busts only that seat: it folds, it is placed below everybody still alive, and its stack
-leaves the table with it (`gone`, which the conservation check counts). The game continues while two
-or more players have chips.
+A forfeit busts only that seat: it folds, it is placed at its EXIT position - below everybody still
+alive and above everybody who had already busted, because forfeiting concedes the place you hold,
+exactly as busting does - and its stack leaves the table with it (`gone`, which the conservation check
+counts). The game continues while two or more players have chips. `finish` reports only the winner
+(`{ winners: [last seat with chips], unsettled: [] }`); the platform's one rule
+(`domains/match/judge.ts`) decides the results. Engagement for poker is **3 own betting decisions**
+(`fold`, `check`, `call`, `raise`, `allin`) - the blinds post themselves and never count.
 
-| | outcome |
-|---|---|
-| heads-up, busted by chips | `won` |
-| heads-up, a forfeit after both seats took at least two actions | `won` for the other |
-| heads-up, a forfeit before that | `abandoned` |
-| three or more, any opponent out by chips, by resigning or by leaving | `won` |
-| three or more, every opponent out by a timeout forfeit | `abandoned` |
+| | the seat that forfeited | everybody else |
+|---|---|---|
+| played to the last chip | — | rated by elimination order: the winner `won`, every bust `lost` |
+| a forfeit, heads-up, both engaged | `abandoned`, a rated loss | `won`, rated |
+| a forfeit, heads-up, either short of 3 | `abandoned`, a rated loss | `void`: no rating, no XP, nothing recorded |
+| a forfeit at three or more | `abandoned`, rated at its exit place against everybody but a seat that quit before it | rated against each other by place as usual; against the quitter only if both are engaged |
 
-The platform's third forfeit reason, `left`, counts with `resign`: it is somebody choosing to go.
+A seat with nobody counted against it is `void`. A timeout forfeit is a rated loss like a
+resignation or a walkout (`left`), and keeps its XP, if the seat had made 3 betting decisions of its
+own first, where those never do.
 
 ### The clock
 
-`autoplay` checks if it can and folds otherwise. It never calls.
+`autoplay` checks if it can and folds otherwise. It never calls. The engine's `turnKey` is the hand
+number and the count of betting decisions so far, so every decision starts a new turn, a seat that
+folds one hand and opens the next gets a fresh key, and a forfeit by a seat not on turn changes
+nothing.
 
 ## Hidden state
 
@@ -147,7 +155,7 @@ A play is `{ kind: 'poker', verb: 'fold' | 'check' | 'call' | 'raise' | 'allin',
   with conservation after every action, the short all-in (alone, behind a full raise, and summed),
   heads-up order, the odd chip, the blind schedule, and placements.
 - `poker-engine.spec.ts` — the catalogue, parsing and wire bounds, every refusal, autoplay, the next
-  hand dealt inside `apply`, the all-in runout, walkouts, the outcome table, tally and points.
+  hand dealt inside `apply`, the all-in runout, walkouts, the facts `finish` reports and the places a forfeit takes, the turn key, tally and points.
 - `poker-seam.spec.ts` — the forgery on `view` and `log`, spectators, folded hands never shown.
 - `engine-contract.spec.ts` plays random matches at 2, 6 and 9 inside its 20,000-action bound.
 

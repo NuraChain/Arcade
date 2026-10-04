@@ -11,8 +11,6 @@ const XP_GAME = 3;
 
 const XP_GAMMON = 3;
 
-const RATED_AFTER = 2;
-
 const roller = (draws: Draws): Die => (sides) => draws.die(sides);
 
 export const backgammonEngine: Engine<BackgammonState, BackgammonAction> = {
@@ -69,10 +67,7 @@ export const backgammonEngine: Engine<BackgammonState, BackgammonAction> = {
             return null;
         }
 
-        const played = state.score[state.winner] >= state.target
-            || state.acted.every((count) => count >= RATED_AFTER);
-
-        return { winners: [state.winner], outcome: played ? 'won' : 'abandoned' };
+        return { winners: [state.winner], unsettled: [] };
     },
 
     standings: (state: BackgammonState): Placement[] =>
@@ -82,6 +77,12 @@ export const backgammonEngine: Engine<BackgammonState, BackgammonAction> = {
                 ? (state.score[1 - seat] > state.score[seat] ? 2 : 1)
                 : (seat === state.winner ? 1 : 2)
         })),
+
+    sideOf: (seat: number) => seat,
+
+    engagement: () => ({ verbs: ['move', 'double', 'take', 'drop'], after: 4 }),
+
+    turnKey: (state: BackgammonState) => String(state.turns),
 
     view: (state: BackgammonState): MatchBoard =>
     {

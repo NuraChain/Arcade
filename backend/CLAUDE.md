@@ -419,7 +419,10 @@ half left behind.
   with the code `seated-max`, which the browser turns into its own sentence, so `/tables/mine` is
   bounded by a rule rather than by a silent `LIMIT`.
 - **A finish inserts only the rungs it newly reached**, reading what is held first, and records its
-  players in id order so two matches finishing for the same people take their locks in one order.
+  players in id order so two matches finishing for the same people take their locks in one order:
+  it inserts any missing `player_stats` row with `orIgnore`, then takes every counted player's row
+  `pessimistic_write` in `user_id` order BEFORE it reads a rating, so the second of two simultaneous
+  finishes rates from where the first left it. A `void` seat's row is neither created nor written.
 - **Push has a timeout, a cap and one key.** A push service that never answers is abandoned after ten
   seconds, the response body is cancelled, at most sixty-four wakes are in flight (a wake is a courtesy,
   so one past the cap is dropped rather than queued), and the VAPID key is imported once.

@@ -19,13 +19,15 @@ export default component MatchResult(props: { match: MatchView; mine?: number; b
 
     derived champion = props.match.players.find((player) => player.result === 'won');
 
-    derived emptied = props.match.outcome !== 'won';
+    derived voided = props.match.outcome !== 'won';
+
+    derived uncounted = props.mine !== undefined && props.match.players.some((player) => player.seat === props.mine && player.result === 'void');
 
     derived headline = (() =>
     {
-        if (emptied)
+        if (voided)
         {
-            return locale.t('match.over.emptied');
+            return locale.t('match.over.void');
         }
 
         if (champion === undefined)
@@ -68,16 +70,16 @@ export default component MatchResult(props: { match: MatchView; mine?: number; b
     const swing = (points: number, after: number) =>
         `${ points >= 0 ? '+' : '−' }${ locale.n(Math.abs(points)) } · ${ locale.n(after) }`;
 
-    <Panel pad="md" stack="md" tone={ emptied ? 'field' : 'accent' }>
+    <Panel pad="md" stack="md" tone={ voided ? 'field' : 'accent' }>
         <div class="flex items-center gap-3">
             <span
                 class={ () => [
                     'flex h-11 w-11 shrink-0 items-center justify-center rounded-full',
-                    emptied ? 'bg-raised text-muted' : 'bg-win/15 text-win'
+                    voided ? 'bg-raised text-muted' : 'bg-win/15 text-win'
                 ].join(' ') }
                 aria-hidden="true"
             >
-                <Icon name={ emptied ? 'clock' : 'trophy' } size={ 22 } />
+                <Icon name={ voided ? 'clock' : 'trophy' } size={ 22 } />
             </span>
             <p class="min-w-0 flex-1 text-ui-lg font-semibold text-text" aria-live="polite">{ headline }</p>
         </div>
@@ -117,8 +119,12 @@ export default component MatchResult(props: { match: MatchView; mine?: number; b
             </For>
         </ul>
 
-        <Show when={ emptied }>
-            { () => <p class="text-ui-xs text-muted">{ locale.t('match.over.noRating') }</p> }
+        <Show when={ voided }>
+            { () => <p class="text-ui-xs text-muted">{ locale.t('match.over.voidLead') }</p> }
+        </Show>
+
+        <Show when={ !voided && uncounted }>
+            { () => <p class="text-ui-xs text-muted">{ locale.t('match.over.voidMine') }</p> }
         </Show>
 
         <Show when={ asking }>

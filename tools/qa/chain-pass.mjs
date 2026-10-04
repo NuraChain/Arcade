@@ -71,7 +71,7 @@ const finishOne = async () =>
     await dana.api('POST', `/tables/${ made.body.id }/ready`, { ready: true });
     await guest.api('POST', `/tables/${ made.body.id }/ready`, { ready: true });
     const started = await dana.api('POST', `/tables/${ made.body.id }/start`);
-    await guest.api('POST', `/matches/${ started.body.id }/resign`, { key: `resign-${ started.body.id }` });
+    await dana.api('POST', `/matches/${ started.body.id }/resign`, { key: `resign-${ started.body.id }` });
     await guest.context.close();
     await clearTables(dana);
 };

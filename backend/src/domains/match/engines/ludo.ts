@@ -16,13 +16,6 @@ import type { MatchBoard, MatchLog, MatchPlay } from '../../../schemas.ts';
  * directory would have meant relaxing the test that makes the purity real. What this file does is answer the four questions the service used to answer for itself
  * by reaching into ludo's own types - whose turn it is, what a seat may do, whether the game is
  * over, and where everybody came.
- *
- * `finish` is the one with an argument behind it. The engine declares a winner in two quite
- * different situations - somebody brought four tokens home, or everybody else walked out and the
- * last player standing is all that is left - and until `record.ts` learned to tell them apart both
- * were recorded identically, which is a rating farm: three accounts sit down, two leave, the third
- * is handed the win. The test is the board, not the winner field, and it belongs to the engine
- * because only the engine knows what a finished board looks like.
  */
 export const ludoEngine: Engine<LudoState, EngineAction> = {
     id: 'ludo',
@@ -113,15 +106,17 @@ export const ludoEngine: Engine<LudoState, EngineAction> = {
         }
 
         const champion = state.players[state.winner];
-        const played = champion !== undefined && champion.pieces.every((piece) => piece >= FINISHED);
 
-        return {
-            winners: champion === undefined ? [] : [champion.seat],
-            outcome: played ? 'won' : 'abandoned'
-        };
+        return { winners: champion === undefined ? [] : [champion.seat], unsettled: [] };
     },
 
     standings: (state: LudoState): Placement[] => placementsOf(state),
+
+    sideOf: (seat: number) => seat,
+
+    engagement: () => ({ verbs: ['roll'], after: 6 }),
+
+    turnKey: (state: LudoState) => String(state.turn),
 
     /**
      * The same board for everybody, because ludo hides nothing.

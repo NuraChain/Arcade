@@ -505,7 +505,7 @@ describe.skipIf(!active)('a match, against a real database', () =>
             expect(acted[0].user_id, 'the server acted, so nobody owns this action').toBeNull();
         });
 
-        it('gives up on the third miss in a row, and the survivor takes it', async () =>
+        it('gives up on the third miss in a row, charging that seat and leaving the other no contest', async () =>
         {
             const { tableId, players } = await seatedTable(2);
             const load = await matches.start(players[0], tableId);
@@ -522,14 +522,16 @@ describe.skipIf(!active)('a match, against a real database', () =>
             const after = await matches.view(players[0], load.match.id);
 
             expect(after!.match.finishedAt).not.toBeNull();
-            expect(after!.match.winnerSeat).not.toBe(seat);
+            expect(after!.match.winnerSeat).toBeNull();
+            expect(after!.match.outcome).toBe('abandoned');
 
-            const results = rowsOf<{ seat: number; result: string }>(await db.query(
-                `select seat, result from match_players where match_id = $1 order by seat`,
+            const results = rowsOf<{ seat: number; result: string; rating_after: number | null }>(await db.query(
+                `select seat, result, rating_after from match_players where match_id = $1 order by seat`,
                 [load.match.id]
             ));
 
-            expect(results.find((row) => row.seat === seat)!.result).toBe('abandoned');
+            expect(results.find((row) => row.seat === seat)).toMatchObject({ result: 'abandoned', rating_after: 1184 });
+            expect(results.find((row) => row.seat !== seat)).toMatchObject({ result: 'void', rating_after: null });
         });
 
         it('counts misses IN A ROW, so acting clears them', async () =>
@@ -777,7 +779,7 @@ describe.skipIf(!active)('a match, against a real database', () =>
 
     describe('a side that wins together', () =>
     {
-        it('pays both partners the win, not only the first seat of the side', async () =>
+        const hokmFour = async () =>
         {
             const players: string[] = [];
 
@@ -801,7 +803,34 @@ describe.skipIf(!active)('a match, against a real database', () =>
                 await tables.setReady(player, table.id, true);
             }
 
-            const load = await matches.start(players[0], table.id);
+            return { players, load: await matches.start(players[0], table.id) };
+        };
+
+        it('leaves the partner of somebody who walks out of it, with no record written at all', async () =>
+        {
+            const { load } = await hokmFour();
+            const quitter = load.players.find((one) => one.seat === 1)!;
+
+            await matches.act(quitter.user_id, load.match.id, { play: null, key: 'walks' });
+
+            const rows = rowsOf<{ seat: number; result: string; rating_after: number | null; stats: number }>(await db.query(
+                `select p.seat, p.result, p.rating_after,
+                        (select count(*)::int from player_stats s where s.user_id = p.user_id) as stats
+                   from match_players p
+                  where p.match_id = $1
+                  order by p.seat`,
+                [load.match.id]
+            ));
+
+            expect(rows.map((row) => row.result)).toEqual(['void', 'abandoned', 'void', 'void']);
+            expect(rows[1].rating_after).toBeLessThan(1200);
+            expect(rows[3]).toMatchObject({ rating_after: null, stats: 0 });
+            expect(rows.map((row) => row.stats)).toEqual([0, 1, 0, 0]);
+        });
+
+        it('pays both partners the win, not only the first seat of the side', async () =>
+        {
+            const { load } = await hokmFour();
             const lastTrick = {
                 ...(load.state as Record<string, unknown>),
                 phase: 'tricks',
@@ -823,13 +852,21 @@ describe.skipIf(!active)('a match, against a real database', () =>
                 [load.match.id]
             )).map((row) => [row.seat, row.user_id]));
 
+            for (const [seat, rating] of [[0, 1300], [1, 1250], [2, 1100], [3, 1150]])
+            {
+                await db.query(
+                    `insert into player_stats (user_id, game, rating, peak_rating, played) values ($1, 'hokm', $2, $2, 4)`,
+                    [userAt.get(seat), rating]
+                );
+            }
+
             for (const [seat, card] of [[0, 51], [1, 0], [2, 13], [3, 26]])
             {
                 await matches.act(userAt.get(seat)!, load.match.id, { play: { kind: 'hokm', verb: 'card', card }, key: `c${ seat }` });
             }
 
-            const rows = rowsOf<{ seat: number; result: string; won: number; streak: number }>(await db.query(
-                `select p.seat, p.result, s.won, s.streak
+            const rows = rowsOf<{ seat: number; result: string; won: number; streak: number; swing: number }>(await db.query(
+                `select p.seat, p.result, s.won, s.streak, p.rating_after - p.rating_before as swing
                    from match_players p
                    join player_stats s on s.user_id = p.user_id and s.game = 'hokm'
                   where p.match_id = $1
@@ -840,6 +877,7 @@ describe.skipIf(!active)('a match, against a real database', () =>
             expect(rows.map((row) => row.result)).toEqual(['won', 'lost', 'won', 'lost']);
             expect(rows.map((row) => row.won)).toEqual([1, 0, 1, 0]);
             expect(rows.map((row) => row.streak)).toEqual([1, 0, 1, 0]);
+            expect(rows.map((row) => row.swing)).toEqual([16, -16, 16, -16]);
         });
     });
 

@@ -226,30 +226,17 @@ describe('how a game ended', () =>
 {
     const table = { target: 0, cube: false, blinds: 'low' as const };
 
-    it('is abandoned heads-up when somebody walks before both have played twice', () =>
+    const placesOf = (state: PokerState) => pokerEngine.standings(state).sort((x, y) => x.seat - y.seat).map((one) => one.place);
+
+    it('names the other seat when somebody walks heads-up, however early', () =>
     {
         const state = pokerEngine.create([0, 1], draws(5), table);
         const ended = applied(state, forfeit(1 - state.turn)).state;
 
-        expect(pokerEngine.finish(ended)).toEqual({ winners: [state.turn], outcome: 'abandoned' });
+        expect(pokerEngine.finish(ended)).toEqual({ winners: [state.turn], unsettled: [] });
     });
 
-    it('is won heads-up once both have played twice', () =>
-    {
-        let state = pokerEngine.create([0, 1], draws(5), table);
-
-        while (state.acts.some((count) => count < 2))
-        {
-            state = applied(state, pokerEngine.autoplay(state, state.turn, draws(1))!).state;
-        }
-
-        const leaver = state.turn;
-        const ended = applied(state, forfeit(leaver, 'timeout')).state;
-
-        expect(pokerEngine.finish(ended)).toEqual({ winners: [1 - leaver], outcome: 'won' });
-    });
-
-    it('is won heads-up by taking the last chip', () =>
+    it('names the seat that took the last chip', () =>
     {
         const dealt = seated([1500, 1500], 0, ['AS AH', 'KS KH'], '2C 7D 9H JS 4C');
         const die = dealt.die;
@@ -258,36 +245,26 @@ describe('how a game ended', () =>
         state = play(state, { kind: 'allin', seat: 0 }, die).state;
         state = play(state, { kind: 'allin', seat: 1 }, die).state;
 
-        expect(pokerEngine.finish(state)).toEqual({ winners: [0], outcome: 'won' });
+        expect(pokerEngine.finish(state)).toEqual({ winners: [0], unsettled: [] });
     });
 
-    it('is abandoned at a full table when every opponent timed out', () =>
+    it('places everybody who walked out by the order they left', () =>
     {
         let state = pokerEngine.create([0, 1, 2, 3, 4, 5], draws(6), table);
         const stayer = state.turn;
+        const order = [1, 2, 3, 4, 5].map((step) => (stayer + step) % 6);
 
-        for (const seat of [1, 2, 3, 4, 5].map((step) => (stayer + step) % 6))
-        {
-            state = applied(state, forfeit(seat, 'timeout')).state;
-        }
-
-        expect(pokerEngine.finish(state)).toEqual({ winners: [stayer], outcome: 'abandoned' });
-    });
-
-    it('is won at a full table when even one opponent resigned', () =>
-    {
-        let state = pokerEngine.create([0, 1, 2, 3, 4, 5], draws(6), table);
-        const stayer = state.turn;
-
-        for (const [index, seat] of [1, 2, 3, 4, 5].map((step) => (stayer + step) % 6).entries())
+        for (const [index, seat] of order.entries())
         {
             state = applied(state, forfeit(seat, index === 2 ? 'resign' : 'timeout')).state;
         }
 
-        expect(pokerEngine.finish(state)).toEqual({ winners: [stayer], outcome: 'won' });
+        expect(pokerEngine.finish(state)).toEqual({ winners: [stayer], unsettled: [] });
+        expect(order.map((seat) => placesOf(state)[seat])).toEqual([6, 5, 4, 3, 2]);
+        expect(placesOf(state)[stayer]).toBe(1);
     });
 
-    it('is won at a full table when an opponent was knocked out by chips', () =>
+    it('places a quitter above a player who had already been knocked out', () =>
     {
         const dealt = seated([1500, 400, 1500], 0, ['AS AH', 'KS KH', 'QS QH'], '2C 7D 9H JS 4C');
         const die = dealt.die;
@@ -301,7 +278,40 @@ describe('how a game ended', () =>
 
         state = applied(state, forfeit(2, 'timeout')).state;
 
-        expect(pokerEngine.finish(state)).toEqual({ winners: [0], outcome: 'won' });
+        expect(pokerEngine.finish(state)).toEqual({ winners: [0], unsettled: [] });
+        expect(placesOf(state)).toEqual([1, 3, 2]);
+    });
+
+    it('counts betting decisions as engagement, three of them, and never a blind', () =>
+    {
+        expect(pokerEngine.engagement(6)).toEqual({ verbs: ['fold', 'check', 'call', 'raise', 'allin'], after: 3 });
+    });
+});
+
+describe('one turn on the clock', () =>
+{
+    it('gives a fresh key to the seat that folded one hand and opens the next', () =>
+    {
+        const state = pokerEngine.create([0, 1], draws(5), { target: 0, cube: false, blinds: 'low' });
+        const opener = state.turn;
+        const raise = pokerEngine.legal(state, opener).find((one) => one.kind === 'raise')!;
+        const raised = applied(state, raise).state;
+        const folder = raised.turn;
+        const folded = applied(raised, { kind: 'fold', seat: folder }).state;
+
+        expect(folded.hand).toBe(state.hand + 1);
+        expect(pokerEngine.turnOf(folded)).toBe(folder);
+        expect(pokerEngine.turnKey(folded)).not.toBe(pokerEngine.turnKey(raised));
+    });
+
+    it('keeps the key while a seat that is not on turn walks out', () =>
+    {
+        const state = pokerEngine.create([0, 1, 2, 3, 4, 5], draws(6), { target: 0, cube: false, blinds: 'low' });
+        const away = (state.turn + 3) % 6;
+        const after = applied(state, forfeit(away)).state;
+
+        expect(pokerEngine.turnOf(after)).toBe(pokerEngine.turnOf(state));
+        expect(pokerEngine.turnKey(after)).toBe(pokerEngine.turnKey(state));
     });
 });
 

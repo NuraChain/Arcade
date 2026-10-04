@@ -653,7 +653,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
          * are the DATABASE's facts - the same for every game - and reading them off the state meant
          * walking an engine's own player array to find a handle. `turn` and `winner` went the same
          * way: the engine answers the first and `matches.winner_seat` already holds the second,
-         * written by `commit` from the engine's own `Ending`.
+         * written by the recorder from the judge's plan.
          */
         const view: MatchView = {
             id: load.match.id,

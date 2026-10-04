@@ -224,4 +224,61 @@ describe('a seat the match never judged', () =>
 
         expect(mine(container)?.textContent).toContain('بی‌نتیجه');
     });
+
+    it('says the game ended too early to count, and that only whoever stopped is rated', () =>
+    {
+        const container = renderTest(() => MatchResult({ match: voided, mine: 0 }) as Rendered).container;
+
+        expect(container.textContent).toContain('Ended too early to count.');
+        expect(container.textContent).toContain('It counts only against whoever stopped playing.');
+        expect(container.textContent).not.toContain('The table emptied');
+        expect(container.textContent).not.toContain('no rating moved');
+    });
+
+    it('says the same in Persian', () =>
+    {
+        useLocale().setLocale('fa');
+        const container = renderTest(() => MatchResult({ match: voided, mine: 0 }) as Rendered).container;
+
+        expect(container.textContent).toContain(useLocale().t('match.over.void'));
+        expect(container.textContent).toContain(useLocale().t('match.over.voidLead'));
+        expect(useLocale().t('match.over.void')).not.toBe('match.over.void');
+        expect(useLocale().t('match.over.voidLead')).not.toBe('match.over.voidLead');
+    });
+
+    it('tells a player whose own seat did not count, in a game somebody else won', () =>
+    {
+        const partly = {
+            ...finished,
+            seats: 4,
+            outcome: 'won',
+            winner: 0,
+            players: [
+                { seat: 0, who: 'alex', timeouts: 0, result: 'won', ratingBefore: 1200, ratingAfter: 1216 },
+                { seat: 1, who: 'omid.k', timeouts: 0, result: 'abandoned', ratingBefore: 1200, ratingAfter: 1184 },
+                { seat: 2, who: 'sara.k', timeouts: 0, result: 'won', ratingBefore: 1200, ratingAfter: 1216 },
+                { seat: 3, who: 'reza.t', timeouts: 0, result: 'void' }
+            ]
+        } as MatchView;
+
+        const english = renderTest(() => MatchResult({ match: partly, mine: 3 }) as Rendered).container;
+
+        expect(english.textContent).toContain('This one did not count for you: your rating and streak are as they were.');
+        expect(english.textContent).not.toContain('Ended too early to count.');
+
+        cleanup();
+        useLocale().setLocale('fa');
+
+        const persian = renderTest(() => MatchResult({ match: partly, mine: 3 }) as Rendered).container;
+
+        expect(persian.textContent).toContain(useLocale().t('match.over.voidMine'));
+        expect(useLocale().t('match.over.voidMine')).not.toBe('match.over.voidMine');
+
+        cleanup();
+        useLocale().setLocale('en');
+
+        const winner = renderTest(() => MatchResult({ match: partly, mine: 0 }) as Rendered).container;
+
+        expect(winner.textContent).not.toContain('did not count for you');
+    });
 });

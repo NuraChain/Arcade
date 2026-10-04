@@ -442,7 +442,7 @@ try
              * something to say. Asked in both browsers, because the loser is the one who gets it
              * wrong most quietly.
              */
-            record(`${ who.handle } is still looking at the finished match`, /won|ended|emptied/i.test(said), said.slice(0, 60));
+            record(`${ who.handle } is still looking at the finished match`, /won|ended/i.test(said), said.slice(0, 60));
             record(`${ who.handle } is offered another`, await pressable(who.page, /Play again/i) !== null);
         }
     }

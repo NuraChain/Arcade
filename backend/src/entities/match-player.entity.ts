@@ -47,7 +47,7 @@ export class MatchPlayer
      * dates in it. This column does, through `matches.finished_at`, and it costs one integer on a
      * row that is written once and never updated again.
      *
-     * A walkout earns zero here, which is `xpFor`'s rule and not this column's - stated because a
+     * A walkout earns zero here, which is the judge's rule and not this column's - stated because a
      * zero in this column is a fact about the game rather than a row nobody got round to filling in.
      */
     @Column({ type: 'integer', default: 0 })

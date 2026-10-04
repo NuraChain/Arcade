@@ -9,8 +9,6 @@ const XP_CAP = 25;
 
 const XP_KNOCKOUT = 3;
 
-const RATED_AFTER = 2;
-
 type PokerBoard = Extract<MatchBoard, { kind: 'poker' }>;
 
 const dieOf = (draws: Draws): Die => (sides) => draws.die(sides);
@@ -60,16 +58,16 @@ export const pokerEngine: Engine<PokerState, PokerAction> = {
             return null;
         }
 
-        const opponents = state.exits.filter((_, seat) => seat !== state.winner);
-
-        const played = state.seats === 2
-            ? opponents[0] === 'chips' || state.acts.every((count) => count >= RATED_AFTER)
-            : opponents.some((exit) => exit !== 'timeout');
-
-        return { winners: [state.winner], outcome: played ? 'won' : 'abandoned' };
+        return { winners: [state.winner], unsettled: [] };
     },
 
     standings: (state: PokerState): Placement[] => standings(state),
+
+    sideOf: (seat: number) => seat,
+
+    engagement: () => ({ verbs: ['fold', 'check', 'call', 'raise', 'allin'], after: 3 }),
+
+    turnKey: (state: PokerState) => `${ state.hand }.${ state.acts.reduce((total, count) => total + count, 0) }`,
 
     view: (state: PokerState, seat: number | null): MatchBoard =>
     {

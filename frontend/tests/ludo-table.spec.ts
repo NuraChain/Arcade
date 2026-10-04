@@ -151,4 +151,20 @@ describe('the ludo table', () =>
         expect(await tag(3)).toEqual({ text: locale.plural('match.missed', 3), tone: 'gold' });
         expect(await tag(4)).toEqual({ text: locale.t('card.lastChance'), tone: 'danger' });
     });
+
+    it('says No contest on a seat the finished game never judged, and Left on the seat that walked', async () =>
+    {
+        const container = await show(ludo({
+            finishedAt: new Date(500_000).toISOString(),
+            outcome: 'abandoned',
+            players: [
+                { seat: 0, who: 'alex', timeouts: 0, result: 'void' },
+                { seat: 1, who: 'sara.k', timeouts: 0, result: 'abandoned' }
+            ] as MatchView['players']
+        }, { seats: [yard(0, 'red'), { ...yard(1, 'yellow'), out: true }] }));
+        const [mine, theirs] = [...container.querySelectorAll<HTMLElement>('.yard-badge')];
+
+        expect(mine.querySelector('.table-plate-tag')?.textContent).toBe('No contest');
+        expect(theirs.querySelector('.table-plate-tag')?.textContent).toBe(useLocale().t('card.out'));
+    });
 });

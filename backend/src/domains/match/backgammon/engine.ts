@@ -47,7 +47,7 @@ function rolled(state: BackgammonState, seat: number, dice: number[], die: Die, 
 
 function begin(state: BackgammonState, seat: number, die: Die, events: BackgammonEvent[], passes = 0): BackgammonState
 {
-    const waiting: BackgammonState = { ...state, turn: seat, phase: 'roll', dice: [] };
+    const waiting: BackgammonState = { ...state, turn: seat, phase: 'roll', dice: [], turns: state.turns + 1 };
 
     if (passes >= PASS_LIMIT || mayDouble(waiting, seat))
     {
@@ -61,8 +61,10 @@ function begin(state: BackgammonState, seat: number, die: Die, events: Backgammo
     return rolled(waiting, seat, dice, die, events, passes);
 }
 
-function opening(state: BackgammonState, die: Die, events: BackgammonEvent[])
+function opening(previous: BackgammonState, die: Die, events: BackgammonEvent[])
 {
+    const state: BackgammonState = { ...previous, turns: previous.turns + 1 };
+
     for (let tries = 0; tries < OPENING_TRIES; tries += 1)
     {
         const first = die(6);
@@ -103,7 +105,7 @@ export function create(target: number, cube: boolean, die: Die)
         dice: [],
         cube: 1,
         owner: null,
-        acted: [0, 0],
+        turns: 0,
         winner: null
     }, die, []);
 }
@@ -243,11 +245,7 @@ export function apply(state: BackgammonState, action: BackgammonAction, die: Die
         };
     }
 
-    const acted = [...state.acted];
-
-    acted[action.seat] += 1;
-
-    const next: BackgammonState = { ...state, rev: state.rev + 1, acted };
+    const next: BackgammonState = { ...state, rev: state.rev + 1 };
 
     if (state.phase === 'double')
     {

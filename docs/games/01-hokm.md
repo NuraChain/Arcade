@@ -102,10 +102,16 @@ achievements, levels, the turn sweep, the idempotency ledger, the revision preco
 New actions on the generic route: `DECLARE_TRUMP`, `PLAY_CARD`, and at two players `KEEP` / `REJECT`.
 `match_actions.kind` must widen (see the seam doc).
 
-**Teams.** `match_players.team` (`0 | 1 | null`), and `rating.ts` scoring a team result. Elo over a
-field already supports equal places, so a 4-player team win is expressible as places `[1,2,1,2]` —
-but that scores partners against each other. *Proposed: rate the TEAM as one entity against the
-other, then apply the same delta to both members. Confirm before building.*
+**Teams.** Built, with no column: partnerships are seat parity (`sideOf(seat, 4) = seat % 2`, the
+product rule), and the engine reports them through `Engine.sideOf`. `rating.ts` rates each SIDE as
+one player at its members' mean rating and moves every member by the same amount, so partners are
+never scored against each other (places `[1,2,1,2]` used to score them as a draw, HOKM-02); equal
+teams move ±16 each. `standings` is competition-ranked by side - a side with a seat out is last
+whatever its points, and sides level on points share a place (HOKM-03). When somebody forfeits,
+`finish` reports every seat still at the table as `unsettled`: the quitter takes a rated loss, their
+partner is `void` (neither punished nor paid), and the opponents win only if they and the quitter
+had each played a hand's worth of cards (7 at three and four players, 13 at two). Three-handed
+survivors of a forfeit are never rated against each other.
 
 **A match is a sequence.** One `matches` row = one match to 7. Hand results are ledger events.
 

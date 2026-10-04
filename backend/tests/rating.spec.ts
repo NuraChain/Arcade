@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { placementsOf } from '../src/domains/match/ludo/standings.ts';
+import { planOf } from '../src/domains/match/judge.ts';
 import { rateField, type Standing } from '../src/domains/match/rating.ts';
 import { FINISHED, YARD } from '../src/domains/match/ludo/board.ts';
 import type { LudoState } from '../src/domains/match/ludo/state.ts';
@@ -14,7 +15,7 @@ import { ludoEngine } from '../src/domains/match/engines/ludo.ts';
  * achievement nobody can earn. None of it touches a database, so it runs in the default `npm test`.
  */
 
-const standing = (seat: number, rating: number, place: number): Standing => ({ seat, rating, place });
+const standing = (seat: number, rating: number, place: number, side = seat): Standing => ({ seat, side, rating, place });
 
 describe('rating a field', () =>
 {
@@ -68,7 +69,7 @@ describe('rating a field', () =>
 
     it('moves nothing at all for a field of one', () =>
     {
-        expect(rateField([standing(0, 1200, 1)])).toEqual([{ seat: 0, before: 1200, after: 1200 }]);
+        expect(rateField([standing(0, 1200, 1)])).toEqual([]);
     });
 
     /** The column is `between 100 and 4000`, so a write outside it strands a finished match. */
@@ -76,6 +77,51 @@ describe('rating a field', () =>
     {
         expect(rateField([standing(0, 4000, 1), standing(1, 100, 2)])[0].after).toBeLessThanOrEqual(4000);
         expect(rateField([standing(0, 100, 2), standing(1, 4000, 1)])[0].after).toBeGreaterThanOrEqual(100);
+    });
+});
+
+describe('rating sides', () =>
+{
+    const swingOf = (moves: ReturnType<typeof rateField>, seat: number) =>
+    {
+        const move = moves.find((one) => one.seat === seat)!;
+
+        return move.after - move.before;
+    };
+
+    it('rates a side as one player at its members mean, so partners move by the same amount', () =>
+    {
+        const moves = rateField([standing(0, 1300, 1, 0), standing(1, 1250, 2, 1), standing(2, 1100, 1, 0), standing(3, 1150, 2, 1)]);
+
+        expect([0, 1, 2, 3].map((seat) => swingOf(moves, seat))).toEqual([16, -16, 16, -16]);
+    });
+
+    it('never scores partners against each other', () =>
+    {
+        const lopsided = rateField([standing(0, 1800, 1, 0), standing(1, 1200, 2, 1), standing(2, 600, 1, 0), standing(3, 1200, 2, 1)]);
+
+        expect(swingOf(lopsided, 0)).toBe(swingOf(lopsided, 2));
+        expect(swingOf(lopsided, 1)).toBe(swingOf(lopsided, 3));
+    });
+
+    it('moves a seat nothing is counted against not at all', () =>
+    {
+        const moves = rateField(
+            [standing(0, 1200, 1), standing(1, 1200, 2), standing(2, 1200, 3)],
+            (seat) => seat !== 1
+        );
+
+        expect(moves.map((one) => one.seat)).toEqual([0, 2]);
+    });
+
+    it('rates a quitter against a field that is not rated against them', () =>
+    {
+        const moves = rateField(
+            [standing(0, 1200, 1), standing(1, 1200, 2), standing(2, 1200, 3)],
+            (seat, side) => seat === 2 || side !== 2
+        );
+
+        expect([0, 1, 2].map((seat) => swingOf(moves, seat))).toEqual([16, -16, -16]);
     });
 });
 
@@ -135,35 +181,40 @@ describe('placing a field', () =>
     });
 });
 
-/**
- * Asked of the ENGINE, because the engine is the only thing that can tell a played win from an
- * emptied room. `record.ts` carried its own `outcomeOf` beside `ludoEngine.finish`, which read the
- * same board and gave the same answer - two copies of one rule, and the second game would have had
- * to remember to add a third.
- */
-describe('what a win is', () =>
+describe('what a ludo game reports', () =>
 {
     const HOME = [FINISHED, FINISHED, FINISHED, FINISHED];
 
-    const outcomeOf = (state: LudoState): string => ludoEngine.finish(state)?.outcome ?? 'abandoned';
-
-    it('is four tokens home', () =>
+    it('names the seat with four tokens home and leaves nobody unsettled', () =>
     {
-        expect(outcomeOf(board([HOME, [1, YARD, YARD, YARD]], 0))).toBe('won');
+        expect(ludoEngine.finish(board([HOME, [1, YARD, YARD, YARD]], 0))).toEqual({ winners: [0], unsettled: [] });
     });
 
-    /**
-     * The rating farm this exists to close: three accounts sit down, two walk out, and the engine
-     * declares the third the winner because it is the last one playing. Recording that as a win
-     * would pay a rating for an empty room.
-     */
-    it('is NOT being the last one left in the room', () =>
+    it('names the last seat left in the room too, and the judge makes that no contest', () =>
     {
-        expect(outcomeOf(board([[3, YARD, YARD, YARD], [YARD, YARD, YARD, YARD]], 0, [false, true]))).toBe('abandoned');
+        const emptied = board([[3, YARD, YARD, YARD], [YARD, YARD, YARD, YARD]], 0, [false, true]);
+        const ending = ludoEngine.finish(emptied)!;
+        const places = ludoEngine.standings(emptied);
+        const plan = planOf({
+            seats: places.map((one) => ({
+                seat: one.seat,
+                side: ludoEngine.sideOf(one.seat, 2),
+                place: one.place,
+                quitter: one.seat === 1 ? { walked: true, rev: 2 } : null,
+                own: 1,
+                unsettled: ending.unsettled.includes(one.seat)
+            })),
+            after: ludoEngine.engagement(2).after,
+            winners: ending.winners
+        });
+
+        expect(ending).toEqual({ winners: [0], unsettled: [] });
+        expect(plan.verdicts.find((one) => one.seat === 0)?.result).toBe('void');
+        expect(plan.outcome).toBe('abandoned');
     });
 
-    it('is not a game that never ended', () =>
+    it('reports nothing for a game that never ended', () =>
     {
-        expect(outcomeOf(board([[3, YARD, YARD, YARD], [4, YARD, YARD, YARD]], null))).toBe('abandoned');
+        expect(ludoEngine.finish(board([[3, YARD, YARD, YARD], [4, YARD, YARD, YARD]], null))).toBeNull();
     });
 });

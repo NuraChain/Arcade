@@ -1,8 +1,8 @@
 import { suitOf, type Suit } from '../cards/cards.ts';
 import { legalCards } from '../hokm/cards.ts';
 import { apply, autoplay, create, dealerSeat, legalMoves, SEATS } from '../hokm/engine.ts';
-import { trickCount, winningTricks } from '../hokm/scoring.ts';
-import { sideCount, sideOf, type HokmAction, type HokmEvent, type HokmState } from '../hokm/state.ts';
+import { TRIPLE_SWEEP, trickCount, winningTricks } from '../hokm/scoring.ts';
+import { seatsOfSide, sideCount, sideOf, type HokmAction, type HokmEvent, type HokmState } from '../hokm/state.ts';
 import type { Draws, Ending, Engine, ForfeitReason, Placement, TableConfig, Tally } from '../engine.ts';
 import type { MatchBoard, MatchLog, MatchPlay } from '../../../schemas.ts';
 
@@ -73,11 +73,6 @@ export const hokmEngine: Engine<HokmState, HokmAction> = {
     autoplay: (state: HokmState, seat: number, draws: Draws) =>
         autoplay(state, seat, (sides) => draws.die(sides)),
 
-    /**
-     * A match that reached its target was WON; one that stopped because somebody walked out was not,
-     * whoever is left holding the most points. That is the same distinction ludo draws by looking at
-     * the board, and it is what keeps a walkout out of the rating.
-     */
     finish: (state: HokmState): Ending | null =>
     {
         if (state.winner === null)
@@ -85,26 +80,34 @@ export const hokmEngine: Engine<HokmState, HokmAction> = {
             return null;
         }
 
-        const winners = Array.from({ length: state.seats }, (_, seat) => seat)
-            .filter((seat) => sideOf(seat, state.seats) === state.winner);
+        const seats = Array.from({ length: state.seats }, (_, seat) => seat);
 
-        const played = state.points[state.winner] >= state.target;
-
-        return { winners, outcome: played ? 'won' : 'abandoned' };
+        return {
+            winners: seatsOfSide(state.winner, state.seats),
+            unsettled: state.points[state.winner] >= state.target ? [] : seats.filter((seat) => state.out[seat] !== true)
+        };
     },
 
-    /**
-     * Placed by match points, which is the only ranking hokm produces - a side either got there
-     * first or did not. Partners share a place because they shared the match.
-     */
     standings: (state: HokmState): Placement[] =>
     {
-        const order = Array.from({ length: sideCount(state.seats) }, (_, side) => side)
-            .sort((a, b) => state.points[b] - state.points[a]);
+        const gone = (side: number) => seatsOfSide(side, state.seats).some((seat) => state.out[seat] === true);
+        const better = (side: number, than: number) =>
+            gone(side) !== gone(than) ? !gone(side) : state.points[side] > state.points[than];
+        const sides = Array.from({ length: sideCount(state.seats) }, (_, side) => side);
 
         return Array.from({ length: state.seats }, (_, seat) =>
-            ({ seat, place: order.indexOf(sideOf(seat, state.seats)) + 1 }));
+        {
+            const side = sideOf(seat, state.seats);
+
+            return { seat, place: 1 + sides.filter((other) => better(other, side)).length };
+        });
     },
+
+    sideOf: (seat: number, seats: number) => sideOf(seat, seats),
+
+    engagement: (seats: number) => ({ verbs: ['card'], after: seats === 3 ? TRIPLE_SWEEP : winningTricks(seats) }),
+
+    turnKey: (state: HokmState) => `${ state.round }.${ state.tricks.reduce((total, count) => total + count, 0) }`,
 
     view: (state: HokmState, seat: number | null): MatchBoard =>
     {

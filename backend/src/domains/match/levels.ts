@@ -24,13 +24,12 @@ export const XP_FINISH = 10;
 export const XP_WIN = 25;
 
 /**
- * What one seat earned.
+ * What one seat that is paid at all earned.
  *
- * A seat that WALKED OUT earns nothing at all - not the finish, not the bonus it built up on the
- * way. Otherwise leaving a game you are losing is a way of banking the good part of it, which is
- * the same hole the engine's own `Ending` closes for the rating: quitting must never be the
- * profitable move. A seat that was TIMED OUT of the game is a different thing and keeps what it
- * earned, because missing three turns is usually a dropped connection rather than a decision.
+ * WHETHER a seat is paid is the judge's (`judge.ts`), beside whether it is rated: a walkout, a seat
+ * timed out before it had played its share and a `void` seat earn nothing, and only a seat timed out
+ * after playing keeps the finish and its bonus, because missing three turns is usually a dropped
+ * connection rather than a decision.
  *
  * `bonus` is the ENGINE's figure for what this seat's own doings were worth. Finishing and winning
  * stay here because they are facts about a match rather than about a game; a capture being worth
@@ -38,16 +37,10 @@ export const XP_WIN = 25;
  * games at once and being edited every time a fifth is added.
  */
 export function xpFor(input: {
-    walked: boolean;
     won: boolean;
     bonus: number;
 })
 {
-    if (input.walked)
-    {
-        return 0;
-    }
-
     return XP_FINISH + (input.won ? XP_WIN : 0) + Math.max(0, Math.trunc(input.bonus));
 }
 

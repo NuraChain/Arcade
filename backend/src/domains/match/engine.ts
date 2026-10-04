@@ -72,17 +72,16 @@ export interface Placement
  */
 export type Tally = Record<string, number>;
 
-/**
- * How a game ended, in the two words the platform already understands.
- *
- * `won` means somebody actually won by playing; `abandoned` means the room emptied and the engine
- * had to declare somebody so the match could stop. The distinction is what stops a rating farm -
- * `outcomeOf` was ludo's own answer to it and it becomes every engine's.
- */
 export interface Ending
 {
     winners: number[];
-    outcome: 'won' | 'abandoned';
+    unsettled: number[];
+}
+
+export interface Engagement
+{
+    verbs: readonly string[];
+    after: number;
 }
 
 export interface TableConfig
@@ -147,6 +146,12 @@ export interface Engine<S = unknown, A = unknown>
     finish(state: S): Ending | null;
 
     standings(state: S): Placement[];
+
+    sideOf(seat: number, seats: number): number;
+
+    engagement(seats: number): Engagement;
+
+    turnKey(state: S): string;
 
     /**
      * What ONE viewer may see, composed rather than filtered.

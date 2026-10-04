@@ -83,6 +83,12 @@ const secretEngine: Engine<SecretState, { seat: number }> = {
 
     standings: (): Placement[] => [],
 
+    sideOf: (seat: number) => seat,
+
+    engagement: () => ({ verbs: ['roll'], after: 1 }),
+
+    turnKey: (state: SecretState) => String(state.turn),
+
     view: (state: SecretState, seat: number | null): MatchBoard => ({
         kind: 'ludo',
         moves: seat === null ? [] : [state.secrets[seat]],
