@@ -197,6 +197,11 @@ function stateOf(match: Match)
 
 export const ENGINES: readonly Engine[] = [ludoEngine, hokmEngine, backgammonEngine, pokerEngine];
 
+export const FOLD_MAX = 8;
+
+export const sameTurn = (engine: Engine, before: unknown, after: unknown) =>
+    engine.turnOf(before) === engine.turnOf(after) && engine.turnKey(before) === engine.turnKey(after);
+
 export function createMatchService(db: DataSource, achieve: AchieveService, engines: readonly Engine[] = ENGINES)
 {
     const recorder = createRecorder(achieve);
@@ -291,6 +296,7 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
     ) =>
     {
         const ending = engine.finish(next);
+        const rearm = ending === null && !sameTurn(engine, match.state, next);
 
         const written = await tx.getRepository(Match).update(
             { id: match.id, rev: match.rev },
@@ -298,7 +304,7 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
                 state: next as Record<string, unknown>,
                 ...(match.opening === null ? { opening: match.state as Record<string, unknown> } : {}),
                 rev: revOf(next),
-                ...(ending === null ? { deadlineAt: deadlineFrom(mode) } : {})
+                ...(rearm ? { deadlineAt: deadlineFrom(mode) } : {})
             }
         );
 
@@ -851,13 +857,40 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
 
                     await tx.getRepository(MatchPlayer).increment({ matchId: match.id, seat }, 'timeouts', 1);
 
-                    await commit(tx, match, engine, outcome.state, outcome.events, {
-                        seat,
-                        userId: null,
-                        kind: forfeiting ? 'forfeit' : 'play',
-                        payload: { verb: forfeiting ? 'timeout' : 'auto' },
-                        key: null
-                    }, mode);
+                    const step = async (at: Match, next: unknown, events: unknown[]) =>
+                    {
+                        await commit(tx, at, engine, next, events, {
+                            seat,
+                            userId: null,
+                            kind: forfeiting ? 'forfeit' : 'play',
+                            payload: { verb: forfeiting ? 'timeout' : 'auto' },
+                            key: null
+                        }, mode);
+
+                        return { ...at, rev: revOf(next), state: next, opening: at.opening ?? at.state };
+                    };
+
+                    const turnGoesOn = (at: Match) => engine.finish(at.state) === null && sameTurn(engine, state, at.state);
+
+                    let current = await step(match, outcome.state, outcome.events);
+
+                    for (let steps = 1; !forfeiting && steps < FOLD_MAX && turnGoesOn(current); steps += 1)
+                    {
+                        const auto = engine.autoplay(current.state, seat, draws);
+                        const folded = auto === null ? null : engine.apply(current.state, auto, draws);
+
+                        if (folded === null || !folded.ok)
+                        {
+                            break;
+                        }
+
+                        current = await step(current, folded.state, folded.events);
+                    }
+
+                    if (turnGoesOn(current))
+                    {
+                        await postpone(tx, match.id, mode);
+                    }
 
                     return { matchId: match.id, game: match.game, played: true, before: match.rev };
                 });

@@ -660,13 +660,26 @@ frame kind that costs something is metered by one ten-second budget (`voice` 30,
 **A turn that runs out is played, not punished.** The sweep finds due matches by Postgres `now()` -
 never `MoreThan(new Date())`, because the deadline is written by Postgres too (`commit` sets it as
 `now() + make_interval(...)`) and a Node clock would disagree with it - asks the engine's
-`autoplay`, and bumps `timeouts`. The third miss IN A ROW (`MISSES_ALLOWED`, asked through
+`autoplay`, and bumps `timeouts`. The third missed TURN IN A ROW (`MISSES_ALLOWED`, asked through
 `nextMissForfeits`) forfeits that seat: any action a person takes puts their count back to zero,
 because a count that only ever grew forfeited somebody for three misses spread across a whole match,
 and a Sit & Go is two hundred decisions a seat. A timeout forfeit is a rated loss for that seat like
 any other forfeit, and the match is `won` or `abandoned` by the judge's rule (see *What a game leaves
 behind*). The server's own actions are written with `user_id = null`, which is what distinguishes
 them in the ledger, and is why no turn the sweep played ever counts towards a seat's engagement.
+
+**One deadline and one miss per TURN, not per action.** A turn is `sameTurn` in `service.ts`: the
+same `turnOf` AND the same `turnKey`, which each engine derives from its own state (ludo's turn index,
+backgammon's turn counter, hokm's round and tricks taken, poker's hand and actions taken). `commit`
+re-arms the deadline only when the game goes on and the action ended the turn, so a ludo roll and its
+move, a backgammon roll and its move, and the hokm Hâkem's trump and opening lead each share ONE
+deadline (LUDO-01, BG-07): a roll no longer buys a fresh clock for the move after it. An action from a seat that is not on turn (a resignation at three or more) changes neither half, so it
+never moves anybody's clock (PK-10). The sweep FOLDS: it plays `autoplay` until the turn changes or
+the game ends, at most `FOLD_MAX` (8) steps, each its own action row so revisions stay gapless, and
+charges ONE miss for the lot. It used to play one action and charge one miss per sweep, so the
+backgammon cube holder's expired roll and move were two misses and two deadlines, and a ludo player
+on sixes was forfeited inside a single turn. `engine-contract.spec.ts` holds every engine's turns to
+the bound and every out-of-turn forfeit to leaving the turn alone.
 
 **The clock is the SERVER's, counted from the moment its answer arrived.** `matchView.remainingMs` is
 worked out when the response is composed, and `TurnClock` counts down from the instant it lands -
@@ -684,7 +697,10 @@ transaction, picked `for update skip locked` INSIDE that transaction - the only 
 means anything; a lock taken by a bare select is released the instant the select returns - and it
 ALWAYS moves the deadline. A match it cannot play (no engine, `turnOf` null, `autoplay` null, or
 `apply` refusing) is pushed a turn into the future without charging anybody a miss, and so is one
-whose engine throws, from a second transaction. The first version had neither guard: due matches
+whose engine throws, from a second transaction. And since `commit` no longer re-arms on an action
+inside a turn, a fold that is still on the same turn when it stops - the bound reached, or a later
+step with nothing to play - calls `postpone` itself; without that the match would stay due and the
+next tick would charge the same seat a second miss for the same turn. The first version had neither guard: due matches
 were ordered by oldest deadline, so one engine bug put the same match first in every tick and
 stopped every turn on the deployment, silently, until somebody noticed nobody's game moved. The
 unplayable ones come back to `main.ts` and are logged as `unplayable match`, because a

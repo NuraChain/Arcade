@@ -49,12 +49,12 @@ const makeUser = async () =>
     ))[0].id;
 };
 
-const started = async () =>
+const started = async (cube = false) =>
 {
     const players = [await makeUser(), await makeUser()];
     const table = await tables.create(players[0], {
         game: 'backgammon', seats: 2, mode: 'live', privacy: 'public',
-        target: 3, cube: false, blinds: 'low', chat: true, voice: false, invitees: []
+        target: 3, cube, blinds: 'low', chat: true, voice: false, invitees: []
     });
 
     await tables.claimSeat(players[1], table.id);
@@ -68,6 +68,12 @@ const started = async () =>
 
     return { matchId: load.match.id, userAt: new Map(load.players.map((one) => [one.seat, one.user_id])) };
 };
+
+const missesOf = async (matchId: string) =>
+    rowsOf<{ timeouts: number }>(await db.query(
+        `select timeouts from match_players where match_id = $1 order by seat`,
+        [matchId]
+    )).map((row) => row.timeouts);
 
 const stateOf = async (matchId: string) => (await matches.peek(matchId))!.state as BackgammonState;
 
@@ -212,5 +218,37 @@ describe.skipIf(!active)('a backgammon match judged, against a real database', (
             { seat: 0, result: 'void', xp: 0, rating_after: null, stats: 0 },
             { seat: 1, result: 'abandoned', xp: 0, rating_after: 1184, stats: 1 }
         ]);
+    });
+
+    it('folds an expired roll and move of the cube holder into one miss and one deadline', async () =>
+    {
+        const { matchId, userAt } = await started(true);
+        const holder = backgammonEngine.turnOf(await stateOf(matchId))!;
+        const doubler = 1 - holder;
+
+        await play(matchId, userAt, (_seat, own) => (own[holder] === 0 ? 'own' : null));
+        await matches.act(userAt.get(doubler)!, matchId, { play: { kind: 'backgammon', verb: 'double' }, key: 'double' });
+        await matches.act(userAt.get(holder)!, matchId, { play: { kind: 'backgammon', verb: 'take' }, key: 'take' });
+        await play(matchId, userAt, (seat) => (seat === doubler ? 'own' : null));
+
+        const waiting = await stateOf(matchId);
+
+        expect(waiting).toMatchObject({ turn: holder, phase: 'roll', owner: holder, cube: 2 });
+
+        const before = (await matches.peek(matchId))!.match.rev;
+
+        await db.query(`update matches set deadline_at = now() - interval '1 second' where id = $1`, [matchId]);
+
+        expect(await matches.expireNext()).toEqual({ matchId, game: 'backgammon', played: true, before });
+        expect(await matches.expireNext()).toBeNull();
+
+        const swept = rowsOf<{ seat: number; user_id: string | null; verb: string }>(await db.query(
+            `select seat, user_id, payload ->> 'verb' as verb from match_actions where match_id = $1 and rev > $2 order by rev`,
+            [matchId, before]
+        ));
+
+        expect(swept).toEqual([holder, holder].map((seat) => ({ seat, user_id: null, verb: 'auto' })));
+        expect(await missesOf(matchId)).toEqual([0, 1].map((seat) => (seat === holder ? 1 : 0)));
+        expect(backgammonEngine.turnOf(await stateOf(matchId))).toBe(doubler);
     });
 });

@@ -7,7 +7,7 @@ import { DataSource } from 'typeorm';
 
 import { entities } from '../src/entities/index.ts';
 import { TableSeat } from '../src/entities/table-seat.entity.ts';
-import { createMatchService } from '../src/domains/match/service.ts';
+import { FOLD_MAX, createMatchService } from '../src/domains/match/service.ts';
 import { createSocialService } from '../src/domains/social/service.ts';
 import { SEATED_MAX, createTableService } from '../src/domains/table/service.ts';
 import { createWatchService } from '../src/domains/match/watch.ts';
@@ -16,7 +16,7 @@ import { rowsOf } from '../src/lib/rows.ts';
 import { legalMoves } from '../src/domains/match/ludo/engine.ts';
 import { ludoEngine } from '../src/domains/match/engines/ludo.ts';
 import type { Draws, Engine } from '../src/domains/match/engine.ts';
-import type { LudoState } from '../src/domains/match/ludo/state.ts';
+import type { EngineAction, LudoState } from '../src/domains/match/ludo/state.ts';
 
 /**
  * A played game, against a real database.
@@ -100,6 +100,24 @@ const countActions = async (matchId: string) =>
 const ROLL = { kind: 'ludo', verb: 'roll' } as const;
 
 const moveOf = (piece: number) => ({ kind: 'ludo', verb: 'move', piece } as const);
+
+const SIXES: Draws = { die: () => 6 };
+
+const sixes = { ...ludoEngine, apply: (state: LudoState, action: EngineAction) => ludoEngine.apply(state, action, SIXES) } as Engine;
+
+const turnSeatOf = (state: unknown) => ludoEngine.turnOf(state as LudoState)!;
+
+const deadlineAt = async (matchId: string) =>
+    rowsOf<{ at: string | null }>(await db.query(
+        `select deadline_at::text as at from matches where id = $1`,
+        [matchId]
+    ))[0].at;
+
+const missesOf = async (matchId: string) =>
+    rowsOf<{ seat: number; timeouts: number }>(await db.query(
+        `select seat, timeouts from match_players where match_id = $1 order by seat`,
+        [matchId]
+    )).map((row) => row.timeouts);
 
 describe.skipIf(!active)('a match, against a real database', () =>
 {
@@ -567,7 +585,7 @@ describe.skipIf(!active)('a match, against a real database', () =>
             const both = await Promise.all([matches.expireNext(), matches.expireNext()]);
 
             expect(both.filter((one) => one !== null)).toHaveLength(1);
-            expect(await countActions(load.match.id)).toBe(1);
+            expect((await missesOf(load.match.id)).reduce((total, misses) => total + misses, 0)).toBe(1);
         });
 
         /**
@@ -629,6 +647,119 @@ describe.skipIf(!active)('a match, against a real database', () =>
 
             expect(await sweeper.expireNext()).toEqual({ matchId: healthyMatch.match.id, game: 'ludo', played: true, before: healthyMatch.match.rev });
             expect(await sweeper.expireNext()).toBeNull();
+        });
+
+        it('keeps one deadline for a whole turn, and arms the next one only when the turn passes', async () =>
+        {
+            const clock = createMatchService(db, createAchieveService(db), [sixes]);
+            const { tableId, players } = await seatedTable(2);
+            const load = await clock.start(players[0], tableId);
+            const seat = turnSeatOf(load.state);
+            const mover = load.players.find((one) => one.seat === seat)!.user_id;
+            const armed = await deadlineAt(load.match.id);
+
+            let state = load.state as LudoState;
+            let step = 0;
+
+            while (turnSeatOf(state) === seat)
+            {
+                expect(await deadlineAt(load.match.id), `action ${ step } of the same turn`).toBe(armed);
+
+                const want = state.die === null ? { play: ROLL, key: `t${ step }` } : { play: moveOf(legalMoves(state)[0]), key: `t${ step }` };
+
+                state = (await clock.act(mover, load.match.id, want)).load.state as LudoState;
+                step += 1;
+
+                expect(step).toBeLessThan(FOLD_MAX);
+            }
+
+            expect(step).toBeGreaterThan(1);
+            expect(await deadlineAt(load.match.id)).not.toBe(armed);
+        });
+
+        it('leaves the deadline alone when a seat not on turn resigns', async () =>
+        {
+            const { tableId, players } = await seatedTable(3);
+            const load = await matches.start(players[0], tableId);
+            const turn = turnSeatOf(load.state);
+            const quitter = load.players.find((one) => one.seat !== turn)!.user_id;
+            const armed = await deadlineAt(load.match.id);
+
+            await matches.act(quitter, load.match.id, { play: null, key: 'resign' });
+
+            expect((await matches.peek(load.match.id))!.match.finishedAt).toBeNull();
+            expect(await deadlineAt(load.match.id)).toBe(armed);
+        });
+
+        it('plays the whole turn in one sweep and charges one miss for it', async () =>
+        {
+            const clock = createMatchService(db, createAchieveService(db), [sixes]);
+            const { tableId, players } = await seatedTable(2);
+            const load = await clock.start(players[0], tableId);
+            const seat = turnSeatOf(load.state);
+
+            await expireNow(load.match.id);
+
+            expect(await clock.expireNext()).toEqual({ matchId: load.match.id, game: 'ludo', played: true, before: load.match.rev });
+
+            const swept = rowsOf<{ seat: number; user_id: string | null }>(await db.query(
+                `select seat, user_id from match_actions where match_id = $1 order by rev`,
+                [load.match.id]
+            ));
+
+            expect(swept.length).toBeGreaterThan(1);
+            expect(swept.every((row) => row.seat === seat && row.user_id === null)).toBe(true);
+            expect(await missesOf(load.match.id)).toEqual([0, 1].map((one) => (one === seat ? 1 : 0)));
+            expect(turnSeatOf((await clock.peek(load.match.id))!.state)).not.toBe(seat);
+            expect(await clock.expireNext()).toBeNull();
+        });
+
+        it('still pushes the deadline when the turn outlasts the fold bound', async () =>
+        {
+            const stalling = {
+                ...ludoEngine,
+                apply: (state: LudoState) => ({ ok: true as const, state: { ...state, rev: state.rev + 1 }, events: [] })
+            } as Engine;
+            const clock = createMatchService(db, createAchieveService(db), [stalling]);
+            const { tableId, players } = await seatedTable(2);
+            const load = await clock.start(players[0], tableId);
+
+            await expireNow(load.match.id);
+
+            expect((await clock.expireNext())?.played).toBe(true);
+            expect(await countActions(load.match.id)).toBe(FOLD_MAX);
+            expect((await missesOf(load.match.id)).reduce((total, misses) => total + misses, 0)).toBe(1);
+            expect(await deadlineOf(load.match.id)).toBe(true);
+            expect(await clock.expireNext()).toBeNull();
+        });
+
+        it('forfeits on the third missed TURN, however many actions each turn took', async () =>
+        {
+            const clock = createMatchService(db, createAchieveService(db), [sixes]);
+            const { tableId, players } = await seatedTable(2);
+            const load = await clock.start(players[0], tableId);
+            const first = turnSeatOf(load.state);
+
+            for (let sweep = 0; sweep < 4; sweep += 1)
+            {
+                await expireNow(load.match.id);
+                expect((await clock.expireNext())?.played).toBe(true);
+            }
+
+            expect(await missesOf(load.match.id)).toEqual([2, 2]);
+            expect(await countActions(load.match.id)).toBeGreaterThan(4);
+            expect((await clock.peek(load.match.id))!.match.finishedAt).toBeNull();
+
+            await expireNow(load.match.id);
+            expect((await clock.expireNext())?.played).toBe(true);
+
+            const results = rowsOf<{ seat: number; result: string }>(await db.query(
+                `select seat, result from match_players where match_id = $1 order by seat`,
+                [load.match.id]
+            ));
+
+            expect((await clock.peek(load.match.id))!.match.finishedAt).not.toBeNull();
+            expect(results.find((row) => row.seat === first)?.result).toBe('abandoned');
         });
     });
 

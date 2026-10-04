@@ -2,7 +2,7 @@ import 'reflect-metadata';
 import { describe, expect, it } from 'vitest';
 
 import type { Draws, Engine, ForfeitReason } from '../src/domains/match/engine.ts';
-import { ENGINES } from '../src/domains/match/service.ts';
+import { ENGINES, FOLD_MAX, sameTurn } from '../src/domains/match/service.ts';
 import type { REFUSALS } from '../src/domains/match/service.ts';
 import type { BackgammonRefusal } from '../src/domains/match/backgammon/state.ts';
 import type { HokmRefusal } from '../src/domains/match/hokm/state.ts';
@@ -12,6 +12,8 @@ import { GAME_SEEDS } from '../src/db/seed-reference.ts';
 import { matchBoard, matchLog, matchPlay } from '../src/schemas.ts';
 
 const GAMES_PER_COUNT = 12;
+
+const CLOCK_GAMES = 4;
 
 const BOUND: Readonly<Record<string, number>> = { ludo: 6000, hokm: 4000, backgammon: 3000, poker: 20_000 };
 
@@ -41,6 +43,62 @@ function seeded(seed: number): { draws: Draws; next: () => number }
 }
 
 const revOf = (state: unknown) => (state as { rev: number }).rev;
+
+function eachState(engine: Engine, count: number, game: number, visit: (state: unknown, actions: number) => void)
+{
+    const { draws, next } = seeded(game * 53 + count * 7 + 1);
+    const seats = Array.from({ length: count }, (_, seat) => seat);
+    let state = engine.create(seats, draws, { target: 0, cube: true, blinds: 'low' });
+    let actions = 0;
+
+    while (engine.finish(state) === null)
+    {
+        visit(state, actions);
+
+        const legal = engine.legal(state, engine.turnOf(state)!);
+        const applied = engine.apply(state, legal[Math.floor(next() * legal.length)], draws);
+
+        expect(applied.ok, `apply at action ${ actions }`).toBe(true);
+
+        if (!applied.ok)
+        {
+            return;
+        }
+
+        state = applied.state;
+        actions += 1;
+
+        expect(actions).toBeLessThan(BOUND[engine.id] ?? 10_000);
+    }
+}
+
+function foldFrom(engine: Engine, state: unknown, draws: Draws)
+{
+    const seat = engine.turnOf(state)!;
+    let current = state;
+    let steps = 0;
+
+    while (steps <= FOLD_MAX && (steps === 0 || (engine.finish(current) === null && sameTurn(engine, state, current))))
+    {
+        const action = engine.autoplay(current, seat, draws);
+
+        expect(action, `autoplay ${ steps } steps into a turn`).not.toBeNull();
+
+        const applied = engine.apply(current, action, draws);
+
+        expect(applied.ok, `autoplay applied ${ steps } steps into a turn`).toBe(true);
+
+        if (!applied.ok)
+        {
+            break;
+        }
+
+        current = applied.state;
+        steps += 1;
+    }
+
+    return steps;
+}
 
 /**
  * Every reason an engine can refuse with has words of its own. An unlisted one still answers - as
@@ -104,6 +162,46 @@ describe.each(ENGINES.map((engine) => [engine.id, engine] as const))('the %s eng
             }
         }
     });
+
+    for (const count of engine.seats)
+    {
+        it(`ends every ${ count }-seat turn the sweep plays out within FOLD_MAX steps of autoplay`, () =>
+        {
+            for (let game = 0; game < CLOCK_GAMES; game += 1)
+            {
+                const fold = seeded(game * 131 + count).draws;
+
+                eachState(engine, count, game, (state, actions) =>
+                {
+                    expect(foldFrom(engine, state, fold), `the turn at action ${ actions }`).toBeLessThanOrEqual(FOLD_MAX);
+                });
+            }
+        }, 60_000);
+
+        it(`leaves the turn alone at ${ count } seats when a seat not on turn forfeits and nothing else moves`, () =>
+        {
+            for (let game = 0; game < CLOCK_GAMES; game += 1)
+            {
+                eachState(engine, count, game, (state, actions) =>
+                {
+                    const turn = engine.turnOf(state)!;
+
+                    for (let seat = 0; seat < count; seat += 1)
+                    {
+                        const applied = seat === turn ? null : engine.apply(state, engine.forfeit(seat, 'resign'), PROBE);
+
+                        if (applied === null || !applied.ok || engine.finish(applied.state) !== null || applied.events.length > 1)
+                        {
+                            continue;
+                        }
+
+                        expect(engine.turnOf(applied.state), `seat ${ seat } forfeiting at action ${ actions }`).toBe(turn);
+                        expect(engine.turnKey(applied.state), `seat ${ seat } forfeiting at action ${ actions }`).toBe(engine.turnKey(state));
+                    }
+                });
+            }
+        }, 60_000);
+    }
 
     for (const count of engine.seats)
     {
