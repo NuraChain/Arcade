@@ -94,6 +94,8 @@ export const me = {
     'me.settings': 'Settings',
     'me.keepSeat.title': 'This seat is this browser.',
     'me.keepSeat.lead': 'A guest seat has no wallet behind it, so nothing here can be sealed and nothing follows you to another device. There is no way back into a guest account once you sign out — and signing in with a wallet starts a new account rather than moving this one.',
+    'me.signOut.guestTitle': 'Sign out of this guest seat?',
+    'me.signOut.guestLead': 'There is no way back into a guest account. This name, these friends and every result stay behind with it.',
 
     'settings.title': 'Settings',
     'settings.lead': 'Your account, who can reach you, and how this device behaves.',

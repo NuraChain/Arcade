@@ -177,8 +177,10 @@ reader's own page and anybody else's. It is a cover band tinted by the person's 
 overlapping it, then the name, the badges, a level row (the XP bar, with the "a level unlocks
 nothing" sentence as its tooltip and in the accessibility tree) and the counts. On a phone the level
 is a row of its own and the counts are equal columns, because four counts beside a level wrapped one
-onto a second line with a stray divider. `corner` floats on the cover: `/app/me` puts three icon buttons there - Settings,
-Edit profile and Share, in that order, so nothing wraps at 390. Top to bottom it reads the owner's order: the wallet
+onto a second line with a stray divider. `corner` floats on the cover: `/app/me` puts four icon buttons there - Settings,
+Edit profile, Share and Sign out, in that order, so nothing wraps at 390. Sign out is the one in
+`components/app/sign-out.ts` that Settings uses too, and a guest is asked first, because nothing
+signs back into a guest seat. Top to bottom it reads the owner's order: the wallet
 chip (`eyebrow`, `/app/me` only), the @handle chip, the join date, the name, the bio - both chips
 look alike and copy on a tap, and a name that is empty is kept only as the screen reader's heading.
 The picture is a button when the page passes `onPicture`: on `/app/me` it opens the profile sheet in

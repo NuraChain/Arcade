@@ -8,6 +8,7 @@ import AchievementTile from '../src/components/social/achievement-tile.component
 import MePage from '../src/pages/app/me.page.azeroth';
 import '../src/locales/app-catalogue.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
+import { useOverlay } from '../src/stores/overlay.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
 import type { Account } from '../../backend/src/schemas.ts';
 import { server } from './fake-api.ts';
@@ -104,7 +105,7 @@ describe('my profile page', () =>
 
     const page = (): Promise<HTMLElement> => render(MePage as unknown as () => HTMLElement, '/app/me');
 
-    it('puts an Edit profile icon between Settings and Share, and shows the level once', async () =>
+    it('puts Settings, Edit profile, Share and Sign out in the corner in that order, and shows the level once', async () =>
     {
         signIn();
         server.progress = { xp: 120, level: 2, into: 20, span: 150 };
@@ -116,8 +117,8 @@ describe('my profile page', () =>
         expect(edits[0]!.textContent?.trim()).toBe('');
         const corner = [...container.querySelectorAll('section [aria-label]')]
             .map((one) => one.getAttribute('aria-label'))
-            .filter((label) => ['Settings', 'Edit profile', 'Share profile'].includes(label ?? ''));
-        expect(corner).toEqual(['Settings', 'Edit profile', 'Share profile']);
+            .filter((label) => ['Settings', 'Edit profile', 'Share profile', 'Sign out'].includes(label ?? ''));
+        expect(corner).toEqual(['Settings', 'Edit profile', 'Share profile', 'Sign out']);
         expect(labelled('Settings')?.getAttribute('href')).toBe('/app/me/settings');
         expect(container.textContent).toContain('Level 2');
         expect(container.querySelectorAll('[role=progressbar]')).toHaveLength(1);
@@ -178,6 +179,93 @@ describe('my profile page', () =>
 
         expect(tabs).toEqual(['Achievements', 'Games']);
         expect(container.textContent).not.toContain('Nura Profile differs');
+    });
+});
+
+describe('signing out from my profile', () =>
+{
+    const signIn = (kind: 'wallet' | 'guest') =>
+    {
+        const account: Account = {
+            id: 'u-dana',
+            handle: 'dana.w',
+            displayName: 'Dana',
+            bio: '',
+            hue: 12,
+            kind,
+            isMinor: false,
+            ...(kind === 'wallet' ? { address: '0x1111111111111111111111111111111111111111' } : {})
+        };
+        server.account = account;
+        useSession().establish(account);
+    };
+
+    const press = async (container: HTMLElement) =>
+    {
+        (container.querySelector('button[aria-label="Sign out"]') as HTMLButtonElement).click();
+        await settle();
+    };
+
+    let replace: ReturnType<typeof vi.spyOn>;
+
+    beforeEach(() =>
+    {
+        replace = vi.spyOn(window.location, 'replace').mockImplementation(() => undefined);
+    });
+
+    afterEach(() =>
+    {
+        replace.mockRestore();
+        useOverlay().reset();
+    });
+
+    it('signs a wallet account out at once and loads the sign-in page', async () =>
+    {
+        signIn('wallet');
+        const container = await render(MePage as unknown as () => HTMLElement, '/app/me');
+
+        await press(container);
+
+        expect(useOverlay().items()).toHaveLength(0);
+        expect(server.calls).toContain('auth.sign-out');
+        expect(useSession().signedIn()).toBe(false);
+        expect(replace).toHaveBeenCalledWith('/sign-in');
+        expect(container.textContent).not.toContain('No such person');
+    });
+
+    it('asks a guest first, because nothing signs back into a guest seat, and Cancel keeps them in', async () =>
+    {
+        signIn('guest');
+        const container = await render(MePage as unknown as () => HTMLElement, '/app/me');
+
+        await press(container);
+
+        const asked = useOverlay().items();
+        expect(asked.map((one) => one.label)).toEqual(['Sign out of this guest seat?']);
+        expect(asked[0]!.props.lead).toContain('no way back into a guest account');
+        expect(server.calls).not.toContain('auth.sign-out');
+
+        useOverlay().close(asked[0]!.id, false);
+        await settle();
+
+        expect(server.calls).not.toContain('auth.sign-out');
+        expect(useSession().signedIn()).toBe(true);
+        expect(replace).not.toHaveBeenCalled();
+        expect((container.querySelector('button[aria-label="Sign out"]') as HTMLButtonElement).disabled).toBe(false);
+    });
+
+    it('signs a guest out once they confirm', async () =>
+    {
+        signIn('guest');
+        const container = await render(MePage as unknown as () => HTMLElement, '/app/me');
+
+        await press(container);
+        useOverlay().close(useOverlay().items()[0]!.id, true);
+        await settle();
+
+        expect(server.calls).toContain('auth.sign-out');
+        expect(useSession().signedIn()).toBe(false);
+        expect(replace).toHaveBeenCalledWith('/sign-in');
     });
 });
 
