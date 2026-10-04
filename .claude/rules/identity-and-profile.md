@@ -257,6 +257,45 @@ and it is not smuggled in under a copy fix.
 run was the one no real person used. It now needs `seedWalletFixtures` to have run, exactly as it
 used to need the demo rows.
 
+**An ordinary wallet is verified with no network, and the chain is asked only about a contract
+wallet.** `verifySignature` recovers the signer locally first and answers `wallet` the moment it
+matches; `NURA_RPC_URL` is consulted only when it does not. Sign-in once ran viem's
+`client.verifyMessage` for EVERY wallet whenever an rpc was set, and that call embeds the 1.7 KB
+ERC-6492 validator bytecode in an `eth_call`. On 2026-10-04 rpc.nurachain.net began dropping
+request bodies over about 1.2 KB (and refusing Node clients outright for a while), viem's default
+transport tried four times (three retries) at 10 s each, and every `POST /api/auth/wallet` took 41
+or 82 seconds - while the browser gives up at 15 (`REQUEST_MS`). Both MetaMask prompts succeeded,
+every person in every browser was told the server could not be reached, and the server went on to
+open a session whose cookie never arrived. `.env.example` had promised all along that a
+key-holding wallet needs nothing here.
+
+The contract branch is small, bounded and asks nothing it does not need:
+
+- **One deadline for all of it.** The transport has a 4-second timeout, no retries, and an
+  `AbortSignal` of 8 seconds covering every request it makes - viem's own timeout stops at the
+  response HEADERS, so a node that sends headers and stalls the body would otherwise hold sign-in
+  for undici's five minutes.
+- **No CCIP-Read, ever.** `ccipRead: false`. viem follows an EIP-3668 `OffchainLookup` revert by
+  default, so the direct ERC-1271 call would let any contract anybody deploys make this server fetch
+  the urls it names - cloud metadata, the api's own loopback, a tarpit - with no timeout, no size cap
+  and no depth limit, before anyone has signed in. An offchain lookup is a refusal.
+- **A deployed wallet is asked with ERC-1271 directly**: `getCode`, then `isValidSignature` over
+  `hashMessage` with the signature as given. That body grows with the signature - a few hundred
+  bytes for one ECDSA signature, more for a passkey or several Safe owners - so on an rpc with a body
+  limit a large contract signature can still be refused, and is reported as `unreachable-chain`.
+- **A wallet that is not deployed yet** proves itself only through its ERC-6492 wrapper, and that
+  check is the deployless validator call, issued here rather than through `client.verifyMessage`:
+  viem's `verifyHash` turns every failed call, a timeout included, into `false`, which would tell a
+  person their signature was wrong when the network never answered.
+- **A refusal is something the EVM said.** `bad-signature` means the chain answered with a revert
+  (`ExecutionRevertedError`, or a `ContractFunctionRevertedError` that carries revert data), with
+  nothing (`ContractFunctionZeroDataError`, a contract with no `isValidSignature`), or with data too
+  short to decode. Everything else - a timeout, an HTTP error, `-32603` from an rpc's own upstream,
+  a rate limit - is `unreachable-chain`, because "try again" is the true instruction for those.
+
+`identity.spec.ts` holds every one of those shapes against a fake rpc, plus a chain that never
+answers (an ordinary signature still passes in under two seconds) and one that stalls mid-body.
+
 **The nonce is single use, and it is burned FIRST.** `signInWithWallet` runs a conditional UPDATE
 that only matches an unconsumed, unexpired row and takes the stored message from its `returning`
 clause. Two requests replaying one signature race in the database and exactly one wins. Verifying
