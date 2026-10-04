@@ -1,3 +1,5 @@
+import type { MessageVars } from '../locales/format.ts';
+
 /**
  * The server-authored lines this client knows how to say.
  *
@@ -54,7 +56,7 @@ export function isLineKey(key: string): key is LineKey
  * two components that render a line - which is how one of them would have been fixed and the other
  * left saying the handle.
  */
-const NAMES: readonly string[] = ['who', 'winner'];
+const NAMES: readonly string[] = ['who', 'winners'];
 
 /**
  * A line's params with every handle turned into whatever this browser has been told that person is
@@ -62,25 +64,33 @@ const NAMES: readonly string[] = ['who', 'winner'];
  * the same answer `people.store.ts` gives everywhere else.
  */
 export function namedParams(
-    params: Record<string, string | undefined> | undefined,
-    nameOf: (handle: string) => string
-): Record<string, string> | undefined
+    params: Record<string, string | readonly string[] | undefined> | undefined,
+    nameOf: (handle: string) => string,
+    list: (items: readonly string[]) => string
+): MessageVars | undefined
 {
     if (params === undefined)
     {
         return undefined;
     }
 
-    const resolved: Record<string, string> = {};
+    const resolved: MessageVars = {};
 
     for (const [key, value] of Object.entries(params))
     {
-        if (typeof value !== 'string' || value === '')
+        if (value === undefined || value.length === 0)
         {
             continue;
         }
 
-        resolved[key] = NAMES.includes(key) ? nameOf(value) : value;
+        if (typeof value === 'string')
+        {
+            resolved[key] = NAMES.includes(key) ? nameOf(value) : value;
+            continue;
+        }
+
+        resolved[key] = list(NAMES.includes(key) ? value.map(nameOf) : value);
+        resolved.count = value.length;
     }
 
     return resolved;

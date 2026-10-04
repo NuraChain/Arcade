@@ -1202,7 +1202,10 @@ export const matchPlayer = object({
      * change here is rendering something that happened.
      */
     ratingBefore: number().optional(),
-    ratingAfter: number().optional()
+    ratingAfter: number().optional(),
+
+    side: number({ int: true, min: 0, max: 8 }).optional(),
+    place: number({ int: true, min: 1, max: 9 }).optional()
 });
 
 /**
@@ -1774,7 +1777,7 @@ export const messageKind = enumOf(['text', 'reaction', 'deleted', 'system', 'inv
  */
 export const lineParams = object({
     game: string().optional(),
-    winner: string().optional(),
+    winners: array(string(), { max: 9 }).optional(),
     who: string().optional(),
     tableId: string().optional(),
 

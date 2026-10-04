@@ -618,30 +618,6 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
      * viewer only and is empty unless it is their turn - a client is told what it may do, never
      * left to work it out, so an older client renders fewer options rather than an illegal one.
      */
-    /**
-     * The half of a seat that is only there once there is something to say.
-     *
-     * `result` exists after a match ends; the rating pair exists only when the match MOVED one, so
-     * a room that emptied carries a result and no numbers. Spread rather than set to null, because
-     * an absent field and a null are different answers and the wire shape says optional.
-     */
-    const seatExtras = (load: MatchLoad, seat: number): Partial<MatchView['players'][number]> =>
-    {
-        const row = load.players.find((one) => one.seat === seat);
-
-        if (row === undefined)
-        {
-            return {};
-        }
-
-        return {
-            ...(row.result == null ? {} : { result: row.result }),
-            ...(row.rating_before == null || row.rating_after == null
-                ? {}
-                : { ratingBefore: row.rating_before, ratingAfter: row.rating_after })
-        };
-    };
-
     const asMatch = (load: MatchLoad) =>
     {
         const state = load.state;
@@ -661,12 +637,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             game: load.match.game,
             rev: load.match.rev,
             seats: load.match.seats,
-            players: load.players.map((row) => ({
-                seat: row.seat,
-                who: row.who,
-                timeouts: row.timeouts,
-                ...seatExtras(load, row.seat)
-            })),
+            players: match.envelope(load),
             turn: match.turnOf(load.match.game, state) ?? 0,
 
             /**

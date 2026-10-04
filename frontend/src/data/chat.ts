@@ -52,7 +52,7 @@ export interface MessageRef
     tableId?: string;
     game?: GameId;
     conversationId?: string;
-    winnerId?: string;
+    winners?: readonly string[];
 }
 
 /**
@@ -65,7 +65,7 @@ export interface MessageRef
 export interface MessageLine
 {
     key: string;
-    params: Record<string, string>;
+    params: Record<string, string | readonly string[]>;
 }
 
 /**

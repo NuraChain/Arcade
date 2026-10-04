@@ -12,16 +12,31 @@ export default component MatchResult(props: { match: MatchView; mine?: number; b
     const locale = useLocale();
     const people = usePeople();
 
+    const rankOf = (player: MatchPlayer) => player.place ?? (player.result === 'won' ? 1 : 2);
+
     derived chairs = playersOf(props.match)
         .map((player) => ({ player, score: scoreOf(props.match, player.seat) }))
         .sort((a, b) =>
-            (a.player.result === 'won' ? 0 : 1) - (b.player.result === 'won' ? 0 : 1) || a.player.seat - b.player.seat);
+            rankOf(a.player) - rankOf(b.player)
+            || (a.player.side ?? a.player.seat) - (b.player.side ?? b.player.seat)
+            || a.player.seat - b.player.seat);
 
-    derived champion = props.match.players.find((player) => player.result === 'won');
+    derived ranked = props.match.view.kind === 'poker';
 
     derived voided = props.match.outcome !== 'won';
 
     derived uncounted = props.mine !== undefined && props.match.players.some((player) => player.seat === props.mine && player.result === 'void');
+
+    derived mineWon = props.mine !== undefined && props.match.players.some((player) => player.seat === props.mine && player.result === 'won');
+
+    derived winners = props.match.players.filter((player) => player.result === 'won');
+
+    const nameOf = (handle: string) =>
+    {
+        const person = people.byHandle(handle);
+
+        return person === null ? handle : locale.text(person.displayName);
+    };
 
     derived headline = (() =>
     {
@@ -30,27 +45,18 @@ export default component MatchResult(props: { match: MatchView; mine?: number; b
             return locale.t('match.over.void');
         }
 
-        if (champion === undefined)
-        {
-            return locale.t('match.over.nobody');
-        }
-
-        if (props.mine !== undefined && champion.seat === props.mine)
+        if (mineWon)
         {
             return locale.t('match.won.you');
         }
 
-        const person = people.byHandle(champion.who);
+        if (winners.length === 0)
+        {
+            return locale.t('match.over.nobody');
+        }
 
-        return locale.t('match.won.them', { name: person === null ? champion.who : locale.text(person.displayName) });
+        return locale.plural('match.won.them', winners.length, { names: locale.list(winners.map((player) => nameOf(player.who))) });
     })();
-
-    const nameOf = (handle: string) =>
-    {
-        const person = people.byHandle(handle);
-
-        return person === null ? handle : locale.text(person.displayName);
-    };
 
     derived asking = props.onAgain !== undefined && props.rematch !== undefined;
 
@@ -67,8 +73,7 @@ export default component MatchResult(props: { match: MatchView; mine?: number; b
             ? null
             : player.ratingAfter - player.ratingBefore;
 
-    const swing = (points: number, after: number) =>
-        `${ points >= 0 ? '+' : '−' }${ locale.n(Math.abs(points)) } · ${ locale.n(after) }`;
+    const signed = (points: number) => `${ points >= 0 ? '+' : '−' }${ locale.n(Math.abs(points)) }`;
 
     <Panel pad="md" stack="md" tone={ voided ? 'field' : 'accent' }>
         <div class="flex items-center gap-3">
@@ -87,12 +92,26 @@ export default component MatchResult(props: { match: MatchView; mine?: number; b
         <ul class="flex flex-col gap-1.5">
             <For each={ chairs } key={ (chair) => chair.player.seat } let={ chair }>
                 <li class="flex items-center gap-2 rounded-tile bg-raised/50 px-2.5 py-2">
-                    <span
-                        class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent-fill text-ui-2xs font-bold text-accent-ink"
-                        aria-hidden="true"
+                    <Show
+                        when={ ranked && chair.player.place !== undefined }
+                        fallback={
+                            <span
+                                class="tally flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent-fill text-ui-2xs font-bold text-accent-ink"
+                                aria-hidden="true"
+                            >
+                                { locale.n(chair.score) }
+                            </span>
+                        }
                     >
-                        { locale.n(chair.score) }
-                    </span>
+                        { () =>
+                            <span
+                                class="flex h-6 min-w-6 shrink-0 items-center justify-center rounded-full bg-accent-fill px-1.5 text-ui-2xs font-bold text-accent-ink"
+                                data-place={ chair.player.place }
+                            >
+                                { locale.ordinal('match.place', chair.player.place ?? 0) }
+                            </span>
+                        }
+                    </Show>
                     <span class="min-w-0 flex-1 truncate text-ui-sm text-text" dir="auto">
                         { chair.player.seat === props.mine ? locale.t('match.you') : nameOf(chair.player.who) }
                     </span>
@@ -107,11 +126,13 @@ export default component MatchResult(props: { match: MatchView; mine?: number; b
                         { () =>
                             <span
                                 class={ () => [
-                                    'tally shrink-0 text-ui-xs font-semibold',
+                                    'tally inline-flex shrink-0 items-center gap-1.5 text-ui-xs font-semibold',
                                     moved(chair.player)! >= 0 ? 'text-win' : 'text-muted'
                                 ].join(' ') }
                             >
-                                { swing(moved(chair.player)!, chair.player.ratingAfter!) }
+                                <span>{ signed(moved(chair.player)!) }</span>
+                                <span class="h-1 w-1 rounded-full bg-current opacity-60" aria-hidden="true"></span>
+                                <span>{ locale.n(chair.player.ratingAfter!) }</span>
                             </span>
                         }
                     </Show>

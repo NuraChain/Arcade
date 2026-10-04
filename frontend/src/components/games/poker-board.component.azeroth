@@ -234,16 +234,6 @@ export default component PokerBoard(props: { match: MatchView; starting?: boolea
             return '';
         }
 
-        if (over)
-        {
-            if (game.winner === undefined)
-            {
-                return locale.t('match.abandoned');
-            }
-
-            return game.winner === mine ? locale.t('match.won.you') : locale.t('match.won.them', { name: nameOf(game.winner) });
-        }
-
         if (mine !== undefined && myRow?.out === true)
         {
             return locale.t('poker.turn.out');

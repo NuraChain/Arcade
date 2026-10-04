@@ -10,6 +10,7 @@ import { pickBelow } from '../../lib/crypto.ts';
 import type { AchieveService } from '../achieve/service.ts';
 import { firstRow } from '../../lib/rows.ts';
 import { createRecorder } from './record.ts';
+import { envelopeOf } from './envelope.ts';
 import { backgammonEngine } from './engines/backgammon.ts';
 import { hokmEngine } from './engines/hokm.ts';
 import { ludoEngine } from './engines/ludo.ts';
@@ -804,6 +805,9 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
 
             return engine.view(state, seat);
         },
+
+        envelope: (load: MatchLoad) =>
+            envelopeOf(engineFor(load.match.game), load.state, load.players, load.match.finishedAt !== null),
 
         /**
          * The board with nobody looking at it.

@@ -64,18 +64,6 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
 
     derived says = (() =>
     {
-        if (over)
-        {
-            if (game.winner === undefined)
-            {
-                return locale.t('match.abandoned');
-            }
-
-            return game.winner === mine
-                ? locale.t('match.won.you')
-                : locale.t('match.won.them', { name: nameOf });
-        }
-
         if (mine !== undefined && mine === game.turn)
         {
             return ludo.die === undefined

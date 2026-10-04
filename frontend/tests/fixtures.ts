@@ -57,7 +57,7 @@ export interface MessageFixture
     minutesAgo: number;
     body?: string;
     kind?: 'system' | 'invite' | 'result';
-    payload?: { key: string; params: Record<string, string> };
+    payload?: { key: string; params: Record<string, string | string[]> };
 }
 
 export const PEOPLE_FIXTURES: PersonFixture[] = [
@@ -213,7 +213,7 @@ export const THREAD_FIXTURES: ThreadFixture[] = [
         messages: [
             { from: 'reza.t', minutesAgo: 1500, body: 'اون دوبل بلوف بود و تو قبولش کردی.' },
             { from: 'alex', minutesAgo: 1490, body: 'و بردم. بگو.' },
-            { from: 'reza.t', minutesAgo: 1488, kind: 'result', payload: { key: 'chat.line.result', params: { game: 'backgammon', winner: 'alex' } } },
+            { from: 'reza.t', minutesAgo: 1488, kind: 'result', payload: { key: 'chat.line.result', params: { game: 'backgammon', winners: ['alex'] } } },
             { from: 'reza.t', minutesAgo: 1487, body: 'فردا بازی مجدد. بالکن.' }
         ]
     },

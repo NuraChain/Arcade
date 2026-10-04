@@ -160,16 +160,32 @@ describe('a line that names somebody', () =>
     it('resolves every handle it carries, and leaves everything else alone', () =>
     {
         const named = namedParams(
-            { who: 'bot63807d', winner: 'ludotwo', game: 'ludo', name: 'Friday Crew' },
-            (handle) => (handle === 'bot63807d' ? 'Bot 63807d' : 'Ludo Two')
+            { who: 'bot63807d', winners: ['ludotwo', 'sara.k'], game: 'ludo', name: 'Friday Crew' },
+            (handle) => ({ bot63807d: 'Bot 63807d', ludotwo: 'Ludo Two' } as Record<string, string>)[handle] ?? handle,
+            (items) => useLocale().list(items)
         );
 
         expect(named).toEqual({
             who: 'Bot 63807d',
-            winner: 'Ludo Two',
+            winners: useLocale().list(['Ludo Two', 'sara.k']),
+            count: 2,
             game: 'ludo',
             name: 'Friday Crew'
         });
+    });
+
+    it('says every winner of a game, in the plural the language needs', () =>
+    {
+        const named = namedParams({ winners: ['alex', 'sara.k'] }, (handle) => handle, (items) => useLocale().list(items));
+
+        expect(useLocale().t('chat.line.result', named)).toBe('alex and sara.k won');
+
+        useLocale().setLocale('fa');
+
+        const persian = namedParams({ winners: ['alex', 'sara.k'] }, (handle) => handle, (items) => useLocale().list(items));
+
+        expect(useLocale().t('chat.line.result', persian)).toBe(`${ useLocale().list(['alex', 'sara.k']) } بردند`);
+        expect(useLocale().t('chat.line.result', namedParams({ winners: ['alex'] }, (handle) => handle, (items) => useLocale().list(items)))).toBe('alex برد');
     });
 
     /**
@@ -179,7 +195,7 @@ describe('a line that names somebody', () =>
      */
     it('leaves a handle it has never been told about exactly as it is', () =>
     {
-        expect(namedParams({ who: 'stranger' }, (handle) => handle)).toEqual({ who: 'stranger' });
-        expect(namedParams(undefined, (handle) => handle)).toBeUndefined();
+        expect(namedParams({ who: 'stranger' }, (handle) => handle, (items) => items.join())).toEqual({ who: 'stranger' });
+        expect(namedParams(undefined, (handle) => handle, (items) => items.join())).toBeUndefined();
     });
 });

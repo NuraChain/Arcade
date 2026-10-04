@@ -148,13 +148,6 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
             return '';
         }
 
-        if (over)
-        {
-            return game.winner === undefined
-                ? locale.t('match.abandoned')
-                : (game.winner === mine ? locale.t('match.won.you') : locale.t('match.won.them', { name: nameOf(game.winner) }));
-        }
-
         if (view.phase === 'trump')
         {
             return view.hakem === mine

@@ -195,6 +195,120 @@ describe('what the next game waits on, read off the chairs', () =>
     });
 });
 
+describe('who the headline says won', () =>
+{
+    const hokm = (players: MatchView['players']) => ({
+        ...finished,
+        game: 'hokm',
+        seats: players.length,
+        players,
+        view: {
+            kind: 'hokm',
+            phase: 'tricks',
+            hakem: 0,
+            dealer: players.length - 1,
+            turn: 0,
+            lead: 0,
+            hand: [],
+            plays: [],
+            trick: [],
+            seats: players.map((player) => ({ seat: player.seat, side: player.side ?? player.seat, held: 0, tricks: 0, out: false })),
+            points: players.length === 4 ? [7, 3] : players.map(() => 0),
+            target: 7,
+            round: 4,
+            needed: 7
+        }
+    } as MatchView);
+
+    const headline = (container: HTMLElement) => container.querySelector('p[aria-live]')?.textContent?.trim();
+
+    const partners = hokm([
+        { seat: 0, who: 'alex', timeouts: 0, result: 'won', side: 0, place: 1 },
+        { seat: 1, who: 'omid.k', timeouts: 0, result: 'lost', side: 1, place: 2 },
+        { seat: 2, who: 'sara.k', timeouts: 0, result: 'won', side: 0, place: 1 },
+        { seat: 3, who: 'reza.t', timeouts: 0, result: 'lost', side: 1, place: 2 }
+    ]);
+
+    it('tells the partner of the first winner that they won too', () =>
+    {
+        const container = renderTest(() => MatchResult({ match: partners, mine: 2 }) as Rendered).container;
+
+        expect(headline(container)).toBe('You won.');
+    });
+
+    it('tells the second survivor of a three-handed forfeit that they won', () =>
+    {
+        const forfeited = hokm([
+            { seat: 0, who: 'alex', timeouts: 0, result: 'won', side: 0, place: 1 },
+            { seat: 1, who: 'omid.k', timeouts: 0, result: 'won', side: 1, place: 2 },
+            { seat: 2, who: 'sara.k', timeouts: 0, result: 'abandoned', side: 2, place: 3 }
+        ]);
+
+        const container = renderTest(() => MatchResult({ match: forfeited, mine: 1 }) as Rendered).container;
+
+        expect(headline(container)).toBe('You won.');
+        expect(container.textContent).not.toContain('alex won');
+    });
+
+    it('names every winner to somebody who did not win, in both languages', () =>
+    {
+        const english = renderTest(() => MatchResult({ match: partners, mine: 1 }) as Rendered).container;
+
+        expect(headline(english)).toBe(useLocale().plural('match.won.them', 2, { names: useLocale().list(['alex', 'sara.k']) }));
+        expect(headline(english)).toContain('alex and sara.k');
+
+        cleanup();
+        useLocale().setLocale('fa');
+
+        const persian = renderTest(() => MatchResult({ match: partners }) as Rendered).container;
+
+        expect(headline(persian)).toBe(useLocale().plural('match.won.them', 2, { names: useLocale().list(['alex', 'sara.k']) }));
+        expect(useLocale().plural('match.won.them', 2, { names: 'x' })).not.toBe(useLocale().plural('match.won.them', 1, { names: 'x' }));
+    });
+});
+
+describe('a Sit & Go, read by place', () =>
+{
+    const places = [3, 1, 6, 2, 5, 4];
+
+    const sitAndGo = {
+        ...finished,
+        game: 'poker',
+        seats: 6,
+        mine: undefined,
+        winner: 1,
+        players: places.map((place, seat) => ({
+            seat,
+            who: `p${ seat }`,
+            timeouts: 0,
+            result: place === 1 ? 'won' : 'lost',
+            side: seat,
+            place
+        })),
+        view: {
+            kind: 'poker',
+            street: 'preflop',
+            hand: 40,
+            button: 0,
+            board: [],
+            pot: 0,
+            pots: [],
+            seats: places.map((place, seat) => ({ seat, stack: place === 1 ? 9000 : 0, bet: 0, folded: false, allIn: false, out: place !== 1 })),
+            blinds: { small: 50, big: 100, level: 4, next: 10 },
+            hole: []
+        }
+    } as MatchView;
+
+    it('lists the seats from first to last, each with its place', () =>
+    {
+        const container = renderTest(() => MatchResult({ match: sitAndGo }) as Rendered).container;
+        const rows = [...container.querySelectorAll('li')];
+
+        expect(rows.map((row) => row.textContent?.match(/p\d/)?.[0])).toEqual(['p1', 'p3', 'p0', 'p5', 'p4', 'p2']);
+        expect(rows.map((row) => row.querySelector('[data-place]')?.textContent?.trim())).toEqual(['1st', '2nd', '3rd', '4th', '5th', '6th']);
+    });
+});
+
 describe('a seat the match never judged', () =>
 {
     const voided = {
@@ -209,6 +323,16 @@ describe('a seat the match never judged', () =>
 
     const mine = (container: HTMLElement) =>
         [...container.querySelectorAll('li')].find((one) => one.textContent?.includes(useLocale().t('match.you')));
+
+    it('keeps the swing and the rating apart with a drawn dot, never a character a Persian zero looks like', () =>
+    {
+        const container = renderTest(() => MatchResult({ match: voided, mine: 0 }) as Rendered).container;
+        const row = [...container.querySelectorAll('li')].find((one) => one.textContent?.includes('1,184'))!;
+
+        expect(row.textContent).not.toContain('·');
+        expect(row.textContent).toContain('−16');
+        expect(row.querySelector('[aria-hidden="true"].rounded-full')).not.toBeNull();
+    });
 
     it('reads No contest', () =>
     {

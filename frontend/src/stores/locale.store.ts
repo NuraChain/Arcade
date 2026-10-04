@@ -89,6 +89,7 @@ export interface LocaleApi
 
     t(key: MessageKey, vars?: MessageVars): string;
     plural(key: MessageKey, count: number, vars?: MessageVars): string;
+    ordinal(key: MessageKey, count: number): string;
 
     n(value: number, options?: Intl.NumberFormatOptions): string;
     relative(at: number | Date, now?: number): string;
@@ -115,13 +116,18 @@ export const useLocale = createStore((): LocaleApi =>
     const rules = (): Intl.PluralRules =>
         cached('plural', tag(), null, () => new Intl.PluralRules(tag()));
 
+    const ordinals = (): Intl.PluralRules =>
+        cached('ordinal', tag(), null, () => new Intl.PluralRules(tag(), { type: 'ordinal' }));
+
     const n = (value: number, options?: Intl.NumberFormatOptions) => numbers(options).format(value);
 
-    const t = (key: MessageKey, vars?: MessageVars) =>
+    const say = (key: MessageKey, vars: MessageVars | undefined, by: Intl.PluralRules) =>
     {
         const message = CATALOG[locale()][key] ?? CATALOG.en[key] ?? key;
-        return interpolate(resolveMessage(message, vars, rules()), vars, (value) => n(value));
+        return interpolate(resolveMessage(message, vars, by), vars, (value) => n(value));
     };
+
+    const t = (key: MessageKey, vars?: MessageVars) => say(key, vars, rules());
 
     return {
         locale,
@@ -138,6 +144,7 @@ export const useLocale = createStore((): LocaleApi =>
         },
         t,
         plural: (key, count, vars) => t(key, { ...vars, count }),
+        ordinal: (key, count) => say(key, { count }, ordinals()),
         n,
         relative: (at, now) =>
         {

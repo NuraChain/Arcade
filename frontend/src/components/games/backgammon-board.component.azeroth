@@ -360,16 +360,6 @@ export default component BackgammonBoard(props: { match: MatchView; starting?: b
             return '';
         }
 
-        if (over)
-        {
-            if (game.winner === undefined)
-            {
-                return locale.t('match.abandoned');
-            }
-
-            return game.winner === mine ? locale.t('match.won.you') : locale.t('match.won.them', { name: nameOf(game.winner) });
-        }
-
         if (view.phase === 'double')
         {
             const offered = locale.n(view.cube * 2);

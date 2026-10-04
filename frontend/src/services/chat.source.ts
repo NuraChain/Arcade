@@ -212,8 +212,9 @@ export function createApiSource()
         signed?: { from: string; frankingKey: string; plain: string; reply?: string; fwd?: true; reactions: Reaction[] }
     ) =>
     {
+        const said = wire.payload?.params ?? {};
         const params = Object.fromEntries(
-            Object.entries(wire.payload?.params ?? {}).filter((entry): entry is [string, string] => entry[1] !== undefined)
+            Object.entries(said).filter((entry): entry is [string, string | string[]] => entry[1] !== undefined)
         );
 
         return remember({
@@ -233,9 +234,9 @@ export function createApiSource()
             ref: wire.payload === undefined
                 ? null
                 : {
-                    ...(params.game === undefined ? {} : { game: params.game as NonNullable<Message['ref']>['game'] }),
-                    ...(params.tableId === undefined ? {} : { tableId: params.tableId }),
-                    ...(params.winner === undefined ? {} : { winnerId: params.winner })
+                    ...(said.game === undefined ? {} : { game: said.game as NonNullable<Message['ref']>['game'] }),
+                    ...(said.tableId === undefined ? {} : { tableId: said.tableId }),
+                    ...(said.winners === undefined ? {} : { winners: said.winners })
                 }
         });
     };
