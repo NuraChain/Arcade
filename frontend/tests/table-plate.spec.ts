@@ -1,15 +1,20 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { cleanup, renderTest } from '@azerothjs/testing';
 
 import TablePlate from '../src/components/games/table-plate.component.azeroth';
 import { plateTag } from '../src/components/games/plate-tag.ts';
+import * as turns from '../../backend/src/domains/match/turns.ts';
 import '../src/locales/app-catalogue.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
 import type { MatchPlayer } from '../src/data/match.ts';
 
 type Rendered = HTMLElement;
 
-afterEach(() => cleanup());
+afterEach(() =>
+{
+    cleanup();
+    vi.restoreAllMocks();
+});
 
 describe('the seat plate every table draws', () =>
 {
@@ -60,8 +65,18 @@ describe('the seat plate every table draws', () =>
 
         expect(plateTag(locale, player(0), false)).toBeNull();
         expect(plateTag(locale, player(1), false)?.tone).toBe('gold');
-        expect(plateTag(locale, player(2), false)).toEqual({ text: locale.t('card.lastChance'), tone: 'danger' });
+        expect(plateTag(locale, player(turns.MISSES_ALLOWED - 1), false)).toEqual({ text: locale.t('card.lastChance'), tone: 'danger' });
         expect(plateTag(locale, player(0, 'won'), true)).toEqual({ text: locale.t('card.won'), tone: 'live' });
-        expect(plateTag(locale, player(2), true)).toBeNull();
+        expect(plateTag(locale, player(turns.MISSES_ALLOWED - 1), true)).toBeNull();
+    });
+
+    it('warns on the miss the server’s own rule calls the last, so a different limit moves the warning with it', () =>
+    {
+        vi.spyOn(turns, 'nextMissForfeits').mockImplementation((timeouts) => timeouts + 1 >= 5);
+
+        const locale = useLocale();
+        const tone = (timeouts: number) => plateTag(locale, { seat: 1, who: 'sara.k', timeouts } as MatchPlayer, false)?.tone;
+
+        expect([1, 2, 3, 4].map(tone)).toEqual(['gold', 'gold', 'gold', 'danger']);
     });
 });

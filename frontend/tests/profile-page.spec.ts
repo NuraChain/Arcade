@@ -8,6 +8,7 @@ import AchievementTile from '../src/components/social/achievement-tile.component
 import MePage from '../src/pages/app/me.page.azeroth';
 import '../src/locales/app-catalogue.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
+import { useOverlay } from '../src/stores/overlay.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
 import type { Account } from '../../backend/src/schemas.ts';
 import { server } from './fake-api.ts';
@@ -104,7 +105,7 @@ describe('my profile page', () =>
 
     const page = (): Promise<HTMLElement> => render(MePage as unknown as () => HTMLElement, '/app/me');
 
-    it('puts an Edit profile icon between Settings and Share, and shows the level once', async () =>
+    it('puts Settings, Edit profile, Share and Sign out in the corner in that order, and shows the level once', async () =>
     {
         signIn();
         server.progress = { xp: 120, level: 2, into: 20, span: 150 };
@@ -116,8 +117,8 @@ describe('my profile page', () =>
         expect(edits[0]!.textContent?.trim()).toBe('');
         const corner = [...container.querySelectorAll('section [aria-label]')]
             .map((one) => one.getAttribute('aria-label'))
-            .filter((label) => ['Settings', 'Edit profile', 'Share profile'].includes(label ?? ''));
-        expect(corner).toEqual(['Settings', 'Edit profile', 'Share profile']);
+            .filter((label) => ['Settings', 'Edit profile', 'Share profile', 'Sign out'].includes(label ?? ''));
+        expect(corner).toEqual(['Settings', 'Edit profile', 'Share profile', 'Sign out']);
         expect(labelled('Settings')?.getAttribute('href')).toBe('/app/me/settings');
         expect(container.textContent).toContain('Level 2');
         expect(container.querySelectorAll('[role=progressbar]')).toHaveLength(1);
@@ -135,6 +136,28 @@ describe('my profile page', () =>
         expect(container.textContent).not.toContain('Server Name');
         expect(container.textContent).not.toContain('Server bio');
         expect(container.textContent).not.toContain('On your Nura Profile');
+    });
+
+    it('says the Nura Profile could not be read, rather than drawing an empty one, and tries again', async () =>
+    {
+        signIn('wallet');
+        server.chain = { configured: true, profile: null };
+        server.chainFaces['dana.w'] = { username: 'dana', displayName: 'Dana on chain', bio: 'Chain bio', avatar: '' };
+        server.refuse = 'chain-unreachable';
+        const container = await page();
+
+        const alert = [...container.querySelectorAll('[role=alert]')].find((one) => one.textContent?.includes('could not read the Nura Profile'));
+        expect(alert).toBeDefined();
+        expect(container.textContent).not.toContain('Chain bio');
+
+        server.refuse = null;
+        const retry = [...container.querySelectorAll('button')].find((one) => one.textContent?.trim() === 'Try again') as HTMLButtonElement;
+        retry.click();
+        await settle();
+
+        expect(container.textContent).toContain('Chain bio');
+        expect(container.textContent).not.toContain('could not read the Nura Profile');
+        expect(server.calls.filter((call) => call === 'chain.person')).toHaveLength(2);
     });
 
     it('is empty but for the handle when there is no Nura Profile', async () =>
@@ -169,6 +192,37 @@ describe('my profile page', () =>
         expect(chip!.compareDocumentPosition(name) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     });
 
+    it('gives each copy chip a 44px row of its own on a coarse pointer, which its touch area fills and never leaves', async () =>
+    {
+        signIn('wallet');
+        useSession().establish({ ...useSession().account()!, joinedAt: '2026-03-01T00:00:00.000Z' });
+        const container = await page();
+        const px = (element: Element, prefix: string) =>
+        {
+            const token = [...element.classList].find((one) => one.startsWith(prefix));
+            expect(token, `${ prefix } on "${ element.className }"`).toBeDefined();
+            return Number(token!.slice(prefix.length)) * 4;
+        };
+
+        const chips = ['Copy wallet address', 'Copy handle'].map((label) => container.querySelector(`button[aria-label="${ label }"]`)!);
+        for (const chip of chips)
+        {
+            const row = chip.parentElement!;
+            const pad = px(row, 'coarse:py-');
+            const border = chip.classList.contains('border') ? 1 : 0;
+
+            expect(row.children).toHaveLength(1);
+            expect(chip.classList).toContain('coarse:before:absolute');
+            expect(chip.classList).toContain('coarse:before:inset-x-0');
+            expect(px(chip, 'h-') + 2 * pad).toBeGreaterThanOrEqual(44);
+            expect(px(chip, 'coarse:before:-inset-y-') - border).toBe(pad);
+        }
+
+        expect(chips[0]!.parentElement!.nextElementSibling).toBe(chips[1]!.parentElement);
+        expect(chips[1]!.parentElement!.nextElementSibling?.textContent).toContain('Joined');
+        expect(chips[0]!.className).toBe(chips[1]!.className);
+    });
+
     it('has no Overview and no About section', async () =>
     {
         signIn('wallet');
@@ -178,6 +232,93 @@ describe('my profile page', () =>
 
         expect(tabs).toEqual(['Achievements', 'Games']);
         expect(container.textContent).not.toContain('Nura Profile differs');
+    });
+});
+
+describe('signing out from my profile', () =>
+{
+    const signIn = (kind: 'wallet' | 'guest') =>
+    {
+        const account: Account = {
+            id: 'u-dana',
+            handle: 'dana.w',
+            displayName: 'Dana',
+            bio: '',
+            hue: 12,
+            kind,
+            isMinor: false,
+            ...(kind === 'wallet' ? { address: '0x1111111111111111111111111111111111111111' } : {})
+        };
+        server.account = account;
+        useSession().establish(account);
+    };
+
+    const press = async (container: HTMLElement) =>
+    {
+        (container.querySelector('button[aria-label="Sign out"]') as HTMLButtonElement).click();
+        await settle();
+    };
+
+    let replace: ReturnType<typeof vi.spyOn>;
+
+    beforeEach(() =>
+    {
+        replace = vi.spyOn(window.location, 'replace').mockImplementation(() => undefined);
+    });
+
+    afterEach(() =>
+    {
+        replace.mockRestore();
+        useOverlay().reset();
+    });
+
+    it('signs a wallet account out at once and loads the sign-in page', async () =>
+    {
+        signIn('wallet');
+        const container = await render(MePage as unknown as () => HTMLElement, '/app/me');
+
+        await press(container);
+
+        expect(useOverlay().items()).toHaveLength(0);
+        expect(server.calls).toContain('auth.sign-out');
+        expect(useSession().signedIn()).toBe(false);
+        expect(replace).toHaveBeenCalledWith('/sign-in');
+        expect(container.textContent).not.toContain('No such person');
+    });
+
+    it('asks a guest first, because nothing signs back into a guest seat, and Cancel keeps them in', async () =>
+    {
+        signIn('guest');
+        const container = await render(MePage as unknown as () => HTMLElement, '/app/me');
+
+        await press(container);
+
+        const asked = useOverlay().items();
+        expect(asked.map((one) => one.label)).toEqual(['Sign out of this guest seat?']);
+        expect(asked[0]!.props.lead).toContain('no way back into a guest account');
+        expect(server.calls).not.toContain('auth.sign-out');
+
+        useOverlay().close(asked[0]!.id, false);
+        await settle();
+
+        expect(server.calls).not.toContain('auth.sign-out');
+        expect(useSession().signedIn()).toBe(true);
+        expect(replace).not.toHaveBeenCalled();
+        expect((container.querySelector('button[aria-label="Sign out"]') as HTMLButtonElement).disabled).toBe(false);
+    });
+
+    it('signs a guest out once they confirm', async () =>
+    {
+        signIn('guest');
+        const container = await render(MePage as unknown as () => HTMLElement, '/app/me');
+
+        await press(container);
+        useOverlay().close(useOverlay().items()[0]!.id, true);
+        await settle();
+
+        expect(server.calls).toContain('auth.sign-out');
+        expect(useSession().signedIn()).toBe(false);
+        expect(replace).toHaveBeenCalledWith('/sign-in');
     });
 });
 

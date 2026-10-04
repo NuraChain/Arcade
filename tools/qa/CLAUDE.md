@@ -54,6 +54,16 @@ languages, and fails on horizontal overflow, a control smaller than 44px under a
 or a dirty console. Findings land in `tools/qa/out/matrix/report.json` with a screenshot per
 failing cell.
 
+**A probe that lands on the island nav counts as the viewport's edge.** The 44px check probes 21px
+above and below a small control and wants to hit the control itself; a probe past the viewport edge
+already passes, because the control is reachable by scrolling. The phone's bottom nav is an island
+floating over the page, and `.page` is padded by `--nav-room` precisely so everything can scroll out
+from under it - so a control sitting behind the island at scroll 0 is in the same position as one
+below the fold. The matrix's short "landscape" cells (390 wide, 360 tall) put the profile header's
+copy chips exactly there, and every one of them failed, on a hit the nav's Games link took. The nav
+carries `data-island`, and a probe that hits it passes for any control that is not itself in the
+nav, so the nav's own links are still measured.
+
 Point it at whichever half is running: `npm run dev` (vite on 3100, the default) or the built
 server (`QA_BASE=http://localhost:<port>`). The server run is the stronger one — it exercises
 `mountPages`, the prerendered landing page and the real asset headers, which vite does not.

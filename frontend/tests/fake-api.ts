@@ -24,7 +24,7 @@ import {
 } from './fixtures.ts';
 import { accountIdOf, buildSealedFixtures } from './sealed-fixtures.ts';
 
-export type Refusal = 'challenge-unreachable' | 'bad-signature' | 'wallet-unreachable' | 'guest-reserved' | 'guest-unreachable';
+export type Refusal = 'challenge-unreachable' | 'bad-signature' | 'wallet-unreachable' | 'guest-reserved' | 'guest-unreachable' | 'chain-unreachable';
 
 function hueOf(text: string)
 {
@@ -628,6 +628,10 @@ export const client =
         async person({ params }: { params: { handle: string } })
         {
             server.calls.push('chain.person');
+            if (server.refuse === 'chain-unreachable')
+            {
+                throw new ApiError(500, 'internal', 'The request took too long to respond.', undefined);
+            }
             const face = server.chainFaces[params.handle];
             return { configured: server.chain.configured, ...(face === undefined ? {} : { profile: { ...face } }) };
         },
@@ -1358,7 +1362,7 @@ export const client =
         async view({ params }: { params: { id: string } })
         {
             server.calls.push('tables.view');
-            return restate(mustTable(params.id));
+            return structuredClone(restate(mustTable(params.id)));
         },
 
         async byCode({ params }: { params: { code: string } })
@@ -1490,7 +1494,15 @@ export const client =
         async start({ params }: { params: { id: string } })
         {
             server.calls.push('tables.start');
-            mustTable(params.id);
+            const table = mustTable(params.id);
+            if (table.chairs.some((chair) => chair.who === undefined))
+            {
+                throw new ApiError(409, 'conflict', 'Every chair has to be taken first.', undefined);
+            }
+            if (table.chairs.some((chair) => !chair.ready))
+            {
+                throw new ApiError(409, 'conflict', 'Everybody has to be ready first.', undefined);
+            }
             return {};
         },
 

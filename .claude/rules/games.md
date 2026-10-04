@@ -595,8 +595,16 @@ inserts with `not exists`, a seat count and a readiness check all inside one sta
 no window between reading a ready table and writing a match against it. That is still not enough on
 its own - `not exists` cannot see another transaction's uncommitted row - so `matches_one_live`
 arbitrates and a 23505 is read as "somebody else started it", which answers with their match. Any
-seated player may press it: the precondition is already unanimous, so host-only would be ceremony
-that strands a table whose host closed the tab.
+seated player may press it: the precondition is unanimous, so host-only would be ceremony that
+strands a table whose host closed the tab.
+
+**Readiness is consent to the NEXT game, and a finish spends it.** The precondition is unanimous
+only because `commit` clears `table_seats.ready` for the table inside the transaction that finishes
+the match - a win, a resignation and the sweep's last forfeit alike. It used to survive the finish,
+which made "unanimous" a fact about the game before: one player pressing Play again started a match
+for everybody still in a chair, including somebody who had closed the tab, whose turns the sweep then
+played and whose seat it forfeited. `match.db.spec.ts` holds both halves - every chair is unready
+after a finish however it ended, and one player's start after it is refused until the other says so.
 
 **A table says `playing` and it is DERIVED, never stored.** `TABLE_COLUMNS` reads it from whether an
 unfinished match exists, for the same reason `ready` is read from occupied chairs - and with more
@@ -646,11 +654,12 @@ frame kind that costs something is metered by one ten-second budget (`voice` 30,
 **A turn that runs out is played, not punished.** The sweep finds due matches by Postgres `now()` -
 never `MoreThan(new Date())`, because the deadline is written by Postgres too (`commit` sets it as
 `now() + make_interval(...)`) and a Node clock would disagree with it - asks the engine's
-`autoplay`, and bumps `timeouts`. The third miss IN A ROW forfeits that seat: any action a person
-takes puts their count back to zero, because a count that only ever grew forfeited somebody for three
-misses spread across a whole match, and a Sit & Go is two hundred decisions a seat. When forfeits
-leave one player standing the match ends `abandoned`. The server's own actions are written with
-`user_id = null`, which is what distinguishes them in the ledger.
+`autoplay`, and bumps `timeouts`. The third miss IN A ROW (`MISSES_ALLOWED`, asked through
+`nextMissForfeits`) forfeits that seat: any action a person takes puts their count back to zero,
+because a count that only ever grew forfeited somebody for three misses spread across a whole match,
+and a Sit & Go is two hundred decisions a seat. When forfeits leave one player standing the match
+ends `abandoned`. The server's own actions are written with `user_id = null`, which is what
+distinguishes them in the ledger.
 
 **The clock is the SERVER's, counted from the moment its answer arrived.** `matchView.remainingMs` is
 worked out when the response is composed, and `TurnClock` counts down from the instant it lands -
@@ -839,8 +848,10 @@ sent no cards.
 
 **Poker only runs live, so the matrix keeps a game going.** Its heads-up QA table is opened live and
 the sweep can finish it mid-run, so before each poker cell the matrix restarts the game on the same
-table - the chairs and the readiness survive a finished match, so that is one request - rather than
-touring a lobby for the rest of the run.
+table rather than touring a lobby for the rest of the run. A finish clears readiness, so that is
+three requests: the partner's ready (the matrix keeps the partner's session for the whole run), the
+tour account's ready, then the start. `fit-pass.mjs` readies every player before it restarts a
+finished table for the same reason.
 
 ## Drawing the board
 
@@ -1249,9 +1260,14 @@ the moment anything a player needs is below the fold.
 - `TablePlate` is the one seat plate for all four games: avatar with the speaking ring and a turn ring
   that runs from `remainingMs` over the turn's full length, a marker (crown, dealer, checker colour,
   seat initial), the game's facts, a one-line tag for what is unusual (`plate-tag.ts`), a trailing
-  slot (the ludo die) and the chat bubble. The turn length is `turnMs(mode)` from
-  `backend/src/domains/match/turns.ts`, a zero-import module the server's deadline and the browser's
-  ring both read. A watcher is sent no `remainingMs`, so a watcher sees no ring.
+  slot (the ludo die) and the chat bubble. The turn length is `turnMs(mode)` and the miss rule is
+  `nextMissForfeits(timeouts)` over `MISSES_ALLOWED`, all from `backend/src/domains/match/turns.ts`, a
+  zero-import module: the server's deadline reads `turnMs` and the sweep's forfeit asks
+  `nextMissForfeits`, and so do the browser's ring and its last-chance tag (`plate-tag.ts`, the ludo
+  `YardBadge`). The COMPARISON is shared, not just the number - three copies of `>=` over one constant
+  would leave the warning a miss early the day the sweep's own comparison moved - and
+  `table-plate.spec.ts` and `ludo-table.spec.ts` move the rule under both tags and require them to
+  follow. A watcher is sent no `remainingMs`, so a watcher sees no ring.
 - Hokm decides one row of cards or two from the stage's measured size (`room`), because two rows are
   only worth their height when one row would squeeze each card below a readable strip.
 - `MatchResult` overlays the stage rather than pushing it down.
@@ -1525,8 +1541,16 @@ that dropped the winner straight back to a lobby with a Start button at the exac
 something to say. Asking "has it finished?" instead does not work either: the table's refetch and the
 match's are two reads that learn about the end separately, so there is a window where the table has
 dropped the id and the match view is still the one from before the final move. Belonging to this
-table is true throughout. The rematch is offered from the result panel and is the table's ordinary
-Start, because a finished match leaves every seat exactly where it was.
+table is true throughout.
+
+**The rematch is asked for, not started.** A finish leaves every seat where it was and every chair
+unready, so Play again is `lobby.again`: this seat says ready, and the start is sent only when that
+was the last chair owed - the same `settle` quick play sits down with. The result panel then walks
+Play again, "Waiting for {names}" while anybody else has not said so, and Start once everybody has
+and no game began (a start that was dropped on the way), and it says a chair is free when somebody
+left. `rematchOf` in `boards.ts` reads all of that off the table's chairs and trusts none of it while
+the table still names the finished match as live, because that readiness is from before the finish.
+`match-result.spec.ts` walks the states and `play.spec.ts` presses the button through the page.
 
 ## Levels, and a board a new player can reach
 
@@ -1692,7 +1716,12 @@ already sitting at it, which `visibleTo` gives for nothing.
 `visibleTo`, so the ORDER it refused things in told a stranger holding an id whether the table was
 open, closed, or of a game with no engine - and the 403 that finally stopped them confirmed it was
 there. Being seated is asked first now and a no is a 404, which needs no visibility check of its
-own: sitting at a table is the strongest form of being able to see one. `/matches/:id/watch` had the
+own: sitting at a table is the strongest form of being able to see one. FIRST means before the live
+match too: for a while the route looked for a running game before anything else, and answered a
+stranger holding the id "You are not in that game" with a 403 - so a table with a game on it was
+still told apart from a missing one, and a player who had stood up mid-game was handed the board
+they had walked away from. Anybody not in a chair is answered 404, and so is somebody in a chair the
+running game never dealt them. `match.db.spec.ts` holds all three. `/matches/:id/watch` had the
 same shape written as an optimisation - `found.live && ...` - so a FINISHED match skipped the table
 check entirely and any signed-in caller holding a match id could read the final board of a game
 played at a private room table. A game being over does not make the room it was played in public.

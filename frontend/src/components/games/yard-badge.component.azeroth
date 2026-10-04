@@ -1,9 +1,10 @@
 import DieFace from './die-face.component.azeroth';
 import TablePlate from './table-plate.component.azeroth';
-import { MISSES_ALLOWED, type PlateTone } from './plate-tag.ts';
+import type { PlateTone } from './plate-tag.ts';
 import { INITIAL } from './seats.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { usePeople } from '../../stores/people.store.ts';
+import { nextMissForfeits } from '../../../../backend/src/domains/match/turns.ts';
 import type { LudoSeat, MatchPlayer } from '../../data/match.ts';
 
 const PIPS = [0, 1, 2, 3];
@@ -34,7 +35,7 @@ export default component YardBadge(props: {
         ? locale.t('match.you')
         : (person === null ? props.player.who : locale.text(person.displayName));
 
-    derived warned = props.player.timeouts >= MISSES_ALLOWED - 1 && !props.finished;
+    derived warned = nextMissForfeits(props.player.timeouts) && !props.finished;
 
     derived routine = props.player.result === undefined && !props.seat.out && props.player.timeouts === 0;
 

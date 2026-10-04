@@ -33,6 +33,8 @@ export const ICON_BUTTON_SIZE: Record<ButtonSize, string> = {
     lg: 'h-12 w-12'
 };
 
+export const COPY_CHIP = 'relative inline-flex h-6 min-w-0 max-w-full cursor-pointer items-center gap-1.5 rounded-full border border-line bg-raised px-2.5 text-ui-xs font-semibold text-muted transition-colors hover:border-accent hover:text-text coarse:before:absolute coarse:before:-inset-y-2.75 coarse:before:inset-x-0';
+
 export const TONE_TEXT: Record<Tone, string> = {
     neutral: 'text-muted',
     accent: 'text-accent',

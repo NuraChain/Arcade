@@ -1,5 +1,16 @@
-import { createPublicClient, http, type Address, type Hex } from 'viem';
+import {
+    encodeDeployData,
+    erc6492SignatureValidatorAbi,
+    erc6492SignatureValidatorByteCode,
+    hashMessage,
+    isErc6492Signature,
+    parseAbi,
+    verifyMessage,
+    type Address,
+    type Hex
+} from 'viem';
 
+import { boundedClient, refusedByContract } from '../../chain/rpc.ts';
 import { normalizeAddress } from '../../lib/crypto.ts';
 import { deviceLine } from '../device/resource.ts';
 
@@ -46,60 +57,53 @@ export type VerifyResult =
     | { ok: true; attestation: 'wallet' | 'contract' }
     | { ok: false; reason: 'bad-signature' | 'unreachable-chain' };
 
-/**
- * Verifies that `address` produced `signature` over `message`.
- *
- * Two kinds of wallet, and both are real:
- *
- *  - An EOA signs with a key, and the address is recovered from the signature. No network.
- *  - A SMART-CONTRACT wallet (a Safe, most account-abstraction wallets) has no key to recover
- *    from. It answers ERC-1271's `isValidSignature` instead, which needs an `eth_call`. Skipping
- *    this branch does not fail safe, it fails EXCLUSIONARY: every contract-wallet holder is
- *    locked out with "bad signature" and nothing explains why.
- *
- * A chain that cannot be reached returns `unreachable-chain`, never `ok`. An unverifiable
- * signature is never treated as verified, and the caller is told the difference so it can say
- * "we could not reach the network" instead of "your signature was wrong".
- */
+const ERC1271_MAGIC = '0x1626ba7e';
+
+const ERC1271 = parseAbi(['function isValidSignature(bytes32 hash, bytes signature) view returns (bytes4)']);
+
 export async function verifySignature(input: VerifyInput): Promise<VerifyResult>
 {
     const address = normalizeAddress(input.address) as Address;
     const signature = input.signature as Hex;
 
-    // viem's verifyMessage does the EIP-191 prefixing and the secp256k1 recovery, then falls
-    // through to ERC-1271 (and ERC-6492 for counterfactual wallets) when a client is given.
+    if (await verifyMessage({ address, message: input.message, signature }).catch(() => false))
+    {
+        return { ok: true, attestation: 'wallet' };
+    }
     if (input.rpcUrl === undefined || input.rpcUrl === '')
     {
-        const { verifyMessage } = await import('viem');
-        const ok = await verifyMessage({ address, message: input.message, signature })
-            .catch(() => false);
-        return ok ? { ok: true, attestation: 'wallet' } : { ok: false, reason: 'bad-signature' };
+        return { ok: false, reason: 'bad-signature' };
     }
 
-    const client = createPublicClient({ transport: http(input.rpcUrl) });
+    const client = boundedClient(input.rpcUrl);
+    const hash = hashMessage(input.message);
     try
     {
-        const ok = await client.verifyMessage({ address, message: input.message, signature });
-        if (!ok)
+        if (isErc6492Signature(signature))
+        {
+            const { data } = await client.call({
+                data: encodeDeployData({
+                    abi: erc6492SignatureValidatorAbi,
+                    bytecode: erc6492SignatureValidatorByteCode,
+                    args: [address, hash, signature]
+                })
+            });
+            return data !== undefined && data !== '0x' && BigInt(data) === 1n
+                ? { ok: true, attestation: 'contract' }
+                : { ok: false, reason: 'bad-signature' };
+        }
+
+        const code = await client.getCode({ address });
+        if (code === undefined || code === '0x')
         {
             return { ok: false, reason: 'bad-signature' };
         }
 
-        // It verified. Which branch answered decides what we record: a contract wallet's
-        // authority is its code, an EOA's is its key, and the devices panel says which.
-        const code = await client.getCode({ address }).catch(() => undefined);
-        const isContract = code !== undefined && code !== '0x';
-        return { ok: true, attestation: isContract ? 'contract' : 'wallet' };
+        const answer = await client.readContract({ address, abi: ERC1271, functionName: 'isValidSignature', args: [hash, signature] });
+        return answer === ERC1271_MAGIC ? { ok: true, attestation: 'contract' } : { ok: false, reason: 'bad-signature' };
     }
-    catch
+    catch (error)
     {
-        // A local signature check that throws is a bad signature; a network call that throws is
-        // an unreachable chain. Distinguish them by trying the offline path once more.
-        const { verifyMessage } = await import('viem');
-        const offline = await verifyMessage({ address, message: input.message, signature })
-            .catch(() => false);
-        return offline
-            ? { ok: true, attestation: 'wallet' }
-            : { ok: false, reason: 'unreachable-chain' };
+        return { ok: false, reason: refusedByContract(error) ? 'bad-signature' : 'unreachable-chain' };
     }
 }

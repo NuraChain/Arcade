@@ -5,8 +5,9 @@ import { useLocale } from '../../stores/locale.store.ts';
 import { usePeople } from '../../stores/people.store.ts';
 import { playersOf, scoreOf, type MatchPlayer } from '../../data/match.ts';
 import type { MatchView } from '../../api.ts';
+import type { Rematch } from './boards.ts';
 
-export default component MatchResult(props: { match: MatchView; mine?: number; busy?: boolean; onAgain?: () => void })
+export default component MatchResult(props: { match: MatchView; mine?: number; busy?: boolean; onAgain?: () => void; rematch?: Rematch })
 {
     const locale = useLocale();
     const people = usePeople();
@@ -48,6 +49,16 @@ export default component MatchResult(props: { match: MatchView; mine?: number; b
 
         return person === null ? handle : locale.text(person.displayName);
     };
+
+    derived asking = props.onAgain !== undefined && props.rematch !== undefined;
+
+    derived ready = props.rematch?.ready === true;
+
+    derived waiting = (props.rematch?.waiting ?? []).map(nameOf);
+
+    derived free = props.rematch?.empty ?? 0;
+
+    derived startable = ready && waiting.length === 0 && free === 0;
 
     const moved = (player: MatchPlayer) =>
         player.ratingAfter === undefined || player.ratingBefore === undefined
@@ -110,11 +121,42 @@ export default component MatchResult(props: { match: MatchView; mine?: number; b
             { () => <p class="text-ui-xs text-muted">{ locale.t('match.over.noRating') }</p> }
         </Show>
 
-        <Show when={ props.onAgain !== undefined }>
+        <Show when={ asking }>
             { () =>
-                <Button variant="primary" size="lg" leading="play" loading={ props.busy === true } onClick={ () => props.onAgain?.() }>
-                    { locale.t('match.rematch') }
-                </Button>
+                <div class="flex flex-col gap-2">
+                    <Show when={ !ready }>
+                        { () =>
+                            <Button variant="primary" size="lg" leading="play" loading={ props.busy === true } onClick={ () => props.onAgain?.() }>
+                                { locale.t('match.rematch') }
+                            </Button>
+                        }
+                    </Show>
+                    <Show when={ startable }>
+                        { () =>
+                            <Button variant="primary" size="lg" leading="play" loading={ props.busy === true } onClick={ () => props.onAgain?.() }>
+                                { locale.t('match.start') }
+                            </Button>
+                        }
+                    </Show>
+                    <div class="flex flex-col gap-1" aria-live="polite">
+                        <Show when={ ready && waiting.length > 0 }>
+                            { () =>
+                                <p class="flex items-center gap-2 text-ui-sm text-muted">
+                                    <Icon name="clock" size={ 15 } class="shrink-0" />
+                                    <span class="min-w-0">{ locale.t('match.rematch.waiting', { names: locale.list(waiting) }) }</span>
+                                </p>
+                            }
+                        </Show>
+                        <Show when={ free > 0 }>
+                            { () =>
+                                <p class="flex items-center gap-2 text-ui-sm text-muted">
+                                    <Icon name="seat" size={ 15 } class="shrink-0" />
+                                    <span class="min-w-0">{ locale.plural('match.rematch.empty', free) }</span>
+                                </p>
+                            }
+                        </Show>
+                    </div>
+                </div>
             }
         </Show>
     </Panel>

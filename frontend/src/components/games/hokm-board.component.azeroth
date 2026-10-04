@@ -23,6 +23,7 @@ import { useLocale } from '../../stores/locale.store.ts';
 import { useSettings } from '../../stores/settings.store.ts';
 import { usePeople } from '../../stores/people.store.ts';
 import type { MatchView } from '../../api.ts';
+import type { Rematch } from './boards.ts';
 
 type Side = 'bottom' | 'top' | 'left' | 'right' | 'top-left' | 'top-right';
 
@@ -89,7 +90,7 @@ const cardNode = (card: number | null, width: number): HTMLElement =>
     return box;
 };
 
-export default component HokmBoard(props: { match: MatchView; starting?: boolean; onAgain?: () => void; speech?: Record<string, string>; turnMs?: number })
+export default component HokmBoard(props: { match: MatchView; starting?: boolean; onAgain?: () => void; rematch?: Rematch; speech?: Record<string, string>; turnMs?: number })
 {
     const locale = useLocale();
     const board = useBoard();
@@ -1145,7 +1146,7 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
 
         <Show when={ over }>
             { () =>
-                <TableResult match={ game } mine={ mine } busy={ props.starting === true } onAgain={ props.onAgain } />
+                <TableResult match={ game } mine={ mine } busy={ props.starting === true } onAgain={ props.onAgain } rematch={ props.rematch } />
             }
         </Show>
 

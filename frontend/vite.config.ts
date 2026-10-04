@@ -1,6 +1,7 @@
 import { azeroth } from '@azerothjs/compiler';
 import tailwindcss from '@tailwindcss/vite';
 import { existsSync } from 'node:fs';
+import { isAbsolute, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadEnv, type Plugin } from 'vite';
 import { defineConfig } from 'vitest/config';
@@ -51,12 +52,37 @@ const shareOrigin = (): Plugin =>
     };
 };
 
+const chunkModules = (): Plugin =>
+{
+    let root = '';
+
+    return {
+        name: 'nura-chunk-modules',
+        apply: 'build',
+        configResolved: (config) =>
+        {
+            root = config.root;
+        },
+        generateBundle(_options, bundle)
+        {
+            const chunks = Object.fromEntries(Object.values(bundle)
+                .filter((output) => output.type === 'chunk')
+                .map((chunk) => [chunk.fileName, Object.entries(chunk.modules)
+                    .filter(([, module]) => module.renderedLength > 0)
+                    .map(([id]) => id.replace(/\?.*$/, ''))
+                    .map((id) => isAbsolute(id) ? relative(root, id).replaceAll('\\', '/') : id)]));
+
+            this.emitFile({ type: 'asset', fileName: '.vite/chunks.json', source: JSON.stringify(chunks) });
+        }
+    };
+};
+
 export default defineConfig(({ isSsrBuild, mode }) =>
 {
     requireEnv(mode);
 
     return {
-        plugins: [azeroth(), tailwindcss(), shareOrigin()],
+        plugins: [azeroth(), tailwindcss(), shareOrigin(), ...(isSsrBuild === true ? [] : [chunkModules()])],
 
         cacheDir: '../node_modules/.vite',
 
@@ -117,7 +143,7 @@ export default defineConfig(({ isSsrBuild, mode }) =>
             rolldownOptions: isSsrBuild === true ? {} : {
                 output: {
                     codeSplitting: {
-                        groups: [{ name: 'hint', test: /\/src\/(components\/ui\/(badge|tooltip)\.component|lib\/anchor)\./ }]
+                        groups: [{ name: 'boot', tags: ['$initial'] }]
                     }
                 }
             }

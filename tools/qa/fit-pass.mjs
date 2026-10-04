@@ -176,6 +176,11 @@ const refresh = async (spec, table) =>
 
     if (state.finishedAt !== undefined)
     {
+        for (const player of table.players)
+        {
+            await player.api('POST', `/tables/${ table.tableId }/ready`, { ready: true });
+        }
+
         const again = await dana.api('POST', `/tables/${ table.tableId }/start`);
 
         if (again.ok)

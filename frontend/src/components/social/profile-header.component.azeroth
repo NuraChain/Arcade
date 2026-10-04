@@ -6,6 +6,7 @@ import { copyText } from '../../lib/clipboard.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import Avatar, { type Facade, type Presence } from '../ui/avatar.component.azeroth';
 import Tooltip from '../ui/tooltip.component.azeroth';
+import { COPY_CHIP } from '../ui/variants.ts';
 
 export interface ProfileStat
 {
@@ -50,7 +51,7 @@ export default component ProfileHeader(props: {
         </div>
 
         <Show when={ props.corner !== undefined }>
-            <div class="absolute end-3 top-3 z-1 flex items-center gap-1 rounded-full border border-line/70 bg-void/50 p-1 backdrop-blur-md">{ props.corner }</div>
+            <div class="absolute end-3 top-3 z-1 flex items-center gap-1 coarse:gap-3 rounded-full border border-line/70 bg-void/50 p-1 backdrop-blur-md">{ props.corner }</div>
         </Show>
 
         <div class="relative flex flex-col gap-4 px-4 pb-5 @xl:px-7 @xl:pb-7">
@@ -76,12 +77,12 @@ export default component ProfileHeader(props: {
                 <div class="flex min-w-0 flex-col gap-4">
                     <div class="flex min-w-0 flex-col gap-1">
                         <Show when={ props.eyebrow !== undefined }>
-                            <div class="hidden pb-1 has-[*]:flex">{ props.eyebrow }</div>
+                            <div class="hidden pb-1 coarse:py-2.5 has-[*]:flex">{ props.eyebrow }</div>
                         </Show>
-                        <div class="flex pb-1">
+                        <div class="flex pb-1 coarse:py-2.5">
                             <button
                                 type="button"
-                                class="relative inline-flex h-6 min-w-0 max-w-full cursor-pointer items-center gap-1.5 rounded-full border border-line bg-raised px-2.5 text-ui-xs font-semibold text-muted transition-colors hover:border-accent hover:text-text coarse:before:absolute coarse:before:-inset-y-2.5 coarse:before:inset-x-0"
+                                class={ COPY_CHIP }
                                 aria-label={ locale.t('profile.handleCopy') }
                                 onClick={ () => void copyText(`@${ props.person.handle }`, 'profile.handleCopied', { dedupe: 'profile.handle' }) }
                             >

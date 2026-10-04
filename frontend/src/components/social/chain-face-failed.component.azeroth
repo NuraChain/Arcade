@@ -1,0 +1,18 @@
+import { NURA_CHAIN } from '../../data/chain.ts';
+import Icon from '../../icons/icon.component.azeroth';
+import { useLocale } from '../../stores/locale.store.ts';
+import Button from '../ui/button.component.azeroth';
+import Panel from '../ui/panel.component.azeroth';
+
+export default component ChainFaceFailed(props: { onRetry: () => void })
+{
+    const locale = useLocale();
+
+    <Panel tone="danger" class="flex flex-col gap-3 @md:flex-row @md:items-center">
+        <p class="flex flex-1 items-start gap-2 text-ui-sm text-text" role="alert">
+            <Icon name="alert" size={ 16 } class="mt-0.5 shrink-0 text-danger" />
+            <span>{ locale.t('profile.chainFailed', { chain: NURA_CHAIN.name }) }</span>
+        </p>
+        <Button variant="secondary" size="sm" leading="refresh" class="self-start @md:self-auto" onClick={ () => props.onRetry() }>{ locale.t('common.retry') }</Button>
+    </Panel>
+}

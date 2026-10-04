@@ -179,6 +179,8 @@ export const play: Pick<Dictionary, keyof typeof reference> = {
     'match.over.nobody': 'این بازی تمام شد.',
     'match.over.noRating': 'کسی نبرد، پس امتیازی جابه‌جا نشد.',
     'match.rematch': 'یک دست دیگر',
+    'match.rematch.waiting': 'منتظر {names} برای یک دست دیگر.',
+    'match.rematch.empty': { one: 'یک صندلی خالی است.', other: '{count} صندلی خالی است.' },
     'match.result.show': 'نمایش نتیجه',
     'match.result.board': 'دیدن صفحه',
     'play.table.chatLead': 'هرکسی که سر این میز است می‌تواند حرف‌هایت را بخواند.',

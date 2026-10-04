@@ -3,6 +3,7 @@ import { createResource, useHead, useNavigate, useParams } from 'azerothjs';
 
 import { client } from '../../api.ts';
 import Page from '../../components/app/page.component.azeroth';
+import ChainFaceFailed from '../../components/social/chain-face-failed.component.azeroth';
 import PersonActions from '../../components/social/person-actions.component.azeroth';
 import ProfileHeader from '../../components/social/profile-header.component.azeroth';
 import PicturePreview from '../../components/social/picture-preview.component.azeroth';
@@ -182,6 +183,10 @@ export default component PersonPage()
                             </span>
                         }
                     />
+
+                    <Show when={ face.error() !== null }>
+                        { () => <ChainFaceFailed onRetry={ () => face.refetch() } /> }
+                    </Show>
 
                     <Show when={ relation === 'blocked' }>
                         { () =>

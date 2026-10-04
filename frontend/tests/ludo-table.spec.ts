@@ -8,6 +8,7 @@ import '../src/locales/app-catalogue.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
 import { useBoard } from '../src/stores/match.store.ts';
 import type { MatchView } from '../src/api.ts';
+import * as turns from '../../backend/src/domains/match/turns.ts';
 import { client } from './fake-api.ts';
 
 type Rendered = HTMLElement;
@@ -116,12 +117,38 @@ describe('the ludo table', () =>
         const container = await show(ludo({
             players: [
                 { seat: 0, who: 'alex', timeouts: 0 },
-                { seat: 1, who: 'sara.k', timeouts: 2 }
+                { seat: 1, who: 'sara.k', timeouts: turns.MISSES_ALLOWED - 1 }
             ] as MatchView['players']
         }));
         const [mine, theirs] = [...container.querySelectorAll<HTMLElement>('.yard-badge')];
 
         expect(mine.querySelector('.sr-only')?.textContent).toBe('Your go');
         expect(theirs.querySelector('.table-plate-tag')?.textContent).toBe(useLocale().t('card.lastChance'));
+    });
+
+    it('takes the last chance from the server’s own rule, so a different limit moves the warning with it', async () =>
+    {
+        vi.spyOn(turns, 'nextMissForfeits').mockImplementation((timeouts) => timeouts + 1 >= 5);
+
+        const locale = useLocale();
+        const tag = async (timeouts: number) =>
+        {
+            const container = await show(ludo({
+                players: [
+                    { seat: 0, who: 'alex', timeouts: 0 },
+                    { seat: 1, who: 'sara.k', timeouts }
+                ] as MatchView['players']
+            }));
+            const plate = container.querySelectorAll<HTMLElement>('.yard-badge')[1].querySelector<HTMLElement>('.table-plate-tag')!;
+            const read = { text: plate.textContent, tone: plate.dataset.tone };
+
+            cleanup();
+            useBoard().close();
+
+            return read;
+        };
+
+        expect(await tag(3)).toEqual({ text: locale.plural('match.missed', 3), tone: 'gold' });
+        expect(await tag(4)).toEqual({ text: locale.t('card.lastChance'), tone: 'danger' });
     });
 });

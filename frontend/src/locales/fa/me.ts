@@ -77,6 +77,7 @@ export const me: Pick<Dictionary, keyof typeof reference> = {
     'profile.failed': 'ذخیره نشد. اتصالت را بررسی کن و دوباره امتحان کن.',
     'profile.handleCopy': 'کپی شناسه',
     'profile.handleCopied': 'شناسه کپی شد',
+    'profile.chainFailed': 'پروفایل نورا روی {chain} خوانده نشد، پس ممکن است نام، بیو و عکس نمایش داده نشوند.',
     'profile.joined': 'عضو از {date}',
     'profile.pictureTitle': 'تصویر پروفایل',
     'profile.pictureView': 'دیدن تصویر',
@@ -97,6 +98,8 @@ export const me: Pick<Dictionary, keyof typeof reference> = {
     'me.settings': 'تنظیمات',
     'me.keepSeat.title': 'این صندلی، همین مرورگر است.',
     'me.keepSeat.lead': 'صندلی مهمان کیف پولی پشتش ندارد، پس نه چیزی اینجا مهروموم می‌شود و نه چیزی روی دستگاه دیگری دنبالت می‌آید. بعد از خروج هیچ راهی به حساب مهمان برنمی‌گردد — و ورود با کیف پول یک حساب تازه می‌سازد، نه اینکه این یکی را جابه‌جا کند.',
+    'me.signOut.guestTitle': 'از این صندلی مهمان خارج می‌شوی؟',
+    'me.signOut.guestLead': 'بعد از خروج هیچ راهی به این حساب مهمان برنمی‌گردد. این نام، این دوستان و همهٔ نتیجه‌ها همراه آن همین‌جا می‌مانند.',
 
     'settings.title': 'تنظیمات',
     'settings.lead': 'حسابت، اینکه چه کسی می‌تواند به تو برسد، و رفتار این دستگاه.',

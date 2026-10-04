@@ -14,7 +14,7 @@ import { backgammonEngine } from './engines/backgammon.ts';
 import { hokmEngine } from './engines/hokm.ts';
 import { ludoEngine } from './engines/ludo.ts';
 import { pokerEngine } from './engines/poker.ts';
-import { turnMs } from './turns.ts';
+import { nextMissForfeits, turnMs } from './turns.ts';
 import type { MatchLog } from '../../schemas.ts';
 import type { MatchHistory } from '../../schemas.ts';
 import type { Draws, Engine, TableConfig } from './engine.ts';
@@ -63,8 +63,6 @@ interface HistoryRow
 const UNIQUE_VIOLATION = '23505';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-const MAX_TIMEOUTS = 3;
 
 export type Applied = 'now' | 'already' | 'stale';
 
@@ -259,6 +257,18 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
         return { match, state: stateOf(match), players: await seatsOf(db, matchId), mine: seat.seat };
     };
 
+    const dealtIn = async (me: string, matchId: string) =>
+    {
+        const mine = await read(me, matchId);
+
+        if (mine === null)
+        {
+            throw new NotFoundError('No table there.');
+        }
+
+        return mine;
+    };
+
     const deadlineFrom = (mode: string): () => string =>
         () => `now() + make_interval(secs => ${ turnMs(mode) / 1000 })`;
 
@@ -345,6 +355,11 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
                 .execute();
 
             await recorder.finish(tx, match.id, engine, next);
+        }
+
+        if (over)
+        {
+            await tx.getRepository(TableSeat).update({ tableId: match.tableId, ready: true }, { ready: false });
         }
     };
 
@@ -490,6 +505,14 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
                 throw new NotFoundError('No table there.');
             }
 
+            const table = await db.getRepository(Table).findOne({ where: { id: tableId } });
+            const chairs = await db.getRepository(TableSeat).find({ where: { tableId }, order: { seat: 'ASC' } });
+
+            if (table === null || !chairs.some((chair) => chair.userId === me))
+            {
+                throw new NotFoundError('No table there.');
+            }
+
             const live = await db.getRepository(Match).findOne({
                 select: { id: true },
                 where: { tableId, finishedAt: IsNull() }
@@ -497,36 +520,7 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
 
             if (live !== null)
             {
-                const mine = await read(me, live.id);
-
-                if (mine === null)
-                {
-                    throw new ForbiddenError('You are not in that game.');
-                }
-
-                return mine;
-            }
-
-            const table = await db.getRepository(Table).findOne({ where: { id: tableId } });
-            const chairs = await db.getRepository(TableSeat).find({ where: { tableId }, order: { seat: 'ASC' } });
-
-            /**
-             * Being SEATED is the first question, and a no is a 404.
-             *
-             * This route reads the table by id and nothing else - it never asks `visibleTo` - so
-             * the order it refused things in was an oracle: a stranger holding an id could tell an
-             * open table from a closed one from one whose game has no engine, and the 403 that
-             * finally stopped them confirmed the table was there. That is exactly what a room
-             * table's 404 exists to prevent, undone by the one route that did not go through the
-             * predicate.
-             *
-             * Asking it first needs no visibility check of its own, because sitting at a table is
-             * the strongest form of being able to see one: `visibleTo`'s seated clause holds
-             * whatever the privacy says, and it is the clause that outlives a group closing.
-             */
-            if (table === null || !chairs.some((chair) => chair.userId === me))
-            {
-                throw new NotFoundError('No table there.');
+                return dealtIn(me, live.id);
             }
 
             if (table.status === 'closed')
@@ -619,17 +613,10 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
                     throw new ConflictError('That table is not ready to start.');
                 }
 
-                const mine = await read(me, raced.id);
-
-                if (mine === null)
-                {
-                    throw new ForbiddenError('You are not in that game.');
-                }
-
-                return mine;
+                return dealtIn(me, raced.id);
             }
 
-            return (await read(me, matchId)) as MatchLoad;
+            return dealtIn(me, matchId);
         },
 
         act: async (
@@ -869,7 +856,7 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
                         where: { matchId: match.id, seat }
                     });
 
-                    const forfeiting = (chair?.timeouts ?? 0) + 1 >= MAX_TIMEOUTS;
+                    const forfeiting = nextMissForfeits(chair?.timeouts ?? 0);
 
                     const action = forfeiting
                         ? engine.forfeit(seat, 'timeout')

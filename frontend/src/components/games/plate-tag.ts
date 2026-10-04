@@ -1,3 +1,4 @@
+import { nextMissForfeits } from '../../../../backend/src/domains/match/turns.ts';
 import type { MatchPlayer } from '../../data/match.ts';
 import type { useLocale } from '../../stores/locale.store.ts';
 
@@ -8,8 +9,6 @@ export interface PlateTag
     text: string;
     tone: PlateTone;
 }
-
-export const MISSES_ALLOWED = 3;
 
 export function plateTag(locale: ReturnType<typeof useLocale>, player: MatchPlayer | undefined, finished: boolean): PlateTag | null
 {
@@ -35,7 +34,7 @@ export function plateTag(locale: ReturnType<typeof useLocale>, player: MatchPlay
 
     if (player.timeouts > 0 && !finished)
     {
-        return player.timeouts >= MISSES_ALLOWED - 1
+        return nextMissForfeits(player.timeouts)
             ? { text: locale.t('card.lastChance'), tone: 'danger' }
             : { text: locale.plural('match.missed', player.timeouts), tone: 'gold' };
     }

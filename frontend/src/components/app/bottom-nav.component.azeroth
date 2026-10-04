@@ -43,7 +43,7 @@ export default component BottomNav()
         };
     };
 
-    <nav class="pointer-events-none absolute inset-x-0 bottom-0 z-nav px-3 pt-2 pb-[calc(env(safe-area-inset-bottom,0px)+0.5rem)]" aria-label={ locale.t('app.nav.primary') }>
+    <nav data-island class="pointer-events-none absolute inset-x-0 bottom-0 z-nav px-3 pt-2 pb-[calc(env(safe-area-inset-bottom,0px)+0.5rem)]" aria-label={ locale.t('app.nav.primary') }>
         <ul class="mx-auto grid h-[var(--nav-h)] w-full max-w-[28rem] grid-cols-5 pointer-events-auto rounded-full border border-line/70 bg-void/35 px-1.5 shadow-[var(--shadow-2)] backdrop-blur-xl backdrop-saturate-150">
             <For each={ NAV } key={ (item) => item.tab } let={ item }>
                 <li class="flex">

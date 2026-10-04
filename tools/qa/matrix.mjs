@@ -236,6 +236,10 @@ async function audit(page)
                     return true;
                 }
                 const hit = document.elementFromPoint(x, y);
+                if (hit !== null && hit.closest('[data-island]') !== null && control.closest('[data-island]') === null)
+                {
+                    return true;
+                }
                 return hit !== null && (hit === control || control.contains(hit));
             });
         };
@@ -331,12 +335,16 @@ async function main()
         hokm: await playableTable(browser, storageState, 'hokm')
     };
 
+    const partner = await browser.newContext({ storageState: await signedIn(browser, PARTNER_HANDLE) });
+
     const keepDealing = async (page) =>
     {
         const seen = await page.request.get(`${ BASE }/api/tables/${ tables.poker }`);
 
         if (seen.ok() && (await seen.json()).matchId === undefined)
         {
+            await partner.request.post(`${ BASE }/api/tables/${ tables.poker }/ready`, { data: { ready: true } });
+            await page.request.post(`${ BASE }/api/tables/${ tables.poker }/ready`, { data: { ready: true } });
             await page.request.post(`${ BASE }/api/tables/${ tables.poker }/start`);
         }
     };
@@ -436,6 +444,7 @@ async function main()
         }
     }
 
+    await partner.close();
     await browser.close();
 
     writeFileSync(join(OUT, 'report.json'), JSON.stringify({ base: BASE, cells, failures }, null, 4));

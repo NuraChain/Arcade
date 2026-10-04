@@ -17,6 +17,7 @@ import type { Person } from '../../data/person.ts';
 import Icon from '../../icons/icon.component.azeroth';
 import type { IconName } from '../../icons/registry.ts';
 import PushToggle from '../../components/app/push-toggle.component.azeroth';
+import { signOut } from '../../components/app/sign-out.ts';
 import { runtime } from '../../lib/runtime.ts';
 import { RESERVED_KEYS, keyName } from '../../lib/talk-key.ts';
 import { shortAddress } from '../../lib/wallet.ts';
@@ -26,7 +27,6 @@ import { useAccount } from '../../stores/account.store.ts';
 import { useDevice } from '../../stores/device.store.ts';
 import { pagingFor, visible } from '../../lib/pagination.ts';
 import { useLocale } from '../../stores/locale.store.ts';
-import { useSession } from '../../stores/session.store.ts';
 import { useSettings } from '../../stores/settings.store.ts';
 import { useSocial } from '../../stores/social.store.ts';
 import { useToasts } from '../../stores/toasts.store.ts';
@@ -50,7 +50,6 @@ export default component SettingsPage()
 {
     const locale = useLocale();
     const account = useAccount();
-    const session = useSession();
     const wallet = useWallet();
     const social = useSocial();
     const settings = useSettings();
@@ -179,9 +178,7 @@ export default component SettingsPage()
     const leave = async () =>
     {
         leaving = true;
-        wallet.disconnect();
-        await session.signOut();
-        window.location.replace('/sign-in');
+        leaving = await signOut();
     };
 
     state active = SECTIONS[0].id;

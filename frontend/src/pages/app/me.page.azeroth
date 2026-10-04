@@ -2,13 +2,16 @@ import { createResource, useHead } from 'azerothjs';
 
 import Page from '../../components/app/page.component.azeroth';
 import PersonRecord, { type RecordPart } from '../../components/social/person-record.component.azeroth';
+import ChainFaceFailed from '../../components/social/chain-face-failed.component.azeroth';
 import ProfileHeader from '../../components/social/profile-header.component.azeroth';
 import Badge from '../../components/ui/badge.component.azeroth';
 import Tabs from '../../components/ui/tabs.component.azeroth';
 import ProfileSheet from '../../components/app/profile-sheet.component.azeroth';
+import { signOut } from '../../components/app/sign-out.ts';
 import Panel from '../../components/ui/panel.component.azeroth';
 import EmptyState from '../../components/ui/empty-state.component.azeroth';
 import IconButton from '../../components/ui/icon-button.component.azeroth';
+import { COPY_CHIP } from '../../components/ui/variants.ts';
 import { client } from '../../api.ts';
 import Icon from '../../icons/icon.component.azeroth';
 import { shortAddress } from '../../lib/wallet.ts';
@@ -47,6 +50,14 @@ export default component MePage()
         void overlay.open(ProfileSheet, { only: 'picture' as const }, { label: locale.t('profile.pictureTitle') }).closed.then(() => face.refetch());
     };
 
+    state leaving = false;
+
+    const leave = async () =>
+    {
+        leaving = true;
+        leaving = await signOut();
+    };
+
     const copyAddress = async () =>
     {
         const address = account.address();
@@ -77,6 +88,12 @@ export default component MePage()
         { name: 'chain.nfts' }
     );
 
+    const retryChain = () =>
+    {
+        face.refetch();
+        nfts.refetch();
+    };
+
     derived nftStat = nfts.data()?.configured === true
         ? [{ label: locale.t('profile.stat.nfts'), value: nfts.data()!.total, to: '/app/me/nfts' }]
         : [];
@@ -99,7 +116,11 @@ export default component MePage()
     <Page label={ locale.t('app.nav.profile') }>
         <Show
             when={ user !== null }
-            fallback={ <EmptyState icon="me" title={ locale.t('person.notFound') } action={ locale.t('app.nav.home') } to="/app" class="py-12" /> }
+            fallback={
+                <Show when={ !leaving }>
+                    { () => <EmptyState icon="me" title={ locale.t('person.notFound') } action={ locale.t('app.nav.home') } to="/app" class="py-12" /> }
+                </Show>
+            }
         >
             { () =>
                 <div class="flex flex-col gap-6">
@@ -117,13 +138,13 @@ export default component MePage()
                             <Show when={ account.isWallet() }>
                                 <button
                                     type="button"
-                                    class="relative inline-flex h-6 cursor-pointer items-center gap-1.5 rounded-full border border-line bg-raised px-2.5 text-ui-xs font-semibold text-muted transition-colors hover:border-accent hover:text-text coarse:before:absolute coarse:before:-inset-y-2.5 coarse:before:inset-x-0 coarse:before:content-['']"
+                                    class={ COPY_CHIP }
                                     aria-label={ locale.t('wallet.address.copy') }
                                     onClick={ () => void copyAddress() }
                                 >
-                                    <Icon name="key" size={ 12 } class="text-live" />
+                                    <Icon name="key" size={ 12 } class="shrink-0 text-live" />
                                     <span class="tally">{ shortAddress(account.address() ?? '') }</span>
-                                    <Icon name="copy" size={ 12 } class="text-accent" />
+                                    <Icon name="copy" size={ 12 } class="shrink-0 text-accent" />
                                 </button>
                             </Show>
                         }
@@ -139,9 +160,14 @@ export default component MePage()
                                 <IconButton icon="settings" label={ locale.t('me.settings') } variant="bare" size="xs" to="/app/me/settings" />
                                 <IconButton icon="edit" label={ locale.t('me.edit') } variant="bare" size="xs" onClick={ editProfile } />
                                 <IconButton icon="share" label={ locale.t('me.share') } variant="bare" size="xs" onClick={ () => void share() } />
+                                <IconButton icon="sign-out" label={ locale.t('app.nav.signOut') } variant="bare" size="xs" flip disabled={ leaving } onClick={ () => void leave() } />
                             </span>
                         }
                     />
+
+                    <Show when={ face.error() !== null }>
+                        { () => <ChainFaceFailed onRetry={ retryChain } /> }
+                    </Show>
 
                     <Show when={ !account.isWallet() }>
                         { () =>

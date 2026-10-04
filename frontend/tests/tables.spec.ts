@@ -144,6 +144,29 @@ describe('the lobby store', () =>
         expect(server.calls).toEqual(expect.arrayContaining(['tables.claim', 'tables.ready', 'tables.start']));
     });
 
+    it('plays again by saying ready, and starts the next game only when nobody is left to say it', async () =>
+    {
+        const lobby = useLobby();
+        const id = await lobby.host('backgammon', defaultTable('backgammon'), []);
+
+        server.tables[0].chairs[1].who = 'sara.k';
+        server.calls = [];
+
+        await lobby.again(id);
+
+        expect(server.tables[0].chairs[0].ready).toBe(true);
+        expect(server.calls).toContain('tables.ready');
+        expect(server.calls).not.toContain('tables.start');
+
+        server.tables[0].chairs[0].ready = false;
+        server.tables[0].chairs[1].ready = true;
+        server.calls = [];
+
+        await lobby.again(id);
+
+        expect(server.calls).toEqual(expect.arrayContaining(['tables.ready', 'tables.start']));
+    });
+
     it('opens the smallest table of four or more, or the largest the game plays', () =>
     {
         const catalogue = useCatalogue();

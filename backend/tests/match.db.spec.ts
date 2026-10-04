@@ -6,6 +6,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { DataSource } from 'typeorm';
 
 import { entities } from '../src/entities/index.ts';
+import { TableSeat } from '../src/entities/table-seat.entity.ts';
 import { createMatchService } from '../src/domains/match/service.ts';
 import { createSocialService } from '../src/domains/social/service.ts';
 import { SEATED_MAX, createTableService } from '../src/domains/table/service.ts';
@@ -255,6 +256,36 @@ describe.skipIf(!active)('a match, against a real database', () =>
             const stranger = await makeUser();
 
             await expect(matches.start(stranger, tableId)).rejects.toThrow(/no table there/i);
+        });
+
+        it('answers a stranger 404 while a game is running there', async () =>
+        {
+            const { tableId, players } = await seatedTable(2);
+            await matches.start(players[0], tableId);
+            const stranger = await makeUser();
+
+            await expect(matches.start(stranger, tableId)).rejects.toMatchObject({ status: 404, message: 'No table there.' });
+        });
+
+        it('answers somebody who stood up mid-game 404, like a stranger', async () =>
+        {
+            const { tableId, players } = await seatedTable(3);
+            await matches.start(players[0], tableId);
+            await tables.leave(players[1], tableId);
+
+            await expect(matches.start(players[1], tableId)).rejects.toMatchObject({ status: 404, message: 'No table there.' });
+        });
+
+        it('answers somebody in a chair the running game never dealt them 404', async () =>
+        {
+            const { tableId, players } = await seatedTable(3);
+            await matches.start(players[0], tableId);
+            await tables.leave(players[1], tableId);
+            const newcomer = await makeUser();
+
+            await db.getRepository(TableSeat).update({ tableId, seat: 1 }, { userId: newcomer, joinedAt: new Date() });
+
+            await expect(matches.start(newcomer, tableId)).rejects.toMatchObject({ status: 404, message: 'No table there.' });
         });
 
         it('will not start a game that has no engine', async () =>
@@ -677,6 +708,70 @@ describe.skipIf(!active)('a match, against a real database', () =>
                  values ($1, 'ludo', 'standard', 2, '{"rev":0}'::jsonb, 0, now())`,
                 [tableId]
             )).rejects.toThrow();
+        });
+    });
+
+    describe('playing again at the same table', () =>
+    {
+        const readyAt = async (tableId: string) =>
+            (await db.getRepository(TableSeat).find({ where: { tableId }, order: { seat: 'ASC' } })).map((chair) => chair.ready);
+
+        const moverOf = (load: Awaited<ReturnType<typeof matches.start>>) =>
+        {
+            const state = load.state as LudoState;
+            const seat = state.players[state.turn].seat;
+
+            return load.players.find((one) => one.seat === seat)!.user_id;
+        };
+
+        it('keeps everybody ready while the game goes on, and takes it away when the game ends', async () =>
+        {
+            const { tableId, players } = await seatedTable(2);
+            const load = await matches.start(players[0], tableId);
+
+            await matches.act(moverOf(load), load.match.id, { play: ROLL, key: 'rolls-on' });
+
+            expect(await readyAt(tableId)).toEqual([true, true]);
+
+            await matches.act(players[1], load.match.id, { play: null, key: 'gives-up' });
+
+            expect((await matches.view(players[0], load.match.id))!.match.finishedAt).not.toBeNull();
+            expect(await readyAt(tableId)).toEqual([false, false]);
+        });
+
+        it('takes it away when the turn clock ends the game too', async () =>
+        {
+            const { tableId, players } = await seatedTable(2);
+            const load = await matches.start(players[0], tableId);
+            const state = load.state as LudoState;
+
+            await db.query(
+                `update match_players set timeouts = 2 where match_id = $1 and seat = $2`,
+                [load.match.id, state.players[state.turn].seat]
+            );
+            await db.query(`update matches set deadline_at = now() - interval '1 second' where id = $1`, [load.match.id]);
+
+            expect((await matches.expireNext())?.played).toBe(true);
+            expect((await matches.view(players[0], load.match.id))!.match.finishedAt).not.toBeNull();
+            expect(await readyAt(tableId)).toEqual([false, false]);
+        });
+
+        it('refuses one player starting the next game alone, and deals it once everybody says so', async () =>
+        {
+            const { tableId, players } = await seatedTable(2);
+            const first = await matches.start(players[0], tableId);
+
+            await matches.act(players[1], first.match.id, { play: null, key: 'gives-up' });
+            await tables.setReady(players[0], tableId, true);
+
+            await expect(matches.start(players[0], tableId)).rejects.toMatchObject({ status: 409, message: 'Everybody has to be ready first.' });
+            expect(await matches.liveFor(tableId)).toBeNull();
+
+            await tables.setReady(players[1], tableId, true);
+            const next = await matches.start(players[1], tableId);
+
+            expect(next.match.id).not.toBe(first.match.id);
+            expect(next.match.finishedAt).toBeNull();
         });
     });
 

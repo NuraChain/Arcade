@@ -43,6 +43,7 @@ import {
     type Row
 } from '../../game/backgammon-layout.ts';
 import type { MatchView } from '../../api.ts';
+import type { Rematch } from './boards.ts';
 
 type Tone = 'light' | 'dark';
 
@@ -98,7 +99,7 @@ const GAP = 10;
 
 const centreOf = (point: number) => columnOf(point).x + POINT_WIDTH / 2;
 
-export default component BackgammonBoard(props: { match: MatchView; starting?: boolean; onAgain?: () => void; speech?: Record<string, string>; turnMs?: number })
+export default component BackgammonBoard(props: { match: MatchView; starting?: boolean; onAgain?: () => void; rematch?: Rematch; speech?: Record<string, string>; turnMs?: number })
 {
     const locale = useLocale();
     const board = useBoard();
@@ -822,7 +823,7 @@ export default component BackgammonBoard(props: { match: MatchView; starting?: b
 
         <Show when={ over }>
             { () =>
-                <TableResult match={ game } mine={ mine } busy={ props.starting === true } onAgain={ props.onAgain } />
+                <TableResult match={ game } mine={ mine } busy={ props.starting === true } onAgain={ props.onAgain } rematch={ props.rematch } />
             }
         </Show>
     </div>

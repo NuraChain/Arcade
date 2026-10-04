@@ -35,7 +35,7 @@ import { plainOf } from '../../lib/markdown.ts';
 import { holdScreen } from '../../lib/wake-lock.ts';
 import { seatedMax } from '../../lib/open-table.ts';
 import { copyText } from '../../lib/clipboard.ts';
-import { BOARDS, drawable, type BoardComponent } from '../../components/games/boards.ts';
+import { BOARDS, drawable, rematchOf, type BoardComponent, type Rematch } from '../../components/games/boards.ts';
 import { turnMs } from '../../../../backend/src/domains/match/turns.ts';
 
 export default component PlayPage()
@@ -418,10 +418,13 @@ export default component PlayPage()
         draw(want);
     }
 
-    const boardProps = (): { match: MatchView; starting: boolean; onAgain?: () => void; speech: Record<string, string>; turnMs: number } => ({
+    derived rematch = table !== null && seated ? rematchOf(table) : undefined;
+
+    const boardProps = (): { match: MatchView; starting: boolean; onAgain?: () => void; rematch?: Rematch; speech: Record<string, string>; turnMs: number } => ({
         match: board.match()!,
         starting,
-        onAgain: seated ? () => void begin() : undefined,
+        onAgain: seated ? () => void again() : undefined,
+        rematch,
         speech,
         turnMs: turnMs(table?.mode ?? 'live')
     });
@@ -462,7 +465,7 @@ export default component PlayPage()
         }
     }
 
-    const begin = async () =>
+    const starter = (step: (tableId: string) => Promise<void>) => async () =>
     {
         if (table === null || starting)
         {
@@ -473,7 +476,7 @@ export default component PlayPage()
 
         try
         {
-            await lobby.begin(table.id);
+            await step(table.id);
         }
         catch
         {
@@ -484,6 +487,10 @@ export default component PlayPage()
             starting = false;
         }
     };
+
+    const begin = starter((tableId) => lobby.begin(tableId));
+
+    const again = starter((tableId) => lobby.again(tableId));
 
     const copyLink = async () =>
     {

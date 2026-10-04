@@ -22,7 +22,7 @@
  */
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { gzipSync } from 'node:zlib';
-import { dirname, join } from 'node:path';
+import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { POSTERS, fingerprint } from './art/poster.mjs';
@@ -46,7 +46,7 @@ const ROUTE_BUDGET = 15 * KB;
 const SOUND_BUDGET = 160 * KB;
 
 /**
- * Chunks that must NOT be in the landing page's initial set, and why.
+ * Modules that must NOT be in the landing page's initial set, and why.
  *
  * `world` is three.js and is a dynamic import inside `mount`, so it never reaches the prerenderer
  * and never blocks first paint. The other three are the imports CLAUDE.md names as load-bearing:
@@ -55,14 +55,17 @@ const SOUND_BUDGET = 160 * KB;
  * `/api/_manifest` - into a page that is prerendered to a file and is supposed to need no server.
  */
 const MUST_BE_LAZY = [
-    { match: /^world-/, why: 'three.js — dynamic import inside mount, after first paint' },
-    { match: /^app-catalogue-/, why: 'the app message catalogue — only the shell and sign-in import it' },
-    { match: /^session\.store-/, why: 'lib/guards.ts imports session.store.ts dynamically' },
-    { match: /^connect-dialog\.component-/, why: 'public-shell imports connect-dialog dynamically' },
-    { match: /-board-/, why: 'a board renderer — dynamic import inside mount, only once a match is running' },
-    { match: /^api-/, why: 'the typed api client — its top-level await fetches the route manifest' },
-    { match: /^landing-/, why: 'the Persian landing catalogue — loaded only for a Persian reader' }
+    { match: /(^|\/)node_modules\/three\//, why: 'three.js — dynamic import inside mount, after first paint' },
+    { match: /^src\/world\/world\.ts$/, why: 'the world — dynamic import inside mount, after first paint' },
+    { match: /^src\/locales\/app-catalogue\.ts$/, why: 'the app message catalogue — only the shell and sign-in import it' },
+    { match: /^src\/stores\/session\.store\.ts$/, why: 'lib/guards.ts imports session.store.ts dynamically' },
+    { match: /\/connect-dialog\.component\.azeroth$/, why: 'public-shell imports connect-dialog dynamically' },
+    { match: /-board(\.component)?\.(ts|azeroth)$/, why: 'a board renderer — dynamic import inside mount, only once a match is running' },
+    { match: /^src\/api\.ts$/, why: 'the typed api client — its top-level await fetches the route manifest' },
+    { match: /^src\/locales\/fa\/landing\.ts$/, why: 'the Persian landing catalogue — loaded only for a Persian reader' }
 ];
+
+const CHUNK_MODULES = join(DIST, '.vite', 'chunks.json');
 
 const WORLD_BUDGET = 200 * KB;
 
@@ -110,13 +113,43 @@ if (initialBytes > INITIAL_BUDGET)
 }
 
 // ---------------------------------------------------------------- what must not be in it
-for (const rule of MUST_BE_LAZY)
+const chunkModules = existsSync(CHUNK_MODULES) ? JSON.parse(readFileSync(CHUNK_MODULES, 'utf8')) : null;
+
+let initialModules = 0;
+
+if (chunkModules === null)
 {
-    const found = initial.find((name) => rule.match.test(name));
-    if (found !== undefined)
+    problems.push(`${ relative(ROOT, CHUNK_MODULES) } is missing, so nothing said which modules the landing page loads - this check cannot pass by finding nothing`);
+}
+else
+{
+    const built = Object.values(chunkModules).flat();
+    const loaded = initial.flatMap((name) => (chunkModules[`assets/${ name }`] ?? []).map((module) => ({ name, module })));
+
+    initialModules = loaded.length;
+
+    for (const name of initial.filter((one) => chunkModules[`assets/${ one }`] === undefined))
     {
-        problems.push(`${ found } is in the landing page's initial set and must be lazy — ${ rule.why }`);
+        problems.push(`${ name } is in the landing page's initial set but not in ${ relative(ROOT, CHUNK_MODULES) }, so its modules were never read`);
     }
+
+    for (const rule of MUST_BE_LAZY)
+    {
+        if (!built.some((module) => rule.match.test(module)))
+        {
+            problems.push(`no module in the client build matches ${ rule.match }, so the rule for ${ rule.why.split(' — ')[0] } guards nothing - has it moved?`);
+        }
+
+        for (const found of loaded.filter((one) => rule.match.test(one.module)))
+        {
+            problems.push(`${ found.module } is in the landing page's initial set (${ found.name }) and must be lazy — ${ rule.why }`);
+        }
+    }
+}
+
+if (initial.length > 1)
+{
+    problems.push(`the landing page's initial set is ${ initial.length } chunks, not one — every page loads every module the entry reaches statically, so the boot group in vite.config.ts keeps them together`);
 }
 
 // ---------------------------------------------------------------- per-chunk ceilings
@@ -312,6 +345,7 @@ const shell = all.find((name) => /^app-shell\.component-/.test(name));
 const pages = all.filter((name) => /\.page-/.test(name)).map((name) => gzip(name));
 
 console.log(`  initial JS   ${ size(initialBytes) } / ${ size(INITIAL_BUDGET) }  (${ initial.length } chunks)`);
+console.log(`  kept lazy    ${ MUST_BE_LAZY.length } rules over the ${ initialModules } modules those chunks hold`);
 console.log(`  app shell    ${ shell === undefined ? 'absent' : size(gzip(shell)) } / ${ size(SHELL_BUDGET) }`);
 console.log(`  routes       ${ pages.length } chunks, largest ${ size(Math.max(0, ...pages)) } / ${ size(ROUTE_BUDGET) }`);
 console.log(`  board        ${ boardChunk === null ? 'absent' : size(gzip(boardChunk)) } / ${ size(BOARD_BUDGET) }`);
