@@ -6,6 +6,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { DataSource } from 'typeorm';
 
 import { entities } from '../src/entities/index.ts';
+import { TableSeat } from '../src/entities/table-seat.entity.ts';
 import { createMatchService } from '../src/domains/match/service.ts';
 import { createSocialService } from '../src/domains/social/service.ts';
 import { SEATED_MAX, createTableService } from '../src/domains/table/service.ts';
@@ -255,6 +256,36 @@ describe.skipIf(!active)('a match, against a real database', () =>
             const stranger = await makeUser();
 
             await expect(matches.start(stranger, tableId)).rejects.toThrow(/no table there/i);
+        });
+
+        it('answers a stranger 404 while a game is running there', async () =>
+        {
+            const { tableId, players } = await seatedTable(2);
+            await matches.start(players[0], tableId);
+            const stranger = await makeUser();
+
+            await expect(matches.start(stranger, tableId)).rejects.toMatchObject({ status: 404, message: 'No table there.' });
+        });
+
+        it('answers somebody who stood up mid-game 404, like a stranger', async () =>
+        {
+            const { tableId, players } = await seatedTable(3);
+            await matches.start(players[0], tableId);
+            await tables.leave(players[1], tableId);
+
+            await expect(matches.start(players[1], tableId)).rejects.toMatchObject({ status: 404, message: 'No table there.' });
+        });
+
+        it('answers somebody in a chair the running game never dealt them 404', async () =>
+        {
+            const { tableId, players } = await seatedTable(3);
+            await matches.start(players[0], tableId);
+            await tables.leave(players[1], tableId);
+            const newcomer = await makeUser();
+
+            await db.getRepository(TableSeat).update({ tableId, seat: 1 }, { userId: newcomer, joinedAt: new Date() });
+
+            await expect(matches.start(newcomer, tableId)).rejects.toMatchObject({ status: 404, message: 'No table there.' });
         });
 
         it('will not start a game that has no engine', async () =>

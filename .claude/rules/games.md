@@ -1698,7 +1698,12 @@ already sitting at it, which `visibleTo` gives for nothing.
 `visibleTo`, so the ORDER it refused things in told a stranger holding an id whether the table was
 open, closed, or of a game with no engine - and the 403 that finally stopped them confirmed it was
 there. Being seated is asked first now and a no is a 404, which needs no visibility check of its
-own: sitting at a table is the strongest form of being able to see one. `/matches/:id/watch` had the
+own: sitting at a table is the strongest form of being able to see one. FIRST means before the live
+match too: for a while the route looked for a running game before anything else, and answered a
+stranger holding the id "You are not in that game" with a 403 - so a table with a game on it was
+still told apart from a missing one, and a player who had stood up mid-game was handed the board
+they had walked away from. Anybody not in a chair is answered 404, and so is somebody in a chair the
+running game never dealt them. `match.db.spec.ts` holds all three. `/matches/:id/watch` had the
 same shape written as an optimisation - `found.live && ...` - so a FINISHED match skipped the table
 check entirely and any signed-in caller holding a match id could read the final board of a game
 played at a private room table. A game being over does not make the room it was played in public.
