@@ -39,6 +39,24 @@ shape push already has without VAPID keys. What it must never do is answer "nobo
 for a read it could not MAKE: a dropped rpc throws and the page renders the failure, which is the
 rule the second audit wrote down when the leaderboard rendered a refused fetch as an empty world.
 
+**Every chain read goes through `boundedClient` (`backend/src/chain/rpc.ts`), and it is built per
+operation.** The profile read, the publish lookup, an NFT's `tokenURI` and the contract-wallet check
+all used to make their own viem client, and only the last was bounded: `/api/chain/people/:handle`
+ran on viem's defaults (10 s, three retries, about 41 s) and the NFT reader on 8 s with three
+retries, so against an rpc that takes the connection and never answers, both answered 500 long after
+the browser's 15-second `REQUEST_MS` had given up, and the QA matrix logged it on `/app/me`. The
+shared client has no retries, a 4-second limit on each request that covers the response body too, an
+8-second `AbortSignal` over everything one operation asks, and `ccipRead: false`. It is built for
+each read rather than kept, because a deadline signal made once at startup would fire eight seconds
+later and refuse every read after that. None of these reads use multicall or batching. The 4-second
+limit on each request is what makes a read fail fast. Every operation today asks at most twice, so
+two slow requests reach eight seconds on their own and the deadline never fires first. It is the
+ceiling for an operation that asks more, and `tests/chain-rpc.spec.ts` holds it there: three
+requests answered after 3 seconds each, and the third is refused at eight. The silent and stalled
+cases in `chain-profile.spec.ts`, `nfts.spec.ts` and `identity.spec.ts` must finish under 6 seconds,
+so a regression to 8 fails them. Failing fast does not change what failing means: the profile still
+throws, and the page still has to render that failure.
+
 **The @handle and the on-chain username are two namespaces and stay that way.** A handle is 2..32 in
 any script — Persian handles are a feature this file describes and `naming.db.spec.ts` pins — and a
 registry username is 3..32 of `[a-z0-9_]`, lower-cased, never starting with `0x`. They cannot be one
@@ -154,6 +172,12 @@ address owns without an indexer. The name and the picture are `tokenURI`/`uri` r
 `NURA_RPC_URL`, then the metadata JSON. With the explorer unset the answer is `configured: false`, the
 stat is not drawn and the page says the server reads no NFTs - never "this wallet is empty".
 
+**A token the chain could not name is asked about again next time.** The metadata cache keeps an
+answer for an hour. That is right when the contract answered (a revert, or nothing at all, is
+`refusedByContract`). It is wrong when the call could not be made: with no retries now, one dropped
+request would leave a token nameless for an hour. So a timeout or an HTTP error returns a nameless
+token for this response only, and the next view asks the chain again.
+
 **A picture is fetched by this server and never by the reader's browser.** Metadata points anywhere
 its minter liked, so a browser told to load it would hand every viewer's address to a stranger's
 host. `GET /api/nfts/image/:contract/:tokenId` answers only a token the signed-in wallet HOLDS - with
@@ -161,9 +185,21 @@ a bare session check it was an open fetch proxy, since anybody can sit down as a
 deploy a contract whose `tokenURI` names any host - and the fetch behind it is the SSRF-guarded one: `https` only (`ipfs://` and `ar://` go through public gateways), a DNS
 lookup that refuses any private, loopback, link-local or mapped address, the same refusal for an IP
 written into the url itself (`allowedUrl` - `request` skips the lookup for a literal), three
-redirects at most, size caps and timeouts. The bytes are sniffed and only PNG, JPEG, WebP and GIF
+redirects at most, size caps and one deadline. The bytes are sniffed and only PNG, JPEG, WebP and GIF
 come back, never SVG, served `nosniff` with `default-src 'none'`. `tests/nfts.spec.ts` in each half
 pins the replay, the guard and the page.
+
+**A metadata host gets eight seconds of wall clock, whatever it sends.** `fetchPublic` used to pass
+`timeout` to `https.request`, and that is a socket IDLE timer: it fires only after 8 seconds with no
+bytes, and each redirect started a fresh one. Anybody can mint a token whose `tokenURI` names a host
+that sends one byte every 7 seconds. Each view of `/app/me/nfts` then held a socket per token for as
+long as that host liked, and under systemd's 1024 open files the api would stop answering. Now one
+`AbortSignal` is passed as the request's `signal` and down through every redirect. When it fires the
+request is destroyed, and trickled bytes do not move it. `meta()` also shares a read that is already
+in flight, so repeated views of one token open one socket, not one each. `nfts.spec.ts` points
+`node:https` at a local host for this, because the SSRF guard rightly refuses loopback. A host that
+trickles is dropped at eight seconds, and redirects that would take longer than the deadline are cut
+short.
 
 ## The admin
 
@@ -271,10 +307,15 @@ key-holding wallet needs nothing here.
 
 The contract branch is small, bounded and asks nothing it does not need:
 
-- **One deadline for all of it.** The transport has a 4-second timeout, no retries, and an
-  `AbortSignal` of 8 seconds covering every request it makes - viem's own timeout stops at the
-  response HEADERS, so a node that sends headers and stalls the body would otherwise hold sign-in
-  for undici's five minutes.
+- **One deadline for all of it.** This is `boundedClient`, the client every chain read uses. Each
+  request has 4 seconds, body included. There are no retries, and an `AbortSignal` of 8 seconds
+  covers every request one verification makes. viem's own timeout stops at the response HEADERS, so
+  a node that sends headers and stalls the body would otherwise hold sign-in for undici's five
+  minutes. Do not pass the signal in `fetchOptions`. Once `fetchOptions.signal` is set, viem gives
+  fetch that signal INSTEAD of its own, and its timeout then aborts nothing. Until 2026-10-04 that
+  made the 4-second limit here really 8 seconds. The signals are now combined in `fetchFn`. A
+  verification asks at most twice, so it is the 4-second limit that fails a silent or stalled chain
+  in about four seconds, and the identity tests fail at six.
 - **No CCIP-Read, ever.** `ccipRead: false`. viem follows an EIP-3668 `OffchainLookup` revert by
   default, so the direct ERC-1271 call would let any contract anybody deploys make this server fetch
   the urls it names - cloud metadata, the api's own loopback, a tarpit - with no timeout, no size cap

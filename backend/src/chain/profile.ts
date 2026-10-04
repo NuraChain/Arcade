@@ -1,6 +1,7 @@
-import { createPublicClient, encodeFunctionData, http, isAddress, parseAbi, type Address, type PublicClient } from 'viem';
+import { encodeFunctionData, isAddress, parseAbi, type Address } from 'viem';
 
 import type { ChainCall, ChainProfile, PersonRecord } from '../schemas.ts';
+import { boundedClient } from './rpc.ts';
 
 export const RECORD_KEY = 'games.nura.record';
 
@@ -46,7 +47,7 @@ export function recordValue(record: PersonRecord | null)
  * fallback to the default - and not storage the core has a struct for. The core stores values
  * addressed by (profile, key, language) and gives them no schema, which is the whole design.
  */
-const LENS_ABI = parseAbi([
+export const LENS_ABI = parseAbi([
     'struct ProfileView { uint256 id; address owner; string username; uint64 createdAt; uint64 updatedAt; string displayName; string bio; string avatar; string cover; string location; string jobTitle; string company; }',
     'function getProfile(address owner, string lang) view returns (ProfileView)'
 ]);
@@ -153,15 +154,6 @@ export function createChainProfiles(settings: ChainSettings): ChainProfiles
     const registry = settings.registry as Address;
     const lens = settings.lens as Address;
 
-    let client: PublicClient | null = null;
-
-    /** Built on first use, so an unconfigured deployment opens no transport at all. */
-    const reader = () =>
-    {
-        client ??= createPublicClient({ transport: http(settings.rpcUrl) });
-        return client;
-    };
-
     return {
         configured,
         registry: configured ? registry : '',
@@ -173,7 +165,8 @@ export function createChainProfiles(settings: ChainSettings): ChainProfiles
                 return null;
             }
 
-            const view = await reader().readContract({
+            const chain = boundedClient(settings.rpcUrl);
+            const view = await chain.readContract({
                 address: lens,
                 abi: LENS_ABI,
                 functionName: 'getProfile',
@@ -187,7 +180,7 @@ export function createChainProfiles(settings: ChainSettings): ChainProfiles
                 return null;
             }
 
-            const record = await reader().readContract({
+            const record = await chain.readContract({
                 address: registry,
                 abi: REGISTRY_ABI,
                 functionName: 'getField',
@@ -217,7 +210,7 @@ export function createChainProfiles(settings: ChainSettings): ChainProfiles
                 return [];
             }
 
-            const profileId = await reader().readContract({
+            const profileId = await boundedClient(settings.rpcUrl).readContract({
                 address: registry,
                 abi: REGISTRY_ABI,
                 functionName: 'profileIdOf',

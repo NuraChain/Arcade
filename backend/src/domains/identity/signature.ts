@@ -1,16 +1,8 @@
 import {
-    AbiDecodingDataSizeTooSmallError,
-    AbiDecodingZeroDataError,
-    BaseError,
-    ContractFunctionRevertedError,
-    ContractFunctionZeroDataError,
-    createPublicClient,
     encodeDeployData,
     erc6492SignatureValidatorAbi,
     erc6492SignatureValidatorByteCode,
-    ExecutionRevertedError,
     hashMessage,
-    http,
     isErc6492Signature,
     parseAbi,
     verifyMessage,
@@ -18,6 +10,7 @@ import {
     type Hex
 } from 'viem';
 
+import { boundedClient, refusedByContract } from '../../chain/rpc.ts';
 import { normalizeAddress } from '../../lib/crypto.ts';
 import { deviceLine } from '../device/resource.ts';
 
@@ -64,21 +57,9 @@ export type VerifyResult =
     | { ok: true; attestation: 'wallet' | 'contract' }
     | { ok: false; reason: 'bad-signature' | 'unreachable-chain' };
 
-const CHAIN_CALL_TIMEOUT_MS = 4_000;
-
-const CHAIN_DEADLINE_MS = 2 * CHAIN_CALL_TIMEOUT_MS;
-
 const ERC1271_MAGIC = '0x1626ba7e';
 
 const ERC1271 = parseAbi(['function isValidSignature(bytes32 hash, bytes signature) view returns (bytes4)']);
-
-const refusedByContract = (error: unknown) =>
-    error instanceof BaseError && error.walk((cause) =>
-        cause instanceof ExecutionRevertedError
-        || (cause instanceof ContractFunctionRevertedError && cause.raw !== undefined && cause.raw !== '0x')
-        || cause instanceof ContractFunctionZeroDataError
-        || cause instanceof AbiDecodingZeroDataError
-        || cause instanceof AbiDecodingDataSizeTooSmallError) !== null;
 
 export async function verifySignature(input: VerifyInput): Promise<VerifyResult>
 {
@@ -94,14 +75,7 @@ export async function verifySignature(input: VerifyInput): Promise<VerifyResult>
         return { ok: false, reason: 'bad-signature' };
     }
 
-    const client = createPublicClient({
-        ccipRead: false,
-        transport: http(input.rpcUrl, {
-            timeout: CHAIN_CALL_TIMEOUT_MS,
-            retryCount: 0,
-            fetchOptions: { signal: AbortSignal.timeout(CHAIN_DEADLINE_MS) }
-        })
-    });
+    const client = boundedClient(input.rpcUrl);
     const hash = hashMessage(input.message);
     try
     {

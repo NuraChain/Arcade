@@ -1,7 +1,9 @@
 import { lookup as dnsLookup, type LookupAddress } from 'node:dns';
 import { request } from 'node:https';
 import { BlockList, isIP, type LookupFunction } from 'node:net';
-import { createPublicClient, http, isAddress, parseAbi, type Address, type PublicClient } from 'viem';
+import { isAddress, parseAbi, type Address } from 'viem';
+
+import { boundedClient, refusedByContract } from './rpc.ts';
 
 export type NftStandard = 'erc721' | 'erc1155';
 
@@ -229,7 +231,7 @@ export function allowedUrl(uri: string): URL | null
     }
 }
 
-export function fetchPublic(uri: string, maxBytes: number, hops = REDIRECTS): Promise<Buffer | null>
+export function fetchPublic(uri: string, maxBytes: number, deadline = AbortSignal.timeout(FETCH_TIMEOUT_MS), hops = REDIRECTS): Promise<Buffer | null>
 {
     if (uri.startsWith('data:'))
     {
@@ -237,21 +239,21 @@ export function fetchPublic(uri: string, maxBytes: number, hops = REDIRECTS): Pr
     }
 
     const url = allowedUrl(uri);
-    if (url === null)
+    if (url === null || deadline.aborted)
     {
         return Promise.resolve(null);
     }
 
     return new Promise((resolve) =>
     {
-        const req = request(url, { lookup: publicLookup, timeout: FETCH_TIMEOUT_MS, headers: { accept: '*/*' } }, (res) =>
+        const req = request(url, { lookup: publicLookup, signal: deadline, headers: { accept: '*/*' } }, (res) =>
         {
             const status = res.statusCode ?? 0;
             if (status >= 300 && status < 400 && res.headers.location !== undefined && hops > 0)
             {
                 res.resume();
                 const next = resolveUri(new URL(res.headers.location, url).toString());
-                resolve(next === null || next.startsWith('data:') ? null : fetchPublic(next, maxBytes, hops - 1));
+                resolve(next === null || next.startsWith('data:') ? null : fetchPublic(next, maxBytes, deadline, hops - 1));
                 return;
             }
             if (status !== 200)
@@ -276,7 +278,6 @@ export function fetchPublic(uri: string, maxBytes: number, hops = REDIRECTS): Pr
             res.on('end', () => resolve(Buffer.concat(chunks)));
             res.on('error', () => resolve(null));
         });
-        req.on('timeout', () => req.destroy());
         req.on('error', () => resolve(null));
         req.end();
     });
@@ -299,15 +300,10 @@ export interface NftReader
 export function createNftReader(settings: NftSettings): NftReader
 {
     const configured = settings.rpcUrl !== '' && settings.explorerApi !== '';
-    let client: PublicClient | null = null;
-    const reader = () =>
-    {
-        client ??= createPublicClient({ transport: http(settings.rpcUrl, { timeout: FETCH_TIMEOUT_MS }) });
-        return client;
-    };
 
     const held = new Map<string, { at: number; value: NftHolding[] }>();
     const metas = new Map<string, { at: number; value: NftMeta }>();
+    const asking = new Map<string, Promise<NftMeta>>();
 
     const transfers = async (action: string, address: string) =>
     {
@@ -341,7 +337,7 @@ export function createNftReader(settings: NftSettings): NftReader
     const uriOf = async (contract: string, tokenId: string, standard: NftStandard) =>
     {
         const id = BigInt(tokenId);
-        const raw = await reader().readContract({
+        const raw = await boundedClient(settings.rpcUrl).readContract({
             address: contract as Address,
             abi: ABI,
             functionName: standard === 'erc721' ? 'tokenURI' : 'uri',
@@ -360,17 +356,16 @@ export function createNftReader(settings: NftSettings): NftReader
         return value;
     };
 
-    const meta: NftReader['meta'] = async ({ contract, tokenId, standard }) =>
+    const read = async (key: string, { contract, tokenId, standard }: Pick<NftHolding, 'contract' | 'tokenId' | 'standard'>) =>
     {
-        const key = `${ standard }:${ contract }:${ tokenId }`;
-        const cached = metas.get(key);
-        if (cached !== undefined && Date.now() - cached.at < META_TTL_MS)
+        const uri = await uriOf(contract, tokenId, standard).catch((error: unknown) => refusedByContract(error) ? '' : null);
+        if (uri === null)
         {
-            return cached.value;
+            return { name: '', image: '' };
         }
         try
         {
-            const location = resolveUri(await uriOf(contract, tokenId, standard));
+            const location = resolveUri(uri);
             const body = location === null ? null : await fetchPublic(location, META_BYTES);
             const parsed = body === null ? null : JSON.parse(body.toString('utf8')) as { name?: unknown; image?: unknown; image_url?: unknown };
             const image = typeof parsed?.image === 'string' ? parsed.image : typeof parsed?.image_url === 'string' ? parsed.image_url : '';
@@ -383,6 +378,24 @@ export function createNftReader(settings: NftSettings): NftReader
         {
             return remember(key, { name: '', image: '' });
         }
+    };
+
+    const meta: NftReader['meta'] = (holding) =>
+    {
+        const key = `${ holding.standard }:${ holding.contract }:${ holding.tokenId }`;
+        const cached = metas.get(key);
+        if (cached !== undefined && Date.now() - cached.at < META_TTL_MS)
+        {
+            return Promise.resolve(cached.value);
+        }
+        const inFlight = asking.get(key);
+        if (inFlight !== undefined)
+        {
+            return inFlight;
+        }
+        const reading = read(key, holding).finally(() => asking.delete(key));
+        asking.set(key, reading);
+        return reading;
     };
 
     return {

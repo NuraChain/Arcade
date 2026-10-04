@@ -1,8 +1,9 @@
-import { decodeFunctionData } from 'viem';
-import { describe, expect, it } from 'vitest';
+import { decodeFunctionData, encodeFunctionResult, toFunctionSelector, type Address } from 'viem';
+import { afterEach, describe, expect, it } from 'vitest';
 
-import { callsFor, createChainProfiles, RECORD_KEY, recordValue, REGISTRY_ABI } from '../src/chain/profile.ts';
+import { callsFor, createChainProfiles, LENS_ABI, RECORD_KEY, recordValue, REGISTRY_ABI } from '../src/chain/profile.ts';
 import type { PersonRecord } from '../src/schemas.ts';
+import { callOf, closeChains, fakeChain, lookupGateway, offchainLookup, silentChain, type Answer, type Rpc } from './fake-chain.ts';
 
 const REGISTRY = '0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512';
 const LENS = '0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0';
@@ -199,5 +200,130 @@ describe('a deployment with no registry behind it', () =>
 
         await expect(chain.profile('', 'en')).resolves.toBeNull();
         await expect(chain.publish({ address: '', ...fieldsOf('Dana', '') })).resolves.toEqual([]);
+    });
+});
+
+describe('reading a registry that may not answer', () =>
+{
+    const OWNER: Address = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266';
+    const RECORD = '{"v":1,"level":4}';
+    const GET_PROFILE = toFunctionSelector('getProfile(address,string)');
+
+    afterEach(closeChains);
+
+    const viewOf = (id: bigint) => ({
+        id,
+        owner: OWNER,
+        username: 'dana',
+        createdAt: 1_700_000_000n,
+        updatedAt: 1_760_000_000n,
+        displayName: 'Dana Whitfield',
+        bio: 'Backgammon, mostly.',
+        avatar: PICTURE,
+        cover: '',
+        location: 'Tehran',
+        jobTitle: '',
+        company: ''
+    });
+
+    const registry = (id: bigint, heard: string[]) => (rpc: Rpc): Answer =>
+    {
+        const { to, data } = callOf(rpc);
+        if (to?.toLowerCase() === LENS.toLowerCase())
+        {
+            const { args } = decodeFunctionData({ abi: LENS_ABI, data });
+            heard.push(`getProfile ${ args.join(' ') }`);
+            return { result: encodeFunctionResult({ abi: LENS_ABI, functionName: 'getProfile', result: viewOf(id) }) };
+        }
+        const call = decodeFunctionData({ abi: REGISTRY_ABI, data });
+        heard.push(`${ call.functionName } ${ (call.args ?? []).map((arg) => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' ') }`);
+        return call.functionName === 'getField'
+            ? { result: encodeFunctionResult({ abi: REGISTRY_ABI, functionName: 'getField', result: RECORD }) }
+            : { result: encodeFunctionResult({ abi: REGISTRY_ABI, functionName: 'profileIdOf', result: id }) };
+    };
+
+    it('reads the profile through the lens in the reader\'s language, and the record through the registry', async () =>
+    {
+        const heard: string[] = [];
+        const fake = await fakeChain(registry(7n, heard));
+        const chain = createChainProfiles({ rpcUrl: fake.url, registry: REGISTRY, lens: LENS });
+
+        await expect(chain.profile(OWNER, 'fa')).resolves.toEqual({
+            id: '7',
+            owner: OWNER,
+            username: 'dana',
+            displayName: 'Dana Whitfield',
+            bio: 'Backgammon, mostly.',
+            avatar: PICTURE,
+            cover: '',
+            location: 'Tehran',
+            jobTitle: '',
+            company: '',
+            record: RECORD,
+            updatedAt: new Date(1_760_000_000_000).toISOString()
+        });
+        expect(heard).toEqual([`getProfile ${ OWNER } fa`, `getField 7 ${ RECORD_KEY }`]);
+    });
+
+    it('answers no profile for an address the lens has never seen, and asks the registry nothing', async () =>
+    {
+        const heard: string[] = [];
+        const fake = await fakeChain(registry(0n, heard));
+
+        await expect(createChainProfiles({ rpcUrl: fake.url, registry: REGISTRY, lens: LENS }).profile(OWNER, 'en')).resolves.toBeNull();
+        expect(fake.asked).toEqual(['eth_call']);
+    });
+
+    it('composes the write from the profile id the registry holds', async () =>
+    {
+        const fake = await fakeChain(registry(7n, []));
+        const [call] = await createChainProfiles({ rpcUrl: fake.url, registry: REGISTRY, lens: LENS }).publish({ address: OWNER, ...fieldsOf('Dana', 'Hello') });
+
+        expect(call.kind).toBe('fields');
+        expect(decode(call.data).args[0]).toBe(7n);
+    });
+
+    it('fails both reads against a chain that takes the connection and never answers, well inside the browser\'s patience', async () =>
+    {
+        const chain = createChainProfiles({ rpcUrl: await silentChain(), registry: REGISTRY, lens: LENS });
+        const started = performance.now();
+
+        const [profile, publish] = await Promise.allSettled([chain.profile(OWNER, 'en'), chain.publish({ address: OWNER, ...fieldsOf('Dana', '') })]);
+        expect(profile.status).toBe('rejected');
+        expect(publish.status).toBe('rejected');
+        expect(performance.now() - started).toBeLessThan(6_000);
+    }, 12_000);
+
+    it('fails a read against a chain that sends the headers and then stalls the body, within the same patience', async () =>
+    {
+        const fake = await fakeChain(() => 'stall');
+        const chain = createChainProfiles({ rpcUrl: fake.url, registry: REGISTRY, lens: LENS });
+        const started = performance.now();
+
+        await expect(chain.profile(OWNER, 'en')).rejects.toThrow();
+        expect(performance.now() - started).toBeLessThan(6_000);
+    }, 12_000);
+
+    it('fails a read whose answer stalls after the first call has landed, within the same patience', async () =>
+    {
+        const fake = await fakeChain((rpc) => callOf(rpc).data.startsWith(GET_PROFILE)
+            ? { result: encodeFunctionResult({ abi: LENS_ABI, functionName: 'getProfile', result: viewOf(7n) }) }
+            : 'stall');
+        const chain = createChainProfiles({ rpcUrl: fake.url, registry: REGISTRY, lens: LENS });
+        const started = performance.now();
+
+        await expect(chain.profile(OWNER, 'en')).rejects.toThrow();
+        expect(fake.asked).toEqual(['eth_call', 'eth_call']);
+        expect(performance.now() - started).toBeLessThan(6_000);
+    }, 12_000);
+
+    it('never follows an offchain lookup the lens answers with, and fails the read instead', async () =>
+    {
+        const gateway = await lookupGateway();
+        const fake = await fakeChain((rpc) => callOf(rpc).data.startsWith(GET_PROFILE) ? offchainLookup(LENS, gateway.url) : { result: '0x' });
+
+        await expect(createChainProfiles({ rpcUrl: fake.url, registry: REGISTRY, lens: LENS }).profile(OWNER, 'en')).rejects.toThrow();
+        expect(gateway.hits()).toBe(0);
+        expect(fake.asked).toEqual(['eth_call']);
     });
 });

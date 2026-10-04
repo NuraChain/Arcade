@@ -1,13 +1,11 @@
-import { createServer as httpServer, type Server, type ServerResponse } from 'node:http';
-import { createServer as tcpServer, type AddressInfo, type Socket } from 'node:net';
-
 import { afterEach, describe, expect, it } from 'vitest';
-import { decodeFunctionData, encodeErrorResult, hashMessage, parseAbi, serializeErc6492Signature, type Hex } from 'viem';
+import { decodeFunctionData, hashMessage, parseAbi, serializeErc6492Signature, type Hex } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 
 import { signInText, verifySignature } from '../src/domains/identity/signature.ts';
 import { candidatesFor, checkHandle, handleFromAddress, handleFromName, normalizeHandle } from '../src/domains/identity/handle.ts';
 import { hashToken, isAddress, mintNonce, mintToken, normalizeAddress, secretsMatch } from '../src/lib/crypto.ts';
+import { callOf, closeChains, fakeChain, lookupGateway, offchainLookup, silentChain, type Answer, type Rpc } from './fake-chain.ts';
 
 /**
  * A real key, fixed so the vectors are reproducible. It controls nothing: it exists only to
@@ -121,71 +119,7 @@ describe('signature verification with a chain configured', () =>
     const NOT_MAGIC = `0xffffffff${ '0'.repeat(56) }`;
     const ERC1271 = parseAbi(['function isValidSignature(bytes32 hash, bytes signature) view returns (bytes4)']);
 
-    type Rpc = { method: string; params: unknown[] };
-    type Answer = { result: unknown } | { error: { code: number; message: string; data?: string } } | { status: number } | 'stall';
-
-    const open: Array<() => void> = [];
-
-    afterEach(() =>
-    {
-        open.splice(0).forEach((close) => close());
-    });
-
-    const listen = async (server: Server | ReturnType<typeof tcpServer>) =>
-    {
-        await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
-        return `http://127.0.0.1:${ (server.address() as AddressInfo).port }/`;
-    };
-
-    const silentChain = async () =>
-    {
-        const sockets = new Set<Socket>();
-        const server = tcpServer((socket) => sockets.add(socket));
-        open.push(() =>
-        {
-            sockets.forEach((socket) => socket.destroy());
-            server.close();
-        });
-        return listen(server);
-    };
-
-    const chain = async (answer: (rpc: Rpc) => Answer) =>
-    {
-        const asked: string[] = [];
-        const held = new Set<ServerResponse>();
-        const server = httpServer(async (request, response) =>
-        {
-            let body = '';
-            for await (const chunk of request)
-            {
-                body += String(chunk);
-            }
-            const rpc = JSON.parse(body) as Rpc & { id: number };
-            asked.push(rpc.method);
-            const reply = answer(rpc);
-            if (reply === 'stall')
-            {
-                held.add(response);
-                response.writeHead(200, { 'content-type': 'application/json' });
-                response.write('{"jsonrpc":"2.0",');
-                return;
-            }
-            if ('status' in reply)
-            {
-                response.writeHead(reply.status);
-                response.end();
-                return;
-            }
-            response.setHeader('content-type', 'application/json');
-            response.end(JSON.stringify({ jsonrpc: '2.0', id: rpc.id, ...reply }));
-        });
-        open.push(() =>
-        {
-            held.forEach((response) => response.destroy());
-            server.close();
-        });
-        return { url: await listen(server), asked };
-    };
+    afterEach(closeChains);
 
     const deployed = (call: (to: string | undefined, data: Hex) => Answer) => (rpc: Rpc): Answer =>
     {
@@ -193,7 +127,7 @@ describe('signature verification with a chain configured', () =>
         {
             return { result: '0x6080' };
         }
-        const { to, data } = rpc.params[0] as { to?: string; data: Hex };
+        const { to, data } = callOf(rpc);
         return call(to, data);
     };
 
@@ -226,7 +160,7 @@ describe('signature verification with a chain configured', () =>
     {
         const message = challenge();
         const signature = await signer.signMessage({ message: challenge('evil.example') });
-        const fake = await chain((rpc) => ({ result: rpc.method === 'eth_getCode' ? '0x' : MAGIC }));
+        const fake = await fakeChain((rpc) => ({ result: rpc.method === 'eth_getCode' ? '0x' : MAGIC }));
 
         const verdict = await verifySignature({ address: signer.address, message, signature, rpcUrl: fake.url });
         expect(verdict).toEqual({ ok: false, reason: 'bad-signature' });
@@ -236,7 +170,7 @@ describe('signature verification with a chain configured', () =>
     it('asks a deployed contract wallet whether it signed exactly this message with exactly this signature', async () =>
     {
         const { message, signature } = await signed();
-        const fake = await chain(deployed((to, data) =>
+        const fake = await fakeChain(deployed((to, data) =>
         {
             const { args } = decodeFunctionData({ abi: ERC1271, data });
             const asked = to?.toLowerCase() === CONTRACT && args[0] === hashMessage(message) && args[1] === signature;
@@ -251,7 +185,7 @@ describe('signature verification with a chain configured', () =>
     it('refuses a contract wallet that answers anything but the ERC-1271 magic value', async () =>
     {
         const { message, signature } = await signed();
-        const fake = await chain(deployed(() => ({ result: NOT_MAGIC })));
+        const fake = await fakeChain(deployed(() => ({ result: NOT_MAGIC })));
 
         const verdict = await verifySignature({ address: CONTRACT, message, signature, rpcUrl: fake.url });
         expect(verdict).toEqual({ ok: false, reason: 'bad-signature' });
@@ -268,7 +202,7 @@ describe('signature verification with a chain configured', () =>
 
         for (const refusal of refusals)
         {
-            const fake = await chain(deployed(() => refusal));
+            const fake = await fakeChain(deployed(() => refusal));
             const verdict = await verifySignature({ address: CONTRACT, message, signature, rpcUrl: fake.url });
             expect(verdict, JSON.stringify(refusal)).toEqual({ ok: false, reason: 'bad-signature' });
         }
@@ -285,7 +219,7 @@ describe('signature verification with a chain configured', () =>
 
         for (const failure of failures)
         {
-            const fake = await chain(deployed(() => failure));
+            const fake = await fakeChain(deployed(() => failure));
             const verdict = await verifySignature({ address: CONTRACT, message, signature, rpcUrl: fake.url });
             expect(verdict, JSON.stringify(failure)).toEqual({ ok: false, reason: 'unreachable-chain' });
         }
@@ -294,30 +228,18 @@ describe('signature verification with a chain configured', () =>
     it('never follows an offchain lookup a contract asks for, and calls that a bad signature', async () =>
     {
         const { message, signature } = await signed();
-        let hits = 0;
-        const gateway = httpServer((_request, response) =>
-        {
-            hits += 1;
-            response.end('{"data":"0x"}');
-        });
-        const gatewayUrl = await listen(gateway);
-        open.push(() => gateway.close());
-        const lookup = encodeErrorResult({
-            abi: parseAbi(['error OffchainLookup(address sender, string[] urls, bytes callData, bytes4 callbackFunction, bytes extraData)']),
-            errorName: 'OffchainLookup',
-            args: [CONTRACT as Hex, [`${ gatewayUrl }{sender}/{data}`], '0xdeadbeef', '0x12345678', '0x']
-        });
-        const fake = await chain(deployed(() => ({ error: { code: 3, message: 'execution reverted', data: lookup } })));
+        const gateway = await lookupGateway();
+        const fake = await fakeChain(deployed(() => offchainLookup(CONTRACT, gateway.url)));
 
         const verdict = await verifySignature({ address: CONTRACT, message, signature, rpcUrl: fake.url });
         expect(verdict).toEqual({ ok: false, reason: 'bad-signature' });
-        expect(hits).toBe(0);
+        expect(gateway.hits()).toBe(0);
     });
 
     it('lets a contract wallet that is not deployed yet prove itself through its ERC-6492 wrapper', async () =>
     {
         const { message, signature } = await counterfactual();
-        const fake = await chain((rpc) => ({ result: (rpc.params[0] as { to?: string }).to === undefined ? `0x${ '1'.padStart(64, '0') }` : '0x' }));
+        const fake = await fakeChain((rpc) => ({ result: (rpc.params[0] as { to?: string }).to === undefined ? `0x${ '1'.padStart(64, '0') }` : '0x' }));
 
         const verdict = await verifySignature({ address: CONTRACT, message, signature, rpcUrl: fake.url });
         expect(verdict).toEqual({ ok: true, attestation: 'contract' });
@@ -327,7 +249,7 @@ describe('signature verification with a chain configured', () =>
     it('says the chain was unreachable, not that an ERC-6492 signature was wrong, when the chain refuses the check', async () =>
     {
         const { message, signature } = await counterfactual();
-        const fake = await chain(() => ({ status: 413 }));
+        const fake = await fakeChain(() => ({ status: 413 }));
 
         const verdict = await verifySignature({ address: CONTRACT, message, signature, rpcUrl: fake.url });
         expect(verdict).toEqual({ ok: false, reason: 'unreachable-chain' });
@@ -340,19 +262,19 @@ describe('signature verification with a chain configured', () =>
 
         const verdict = await verifySignature({ address: CONTRACT, message, signature, rpcUrl: await silentChain() });
         expect(verdict).toEqual({ ok: false, reason: 'unreachable-chain' });
-        expect(performance.now() - started).toBeLessThan(10_000);
+        expect(performance.now() - started).toBeLessThan(6_000);
     }, 12_000);
 
     it('gives up on a chain that sends the headers and then stalls the body, within the same patience', async () =>
     {
         const { message, signature } = await signed();
-        const fake = await chain(deployed(() => 'stall'));
+        const fake = await fakeChain(deployed(() => 'stall'));
         const started = performance.now();
 
         const verdict = await verifySignature({ address: CONTRACT, message, signature, rpcUrl: fake.url });
         expect(verdict).toEqual({ ok: false, reason: 'unreachable-chain' });
-        expect(performance.now() - started).toBeLessThan(12_000);
-    }, 14_000);
+        expect(performance.now() - started).toBeLessThan(6_000);
+    }, 12_000);
 });
 
 describe('tokens and addresses', () =>
