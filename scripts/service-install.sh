@@ -79,7 +79,7 @@ fi
 echo "note: run 'npm run schema:sync --workspace backend' before the first start, and after any entity change" >&2
 
 # systemd does not create the directory it is told to log into.
-mkdir -p "$SERVICE_PATH/logs"
+mkdir -p "$ROOT/.logs"
 
 echo "> Installing systemd service (${SERVICE_FILE})..."
 
@@ -99,8 +99,8 @@ WorkingDirectory=$SERVICE_PATH
 # a space in it (nvm on some setups, /opt installs) would otherwise be read as two arguments.
 ExecStart="$NODE_PATH" --enable-source-maps $SERVICE_PATH_APP
 
-StandardOutput=file:$SERVICE_PATH/logs/service_output.log
-StandardError=file:$SERVICE_PATH/logs/service_error.log
+StandardOutput=file:$ROOT/.logs/service_output.log
+StandardError=file:$ROOT/.logs/service_error.log
 
 LimitNOFILE=1048576
 
