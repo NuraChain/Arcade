@@ -633,14 +633,26 @@ rather than growing the control for everyone. `npm run qa` fails the build if it
 
 **`npm run build` fails on these now.** `tools/budgets.mjs` runs after the build steps, gzips the
 chunks the prerendered `index.html` actually pulls, and exits 1 over budget - so the table below is
-a gate rather than a paragraph. It also asserts the chunks that must NOT be in that initial set:
-three.js, the app catalogue, `session.store` behind `lib/guards.ts`, `connect-dialog` behind the
-public shell, the typed `api` client, and the Persian landing catalogue; that the world chunk stays
-under 200 KB gzip; that both prerendered languages exist; and that the posters are present, within
-their bytes and captured from the scene that ships. Each of those is one keystroke from being undone and every one of them
+a gate rather than a paragraph. It also asserts the MODULES that must not be in that initial set:
+three.js and `world/world.ts`, the app catalogue, `session.store` behind `lib/guards.ts`,
+`connect-dialog` behind the public shell, every board renderer, the typed `api` client, and the
+Persian landing catalogue; that the world chunk stays under 200 KB gzip; that both prerendered
+languages exist; and that the posters are present, within their bytes and captured from the scene
+that ships. Each of those is one keystroke from being undone and every one of them
 fails silently - the page still works, it just pays for the whole typed api client, and its
 top-level await on `/api/_manifest`, on a route prerendered to a file precisely so it needs no
 server.
+
+**It asks which modules, never which chunk names, because the `boot` group renames everything it
+swallows.** The rules used to match `^api-`, `^landing-`, `^session\.store-` against the initial
+chunks, and once everything the entry reaches became one `boot-*` chunk no name could match: a static
+`import { REQUEST_MS } from '../api.ts'` in `guards.ts` made no `api-*` chunk anywhere, folded the
+`_manifest` fetch into `boot` and passed at 55.5 KB, under budget. The bigger modules were caught only
+while they happened to be larger than the headroom. The client build's `nura-chunk-modules` plugin in
+`vite.config.ts` writes every chunk's modules (those that rendered any code, relative to `frontend/`)
+to `.dist-frontend/.vite/chunks.json` - a dot segment, which the static server never serves - and the
+gate refuses a module of any rule inside an initial chunk, a missing file, and a rule that matches no
+module anywhere in the build, so a rename cannot leave a rule guarding nothing.
 
 **What leaves the server is compressed, and brotli is never spent on the fly.** The framework compresses
 nothing by default, so for a long time the built server sent every chunk raw - the world chunk as
@@ -658,11 +670,17 @@ stay true: the `/app` layout route is `lazy`, the app message catalogue is regis
 `session.store.ts` dynamically**, and **`public-shell.component.azeroth` imports
 `connect-dialog.component.azeroth` dynamically**.
 
-**Badge, Tooltip and `lib/anchor.ts` are pinned into one chunk** (`hint`, a `codeSplitting` group in
-`vite.config.ts`, client build only - the SSR bundle stays one file). The landing needs all three, and
-the bundler groups modules by which lazy routes reach them: dropping one `IconButton` from `PageHeader`
-changed that set, split the three into separate chunks and pushed the landing 0.8 KB over its budget
-with no byte of new code in it.
+**Everything the entry reaches statically is one chunk** (`boot`, a `codeSplitting` group in
+`vite.config.ts` on rolldown's `$initial` tag, client build only - the SSR bundle stays one file). Every
+page loads all of it, because `routes.ts` imports the public shell, the landing and the guards
+statically, so splitting it buys nothing; and the bundler splits by which lazy routes reach a module,
+so a change far from the landing re-cut it with no byte of new code. It happened twice: dropping one
+`IconButton` from `PageHeader` split Badge, Tooltip and `lib/anchor.ts` apart (the old `hint` group
+pinned exactly those three), and adding the `/admin` route split the router's `Link` out into a chunk
+of its own, which with the guard put the landing 0.1 KB over. Twenty chunks also paid in every lazy
+import's preload table, which names each one: in the entry for every route and in the shell for every
+store. One chunk measured 52.9 KB against 60.1 for the twenty, and the shell 11.8 KB against 12.0.
+`tools/budgets.mjs` refuses an initial set of more than one chunk.
 
 A fourth is in the same family for a different reason: **`lib/seal-state.ts` imports
 `lib/attestation.ts` dynamically**, because the curve code behind it is 14 KB gzip that most
