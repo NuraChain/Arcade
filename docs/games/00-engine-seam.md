@@ -108,7 +108,7 @@ Engine<State, Action>
     view(state, seat | null)       -> unknown        // per viewer. the whole redaction story
     turnOf(state)                  -> number | null
     autoplay(state, seat)          -> Action | null  // what the timeout sweep plays
-    finish(state)                  -> { winners: number[], unsettled: number[] } | null   // facts only
+    finish(state)                  -> { winners, unsettled, trailing: number[] } | null   // facts only
     standings(state)               -> Placement[]    // competition-ranked; feeds the judge
     sideOf(seat, seats)            -> number         // who plays together; teams only in 4P hokm
     engagement(seats)              -> { verbs, after }  // which own decisions count, and how many
@@ -119,11 +119,14 @@ Engine<State, Action>
 **An engine reports facts and never decides what a result is worth.** `finish` used to return an
 `outcome` - `won` or `abandoned` - and each engine had its own threshold for when a forfeit counted
 (`RATED_AFTER`, backgammon's `acted`, poker's "anybody resigned"). Now `finish` names the winners and
-the seats the game stopped before ordering (`unsettled`, which only hokm ever fills, at a forfeit),
+the seats the game stopped before ordering (`unsettled`, which only hokm ever fills, at a forfeit)
+and which of those seats' sides trailed a side still in play when it stopped (`trailing`, the same),
 and the one pure `domains/match/judge.ts` decides every game's results from those facts plus the
 ledger: a quitter always takes a rated loss (and is never rated against a seat that quit before it),
 a survivor is rated against a quitter only if both
-played `engagement(seats).after` decisions of their own, and a seat with no counted pair is `void`.
+played `engagement(seats).after` decisions of their own and the survivor's side was not trailing, and
+a seat with no counted pair is `void`. A match whose last ledger row is a forfeit pays its winner the
+rating and the finish alone.
 `record.ts` is the database adapter around it. The rule and its cases are in `.claude/rules/games.md`
 under *What a game leaves behind*.
 

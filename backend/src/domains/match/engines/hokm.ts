@@ -6,6 +6,10 @@ import { seatsOfSide, sideCount, sideOf, type HokmAction, type HokmEvent, type H
 import type { Draws, Ending, Engine, ForfeitReason, Placement, TableConfig, Tally } from '../engine.ts';
 import type { MatchBoard, MatchLog, MatchPlay } from '../../../schemas.ts';
 
+const sidesOf = (state: HokmState) => Array.from({ length: sideCount(state.seats) }, (_, side) => side);
+
+const gone = (state: HokmState, side: number) => seatsOfSide(side, state.seats).some((seat) => state.out[seat] === true);
+
 /**
  * Hokm, behind the seam every game sits behind.
  *
@@ -80,26 +84,33 @@ export const hokmEngine: Engine<HokmState, HokmAction> = {
             return null;
         }
 
-        const seats = Array.from({ length: state.seats }, (_, seat) => seat);
+        const winners = seatsOfSide(state.winner, state.seats);
 
-        return {
-            winners: seatsOfSide(state.winner, state.seats),
-            unsettled: state.points[state.winner] >= state.target ? [] : seats.filter((seat) => state.out[seat] !== true)
-        };
+        if (state.points[state.winner] >= state.target)
+        {
+            return { winners, unsettled: [], trailing: [] };
+        }
+
+        const unsettled = Array.from({ length: state.seats }, (_, seat) => seat).filter((seat) => state.out[seat] !== true);
+        const live = sidesOf(state).filter((side) => !gone(state, side));
+        const tricksOf = (side: number) => seatsOfSide(side, state.seats).reduce((total, seat) => total + (state.tricks[seat] ?? 0), 0);
+        const behind = (side: number, than: number) =>
+            state.points[side] < state.points[than] || (state.points[side] === state.points[than] && tricksOf(side) < tricksOf(than));
+        const trails = (seat: number) => live.some((side) => side !== sideOf(seat, state.seats) && behind(sideOf(seat, state.seats), side));
+
+        return { winners, unsettled, trailing: unsettled.filter(trails) };
     },
 
     standings: (state: HokmState): Placement[] =>
     {
-        const gone = (side: number) => seatsOfSide(side, state.seats).some((seat) => state.out[seat] === true);
         const better = (side: number, than: number) =>
-            gone(side) !== gone(than) ? !gone(side) : state.points[side] > state.points[than];
-        const sides = Array.from({ length: sideCount(state.seats) }, (_, side) => side);
+            gone(state, side) !== gone(state, than) ? !gone(state, side) : state.points[side] > state.points[than];
 
         return Array.from({ length: state.seats }, (_, seat) =>
         {
             const side = sideOf(seat, state.seats);
 
-            return { seat, place: 1 + sides.filter((other) => better(other, side)).length };
+            return { seat, place: 1 + sidesOf(state).filter((other) => better(other, side)).length };
         });
     },
 

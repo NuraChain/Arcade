@@ -292,6 +292,11 @@ describe.each(ENGINES.map((engine) => [engine.id, engine] as const))('the %s eng
                     expect(quitters.has(seat), `seat ${ seat } forfeited and is still a winner or in play`).toBe(false);
                 }
 
+                for (const seat of ending.trailing)
+                {
+                    expect(ending.unsettled, `seat ${ seat } trails but is not still in play`).toContain(seat);
+                }
+
                 for (const seat of seats)
                 {
                     const better = new Set(seats.filter((other) => placeOf(other) < placeOf(seat)).map(sideOf));

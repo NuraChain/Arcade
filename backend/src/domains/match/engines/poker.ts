@@ -58,7 +58,7 @@ export const pokerEngine: Engine<PokerState, PokerAction> = {
             return null;
         }
 
-        return { winners: [state.winner], unsettled: [] };
+        return { winners: [state.winner], unsettled: [], trailing: [] };
     },
 
     standings: (state: PokerState): Placement[] => standings(state),

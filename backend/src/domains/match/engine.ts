@@ -76,6 +76,7 @@ export interface Ending
 {
     winners: number[];
     unsettled: number[];
+    trailing: number[];
 }
 
 export interface Engagement

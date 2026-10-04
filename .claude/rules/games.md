@@ -785,13 +785,23 @@ past. There is no `deal.ts` and no `rotation.ts` for the same reason.
 is nothing to continue with; the side left standing is named so the board can stop, and `finish`
 reports every seat still at the table as `unsettled`, because the game stopped before it decided
 their order. The judge never rates two unsettled sides against each other: the three-handed survivors
-are not rated against one another, and a four-handed quitter's PARTNER - unsettled against both
-opponents and on the quitter's own side - has nobody counted against them and is `void`, neither
-punished for a teammate's walkout nor paid for a win their side did not have. The quitter takes a
-rated loss, team against team; the opponents win only if they and the quitter had each played a
-hand's worth of cards (`engagement`: 7 at three and four, 13 at two). `standings` puts a side with a
-seat out LAST whatever its points and lets sides level on points share a place (HOKM-03: a 3P tie
-used to be broken by seat number).
+are not rated against one another. The quitter takes a rated loss, team against team; the opponents
+win only if they and the quitter had each played a hand's worth of cards (`engagement`: 7 at three and
+four, 13 at two). `standings` puts a side with a seat out LAST whatever its points and lets sides
+level on points share a place (HOKM-03: a 3P tie used to be broken by seat number).
+
+**The score at the forfeit decides who gains by it (D25).** `finish` also reports `trailing`: every
+seat still at the table whose side was BEHIND a side still in play - fewer points, or level on points
+and fewer tricks in the hand in progress. Without it a forfeit was a rating farm two ways. At three, a
+trailing player's partner in crime walked out and the trailing player banked a win over them while
+losing the game they were actually in; a trailing survivor is now `void` against the quitter, and the
+leader still wins. At four, a losing team's alt walked out and the main account's loss became a
+`void`; the partner of a WALKOUT now shares the team's rated loss when the team was trailing and both
+the partner and the walkout had played their share (`engagement`) - an early walkout is the quitter's
+loss alone, or a griefer could sink a stranger's rating by quitting on the first trick. The
+partner stays `void` when the team was level or ahead - neither punished for a teammate's exit nor
+paid for a win the side did not have - and when the exit was a TIMEOUT, because a dropped connection
+is not a decision anybody at the table made. The engine reports the fact; the judge applies it.
 
 **The log needs no filtering and that is a fact about what is LOGGED.** A card is played face up, a
 trump is called aloud, a trick is taken in front of the table and a hand is written on a score sheet.
@@ -1507,8 +1517,9 @@ stop and be timed out to dodge a loss, and four-handed partners were rated again
   (`standings`, competition-ranked), `quitter` (a forfeit row in the ledger; it WALKED if the row
   names a person, was timed out if it is null, and its `rev` is the exit order), `own` (the seat's
   play rows that name a person and carry one of the engine's `engagement` verbs - the sweep writes
-  `user_id = null`, so autoplay never counts) and `unsettled` (hokm only: everybody still at the table
-  when a forfeit stopped it).
+  `user_id = null`, so autoplay never counts), `unsettled` (hokm only: everybody still at the table
+  when a forfeit stopped it) and `trailing` (hokm only: those of them whose side was behind a side
+  still in play).
 - **A quitter always takes a rated loss**, below everybody still playing when they left, a later
   leaver above an earlier one. That includes a TIMEOUT, or waiting out the clock would dodge the loss.
   A quitter is never rated against a seat that had quit BEFORE it: the first cut rated it against
@@ -1523,7 +1534,20 @@ stop and be timed out to dodge a loss, and four-handed partners were rated again
 - **Everybody else is rated against a quitter only if they and the quitter are both ENGAGED** - own
   decisions at least `engagement(seats).after`: ludo 6 rolls, backgammon 4 moves or cube actions,
   hokm one hand's cards (7 at three and four, 13 at two), poker 3 betting actions with the blinds
-  excluded. Against a side with no quitter a seat is always rated, unless both are unsettled.
+  excluded - and only if the survivor was not `trailing`. Against a side with no quitter a seat is
+  always rated, unless both are unsettled; then it is rated only when it is `trailing` and a member of
+  its own side WALKED (the four-handed partner above).
+- **A forfeit win pays the rating and the finish (D26).** A match whose LAST ledger row is a forfeit
+  ended because the last opponent quit, and that is the fact the recorder hands the judge as
+  `forfeited` (`unsettled` would only say so for hokm). Its winner's rating moves and the verdict pays
+  `finish` - the 10 XP and no engine bonus - with `credit` false: no win bonus, no `won` count and no
+  `played` count either (a win that lowered the winner's win rate would read as a punishment), the
+  streak kept rather than extended, and `achieve/service.ts` asks the same question of the ledger
+  (`PLAYED_OUT`) so the match climbs no win rung and gives no hosted credit. A game that goes on after
+  a quitter and is then played out - poker at three or more - ends on a play and pays a full win.
+  Every other seat paid in a match a forfeit ended is paid the same `finish` and no more - the partner
+  sharing a loss, a timed-out quitter that had played its share - so nobody earns more from a forfeit
+  than its winner does.
 - **A seat with no counted pair is `void`**: no rating move, no XP, nothing written to
   `player_stats`, streak untouched, no achievements. A seat that beat every side it was counted
   against is `won`, a quitter is `abandoned`, anybody else `lost`. The match is `won` if anybody won,
@@ -1667,7 +1691,8 @@ the way: otherwise leaving a game you are losing banks the good half of it, whic
 judge closes for the rating from the other side. A seat timed out of the game after playing its share
 keeps the finish and its bonus, one timed out before that earns nothing, and a `void` seat earns
 nothing, because nothing about that game is written for it. Whether a seat is paid at all is the
-judge's `paid`; `xpFor` only says how much.
+judge's `paid` - `full`, `finish` (the 10 alone, for a win the last opponent's forfeit handed over)
+or `none`; `xpFor` only says how much.
 
 A level costs `100 + 50 * (n - 1)`, so the total to reach level n is a quadratic in n and `levelOf`
 is its positive root floored rather than a loop — a very large total costs what a small one does.

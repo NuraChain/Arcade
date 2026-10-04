@@ -187,7 +187,7 @@ describe('what a ludo game reports', () =>
 
     it('names the seat with four tokens home and leaves nobody unsettled', () =>
     {
-        expect(ludoEngine.finish(board([HOME, [1, YARD, YARD, YARD]], 0))).toEqual({ winners: [0], unsettled: [] });
+        expect(ludoEngine.finish(board([HOME, [1, YARD, YARD, YARD]], 0))).toEqual({ winners: [0], unsettled: [], trailing: [] });
     });
 
     it('names the last seat left in the room too, and the judge makes that no contest', () =>
@@ -202,13 +202,15 @@ describe('what a ludo game reports', () =>
                 place: one.place,
                 quitter: one.seat === 1 ? { walked: true, rev: 2 } : null,
                 own: 1,
-                unsettled: ending.unsettled.includes(one.seat)
+                unsettled: ending.unsettled.includes(one.seat),
+                trailing: ending.trailing.includes(one.seat)
             })),
             after: ludoEngine.engagement(2).after,
-            winners: ending.winners
+            winners: ending.winners,
+            forfeited: true
         });
 
-        expect(ending).toEqual({ winners: [0], unsettled: [] });
+        expect(ending).toEqual({ winners: [0], unsettled: [], trailing: [] });
         expect(plan.verdicts.find((one) => one.seat === 0)?.result).toBe('void');
         expect(plan.outcome).toBe('abandoned');
     });

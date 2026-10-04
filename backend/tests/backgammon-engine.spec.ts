@@ -318,8 +318,8 @@ describe('walking out', () =>
     {
         const state = opened(5, true);
 
-        expect(finishAfter(state, 0)).toEqual({ winners: [1], unsettled: [] });
-        expect(finishAfter(state, 1)).toEqual({ winners: [0], unsettled: [] });
+        expect(finishAfter(state, 0)).toEqual({ winners: [1], unsettled: [], trailing: [] });
+        expect(finishAfter(state, 1)).toEqual({ winners: [0], unsettled: [], trailing: [] });
         expect(backgammonEngine.standings(applied(apply(state, { kind: 'forfeit', seat: 0, reason: 'left' }, scripted([1]))).state))
             .toEqual([{ seat: 0, place: 2 }, { seat: 1, place: 1 }]);
     });
@@ -343,7 +343,7 @@ describe('walking out', () =>
 
         expect(won.state.winner).toBe(0);
         expect(won.events.at(-1)).toEqual({ e: 'finish', seat: 0 });
-        expect(backgammonEngine.finish(won.state)).toEqual({ winners: [0], unsettled: [] });
+        expect(backgammonEngine.finish(won.state)).toEqual({ winners: [0], unsettled: [], trailing: [] });
         expect(backgammonEngine.standings(won.state)).toEqual([{ seat: 0, place: 1 }, { seat: 1, place: 2 }]);
     });
 });

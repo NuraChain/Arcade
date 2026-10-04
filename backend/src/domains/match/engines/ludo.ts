@@ -107,7 +107,7 @@ export const ludoEngine: Engine<LudoState, EngineAction> = {
 
         const champion = state.players[state.winner];
 
-        return { winners: champion === undefined ? [] : [champion.seat], unsettled: [] };
+        return { winners: champion === undefined ? [] : [champion.seat], unsettled: [], trailing: [] };
     },
 
     standings: (state: LudoState): Placement[] => placementsOf(state),

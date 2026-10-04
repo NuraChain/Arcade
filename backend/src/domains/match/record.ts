@@ -4,7 +4,7 @@ import { Match, MatchAction, MatchPlayer, PlayerStats } from '../../entities/ind
 import type { AchieveService } from '../achieve/service.ts';
 import type { Ending, Engine } from './engine.ts';
 import { movesOf, planOf } from './judge.ts';
-import { xpFor } from './levels.ts';
+import { XP_FINISH, xpFor } from './levels.ts';
 import { START } from './rating.ts';
 
 interface Ledger
@@ -13,6 +13,7 @@ interface Ledger
     own: number;
     exit: number | null;
     walked: boolean;
+    last: number;
 }
 
 const SUMMED = `(select coalesce(jsonb_object_agg(counter, coalesce((tallies ->> counter)::numeric, 0) + coalesce((cast(:tallies as jsonb) ->> counter)::numeric, 0)), '{}'::jsonb)
@@ -25,6 +26,7 @@ const ledgerOf = (tx: EntityManager, matchId: string, verbs: readonly string[]) 
         .addSelect(`(count(*) filter (where a.kind = 'play' and a.user_id is not null and a.payload ->> 'verb' in (:...verbs)))::int`, 'own')
         .addSelect(`min(a.rev) filter (where a.kind = 'forfeit')`, 'exit')
         .addSelect(`coalesce(bool_or(a.kind = 'forfeit' and a.user_id is not null), false)`, 'walked')
+        .addSelect('max(a.rev)', 'last')
         .where('a.match_id = :matchId', { matchId, verbs: [...verbs] })
         .groupBy('a.seat')
         .getRawMany<Ledger>();
@@ -54,6 +56,7 @@ export function createRecorder(achieve: AchieveService): Recorder
             const engagement = engine.engagement(players.length);
             const ledger = await ledgerOf(tx, matchId, engagement.verbs);
             const places = engine.standings(state);
+            const last = Math.max(0, ...ledger.map((row) => row.last));
 
             const plan = planOf({
                 seats: players.map((player) =>
@@ -66,11 +69,13 @@ export function createRecorder(achieve: AchieveService): Recorder
                         place: places.find((one) => one.seat === player.seat)?.place ?? players.length,
                         quitter: row === undefined || row.exit === null ? null : { walked: row.walked, rev: row.exit },
                         own: row?.own ?? 0,
-                        unsettled: ending.unsettled.includes(player.seat)
+                        unsettled: ending.unsettled.includes(player.seat),
+                        trailing: ending.trailing.includes(player.seat)
                     };
                 }),
                 after: engagement.after,
-                winners: ending.winners
+                winners: ending.winners,
+                forfeited: ledger.some((row) => row.exit === last)
             });
 
             await tx.getRepository(Match).update(
@@ -119,7 +124,9 @@ export function createRecorder(achieve: AchieveService): Recorder
 
                 const move = moves.find((one) => one.seat === player.seat);
                 const tally = bySeat.get(player.seat) ?? {};
-                const earned = verdict.paid ? xpFor({ won: verdict.result === 'won', bonus: engine.points(tally) }) : 0;
+                const earned = verdict.paid === 'full'
+                    ? xpFor({ won: verdict.credit, bonus: engine.points(tally) })
+                    : (verdict.paid === 'finish' ? XP_FINISH : 0);
 
                 await tx.getRepository(MatchPlayer).update(
                     { matchId, seat: player.seat },
@@ -142,7 +149,7 @@ export function createRecorder(achieve: AchieveService): Recorder
                     .set({
                         rating: after,
                         peakRating: () => 'greatest(peak_rating, :after)',
-                        played: () => 'played + 1',
+                        played: () => 'played + :played',
                         won: () => 'won + :won',
                         abandoned: () => 'abandoned + :quit',
                         streak,
@@ -153,7 +160,8 @@ export function createRecorder(achieve: AchieveService): Recorder
                     .where('user_id = :userId and game = :game')
                     .setParameters({
                         after,
-                        won: verdict.result === 'won' ? 1 : 0,
+                        played: verdict.result === 'won' && !verdict.credit ? 0 : 1,
+                        won: verdict.credit ? 1 : 0,
                         quit: verdict.result === 'abandoned' ? 1 : 0,
                         streak,
                         tallies: JSON.stringify(tally),

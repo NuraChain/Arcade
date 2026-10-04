@@ -108,10 +108,15 @@ one player at its members' mean rating and moves every member by the same amount
 never scored against each other (places `[1,2,1,2]` used to score them as a draw, HOKM-02); equal
 teams move ±16 each. `standings` is competition-ranked by side - a side with a seat out is last
 whatever its points, and sides level on points share a place (HOKM-03). When somebody forfeits,
-`finish` reports every seat still at the table as `unsettled`: the quitter takes a rated loss, their
-partner is `void` (neither punished nor paid), and the opponents win only if they and the quitter
-had each played a hand's worth of cards (7 at three and four players, 13 at two). Three-handed
-survivors of a forfeit are never rated against each other.
+`finish` reports every seat still at the table as `unsettled`, and as `trailing` each of those whose
+side was behind a side still in play - fewer points, or level on points and fewer tricks in the hand
+in progress (D25). The quitter takes a rated loss. The opponents win only if they and the quitter had
+each played a hand's worth of cards (7 at three and four players, 13 at two) and they were not
+trailing, so a three-handed survivor who was behind the other one is `void` rather than paid for the
+quitter's exit. The partner of a four-handed WALKOUT shares the team's rated loss when the team was
+trailing and both of them had played a hand's worth of cards, and is `void` when it was level or
+ahead or when the clock took the quitter. Three-handed survivors of a forfeit are never rated against each other. Every hokm forfeit ends the match, so a
+win by one pays the rating and the 10 XP finish and nothing else (D26).
 
 **A match is a sequence.** One `matches` row = one match to 7. Hand results are ledger events.
 

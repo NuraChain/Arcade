@@ -2,6 +2,8 @@ import { START, rateField, unitPlace } from './rating.ts';
 
 export type Result = 'won' | 'lost' | 'abandoned' | 'void';
 
+export type Pay = 'full' | 'finish' | 'none';
+
 export interface Quit
 {
     walked: boolean;
@@ -16,6 +18,7 @@ export interface SeatFacts
     quitter: Quit | null;
     own: number;
     unsettled: boolean;
+    trailing: boolean;
 }
 
 export interface Verdict
@@ -25,7 +28,8 @@ export interface Verdict
     place: number;
     result: Result;
     counted: number[];
-    paid: boolean;
+    paid: Pay;
+    credit: boolean;
     streak: 'add' | 'reset' | 'keep';
 }
 
@@ -47,7 +51,7 @@ function placed(seats: readonly SeatFacts[]): SeatFacts[]
     return seats.map((mine) => (mine.quitter === null ? mine : { ...mine, place: mine.place + leftAfter(mine) }));
 }
 
-function counts(mine: SeatFacts, theirs: readonly SeatFacts[], after: number)
+function counts(mine: SeatFacts, own: readonly SeatFacts[], theirs: readonly SeatFacts[], after: number)
 {
     if (mine.quitter !== null)
     {
@@ -58,10 +62,15 @@ function counts(mine: SeatFacts, theirs: readonly SeatFacts[], after: number)
 
     if (quitters.length > 0)
     {
-        return mine.own >= after && quitters.every((one) => one.own >= after);
+        return !mine.trailing && mine.own >= after && quitters.every((one) => one.own >= after);
     }
 
-    return !(mine.unsettled && theirs.every((one) => one.unsettled));
+    if (mine.unsettled && theirs.every((one) => one.unsettled))
+    {
+        return mine.trailing && mine.own >= after && own.some((one) => one.quitter?.walked === true && one.own >= after);
+    }
+
+    return true;
 }
 
 function resultOf(mine: SeatFacts, counted: readonly number[], beat: (side: number) => boolean): Result
@@ -81,10 +90,17 @@ function resultOf(mine: SeatFacts, counted: readonly number[], beat: (side: numb
 
 const STREAK = { won: 'add', lost: 'reset', abandoned: 'reset', void: 'keep' } as const satisfies Record<Result, Verdict['streak']>;
 
-const paidFor = (mine: SeatFacts, result: Result, after: number) =>
-    result !== 'void' && (mine.quitter === null || (!mine.quitter.walked && mine.own >= after));
+function payOf(mine: SeatFacts, result: Result, after: number, forfeited: boolean): Pay
+{
+    if (result === 'void' || (mine.quitter !== null && (mine.quitter.walked || mine.own < after)))
+    {
+        return 'none';
+    }
 
-export function planOf(input: { seats: readonly SeatFacts[]; after: number; winners: readonly number[] }): Plan
+    return forfeited ? 'finish' : 'full';
+}
+
+export function planOf(input: { seats: readonly SeatFacts[]; after: number; winners: readonly number[]; forfeited: boolean }): Plan
 {
     const seats = placed(input.seats);
     const sides = [...new Set(seats.map((one) => one.side))];
@@ -92,8 +108,9 @@ export function planOf(input: { seats: readonly SeatFacts[]; after: number; winn
 
     const verdicts = seats.map((mine): Verdict =>
     {
-        const counted = sides.filter((side) => side !== mine.side && counts(mine, membersOf(side), input.after));
+        const counted = sides.filter((side) => side !== mine.side && counts(mine, membersOf(mine.side), membersOf(side), input.after));
         const result = resultOf(mine, counted, (side) => unitPlace(seats, mine.side) < unitPlace(seats, side));
+        const credit = result === 'won' && !input.forfeited;
 
         return {
             seat: mine.seat,
@@ -101,8 +118,9 @@ export function planOf(input: { seats: readonly SeatFacts[]; after: number; winn
             place: mine.place,
             result,
             counted,
-            paid: paidFor(mine, result, input.after),
-            streak: STREAK[result]
+            paid: payOf(mine, result, input.after, input.forfeited),
+            credit,
+            streak: result === 'won' && !credit ? 'keep' : STREAK[result]
         };
     });
 

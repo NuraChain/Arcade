@@ -67,7 +67,7 @@ export const backgammonEngine: Engine<BackgammonState, BackgammonAction> = {
             return null;
         }
 
-        return { winners: [state.winner], unsettled: [] };
+        return { winners: [state.winner], unsettled: [], trailing: [] };
     },
 
     standings: (state: BackgammonState): Placement[] =>

@@ -233,7 +233,7 @@ describe('how a game ended', () =>
         const state = pokerEngine.create([0, 1], draws(5), table);
         const ended = applied(state, forfeit(1 - state.turn)).state;
 
-        expect(pokerEngine.finish(ended)).toEqual({ winners: [state.turn], unsettled: [] });
+        expect(pokerEngine.finish(ended)).toEqual({ winners: [state.turn], unsettled: [], trailing: [] });
     });
 
     it('names the seat that took the last chip', () =>
@@ -245,7 +245,7 @@ describe('how a game ended', () =>
         state = play(state, { kind: 'allin', seat: 0 }, die).state;
         state = play(state, { kind: 'allin', seat: 1 }, die).state;
 
-        expect(pokerEngine.finish(state)).toEqual({ winners: [0], unsettled: [] });
+        expect(pokerEngine.finish(state)).toEqual({ winners: [0], unsettled: [], trailing: [] });
     });
 
     it('places everybody who walked out by the order they left', () =>
@@ -259,7 +259,7 @@ describe('how a game ended', () =>
             state = applied(state, forfeit(seat, index === 2 ? 'resign' : 'timeout')).state;
         }
 
-        expect(pokerEngine.finish(state)).toEqual({ winners: [stayer], unsettled: [] });
+        expect(pokerEngine.finish(state)).toEqual({ winners: [stayer], unsettled: [], trailing: [] });
         expect(order.map((seat) => placesOf(state)[seat])).toEqual([6, 5, 4, 3, 2]);
         expect(placesOf(state)[stayer]).toBe(1);
     });
@@ -278,7 +278,7 @@ describe('how a game ended', () =>
 
         state = applied(state, forfeit(2, 'timeout')).state;
 
-        expect(pokerEngine.finish(state)).toEqual({ winners: [0], unsettled: [] });
+        expect(pokerEngine.finish(state)).toEqual({ winners: [0], unsettled: [], trailing: [] });
         expect(placesOf(state)).toEqual([1, 3, 2]);
     });
 

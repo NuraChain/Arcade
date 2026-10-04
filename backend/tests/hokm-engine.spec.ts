@@ -593,7 +593,7 @@ describe('what a finished match reports', () =>
     {
         const ended: HokmState = { ...create(4, 7, seeded(5)), points: [7, 4], winner: 0 };
 
-        expect(hokmEngine.finish(ended)).toEqual({ winners: [0, 2], unsettled: [] });
+        expect(hokmEngine.finish(ended)).toEqual({ winners: [0, 2], unsettled: [], trailing: [] });
         expect(placesOf(ended)).toEqual([1, 2, 1, 2]);
     });
 
@@ -602,9 +602,22 @@ describe('what a finished match reports', () =>
         const four = forfeited({ ...create(4, 7, seeded(5)), points: [2, 4] }, 1);
         const three = forfeited({ ...create(3, 7, seeded(5)), points: [1, 5, 2] }, 1);
 
-        expect(hokmEngine.finish(four)).toEqual({ winners: [0, 2], unsettled: [0, 2, 3] });
+        expect(hokmEngine.finish(four)).toEqual({ winners: [0, 2], unsettled: [0, 2, 3], trailing: [] });
         expect(placesOf(four)).toEqual([1, 2, 1, 2]);
-        expect(hokmEngine.finish(three)).toEqual({ winners: [2], unsettled: [0, 2] });
+        expect(hokmEngine.finish(three)).toEqual({ winners: [2], unsettled: [0, 2], trailing: [0] });
+    });
+
+    it('names the seats still at the table whose side trailed a side still in play', () =>
+    {
+        const behind = forfeited({ ...create(4, 7, seeded(5)), points: [4, 2] }, 1);
+        const onTricks = forfeited({ ...create(4, 7, seeded(5)), points: [3, 3], tricks: [1, 2, 0, 2] }, 0);
+        const level = forfeited({ ...create(4, 7, seeded(5)), points: [3, 3], tricks: [1, 1, 1, 1] }, 3);
+        const threeOnTricks = forfeited({ ...create(3, 7, seeded(5)), points: [2, 0, 2], tricks: [1, 4, 3] }, 1);
+
+        expect(hokmEngine.finish(behind)?.trailing).toEqual([3]);
+        expect(hokmEngine.finish(onTricks)?.trailing).toEqual([2]);
+        expect(hokmEngine.finish(level)?.trailing).toEqual([]);
+        expect(hokmEngine.finish(threeOnTricks)?.trailing).toEqual([0]);
     });
 
     it('counts a hand of cards as engagement: seven at three and four, a whole hand at two', () =>

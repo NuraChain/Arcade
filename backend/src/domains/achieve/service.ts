@@ -43,6 +43,8 @@ const COUNTED = `p.result in ('won', 'lost', 'abandoned')`;
 
 const FINISHED = `p.user_id = :userId and ${ COUNTED } and m.finished_at is not null`;
 
+const PLAYED_OUT = `m.outcome = 'won' and (select a.kind from match_actions a where a.match_id = m.id order by a.rev desc limit 1) is distinct from 'forfeit'`;
+
 const blank = (): LadderFacts => ({
     played: 0,
     won: 0,
@@ -67,7 +69,7 @@ async function factsOf(runner: EntityManager, userId: string): Promise<Facts>
         .addSelect('m.seats', 'seats')
         .addSelect('t.mode', 'mode')
         .addSelect('count(*)::int', 'played')
-        .addSelect(`count(*) filter (where p.result = 'won' and m.outcome = 'won')::int`, 'won')
+        .addSelect(`count(*) filter (where p.result = 'won' and ${ PLAYED_OUT })::int`, 'won')
         .where(FINISHED, { userId })
         .groupBy('m.game')
         .addGroupBy('m.seats')
@@ -95,7 +97,7 @@ async function factsOf(runner: EntityManager, userId: string): Promise<Facts>
         .createQueryBuilder('t')
         .innerJoin(Match, 'm', 'm.table_id = t.id')
         .select('count(distinct t.id)::int', 'count')
-        .where(`t.host_id = :userId and m.outcome = 'won'`, { userId })
+        .where(`t.host_id = :userId and ${ PLAYED_OUT }`, { userId })
         .getRawOne<{ count: number }>();
 
     const games = new Map<string, LadderFacts>();
