@@ -442,7 +442,9 @@ behind the other. `game_rules.seats` for ludo is `[2, 3, 4]`, and `reference-par
 stops the client's fallback disagreeing.
 
 **The ruleset is written down, and four of its clauses are where a generic Ludo goes wrong.** It is
-Variant B - the common Iranian rules - and every one of these was wrong in the first engine:
+Variant B - the common Iranian rules, written out clause by clause with a source or a "house rule"
+label for each in `docs/games/04-ludo.md`, which also lists the two open choices - and every one of
+these was wrong in the first engine:
 
 - **Own tokens share a square and never block each other**, on the track and in the home lane alike.
   There are no barriers; a token moves through an occupied square freely.
