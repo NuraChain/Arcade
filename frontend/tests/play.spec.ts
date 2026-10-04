@@ -13,7 +13,7 @@ import TableMenu from '../src/components/games/table-menu.component.azeroth';
 import TurnClock from '../src/components/games/turn-clock.component.azeroth';
 import WatchBoard from '../src/components/games/watch-board.component.azeroth';
 import { BOARDS } from '../src/components/games/boards.ts';
-import type { MatchWatch } from '../src/api.ts';
+import type { MatchView, MatchWatch } from '../src/api.ts';
 import ChatPage from '../src/pages/app/chat.page.azeroth';
 import PlayPage from '../src/pages/app/play.page.azeroth';
 import { gameArt, gameIcon } from '../src/components/games/art.ts';
@@ -27,6 +27,7 @@ import { useChat } from '../src/stores/chat.store.ts';
 import { useDevice } from '../src/stores/device.store.ts';
 import { useLobby } from '../src/stores/lobby.store.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
+import { usePeople } from '../src/stores/people.store.ts';
 import { usePresence } from '../src/stores/presence.store.ts';
 import { useRealtime } from '../src/stores/realtime.store.ts';
 import { useConnection } from '../src/stores/connection.store.ts';
@@ -421,6 +422,114 @@ describe('PlayPage', () =>
         {
             delete matches.view;
         }
+    });
+
+    describe('playing again once a game is over', () =>
+    {
+        const over = (tableId: string) => ({
+            id: `over-${ tableId }`,
+            tableId,
+            game: 'backgammon',
+            rev: 40,
+            seats: 2,
+            players: [
+                { seat: 0, who: 'alex', timeouts: 0, result: 'won' },
+                { seat: 1, who: 'sara.k', timeouts: 0, result: 'lost' }
+            ],
+            turn: 0,
+            mine: 0,
+            winner: 0,
+            outcome: 'won',
+            startedAt: new Date(400_000).toISOString(),
+            finishedAt: new Date(900_000).toISOString(),
+            view: {
+                kind: 'backgammon',
+                phase: 'move',
+                turn: 0,
+                dice: [],
+                seats: [0, 1].map((seat) => ({ seat, checkers: Array.from({ length: 26 }, () => 0), pips: 0, score: seat === 0 ? 1 : 0 })),
+                cubed: false,
+                cube: 1,
+                doubling: false,
+                crawford: false,
+                target: 1,
+                round: 1
+            }
+        } as MatchView);
+
+        const pressable = (container: HTMLElement, label: string) =>
+            [...container.querySelectorAll('button')].find((one) => one.textContent?.trim() === label);
+
+        const finishedAt = async (otherSaidAgain: boolean) =>
+        {
+            const lobby = useLobby();
+            const id = await lobby.host('backgammon', defaultTable('backgammon'), []);
+            const held = server.tables.find((one) => one.id === id)!;
+
+            held.chairs[1].who = 'sara.k';
+            held.matchId = `over-${ id }`;
+            usePeople().remember([{ id: 'sara.k', handle: 'sara.k', displayName: 'Sara Kamali', bio: '', hue: 340, isMinor: false }]);
+            (client.matches as unknown as Record<string, unknown>).view = async () => over(id);
+
+            const table: Route[] = [{ path: '/app/play/:id', component: (): HTMLElement => PlayPage() as HTMLElement }];
+            const router = createRouter({ routes: table, history: createMemoryHistory(`/app/play/${ id }`), scroll: false });
+            const { container } = renderTest(() => RouterProvider({ router, children: () => Routes({}) }) as Rendered);
+
+            await vi.waitFor(() => expect(pressable(container, 'Play again')).toBeDefined(), { timeout: 4000 });
+
+            delete held.matchId;
+            held.chairs[1].ready = otherSaidAgain;
+            await lobby.refresh();
+            await settle();
+            server.calls = [];
+
+            return { container, held };
+        };
+
+        afterEach(() =>
+        {
+            delete (client.matches as unknown as Record<string, unknown>).view;
+        });
+
+        it('says ready when Play again is pressed, starts nothing while somebody has not, and says who', async () =>
+        {
+            const { container, held } = await finishedAt(false);
+
+            fire(pressable(container, 'Play again')!, 'click');
+
+            await vi.waitFor(() => expect(container.textContent).toContain(useLocale().t('match.rematch.waiting', { names: 'Sara Kamali' })), { timeout: 4000 });
+
+            expect(server.calls).toContain('tables.ready');
+            expect(server.calls).not.toContain('tables.start');
+            expect(held.chairs[0].ready).toBe(true);
+            expect(pressable(container, 'Play again')).toBeUndefined();
+            expect(pressable(container, 'Start the game')).toBeUndefined();
+        });
+
+        it('starts the next game when the last player at the table presses Play again', async () =>
+        {
+            const { container, held } = await finishedAt(true);
+
+            fire(pressable(container, 'Play again')!, 'click');
+
+            await vi.waitFor(() => expect(server.calls).toContain('tables.start'), { timeout: 4000 });
+
+            const ready = server.calls.indexOf('tables.ready');
+
+            expect(ready).toBeGreaterThanOrEqual(0);
+            expect(ready).toBeLessThan(server.calls.indexOf('tables.start'));
+            expect(held.chairs[0].ready).toBe(true);
+        });
+
+        it('says a chair is free once the other player has left', async () =>
+        {
+            const { container, held } = await finishedAt(false);
+
+            delete held.chairs[1].who;
+            await useLobby().refresh();
+
+            await vi.waitFor(() => expect(container.textContent).toContain(useLocale().plural('match.rematch.empty', 1)), { timeout: 4000 });
+        });
     });
 
     it('draws a spectated game with its own board, and one it cannot draw as exactly that', () =>

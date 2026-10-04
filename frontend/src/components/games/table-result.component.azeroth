@@ -2,8 +2,9 @@ import MatchResult from './match-result.component.azeroth';
 import Button from '../ui/button.component.azeroth';
 import { useLocale } from '../../stores/locale.store.ts';
 import type { MatchView } from '../../api.ts';
+import type { Rematch } from './boards.ts';
 
-export default component TableResult(props: { match: MatchView; mine?: number; busy?: boolean; onAgain?: () => void })
+export default component TableResult(props: { match: MatchView; mine?: number; busy?: boolean; onAgain?: () => void; rematch?: Rematch })
 {
     const locale = useLocale();
 
@@ -20,7 +21,7 @@ export default component TableResult(props: { match: MatchView; mine?: number; b
         { () =>
             <div class="table-result">
                 <div class="flex flex-col gap-2">
-                    <MatchResult match={ props.match } mine={ props.mine } busy={ props.busy === true } onAgain={ props.onAgain } />
+                    <MatchResult match={ props.match } mine={ props.mine } busy={ props.busy === true } onAgain={ props.onAgain } rematch={ props.rematch } />
                     <Button variant="ghost" size="sm" class="self-center" onClick={ () => folded = true }>{ locale.t('match.result.board') }</Button>
                 </div>
             </div>

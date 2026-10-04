@@ -711,6 +711,70 @@ describe.skipIf(!active)('a match, against a real database', () =>
         });
     });
 
+    describe('playing again at the same table', () =>
+    {
+        const readyAt = async (tableId: string) =>
+            (await db.getRepository(TableSeat).find({ where: { tableId }, order: { seat: 'ASC' } })).map((chair) => chair.ready);
+
+        const moverOf = (load: Awaited<ReturnType<typeof matches.start>>) =>
+        {
+            const state = load.state as LudoState;
+            const seat = state.players[state.turn].seat;
+
+            return load.players.find((one) => one.seat === seat)!.user_id;
+        };
+
+        it('keeps everybody ready while the game goes on, and takes it away when the game ends', async () =>
+        {
+            const { tableId, players } = await seatedTable(2);
+            const load = await matches.start(players[0], tableId);
+
+            await matches.act(moverOf(load), load.match.id, { play: ROLL, key: 'rolls-on' });
+
+            expect(await readyAt(tableId)).toEqual([true, true]);
+
+            await matches.act(players[1], load.match.id, { play: null, key: 'gives-up' });
+
+            expect((await matches.view(players[0], load.match.id))!.match.finishedAt).not.toBeNull();
+            expect(await readyAt(tableId)).toEqual([false, false]);
+        });
+
+        it('takes it away when the turn clock ends the game too', async () =>
+        {
+            const { tableId, players } = await seatedTable(2);
+            const load = await matches.start(players[0], tableId);
+            const state = load.state as LudoState;
+
+            await db.query(
+                `update match_players set timeouts = 2 where match_id = $1 and seat = $2`,
+                [load.match.id, state.players[state.turn].seat]
+            );
+            await db.query(`update matches set deadline_at = now() - interval '1 second' where id = $1`, [load.match.id]);
+
+            expect((await matches.expireNext())?.played).toBe(true);
+            expect((await matches.view(players[0], load.match.id))!.match.finishedAt).not.toBeNull();
+            expect(await readyAt(tableId)).toEqual([false, false]);
+        });
+
+        it('refuses one player starting the next game alone, and deals it once everybody says so', async () =>
+        {
+            const { tableId, players } = await seatedTable(2);
+            const first = await matches.start(players[0], tableId);
+
+            await matches.act(players[1], first.match.id, { play: null, key: 'gives-up' });
+            await tables.setReady(players[0], tableId, true);
+
+            await expect(matches.start(players[0], tableId)).rejects.toMatchObject({ status: 409, message: 'Everybody has to be ready first.' });
+            expect(await matches.liveFor(tableId)).toBeNull();
+
+            await tables.setReady(players[1], tableId, true);
+            const next = await matches.start(players[1], tableId);
+
+            expect(next.match.id).not.toBe(first.match.id);
+            expect(next.match.finishedAt).toBeNull();
+        });
+    });
+
     describe('a side that wins together', () =>
     {
         it('pays both partners the win, not only the first seat of the side', async () =>

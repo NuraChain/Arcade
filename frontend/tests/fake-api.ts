@@ -1362,7 +1362,7 @@ export const client =
         async view({ params }: { params: { id: string } })
         {
             server.calls.push('tables.view');
-            return restate(mustTable(params.id));
+            return structuredClone(restate(mustTable(params.id)));
         },
 
         async byCode({ params }: { params: { code: string } })
@@ -1494,7 +1494,15 @@ export const client =
         async start({ params }: { params: { id: string } })
         {
             server.calls.push('tables.start');
-            mustTable(params.id);
+            const table = mustTable(params.id);
+            if (table.chairs.some((chair) => chair.who === undefined))
+            {
+                throw new ApiError(409, 'conflict', 'Every chair has to be taken first.', undefined);
+            }
+            if (table.chairs.some((chair) => !chair.ready))
+            {
+                throw new ApiError(409, 'conflict', 'Everybody has to be ready first.', undefined);
+            }
             return {};
         },
 

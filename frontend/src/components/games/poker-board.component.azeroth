@@ -19,6 +19,7 @@ import { pokerBeats, tableCues } from './table-cues.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { usePeople } from '../../stores/people.store.ts';
 import type { MatchView } from '../../api.ts';
+import type { Rematch } from './boards.ts';
 
 const RADIUS_X = 41;
 
@@ -28,7 +29,7 @@ const BET_REACH = 0.5;
 
 const BOARD_SLOTS = [0, 1, 2, 3, 4];
 
-export default component PokerBoard(props: { match: MatchView; starting?: boolean; onAgain?: () => void; speech?: Record<string, string>; turnMs?: number })
+export default component PokerBoard(props: { match: MatchView; starting?: boolean; onAgain?: () => void; rematch?: Rematch; speech?: Record<string, string>; turnMs?: number })
 {
     const locale = useLocale();
     const board = useBoard();
@@ -565,7 +566,7 @@ export default component PokerBoard(props: { match: MatchView; starting?: boolea
 
         <Show when={ over }>
             { () =>
-                <TableResult match={ game } mine={ mine } busy={ props.starting === true } onAgain={ props.onAgain } />
+                <TableResult match={ game } mine={ mine } busy={ props.starting === true } onAgain={ props.onAgain } rematch={ props.rematch } />
             }
         </Show>
     </div>

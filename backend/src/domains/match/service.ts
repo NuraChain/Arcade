@@ -356,6 +356,11 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
 
             await recorder.finish(tx, match.id, engine, next);
         }
+
+        if (over)
+        {
+            await tx.getRepository(TableSeat).update({ tableId: match.tableId, ready: true }, { ready: false });
+        }
     };
 
     /**

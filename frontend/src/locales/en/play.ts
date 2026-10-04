@@ -176,6 +176,8 @@ export const play = {
     'match.over.nobody': 'That game is over.',
     'match.over.noRating': 'Nobody won this one, so no rating moved.',
     'match.rematch': 'Play again',
+    'match.rematch.waiting': 'Waiting for {names} to play again.',
+    'match.rematch.empty': { one: 'A chair is free.', other: '{count} chairs are free.' },
     'match.result.show': 'Show the result',
     'match.result.board': 'See the board',
     'play.table.chatLead': 'Everyone at this table can read what you say here.',

@@ -14,6 +14,7 @@ import { useBoard } from '../../stores/match.store.ts';
 import { usePeople } from '../../stores/people.store.ts';
 import { useSettings } from '../../stores/settings.store.ts';
 import type { MatchView } from '../../api.ts';
+import type { Rematch } from './boards.ts';
 import type { BoardView, LudoBeat } from '../../game/bridge.ts';
 import { chairsOf, ludoOf } from '../../data/match.ts';
 import { seatsFor } from './seats.ts';
@@ -23,7 +24,7 @@ import { coachOf, movedTo, outcomeOf } from '../../game/helpers/ludo.ts';
 const STAGE = `--cell-cq: ${ (CELL * 100).toFixed(4) }cqi; --margin-cq: ${ (MARGIN * 100).toFixed(4) }cqi`;
 
 
-export default component MatchBoard(props: { match: MatchView; starting?: boolean; onAgain?: () => void; speech?: Record<string, string>; turnMs?: number })
+export default component MatchBoard(props: { match: MatchView; starting?: boolean; onAgain?: () => void; rematch?: Rematch; speech?: Record<string, string>; turnMs?: number })
 {
     const locale = useLocale();
     const board = useBoard();
@@ -294,7 +295,7 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
 
         <Show when={ over }>
             { () =>
-                <TableResult match={ game } mine={ mine } busy={ props.starting === true } onAgain={ props.onAgain } />
+                <TableResult match={ game } mine={ mine } busy={ props.starting === true } onAgain={ props.onAgain } rematch={ props.rematch } />
             }
         </Show>
     </div>
