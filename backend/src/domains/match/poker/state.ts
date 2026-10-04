@@ -77,6 +77,8 @@ export interface PokerState
     opening: number;
     hand: number;
     button: number;
+    sb: number;
+    bb: number;
     street: Street;
     board: number[];
     holes: number[][];

@@ -349,7 +349,7 @@ describe('an all-in short of a full raise', () =>
     });
 });
 
-describe('heads-up', () =>
+describe('heads-up, TDA 2026 Rule 36', () =>
 {
     it('puts the button on the small blind, first to act preflop and last after the flop', () =>
     {
@@ -410,6 +410,224 @@ describe('heads-up', () =>
 
         expect(state.street).toBe('flop');
         expect(state.turn).toBe(1);
+    });
+});
+
+const OTHERS = ['7C 8D', '9C TD', 'JC QD', 'KC 4D'];
+const BOARD = 'KD QC 9S 5H 4S';
+
+const holesWith = (seats: number, strong: number, weak: number) =>
+{
+    const spare = [...OTHERS];
+
+    return Array.from({ length: seats }, (_, seat) =>
+    {
+        if (seat === strong)
+        {
+            return 'AS AH';
+        }
+
+        return seat === weak ? '2C 3D' : spare.shift() ?? '';
+    });
+};
+
+const postedIn = (events: readonly PokerEvent[]) =>
+{
+    const deal = events.findIndex((event) => event.e === 'deal');
+
+    return events.slice(deal + 1).flatMap((event) => (event.e === 'blind' ? [[event.seat, event.amount]] : []));
+};
+
+describe('the dead button, TDA 2026 Rule 34', () =>
+{
+    it('moves the big blind on one seat when the big blind busts, leaving a dead small blind', () =>
+    {
+        const dealt = seated([1500, 1500, 100, 1500, 1500, 1500], 0, holesWith(6, 3, 2), BOARD);
+        const die = dealt.die;
+        let state = dealt.state;
+
+        expect(state.bets).toEqual([0, 10, 20, 0, 0, 0]);
+
+        state = play(state, { kind: 'call', seat: 3 }, die).state;
+
+        for (const seat of [4, 5, 0, 1])
+        {
+            state = play(state, { kind: 'fold', seat }, die).state;
+        }
+
+        state = play(state, { kind: 'allin', seat: 2 }, die).state;
+
+        const next = play(state, { kind: 'call', seat: 3 }, die);
+
+        state = next.state;
+
+        expect(state.out[2]).toBe(true);
+        expect(state.hand).toBe(2);
+        expect(state.button).toBe(1);
+        expect(postedIn(next.events), 'nobody posts the small blind the bust left behind').toEqual([[3, 20]]);
+        expect(state.bets).toEqual([0, 0, 0, 20, 0, 0]);
+        expect(state.turn).toBe(4);
+    });
+
+    it('skips a bust who was due the next big blind, and the old big blind posts the small', () =>
+    {
+        const dealt = seated([1500, 1500, 1500, 100, 1500, 1500], 0, holesWith(6, 2, 3), BOARD);
+        const die = dealt.die;
+        let state = dealt.state;
+
+        state = play(state, { kind: 'allin', seat: 3 }, die).state;
+
+        for (const seat of [4, 5, 0, 1])
+        {
+            state = play(state, { kind: 'fold', seat }, die).state;
+        }
+
+        const next = play(state, { kind: 'call', seat: 2 }, die);
+
+        state = next.state;
+
+        expect(state.out[3]).toBe(true);
+        expect(state.button).toBe(1);
+        expect(postedIn(next.events)).toEqual([[2, 10], [4, 20]]);
+        expect(state.turn).toBe(5);
+    });
+
+    it('leaves the button on the empty seat of a small blind who busted, and the next seat opens the flop', () =>
+    {
+        const dealt = seated([1500, 100, 1500, 1500, 1500, 1500], 0, holesWith(6, 3, 1), BOARD);
+        const die = dealt.die;
+        let state = dealt.state;
+
+        state = play(state, { kind: 'call', seat: 3 }, die).state;
+
+        for (const seat of [4, 5, 0])
+        {
+            state = play(state, { kind: 'fold', seat }, die).state;
+        }
+
+        state = play(state, { kind: 'allin', seat: 1 }, die).state;
+        state = play(state, { kind: 'fold', seat: 2 }, die).state;
+
+        const next = play(state, { kind: 'call', seat: 3 }, die);
+
+        state = next.state;
+
+        expect(state.out[1]).toBe(true);
+        expect(state.button, 'a dead button').toBe(1);
+        expect(postedIn(next.events), 'the big blind posts again only after an orbit').toEqual([[2, 10], [3, 20]]);
+        expect(state.turn).toBe(4);
+
+        for (const seat of [4, 5, 0, 2])
+        {
+            state = play(state, { kind: 'call', seat }, die).state;
+        }
+
+        state = play(state, { kind: 'check', seat: 3 }, die).state;
+
+        expect(state.street).toBe('flop');
+        expect(state.turn).toBe(2);
+    });
+
+    it('gives the button to whoever had the latest big blind when the table goes heads-up, Rule 36', () =>
+    {
+        const dealt = seated([100, 1500, 1500], 0, holesWith(3, 2, 0), BOARD);
+        const die = dealt.die;
+        let state = dealt.state;
+
+        expect(state.bets).toEqual([0, 10, 20]);
+
+        state = play(state, { kind: 'allin', seat: 0 }, die).state;
+        state = play(state, { kind: 'fold', seat: 1 }, die).state;
+
+        const next = play(state, { kind: 'call', seat: 2 }, die);
+
+        state = next.state;
+
+        expect(state.out[0]).toBe(true);
+        expect(state.button, 'the last big blind takes the button').toBe(2);
+        expect(postedIn(next.events), 'nobody takes the big blind twice in a row').toEqual([[2, 10], [1, 20]]);
+        expect(state.turn, 'the button acts first preflop').toBe(2);
+
+        state = play(state, { kind: 'call', seat: 2 }, die).state;
+        state = play(state, { kind: 'check', seat: 1 }, die).state;
+
+        expect(state.street).toBe('flop');
+        expect(state.turn, 'and last after it').toBe(1);
+    });
+
+    it('moves the big blind one live seat every hand of random games, and the small blind and the button follow it', () =>
+    {
+        for (const seats of [2, 3, 6, 9])
+        {
+            for (let game = 0; game < 6; game += 1)
+            {
+                const die = seeded(seats * 7919 + game);
+                let state = create(seats, 'low', die);
+                const out = new Set<number>();
+                const hands = [{ button: state.button, posted: [state.bets.indexOf(10), state.bets.indexOf(20)], out: new Set<number>() }];
+                let actions = 0;
+
+                while (state.winner === null && actions < 20_000)
+                {
+                    const legal = legalMoves(state, state.turn);
+                    const chosen = die.next() < 0.01
+                        ? { kind: 'forfeit' as const, seat: state.turn, reason: 'timeout' as const }
+                        : legal[Math.floor(die.next() * legal.length)];
+                    const applied = apply(state, chosen, die);
+
+                    if (!applied.ok)
+                    {
+                        throw new Error(applied.reason);
+                    }
+
+                    for (const event of applied.events)
+                    {
+                        if (event.e === 'bust' || event.e === 'forfeit')
+                        {
+                            out.add(event.seat);
+                        }
+                        else if (event.e === 'deal')
+                        {
+                            hands.push({ button: event.button, posted: [], out: new Set(out) });
+                        }
+                        else if (event.e === 'blind')
+                        {
+                            hands[hands.length - 1].posted.push(event.seat);
+                        }
+                    }
+
+                    state = applied.state;
+                    actions += 1;
+                }
+
+                let small = hands[0].posted[0];
+
+                for (let index = 1; index < hands.length; index += 1)
+                {
+                    const now = hands[index];
+                    const before = hands[index - 1].posted[hands[index - 1].posted.length - 1];
+                    const big = now.posted[now.posted.length - 1];
+                    const live = Array.from({ length: seats }, (_, seat) => seat).filter((seat) => !now.out.has(seat));
+                    const due = Array.from({ length: seats }, (_, step) => (before + 1 + step) % seats).find((seat) => !now.out.has(seat));
+                    const where = `${ seats } seats, game ${ game }, hand ${ index + 1 }`;
+
+                    expect(big, `${ where }: the big blind moves one live seat`).toBe(due);
+                    expect(big, `${ where }: nobody takes the big blind twice in a row`).not.toBe(before);
+
+                    if (live.length === 2)
+                    {
+                        expect(now.posted, `${ where }: heads-up, the button posts the small blind`).toEqual([now.button, big]);
+                        small = now.button;
+                    }
+                    else
+                    {
+                        expect(now.posted, `${ where }: the last big blind posts the small one, or nobody does`).toEqual(now.out.has(before) ? [big] : [before, big]);
+                        expect(now.button, `${ where }: the button takes the last small blind's seat`).toBe(small);
+                        small = before;
+                    }
+                }
+            }
+        }
     });
 });
 

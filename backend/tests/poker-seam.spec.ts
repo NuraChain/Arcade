@@ -231,9 +231,9 @@ describe('what one seat may see of another', () =>
         expect(state.board).toEqual([]);
         expect(known.size).toBe(18);
         expect(Object.keys(state).sort()).toEqual([
-            'acts', 'bets', 'board', 'button', 'current', 'exits', 'faced', 'folded', 'game', 'gone', 'hand', 'holes',
-            'last', 'opening', 'out', 'places', 'put', 'raise', 'rev', 'seats', 'stacks', 'start', 'street', 'turn', 'v',
-            'winner'
+            'acts', 'bb', 'bets', 'board', 'button', 'current', 'exits', 'faced', 'folded', 'game', 'gone', 'hand', 'holes',
+            'last', 'opening', 'out', 'places', 'put', 'raise', 'rev', 'sb', 'seats', 'stacks', 'start', 'street', 'turn',
+            'v', 'winner'
         ]);
     });
 });

@@ -76,13 +76,34 @@ function alive(state: PokerState)
     return state.out.map((_, seat) => seat).filter((seat) => !state.out[seat]);
 }
 
-function startHand(state: PokerState, events: PokerEvent[], die: Die)
+function positions(state: PokerState)
 {
-    if (state.hand > 0)
+    if (state.hand === 0)
     {
-        state.button = nextAlive(state, state.button);
+        const sb = alive(state).length === 2 ? state.button : nextAlive(state, state.button);
+
+        return { button: state.button, sb, bb: nextAlive(state, sb) };
     }
 
+    const bb = nextAlive(state, state.bb);
+
+    if (alive(state).length === 2)
+    {
+        const button = nextAlive(state, bb);
+
+        return { button, sb: button, bb };
+    }
+
+    return { button: state.sb, sb: state.bb, bb };
+}
+
+function startHand(state: PokerState, events: PokerEvent[], die: Die)
+{
+    const { button, sb, bb } = positions(state);
+
+    state.button = button;
+    state.sb = sb;
+    state.bb = bb;
     state.hand += 1;
 
     const { small, big } = blindsAt(levelOf(state));
@@ -98,11 +119,13 @@ function startHand(state: PokerState, events: PokerEvent[], die: Die)
 
     events.push({ e: 'deal', hand: state.hand, button: state.button, small, big });
 
-    const sb = alive(state).length === 2 ? state.button : nextAlive(state, state.button);
-    const bb = nextAlive(state, sb);
-
     for (const [seat, amount] of [[sb, small], [bb, big]] as const)
     {
+        if (state.out[seat])
+        {
+            continue;
+        }
+
         const chips = Math.min(amount, state.stacks[seat]);
 
         commit(state, seat, chips);
@@ -409,6 +432,8 @@ export function create(seats: number, blinds: keyof typeof OPENING, die: Die)
         opening: OPENING[blinds],
         hand: 0,
         button: Math.min(seats, Math.max(1, Math.floor(die(seats)))) - 1,
+        sb: -1,
+        bb: -1,
         street: 'preflop',
         board: [],
         holes: Array.from({ length: seats }, () => []),

@@ -53,6 +53,22 @@ they have to, and `view` never builds another seat's.
 
 Hole cards go out two rounds, starting left of the button. The first button is drawn from `draws`.
 
+### The button and the blinds
+
+**The button is dead, as TDA 2026 Rule 34 asks of every tournament.** The BIG BLIND is what moves:
+one live seat to the left every hand, so nobody can skip it by sitting beside a bust. The small blind
+and the button follow from it - the small blind is the seat that had the big blind last hand, and the
+button is the seat that had the small blind - and a seat that busted stays in that chain, so a bust
+can leave a dead small blind (nobody posts it) or a dead button (the button sits on an empty seat,
+and the first live seat to its left is dealt first and acts first after the flop). The state carries
+`button`, `sb` and `bb` as seats, any of which may be out.
+
+**Heads-up the button is the small blind** (TDA 2026 Rule 36): it acts first preflop and last on
+every later street. Going heads-up follows Robert's Rules: the player who had the most recent big
+blind takes the button, which is the adjustment Rule 36 allows so that nobody takes the big blind
+twice in a row. Moving the big blind to the next live seat already gives exactly that, so there is
+no separate branch for the transition.
+
 ### Betting
 
 - **Minimum raise** is the last full raise; a bet is at least the big blind.
@@ -60,8 +76,8 @@ Hole cards go out two rounds, starting left of the button. The first button is d
   TDA's: a seat may raise again only if what it faces now, over what it last matched, is at least a
   full raise — so two short all-ins that add up to a full raise DO reopen it. `faced[seat]` is the
   bet level the seat matched when it last acted, and it is the whole mechanism.
-- **Heads-up is its own branch**: the button posts the small blind and acts first preflop, last on
-  every later street.
+- **Heads-up is its own branch** (TDA 2026 Rule 36): the button posts the small blind and acts first
+  preflop, last on every later street.
 - **The big blind is owed in full** even when the player in the big blind is all-in for less; the
   excess comes back as an uncalled bet.
 - **Nobody may raise into a table that cannot answer.** With every other player all-in, the choices
@@ -153,7 +169,9 @@ A play is `{ kind: 'poker', verb: 'fold' | 'check' | 'call' | 'raise' | 'allin',
 
 - `poker-rules.spec.ts` — every category and the wheel, ties and kickers, the pot maths, side pots
   with conservation after every action, the short all-in (alone, behind a full raise, and summed),
-  heads-up order, the odd chip, the blind schedule, and placements.
+  heads-up order, the dead button (a bust in the big blind, the small blind and the next big blind,
+  the move to heads-up, and the big blind's walk through random games), the odd chip, the blind
+  schedule, and placements.
 - `poker-engine.spec.ts` — the catalogue, parsing and wire bounds, every refusal, autoplay, the next
   hand dealt inside `apply`, the all-in runout, walkouts, the facts `finish` reports and the places a forfeit takes, the turn key, tally and points.
 - `poker-seam.spec.ts` — the forgery on `view` and `log`, spectators, folded hands never shown.
@@ -186,6 +204,6 @@ holds a card after folding or busting.
 
 ## What is left
 
-Cash tables, rebuys, PLO, hand replay and a dead-button rule are not built. A two-browser play pass
+Cash tables, rebuys, PLO and hand replay are not built. A two-browser play pass
 through the interface, like `play-pass.mjs` for ludo, is not written yet; the moves were played by
 hand in the browser at 390 (Persian and English), 844x390 and 1280.
