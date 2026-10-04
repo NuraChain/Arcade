@@ -110,7 +110,7 @@ Quick-play button in the product outside the home page. `npm run qa` tours route
 presses a button, so no gate could see it. `lib/open-table.ts` takes the promise as an argument -
 the caller never holds the id, so the broken form cannot be written - and owns the refusal, which
 eight `void`-less calls had nowhere to put. Nothing enforces that now - see *The rules no test holds
-any more*.
+any more* in `frontend/CLAUDE.md`.
 
 **Every control on the table page is a `Button` with words on it.** Three of them were not, and each
 failed differently. "Take a seat" - the whole point of the watching panel - was an `IconButton`,

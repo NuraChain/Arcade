@@ -149,28 +149,6 @@ which binds the account uuid because a signature must name something a rename ca
 - **A public route publishes everything on it.** Send what the screen needs, not a whole person.
 - **A refused fetch is not an empty list.** Render the failure, never "nobody has done this yet".
 
-## The rules no test holds any more
-
-`frontend/tests/markup.spec.ts` (deleted 2026-09-20) refused these shapes by reading `src/` as text.
-Each once shipped with every gate green; they are still house style:
-
-- a `lobby.quick`/`lobby.host` call inside a play url, or HOLDING one of those promises in a variable
-- a `fallback` or a `when` that asserts non-null on something the surrounding guard owns
-- a send path that does not ask what stands in the way
-- a store mutator that writes a signal from a value it read out of that same signal
-- an `effect` whose only signal read hides behind an optional call (it subscribes to nothing)
-- a hand-written panel surface instead of `Panel`
-- a primitive in `components/ui/` with no caller anywhere
-- one element asked to both grow and be visually hidden
-- a loading flag derived straight from a resource rather than gated on having nothing to show
-- a block comment inside the markup region
-- `madder` used for something merely wrong rather than a table playing for something
-- an invisible control character anywhere in `src/`
-- an element that is only a display name and lacks `dir="auto"`
-- a `to`/`href` naming a path `routes.ts` never declares
-- a ternary choosing between two ELEMENTS inside a control-flow branch (built once, untracked - see
-  *The product shell* in `frontend/CLAUDE.md`)
-
 ## Verification
 
 `npm run check` · `npm test` · `npm run test:shuffle` · `npm run build` · `npm run qa`, then the
@@ -180,16 +158,13 @@ hand-run passes in `tools/qa/` against the built server: `regression`, `ludo`, `
 every route at 390, 1280 and 1440 in both languages against `design.jpg`, a clean console, and the
 WebGL disposal check (no "Too many active WebGL contexts" after repeated create and dispose).
 
-Three sizing traps: a grid item needs `min-w-0` to shrink around `truncate`; an `<input>`'s wrapper
-needs `min-w-0` too; and a `<button>` shrink-wraps even at `display: flex`, so a class list shared with
-a `<div>` must state `w-full`.
-
 ## Where the rest lives
 
 Loaded only when a session touches the matching code:
 
 - `backend/CLAUDE.md` - the server, the database and schema, the social graph, groups.
-- `frontend/CLAUDE.md` - the frontend, the landing, the design system, the shell, mobile first, RTL.
+- `frontend/CLAUDE.md` - the frontend, the landing, the design system, the shell, mobile first, RTL,
+  and the markup rules no test holds any more.
 - `.claude/rules/games.md` - tables, voice, the engines, the boards, records, and the second audit.
 - `.claude/rules/chat-and-keys.md` - chat, `nura-e2ee/v1`, devices, sealing, recovery, franking,
   notifications, realtime, and the first audit.
