@@ -61,6 +61,15 @@ function begin(state: BackgammonState, seat: number, die: Die, events: Backgammo
     return rolled(waiting, seat, dice, die, events, passes);
 }
 
+function openWith(state: BackgammonState, first: number, second: number, die: Die, events: BackgammonEvent[])
+{
+    const seat = first > second ? 0 : 1;
+
+    events.push({ e: 'opening', seat, dice: [first, second] });
+
+    return rolled(state, seat, [first, second], die, events, 0);
+}
+
 function opening(previous: BackgammonState, die: Die, events: BackgammonEvent[])
 {
     const state: BackgammonState = { ...previous, turns: previous.turns + 1 };
@@ -72,20 +81,13 @@ function opening(previous: BackgammonState, die: Die, events: BackgammonEvent[])
 
         if (first !== second)
         {
-            const seat = first > second ? 0 : 1;
-
-            events.push({ e: 'opening', seat, dice: [first, second] });
-
-            return rolled(state, seat, [first, second], die, events, 0);
+            return openWith(state, first, second, die, events);
         }
     }
 
-    const seat = die(2) - 1;
-    const dice = [die(6), die(6)];
+    const first = die(6);
 
-    events.push({ e: 'opening', seat, dice });
-
-    return rolled(state, seat, dice, die, events, 0);
+    return openWith(state, first, 1 + (first - 1 + die(5)) % 6, die, events);
 }
 
 export function create(target: number, cube: boolean, die: Die)

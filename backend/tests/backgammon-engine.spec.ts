@@ -93,13 +93,17 @@ describe('the opening roll', () =>
         expect(state.dice).toEqual([2, 5]);
     });
 
-    it('still opens when every throw ties, rather than rolling forever', () =>
+    it('still opens when every throw ties, rather than rolling forever, and never on a doublet', () =>
     {
-        const state = opened(3, true, [4]);
+        for (const face of [1, 2, 3, 4, 5, 6])
+        {
+            const state = opened(3, true, [face]);
+            const [first, second] = state.dice;
 
-        expect([0, 1]).toContain(state.turn);
-        expect(state.phase).toBe('move');
-        expect(state.dice).toEqual([4, 4]);
+            expect(state.phase).toBe('move');
+            expect(first).not.toBe(second);
+            expect(state.turn).toBe(first > second ? 0 : 1);
+        }
     });
 
     it('opens every later game of the match the same way, and says so in the log', () =>
@@ -428,6 +432,32 @@ describe('autoplay', () =>
 
         expect(autoplay(offered, 1)).toEqual({ kind: 'drop', seat: 1 });
         expect(autoplay(offered, 0)).toBeNull();
+    });
+
+    it('never offers or takes a double for anybody over the opening turns of a game', () =>
+    {
+        const cube: string[] = [];
+
+        for (let seed = 0; seed < 100; seed += 1)
+        {
+            const die = dieFrom(seeded(seed));
+            let state = create(5, true, die);
+
+            while (state.round === 1 && state.turns <= 2 && state.winner === null)
+            {
+                const seat = backgammonEngine.turnOf(state)!;
+                const auto = autoplay(state, seat)!;
+
+                if (auto.kind === 'double' || auto.kind === 'take')
+                {
+                    cube.push(`seed ${ seed } turn ${ state.turns }: ${ auto.kind }`);
+                }
+
+                state = applied(apply(state, auto, die)).state;
+            }
+        }
+
+        expect(cube).toEqual([]);
     });
 
     it('plays nothing for somebody who is not on turn, or after the match', () =>

@@ -82,9 +82,11 @@ opening roll (2-1: 15 … 6-6: 11).
 
 ### Turn flow
 
-A match opens mid-turn. `create` throws one die per seat, re-throws a tie (at most sixteen times,
-then picks the starter with one draw so a constant fixture cannot spin), and the higher starts with
-those two dice. Every later game of the match opens the same way and logs an `opening` event.
+A match opens mid-turn. `create` throws one die per seat, re-throws a tie, and the higher starts with
+those two dice, so an opening is never a doublet. After sixteen ties, so a constant fixture cannot
+spin, the fallback throws one die and draws the other from the five faces left: still two different
+dice, still the higher one starts, and never a doublet. Every later game of the match opens the same
+way and logs an `opening` event.
 
 After a move, a take or a roll that passes, the next player's turn begins:
 
@@ -152,7 +154,7 @@ changes when a dance passes the dice back round or a new game opens on the same 
 
 What the sweep plays for somebody whose clock ran out: `roll` in `phase: 'roll'` (never a double),
 the first full legal turn in `phase: 'move'`, and `drop` when a double is waiting on them, which is
-the loss that is bounded.
+the loss that is bounded. Autoplay never offers or takes a double, the opening turns included.
 
 ---
 
