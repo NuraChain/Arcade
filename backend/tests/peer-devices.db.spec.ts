@@ -10,6 +10,7 @@ import { createChatService } from '../src/domains/chat/service.ts';
 import { createPeerDevices } from '../src/domains/device/peers.ts';
 import { createDeviceService } from '../src/domains/device/service.ts';
 import { deviceIdFrom } from '../src/domains/device/id.ts';
+import { namesDevice } from '../src/domains/device/resource.ts';
 import { createSocialService } from '../src/domains/social/service.ts';
 import { entities } from '../src/entities/index.ts';
 import { hashToken, mintToken } from '../src/lib/crypto.ts';
@@ -141,7 +142,7 @@ describe.skipIf(!active)('what a peer may learn about somebody devices', () =>
 
         // The kept bytes must be the bytes that were signed, and they must name this device -
         // otherwise the proof verifies against something nobody can reproduce.
-        expect(row.attested_message).toContain(`nura:device:${ id }`);
+        expect(namesDevice(row.attested_message ?? '', id)).toBe(true);
     });
 
     it('refuses to hold a wallet-attested device with no proof beside it', async () =>
