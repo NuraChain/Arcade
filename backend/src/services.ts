@@ -635,7 +635,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         }
 
         return {
-            ...(row.result == null ? {} : { result: row.result as 'won' | 'lost' | 'abandoned' }),
+            ...(row.result == null ? {} : { result: row.result }),
             ...(row.rating_before == null || row.rating_after == null
                 ? {}
                 : { ratingBefore: row.rating_before, ratingAfter: row.rating_after })

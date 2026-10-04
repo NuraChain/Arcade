@@ -11,6 +11,7 @@ export const play = {
     'home.recent.won': 'You won at {game}',
     'home.recent.lost': 'You lost at {game}',
     'home.recent.abandoned': 'You left a game of {game}',
+    'home.recent.void': 'A game of {game} did not count',
     'home.table.seated': 'seated',
     'home.table.open': 'Waiting',
     'home.table.ready': 'Ready',

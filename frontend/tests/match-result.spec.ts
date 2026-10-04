@@ -194,3 +194,34 @@ describe('what the next game waits on, read off the chairs', () =>
         ], { matchId: 'match-done', status: 'playing' }))).toEqual({ ready: false, waiting: [], empty: 0 });
     });
 });
+
+describe('a seat the match never judged', () =>
+{
+    const voided = {
+        ...finished,
+        outcome: 'abandoned',
+        winner: undefined,
+        players: [
+            { seat: 0, who: 'alex', timeouts: 0, result: 'void' },
+            { seat: 1, who: 'omid.k', timeouts: 0, result: 'abandoned', ratingBefore: 1200, ratingAfter: 1184 }
+        ]
+    } as MatchView;
+
+    const mine = (container: HTMLElement) =>
+        [...container.querySelectorAll('li')].find((one) => one.textContent?.includes(useLocale().t('match.you')));
+
+    it('reads No contest', () =>
+    {
+        const container = renderTest(() => MatchResult({ match: voided, mine: 0 }) as Rendered).container;
+
+        expect(mine(container)?.textContent).toContain('No contest');
+    });
+
+    it('reads it in Persian too', () =>
+    {
+        useLocale().setLocale('fa');
+        const container = renderTest(() => MatchResult({ match: voided, mine: 0 }) as Rendered).container;
+
+        expect(mine(container)?.textContent).toContain('بی‌نتیجه');
+    });
+});

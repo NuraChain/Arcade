@@ -57,6 +57,7 @@ export const me = {
     'history.result.won': 'Won',
     'history.result.lost': 'Lost',
     'history.result.abandoned': 'Left',
+    'history.result.void': 'No contest',
     'history.against': 'with {players}',
 
     'profile.title': 'Your profile',

@@ -10,6 +10,7 @@ import type {
     ConversationDevices,
     ConversationSummary,
     Device,
+    MatchHistoryEntry,
     MuteSubject,
     NftItem,
     PersonSummary,
@@ -185,6 +186,7 @@ export const server =
 
     /** A game's leaderboard. Empty by default, which is what a game nobody has played looks like. */
     standings: [] as { handle: string; rating: number; played: number; won: number }[],
+    history: [] as MatchHistoryEntry[],
 
     /** The social half: mutes the fake server holds, and the privacy it enforces. */
     mutes: [] as { kind: MuteSubject; id: string }[],
@@ -352,6 +354,7 @@ export const server =
         server.achievements = { scopes: [], families: [], recent: [] };
         server.progress = { xp: 0, level: 1, into: 0, span: 100 };
         server.ladders = {};
+        server.history = [];
         server.groups = GROUP_FIXTURES.map((group) => ({
             id: group.slug,
             slug: group.slug,
@@ -1524,7 +1527,7 @@ export const client =
     },
 
     /**
-     * Games that have finished, which is none of them here.
+     * Games that have finished: none, unless a spec puts some in `server.history`.
      *
      * The same reason `social.record` answers empty: the profile pages page this on mount, and a
      * namespace the fake does not have at all is an unhandled rejection rather than a missing
@@ -1535,7 +1538,7 @@ export const client =
         async history()
         {
             server.calls.push('matches.history');
-            return { matches: [] };
+            return { matches: server.history.map((row) => ({ ...row })) };
         }
     },
 

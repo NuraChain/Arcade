@@ -1,6 +1,7 @@
 {
     "tables": [
         "achievements",
+        "avatars",
         "blocks",
         "conversation_epochs",
         "conversation_members",
@@ -42,6 +43,10 @@
         "achievements.name_fa text NO -",
         "achievements.sort_order smallint NO -",
         "achievements.tier character varying NO -",
+        "avatars.bytes bytea NO -",
+        "avatars.created_at timestamp with time zone NO now()",
+        "avatars.hash character NO -",
+        "avatars.type character varying NO -",
         "blocks.blocked_id uuid NO -",
         "blocks.created_at timestamp with time zone NO now()",
         "blocks.user_id uuid NO -",
@@ -277,6 +282,7 @@
         "user_achievements.match_id uuid YES -",
         "user_achievements.user_id uuid NO -",
         "users.allow_stranger_messages boolean NO true",
+        "users.avatar text YES -",
         "users.bio text NO ''::text",
         "users.created_at timestamp with time zone NO now()",
         "users.display_name text NO -",
@@ -301,6 +307,9 @@
     "checks": [
         "achievements_tier_known :: CHECK (((tier)::text = ANY ((ARRAY['bronze'::character varying, 'silver'::character varying, 'gold'::character varying, 'platinum'::character varying, 'diamond'::character varying])::text[])))",
         "achievements_translated :: CHECK (((length(btrim(name_en)) > 0) AND (length(btrim(name_fa)) > 0) AND (length(btrim(blurb_en)) > 0) AND (length(btrim(blurb_fa)) > 0)))",
+        "avatars_bytes_bounded :: CHECK (((octet_length(bytes) >= 1) AND (octet_length(bytes) <= 65536)))",
+        "avatars_hash_shape :: CHECK ((hash ~ '^[0-9a-f]{64}$'::text))",
+        "avatars_type_known :: CHECK (((type)::text = ANY ((ARRAY['image/webp'::character varying, 'image/jpeg'::character varying, 'image/png'::character varying])::text[])))",
         "blocks_not_self :: CHECK ((user_id <> blocked_id))",
         "conversation_epochs_has_recipients :: CHECK ((recipients <> ''::text))",
         "conversation_epochs_numbered :: CHECK ((epoch >= 1))",
@@ -330,7 +339,7 @@
         "match_actions_kind_known :: CHECK (((kind)::text = ANY ((ARRAY['play'::character varying, 'forfeit'::character varying])::text[])))",
         "match_actions_rev_positive :: CHECK ((rev > 0))",
         "match_players_rating_pairs :: CHECK (((rating_before IS NULL) = (rating_after IS NULL)))",
-        "match_players_result_known :: CHECK (((result IS NULL) OR ((result)::text = ANY ((ARRAY['won'::character varying, 'lost'::character varying, 'abandoned'::character varying])::text[]))))",
+        "match_players_result_known :: CHECK (((result IS NULL) OR ((result)::text = ANY ((ARRAY['won'::character varying, 'lost'::character varying, 'abandoned'::character varying, 'void'::character varying])::text[]))))",
         "match_players_timeouts_positive :: CHECK ((timeouts >= 0))",
         "match_players_xp :: CHECK ((xp >= 0))",
         "matches_finished_has_outcome :: CHECK (((finished_at IS NULL) = (outcome IS NULL)))",
@@ -438,6 +447,7 @@
     ],
     "primaryKeys": [
         "achievements PRIMARY KEY (id)",
+        "avatars PRIMARY KEY (hash)",
         "blocks PRIMARY KEY (user_id, blocked_id)",
         "conversation_epochs PRIMARY KEY (conversation_id, epoch)",
         "conversation_members PRIMARY KEY (conversation_id, user_id)",
@@ -480,6 +490,7 @@
     "indexShapes": [
         "achievements CREATE INDEX ON public.achievements USING btree (sort_order)",
         "achievements CREATE UNIQUE INDEX ON public.achievements USING btree (id)",
+        "avatars CREATE UNIQUE INDEX ON public.avatars USING btree (hash)",
         "blocks CREATE INDEX ON public.blocks USING btree (blocked_id)",
         "blocks CREATE UNIQUE INDEX ON public.blocks USING btree (user_id, blocked_id)",
         "conversation_epochs CREATE UNIQUE INDEX ON public.conversation_epochs USING btree (conversation_id, epoch)",

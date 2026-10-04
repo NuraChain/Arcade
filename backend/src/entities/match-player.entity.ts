@@ -2,7 +2,7 @@ import { Check, Column, Entity, Index, JoinColumn, ManyToOne, PrimaryColumn } fr
 import { Match } from './match.entity.ts';
 import { User } from './user.entity.ts';
 
-export type MatchResult = 'won' | 'lost' | 'abandoned';
+export type MatchResult = 'won' | 'lost' | 'abandoned' | 'void';
 
 /**
  * Who sat in which chair, permanently.
@@ -16,7 +16,7 @@ export type MatchResult = 'won' | 'lost' | 'abandoned';
  * the game, so a finished match still names everyone who played it.
  */
 @Check('match_players_rating_pairs', `(rating_before is null) = (rating_after is null)`)
-@Check('match_players_result_known', `result is null or result in ('won', 'lost', 'abandoned')`)
+@Check('match_players_result_known', `result is null or result in ('won', 'lost', 'abandoned', 'void')`)
 @Check('match_players_timeouts_positive', `timeouts >= 0`)
 @Check('match_players_xp', `xp >= 0`)
 @Index('match_players_one_per_person', ['matchId', 'userId'], { unique: true })

@@ -212,7 +212,7 @@ export const matchHistoryEntry = object({
     seats: number(),
     finishedAt: string(),
     outcome: enumOf(['won', 'abandoned', 'closed']),
-    result: enumOf(['won', 'lost', 'abandoned']),
+    result: enumOf(['won', 'lost', 'abandoned', 'void']),
     ratingBefore: number().optional(),
     ratingAfter: number().optional(),
 
@@ -1194,7 +1194,7 @@ export const matchPlayer = object({
      */
     timeouts: number(),
 
-    result: enumOf(['won', 'lost', 'abandoned']).optional(),
+    result: enumOf(['won', 'lost', 'abandoned', 'void']).optional(),
 
     /**
      * What the game did to this seat's rating. Both or neither, and absent for a match that did not

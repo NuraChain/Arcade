@@ -60,6 +60,7 @@ export const me: Pick<Dictionary, keyof typeof reference> = {
     'history.result.won': 'برد',
     'history.result.lost': 'باخت',
     'history.result.abandoned': 'ترک',
+    'history.result.void': 'بی‌نتیجه',
     'history.against': 'با {players}',
 
     'profile.title': 'پروفایل تو',

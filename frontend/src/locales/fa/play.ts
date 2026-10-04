@@ -14,6 +14,7 @@ export const play: Pick<Dictionary, keyof typeof reference> = {
     'home.recent.won': 'در {game} بردی',
     'home.recent.lost': 'در {game} باختی',
     'home.recent.abandoned': 'از یک بازی {game} بیرون آمدی',
+    'home.recent.void': 'یک بازی {game} حساب نشد',
     'home.table.seated': 'نشسته',
     'home.table.open': 'در انتظار',
     'home.table.ready': 'آماده',

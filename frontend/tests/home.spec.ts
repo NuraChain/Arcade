@@ -10,11 +10,22 @@ import { useAccount } from '../src/stores/account.store.ts';
 import { useCatalogue } from '../src/stores/catalogue.store.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
 import { useRecord } from '../src/stores/record.store.ts';
+import type { MatchHistoryEntry } from '../src/api.ts';
 import { server } from './fake-api.ts';
 
 vi.mock('../src/api.ts', async () => await import('./fake-api.ts'));
 
 type Rendered = HTMLElement;
+
+const voided: MatchHistoryEntry = {
+    id: 'match-void',
+    game: 'ludo',
+    seats: 2,
+    finishedAt: new Date(4000).toISOString(),
+    outcome: 'abandoned',
+    result: 'void',
+    players: ['alex', 'sara.k']
+};
 
 const settle = async () =>
 {
@@ -88,6 +99,23 @@ describe('the home page', () =>
         const container = await show();
 
         expect(container.textContent).toContain('Games you finish show up here');
+    });
+
+    it('says a game that never counted did not count', async () =>
+    {
+        server.history = [voided];
+        const container = await show();
+
+        expect(container.textContent).toContain('A game of Ludo did not count');
+    });
+
+    it('says it in Persian too', async () =>
+    {
+        useLocale().setLocale('fa');
+        server.history = [voided];
+        const container = await show();
+
+        expect(container.textContent).toContain('یک بازی منچ حساب نشد');
     });
 
     it('offers every game as a tile that opens its page', async () =>

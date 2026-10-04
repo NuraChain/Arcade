@@ -7,6 +7,7 @@ import '../src/entities/index.ts';
 import { GAME_SEEDS } from '../src/db/seed-reference.ts';
 import { RUNGS } from '../src/domains/achieve/families.ts';
 import { NOTICES, NOTICE_OF } from '../src/domains/notify/notices.ts';
+import { matchHistoryEntry, matchPlayer } from '../src/schemas.ts';
 import { GAMES } from '../../frontend/src/data/games.ts';
 import { TABLE_RULES } from '../../frontend/src/data/tables.ts';
 
@@ -162,5 +163,29 @@ describe('notices: the kinds a person can switch off hold together', () =>
     {
         expect(Object.keys(NOTICE_OF).sort()).toEqual(listed('notifications_kind_known').sort());
         expect(new Set(Object.values(NOTICE_OF))).toEqual(new Set(NOTICES));
+    });
+});
+
+describe('match results: the database and the wire name the same ones', () =>
+{
+    const known = [...(getMetadataArgsStorage().checks.find((one) => one.name === 'match_players_result_known')?.expression ?? '').matchAll(/'([a-z-]+)'/g)].map((match) => match[1]);
+
+    const row = (result: string) => ({ id: 'm', game: 'ludo', seats: 2, finishedAt: '2026-10-04T00:00:00.000Z', outcome: 'won', result, players: [] });
+    const seat = (result: string) => ({ seat: 0, who: 'dana.w', timeouts: 0, result });
+
+    it('keeps a seat the match never judged as void', () =>
+    {
+        expect([...known].sort()).toEqual(['abandoned', 'lost', 'void', 'won']);
+    });
+
+    it('carries exactly the results the CHECK accepts, in a history row and on a seat', () =>
+    {
+        const candidates = new Set([...known, 'won', 'lost', 'abandoned', 'void', 'closed', 'draw', 'left', 'resign', 'timeout', 'Void', '']);
+
+        for (const result of candidates)
+        {
+            expect(matchHistoryEntry.safeParse(row(result)).ok, result).toBe(known.includes(result));
+            expect(matchPlayer.safeParse(seat(result)).ok, result).toBe(known.includes(result));
+        }
     });
 });

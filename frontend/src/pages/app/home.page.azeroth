@@ -29,7 +29,15 @@ import { useSocial } from '../../stores/social.store.ts';
 const RESULT_ICON: Record<MatchHistoryEntry['result'], IconName> = {
     won: 'trophy',
     lost: 'dice',
-    abandoned: 'sign-out'
+    abandoned: 'sign-out',
+    void: 'undo'
+};
+
+const RESULT_TINT: Record<MatchHistoryEntry['result'], string> = {
+    won: 'bg-win/15 text-win',
+    lost: 'bg-accent/12 text-accent',
+    abandoned: 'bg-danger/12 text-danger',
+    void: 'bg-raised text-muted'
 };
 
 export default component HomePage()
@@ -183,7 +191,7 @@ export default component HomePage()
                                     <li class="flex min-h-14 items-center gap-3 border-b border-line py-2.5 last:border-b-0">
                                         <span class={ () => [
                                             'flex h-9 w-9 shrink-0 items-center justify-center rounded-full',
-                                            row.result === 'won' ? 'bg-win/15 text-win' : (row.result === 'abandoned' ? 'bg-danger/12 text-danger' : 'bg-accent/12 text-accent')
+                                            RESULT_TINT[row.result]
                                         ].join(' ') }>
                                             <Icon name={ RESULT_ICON[row.result] } size={ 16 } />
                                         </span>

@@ -2,7 +2,7 @@ import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@
 import { In, IsNull, MoreThan, type DataSource, type EntityManager } from 'typeorm';
 
 import { MatchAction } from '../../entities/match-action.entity.ts';
-import { MatchPlayer } from '../../entities/match-player.entity.ts';
+import { MatchPlayer, type MatchResult } from '../../entities/match-player.entity.ts';
 import { Match } from '../../entities/match.entity.ts';
 import { Table } from '../../entities/table.entity.ts';
 import { TableSeat } from '../../entities/table-seat.entity.ts';
@@ -30,7 +30,7 @@ interface HistoryRow
     seats: number;
     finished_at: Date;
     outcome: 'won' | 'abandoned' | 'closed';
-    result: 'won' | 'lost' | 'abandoned';
+    result: MatchResult;
     rating_before: number | null;
     rating_after: number | null;
     players: string[] | null;
@@ -84,7 +84,7 @@ export interface MatchSeatRow
 
     colour: number;
     timeouts: number;
-    result: string | null;
+    result: MatchResult | null;
     rating_before: number | null;
     rating_after: number | null;
 }
