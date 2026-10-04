@@ -19,7 +19,7 @@ import { useLocale } from '../../stores/locale.store.ts';
 import { usePeople } from '../../stores/people.store.ts';
 import { diceOf, stage } from '../../../../backend/src/domains/match/backgammon/moves.ts';
 import type { Hop } from '../../../../backend/src/domains/match/backgammon/board.ts';
-import { coachOf, hits, outcomeOf, type Outcome } from '../../game/helpers/backgammon.ts';
+import { coachOf, hits, outcomeOf } from '../../game/helpers/backgammon.ts';
 import {
     BAR_LEFT,
     BAR_WIDTH,
@@ -96,7 +96,7 @@ const SLAB = (BOTTOM - TOP - 40) / 30;
 
 const GAP = 10;
 
-const centreOf = (point: number): number => columnOf(point).x + POINT_WIDTH / 2;
+const centreOf = (point: number) => columnOf(point).x + POINT_WIDTH / 2;
 
 export default component BackgammonBoard(props: { match: MatchView; starting?: boolean; onAgain?: () => void; speech?: Record<string, string>; turnMs?: number })
 {
@@ -137,9 +137,9 @@ export default component BackgammonBoard(props: { match: MatchView; starting?: b
     derived rowOf = (seat: number): readonly number[] =>
         view?.seats.find((row) => row.seat === seat)?.checkers ?? [];
 
-    derived whoAt = (seat: number): string => game.players.find((one) => one.seat === seat)?.who ?? '';
+    derived whoAt = (seat: number) => game.players.find((one) => one.seat === seat)?.who ?? '';
 
-    derived nameOf = (seat: number): string =>
+    derived nameOf = (seat: number) =>
     {
         if (seat === mine)
         {
@@ -251,7 +251,7 @@ export default component BackgammonBoard(props: { match: MatchView; starting?: b
         return out;
     })();
 
-    derived slabs = ((): Slab[] =>
+    derived slabs = (() =>
     {
         const out: Slab[] = [];
 
@@ -280,7 +280,7 @@ export default component BackgammonBoard(props: { match: MatchView; starting?: b
 
     derived dice = view === null ? [] : diceOf(view.dice);
 
-    derived spent = ((): boolean[] =>
+    derived spent = (() =>
     {
         const left = [...dice];
         const used = dice.map(() => false);
@@ -317,7 +317,7 @@ export default component BackgammonBoard(props: { match: MatchView; starting?: b
 
     derived faces = dice.map((face, index) => ({ face, index, spent: spent[index] === true }));
 
-    derived cubeY = ((): number =>
+    derived cubeY = (() =>
     {
         if (view === null || view.owner === undefined)
         {
@@ -327,7 +327,7 @@ export default component BackgammonBoard(props: { match: MatchView; starting?: b
         return view.owner === viewer ? BOTTOM - 44 : TOP + 44;
     })();
 
-    const spotSays = (spot: number): string =>
+    const spotSays = (spot: number) =>
     {
         if (spot === 25)
         {
@@ -337,9 +337,9 @@ export default component BackgammonBoard(props: { match: MatchView; starting?: b
         return spot === 0 ? locale.t('backgammon.off') : locale.n(spot);
     };
 
-    const outcomeAt = (hop: Hop): Outcome | null => (told && plan !== null ? outcomeOf(plan.at, hop) : null);
+    const outcomeAt = (hop: Hop) => (told && plan !== null ? outcomeOf(plan.at, hop) : null);
 
-    const hopSays = (hop: Hop): string =>
+    const hopSays = (hop: Hop) =>
     {
         const said = outcomeAt(hop);
 
@@ -401,7 +401,7 @@ export default component BackgammonBoard(props: { match: MatchView; starting?: b
         return locale.t('backgammon.turn.move', { dice: locale.list(view.dice.map((face) => locale.n(face))) });
     })();
 
-    derived stacksSaid = (seat: number): string =>
+    derived stacksSaid = (seat: number) =>
     {
         const row = seat === viewer ? near : far;
         const own = seat === viewer;
@@ -423,20 +423,20 @@ export default component BackgammonBoard(props: { match: MatchView; starting?: b
         return `${ nameOf(seat) }: ${ locale.list(parts) }`;
     };
 
-    const add = (hop: Hop): void =>
+    const add = (hop: Hop) =>
     {
         staged = [...staged, hop];
         picked = null;
         haptic('tick');
     };
 
-    const undo = (): void =>
+    const undo = () =>
     {
         staged = staged.slice(0, -1);
         picked = null;
     };
 
-    const tap = (event: PointerEvent): void =>
+    const tap = (event: PointerEvent) =>
     {
         const held = plan;
 
@@ -484,13 +484,13 @@ export default component BackgammonBoard(props: { match: MatchView; starting?: b
         picked = spot;
     };
 
-    const play = async (verb: 'roll' | 'double' | 'take' | 'drop'): Promise<void> =>
+    const play = async (verb: 'roll' | 'double' | 'take' | 'drop') =>
     {
         haptic('select');
         await board.play({ kind: 'backgammon', verb });
     };
 
-    const submit = async (): Promise<void> =>
+    const submit = async () =>
     {
         if (plan?.done !== true || staged.length === 0)
         {

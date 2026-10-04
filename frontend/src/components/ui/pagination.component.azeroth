@@ -24,7 +24,7 @@ export default component Pagination(props: {
 
     let nav: HTMLElement | null = null;
 
-    const go = (page: number): void =>
+    const go = (page: number) =>
     {
         props.onPage(page);
         const list = nav?.previousElementSibling;

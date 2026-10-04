@@ -44,7 +44,7 @@ export default component ReportSheet(props: OverlayProps & {
      * and the person believed moderation had their evidence. On a safety surface that is the worst
      * possible failure mode: somebody stops looking for another way to get help.
      */
-    const submit = async (): Promise<void> =>
+    const submit = async () =>
     {
         if (sending)
         {

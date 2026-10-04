@@ -6,7 +6,7 @@ export const RECORD_KEY = 'games.nura.record';
 
 export const RECORD_MAX_BYTES = 4096;
 
-export function recordValue(record: PersonRecord | null): string
+export function recordValue(record: PersonRecord | null)
 {
     if (record === null || record.games.every((one) => one.played === 0))
     {
@@ -156,7 +156,7 @@ export function createChainProfiles(settings: ChainSettings): ChainProfiles
     let client: PublicClient | null = null;
 
     /** Built on first use, so an unconfigured deployment opens no transport at all. */
-    const reader = (): PublicClient =>
+    const reader = () =>
     {
         client ??= createPublicClient({ transport: http(settings.rpcUrl) });
         return client;

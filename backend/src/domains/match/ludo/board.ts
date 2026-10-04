@@ -66,7 +66,7 @@ const YARD_CORNER: Readonly<Record<LudoColour, readonly [number, number]>> = {
     blue: [0, 9]
 };
 
-function trace(segments: readonly Segment[]): Cell[]
+function trace(segments: readonly Segment[])
 {
     const cells: Cell[] = [];
 
@@ -114,7 +114,7 @@ export function yardCells(colour: LudoColour): readonly Cell[]
     ];
 }
 
-export function ringIndex(colour: LudoColour, progress: number): number
+export function ringIndex(colour: LudoColour, progress: number)
 {
     return (ENTRY[colour] + progress) % RING;
 }
@@ -134,7 +134,7 @@ export function cellAt(colour: LudoColour, progress: number): Cell | null
     return HOME_CELLS[colour][progress - RING_STEPS];
 }
 
-export function isSafeRing(index: number): boolean
+export function isSafeRing(index: number)
 {
     return SAFE.includes(index);
 }

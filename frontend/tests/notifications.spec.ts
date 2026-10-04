@@ -17,7 +17,7 @@ import '../src/locales/app-catalogue.ts';
 
 let clock: ReturnType<typeof manualClock>;
 
-const settle = async (): Promise<void> =>
+const settle = async () =>
 {
     for (let turn = 0; turn < 12; turn += 1)
     {
@@ -218,7 +218,7 @@ describe('the notifications store', () =>
 
 describe('what a notification says', () =>
 {
-    const render = (item: Notification): string =>
+    const render = (item: Notification) =>
     {
         const { container } = renderTest(() =>
             NotificationRow({ item, onOpen: () => undefined, onDismiss: () => undefined }) as HTMLElement);

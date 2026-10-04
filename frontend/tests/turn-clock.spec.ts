@@ -18,7 +18,7 @@ vi.mock('../src/game/sound.ts', () => ({
 
 type Rendered = HTMLElement;
 
-const clock = (): ManualClock => runtime().clock as ManualClock;
+const clock = () => runtime().clock as ManualClock;
 
 beforeEach(() =>
 {

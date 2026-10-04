@@ -36,7 +36,7 @@ export const socket =
     /** The live connection's handlers, or null between connections. */
     live: null as RealtimeHandlers | null,
 
-    reset(): void
+    reset()
     {
         socket.opens = 0;
         socket.closed = [];
@@ -47,12 +47,12 @@ export const socket =
     },
 
     /** The handshake completes. */
-    accept(): void
+    accept()
     {
         socket.live?.onOpen();
     },
 
-    deliver(frame: ServerFrame): void
+    deliver(frame: ServerFrame)
     {
         socket.live?.onFrame(frame);
     },
@@ -61,7 +61,7 @@ export const socket =
      * The far end hangs up. 1006 is what a browser reports for a socket that died without a close
      * frame, which is what an interrupted connection actually looks like.
      */
-    drop(code = 1006): void
+    drop(code = 1006)
     {
         const handlers = socket.live;
         socket.live = null;

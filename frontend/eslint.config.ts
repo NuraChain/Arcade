@@ -4,6 +4,8 @@ import tseslint from 'typescript-eslint';
 import { defineConfig, globalIgnores } from 'eslint/config';
 import azeroth from '@azerothjs/eslint-plugin';
 
+import { nura } from '../tools/eslint/return-types.ts';
+
 // The AzerothJS house style: allman braces, 4-space indent, single quotes, and the
 // TypeScript discipline the framework itself is written under. `azeroth.configs.recommended`
 // makes .azeroth a first-class lint target (full rule set + the reactivity rules).
@@ -21,6 +23,7 @@ const config: ReturnType<typeof defineConfig> = defineConfig([
     {
         files: ['**/*.{js,mjs,cjs,ts,mts,cts}'],
         languageOptions: { globals: globals.browser },
+        plugins: { nura },
         rules:
         {
             'no-undef': 'off',
@@ -47,7 +50,8 @@ const config: ReturnType<typeof defineConfig> = defineConfig([
             'linebreak-style': ['error', 'unix'],
             'no-unused-vars': 'off',
             '@typescript-eslint/no-explicit-any': 'error',
-            '@typescript-eslint/explicit-function-return-type': ['warn', { allowExpressions: true, allowTypedFunctionExpressions: true }],
+            '@typescript-eslint/no-inferrable-types': 'error',
+            'nura/prefer-inferred-return-type': 'error',
             '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_', destructuredArrayIgnorePattern: '^_' }],
             '@typescript-eslint/consistent-type-definitions': ['error', 'interface'],
             '@typescript-eslint/consistent-type-imports': ['error', { prefer: 'type-imports', fixStyle: 'separate-type-imports', disallowTypeAnnotations: false }],
@@ -77,19 +81,13 @@ const config: ReturnType<typeof defineConfig> = defineConfig([
         }
     },
     {
-        files: ['**/*.{js,mjs,cjs}'],
-        rules: { '@typescript-eslint/explicit-function-return-type': 'off' }
+        files: ['**/*.ts'],
+        languageOptions:
+        {
+            parserOptions: { projectService: { allowDefaultProject: ['*.config.ts'] }, tsconfigRootDir: import.meta.dirname }
+        }
     },
-    {
-        files: ['**/*.spec.ts', '**/tests/**/*.ts'],
-        rules: { '@typescript-eslint/explicit-function-return-type': 'off' }
-    },
-    ...azeroth.configs.recommended,
-    {
-        // A .azeroth component's return type is owned by the compiler, not the author.
-        files: ['**/*.azeroth/*.ts'],
-        rules: { '@typescript-eslint/explicit-function-return-type': 'off' }
-    }
+    ...azeroth.configs.recommended
 ]);
 
 export default config;

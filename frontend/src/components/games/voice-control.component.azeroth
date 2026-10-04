@@ -30,7 +30,7 @@ export default component VoiceControl(props: { table: string })
 
     derived speaking = voice.people().some((person) => person.me && person.speaking);
 
-    const join = (): void =>
+    const join = () =>
     {
         haptic('select');
         void voice.join(props.table).then(() =>

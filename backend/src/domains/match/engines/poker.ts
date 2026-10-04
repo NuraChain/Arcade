@@ -15,7 +15,7 @@ type PokerBoard = Extract<MatchBoard, { kind: 'poker' }>;
 
 const dieOf = (draws: Draws): Die => (sides) => draws.die(sides);
 
-function readerOf(state: PokerState, seat: number | null): number | null
+function readerOf(state: PokerState, seat: number | null)
 {
     return seat !== null && Number.isInteger(seat) && seat >= 0 && seat < state.seats ? seat : null;
 }
@@ -25,7 +25,7 @@ export const pokerEngine: Engine<PokerState, PokerAction> = {
 
     seats: SEATS,
 
-    create: (seats: readonly number[], draws: Draws, table: TableConfig): PokerState =>
+    create: (seats: readonly number[], draws: Draws, table: TableConfig) =>
         create(seats.length, table.blinds, dieOf(draws)),
 
     parse: (play: MatchPlay, seat: number): PokerAction | null =>
@@ -47,11 +47,11 @@ export const pokerEngine: Engine<PokerState, PokerAction> = {
 
     apply: (state: PokerState, action: PokerAction, draws: Draws) => apply(state, action, dieOf(draws)),
 
-    legal: (state: PokerState, seat: number): PokerAction[] => legalMoves(state, seat),
+    legal: (state: PokerState, seat: number) => legalMoves(state, seat),
 
-    turnOf: (state: PokerState): number | null => (state.winner === null && state.turn >= 0 ? state.turn : null),
+    turnOf: (state: PokerState) => (state.winner === null && state.turn >= 0 ? state.turn : null),
 
-    autoplay: (state: PokerState, seat: number): PokerAction | null => autoplay(state, seat),
+    autoplay: (state: PokerState, seat: number) => autoplay(state, seat),
 
     finish: (state: PokerState): Ending | null =>
     {
@@ -125,11 +125,11 @@ export const pokerEngine: Engine<PokerState, PokerAction> = {
             .flatMap((event) => (event.e === 'hole' ? [] : [{ ...event }]))
     }),
 
-    tally: (events: readonly unknown[]): Map<number, Tally> =>
+    tally: (events: readonly unknown[]) =>
     {
         const bySeat = new Map<number, Tally>();
 
-        const bump = (seat: number, name: string): void =>
+        const bump = (seat: number, name: string) =>
         {
             const tally = bySeat.get(seat) ?? {};
 
@@ -163,5 +163,5 @@ export const pokerEngine: Engine<PokerState, PokerAction> = {
         return bySeat;
     },
 
-    points: (tally: Tally): number => Math.min(XP_CAP, (tally.pots ?? 0) + XP_KNOCKOUT * (tally.knockouts ?? 0))
+    points: (tally: Tally) => Math.min(XP_CAP, (tally.pots ?? 0) + XP_KNOCKOUT * (tally.knockouts ?? 0))
 };

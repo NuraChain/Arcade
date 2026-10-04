@@ -3,7 +3,7 @@ export function holdScreen(): () => void
     let held: WakeLockSentinel | null = null;
     let released = false;
 
-    const hold = (): void =>
+    const hold = () =>
     {
         if (released || document.visibilityState !== 'visible' || navigator.wakeLock === undefined)
         {

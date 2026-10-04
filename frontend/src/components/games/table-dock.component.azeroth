@@ -5,7 +5,7 @@ import { useLocale } from '../../stores/locale.store.ts';
 import { useOverlay } from '../../stores/overlay.store.ts';
 import { useSettings } from '../../stores/settings.store.ts';
 
-const canFullscreen = (): boolean =>
+const canFullscreen = () =>
     typeof document !== 'undefined' && document.fullscreenEnabled === true;
 
 const lockUpright = (): Promise<void> =>
@@ -36,7 +36,7 @@ export default component TableDock(props: {
 
     mount
     {
-        const onChanged = (): void =>
+        const onChanged = () =>
         {
             full = document.fullscreenElement !== null;
         };
@@ -46,7 +46,7 @@ export default component TableDock(props: {
         return () => document.removeEventListener('fullscreenchange', onChanged);
     }
 
-    const toggleFull = (): void =>
+    const toggleFull = () =>
     {
         const host = props.target ?? document.documentElement;
 
@@ -61,7 +61,7 @@ export default component TableDock(props: {
         void document.exitFullscreen?.().catch(() => undefined);
     };
 
-    const openMenu = (): void =>
+    const openMenu = () =>
     {
         overlay.open(
             TableMenu,

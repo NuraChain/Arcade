@@ -92,7 +92,7 @@ describe('message catalogues', () =>
 
     it('keeps the brand mark assembling to the full name in both languages', () =>
     {
-        const compose = (d: Dictionary): string =>
+        const compose = (d: Dictionary) =>
             `${ messageText(d['brand.lead']) } ${ messageText(d['brand.accent']) } ${ messageText(d['brand.trail']) }`
                 .replace(/\s+/g, ' ')
                 .trim();

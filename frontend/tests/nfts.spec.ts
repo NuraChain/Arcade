@@ -12,7 +12,7 @@ import { server } from './fake-api.ts';
 
 vi.mock('../src/api.ts', async () => await import('./fake-api.ts'));
 
-const settle = async (): Promise<void> =>
+const settle = async () =>
 {
     for (let i = 0; i < 12; i++)
     {
@@ -33,7 +33,7 @@ const token = (n: number): NftItem => ({
     image: n === 2 ? '' : `/api/nfts/image/${ COLLECTION }/${ n }`
 });
 
-const signIn = (kind: 'wallet' | 'guest'): void =>
+const signIn = (kind: 'wallet' | 'guest') =>
 {
     const account: Account = {
         id: 'u-dana',
@@ -49,7 +49,7 @@ const signIn = (kind: 'wallet' | 'guest'): void =>
     useSession().establish(account);
 };
 
-const render = async (component: () => HTMLElement): Promise<HTMLElement> =>
+const render = async (component: () => HTMLElement) =>
 {
     const table: Route[] = [{ path: '/app/me/nfts', component }];
     const router = createRouter({ routes: table, history: createMemoryHistory('/app/me/nfts'), scroll: false });

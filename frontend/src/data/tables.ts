@@ -76,7 +76,7 @@ export function defaultTable(game: GameId): TableConfig
     };
 }
 
-export function isValidTable(config: TableConfig): boolean
+export function isValidTable(config: TableConfig)
 {
     const rules = TABLE_RULES[config.game];
     return rules.seats.includes(config.seats)

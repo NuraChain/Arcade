@@ -23,7 +23,7 @@ import { matchPlayer, matchView } from '../src/schemas.ts';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
-const read = (name: string): string => readFileSync(join(HERE, '..', 'src', name), 'utf8')
+const read = (name: string) => readFileSync(join(HERE, '..', 'src', name), 'utf8')
     .replace(/\/\*[\s\S]*?\*\//g, '')
     .replace(/\/\/.*$/gm, '');
 

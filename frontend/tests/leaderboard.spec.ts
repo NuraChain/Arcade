@@ -17,7 +17,7 @@ vi.mock('../src/api.ts', async () => await import('./fake-api.ts'));
 
 type Rendered = HTMLElement;
 
-const settle = async (): Promise<void> =>
+const settle = async () =>
 {
     for (let i = 0; i < 8; i += 1)
     {
@@ -39,7 +39,7 @@ const summary = (id: string, status: 'available' | 'coming-soon'): unknown => ({
     rules: { seats: [2, 4], modes: ['live'], targets: [], stakes: 'none', partners: false, hasCube: false, hasBlinds: false }
 });
 
-const show = async (): Promise<HTMLElement> =>
+const show = async () =>
 {
     const page = LeaderboardPage as unknown as () => HTMLElement;
     const table: Route[] = [{ path: '/app/leaderboard', component: page }];

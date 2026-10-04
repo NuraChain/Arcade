@@ -38,7 +38,7 @@ export default component YardBadge(props: {
 
     derived routine = props.player.result === undefined && !props.seat.out && props.player.timeouts === 0;
 
-    derived says = ((): string =>
+    derived says = (() =>
     {
         if (props.player.result === 'won')
         {

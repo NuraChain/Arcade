@@ -62,17 +62,17 @@ export const useOverlay = createStore((): OverlayApi =>
     const backstops = new Map<string, () => void>();
     let counter = 0;
 
-    const patch = (id: string, change: Partial<OverlayEntry>): void =>
+    const patch = (id: string, change: Partial<OverlayEntry>) =>
         setItems((current) => current.map((entry) => (entry.id === id ? { ...entry, ...change } : entry)));
 
-    const settle = (id: string): void =>
+    const settle = (id: string) =>
     {
         backstops.get(id)?.();
         backstops.delete(id);
         setItems((current) => current.filter((entry) => entry.id !== id));
     };
 
-    const close = (id: string, result?: unknown): void =>
+    const close = (id: string, result?: unknown) =>
     {
         const entry = items().find((candidate) => candidate.id === id);
         if (entry === undefined || entry.phase === 'closing')

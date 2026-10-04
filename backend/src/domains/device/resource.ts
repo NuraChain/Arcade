@@ -9,7 +9,7 @@
  * A whole LINE is compared, never a substring: a device id inside some other line, or a longer id
  * that starts with this one, is not this device.
  */
-export const deviceLine = (id: string): string => `Browser key: ${ id }`;
+export const deviceLine = (id: string) => `Browser key: ${ id }`;
 
-export const namesDevice = (message: string, id: string): boolean =>
+export const namesDevice = (message: string, id: string) =>
     message.split('\n').includes(deviceLine(id));

@@ -72,12 +72,12 @@ export default component CreateGameForm(props: { game: Game; onCreated: (tableId
         ? 'create.privacy.friendsHint'
         : (privacy === 'public' ? 'create.privacy.publicHint' : 'create.privacy.inviteHint'));
 
-    const toggleInvite = (id: string): void =>
+    const toggleInvite = (id: string) =>
     {
         invitees = invitees.includes(id) ? invitees.filter((entry) => entry !== id) : [...invitees, id];
     };
 
-    const submit = (): void =>
+    const submit = () =>
     {
         if (!valid || pending)
         {

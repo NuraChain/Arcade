@@ -33,7 +33,7 @@ const FULL: Record<string, string> = {
 
 const saved = { ...process.env };
 
-const use = (env: Record<string, string>): void =>
+const use = (env: Record<string, string>) =>
 {
     for (const key of Object.keys(FULL))
     {

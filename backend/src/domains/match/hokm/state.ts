@@ -130,17 +130,17 @@ export type HokmRefusal =
  * that knows whether a game has teams in it - and it is why the same scoring functions serve the
  * two-handed game and the four-handed one without a branch.
  */
-export function sideOf(seat: number, seats: number): number
+export function sideOf(seat: number, seats: number)
 {
     return seats === 4 ? seat % 2 : seat;
 }
 
-export function sideCount(seats: number): number
+export function sideCount(seats: number)
 {
     return seats === 4 ? 2 : seats;
 }
 
-export function seatsOfSide(side: number, seats: number): number[]
+export function seatsOfSide(side: number, seats: number)
 {
     return Array.from({ length: seats }, (_, seat) => seat).filter((seat) => sideOf(seat, seats) === side);
 }

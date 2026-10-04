@@ -12,9 +12,9 @@ import type { GameEvent, LudoState, Outcome } from '../src/domains/match/ludo/st
  * let two of them swap places silently.
  */
 
-const table = (seats: number, first = 0): LudoState => create(Array.from({ length: seats }, (_, seat) => seat), first);
+const table = (seats: number, first = 0) => create(Array.from({ length: seats }, (_, seat) => seat), first);
 
-const place = (state: LudoState, seat: number, pieces: number[]): LudoState =>
+const place = (state: LudoState, seat: number, pieces: number[]) =>
 {
     const next: LudoState = { ...state, players: state.players.map((player) => ({ ...player, pieces: [...player.pieces] })) };
     next.players[indexOfSeat(next, seat)].pieces = [...pieces];

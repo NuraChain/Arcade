@@ -64,13 +64,13 @@ const position = (mine: Record<number, number>, theirs: Record<number, number>):
     { seat: 1, checkers: row(theirs), pips: 0, score: 0 }
 ];
 
-const lit = (container: HTMLElement): number =>
+const lit = (container: HTMLElement) =>
     container.querySelectorAll('svg circle[stroke="var(--accent)"]').length;
 
-const note = (container: HTMLElement): string | null =>
+const note = (container: HTMLElement) =>
     container.querySelector('[role="note"]')?.textContent ?? null;
 
-const button = (container: HTMLElement, label: string): HTMLButtonElement =>
+const button = (container: HTMLElement, label: string) =>
     [...container.querySelectorAll('button')].find((one) => one.getAttribute('aria-label') === label || one.textContent?.trim() === label) as HTMLButtonElement;
 
 beforeEach(() =>
@@ -142,7 +142,7 @@ describe('BackgammonBoard', () =>
     {
         const play = vi.spyOn(useBoard(), 'play').mockResolvedValue('now');
         const { container } = renderTest(() => BackgammonBoard({ match: match({}) }) as Rendered);
-        const confirm = (): HTMLButtonElement => button(container, 'Play the move');
+        const confirm = () => button(container, 'Play the move');
 
         expect(confirm().disabled).toBe(true);
 
@@ -161,7 +161,7 @@ describe('BackgammonBoard', () =>
     it('takes a staged hop back with undo', () =>
     {
         const { container } = renderTest(() => BackgammonBoard({ match: match({}) }) as Rendered);
-        const undo = (): HTMLButtonElement => button(container, 'Undo');
+        const undo = () => button(container, 'Undo');
 
         expect(undo().disabled).toBe(true);
 
@@ -181,7 +181,7 @@ describe('BackgammonBoard', () =>
         {
             return current();
         } }) as Rendered);
-        const undo = (): HTMLButtonElement => button(container, 'Undo');
+        const undo = () => button(container, 'Undo');
 
         fire(button(container, 'Move a checker from 13 to 7'), 'click');
         setCurrent({ ...current() });
@@ -239,7 +239,7 @@ describe('BackgammonBoard', () =>
 
 describe('the backgammon helpers', () =>
 {
-    const blot = (mine: number | null = 0): MatchView => match({ dice: [5, 3], seats: position({ 13: 1, 1: 14 }, { 17: 1, 6: 14 }) }, mine);
+    const blot = (mine: number | null = 0) => match({ dice: [5, 3], seats: position({ 13: 1, 1: 14 }, { 17: 1, 6: 14 }) }, mine);
 
     it('lights the checkers that can move, and stops when the switch is off without taking a move away', () =>
     {

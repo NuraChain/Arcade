@@ -40,7 +40,7 @@ async function makeUser(options: { strangers?: boolean } = {}): Promise<string>
     return rowsOf<{ id: string }>(rows)[0].id;
 }
 
-async function befriend(a: string, b: string): Promise<void>
+async function befriend(a: string, b: string)
 {
     await social.sendRequest(a, b);
     const { incoming } = await social.requests(b);
@@ -371,7 +371,7 @@ describe.skipIf(!active)('chat, against a real database', () =>
     it('refuses a line at a table whose host turned the chat off, and says so on the list row', async () =>
     {
         const [a, b] = [await makeUser(), await makeUser()];
-        const room = async (chatOn: boolean): Promise<string> =>
+        const room = async (chatOn: boolean) =>
         {
             const table = rowsOf<{ id: string }>(await db.query(
                 `insert into tables (game, code, host_id, seats, mode, privacy, target, cube, blinds, chat, voice)

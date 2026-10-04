@@ -13,7 +13,7 @@ const OPTIONS = [
     { value: 'headset', label: 'Headset' }
 ];
 
-const frame = async (): Promise<void> =>
+const frame = async () =>
 {
     await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)));
     await Promise.resolve();

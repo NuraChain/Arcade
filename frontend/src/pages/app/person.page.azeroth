@@ -92,7 +92,7 @@ export default component PersonPage()
         { label: locale.t('profile.stat.achievements'), value: (held?.achievements.scopes ?? []).reduce((total, one) => total + one.earned, 0) }
     ];
 
-    const viewPicture = (): void =>
+    const viewPicture = () =>
     {
         const src = shown?.avatar ?? '';
         if (src !== '')
@@ -101,7 +101,7 @@ export default component PersonPage()
         }
     };
 
-    const play = (): void =>
+    const play = () =>
     {
         if (person !== null)
         {
@@ -110,7 +110,7 @@ export default component PersonPage()
         }
     };
 
-    const message = (): void =>
+    const message = () =>
     {
         if (person !== null)
         {

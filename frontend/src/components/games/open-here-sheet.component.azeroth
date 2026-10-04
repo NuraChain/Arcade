@@ -58,7 +58,7 @@ export default component OpenHereSheet(props: OverlayProps & { conversationId: s
      */
     derived capacity = chat.conversation(props.conversationId)?.participants.length ?? MOST_SEATS;
 
-    derived fits = (entry: Game): number[] => catalogue.rules(entry.id).seats.filter((count) => count <= capacity);
+    derived fits = (entry: Game) => catalogue.rules(entry.id).seats.filter((count) => count <= capacity);
 
     derived playable = catalogue.games
         .filter((entry) => catalogue.playable(entry.id))
@@ -89,7 +89,7 @@ export default component OpenHereSheet(props: OverlayProps & { conversationId: s
      * string, which is exactly what a `'{min}-{max}'` entry would be. It wears `tally` so the range
      * does not reverse inside a Persian line.
      */
-    const playersOf = (entry: Game): string =>
+    const playersOf = (entry: Game) =>
     {
         const counts = fits(entry);
         const low = counts[0] ?? entry.minPlayers;
@@ -98,7 +98,7 @@ export default component OpenHereSheet(props: OverlayProps & { conversationId: s
         return low === high ? locale.n(low) : `${ locale.n(low) }-${ locale.n(high) }`;
     };
 
-    const open = (): void =>
+    const open = () =>
     {
         if (chosen === null)
         {

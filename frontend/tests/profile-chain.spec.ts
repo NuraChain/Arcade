@@ -17,7 +17,7 @@ import { client, server } from './fake-api.ts';
 
 vi.mock('../src/api.ts', async () => await import('./fake-api.ts'));
 
-const settle = async (): Promise<void> =>
+const settle = async () =>
 {
     for (let i = 0; i < 12; i++)
     {
@@ -28,7 +28,7 @@ const settle = async (): Promise<void> =>
 
 let seed = 0;
 
-const addressOf = (n: number): string => `0x${ n.toString(16).padStart(40, '0') }`;
+const addressOf = (n: number) => `0x${ n.toString(16).padStart(40, '0') }`;
 
 const walletWith = (address: string, send: () => Promise<unknown>, locked = false): { calls: string[]; provider: Eip1193Provider } =>
 {
@@ -79,7 +79,7 @@ const walletWith = (address: string, send: () => Promise<unknown>, locked = fals
 
 let stopWallet: (() => void) | null = null;
 
-const signInWith = async (signer: { provider: Eip1193Provider }, owner: string): Promise<void> =>
+const signInWith = async (signer: { provider: Eip1193Provider }, owner: string) =>
 {
     const account: Account = { id: `u-${ owner }`, handle: 'dana.w', displayName: 'Dana', bio: '', hue: 12, kind: 'wallet', isMinor: false, address: owner };
     server.account = account;
@@ -93,10 +93,10 @@ const signInWith = async (signer: { provider: Eip1193Provider }, owner: string):
 
 let closedWith: boolean | null = null;
 
-const sheet = async (): Promise<HTMLElement> =>
+const sheet = async () =>
 {
     closedWith = null;
-    const close = (value?: unknown): void =>
+    const close = (value?: unknown) =>
     {
         closedWith = value === true;
     };
@@ -108,7 +108,7 @@ const sheet = async (): Promise<HTMLElement> =>
     return container;
 };
 
-const fill = (container: HTMLElement, id: string, value: string): void =>
+const fill = (container: HTMLElement, id: string, value: string) =>
 {
     const field = container.querySelector(`#${ id }`) as HTMLInputElement | HTMLTextAreaElement;
     const proto = Object.getPrototypeOf(field) as object;
@@ -116,13 +116,13 @@ const fill = (container: HTMLElement, id: string, value: string): void =>
     field.dispatchEvent(new Event('input', { bubbles: true }));
 };
 
-const save = async (container: HTMLElement): Promise<void> =>
+const save = async (container: HTMLElement) =>
 {
     [...container.querySelectorAll('button')].find((one) => one.textContent?.trim().startsWith('Save'))?.click();
     await settle();
 };
 
-const told = (): string => useToasts().items().map((toast) => toast.text).join(' | ');
+const told = () => useToasts().items().map((toast) => toast.text).join(' | ');
 
 beforeEach(() =>
 {

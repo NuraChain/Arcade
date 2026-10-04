@@ -54,7 +54,7 @@ export default component Leaderboard(props: { game: GameId; titled?: boolean; se
 
     derived nextFrom = extra.length === 0 ? board.data()?.cursor : cursor;
 
-    const more = async (): Promise<void> =>
+    const more = async () =>
     {
         const from = nextFrom;
 
@@ -92,7 +92,7 @@ export default component Leaderboard(props: { game: GameId; titled?: boolean; se
 
     derived empty = locale.t(showing === 'all' ? 'board.empty' : 'board.emptyWindow');
 
-    const nameOf = (row: { handle: string; person: { displayName: string } }): string =>
+    const nameOf = (row: { handle: string; person: { displayName: string } }) =>
         row.person.displayName === '' ? row.handle : locale.text(row.person.displayName);
 
     <section aria-labelledby="game-board">

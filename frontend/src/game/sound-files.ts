@@ -35,7 +35,7 @@ export const PACK = new URL('./sound/table.cues', import.meta.url).href;
 
 const MAGIC = 'NCUE';
 
-export function unpack(bytes: ArrayBuffer): Map<Sampled, ArrayBuffer[]>
+export function unpack(bytes: ArrayBuffer)
 {
     const found = new Map<Sampled, ArrayBuffer[]>();
 

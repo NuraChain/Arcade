@@ -31,7 +31,7 @@ export function othersOf(conversation: Conversation, me: string, find: (handle: 
  * given - it is imported by a page, a list row, an actions sheet and a search result, and any one
  * of them calling a store from inside a `derived` would subscribe four times over.
  */
-export function groupNameOf(conversation: Conversation, find: (slug: string) => GroupSummary | undefined): string | undefined
+export function groupNameOf(conversation: Conversation, find: (slug: string) => GroupSummary | undefined)
 {
     return conversation.groupId === null ? undefined : find(conversation.groupId)?.name;
 }
@@ -43,7 +43,7 @@ export function groupNameOf(conversation: Conversation, find: (slug: string) => 
  * row, an actions sheet and a search result, and a store call inside a `derived` would subscribe
  * four times over.
  */
-export function gameNameOf(conversation: Conversation, name: (game: GameId) => string): string | undefined
+export function gameNameOf(conversation: Conversation, name: (game: GameId) => string)
 {
     return conversation.game === null ? undefined : name(conversation.game);
 }
@@ -108,7 +108,7 @@ export function titleOf(
 export function sealSentenceOf(
     error: unknown,
     translate: (key: MessageKey, vars?: MessageVars) => string
-): string
+)
 {
     if (!(error instanceof SealFailure))
     {

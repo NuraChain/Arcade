@@ -1,6 +1,6 @@
 import { useLocale } from '../../stores/locale.store.ts';
 
-function quantise(value: number, min: number, max: number, step: number): number
+function quantise(value: number, min: number, max: number, step: number)
 {
     const steps = Math.round((value - min) / step);
     return Math.min(max, Math.max(min, Number((min + steps * step).toFixed(6))));
@@ -34,7 +34,7 @@ export default component Slider(props: {
 
     derived percent = Math.round(Math.min(1, Math.max(0, ratio)) * 100);
 
-    const fromPointer = (clientX: number): void =>
+    const fromPointer = (clientX: number) =>
     {
         if (track === null || props.disabled === true)
         {
@@ -46,7 +46,7 @@ export default component Slider(props: {
         props.onChange(quantise(min + along * (max - min), min, max, step));
     };
 
-    const nudge = (direction: number): void =>
+    const nudge = (direction: number) =>
     {
         if (props.disabled === true)
         {

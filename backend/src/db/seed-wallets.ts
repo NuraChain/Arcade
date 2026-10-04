@@ -48,7 +48,7 @@ const WALLET_THREADS: { left: string; right: string }[] = [
     { left: 'sara.k', right: 'leila.a' }
 ];
 
-const b64url = (buffer: ArrayBuffer): string => Buffer.from(buffer).toString('base64url');
+const b64url = (buffer: ArrayBuffer) => Buffer.from(buffer).toString('base64url');
 
 /**
  * A device nobody holds: two P-256 public keys and the id they hash to.
@@ -81,7 +81,7 @@ export interface WalletSeedConfig
  * a fresh device every boot and pile them up. The guard is "does this account already have one"
  * rather than a fixed id, which is also the rule a real account follows.
  */
-export async function seedWalletFixtures(db: DataSource, config: WalletSeedConfig): Promise<void>
+export async function seedWalletFixtures(db: DataSource, config: WalletSeedConfig)
 {
     if (process.env.NODE_ENV !== 'development')
     {
@@ -172,7 +172,7 @@ async function idsByHandle(db: DataSource): Promise<Map<string, string>>
  * rather than a union of two half-queries. A seed that wrote one direction would produce people
  * who are friends from one side only, which is a state the product has no code for.
  */
-async function seedWalletFriendships(db: DataSource): Promise<void>
+async function seedWalletFriendships(db: DataSource)
 {
     const idOf = await idsByHandle(db);
 
@@ -199,7 +199,7 @@ async function seedWalletFriendships(db: DataSource): Promise<void>
  * Membership moves in lockstep with the conversation, the way `group/service.ts` does it: a member
  * who is not in the thread cannot read what the group is saying.
  */
-async function seedWalletGroup(db: DataSource): Promise<void>
+async function seedWalletGroup(db: DataSource)
 {
     const idOf = await idsByHandle(db);
     const members = WALLET_GROUP.members.map((handle) => idOf.get(handle)).filter((id): id is string => id !== undefined);
@@ -264,7 +264,7 @@ async function seedWalletGroup(db: DataSource): Promise<void>
 }
 
 /** One conversation per pair, idempotent on the unordered pair key the chat domain already uses. */
-async function seedWalletThreads(db: DataSource): Promise<void>
+async function seedWalletThreads(db: DataSource)
 {
     const idOf = await idsByHandle(db);
 

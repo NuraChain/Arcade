@@ -26,7 +26,7 @@ export function createLongPress(options: PressOptions): Press
     let originY = 0;
     let done = false;
 
-    const stop = (): void =>
+    const stop = () =>
     {
         cancel?.();
         cancel = null;

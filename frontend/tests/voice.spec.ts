@@ -69,7 +69,7 @@ const track = { stop: () => undefined } as unknown as MediaStreamTrack;
 
 const stream = { getTracks: () => [track], getAudioTracks: () => [track] } as unknown as MediaStream;
 
-const media = (outcome: 'grant' | 'deny' | 'none'): MediaDevices => ({
+const media = (outcome: 'grant' | 'deny' | 'none') => ({
     getUserMedia: async () =>
     {
         if (outcome === 'grant')
@@ -83,7 +83,7 @@ const media = (outcome: 'grant' | 'deny' | 'none'): MediaDevices => ({
 const voiceFrames = (): Extract<ClientFrame, { t: 'voice' }>[] =>
     socket.sent.filter((frame): frame is Extract<ClientFrame, { t: 'voice' }> => frame.t === 'voice');
 
-const settle = async (): Promise<void> =>
+const settle = async () =>
 {
     for (let i = 0; i < 6; i += 1)
     {
@@ -214,7 +214,7 @@ describe('voice at a table', () =>
         expect(voiceFrames().at(-1)).toMatchObject({ table: TABLE, on: true });
     });
 
-    const room = async (): Promise<void> =>
+    const room = async () =>
     {
         socket.deliver({ v: 1, t: 'voice', n: 3, table: TABLE, joined: true, peers: [
             { who: 'alex', muted: false, talk: true },

@@ -29,9 +29,9 @@ export default component ForwardSheet(props: OverlayProps & { message: Message }
 
     state sending = '';
 
-    const gameName = (game: GameId): string => locale.t(catalogue.byId(game).nameKey);
+    const gameName = (game: GameId) => locale.t(catalogue.byId(game).nameKey);
 
-    const titleFor = (conversation: Conversation): string => locale.text(titleOf(conversation, chat.me(), people.byHandle, {
+    const titleFor = (conversation: Conversation) => locale.text(titleOf(conversation, chat.me(), people.byHandle, {
         group: groupNameOf(conversation, groups.byId),
         game: gameNameOf(conversation, gameName)
     }));
@@ -41,7 +41,7 @@ export default component ForwardSheet(props: OverlayProps & { message: Message }
         .map((conversation) => ({ conversation, title: titleFor(conversation) }))
         .filter((room) => query.trim() === '' || room.title.toLowerCase().includes(query.trim().toLowerCase()));
 
-    const send = async (conversation: Conversation, title: string): Promise<void> =>
+    const send = async (conversation: Conversation, title: string) =>
     {
         if (sending !== '')
         {

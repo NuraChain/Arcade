@@ -120,7 +120,7 @@ function durationFor(input: ToastInput, kind: ToastKind): number
     return input.action !== undefined ? TOAST_ACTION_DURATION : TOAST_DURATION;
 }
 
-export const useToasts = createStore((): ToastsApi =>
+export const useToasts = createStore(() =>
 {
     const [items, setItems] = createSignal<Toast[]>([]);
     const [queue, setQueue] = createSignal<Toast[]>([]);
@@ -129,13 +129,13 @@ export const useToasts = createStore((): ToastsApi =>
     const timers = new Map<string, () => void>();
     let counter = 0;
 
-    const stop = (id: string): void =>
+    const stop = (id: string) =>
     {
         timers.get(id)?.();
         timers.delete(id);
     };
 
-    const arm = (toast: Toast): void =>
+    const arm = (toast: Toast) =>
     {
         stop(toast.id);
         if (!Number.isFinite(toast.remaining))
@@ -145,12 +145,12 @@ export const useToasts = createStore((): ToastsApi =>
         timers.set(toast.id, runtime().clock.after(toast.remaining, () => dismiss(toast.id)));
     };
 
-    const patchItem = (id: string, patch: Partial<Toast>): void =>
+    const patchItem = (id: string, patch: Partial<Toast>) =>
     {
         setItems(untrack(items).map((toast) => (toast.id === id ? { ...toast, ...patch } : toast)));
     };
 
-    const promote = (): void =>
+    const promote = () =>
     {
         while (untrack(items).length < TOAST_VISIBLE && untrack(queue).length > 0)
         {
@@ -163,7 +163,7 @@ export const useToasts = createStore((): ToastsApi =>
         }
     };
 
-    const dismiss = (id: string): void =>
+    const dismiss = (id: string) =>
     {
         stop(id);
         setItems(untrack(items).filter((toast) => toast.id !== id));
@@ -346,7 +346,7 @@ export const useToasts = createStore((): ToastsApi =>
 
         start()
         {
-            const caught = (event: PromiseRejectionEvent): void =>
+            const caught = (event: PromiseRejectionEvent) =>
             {
                 /*
                  * Logged as well as shown, always. The toast is for the person in front of the

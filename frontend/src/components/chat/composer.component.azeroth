@@ -33,7 +33,7 @@ export default component Composer(props: {
 
     const field = (): HTMLTextAreaElement | null => bar?.querySelector('textarea') ?? null;
 
-    const insert = (emoji: string): void =>
+    const insert = (emoji: string) =>
     {
         const area = field();
         const value = props.value;
@@ -54,7 +54,7 @@ export default component Composer(props: {
         });
     };
 
-    const emoji = (): void =>
+    const emoji = () =>
     {
         if (device.coarse() || device.posture() === 'phone')
         {
@@ -68,14 +68,14 @@ export default component Composer(props: {
         }
     };
 
-    const send = (): void =>
+    const send = () =>
     {
         docked = false;
         pop.close();
         props.onSend();
     };
 
-    const dismiss = (event: KeyboardEvent): void =>
+    const dismiss = (event: KeyboardEvent) =>
     {
         if (event.key !== 'Escape')
         {

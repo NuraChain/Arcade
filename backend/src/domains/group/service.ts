@@ -113,7 +113,7 @@ export function createGroupService(db: DataSource, social: SocialService)
         return row?.role ?? null;
     };
 
-    const mustBeMember = async (me: string, groupId: string): Promise<GroupRole> =>
+    const mustBeMember = async (me: string, groupId: string) =>
     {
         const role = await roleOf(me, groupId);
         if (role === null)
@@ -123,7 +123,7 @@ export function createGroupService(db: DataSource, social: SocialService)
         return role;
     };
 
-    const mustOwn = async (me: string, groupId: string): Promise<void> =>
+    const mustOwn = async (me: string, groupId: string) =>
     {
         if (await mustBeMember(me, groupId) !== 'owner')
         {
@@ -174,7 +174,7 @@ export function createGroupService(db: DataSource, social: SocialService)
             return true;
         });
 
-    const unseat = async (groupId: string, userId: string): Promise<void> =>
+    const unseat = async (groupId: string, userId: string) =>
     {
         await db.transaction(async (tx) =>
         {
@@ -255,7 +255,7 @@ export function createGroupService(db: DataSource, social: SocialService)
          * A name that folds to nothing - all emoji, all punctuation - falls back to a word the
          * product owns rather than to something invented from the characters.
          */
-        async create(me: string, input: { name: string; blurb: string; crest: string; hue: number; game: string | null; privacy: GroupPrivacy }): Promise<GroupRow>
+        async create(me: string, input: { name: string; blurb: string; crest: string; hue: number; game: string | null; privacy: GroupPrivacy })
         {
             const name = input.name.trim().slice(0, NAME_MAX);
             if (name.length < 2)
@@ -325,7 +325,7 @@ export function createGroupService(db: DataSource, social: SocialService)
          * Returns false when this account was already in it, so the caller can stay quiet rather
          * than announcing an arrival that did not happen.
          */
-        async join(me: string, groupId: string): Promise<boolean>
+        async join(me: string, groupId: string)
         {
             if (!UUID.test(groupId) || (await one(me, groupId)) === null)
             {
@@ -342,7 +342,7 @@ export function createGroupService(db: DataSource, social: SocialService)
          * that takes no stranger messages, and a minor being added by a stranger are all refused
          * by the one rule rather than by a second opinion written here.
          */
-        async add(me: string, groupId: string, otherId: string): Promise<boolean>
+        async add(me: string, groupId: string, otherId: string)
         {
             await mustBeMember(me, groupId);
 
@@ -432,7 +432,7 @@ export function createGroupService(db: DataSource, social: SocialService)
          * `group_members_single_owner` makes the intermediate two-owner state unrepresentable.
          * That ordering is the whole reason the role is a row rather than a column.
          */
-        async transfer(me: string, groupId: string, otherId: string): Promise<void>
+        async transfer(me: string, groupId: string, otherId: string)
         {
             await mustOwn(me, groupId);
             if (otherId === me)
@@ -457,7 +457,7 @@ export function createGroupService(db: DataSource, social: SocialService)
          * A url that changes when somebody edits a name is a url that breaks every link anyone
          * ever shared. The slug is claimed once, at creation, and the name is free after that.
          */
-        async update(me: string, groupId: string, patch: { name?: string; blurb?: string; crest?: string; game?: string | null; privacy?: GroupPrivacy }): Promise<GroupRow>
+        async update(me: string, groupId: string, patch: { name?: string; blurb?: string; crest?: string; game?: string | null; privacy?: GroupPrivacy })
         {
             await mustOwn(me, groupId);
 

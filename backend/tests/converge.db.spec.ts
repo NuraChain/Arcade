@@ -35,7 +35,7 @@ const PROBE = 'nura_converge_probe';
 let base: DataSource;
 let built: DataSource;
 
-const probeUrl = (): string => new URL(url ?? '').toString().replace(/\/[^/]*$/, `/${ PROBE }`);
+const probeUrl = () => new URL(url ?? '').toString().replace(/\/[^/]*$/, `/${ PROBE }`);
 
 describe.skipIf(!active)('syncSchema settles', () =>
 {

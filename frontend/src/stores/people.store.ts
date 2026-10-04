@@ -55,7 +55,7 @@ export const usePeople = createStore((): PeopleApi =>
     /** Handles already asked about, so a thread of strangers asks once rather than once per render. */
     const asked = new Set<string>();
 
-    const remember = (people: readonly PersonSummary[]): void =>
+    const remember = (people: readonly PersonSummary[]) =>
     {
         if (people.length === 0)
         {

@@ -12,14 +12,14 @@ export interface ThreadRow
 
 export type DayKind = 'today' | 'yesterday' | 'older';
 
-function dayKey(at: number): string
+function dayKey(at: number)
 {
     const date = new Date(at);
 
     return `${ date.getFullYear() }-${ date.getMonth() }-${ date.getDate() }`;
 }
 
-function joins(earlier: Message | undefined, later: Message | undefined): boolean
+function joins(earlier: Message | undefined, later: Message | undefined)
 {
     return earlier !== undefined
         && later !== undefined

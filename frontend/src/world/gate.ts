@@ -20,7 +20,7 @@ export interface Opened
     choice: Choice;
 }
 
-export function refused(conditions: Conditions): boolean
+export function refused(conditions: Conditions)
 {
     return conditions.reducedMotion
         || conditions.saveData

@@ -82,7 +82,7 @@ export function createDeviceService(db: DataSource, config: DeviceConfig)
     const domain = new URL(config.origin).host;
 
     /** The account's most recently used wallet, or null for a guest or a demo persona. */
-    const walletOf = async (userId: string): Promise<string | null> =>
+    const walletOf = async (userId: string) =>
     {
         const row = await db.getRepository(Wallet).findOne({
             select: { address: true },
@@ -167,7 +167,7 @@ export function createDeviceService(db: DataSource, config: DeviceConfig)
         },
 
         /** Which device the session making this request is signed in on, if it has enrolled one. */
-        async deviceOfSession(sessionId: string): Promise<string | null>
+        async deviceOfSession(sessionId: string)
         {
             const row = await db.getRepository(Session).findOne({
                 select: { deviceId: true },
@@ -241,7 +241,7 @@ export function createDeviceService(db: DataSource, config: DeviceConfig)
                 throw new BadRequestError('Those keys do not match that device id.');
             }
 
-            const prove = async (address: string): Promise<AttestationProof> =>
+            const prove = async (address: string) =>
             {
                 if (signedIn === undefined)
                 {
@@ -347,7 +347,7 @@ export function createDeviceService(db: DataSource, config: DeviceConfig)
         },
 
         /** Renames one. The label is theirs to write and is never parsed. */
-        async rename(userId: string, id: string, label: string): Promise<DeviceRow>
+        async rename(userId: string, id: string, label: string)
         {
             const updated = await db.query(
                 `update devices set label = $3

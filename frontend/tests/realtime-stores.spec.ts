@@ -13,7 +13,7 @@ import '../src/locales/app-catalogue.ts';
 
 let clock: ManualClock;
 
-const settle = async (): Promise<void> =>
+const settle = async () =>
 {
     for (let turn = 0; turn < 8; turn += 1)
     {
@@ -21,7 +21,7 @@ const settle = async (): Promise<void> =>
     }
 };
 
-const room = (people: { who: string; state: 'online' | 'away' }[]): void =>
+const room = (people: { who: string; state: 'online' | 'away' }[]) =>
 {
     socket.deliver({
         v: 1,

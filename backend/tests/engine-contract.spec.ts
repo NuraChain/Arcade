@@ -19,7 +19,7 @@ function seeded(seed: number): { draws: Draws; next: () => number }
 {
     let state = (seed * 2654435761) >>> 0 || 1;
 
-    const next = (): number =>
+    const next = () =>
     {
         state ^= state << 13;
         state ^= state >>> 17;
@@ -30,7 +30,7 @@ function seeded(seed: number): { draws: Draws; next: () => number }
     return { draws: { die: (sides) => 1 + Math.floor(next() * sides) }, next };
 }
 
-const revOf = (state: unknown): number => (state as { rev: number }).rev;
+const revOf = (state: unknown) => (state as { rev: number }).rev;
 
 /**
  * Every reason an engine can refuse with has words of its own. An unlisted one still answers - as

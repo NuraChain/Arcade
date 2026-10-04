@@ -1,6 +1,6 @@
 import { redirect, type GuardContext, type GuardVerdict } from 'azerothjs';
 
-export function safeNext(candidate: string | string[] | undefined): string
+export function safeNext(candidate: string | string[] | undefined)
 {
     const value = Array.isArray(candidate) ? candidate[0] : candidate;
     return value !== undefined && value.startsWith('/app') && !value.startsWith('//') ? value : '/app';

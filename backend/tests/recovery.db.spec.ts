@@ -43,7 +43,7 @@ const bob = privateKeyToAccount('0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7
 
 let seq = 0;
 
-const b64url = (buffer: ArrayBuffer): string => Buffer.from(new Uint8Array(buffer)).toString('base64url');
+const b64url = (buffer: ArrayBuffer) => Buffer.from(new Uint8Array(buffer)).toString('base64url');
 
 /** A recovery keypair, as a browser derives one from a phrase. */
 async function phraseKeys(): Promise<{ publicKey: string; sign: (text: string) => Promise<string> }>
@@ -71,7 +71,7 @@ async function keypair(): Promise<{ id: string; exchangeKey: string; signingKey:
     return { id: deviceIdFrom(exchangeKey, signingKey), exchangeKey, signingKey };
 }
 
-async function makeUser(wallet: typeof alice): Promise<string>
+async function makeUser(wallet: typeof alice)
 {
     seq += 1;
     const handle = `r${ seq }x${ Math.floor(Math.random() * 100000) }`;
@@ -101,7 +101,7 @@ async function openSession(userId: string): Promise<string>
     return rowsOf<{ id: string }>(rows)[0].id;
 }
 
-async function enrol(userId: string, wallet: typeof alice): Promise<string>
+async function enrol(userId: string, wallet: typeof alice)
 {
     const keys = await keypair();
     const { nonce, message } = await devices.challenge(userId, keys.id);

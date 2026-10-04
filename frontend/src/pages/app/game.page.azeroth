@@ -45,7 +45,7 @@ export default component GamePage()
 
     derived ruleKeys = game === null ? [] : [1, 2, 3].map((index) => `game.rules.${ game!.id }.${ index }` as MessageKey);
 
-    const quickPlay = (): void =>
+    const quickPlay = () =>
     {
         if (game !== null)
         {

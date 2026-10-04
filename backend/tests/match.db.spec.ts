@@ -39,7 +39,7 @@ let social: ReturnType<typeof createSocialService>;
 
 let seq = 0;
 
-const makeUser = async (): Promise<string> =>
+const makeUser = async () =>
 {
     seq += 1;
 
@@ -86,7 +86,7 @@ const seatedTable = async (seats: number): Promise<{ tableId: string; players: s
     return { tableId: table.id, players };
 };
 
-const countActions = async (matchId: string): Promise<number> =>
+const countActions = async (matchId: string) =>
     Number(rowsOf<{ n: string }>(await db.query(
         `select count(*) as n from match_actions where match_id = $1`,
         [matchId]
@@ -427,12 +427,12 @@ describe.skipIf(!active)('a match, against a real database', () =>
 
     describe('a turn that runs out', () =>
     {
-        const expireNow = async (matchId: string): Promise<void> =>
+        const expireNow = async (matchId: string) =>
         {
             await db.query(`update matches set deadline_at = now() - interval '1 second' where id = $1`, [matchId]);
         };
 
-        const deadlineOf = async (matchId: string): Promise<boolean> =>
+        const deadlineOf = async (matchId: string) =>
             rowsOf<{ future: boolean }>(await db.query(
                 `select deadline_at > now() as future from matches where id = $1`,
                 [matchId]

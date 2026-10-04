@@ -22,7 +22,7 @@ import type { HandshakeLimit } from './handshake-limit.ts';
  * missed it because every https case in it supplied an explicit `:443`, which is the one shape that
  * cannot fail.
  */
-export function isSameOrigin(origin: string, host: string | undefined): boolean
+export function isSameOrigin(origin: string, host: string | undefined)
 {
     if (host === undefined || origin === 'null')
     {
@@ -110,7 +110,7 @@ export function admit(options: AdmitOptions): (origin: string | null, request: I
  * fleet keys on the proxy and the budget becomes one global bucket; in front of one WITH it,
  * anybody can set the header and own somebody else's bucket.
  */
-function clientAddress(request: IncomingMessage, trustProxy: boolean): string
+function clientAddress(request: IncomingMessage, trustProxy: boolean)
 {
     if (trustProxy)
     {
@@ -132,7 +132,7 @@ function clientAddress(request: IncomingMessage, trustProxy: boolean): string
  * about which cookie name is in force - `__Host-nura.session` under TLS and `nura.session`
  * without it. Two parsers would be two answers.
  */
-export function toWebRequest(request: IncomingMessage): Request
+export function toWebRequest(request: IncomingMessage)
 {
     const headers = new Headers();
     const cookie = request.headers.cookie;

@@ -11,12 +11,12 @@ export function diceOf(roll: readonly number[]): number[]
     return roll[0] === roll[1] ? [roll[0], roll[0], roll[0], roll[0]] : [roll[0], roll[1]];
 }
 
-export function landing(from: number, die: number): number
+export function landing(from: number, die: number)
 {
     return Math.max(OFF, from - die);
 }
 
-export function canStep(side: Side, from: number, die: number): boolean
+export function canStep(side: Side, from: number, die: number)
 {
     if (from < 1 || from > BAR || side.me[from] === 0 || (side.me[BAR] > 0 && from !== BAR))
     {
@@ -82,7 +82,7 @@ function without(dice: readonly number[], die: number): number[]
     return [...dice.slice(0, at), ...dice.slice(at + 1)];
 }
 
-function playable(side: Side, die: number): boolean
+function playable(side: Side, die: number)
 {
     for (let from = BAR; from >= 1; from -= 1)
     {
@@ -128,7 +128,7 @@ function deepest(side: Side, dice: readonly number[], memo: Map<string, number>)
     return best;
 }
 
-export function longest(side: Side, dice: readonly number[]): number
+export function longest(side: Side, dice: readonly number[])
 {
     return deepest(side, dice, new Map());
 }
@@ -154,7 +154,7 @@ export function turns(side: Side, roll: readonly number[]): Hop[][]
     const found = new Map<string, Hop[]>();
     const seen = new Set<string>();
 
-    const walk = (at: Side, left: number[], path: Hop[]): void =>
+    const walk = (at: Side, left: number[], path: Hop[]) =>
     {
         if (path.length === need)
         {
@@ -274,7 +274,7 @@ export function stage(side: Side, roll: readonly number[], staged: readonly Hop[
         return null;
     }
 
-    const walk = (at: Side, left: number[], index: number): void =>
+    const walk = (at: Side, left: number[], index: number) =>
     {
         if (index === staged.length)
         {

@@ -315,7 +315,7 @@ describe('a trick is taken by the rules', () =>
 
         state = called.state;
 
-        const play = (): void =>
+        const play = () =>
         {
             const outcome = apply(state, autoplay(state, state.turn, deal)!, deal);
 
@@ -434,7 +434,7 @@ describe('a trick is taken by the rules', () =>
 
 describe('refusing what is not a move', () =>
 {
-    const opened = (): HokmState => create(4, 7, seeded(5));
+    const opened = () => create(4, 7, seeded(5));
 
     it('refuses a trump call from anybody but the Hâkem', () =>
     {

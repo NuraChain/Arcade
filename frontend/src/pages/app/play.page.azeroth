@@ -78,7 +78,7 @@ export default component PlayPage()
 
     state stamp = 0;
 
-    const publish = (): void =>
+    const publish = () =>
     {
         version += 1;
         stamp = version;
@@ -197,7 +197,7 @@ export default component PlayPage()
         }
     }
 
-    const switchVoice = (): void =>
+    const switchVoice = () =>
     {
         const current = untrack(lobby.table);
 
@@ -253,7 +253,7 @@ export default component PlayPage()
     derived chatShown = cardOpen || sheetVisible;
 
     derived openChat = hasChat && !chatShown
-        ? (): void =>
+        ? () =>
         {
             if (floating)
             {
@@ -265,7 +265,7 @@ export default component PlayPage()
         }
         : undefined;
 
-    const closeChat = (): void =>
+    const closeChat = () =>
     {
         if (floating)
         {
@@ -349,7 +349,7 @@ export default component PlayPage()
 
     derived resigning = seated && showing && board.match()?.finishedAt === undefined;
 
-    const resign = async (): Promise<void> =>
+    const resign = async () =>
     {
         const yes = await overlay.open(
             ConfirmSheet,
@@ -372,7 +372,7 @@ export default component PlayPage()
 
     state boardFailed = false;
 
-    const draw = (want: string): void =>
+    const draw = (want: string) =>
     {
         boardFailed = false;
 
@@ -401,7 +401,7 @@ export default component PlayPage()
         });
     };
 
-    const redraw = (): void =>
+    const redraw = () =>
     {
         draw(playing);
     };
@@ -462,7 +462,7 @@ export default component PlayPage()
         }
     }
 
-    const begin = async (): Promise<void> =>
+    const begin = async () =>
     {
         if (table === null || starting)
         {
@@ -485,7 +485,7 @@ export default component PlayPage()
         }
     };
 
-    const copyLink = async (): Promise<void> =>
+    const copyLink = async () =>
     {
         if (table === null)
         {
@@ -494,7 +494,7 @@ export default component PlayPage()
         await copyText(`${ window.location.origin }/app/play/${ table.id }`, 'play.lobby.copied');
     };
 
-    const sitDown = async (): Promise<void> =>
+    const sitDown = async () =>
     {
         if (table === null)
         {
@@ -514,7 +514,7 @@ export default component PlayPage()
         }
     };
 
-    const leave = async (): Promise<void> =>
+    const leave = async () =>
     {
         if (table === null)
         {
@@ -539,7 +539,7 @@ export default component PlayPage()
         }
     };
 
-    const end = async (): Promise<void> =>
+    const end = async () =>
     {
         if (table === null)
         {

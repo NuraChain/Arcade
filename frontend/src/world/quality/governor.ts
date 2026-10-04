@@ -32,9 +32,9 @@ export function createGovernor(options: GovernorOptions): Governor
     let slowSince = -1;
     let current = options.tier;
     let exhausted = false;
-    const now = options.now ?? ((): number => performance.now());
+    const now = options.now ?? (() => performance.now());
 
-    const median = (): number =>
+    const median = () =>
     {
         const count = Math.min(written, WINDOW);
         scratch.set(frames.subarray(0, count));

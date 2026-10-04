@@ -14,7 +14,7 @@ const IMMUTABLE = 'public, max-age=31536000, immutable';
 
 const REVALIDATE = 'public, max-age=0, must-revalidate';
 
-export function accepts(request: Request, coding: string): boolean
+export function accepts(request: Request, coding: string)
 {
     return (request.headers.get('accept-encoding') ?? '').toLowerCase().split(',').some((entry) =>
     {

@@ -22,7 +22,7 @@ export interface Scrolled
     clientHeight: number;
 }
 
-export function isNearBottom(view: Scrolled, slack: number = STICK_SLACK): boolean
+export function isNearBottom(view: Scrolled, slack: number = STICK_SLACK)
 {
     return view.scrollHeight - view.scrollTop - view.clientHeight <= slack;
 }
@@ -35,10 +35,10 @@ export function isNearBottom(view: Scrolled, slack: number = STICK_SLACK): boole
  */
 export function attachStick(element: HTMLElement, onChange: (near: boolean) => void, slack: number = STICK_SLACK): () => void
 {
-    const read = (): void => onChange(isNearBottom(element, slack));
+    const read = () => onChange(isNearBottom(element, slack));
 
     element.addEventListener('scroll', read, { passive: true });
     read();
 
-    return (): void => element.removeEventListener('scroll', read);
+    return () => element.removeEventListener('scroll', read);
 }

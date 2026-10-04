@@ -58,7 +58,7 @@ export default component ChatPage()
     const presence = usePresence();
     const catalogue = useCatalogue();
 
-    const gameName = (game: GameId): string => locale.t(catalogue.byId(game).nameKey);
+    const gameName = (game: GameId) => locale.t(catalogue.byId(game).nameKey);
     const overlay = useOverlay();
     const shell = useShell();
     const toasts = useToasts();
@@ -186,7 +186,7 @@ export default component ChatPage()
 
     let anchor: { first: string; from: number } | null = null;
 
-    const showEarlier = (): void =>
+    const showEarlier = () =>
     {
         if (list !== null)
         {
@@ -213,9 +213,9 @@ export default component ChatPage()
         }
     }
 
-    const keepPlace = (target: HTMLElement, from: number): void =>
+    const keepPlace = (target: HTMLElement, from: number) =>
     {
-        const apply = (): void =>
+        const apply = () =>
         {
             target.scrollTop = target.scrollHeight - from;
         };
@@ -228,7 +228,7 @@ export default component ChatPage()
         }
 
         const watch = new ResizeObserver(apply);
-        const release = (): void =>
+        const release = () =>
         {
             watch.disconnect();
             target.removeEventListener('wheel', release);
@@ -251,7 +251,7 @@ export default component ChatPage()
         }
     }
 
-    const send = (): void =>
+    const send = () =>
     {
         void chat.send(id, chat.draft(id))
             .then(() => haptic('tick'))
@@ -261,12 +261,12 @@ export default component ChatPage()
             });
     };
 
-    const warn = (error: unknown): void =>
+    const warn = (error: unknown) =>
     {
         toasts.show({ kind: 'error', text: sealSentenceOf(error, locale.t), dedupe: `chat-act-${ id }` });
     };
 
-    const nameOf = (handle: string): string =>
+    const nameOf = (handle: string) =>
     {
         if (handle === me)
         {
@@ -278,7 +278,7 @@ export default component ChatPage()
         return person === null ? handle : locale.text(person.displayName);
     };
 
-    const quoteOf = (quoted: string): Message | undefined => all.find((message) => message.id === quoted);
+    const quoteOf = (quoted: string) => all.find((message) => message.id === quoted);
 
     derived replying = ((): { name: string; text: string } | null =>
     {
@@ -287,18 +287,18 @@ export default component ChatPage()
         return target === null ? null : { name: target.from === me ? locale.t('chat.yourself') : nameOf(target.from), text: plainOf(target.text, locale.t('chat.spoilerPreview')) };
     })();
 
-    const reply = (message: Message): void =>
+    const reply = (message: Message) =>
     {
         chat.setReplyTo(id, message);
         requestAnimationFrame(() => document.querySelector<HTMLTextAreaElement>('#chat-thread textarea')?.focus());
     };
 
-    const react = (message: Message, emoji: string): void =>
+    const react = (message: Message, emoji: string) =>
     {
         void chat.react(message, emoji).then(() => haptic('tick')).catch(warn);
     };
 
-    const flash = (target: Element): void =>
+    const flash = (target: Element) =>
     {
         const bubble = target.querySelector('.bubble');
         const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -310,7 +310,7 @@ export default component ChatPage()
         );
     };
 
-    const jump = (quoted: string): void =>
+    const jump = (quoted: string) =>
     {
         const index = messages.findIndex((message) => message.id === quoted);
 
@@ -330,7 +330,7 @@ export default component ChatPage()
         });
     };
 
-    const remove = async (message: Message): Promise<void> =>
+    const remove = async (message: Message) =>
     {
         const yes = await overlay.open(
             ConfirmSheet,
@@ -344,7 +344,7 @@ export default component ChatPage()
         }
     };
 
-    const actions = (message: Message, pick?: boolean): void =>
+    const actions = (message: Message, pick?: boolean) =>
     {
         const talk = !quiet;
 
@@ -378,7 +378,7 @@ export default component ChatPage()
         ));
     };
 
-    const startGame = (): void =>
+    const startGame = () =>
     {
         overlay.open(
             OpenHereSheet,
@@ -389,7 +389,7 @@ export default component ChatPage()
 
     const { back, replace } = useNavigate();
 
-    const goBack = (): void => leave({ back, replace }, shell.depth(), '/app/chats');
+    const goBack = () => leave({ back, replace }, shell.depth(), '/app/chats');
 
     derived split = device.posture() === 'sidebar';
 

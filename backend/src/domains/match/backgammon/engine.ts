@@ -61,7 +61,7 @@ function begin(state: BackgammonState, seat: number, die: Die, events: Backgammo
     return rolled(waiting, seat, dice, die, events, passes);
 }
 
-function opening(state: BackgammonState, die: Die, events: BackgammonEvent[]): BackgammonState
+function opening(state: BackgammonState, die: Die, events: BackgammonEvent[])
 {
     for (let tries = 0; tries < OPENING_TRIES; tries += 1)
     {
@@ -86,7 +86,7 @@ function opening(state: BackgammonState, die: Die, events: BackgammonEvent[]): B
     return rolled(state, seat, dice, die, events, 0);
 }
 
-export function create(target: number, cube: boolean, die: Die): BackgammonState
+export function create(target: number, cube: boolean, die: Die)
 {
     return opening({
         v: 1,

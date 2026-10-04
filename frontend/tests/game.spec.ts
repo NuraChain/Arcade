@@ -221,7 +221,7 @@ describe('the sound layer', () =>
                 contexts.push(this);
             }
 
-            public addEventListener(_name: string, listener: () => void): void
+            public addEventListener(_name: string, listener: () => void)
             {
                 this.listeners.push(listener);
             }
@@ -236,31 +236,31 @@ describe('the sound layer', () =>
                 });
             }
 
-            public suspend(): Promise<void>
+            public suspend()
             {
                 this.suspended += 1;
                 this.state = 'suspended';
                 return Promise.resolve();
             }
 
-            public close(): Promise<void>
+            public close()
             {
                 this.closed += 1;
                 this.state = 'closed';
                 return Promise.resolve();
             }
 
-            public createGain(): Record<string, unknown>
+            public createGain()
             {
                 return node();
             }
 
-            public createDynamicsCompressor(): Record<string, unknown>
+            public createDynamicsCompressor()
             {
                 return node();
             }
 
-            public createStereoPanner(): Record<string, unknown>
+            public createStereoPanner()
             {
                 return node();
             }
@@ -284,7 +284,7 @@ describe('the sound layer', () =>
         return { made: () => made, oscillators: () => oscillators, buffers: () => buffers, last: () => contexts.at(-1) ?? null };
     };
 
-    const pack = (takes: Record<string, number[][]>): ArrayBuffer =>
+    const pack = (takes: Record<string, number[][]>) =>
     {
         const index: Record<string, [number, number][]> = {};
         const bodies: number[] = [];
@@ -320,12 +320,12 @@ describe('the sound layer', () =>
         expect(unpack(new TextEncoder().encode('RIFF0000').buffer).size).toBe(0);
     });
 
-    const tap = (name = 'pointerup'): void =>
+    const tap = (name = 'pointerup') =>
     {
         window.dispatchEvent(new Event(name));
     };
 
-    const flush = async (): Promise<void> =>
+    const flush = async () =>
     {
         for (let step = 0; step < 6; step += 1)
         {
@@ -562,7 +562,7 @@ describe('the two halves of a chair', () =>
      * blank colour and no tokens would render as a fact about the game rather than as a fact about
      * the viewer, which is precisely the confusion the split exists to prevent.
      */
-    const match = (seats: LudoSeat[], players: number[]): MatchView => ({
+    const match = (seats: LudoSeat[], players: number[]) => ({
         id: 'm', tableId: 't', game: 'ludo', rev: 3, seats: players.length, turn: 0,
         players: players.map((seat) => ({ seat, who: `p${ seat }`, timeouts: 0 })),
         view: { kind: 'ludo', die: 6, moves: [1], seats },
@@ -717,7 +717,7 @@ describe('where a card lands on the felt', () =>
 
 describe('a hand arranged the way a person holds it', () =>
 {
-    const card = (suit: number, rank: number): number => suit * 13 + rank;
+    const card = (suit: number, rank: number) => suit * 13 + rank;
 
     it('puts trump first, alternates the colours after it, and holds each suit high to low', () =>
     {
@@ -830,9 +830,9 @@ describe('a finished pawn stands in its own triangle', () =>
         blue: [[6, 9], [9, 9], [MIDDLE, MIDDLE]]
     };
 
-    const inside = (point: readonly [number, number], [a, b, c]: readonly (readonly [number, number])[]): boolean =>
+    const inside = (point: readonly [number, number], [a, b, c]: readonly (readonly [number, number])[]) =>
     {
-        const side = (p: readonly [number, number], q: readonly [number, number], r: readonly [number, number]): number =>
+        const side = (p: readonly [number, number], q: readonly [number, number], r: readonly [number, number]) =>
             (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0]);
         const signs = [side(a, b, point), side(b, c, point), side(c, a, point)];
 

@@ -39,7 +39,7 @@ export interface SessionApi
  * and independent: a browser that refuses IndexedDB must still be able to sign out, and one failure
  * must not strand the rest.
  */
-const surrenderKeys = async (): Promise<void> =>
+const surrenderKeys = async () =>
 {
     // The plaintext FIRST, because it is the thing a person can actually read without any key at
     // all. Surrendering only the keys left every message this browser had already opened sitting in
@@ -64,7 +64,7 @@ export const useSession = createStore((): SessionApi =>
 
     let settled: Promise<void> | null = null;
 
-    const load = async (): Promise<void> =>
+    const load = async () =>
     {
         try
         {
@@ -84,7 +84,7 @@ export const useSession = createStore((): SessionApi =>
         }
     };
 
-    const ready = (): Promise<void> =>
+    const ready = () =>
     {
         settled ??= load();
         return settled;
@@ -97,7 +97,7 @@ export const useSession = createStore((): SessionApi =>
      * drafts, board, notifications and names in module memory, and a page load is the one reset
      * that cannot forget one of them.
      */
-    const forget = (): void =>
+    const forget = () =>
     {
         setAccount(null);
         rememberBeenHere(false);

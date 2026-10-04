@@ -8,7 +8,7 @@ interface FakeLock
     released: number;
 }
 
-const install = (refuse = false): FakeLock =>
+const install = (refuse = false) =>
 {
     const fake: FakeLock = { requests: 0, released: 0 };
 
@@ -24,7 +24,7 @@ const install = (refuse = false): FakeLock =>
                     throw new Error('battery saver');
                 }
 
-                const release = async (): Promise<void> =>
+                const release = async () =>
                 {
                     fake.released += 1;
                 };
@@ -37,7 +37,7 @@ const install = (refuse = false): FakeLock =>
     return fake;
 };
 
-const settle = async (): Promise<void> =>
+const settle = async () =>
 {
     for (let turn = 0; turn < 6; turn += 1)
     {

@@ -15,7 +15,7 @@
  * the same name composed differently and look like two different things. The `citext` column
  * lowercases too; this makes the application agree with it rather than assume.
  */
-export function normalizeName(value: string): string
+export function normalizeName(value: string)
 {
     return value.normalize('NFC').trim().toLowerCase();
 }
@@ -36,7 +36,7 @@ export interface CandidateShape
  * and a random tail means two simultaneous claims for the same name almost never collide twice.
  * The first candidate is the name as asked for, so an uncontested claim gets exactly it.
  */
-export function candidateFor(wanted: string, attempt: number, random: () => number, shape: CandidateShape): string
+export function candidateFor(wanted: string, attempt: number, random: () => number, shape: CandidateShape)
 {
     const base = normalizeName(wanted).slice(0, shape.stem);
     if (attempt === 0)

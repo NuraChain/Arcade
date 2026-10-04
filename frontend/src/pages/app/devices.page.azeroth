@@ -24,7 +24,7 @@ export default component DevicesPage()
 
     useHead({ title: () => locale.t('devices.title') });
 
-    const act = async (work: Promise<void>, said: 'devices.revoked'): Promise<void> =>
+    const act = async (work: Promise<void>, said: 'devices.revoked') =>
     {
         try
         {

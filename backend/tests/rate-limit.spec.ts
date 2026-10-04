@@ -20,7 +20,7 @@ function probe(limit: number)
     return pipeline(app, apiRateLimit({ limit, windowMs: 60_000, trustProxy: true }));
 }
 
-const hit = (handler: ReturnType<typeof probe>, path: string): Promise<Response> =>
+const hit = (handler: ReturnType<typeof probe>, path: string) =>
     handler.handle(new Request(`http://local${ path }`, {
         headers: { 'x-forwarded-for': '203.0.113.7' }
     }));

@@ -31,7 +31,7 @@ export default component RecoveryPanel(props: { device?: string })
 
     derived configured = state?.configured === true;
 
-    const make = async (): Promise<void> =>
+    const make = async () =>
     {
         const made = await recovery.setUp();
 
@@ -41,13 +41,13 @@ export default component RecoveryPanel(props: { device?: string })
         }
     };
 
-    const turnOff = async (): Promise<void> =>
+    const turnOff = async () =>
     {
         await recovery.turnOff();
         toasts.show({ kind: 'info', text: locale.t('recovery.off') });
     };
 
-    const copy = async (): Promise<void> =>
+    const copy = async () =>
     {
         const phrase = recovery.freshPhrase();
 
@@ -59,7 +59,7 @@ export default component RecoveryPanel(props: { device?: string })
         await copyText(phrase, 'recovery.copied', { secret: true });
     };
 
-    const use = async (): Promise<void> =>
+    const use = async () =>
     {
         const deviceId = props.device;
 

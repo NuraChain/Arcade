@@ -148,7 +148,7 @@ export interface RealtimeApi
 
 let active: RealtimeSource = createSocketSource();
 
-export function onBack(live: Pick<RealtimeApi, 'onStatus'>, listener: () => void): () => void
+export function onBack(live: Pick<RealtimeApi, 'onStatus'>, listener: () => void)
 {
     let dropped = false;
 
@@ -168,7 +168,7 @@ export function onBack(live: Pick<RealtimeApi, 'onStatus'>, listener: () => void
     });
 }
 
-export function setRealtimeSource(next: RealtimeSource | null): void
+export function setRealtimeSource(next: RealtimeSource | null)
 {
     active = next ?? createSocketSource();
 }
@@ -216,7 +216,7 @@ export const useRealtime = createStore((): RealtimeApi =>
     let wanted = false;
     let watching: (() => void) | null = null;
 
-    const announce = (next: RealtimeStatus): void =>
+    const announce = (next: RealtimeStatus) =>
     {
         setStatus(next);
         for (const watcher of watchers)
@@ -225,13 +225,13 @@ export const useRealtime = createStore((): RealtimeApi =>
         }
     };
 
-    const clearRetry = (): void =>
+    const clearRetry = () =>
     {
         retry?.();
         retry = null;
     };
 
-    const flush = (): void =>
+    const flush = () =>
     {
         coalesce = null;
         const batch = [...pending.values()];
@@ -245,7 +245,7 @@ export const useRealtime = createStore((): RealtimeApi =>
         }
     };
 
-    const nudge = (scope: NudgeScope, id: string | undefined): void =>
+    const nudge = (scope: NudgeScope, id: string | undefined) =>
     {
         pending.set(`${ scope }:${ id ?? '' }`, { scope, id });
         if (coalesce === null)
@@ -254,16 +254,16 @@ export const useRealtime = createStore((): RealtimeApi =>
         }
     };
 
-    const sent = (frame: Parameters<RealtimeSource['send']>[0]): boolean =>
+    const sent = (frame: Parameters<RealtimeSource['send']>[0]) =>
         status() === 'connected' && active.send(frame);
 
-    const cancelProbe = (): void =>
+    const cancelProbe = () =>
     {
         probe?.();
         probe = null;
     };
 
-    const ping = (): void =>
+    const ping = () =>
     {
         pingedAt = runtime().clock.now();
 
@@ -273,7 +273,7 @@ export const useRealtime = createStore((): RealtimeApi =>
         }
     };
 
-    const recycle = (): void =>
+    const recycle = () =>
     {
         cancelProbe();
         clearRetry();
@@ -285,7 +285,7 @@ export const useRealtime = createStore((): RealtimeApi =>
         open();
     };
 
-    const armProbe = (): void =>
+    const armProbe = () =>
     {
         cancelProbe();
 
@@ -301,7 +301,7 @@ export const useRealtime = createStore((): RealtimeApi =>
         });
     };
 
-    const sample = (serverAt: number): void =>
+    const sample = (serverAt: number) =>
     {
         const now = runtime().clock.now();
 
@@ -320,7 +320,7 @@ export const useRealtime = createStore((): RealtimeApi =>
         setRtt(sorted[Math.floor(sorted.length / 2)].rtt);
     };
 
-    const receive = (frame: ServerFrame): void =>
+    const receive = (frame: ServerFrame) =>
     {
         armProbe();
 
@@ -420,7 +420,7 @@ export const useRealtime = createStore((): RealtimeApi =>
         }
     };
 
-    const schedule = (): void =>
+    const schedule = () =>
     {
         if (!wanted || retry !== null)
         {
@@ -441,7 +441,7 @@ export const useRealtime = createStore((): RealtimeApi =>
         });
     };
 
-    function open(): void
+    function open()
     {
         if (!wanted || close !== null)
         {
@@ -524,14 +524,14 @@ export const useRealtime = createStore((): RealtimeApi =>
      * already assigned by the time `open()` returns, so a second event finds a connection in
      * progress and does nothing.
      */
-    const watchEnvironment = (): void =>
+    const watchEnvironment = () =>
     {
         if (typeof document === 'undefined' || typeof window === 'undefined' || watching !== null)
         {
             return;
         }
 
-        const resume = (): void =>
+        const resume = () =>
         {
             if (!wanted || close !== null || (document.visibilityState === 'hidden' && holds === 0))
             {
@@ -553,7 +553,7 @@ export const useRealtime = createStore((): RealtimeApi =>
          * `down` into a reconnecting strip, which would be waiting on the screen when somebody
          * comes back to a tab that was working perfectly.
          */
-        const sleep = (): void =>
+        const sleep = () =>
         {
             if (close === null || document.visibilityState !== 'hidden' || holds > 0)
             {
@@ -566,7 +566,7 @@ export const useRealtime = createStore((): RealtimeApi =>
             announce('idle');
         };
 
-        const watchVisibility = (): void =>
+        const watchVisibility = () =>
         {
             cancelSleep?.();
             cancelSleep = null;
@@ -601,7 +601,7 @@ export const useRealtime = createStore((): RealtimeApi =>
         };
     };
 
-    const teardown = (): void =>
+    const teardown = () =>
     {
         wanted = false;
         cancelProbe();

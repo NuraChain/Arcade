@@ -14,7 +14,7 @@ export type MessageVars = Record<string, string | number>;
 
 const PLACEHOLDER = /\{([a-zA-Z0-9_]+)\}/g;
 
-export function interpolate(template: string, vars: MessageVars | undefined, formatNumber: (value: number) => string): string
+export function interpolate(template: string, vars: MessageVars | undefined, formatNumber: (value: number) => string)
 {
     if (vars === undefined)
     {
@@ -31,13 +31,13 @@ export function interpolate(template: string, vars: MessageVars | undefined, for
     });
 }
 
-export function selectForm(forms: PluralForms, count: number, rules: Intl.PluralRules): string
+export function selectForm(forms: PluralForms, count: number, rules: Intl.PluralRules)
 {
     const category = rules.select(count) as keyof PluralForms;
     return forms[category] ?? forms.other;
 }
 
-export function resolveMessage(message: Message, vars: MessageVars | undefined, rules: Intl.PluralRules): string
+export function resolveMessage(message: Message, vars: MessageVars | undefined, rules: Intl.PluralRules)
 {
     if (typeof message === 'string')
     {
@@ -47,7 +47,7 @@ export function resolveMessage(message: Message, vars: MessageVars | undefined, 
     return selectForm(message, typeof count === 'number' ? count : Number(count ?? 0), rules);
 }
 
-export function messageText(message: Message): string
+export function messageText(message: Message)
 {
     return typeof message === 'string' ? message : message.other;
 }

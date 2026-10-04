@@ -2,13 +2,13 @@ export type MotionKit = typeof import('./motion-kit.ts');
 
 let loading: Promise<MotionKit> | null = null;
 
-export function motion(): Promise<MotionKit>
+export function motion()
 {
     loading ??= import('./motion-kit.ts');
     return loading;
 }
 
-export function flip(list: HTMLElement, tops: Map<string, number>, kit: MotionKit | null, still: boolean): void
+export function flip(list: HTMLElement, tops: Map<string, number>, kit: MotionKit | null, still: boolean)
 {
     const seen = new Set<string>();
 

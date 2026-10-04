@@ -66,7 +66,7 @@ export function placementsOf(state: LudoState): Placement[]
 
     type Scored = typeof scored[number];
 
-    const better = (a: Scored, b: Scored): number => b.rank - a.rank || b.home - a.home || b.distance - a.distance;
+    const better = (a: Scored, b: Scored) => b.rank - a.rank || b.home - a.home || b.distance - a.distance;
 
     const order = [...scored].sort(better);
 

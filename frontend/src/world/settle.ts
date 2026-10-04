@@ -26,7 +26,7 @@ interface Waiting
     nodes: Object3D[];
 }
 
-export function createSettling(root: Object3D, clips: readonly AnimationClip[]): Settling
+export function createSettling(root: Object3D, clips: readonly AnimationClip[])
 {
     const mixer = new AnimationMixer(root);
     const waiting = new Map<string, Waiting>();

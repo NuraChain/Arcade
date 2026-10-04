@@ -28,7 +28,7 @@ const CARD_GAP = 90;
 
 const CATCH_UP_ACTIONS = 12;
 
-export function backgammonBeats(moves: Moves<'backgammon'>, seat: Seat): Beat[]
+export function backgammonBeats(moves: Moves<'backgammon'>, seat: Seat)
 {
     const beats: Beat[] = [];
     let at = 0;
@@ -82,7 +82,7 @@ export function backgammonBeats(moves: Moves<'backgammon'>, seat: Seat): Beat[]
     return beats;
 }
 
-export function pokerBeats(moves: Moves<'poker'>, seat: Seat): Beat[]
+export function pokerBeats(moves: Moves<'poker'>, seat: Seat)
 {
     const beats: Beat[] = [];
     let at = 0;

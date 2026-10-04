@@ -48,7 +48,7 @@ const outsider = privateKeyToAccount('0x5de4111afa1a4b94908f83103eb1f1706367c2e6
 
 let seq = 0;
 
-const b64url = (buffer: ArrayBuffer): string => Buffer.from(buffer).toString('base64url');
+const b64url = (buffer: ArrayBuffer) => Buffer.from(buffer).toString('base64url');
 
 async function keypair(): Promise<{ id: string; exchangeKey: string; signingKey: string; privateSigning: CryptoKey }>
 {
@@ -61,7 +61,7 @@ async function keypair(): Promise<{ id: string; exchangeKey: string; signingKey:
     return { id: deviceIdFrom(exchangeKey, signingKey), exchangeKey, signingKey, privateSigning: signing.privateKey };
 }
 
-async function makeUser(wallet: typeof alice | null): Promise<{ id: string; handle: string }>
+async function makeUser(wallet: typeof alice | null)
 {
     seq += 1;
     const handle = `e${ seq }x${ Math.floor(Math.random() * 100000) }`;
@@ -95,7 +95,7 @@ async function openSession(userId: string): Promise<string>
     return rowsOf<{ id: string }>(rows)[0].id;
 }
 
-async function enrol(userId: string, wallet: typeof alice): Promise<string>
+async function enrol(userId: string, wallet: typeof alice)
 {
     const keys = await keypair();
     const { nonce, message } = await devices.challenge(userId, keys.id);

@@ -22,12 +22,11 @@ import {
     REQUEST_FIXTURES,
     THREAD_FIXTURES
 } from './fixtures.ts';
-import type { TestDevice } from './keys.ts';
 import { accountIdOf, buildSealedFixtures } from './sealed-fixtures.ts';
 
 export type Refusal = 'challenge-unreachable' | 'bad-signature' | 'wallet-unreachable' | 'guest-reserved' | 'guest-unreachable';
 
-function hueOf(text: string): number
+function hueOf(text: string)
 {
     return [...text].reduce((total, character) => total + character.codePointAt(0)!, 0) % 360;
 }
@@ -104,7 +103,7 @@ interface TableWire
  * What this fake exists to prove is the other half: that the client sends what it said it would,
  * renders what came back, and treats "no chair" as an answer rather than an error.
  */
-function restate(table: TableWire): TableWire
+function restate(table: TableWire)
 {
     table.taken = table.chairs.filter((chair) => chair.who !== undefined).length;
     if (table.status !== 'closed')
@@ -125,7 +124,7 @@ function restate(table: TableWire): TableWire
     return table;
 }
 
-function mustTable(id: string): TableWire
+function mustTable(id: string)
 {
     const table = server.tables.find((one) => one.id === id);
     if (table === undefined)
@@ -135,7 +134,7 @@ function mustTable(id: string): TableWire
     return table;
 }
 
-function mustGroup(slug: string): GroupWire
+function mustGroup(slug: string)
 {
     const group = server.groups.find((one) => one.slug === slug);
     if (group === undefined)
@@ -145,7 +144,7 @@ function mustGroup(slug: string): GroupWire
     return group;
 }
 
-function mustDevice(id: string): Device
+function mustDevice(id: string)
 {
     const found = server.devices.find((one) => one.id === id);
     if (found === undefined)
@@ -282,7 +281,7 @@ export const server =
         attested?: Device['attested'];
         revoked?: boolean;
         id: string;
-    }): Device
+    })
     {
         const device: Device = {
             id: input.id,
@@ -308,7 +307,7 @@ export const server =
      * RULE is the server's and `notify.db.spec.ts` owns it against a real Postgres; this is here
      * so a client test can arrange a list without a database.
      */
-    notify(input: { kind: NotificationWire['kind']; actor?: string; ref?: Record<string, string>; dedupeKey: string }): void
+    notify(input: { kind: NotificationWire['kind']; actor?: string; ref?: Record<string, string>; dedupeKey: string })
     {
         const existing = server.notifications.find((one) => one.id === input.dedupeKey);
         if (existing !== undefined)
@@ -346,7 +345,7 @@ export const server =
     blocks: [] as string[],
     reports: [] as { id: string; against: string; category: string; status: string; at: string }[],
 
-    reset(): void
+    reset()
     {
         server.watching = [];
         server.games = [];
@@ -464,7 +463,7 @@ interface FakeSend
 const sealed = await buildSealedFixtures();
 
 /** The device a fixture person holds, with real keys. `setup.ts` installs it as the key store. */
-export function fixtureDevice(handle: string): TestDevice | null
+export function fixtureDevice(handle: string)
 {
     return sealed.devices.get(handle) ?? null;
 }
@@ -478,7 +477,7 @@ let counter = 0;
  * real server hands out uuids the client treats as opaque - which is exactly what the client does
  * with either.
  */
-function loadFixtures(): void
+function loadFixtures()
 {
     counter = 0;
     server.conversations = [];
@@ -522,7 +521,7 @@ function loadFixtures(): void
  * payload the browser sees, so a test that passes here is a test that would pass against the
  * server.
  */
-function loadGraph(): void
+function loadGraph()
 {
     server.friends = FRIENDSHIP_FIXTURES
         .filter(([a, b]) => a === server.me || b === server.me)
@@ -541,7 +540,7 @@ function loadGraph(): void
     server.reports = [];
 }
 
-const reachable = (handle: string): boolean => !server.blocks.includes(handle) && handle !== server.me;
+const reachable = (handle: string) => !server.blocks.includes(handle) && handle !== server.me;
 
 const personWire = (handle: string): PersonSummary =>
 {

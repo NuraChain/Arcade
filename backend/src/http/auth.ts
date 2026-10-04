@@ -22,7 +22,7 @@ export function sessionCookieName(secure: boolean): string
 /** Thirty days. Long enough that a returning player is still signed in, short enough to expire. */
 export const SESSION_TTL_SECONDS = 30 * 24 * 60 * 60;
 
-export function sessionCookie(token: string, secure: boolean): string
+export function sessionCookie(token: string, secure: boolean)
 {
     return serializeCookie(sessionCookieName(secure), token, {
         maxAge: SESSION_TTL_SECONDS,
@@ -37,7 +37,7 @@ export function sessionCookie(token: string, secure: boolean): string
     });
 }
 
-export function clearSessionCookie(secure: boolean): string
+export function clearSessionCookie(secure: boolean)
 {
     return expireCookie(sessionCookieName(secure), { path: '/', secure });
 }

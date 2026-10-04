@@ -32,7 +32,7 @@ const CATALOG: Record<Locale, Catalogue> = { en: { ...enLanding }, fa: {} };
 
 const present = new Set<Locale>(['en']);
 
-export function registerCatalogue(pages: Record<Locale, Catalogue>): void
+export function registerCatalogue(pages: Record<Locale, Catalogue>)
 {
     for (const locale of LOCALES)
     {
@@ -44,7 +44,7 @@ export function registerCatalogue(pages: Record<Locale, Catalogue>): void
     }
 }
 
-export async function loadCatalogue(locale: Locale): Promise<void>
+export async function loadCatalogue(locale: Locale)
 {
     if (present.has(locale))
     {
@@ -59,7 +59,7 @@ function isLocale(value: string | null | undefined): value is Locale
     return value !== undefined && value !== null && (LOCALES as string[]).includes(value);
 }
 
-function initial(): Locale
+function initial()
 {
     const pinned = useDocumentLocale()();
     return isLocale(pinned) ? pinned : 'en';
@@ -67,7 +67,7 @@ function initial(): Locale
 
 const formatters = new Map<string, unknown>();
 
-function cached<T>(kind: string, tag: string, options: unknown, build: () => T): T
+function cached<T>(kind: string, tag: string, options: unknown, build: () => T)
 {
     const key = `${ kind }|${ tag }|${ JSON.stringify(options ?? null) }`;
     const existing = formatters.get(key);
@@ -101,9 +101,9 @@ export const useLocale = createStore((): LocaleApi =>
 {
     const [locale, setSignal] = createSignal<Locale>(initial());
 
-    const tag = (): string => LOCALE_TAG[locale()];
+    const tag = () => LOCALE_TAG[locale()];
 
-    const apply = (next: Locale): void =>
+    const apply = (next: Locale) =>
     {
         setSignal(next);
         setDocumentLocale(next);
@@ -115,9 +115,9 @@ export const useLocale = createStore((): LocaleApi =>
     const rules = (): Intl.PluralRules =>
         cached('plural', tag(), null, () => new Intl.PluralRules(tag()));
 
-    const n = (value: number, options?: Intl.NumberFormatOptions): string => numbers(options).format(value);
+    const n = (value: number, options?: Intl.NumberFormatOptions) => numbers(options).format(value);
 
-    const t = (key: MessageKey, vars?: MessageVars): string =>
+    const t = (key: MessageKey, vars?: MessageVars) =>
     {
         const message = CATALOG[locale()][key] ?? CATALOG.en[key] ?? key;
         return interpolate(resolveMessage(message, vars, rules()), vars, (value) => n(value));

@@ -50,7 +50,7 @@ export default component PersonActions(props: OverlayProps & {
 
     derived blocked = social.isBlocked(props.personId);
 
-    const confirmBlock = async (): Promise<void> =>
+    const confirmBlock = async () =>
     {
         const yes = await overlay.open(
             ConfirmSheet,
@@ -63,13 +63,13 @@ export default component PersonActions(props: OverlayProps & {
         }
     };
 
-    const copyHandle = async (): Promise<void> =>
+    const copyHandle = async () =>
     {
         const handle = `@${ person?.handle ?? props.personId }`;
         await copyText(handle, 'actions.handleCopied');
     };
 
-    derived actions = ((): Action[] =>
+    derived actions = (() =>
     {
         const list: Action[] = [
             {

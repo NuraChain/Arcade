@@ -25,7 +25,7 @@ export const DEVICE_ID_LENGTH = 22;
 
 const DEVICE_ID = /^[A-Za-z0-9_-]{22}$/;
 
-export function isDeviceId(value: string): boolean
+export function isDeviceId(value: string)
 {
     return DEVICE_ID.test(value);
 }
@@ -36,7 +36,7 @@ export function isDeviceId(value: string): boolean
  * never over the strings: a client that encoded with padding and a server that did not would
  * otherwise disagree about the same two keys.
  */
-export function deviceIdFrom(exchangeKey: string, signingKey: string): string
+export function deviceIdFrom(exchangeKey: string, signingKey: string)
 {
     const exchange = Buffer.from(exchangeKey, 'base64url');
     const signing = Buffer.from(signingKey, 'base64url');
@@ -48,7 +48,7 @@ export function deviceIdFrom(exchangeKey: string, signingKey: string): string
 }
 
 /** Whether a claimed id really belongs to the keys published beside it. */
-export function deviceIdMatches(id: string, exchangeKey: string, signingKey: string): boolean
+export function deviceIdMatches(id: string, exchangeKey: string, signingKey: string)
 {
     return isDeviceId(id) && deviceIdFrom(exchangeKey, signingKey) === id;
 }

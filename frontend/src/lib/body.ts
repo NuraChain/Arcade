@@ -15,7 +15,7 @@ const EMOJI = /^(?:\p{Extended_Pictographic}|\p{Regional_Indicator}|[#*0-9]ï¸?â
 
 const graphemes = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
 
-export function isEmoji(value: string): boolean
+export function isEmoji(value: string)
 {
     return value.length > 0
         && value.length <= 32
@@ -37,7 +37,7 @@ const documentOf = (raw: string): Record<string, unknown> | null =>
     }
 };
 
-export function encodeText(body: TextBody): string
+export function encodeText(body: TextBody)
 {
     return JSON.stringify({
         text: body.text,
@@ -46,7 +46,7 @@ export function encodeText(body: TextBody): string
     });
 }
 
-export function encodeReaction(body: ReactionBody): string
+export function encodeReaction(body: ReactionBody)
 {
     return JSON.stringify({ react: body.react, on: body.on });
 }

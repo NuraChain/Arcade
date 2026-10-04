@@ -10,12 +10,12 @@ export interface PageWindow
     total: number;
 }
 
-export function pageCount(total: number, size: number): number
+export function pageCount(total: number, size: number)
 {
     return Math.max(1, Math.ceil(total / Math.max(1, size)));
 }
 
-export function clampPage(page: number, pages: number): number
+export function clampPage(page: number, pages: number)
 {
     return Math.min(Math.max(1, Math.round(page)), Math.max(1, pages));
 }
@@ -76,7 +76,7 @@ export function visible<T>(items: readonly T[], size: number, page: number, pagi
     return paging === 'more' ? items.slice(0, Math.max(1, page) * size) : slice(items, size, page);
 }
 
-export function slice<T>(items: readonly T[], size: number, page: number): T[]
+export function slice<T>(items: readonly T[], size: number, page: number)
 {
     const pages = pageCount(items.length, size);
     const current = clampPage(page, pages);

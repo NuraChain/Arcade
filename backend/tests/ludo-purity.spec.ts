@@ -86,7 +86,7 @@ function seeded(seed: number): () => number
     };
 }
 
-function pick(moves: number[], random: () => number): number
+function pick(moves: number[], random: () => number)
 {
     return moves.length === 0 ? -1 : moves[Math.floor(random() * moves.length)];
 }

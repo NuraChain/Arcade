@@ -14,13 +14,13 @@ type Rendered = HTMLElement;
 
 const original = window.matchMedia;
 
-const routed = (build: () => unknown): HTMLElement =>
+const routed = (build: () => unknown) =>
 {
     const router = createRouter({ routes: [{ path: '/', component: (): HTMLElement => document.createElement('div') }], history: createMemoryHistory('/'), scroll: false });
     return renderTest(() => RouterProvider({ router, children: () => build() as MountNode }) as Rendered).container;
 };
 
-const settle = async (): Promise<void> =>
+const settle = async () =>
 {
     await Promise.resolve();
     await new Promise((resolve) => setTimeout(resolve, 0));

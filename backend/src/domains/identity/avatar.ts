@@ -10,7 +10,7 @@ const EXTENSION: Record<AvatarType, string> = {
 
 const FILE = /^([0-9a-f]{64})\.(webp|jpg|png)$/;
 
-const opensWith = (bytes: Uint8Array, at: number, expected: readonly number[]): boolean =>
+const opensWith = (bytes: Uint8Array, at: number, expected: readonly number[]) =>
     expected.every((value, index) => bytes[at + index] === value);
 
 export function sniffAvatar(bytes: Uint8Array): AvatarType | null
@@ -30,17 +30,17 @@ export function sniffAvatar(bytes: Uint8Array): AvatarType | null
     return null;
 }
 
-export function avatarUrl(origin: string, hash: string, type: AvatarType): string
+export function avatarUrl(origin: string, hash: string, type: AvatarType)
 {
     return `${ origin }/avatars/${ hash }.${ EXTENSION[type] }`;
 }
 
-export function avatarFile(name: string): string | null
+export function avatarFile(name: string)
 {
     return FILE.exec(name)?.[1] ?? null;
 }
 
-export function avatarHashOf(origin: string, url: string): string | null
+export function avatarHashOf(origin: string, url: string)
 {
     const prefix = `${ origin }/avatars/`;
     return url.startsWith(prefix) ? avatarFile(url.slice(prefix.length)) : null;

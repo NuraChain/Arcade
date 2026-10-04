@@ -2,12 +2,12 @@ import type { BackgammonState } from './state.ts';
 
 export const MAX_CUBE = 64;
 
-export function cubeLive(target: number, cube: boolean): boolean
+export function cubeLive(target: number, cube: boolean)
 {
     return cube && target > 1;
 }
 
-export function mayDouble(state: BackgammonState, seat: number): boolean
+export function mayDouble(state: BackgammonState, seat: number)
 {
     return state.cubed
         && state.winner === null

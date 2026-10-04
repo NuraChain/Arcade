@@ -8,7 +8,6 @@ import LoadMore from '../ui/load-more.component.azeroth';
 import SearchInput from '../ui/search-input.component.azeroth';
 import Skeleton from '../ui/skeleton.component.azeroth';
 import Tabs from '../ui/tabs.component.azeroth';
-import type { Conversation } from '../../data/chat.ts';
 import { flip, motion, type MotionKit } from '../../lib/motion.ts';
 import { fold } from '../../services/search.service.ts';
 import { useDevice } from '../../stores/device.store.ts';
@@ -31,7 +30,7 @@ export default component ChatList(props: { active?: string; pane?: boolean; clas
     const people = usePeople();
     const device = useDevice();
 
-    const gameName = (game: GameId): string => locale.t(catalogue.byId(game).nameKey);
+    const gameName = (game: GameId) => locale.t(catalogue.byId(game).nameKey);
 
     derived pane = props.pane === true;
 
@@ -46,7 +45,7 @@ export default component ChatList(props: { active?: string; pane?: boolean; clas
 
     const tops = new Map<string, number>();
 
-    const hold = (): void =>
+    const hold = () =>
     {
         kept.scroll = scroller?.scrollTop ?? kept.scroll;
     };
@@ -64,7 +63,7 @@ export default component ChatList(props: { active?: string; pane?: boolean; clas
         return () => scroller?.removeEventListener('scroll', hold);
     }
 
-    const choose = (id: string): void =>
+    const choose = (id: string) =>
     {
         tab = id;
         if (pane)
@@ -81,7 +80,7 @@ export default component ChatList(props: { active?: string; pane?: boolean; clas
 
     derived mine = chat.me();
 
-    derived filtered = ((): Conversation[] =>
+    derived filtered = (() =>
     {
         const needle = fold(query);
         const byTab = all.filter((conversation) => tab === 'all'

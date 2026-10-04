@@ -53,7 +53,7 @@ export function mayMessage(from: Party, to: Party, relation: Relation): MessageR
  * Someone who turned themselves invisible is offline to everyone but their friends, and a minor
  * is offline to strangers whatever they set - the same shape as messaging, for the same reason.
  */
-export function maySeeOnline(viewer: Party, subject: Party, relation: Relation): boolean
+export function maySeeOnline(viewer: Party, subject: Party, relation: Relation)
 {
     if (viewer.id === subject.id)
     {
@@ -77,7 +77,7 @@ export function maySeeOnline(viewer: Party, subject: Party, relation: Relation):
  * is a product for finding people to play with, and a directory that hides everyone is a
  * directory nobody can use. What strangers cannot do is WRITE, which `mayMessage` decides.
  */
-export function mayDiscover(relation: Relation): boolean
+export function mayDiscover(relation: Relation)
 {
     return relation !== 'blocked';
 }

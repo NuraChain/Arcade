@@ -2,7 +2,7 @@ import type { MessageKey } from '../locales/en.ts';
 import { useLocale } from '../stores/locale.store.ts';
 import { useToasts } from '../stores/toasts.store.ts';
 
-export async function copyText(value: string, done: MessageKey, options: { secret?: boolean; dedupe?: string } = {}): Promise<boolean>
+export async function copyText(value: string, done: MessageKey, options: { secret?: boolean; dedupe?: string } = {})
 {
     const toasts = useToasts();
     const locale = useLocale();

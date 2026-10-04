@@ -73,7 +73,7 @@ const hexToBytes = (hex: string): Uint8Array =>
     return bytes;
 };
 
-const bytesToHex = (bytes: Uint8Array): string =>
+const bytesToHex = (bytes: Uint8Array) =>
 {
     let hex = '';
     for (const byte of bytes)

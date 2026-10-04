@@ -38,7 +38,7 @@ export const useSeal = createStore((): SealApi =>
 
     const answer = createResource<Sealability, string>(
         () => (chat.openId() === '' ? null : chat.openId()),
-        async (conversationId): Promise<Sealability> =>
+        async (conversationId) =>
             sealabilityOf(
                 await client.chat.devices({ params: { id: conversationId } }),
                 account.user()?.handle ?? ''

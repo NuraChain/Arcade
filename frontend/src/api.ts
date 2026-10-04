@@ -92,7 +92,7 @@ async function loadManifest(): Promise<Manifest>
 
 export const REQUEST_MS = 15_000;
 
-const timed = (request: Request): Promise<Response> =>
+const timed = (request: Request) =>
     fetch(request, { signal: AbortSignal.any([request.signal, AbortSignal.timeout(REQUEST_MS)]) });
 
 export const client = createClient<Api>(await loadManifest(), {

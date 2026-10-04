@@ -8,7 +8,7 @@ export const RARITY_SHARE: Record<Rarity, number> = {
     legendary: 0.1
 };
 
-export function rarityAt(index: number, count: number): Rarity
+export function rarityAt(index: number, count: number)
 {
     const at = (index + 1) / count;
     let edge = 0;

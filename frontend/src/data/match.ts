@@ -35,22 +35,22 @@ export interface LudoChair
     seat: LudoSeat;
 }
 
-export function ludoOf(match: Pick<MatchView, 'view'>): LudoBoard | null
+export function ludoOf(match: Pick<MatchView, 'view'>)
 {
     return match.view.kind === 'ludo' ? match.view : null;
 }
 
-export function hokmOf(match: Pick<MatchView, 'view'>): HokmBoard | null
+export function hokmOf(match: Pick<MatchView, 'view'>)
 {
     return match.view.kind === 'hokm' ? match.view : null;
 }
 
-export function backgammonOf(match: Pick<MatchView, 'view'>): BackgammonBoard | null
+export function backgammonOf(match: Pick<MatchView, 'view'>)
 {
     return match.view.kind === 'backgammon' ? match.view : null;
 }
 
-export function pokerOf(match: Pick<MatchView, 'view'>): PokerBoard | null
+export function pokerOf(match: Pick<MatchView, 'view'>)
 {
     return match.view.kind === 'poker' ? match.view : null;
 }
@@ -62,7 +62,7 @@ export function pokerOf(match: Pick<MatchView, 'view'>): PokerBoard | null
  * of seven and tokens are not a thing it has. Asked here rather than in `match-result`, so a screen
  * every game shares holds no game's vocabulary - the same argument `asMatch` answers on the server.
  */
-export function scoreOf(match: Pick<MatchView, 'view'>, seat: number): number
+export function scoreOf(match: Pick<MatchView, 'view'>, seat: number)
 {
     if (match.view.kind === 'ludo')
     {
@@ -114,7 +114,7 @@ export function chairsOf(match: Pick<MatchView, 'players' | 'view'>): LudoChair[
  * what draws ludo's coloured pips; this is the shared half, and a game the board does not mention
  * is dropped for the same reason - an invented chair reads as a fact about the game.
  */
-export function playersOf(match: Pick<MatchView, 'players' | 'view'>): MatchPlayer[]
+export function playersOf(match: Pick<MatchView, 'players' | 'view'>)
 {
     const seats = new Set(match.view.seats.map((row) => row.seat));
 

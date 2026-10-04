@@ -37,17 +37,17 @@ export default component MePage()
         games: ['record', 'history']
     };
 
-    const editProfile = (): void =>
+    const editProfile = () =>
     {
         void overlay.open(ProfileSheet, {}, { label: locale.t('profile.title') }).closed.then(() => face.refetch());
     };
 
-    const editPicture = (): void =>
+    const editPicture = () =>
     {
         void overlay.open(ProfileSheet, { only: 'picture' as const }, { label: locale.t('profile.pictureTitle') }).closed.then(() => face.refetch());
     };
 
-    const copyAddress = async (): Promise<void> =>
+    const copyAddress = async () =>
     {
         const address = account.address();
         if (address === null)
@@ -88,7 +88,7 @@ export default component MePage()
         ...nftStat
     ];
 
-    const share = async (): Promise<void> =>
+    const share = async () =>
     {
         const link = `${ window.location.origin }/app/people/${ user?.handle ?? '' }`;
         await copyText(link, 'me.shared');

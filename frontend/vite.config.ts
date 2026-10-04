@@ -18,7 +18,7 @@ const REQUIRED_ENV = [
     'VITE_PUBLIC_ORIGIN'
 ];
 
-const requireEnv = (mode: string): void =>
+const requireEnv = (mode: string) =>
 {
     const root = fileURLToPath(new URL('..', import.meta.url));
 

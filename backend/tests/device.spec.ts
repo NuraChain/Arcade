@@ -16,16 +16,16 @@ import { deviceText, signInText } from '../src/domains/identity/signature.ts';
  * SubjectPublicKeyInfo and its length and prefix are part of what makes two of them distinguishable.
  */
 
-const b64url = (buffer: ArrayBuffer): string => Buffer.from(buffer).toString('base64url');
+const b64url = (buffer: ArrayBuffer) => Buffer.from(buffer).toString('base64url');
 
-const exportPublic = async (algorithm: EcKeyGenParams, usages: KeyUsage[]): Promise<string> =>
+const exportPublic = async (algorithm: EcKeyGenParams, usages: KeyUsage[]) =>
 {
     const pair = await webcrypto.subtle.generateKey(algorithm, true, usages) as CryptoKeyPair;
     return b64url(await webcrypto.subtle.exportKey('spki', pair.publicKey));
 };
 
-const exchangeKey = (): Promise<string> => exportPublic({ name: 'ECDH', namedCurve: 'P-256' }, ['deriveBits']);
-const signingKey = (): Promise<string> => exportPublic({ name: 'ECDSA', namedCurve: 'P-256' }, ['sign', 'verify']);
+const exchangeKey = () => exportPublic({ name: 'ECDH', namedCurve: 'P-256' }, ['deriveBits']);
+const signingKey = () => exportPublic({ name: 'ECDSA', namedCurve: 'P-256' }, ['sign', 'verify']);
 
 describe('a device id', () =>
 {

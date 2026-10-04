@@ -135,7 +135,7 @@ export const GAME_SEEDS: GameSeed[] = [
  *
  * Every other column is definition and is brought back in line on every boot.
  */
-export async function seedReference(db: DataSource): Promise<void>
+export async function seedReference(db: DataSource)
 {
     await db.transaction(async (tx) =>
     {

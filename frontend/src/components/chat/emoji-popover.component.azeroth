@@ -18,7 +18,7 @@ export default component EmojiPopover()
 
     derived current = pop.current();
 
-    const settle = (): void =>
+    const settle = () =>
     {
         const now = untrack(pop.current);
 
@@ -36,7 +36,7 @@ export default component EmojiPopover()
         placed = true;
     };
 
-    const choose = (emoji: string): void =>
+    const choose = (emoji: string) =>
     {
         const now = untrack(pop.current);
 
@@ -65,7 +65,7 @@ export default component EmojiPopover()
             return;
         }
 
-        const outside = (event: PointerEvent): void =>
+        const outside = (event: PointerEvent) =>
         {
             const target = event.target as Node;
 
@@ -77,7 +77,7 @@ export default component EmojiPopover()
             pop.close();
         };
 
-        const key = (event: KeyboardEvent): void =>
+        const key = (event: KeyboardEvent) =>
         {
             if (event.key === 'Escape')
             {
@@ -87,7 +87,7 @@ export default component EmojiPopover()
             }
         };
 
-        const moved = (): void =>
+        const moved = () =>
         {
             requestAnimationFrame(settle);
         };

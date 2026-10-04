@@ -100,7 +100,7 @@ describe('what one seat may see of another', () =>
     it('proves the forgery would catch a leak', () =>
     {
         const state = pokerEngine.create([0, 1, 2], { die: seeded(8) }, { target: 0, cube: false, blinds: 'low' });
-        const leaky = (target: PokerState): string => JSON.stringify({ ...pokerEngine.view(target, 0), peek: target.holes[1] });
+        const leaky = (target: PokerState) => JSON.stringify({ ...pokerEngine.view(target, 0), peek: target.holes[1] });
 
         expect(leaky(forgeHoles(state, 1))).not.toBe(leaky(state));
         expect(JSON.stringify(pokerEngine.view(forgeHoles(state, 1), 0))).toBe(JSON.stringify(pokerEngine.view(state, 0)));
@@ -113,7 +113,7 @@ describe('what one seat may see of another', () =>
         if (folded.ok)
         {
             const events = folded.events as PokerEvent[];
-            const unredacted = (target: readonly PokerEvent[]): string => JSON.stringify({ kind: 'poker', moves: target });
+            const unredacted = (target: readonly PokerEvent[]) => JSON.stringify({ kind: 'poker', moves: target });
 
             expect(events.some((event) => event.e === 'hole' && event.seat === 1)).toBe(true);
             expect(unredacted(forgeLog(events, 1))).not.toBe(unredacted(events));

@@ -63,7 +63,7 @@ export const useGroups = createStore((): GroupsApi =>
 {
     const account = useAccount();
 
-    const who = (): string | null => account.user()?.id ?? null;
+    const who = () => account.user()?.id ?? null;
 
     const [openId, setOpenId] = createSignal('');
     const [wanted, setWanted] = createSignal(false);
@@ -108,7 +108,7 @@ export const useGroups = createStore((): GroupsApi =>
 
     let inFlight: Promise<void> = Promise.resolve();
 
-    const queue = (work: () => Promise<unknown>): Promise<void> =>
+    const queue = (work: () => Promise<unknown>) =>
     {
         inFlight = inFlight.catch(() => undefined).then(async () =>
         {
@@ -117,7 +117,7 @@ export const useGroups = createStore((): GroupsApi =>
         return inFlight;
     };
 
-    const revalidate = (): Promise<void> => queue(async () =>
+    const revalidate = () => queue(async () =>
     {
         await Promise.all([
             mine.refetch(),

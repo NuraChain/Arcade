@@ -15,7 +15,7 @@ type Rendered = HTMLElement;
 
 let clock: ManualClock;
 
-const settle = async (): Promise<void> =>
+const settle = async () =>
 {
     await Promise.resolve();
     await Promise.resolve();
@@ -36,13 +36,13 @@ const open = (): { container: HTMLElement; at: () => string } =>
     return { container, at: () => router.location().pathname };
 };
 
-const nameBox = (container: HTMLElement): HTMLInputElement =>
+const nameBox = (container: HTMLElement) =>
     container.querySelector<HTMLInputElement>('#sign-in-name')!;
 
-const guestButton = (container: HTMLElement): HTMLButtonElement =>
+const guestButton = (container: HTMLElement) =>
     [...container.querySelectorAll('button')].find((button) => button.getAttribute('type') === 'submit')!;
 
-const type = async (container: HTMLElement, value: string): Promise<void> =>
+const type = async (container: HTMLElement, value: string) =>
 {
     const box = nameBox(container);
     box.value = value;
@@ -50,7 +50,7 @@ const type = async (container: HTMLElement, value: string): Promise<void> =>
     await settle();
 };
 
-const send = async (container: HTMLElement): Promise<void> =>
+const send = async (container: HTMLElement) =>
 {
     fire(container.querySelector('form')!, 'submit');
     await settle();

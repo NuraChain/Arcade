@@ -55,7 +55,7 @@ function straightHigh(ranks: readonly number[]): number | null
     return distinct[0] === ACE && distinct[1] === FIVE ? FIVE : null;
 }
 
-export function evaluateFive(cards: readonly number[]): Strength
+export function evaluateFive(cards: readonly number[])
 {
     const ranks = cards.map(rankOf).sort((a, b) => b - a);
     const flush = cards.every((card) => suitOf(card) === suitOf(cards[0]));
@@ -110,7 +110,7 @@ export function evaluateFive(cards: readonly number[]): Strength
     return scored(shape === '2111' ? 1 : 0, order);
 }
 
-export function evaluate(cards: readonly number[]): Strength
+export function evaluate(cards: readonly number[])
 {
     let best: Strength | null = null;
     const count = cards.length;

@@ -14,7 +14,7 @@ import { server } from './fake-api.ts';
 
 vi.mock('../src/api.ts', async () => await import('./fake-api.ts'));
 
-const settle = async (): Promise<void> =>
+const settle = async () =>
 {
     for (let i = 0; i < 12; i++)
     {
@@ -23,7 +23,7 @@ const settle = async (): Promise<void> =>
     await new Promise((resolve) => setTimeout(resolve, 40));
 };
 
-const render = async (component: () => HTMLElement, at: string): Promise<HTMLElement> =>
+const render = async (component: () => HTMLElement, at: string) =>
 {
     const table: Route[] = [{ path: at, component }];
     const router = createRouter({ routes: table, history: createMemoryHistory(at), scroll: false });
@@ -86,7 +86,7 @@ describe('the profile header', () =>
 
 describe('my profile page', () =>
 {
-    const signIn = (kind: 'wallet' | 'guest' = 'guest'): void =>
+    const signIn = (kind: 'wallet' | 'guest' = 'guest') =>
     {
         const account: Account = {
             id: 'u-dana',

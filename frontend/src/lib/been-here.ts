@@ -27,7 +27,7 @@ const NOTE = 'nura.here';
 /** A year: it outlives the session on purpose, because being wrong costs a redirect. */
 const KEEP = 365 * 24 * 60 * 60;
 
-export function beenHere(): boolean
+export function beenHere()
 {
     if (typeof document === 'undefined')
     {
@@ -37,7 +37,7 @@ export function beenHere(): boolean
     return document.cookie.split('; ').some((one) => one.startsWith(`${ NOTE }=1`));
 }
 
-export function rememberBeenHere(here: boolean): void
+export function rememberBeenHere(here: boolean)
 {
     if (typeof document === 'undefined')
     {

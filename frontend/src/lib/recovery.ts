@@ -70,7 +70,7 @@ export interface RecoveryKeys
  * from a string that no typed phrase can ever equal, and recovery would fail for everybody with
  * nothing anywhere explaining why. `groupPhrase` is for the screen and only for the screen.
  */
-export function mintPhrase(): string
+export function mintPhrase()
 {
     const bytes = crypto.getRandomValues(new Uint8Array(PHRASE_BYTES));
 
@@ -117,13 +117,13 @@ export function normalisePhrase(typed: string): string | null
 }
 
 /** The phrase as it is shown and written down: groups of four, joined by a hyphen. */
-export function groupPhrase(phrase: string): string
+export function groupPhrase(phrase: string)
 {
     return phrase.match(/.{1,4}/g)?.join('-') ?? phrase;
 }
 
 /** A fresh salt for a new vault. Published beside the ciphertext; secret of nothing. */
-export function mintSalt(): string
+export function mintSalt()
 {
     return toBase64Url(crypto.getRandomValues(new Uint8Array(SALT_BYTES)));
 }
@@ -164,7 +164,7 @@ const scalarFrom = (bytes: Uint8Array): Uint8Array =>
  * and `SubtleCrypto` exposes no way to import a raw ECDSA private key without already knowing the
  * public one - which is precisely what has to be computed.
  */
-const curve = async (): Promise<typeof import('@noble/curves/nist.js').p256> =>
+const curve = async () =>
     (await import('@noble/curves/nist.js')).p256;
 
 /**
@@ -210,7 +210,7 @@ export function mintArchiveKey(): Uint8Array
     return crypto.getRandomValues(new Uint8Array(32));
 }
 
-const seal = async (key: CryptoKey, bytes: Uint8Array, aad?: Uint8Array): Promise<string> =>
+const seal = async (key: CryptoKey, bytes: Uint8Array, aad?: Uint8Array) =>
 {
     const iv = crypto.getRandomValues(new Uint8Array(IV_BYTES));
     const sealed = new Uint8Array(await crypto.subtle.encrypt(
@@ -248,13 +248,13 @@ const open = async (key: CryptoKey, packed: string, aad?: Uint8Array): Promise<U
 };
 
 /** The archive key, sealed under the phrase. The only copy anywhere. */
-export const sealArchiveKey = (keys: RecoveryKeys, archiveKey: Uint8Array): Promise<string> =>
+export const sealArchiveKey = (keys: RecoveryKeys, archiveKey: Uint8Array) =>
     seal(keys.wrap, archiveKey);
 
-export const openArchiveKey = (keys: RecoveryKeys, wrapped: string): Promise<Uint8Array | null> =>
+export const openArchiveKey = (keys: RecoveryKeys, wrapped: string) =>
     open(keys.wrap, wrapped);
 
-const archiveAes = (archiveKey: Uint8Array): Promise<CryptoKey> =>
+const archiveAes = (archiveKey: Uint8Array) =>
     crypto.subtle.importKey('raw', archiveKey as BufferSource, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
 
 /**
@@ -274,7 +274,7 @@ export async function sealForArchive(
     conversationId: string,
     epoch: number,
     epochKey: Uint8Array
-): Promise<string>
+)
 {
     return seal(await archiveAes(archiveKey), epochKey, archiveAad(conversationId, epoch));
 }
@@ -284,7 +284,7 @@ export async function openFromArchive(
     conversationId: string,
     epoch: number,
     wrapped: string
-): Promise<Uint8Array | null>
+)
 {
     return open(await archiveAes(archiveKey), wrapped, archiveAad(conversationId, epoch));
 }
@@ -297,10 +297,10 @@ export async function openFromArchive(
  * be the same message. This is the epoch confirmation tag from `crypto.ts`, doing the same job one
  * level up.
  */
-export const checkValueOf = (keys: RecoveryKeys): Promise<string> =>
+export const checkValueOf = (keys: RecoveryKeys) =>
     seal(keys.wrap, utf8.encode(RECOVERY_PROTOCOL));
 
-export async function phraseMatches(keys: RecoveryKeys, checkValue: string): Promise<boolean>
+export async function phraseMatches(keys: RecoveryKeys, checkValue: string)
 {
     const opened = await open(keys.wrap, checkValue);
     return opened !== null && new TextDecoder().decode(opened) === RECOVERY_PROTOCOL;
@@ -318,7 +318,7 @@ export async function signRecovery(
     accountId: string,
     deviceId: string,
     nonce: string
-): Promise<string>
+)
 {
     const p256 = await curve();
 

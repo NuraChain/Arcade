@@ -33,14 +33,14 @@ function server()
     return { handler: pipeline(app, gzipOnTheWay, precompressed(root, ['/assets/', '/world/'])) };
 }
 
-const get = (handler: ReturnType<typeof server>['handler'], path: string, headers: Record<string, string> = {}): Promise<Response> =>
+const get = (handler: ReturnType<typeof server>['handler'], path: string, headers: Record<string, string> = {}) =>
     handler.handle(new Request(`http://local${ path }`, { headers }));
 
 describe('what a reader is sent compressed', () =>
 {
     it('reads Accept-Encoding the way RFC 9110 writes it', () =>
     {
-        const asking = (value: string): Request => new Request('http://local/', { headers: { 'accept-encoding': value } });
+        const asking = (value: string) => new Request('http://local/', { headers: { 'accept-encoding': value } });
         expect(accepts(asking('gzip, deflate, br'), 'br')).toBe(true);
         expect(accepts(asking('br;q=0, gzip'), 'br')).toBe(false);
         expect(accepts(asking('GZIP'), 'gzip')).toBe(true);

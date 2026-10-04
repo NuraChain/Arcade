@@ -38,7 +38,7 @@ export default component TopBar()
 
     derived titled = phone && parent !== undefined;
 
-    const goBack = (): void => leave({ back, replace }, shell.depth(), parent);
+    const goBack = () => leave({ back, replace }, shell.depth(), parent);
 
     derived unread = notifications.unread();
 
@@ -48,11 +48,11 @@ export default component TopBar()
 
     derived open = table ? settings.settings().tableSidebarOpen : settings.settings().sidebarOpen;
 
-    const toggle = (): void => settings.update(table ? { tableSidebarOpen: !open } : { sidebarOpen: !open });
+    const toggle = () => settings.update(table ? { tableSidebarOpen: !open } : { sidebarOpen: !open });
 
     mount
     {
-        const onKey = (event: KeyboardEvent): void =>
+        const onKey = (event: KeyboardEvent) =>
         {
             if ((event.key !== '/' && event.key !== '[') || event.defaultPrevented || device.posture() === 'phone')
             {

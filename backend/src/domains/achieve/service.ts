@@ -97,7 +97,7 @@ async function factsOf(runner: EntityManager, userId: string): Promise<Facts>
         .getRawOne<{ count: number }>();
 
     const games = new Map<string, LadderFacts>();
-    const of = (game: string): LadderFacts =>
+    const of = (game: string) =>
     {
         const found = games.get(game) ?? blank();
 
@@ -160,7 +160,7 @@ async function factsOf(runner: EntityManager, userId: string): Promise<Facts>
     };
 }
 
-const valueOf = (facts: Facts, game: string | null, family: Family): number =>
+const valueOf = (facts: Facts, game: string | null, family: Family) =>
     measure((game === null ? undefined : facts.games.get(game)) ?? blank(), facts.global, family.metric);
 
 const reachedIn = (facts: Facts, game: string | null): string[] =>
@@ -199,7 +199,7 @@ const asEarned = (rung: Rung, earnedAt: Date, holders: ReadonlyMap<string, numbe
     earnedAt: new Date(earnedAt).toISOString()
 });
 
-const recentOf = (held: readonly HeldRow[]): HeldRow[] => held
+const recentOf = (held: readonly HeldRow[]) => held
     .filter((row) => RUNG_BY_ID.has(row.achievementId))
     .sort((a, b) => new Date(b.earnedAt).getTime() - new Date(a.earnedAt).getTime() || b.achievementId.localeCompare(a.achievementId))
     .slice(0, RECENT);
@@ -337,7 +337,7 @@ const SPANS: Record<Exclude<LeaderboardWindow, 'all'>, string> = {
 
 export function createAchieveService(db: DataSource)
 {
-    const userOf = (handle: string): Promise<User | null> =>
+    const userOf = (handle: string) =>
         db.getRepository(User).findOne({ select: { id: true, handle: true }, where: { handle } });
 
     const heldBy = (userId: string, ids?: readonly string[]): Promise<HeldRow[]> =>
@@ -370,7 +370,7 @@ export function createAchieveService(db: DataSource)
     };
 
     return {
-        async record(tx: EntityManager, userId: string, matchId: string, game: string): Promise<void>
+        async record(tx: EntityManager, userId: string, matchId: string, game: string)
         {
             const facts = await factsOf(tx, userId);
             const ids = [...reachedIn(facts, null), ...reachedIn(facts, game)];
@@ -441,7 +441,7 @@ export function createAchieveService(db: DataSource)
          * nobody new can reach - the number you climb should be the one that only goes up, and the
          * rating is right beside it for anybody who wants to know how well.
          */
-        async leaderboardOf(game: string, window: LeaderboardWindow, after?: number): Promise<Leaderboard>
+        async leaderboardOf(game: string, window: LeaderboardWindow, after?: number)
         {
             if (window === 'all')
             {

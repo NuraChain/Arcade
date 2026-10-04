@@ -33,7 +33,7 @@ export function uncalled(put: readonly number[], folded: readonly boolean[]): Re
     return amount > 0 ? { seat: top, amount } : null;
 }
 
-export function layers(put: readonly number[], folded: readonly boolean[]): Pot[]
+export function layers(put: readonly number[], folded: readonly boolean[])
 {
     const contenders = put.map((_, seat) => seat).filter((seat) => !folded[seat]);
     const levels = [...new Set(contenders.map((seat) => put[seat]))].filter((level) => level > 0).sort((a, b) => a - b);
@@ -79,7 +79,7 @@ export function split(amount: number, winners: readonly number[], order: (seat: 
     return new Map(ordered.map((seat, index) => [seat, share + (index < odd ? 1 : 0)]));
 }
 
-export function standing(put: readonly number[], folded: readonly boolean[], allIn: readonly boolean[]): Pot[]
+export function standing(put: readonly number[], folded: readonly boolean[], allIn: readonly boolean[])
 {
     const contenders = put.map((_, seat) => seat).filter((seat) => !folded[seat]);
     const caps = [...new Set(contenders.filter((seat) => allIn[seat]).map((seat) => put[seat]))].filter((cap) => cap > 0).sort((a, b) => a - b);

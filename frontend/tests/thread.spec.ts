@@ -5,7 +5,7 @@ import { GROUP_GAP_MS, dayKindOf, threadRows } from '../src/lib/thread.ts';
 
 const NOON = new Date(2026, 8, 23, 12, 0).getTime();
 
-function line(id: string, from: string, at: number, kind: Message['kind'] = 'text'): Message
+function line(id: string, from: string, at: number, kind: Message['kind'] = 'text')
 {
     return { id, conversationId: 'c', from, kind, text: id, at } as Message;
 }

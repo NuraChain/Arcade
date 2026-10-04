@@ -15,7 +15,7 @@ import { useSession } from '../src/stores/session.store.ts';
 import { server } from './fake-api.ts';
 import '../src/locales/app-catalogue.ts';
 
-const settle = async (): Promise<void> =>
+const settle = async () =>
 {
     for (let turn = 0; turn < 12; turn += 1)
     {
@@ -308,7 +308,7 @@ describe('the devices store', () =>
 
 describe('the trust badge', () =>
 {
-    const render = (component: () => HTMLElement): string =>
+    const render = (component: () => HTMLElement) =>
         renderTest(component).container.textContent ?? '';
 
     it('says who vouched, and never says wallet for a device this server asserted', () =>

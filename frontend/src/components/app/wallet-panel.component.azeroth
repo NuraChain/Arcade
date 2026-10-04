@@ -57,7 +57,7 @@ export default component WalletPanel(props: { onConnected: (account: Account) =>
         { id: 'keys', icon: 'shield' as const, label: locale.t('wallet.selfCustody') }
     ];
 
-    const connect = async (): Promise<void> =>
+    const connect = async () =>
     {
         const account = await wallet.connect();
         if (account !== null)

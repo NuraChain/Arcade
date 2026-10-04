@@ -64,7 +64,7 @@ export interface VaultInput
  * one of them wrong produces an import error that names nothing useful. Splitting the point the
  * client published into `x` and `y` is the same fact with nothing to get wrong.
  */
-async function holdsPhrase(publicKey: string, signature: string, challenge: string): Promise<boolean>
+async function holdsPhrase(publicKey: string, signature: string, challenge: string)
 {
     try
     {
@@ -121,7 +121,7 @@ export function createRecoveryService(db: DataSource)
         };
     };
 
-    const liveDevice = async (userId: string, deviceId: string | null): Promise<boolean> =>
+    const liveDevice = async (userId: string, deviceId: string | null) =>
         deviceId !== null && await db.getRepository(Device).existsBy({ id: deviceId, userId, revokedAt: IsNull() });
 
     return {
@@ -135,7 +135,7 @@ export function createRecoveryService(db: DataSource)
          * wrapping changes. Nothing here can tell the difference, which is correct - it cannot read
          * either version.
          */
-        async setVault(userId: string, sessionDevice: string | null, input: VaultInput): Promise<VaultRow>
+        async setVault(userId: string, sessionDevice: string | null, input: VaultInput)
         {
             if (!await liveDevice(userId, sessionDevice))
             {
@@ -170,7 +170,7 @@ export function createRecoveryService(db: DataSource)
          * nothing, and an archive with no vault is ciphertext nobody can ever open. Leaving either
          * behind would be leaving a promise this product could not keep.
          */
-        async clearVault(userId: string, sessionDevice: string | null): Promise<void>
+        async clearVault(userId: string, sessionDevice: string | null)
         {
             // Gated like writing one. This destroys the vault AND the whole archive irreversibly,
             // and it was reachable by any session at all - so a stolen cookie could throw away
@@ -192,7 +192,7 @@ export function createRecoveryService(db: DataSource)
          * would make every honest write afterwards a silent no-op, and that conversation
          * permanently unrecoverable.
          */
-        async archive(userId: string, conversationId: string, epoch: number, wrapped: string): Promise<void>
+        async archive(userId: string, conversationId: string, epoch: number, wrapped: string)
         {
             if (!UUID.test(conversationId))
             {

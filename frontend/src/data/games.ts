@@ -68,7 +68,7 @@ export const GAMES: Game[] = [
     }
 ];
 
-export function gameBySlug(slug: string): Game | undefined
+export function gameBySlug(slug: string)
 {
     return GAMES.find((game) => game.slug === slug);
 }

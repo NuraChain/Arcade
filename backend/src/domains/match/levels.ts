@@ -41,7 +41,7 @@ export function xpFor(input: {
     walked: boolean;
     won: boolean;
     bonus: number;
-}): number
+})
 {
     if (input.walked)
     {
@@ -57,7 +57,7 @@ const FIRST = 100;
 const STEEPER = 50;
 
 /** The total needed to REACH this level, which is level 1 at nothing. */
-export function xpToReach(level: number): number
+export function xpToReach(level: number)
 {
     const steps = Math.max(0, Math.trunc(level) - 1);
 

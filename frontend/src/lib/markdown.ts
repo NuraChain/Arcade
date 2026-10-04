@@ -46,7 +46,7 @@ export function safeHref(raw: string): string | null
     }
 }
 
-function balanced(url: string): string
+function balanced(url: string)
 {
     let open = 0;
     let end = url.length;
@@ -71,7 +71,7 @@ function balanced(url: string): string
     return url.slice(0, end);
 }
 
-function matchAt(pattern: RegExp, source: string, at: number): RegExpExecArray | null
+function matchAt(pattern: RegExp, source: string, at: number)
 {
     pattern.lastIndex = at;
 
@@ -84,7 +84,7 @@ export function parseInline(source: string, depth = 0): Inline[]
     let text = '';
     let at = 0;
 
-    const flush = (): void =>
+    const flush = () =>
     {
         if (text !== '')
         {
@@ -174,13 +174,13 @@ const BULLET = /^\s*[-*] (.+)$/;
 
 const NUMBERED = /^\s*(\d{1,9})\. (.+)$/;
 
-export function parseMarkdown(source: string): Block[]
+export function parseMarkdown(source: string)
 {
     const lines = source.replace(/\r\n?/g, '\n').split('\n');
     const blocks: Block[] = [];
     let paragraph: string[] = [];
 
-    const flush = (): void =>
+    const flush = () =>
     {
         if (paragraph.length === 0)
         {
@@ -284,7 +284,7 @@ export function parseMarkdown(source: string): Block[]
     return blocks;
 }
 
-export function plainOf(source: string, spoiler: string): string
+export function plainOf(source: string, spoiler: string)
 {
     const walk = (nodes: readonly Inline[]): string => nodes.map((node) =>
     {

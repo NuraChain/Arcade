@@ -44,7 +44,7 @@ const second = privateKeyToAccount('0x59c6995e998f97a5a0044966f0945389dc9e86dae8
 
 let seq = 0;
 
-const b64url = (buffer: ArrayBuffer): string => Buffer.from(buffer).toString('base64url');
+const b64url = (buffer: ArrayBuffer) => Buffer.from(buffer).toString('base64url');
 
 async function keypair(): Promise<{ id: string; exchangeKey: string; signingKey: string }>
 {
@@ -57,7 +57,7 @@ async function keypair(): Promise<{ id: string; exchangeKey: string; signingKey:
     return { id: deviceIdFrom(exchangeKey, signingKey), exchangeKey, signingKey };
 }
 
-async function makeUser(kind: 'guest' | 'wallet', wallet?: typeof signer): Promise<{ id: string; handle: string }>
+async function makeUser(kind: 'guest' | 'wallet', wallet?: typeof signer)
 {
     seq += 1;
     const handle = `p${ seq }x${ Math.floor(Math.random() * 100000) }`;
@@ -90,7 +90,7 @@ async function openSession(userId: string): Promise<string>
 }
 
 /** Enrols a device the way a wallet account really does: challenge, sign, send. */
-async function enrolWithWallet(userId: string, wallet: typeof signer, label = 'Laptop'): Promise<string>
+async function enrolWithWallet(userId: string, wallet: typeof signer, label = 'Laptop')
 {
     const keys = await keypair();
     const { nonce, message } = await devices.challenge(userId, keys.id);
@@ -218,7 +218,7 @@ describe.skipIf(!active)('what a peer may learn about somebody devices', () =>
 
     describe('the list a peer is handed', () =>
     {
-        const conversationOf = async (a: { id: string }, b: { id: string }): Promise<string> =>
+        const conversationOf = async (a: { id: string }, b: { id: string }) =>
             chat.openDirect(a.id, b.id);
 
         it('carries the keys and the proof, and nothing about the owner life', async () =>

@@ -42,7 +42,7 @@ interface Sealed
     bytes: string;
 }
 
-const slotFor = (conversationId: string, epoch: number): string => `${ conversationId }:${ epoch }`;
+const slotFor = (conversationId: string, epoch: number) => `${ conversationId }:${ epoch }`;
 
 const slotBack = (slot: string): { conversationId: string; epoch: number } | null =>
 {
@@ -93,7 +93,7 @@ const vaultKey = async (): Promise<CryptoKey | null> =>
 };
 
 /** Seals an epoch key into the vault. The caller still owns its copy of the bytes, and zeroes it. */
-export async function rememberEpochKey(conversationId: string, epoch: number, key: Uint8Array): Promise<boolean>
+export async function rememberEpochKey(conversationId: string, epoch: number, key: Uint8Array)
 {
     const vault = await vaultKey();
     if (vault === null)
@@ -187,14 +187,14 @@ export async function recallArchiveKey(): Promise<Uint8Array | null>
     }
 }
 
-export async function holdsArchiveKey(): Promise<boolean>
+export async function holdsArchiveKey()
 {
     const key = await recallArchiveKey();
     key?.fill(0);
     return key !== null;
 }
 
-export async function rememberArchiveKey(key: Uint8Array): Promise<boolean>
+export async function rememberArchiveKey(key: Uint8Array)
 {
     const vault = await vaultKey();
     if (vault === null)
@@ -217,7 +217,7 @@ export async function rememberArchiveKey(key: Uint8Array): Promise<boolean>
     }
 }
 
-export async function forgetArchiveKey(): Promise<void>
+export async function forgetArchiveKey()
 {
     if (!keyringAvailable())
     {
@@ -272,7 +272,7 @@ export async function heldEpochKeys(): Promise<{ conversationId: string; epoch: 
  * would mean the next person to use this browser inherits the ability to read every conversation
  * the last one had open - which is the one promise a sealed archive has to keep.
  */
-export async function forgetEpochKeys(): Promise<void>
+export async function forgetEpochKeys()
 {
     if (!keyringAvailable())
     {

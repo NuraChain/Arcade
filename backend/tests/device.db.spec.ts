@@ -38,7 +38,7 @@ const signer = privateKeyToAccount('0xac0974bec39a17e36ba4a6b4d238ff944bacb478cb
 
 let seq = 0;
 
-const b64url = (buffer: ArrayBuffer): string => Buffer.from(buffer).toString('base64url');
+const b64url = (buffer: ArrayBuffer) => Buffer.from(buffer).toString('base64url');
 
 async function keypair(): Promise<{ id: string; exchangeKey: string; signingKey: string }>
 {
@@ -63,7 +63,7 @@ async function makeUser(): Promise<string>
 }
 
 /** An account with a wallet on it, which is what makes enrolment demand a signature. */
-async function makeWalletUser(): Promise<string>
+async function makeWalletUser()
 {
     const userId = await makeUser();
     await db.query(
@@ -84,7 +84,7 @@ async function openSession(userId: string): Promise<string>
     return rowsOf<{ id: string }>(rows)[0].id;
 }
 
-const enrol = async (userId: string, sessionId: string, label = 'A browser'): ReturnType<typeof device.enrol> =>
+const enrol = async (userId: string, sessionId: string, label = 'A browser') =>
     device.enrol(userId, sessionId, { ...await keypair(), label, userAgent: 'vitest' });
 
 describe.skipIf(!active)('devices, against a real database', () =>

@@ -96,7 +96,7 @@ export default component ConnectDialog(props: { close: () => void; navigate: (to
     const finish = props.close;
     let gone = false;
 
-    const dismiss = (): void =>
+    const dismiss = () =>
     {
         if (busy !== '')
         {
@@ -112,7 +112,7 @@ export default component ConnectDialog(props: { close: () => void; navigate: (to
         const stopDiscovery = discoverWallets(() => present = announcedWallets());
         present = announcedWallets();
 
-        const onKeyDown = (event: KeyboardEvent): void =>
+        const onKeyDown = (event: KeyboardEvent) =>
         {
             if (event.key === 'Escape')
             {
@@ -151,10 +151,10 @@ export default component ConnectDialog(props: { close: () => void; navigate: (to
 
     derived failure = wallet.failure();
 
-    const found = (choice: Choice): AnnouncedWallet | undefined =>
+    const found = (choice: Choice) =>
         present.find((one) => one.rdns === choice.rdns || one.rdns.startsWith(`${ choice.rdns }.`));
 
-    const enter = async (choice: Choice, announced: AnnouncedWallet): Promise<void> =>
+    const enter = async (choice: Choice, announced: AnnouncedWallet) =>
     {
         if (busy !== '')
         {
@@ -174,7 +174,7 @@ export default component ConnectDialog(props: { close: () => void; navigate: (to
         props.navigate('/app');
     };
 
-    const copyLink = async (): Promise<void> =>
+    const copyLink = async () =>
     {
         try
         {

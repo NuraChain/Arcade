@@ -38,7 +38,7 @@ export default component TextArea(props: {
 {
     let field: HTMLTextAreaElement | null = null;
 
-    const fit = (): void =>
+    const fit = () =>
     {
         if (field === null)
         {

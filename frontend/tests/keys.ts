@@ -36,7 +36,7 @@ export const TEST_ACCOUNTS = {
     third: privateKeyToAccount('0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a')
 };
 
-const enrolMessage = (_address: string, id: string): string => [
+const enrolMessage = (_address: string, id: string) => [
     'Let this browser read and send your messages on Nura Games (nura.games).',
     '',
     deviceLine(id),

@@ -10,7 +10,7 @@ disagrees with the code, the code is right and this file needs fixing.
 
 ```sh
 npm run dev            # tsc -w on the server, node --watch on .dist-backend, vite on 3100
-npm run check          # api typecheck + server test typecheck + azeroth-tsc + eslint — the gate
+npm run check          # typecheck and eslint on both halves, then the server test typecheck — the gate
 npm run build          # server tsc, client bundle, SSR bundle, prerender, budgets
 npm test               # every suite, both workspaces, no Postgres
 npm run test:shuffle   # every suite in random order — the isolation gate
@@ -96,6 +96,11 @@ the third so nobody re-investigates it.
 
 **No comments in code.** Names and structure carry the meaning; these notes and the tests hold the
 reasoning.
+
+**No type the compiler already has.** A function does not state a return type the compiler infers
+identically; `nura/prefer-inferred-return-type` (`tools/eslint/return-types.ts`) fails the check and
+`eslint --fix` removes it. An annotation stays where it does work: on an object or array literal, a
+generic call, a literal it widens, recursion. `backend/tests/return-types.spec.ts` holds the edges.
 
 **Nothing has shipped: build the FINAL shape.** No migration, backfill, compat shim, deprecation
 window, dual-write, flag guarding an old behaviour or adapter from a shape that never existed. A seed

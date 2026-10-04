@@ -45,7 +45,7 @@ export default component BoardCanvas(props: { game: string; view: BoardView; onP
     {
         let dropped = false;
 
-        void (async (): Promise<void> =>
+        void (async () =>
         {
             if (host === null)
             {

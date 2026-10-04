@@ -149,7 +149,7 @@ export function fly(layer: HTMLElement, clone: HTMLElement, from: Rect, to: Rect
     return run;
 }
 
-export function land(layer: HTMLElement): void
+export function land(layer: HTMLElement)
 {
     for (const running of layer.getAnimations?.({ subtree: true }) ?? [])
     {

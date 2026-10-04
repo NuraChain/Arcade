@@ -24,7 +24,7 @@ export const hokmEngine: Engine<HokmState, HokmAction> = {
 
     seats: SEATS,
 
-    create: (seats: readonly number[], draws: Draws, table: TableConfig): HokmState =>
+    create: (seats: readonly number[], draws: Draws, table: TableConfig) =>
         create(seats.length, table.target > 0 ? table.target : 7, (sides) => draws.die(sides)),
 
     /**
@@ -54,7 +54,7 @@ export const hokmEngine: Engine<HokmState, HokmAction> = {
     apply: (state: HokmState, action: HokmAction, draws: Draws) =>
         apply(state, action, (sides) => draws.die(sides)),
 
-    legal: (state: HokmState, seat: number): HokmAction[] => legalMoves(state, seat),
+    legal: (state: HokmState, seat: number) => legalMoves(state, seat),
 
     /**
      * During the pause the Hâkem is on turn even though nobody has played a card, which is what puts
@@ -70,7 +70,7 @@ export const hokmEngine: Engine<HokmState, HokmAction> = {
         return state.phase === 'trump' ? state.hakem : state.turn;
     },
 
-    autoplay: (state: HokmState, seat: number, draws: Draws): HokmAction | null =>
+    autoplay: (state: HokmState, seat: number, draws: Draws) =>
         autoplay(state, seat, (sides) => draws.die(sides)),
 
     /**
@@ -165,11 +165,11 @@ export const hokmEngine: Engine<HokmState, HokmAction> = {
      * hand over seven hands would be a hundred of them, which would make one hokm match worth five
      * ludo games.
      */
-    tally: (events: readonly unknown[]): Map<number, Tally> =>
+    tally: (events: readonly unknown[]) =>
     {
         const bySeat = new Map<number, Tally>();
 
-        const bump = (seat: number, name: string): void =>
+        const bump = (seat: number, name: string) =>
         {
             const tally = bySeat.get(seat) ?? {};
 
@@ -206,7 +206,7 @@ export const hokmEngine: Engine<HokmState, HokmAction> = {
         return bySeat;
     },
 
-    points: (tally: Tally): number => (tally.hands ?? 0) * XP_HAND + (tally.kots ?? 0) * XP_KOT
+    points: (tally: Tally) => (tally.hands ?? 0) * XP_HAND + (tally.kots ?? 0) * XP_KOT
 };
 
 /** Taking a hand is the unit of progress in hokm, the way a token coming home is in ludo. */

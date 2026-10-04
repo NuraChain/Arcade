@@ -23,7 +23,7 @@ const noop = (): void => undefined;
 
 let clock: ManualClock;
 
-const settle = async (): Promise<void> =>
+const settle = async () =>
 {
     await Promise.resolve();
     await Promise.resolve();
@@ -518,7 +518,7 @@ describe('Tooltip', () =>
      * `.focus()` - both match there - so the half of the rule that keeps a sheet's close tooltip off
      * its own first paragraph is checked in a real browser and not here.
      */
-    const tabTo = (host: HTMLElement): void =>
+    const tabTo = (host: HTMLElement) =>
     {
         const button = host.querySelector('button')!;
 
@@ -529,7 +529,7 @@ describe('Tooltip', () =>
     };
 
     /** Leaves for real, so the element stops being the active one and the next arrival counts. */
-    const tabAway = (host: HTMLElement): void =>
+    const tabAway = (host: HTMLElement) =>
     {
         host.querySelector('button')!.blur();
     };

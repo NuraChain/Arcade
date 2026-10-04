@@ -102,7 +102,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const CODE = /^[a-z2-9]{4,12}$/i;
 
-function codeFrom(random: () => number): string
+function codeFrom(random: () => number)
 {
     let out = '';
     for (let index = 0; index < CODE_LENGTH; index += 1)
@@ -211,7 +211,7 @@ const tableQuery = (db: DataSource, me: string) => db.getRepository(Table)
  * A refusal is a 404 rather than a 403, the same as a private group, because a 403 confirms the
  * table is there and the whole point is that a stranger cannot tell a closed door from a typo.
  */
-const visibleTo = (viewer: string): string => `(
+const visibleTo = (viewer: string) => `(
         t.privacy = 'public'
      or exists (select 1 from table_seats s where s.table_id = t.id and s.user_id = ${ viewer })
      or (t.privacy = 'friends' and exists (select 1 from friendships f
@@ -226,7 +226,7 @@ export const SEATED_MAX = 50;
 
 export function createTableService(db: DataSource, social: SocialService)
 {
-    const mustHaveRoom = async (me: string): Promise<void> =>
+    const mustHaveRoom = async (me: string) =>
     {
         const seated = await db.getRepository(TableSeat)
             .createQueryBuilder('seat')
@@ -271,14 +271,14 @@ export function createTableService(db: DataSource, social: SocialService)
      * it about anyone but the caller, which is how `invite` came to hold a chair for a person the
      * table would answer 404 to.
      */
-    const canSee = async (who: string, tableId: string): Promise<boolean> =>
+    const canSee = async (who: string, tableId: string) =>
         db.getRepository(Table)
             .createQueryBuilder('t')
             .where('t.id = :tableId', { tableId })
             .andWhere(visibleTo(':who'), { who })
             .getExists();
 
-    const mustSee = async (me: string, tableId: string): Promise<TableRow> =>
+    const mustSee = async (me: string, tableId: string) =>
     {
         const table = await one(me, tableId);
         if (table === null)
@@ -305,7 +305,7 @@ export function createTableService(db: DataSource, social: SocialService)
          * everybody else - the setting did precisely nothing and told the person who picked it
          * that their friends could find the table.
          */
-        async open(me: string, filter: { game: string | null; mode: TableMode | null }, limit: number): Promise<TableRow[]>
+        async open(me: string, filter: { game: string | null; mode: TableMode | null }, limit: number)
         {
             return await tableQuery(db, me)
                 .where(`t.status = 'open'`)
@@ -342,14 +342,7 @@ export function createTableService(db: DataSource, social: SocialService)
          * A block hides it in both directions, like every other read - watching somebody who blocked
          * you is a way of following them around, which is what a block is for.
          */
-        async watchable(me: string, game: string | null, limit: number): Promise<{
-            id: string;
-            code: string;
-            game: string;
-            seats: number;
-            players: string[];
-            started_at: Date;
-        }[]>
+        async watchable(me: string, game: string | null, limit: number)
         {
             return await db.getRepository(Table)
                 .createQueryBuilder('t')
@@ -406,7 +399,7 @@ export function createTableService(db: DataSource, social: SocialService)
          * around, which is precisely what a block is for - and the list already filters on it, so
          * a direct link that did not would be the hole the list exists to close.
          */
-        async watchableTable(me: string, tableId: string): Promise<boolean>
+        async watchableTable(me: string, tableId: string)
         {
             return await db.getRepository(Table)
                 .createQueryBuilder('t')
@@ -423,7 +416,7 @@ export function createTableService(db: DataSource, social: SocialService)
         },
 
         /** The tables this account is sitting at right now. */
-        async mine(me: string): Promise<TableRow[]>
+        async mine(me: string)
         {
             return await tableQuery(db, me)
                 .innerJoin(TableSeat, 'seat', 'seat.table_id = t.id and seat.user_id = :me')
@@ -452,7 +445,7 @@ export function createTableService(db: DataSource, social: SocialService)
             voice: boolean;
             invitees: string[];
             roomId?: string | null;
-        }): Promise<TableRow>
+        })
         {
             await mustHaveRoom(me);
 
@@ -842,7 +835,7 @@ export function createTableService(db: DataSource, social: SocialService)
         },
 
         /** Says whether this seat is ready. Only the person in it may say. */
-        async setReady(me: string, tableId: string, ready: boolean): Promise<void>
+        async setReady(me: string, tableId: string, ready: boolean)
         {
             await mustSee(me, tableId);
             await db.getRepository(TableSeat).update({ tableId, userId: me }, { ready });
@@ -905,7 +898,7 @@ export function createTableService(db: DataSource, social: SocialService)
         },
 
         /** Ends the table. The host's call. */
-        async close(me: string, tableId: string): Promise<void>
+        async close(me: string, tableId: string)
         {
             const table = await mustSee(me, tableId);
             if (!table.is_host)
@@ -927,7 +920,7 @@ export function createTableService(db: DataSource, social: SocialService)
             }
         },
 
-        async setVoice(me: string, tableId: string, on: boolean): Promise<void>
+        async setVoice(me: string, tableId: string, on: boolean)
         {
             const table = await mustSee(me, tableId);
             if (!table.is_host)

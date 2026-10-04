@@ -46,7 +46,7 @@ const said = (text: string): Message => ({
 });
 
 /** One direct thread, both sides provable, nothing said yet. */
-function arrange(options: { theirKind?: 'wallet' | 'guest' } = {}): void
+function arrange(options: { theirKind?: 'wallet' | 'guest' } = {})
 {
     server.reset();
     server.me = 'alex';

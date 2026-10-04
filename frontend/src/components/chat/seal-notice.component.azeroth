@@ -47,7 +47,7 @@ export default component SealNotice(props: { stop: SendBlock | null; action?: Ch
     const locale = useLocale();
 
     <>
-        <Show when={ (): boolean => props.stop === null }>
+        <Show when={ () => props.stop === null }>
             { () =>
                 <p class="flex items-start gap-2 px-3 py-1.5 text-ui-xs text-faint">
                     <Icon name="lock" size={ 14 } class="mt-0.5 shrink-0" />

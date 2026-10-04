@@ -36,17 +36,17 @@ function sideFrom(layout: Layout): Side
     return { me, them };
 }
 
-const named = (hops: readonly Hop[]): string =>
+const named = (hops: readonly Hop[]) =>
     hops.map((hop) => `${ hop.from === BAR ? 'bar' : hop.from }/${ hop.to === OFF ? 'off' : hop.to }`).join(' ');
 
-const listed = (side: Side, roll: number[]): string[] => turns(side, roll).map(named).sort();
+const listed = (side: Side, roll: number[]) => turns(side, roll).map(named).sort();
 
 const orders = (hops: readonly Hop[]): Hop[][] =>
     hops.length <= 1
         ? [[...hops]]
         : hops.flatMap((hop, index) => orders([...hops.slice(0, index), ...hops.slice(index + 1)]).map((rest) => [hop, ...rest]));
 
-const firstSteps = (side: Side, roll: number[]): string[] =>
+const firstSteps = (side: Side, roll: number[]) =>
     [...new Set(turns(side, roll)
         .flatMap(orders)
         .filter((order) => settle(side, roll, order) !== null)
@@ -299,12 +299,12 @@ interface Line
     side: Side;
 }
 
-function naive(side: Side, roll: number[]): Line[]
+function naive(side: Side, roll: number[])
 {
     const dice = roll[0] === roll[1] ? [roll[0], roll[0], roll[0], roll[0]] : [roll[0], roll[1]];
     const lines: Line[] = [];
 
-    const walk = (at: Side, left: number[], hops: Hop[], used: number[]): void =>
+    const walk = (at: Side, left: number[], hops: Hop[], used: number[]) =>
     {
         let moved = false;
 
@@ -345,14 +345,14 @@ function naive(side: Side, roll: number[]): Line[]
     return full;
 }
 
-const finalOf = (side: Side): string => `${ side.me.join(',') }|${ side.them.join(',') }`;
+const finalOf = (side: Side) => `${ side.me.join(',') }|${ side.them.join(',') }`;
 
 describe('the move generator agrees with a naive enumerator written here', () =>
 {
     it('offers exactly the final positions every legal sequence reaches, and accepts every one of those sequences', () =>
     {
         let seed = 991;
-        const random = (): number =>
+        const random = () =>
         {
             seed = (seed * 1103515245 + 12345) % 2147483648;
 
@@ -399,7 +399,7 @@ describe('staging a turn one hop at a time, which is how the board lets somebody
     it('offers exactly the hops some complete legal turn continues with, in whatever order they came', () =>
     {
         let seed = 4441;
-        const random = (): number =>
+        const random = () =>
         {
             seed = (seed * 1103515245 + 12345) % 2147483648;
 
@@ -486,7 +486,7 @@ describe('checkers are conserved', () =>
     it('keeps fifteen a side, and never two colours on one point, after every single hop', () =>
     {
         let seed = 17;
-        const random = (): number =>
+        const random = () =>
         {
             seed = (seed * 1103515245 + 12345) % 2147483648;
 
@@ -570,7 +570,7 @@ describe('scoring', () =>
         expect(kindOf(sideFrom({ me: { 6: 14, 18: 1 } }).me)).toBe('gammon');
     });
 
-    const finishing = (loser: Record<number, number>, cube: number): BackgammonState =>
+    const finishing = (loser: Record<number, number>, cube: number) =>
     {
         const winner = sideFrom({ me: { 1: 1 } });
         const beaten = sideFrom({ me: loser });
@@ -685,7 +685,7 @@ describe('the Crawford rule', () =>
 
     it('is played for real: reaching match point minus one makes the next game Crawford, and the one after it free', () =>
     {
-        const winning = (score: number[], crawford: BackgammonState['crawford'], seat: number): BackgammonState =>
+        const winning = (score: number[], crawford: BackgammonState['crawford'], seat: number) =>
         {
             const winner = sideFrom({ me: { 1: 1, 0: 14 } });
             const loser = sideFrom({ me: { 2: 1, 0: 14 } });

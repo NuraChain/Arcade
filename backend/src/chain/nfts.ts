@@ -78,7 +78,7 @@ export function isPublicIp(ip: string): boolean
     return !PRIVATE.check(ip, family === 4 ? 'ipv4' : 'ipv6');
 }
 
-export function holdingsFrom(address: string, erc721: readonly NftTransfer[], erc1155: readonly NftTransfer[]): NftHolding[]
+export function holdingsFrom(address: string, erc721: readonly NftTransfer[], erc1155: readonly NftTransfer[])
 {
     const me = address.toLowerCase();
     const owned = new Map<string, NftHolding>();
@@ -159,7 +159,7 @@ export function resolveUri(uri: string): string | null
 
 export function sniffNftImage(bytes: Uint8Array): NftImageType | null
 {
-    const opens = (at: number, expected: readonly number[]): boolean => expected.every((v, i) => bytes[at + i] === v);
+    const opens = (at: number, expected: readonly number[]) => expected.every((v, i) => bytes[at + i] === v);
     if (opens(0, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
     {
         return 'image/png';
@@ -300,7 +300,7 @@ export function createNftReader(settings: NftSettings): NftReader
 {
     const configured = settings.rpcUrl !== '' && settings.explorerApi !== '';
     let client: PublicClient | null = null;
-    const reader = (): PublicClient =>
+    const reader = () =>
     {
         client ??= createPublicClient({ transport: http(settings.rpcUrl, { timeout: FETCH_TIMEOUT_MS }) });
         return client;
@@ -309,7 +309,7 @@ export function createNftReader(settings: NftSettings): NftReader
     const held = new Map<string, { at: number; value: NftHolding[] }>();
     const metas = new Map<string, { at: number; value: NftMeta }>();
 
-    const transfers = async (action: string, address: string): Promise<NftTransfer[]> =>
+    const transfers = async (action: string, address: string) =>
     {
         const all: NftTransfer[] = [];
         for (let page = 1; page <= EXPLORER_PAGES; page++)
@@ -338,7 +338,7 @@ export function createNftReader(settings: NftSettings): NftReader
         return all;
     };
 
-    const uriOf = async (contract: string, tokenId: string, standard: NftStandard): Promise<string> =>
+    const uriOf = async (contract: string, tokenId: string, standard: NftStandard) =>
     {
         const id = BigInt(tokenId);
         const raw = await reader().readContract({
@@ -350,7 +350,7 @@ export function createNftReader(settings: NftSettings): NftReader
         return standard === 'erc1155' ? raw.replace('{id}', id.toString(16).padStart(64, '0')) : raw;
     };
 
-    const remember = (key: string, value: NftMeta): NftMeta =>
+    const remember = (key: string, value: NftMeta) =>
     {
         if (metas.size >= META_MAX)
         {

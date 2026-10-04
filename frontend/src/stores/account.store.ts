@@ -6,7 +6,7 @@ import type { Person } from '../data/person.ts';
 import { shortAddress } from '../lib/wallet.ts';
 import { useSession } from './session.store.ts';
 
-export function slugify(handle: string): string
+export function slugify(handle: string)
 {
     return handle.trim().toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '');
 }

@@ -8,22 +8,22 @@ export type Rank = typeof RANKS[number];
 
 export const DECK: readonly number[] = Array.from({ length: SUITS.length * RANKS.length }, (_, card) => card);
 
-export function suitOf(card: number): Suit
+export function suitOf(card: number)
 {
     return SUITS[Math.floor(card / RANKS.length)];
 }
 
-export function rankOf(card: number): number
+export function rankOf(card: number)
 {
     return card % RANKS.length;
 }
 
-export function cardOf(suit: Suit, rank: Rank): number
+export function cardOf(suit: Suit, rank: Rank)
 {
     return SUITS.indexOf(suit) * RANKS.length + RANKS.indexOf(rank);
 }
 
-export function nameOf(card: number): string
+export function nameOf(card: number)
 {
     return `${ RANKS[rankOf(card)] }${ suitOf(card)[0].toUpperCase() }`;
 }

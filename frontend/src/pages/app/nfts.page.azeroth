@@ -15,7 +15,7 @@ import { useLocale } from '../../stores/locale.store.ts';
 
 const PAGE = 24;
 
-const keyOf = (item: NftItem): string => `${ item.contract }:${ item.tokenId }`;
+const keyOf = (item: NftItem) => `${ item.contract }:${ item.tokenId }`;
 
 export default component NftsPage()
 {
@@ -52,7 +52,7 @@ export default component NftsPage()
 
     derived offline = first.data()?.configured === false;
 
-    const more = async (): Promise<void> =>
+    const more = async () =>
     {
         if (paging)
         {
@@ -79,9 +79,9 @@ export default component NftsPage()
         }
     };
 
-    const nameOf = (item: NftItem): string => item.name !== '' ? item.name : `#${ item.tokenId }`;
+    const nameOf = (item: NftItem) => item.name !== '' ? item.name : `#${ item.tokenId }`;
 
-    const hide = (event: Event): void =>
+    const hide = (event: Event) =>
     {
         (event.currentTarget as HTMLElement).remove();
     };

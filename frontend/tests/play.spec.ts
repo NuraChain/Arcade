@@ -102,7 +102,7 @@ describe('game artwork', () =>
 
 describe('GameCard', () =>
 {
-    const settle = async (): Promise<void> =>
+    const settle = async () =>
     {
         for (let i = 0; i < 6; i += 1)
         {
@@ -174,7 +174,7 @@ describe('GameCard', () =>
 
 describe('PlayHeader', () =>
 {
-    const table = (id: string, game: string, extra: Record<string, unknown> = {}): never => ({
+    const table = (id: string, game: string, extra: Record<string, unknown> = {}) => ({
         id,
         code: id.toUpperCase(),
         game,
@@ -298,7 +298,7 @@ describe('TurnClock', () =>
 
 describe('PlayPage', () =>
 {
-    const settle = async (): Promise<void> =>
+    const settle = async () =>
     {
         for (let i = 0; i < 12; i += 1)
         {
@@ -425,7 +425,7 @@ describe('PlayPage', () =>
 
     it('draws a spectated game with its own board, and one it cannot draw as exactly that', () =>
     {
-        const watching = (game: string): MatchWatch => ({
+        const watching = (game: string) => ({
             match: {
                 id: 'watched',
                 tableId: 'somewhere',
@@ -474,7 +474,7 @@ describe('PlayPage', () =>
 
 describe('TableChat', () =>
 {
-    const settle = async (): Promise<void> =>
+    const settle = async () =>
     {
         for (let i = 0; i < 12; i += 1)
         {
@@ -515,7 +515,7 @@ describe('TableChat', () =>
 
 describe('the messenger', () =>
 {
-    const settle = async (): Promise<void> =>
+    const settle = async () =>
     {
         for (let step = 0; step < 10; step += 1)
         {
@@ -532,7 +532,7 @@ describe('the messenger', () =>
 
     let router: ReturnType<typeof createRouter>;
 
-    const open = async (posture: 'phone' | 'sidebar'): Promise<HTMLElement> =>
+    const open = async (posture: 'phone' | 'sidebar') =>
     {
         useDevice().override(posture);
         const table: Route[] = [{ path: '/app/chats/:id', component: (): HTMLElement => ChatPage() as HTMLElement }];
@@ -573,7 +573,7 @@ describe('the messenger', () =>
 
 describe('the table’s chat and its controls', () =>
 {
-    const settle = async (): Promise<void> =>
+    const settle = async () =>
     {
         for (let step = 0; step < 10; step += 1)
         {
@@ -589,7 +589,7 @@ describe('the table’s chat and its controls', () =>
         useSettings().update({ railOpen: true });
     });
 
-    const open = async (posture: 'phone' | 'rail' | 'sidebar'): Promise<HTMLElement> =>
+    const open = async (posture: 'phone' | 'rail' | 'sidebar') =>
     {
         useDevice().override(posture);
         const id = await useLobby().host('ludo', defaultTable('ludo'), []);
@@ -604,7 +604,7 @@ describe('the table’s chat and its controls', () =>
         [...container.querySelectorAll('button')].find((one) =>
             one.getAttribute('aria-label') === name || one.textContent?.trim() === name);
 
-    const found = async (container: HTMLElement, name: string): Promise<HTMLElement> =>
+    const found = async (container: HTMLElement, name: string) =>
     {
         await vi.waitFor(() => expect(button(container, name)).toBeDefined(), { timeout: 4000 });
 
@@ -676,7 +676,7 @@ describe('the table’s chat and its controls', () =>
         expect(rail(container)!.querySelector('textarea')).not.toBeNull();
     });
 
-    const screen = (width: number, height: number): void =>
+    const screen = (width: number, height: number) =>
     {
         Object.defineProperty(window, 'innerWidth', { configurable: true, value: width });
         Object.defineProperty(window, 'innerHeight', { configurable: true, value: height });

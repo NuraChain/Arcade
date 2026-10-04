@@ -67,19 +67,19 @@ export const TALK_KEY = 'KeyV';
 
 let media: () => MediaDevices | null = () => (typeof navigator === 'undefined' ? null : navigator.mediaDevices ?? null);
 
-export function setVoiceMedia(next: (() => MediaDevices | null) | null): void
+export function setVoiceMedia(next: (() => MediaDevices | null) | null)
 {
     media = next ?? (() => (typeof navigator === 'undefined' ? null : navigator.mediaDevices ?? null));
 }
 
 let makeCall: (deps: VoiceCallDeps) => VoiceCall = createVoiceCall;
 
-export function setVoiceCall(next: ((deps: VoiceCallDeps) => VoiceCall) | null): void
+export function setVoiceCall(next: ((deps: VoiceCallDeps) => VoiceCall) | null)
 {
     makeCall = next ?? createVoiceCall;
 }
 
-const typing = (target: EventTarget | null): boolean =>
+const typing = (target: EventTarget | null) =>
 {
     const element = target as HTMLElement | null;
 
@@ -111,24 +111,24 @@ export const useVoice = createStore((): VoiceApi =>
     let mutedBeforeDeaf = true;
     let unhold: (() => void) | null = null;
 
-    const me = (): string => untrack(account.user)?.id ?? '';
+    const me = () => untrack(account.user)?.id ?? '';
 
-    const master = (): number => Math.min(Math.max(untrack(settings.settings).voiceVolume, 0), 1);
+    const master = () => Math.min(Math.max(untrack(settings.settings).voiceVolume, 0), 1);
 
-    const own = (who: string): number => untrack(volumes)[who] ?? 1;
+    const own = (who: string) => untrack(volumes)[who] ?? 1;
 
-    const heard = (who: string): number => (untrack(deaf) ? 0 : master() * own(who));
+    const heard = (who: string) => (untrack(deaf) ? 0 : master() * own(who));
 
-    const pushToTalk = (): boolean => untrack(settings.settings).voicePushToTalk;
+    const pushToTalk = () => untrack(settings.settings).voicePushToTalk;
 
-    const talkKey = (): string => untrack(settings.settings).voiceTalkKey || TALK_KEY;
+    const talkKey = () => untrack(settings.settings).voiceTalkKey || TALK_KEY;
 
-    const gate = (): void =>
+    const gate = () =>
     {
         call?.setMuted(untrack(muted) || untrack(deaf) || (pushToTalk() && !untrack(talking)));
     };
 
-    const level = (who: string, value: number): void =>
+    const level = (who: string, value: number) =>
     {
         setLoud((current) =>
         {
@@ -148,7 +148,7 @@ export const useVoice = createStore((): VoiceApi =>
         });
     };
 
-    const stopTracks = (held: MediaStream | null): void =>
+    const stopTracks = (held: MediaStream | null) =>
     {
         for (const track of held?.getTracks() ?? [])
         {
@@ -156,7 +156,7 @@ export const useVoice = createStore((): VoiceApi =>
         }
     };
 
-    const stopStream = (): void =>
+    const stopStream = () =>
     {
         stopTracks(stream);
         stream = null;
@@ -164,7 +164,7 @@ export const useVoice = createStore((): VoiceApi =>
 
     let joins = 0;
 
-    const teardown = (): void =>
+    const teardown = () =>
     {
         joins += 1;
         unhold?.();
@@ -187,7 +187,7 @@ export const useVoice = createStore((): VoiceApi =>
         setTalking(false);
     };
 
-    const onVoice = (frame: VoiceFrame): void =>
+    const onVoice = (frame: VoiceFrame) =>
     {
         if (frame.table !== untrack(table))
         {
@@ -207,7 +207,7 @@ export const useVoice = createStore((): VoiceApi =>
         call?.sync(frame.peers.filter((peer) => peer.talk && peer.who !== self).map((peer) => peer.who));
     };
 
-    const signalled = (frame: SignalFrame): void =>
+    const signalled = (frame: SignalFrame) =>
     {
         if (frame.table === untrack(table))
         {
@@ -215,7 +215,7 @@ export const useVoice = createStore((): VoiceApi =>
         }
     };
 
-    const survey = async (): Promise<void> =>
+    const survey = async () =>
     {
         const devices = media();
 
@@ -285,7 +285,7 @@ export const useVoice = createStore((): VoiceApi =>
         }));
     };
 
-    const applyVolume = (): void =>
+    const applyVolume = () =>
     {
         for (const peer of untrack(roster))
         {
@@ -293,13 +293,13 @@ export const useVoice = createStore((): VoiceApi =>
         }
     };
 
-    const setLevel = (who: string, value: number): void =>
+    const setLevel = (who: string, value: number) =>
     {
         setVolumes((current) => ({ ...current, [who]: Math.min(Math.max(value, 0), 1) }));
         call?.setVolume(who, heard(who));
     };
 
-    const press = (): void =>
+    const press = () =>
     {
         if (untrack(table) === null || untrack(talking))
         {
@@ -310,7 +310,7 @@ export const useVoice = createStore((): VoiceApi =>
         gate();
     };
 
-    const letGo = (): void =>
+    const letGo = () =>
     {
         if (!untrack(talking))
         {
@@ -321,7 +321,7 @@ export const useVoice = createStore((): VoiceApi =>
         gate();
     };
 
-    const announce = (): void =>
+    const announce = () =>
     {
         const current = untrack(table);
 
@@ -553,7 +553,7 @@ export const useVoice = createStore((): VoiceApi =>
 
             devices?.addEventListener?.('devicechange', changed);
 
-            const down = (event: KeyboardEvent): void =>
+            const down = (event: KeyboardEvent) =>
             {
                 if (event.code === talkKey() && !event.repeat && pushToTalk() && untrack(table) !== null && !typing(event.target))
                 {
@@ -562,7 +562,7 @@ export const useVoice = createStore((): VoiceApi =>
                 }
             };
 
-            const up = (event: KeyboardEvent): void =>
+            const up = (event: KeyboardEvent) =>
             {
                 if (event.code === talkKey())
                 {
@@ -570,7 +570,7 @@ export const useVoice = createStore((): VoiceApi =>
                 }
             };
 
-            const blur = (): void => letGo();
+            const blur = () => letGo();
 
             if (typeof window !== 'undefined')
             {

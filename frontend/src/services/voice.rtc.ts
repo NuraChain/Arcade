@@ -81,7 +81,7 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
     let closed = false;
     let sink = '';
 
-    const route = (audio: HTMLAudioElement): void =>
+    const route = (audio: HTMLAudioElement) =>
     {
         const output = audio as HTMLAudioElement & { setSinkId?: (id: string) => Promise<void> };
 
@@ -93,7 +93,7 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
 
     const connect = deps.connect ?? ((config: RTCConfiguration) => new RTCPeerConnection(config));
 
-    const drop = (who: string): void =>
+    const drop = (who: string) =>
     {
         const peer = peers.get(who);
         if (peer === undefined)
@@ -111,7 +111,7 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
         deps.onLink(who, null);
     };
 
-    const open = (who: string): Peer =>
+    const open = (who: string) =>
     {
         const connection = connect({ iceServers: deps.iceServers });
         const transceiver = connection.addTransceiver('audio', { direction: 'sendrecv' });

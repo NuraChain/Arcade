@@ -26,12 +26,12 @@ export interface Played extends Hop
     hit: boolean;
 }
 
-export function facing(point: number): number
+export function facing(point: number)
 {
     return BAR - point;
 }
 
-export function allHome(me: readonly number[]): boolean
+export function allHome(me: readonly number[])
 {
     for (let point = HOME + 1; point <= BAR; point += 1)
     {
@@ -44,12 +44,12 @@ export function allHome(me: readonly number[]): boolean
     return true;
 }
 
-export function pips(me: readonly number[]): number
+export function pips(me: readonly number[])
 {
     return me.reduce((total, count, point) => total + count * point, 0);
 }
 
-export function keyOf(side: Side): string
+export function keyOf(side: Side)
 {
     return `${ side.me.join(',') }|${ side.them.join(',') }`;
 }

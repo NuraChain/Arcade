@@ -19,7 +19,7 @@ export default component LeaderboardPage()
 
     const query = useQuery();
 
-    state picked = ((): GameId | null =>
+    state picked = (() =>
     {
         const asked = untrack(query).game;
         return typeof asked === 'string' ? asked as GameId : null;

@@ -16,7 +16,7 @@ vi.mock('../src/api.ts', async () => await import('./fake-api.ts'));
 
 type Rendered = HTMLElement;
 
-const settle = async (): Promise<void> =>
+const settle = async () =>
 {
     for (let i = 0; i < 8; i += 1)
     {
@@ -25,7 +25,7 @@ const settle = async (): Promise<void> =>
     await new Promise((resolve) => setTimeout(resolve, 40));
 };
 
-const show = async (): Promise<HTMLElement> =>
+const show = async () =>
 {
     const Stub = (): HTMLElement => document.createElement('div');
     const table: Route[] = [{ path: '/app', component: HomePage as unknown as () => HTMLElement, children: [{ path: 'games/:slug', component: Stub }] }];

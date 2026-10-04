@@ -27,9 +27,9 @@ const scene = (): { root: Group; die: Group; face: Object3D; clip: AnimationClip
     return { root, die, face, clip };
 };
 
-const heightOf = (node: Object3D): number => node.matrixWorld.elements[13];
+const heightOf = (node: Object3D) => node.matrixWorld.elements[13];
 
-const finish = (settling: Settling): void =>
+const finish = (settling: Settling) =>
 {
     let steps = 0;
 

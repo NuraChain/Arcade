@@ -29,7 +29,7 @@ export default component NotificationsPage()
 
     state loadingMore = false;
 
-    const more = (): void =>
+    const more = () =>
     {
         loadingMore = true;
         void notifications.more().finally(() => loadingMore = false);
@@ -42,7 +42,7 @@ export default component NotificationsPage()
         return () => notifications.only(null);
     }
 
-    derived dayStart = ((): number =>
+    derived dayStart = (() =>
     {
         const reference = new Date(runtime().clock.now());
         reference.setHours(0, 0, 0, 0);
@@ -53,7 +53,7 @@ export default component NotificationsPage()
 
     derived earlier = items.filter((item) => Date.parse(item.at) < dayStart);
 
-    const open = (item: Notification): void =>
+    const open = (item: Notification) =>
     {
         void notifications.markRead(item.id);
         const target = targetOf(item);

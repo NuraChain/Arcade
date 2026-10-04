@@ -24,7 +24,7 @@ export default component ChatListItem(props: { conversation: Conversation; me: s
     const locale = useLocale();
     const catalogue = useCatalogue();
 
-    const gameName = (game: GameId): string => locale.t(catalogue.byId(game).nameKey);
+    const gameName = (game: GameId) => locale.t(catalogue.byId(game).nameKey);
     const social = useSocial();
     const chat = useChat();
     const presence = usePresence();
@@ -42,7 +42,7 @@ export default component ChatListItem(props: { conversation: Conversation; me: s
         return attachHold(row, () => props.onHold?.());
     }
 
-    const nameOf = (handle: string): string =>
+    const nameOf = (handle: string) =>
     {
         const person = people.byHandle(handle);
 
@@ -61,7 +61,7 @@ export default component ChatListItem(props: { conversation: Conversation; me: s
 
     derived muted = social.isMuted('conversation', props.conversation.id);
 
-    derived preview = ((): string =>
+    derived preview = (() =>
     {
         if (typing.length > 0)
         {

@@ -72,7 +72,7 @@ export const useLobby = createStore((): LobbyApi =>
     const account = useAccount();
     const catalogue = useCatalogue();
 
-    const who = (): string | null => account.user()?.id ?? null;
+    const who = () => account.user()?.id ?? null;
 
     const [openId, setOpenId] = createSignal('');
 
@@ -109,7 +109,7 @@ export const useLobby = createStore((): LobbyApi =>
 
     let inFlight: Promise<void> = Promise.resolve();
 
-    const revalidate = (): Promise<void> =>
+    const revalidate = () =>
     {
         inFlight = inFlight.catch(() => undefined).then(async () =>
         {
@@ -174,7 +174,7 @@ export const useLobby = createStore((): LobbyApi =>
         };
     };
 
-    const settle = async (tableId: string): Promise<void> =>
+    const settle = async (tableId: string) =>
     {
         const table = await client.tables.ready({ params: { id: tableId }, input: { ready: true } });
 

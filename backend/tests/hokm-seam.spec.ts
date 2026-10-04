@@ -48,7 +48,7 @@ function forged(hand: readonly number[]): number[]
     return hand.map((card) => (card + 26) % 52);
 }
 
-const opened = (seats: number, seed: number): HokmState =>
+const opened = (seats: number, seed: number) =>
     hokmEngine.create(Array.from({ length: seats }, (_, seat) => seat), seeded(seed), { target: 7, cube: false, blinds: 'low' }) as HokmState;
 
 describe('what one seat may see of another', () =>

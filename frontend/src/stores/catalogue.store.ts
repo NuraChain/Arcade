@@ -100,7 +100,7 @@ export const useCatalogue = createStore((): CatalogueApi =>
         ]));
     };
 
-    const rulesFor = (id: GameId): TableRules => published().get(id)?.rules ?? TABLE_RULES[id];
+    const rulesFor = (id: GameId) => published().get(id)?.rules ?? TABLE_RULES[id];
 
     const counts = (): Map<string, LiveStats> => new Map(
         (live.data()?.games ?? []).map((row) => [row.game, { tablesOpen: row.tables, playersOnline: row.playing }])

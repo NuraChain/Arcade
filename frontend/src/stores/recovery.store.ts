@@ -73,7 +73,7 @@ export const useRecovery = createStore((): RecoveryApi =>
 
     const answer = createResource<RecoveryState, boolean>(
         () => (session.account() === null ? null : true),
-        async (): Promise<RecoveryState> => client.devices.recovery(),
+        async () => client.devices.recovery(),
         { name: 'devices.recovery' }
     );
 
@@ -182,7 +182,7 @@ export const useRecovery = createStore((): RecoveryApi =>
          * of the archive key, because keeping one for an archive that no longer exists is holding a
          * key to a door somebody demolished.
          */
-        async turnOff(): Promise<void>
+        async turnOff()
         {
             setBusy(true);
 

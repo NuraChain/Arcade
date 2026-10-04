@@ -16,7 +16,7 @@ export interface LudoHappened
     why?: string;
 }
 
-const squareOf = (seat: LudoSeat, progress: number): number => ringIndex(seat.colour as LudoColour, progress);
+const squareOf = (seat: LudoSeat, progress: number) => ringIndex(seat.colour as LudoColour, progress);
 
 const standingOn = (board: LudoBoard, mover: number, square: number): number[] =>
     board.seats
@@ -104,7 +104,7 @@ export function outcomeOf(board: LudoBoard, seat: number, piece: number): LudoOu
     return victims.length === 0 ? { kind: 'step' } : { kind: 'capture', victim: victims[0], count: victims.length };
 }
 
-const starShields = (board: LudoBoard, me: LudoSeat, die: number): boolean =>
+const starShields = (board: LudoBoard, me: LudoSeat, die: number) =>
     board.moves.some((piece) =>
     {
         const to = landing(me, piece, die);
@@ -119,7 +119,7 @@ const starShields = (board: LudoBoard, me: LudoSeat, die: number): boolean =>
         return isSafeRing(square) && standingOn(board, me.seat, square).length > 0;
     });
 
-const ends = (me: LudoSeat, piece: number, die: number): boolean =>
+const ends = (me: LudoSeat, piece: number, die: number) =>
     landing(me, piece, die) === FINISHED && me.tokens.every((token) => token.piece === piece || token.at === FINISHED);
 
 export function coachOf(board: LudoBoard, mine: number | undefined, turn: number | undefined, recent: readonly LudoHappened[]): Tip | null

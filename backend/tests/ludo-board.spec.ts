@@ -53,11 +53,11 @@ const HOMES: Record<LudoColour, readonly (readonly [number, number])[]> = {
     blue: [[7, 9], [7, 10], [7, 11], [7, 12], [7, 13]]
 };
 
-const key = (cell: Cell): string => `${ cell.col },${ cell.row }`;
+const key = (cell: Cell) => `${ cell.col },${ cell.row }`;
 
-const pair = ([col, row]: readonly [number, number]): string => `${ col },${ row }`;
+const pair = ([col, row]: readonly [number, number]) => `${ col },${ row }`;
 
-const adjacent = (a: Cell, b: Cell): boolean =>
+const adjacent = (a: Cell, b: Cell) =>
     Math.abs(a.col - b.col) + Math.abs(a.row - b.row) === 1;
 
 describe('the ring', () =>

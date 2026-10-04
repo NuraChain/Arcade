@@ -75,7 +75,7 @@ export default component ProfileSheet(props: OverlayProps & { only?: 'picture' }
         avatar: preview !== '' ? preview : picture
     };
 
-    const choose = async (file: File | undefined): Promise<void> =>
+    const choose = async (file: File | undefined) =>
     {
         if (file === undefined)
         {
@@ -95,7 +95,7 @@ export default component ProfileSheet(props: OverlayProps & { only?: 'picture' }
         }
     };
 
-    const remove = (): void =>
+    const remove = () =>
     {
         picture = '';
         picked = '';
@@ -103,7 +103,7 @@ export default component ProfileSheet(props: OverlayProps & { only?: 'picture' }
         pictureRefusal = '';
     };
 
-    const finish = (kind: 'success' | 'warning', text: string): void =>
+    const finish = (kind: 'success' | 'warning', text: string) =>
     {
         busy = false;
         publishing = false;
@@ -111,7 +111,7 @@ export default component ProfileSheet(props: OverlayProps & { only?: 'picture' }
         props.close(true);
     };
 
-    const save = async (): Promise<void> =>
+    const save = async () =>
     {
         if (busy || !valid)
         {

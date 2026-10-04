@@ -21,23 +21,23 @@ let allowed = false;
 
 let last = -Infinity;
 
-export function setHaptics(on: boolean): void
+export function setHaptics(on: boolean)
 {
     allowed = on;
 }
 
-export function hapticsAllowed(): boolean
+export function hapticsAllowed()
 {
     return allowed;
 }
 
-export function resetHaptics(): void
+export function resetHaptics()
 {
     allowed = false;
     last = -Infinity;
 }
 
-export function haptic(kind: Haptic): boolean
+export function haptic(kind: Haptic)
 {
     if (!allowed || typeof navigator === 'undefined' || typeof navigator.vibrate !== 'function')
     {

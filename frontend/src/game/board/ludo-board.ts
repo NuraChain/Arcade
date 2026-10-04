@@ -52,9 +52,9 @@ const order = (key: string): [number, number] =>
     return [seat ?? 0, piece ?? 0];
 };
 
-const cq = (value: number): string => `${ value.toFixed(3) }cqi`;
+const cq = (value: number) => `${ value.toFixed(3) }cqi`;
 
-const at = (spot: { x: number; y: number }): string => `${ cq(spot.x) } ${ cq(spot.y) }`;
+const at = (spot: { x: number; y: number }) => `${ cq(spot.x) } ${ cq(spot.y) }`;
 
 function foot(col: number, row: number): { x: number; y: number }
 {
@@ -64,7 +64,7 @@ function foot(col: number, row: number): { x: number; y: number }
     };
 }
 
-function element<K extends keyof HTMLElementTagNameMap>(tag: K, name: string, parent?: HTMLElement): HTMLElementTagNameMap[K]
+function element<K extends keyof HTMLElementTagNameMap>(tag: K, name: string, parent?: HTMLElement)
 {
     const made = document.createElement(tag);
 
@@ -98,7 +98,7 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
     root.style.setProperty('--c', cq(C));
     root.toggleAttribute('data-still', !motion);
 
-    const later = (ms: number, run: () => void): number =>
+    const later = (ms: number, run: () => void) =>
     {
         const id = window.setTimeout(() =>
         {
@@ -144,14 +144,14 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
         return { x: base.x + place.dx * C, y: base.y + place.dy * C, scale: place.scale };
     };
 
-    const place = (piece: Piece, spot: Spot): void =>
+    const place = (piece: Piece, spot: Spot) =>
     {
         piece.root.style.translate = at(spot);
         piece.root.style.scale = String(spot.scale);
         piece.root.style.zIndex = String(Math.round(spot.y * 10));
     };
 
-    const dress = (piece: Piece): void =>
+    const dress = (piece: Piece) =>
     {
         const token = piece.token;
 
@@ -160,7 +160,7 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
         piece.root.style.setProperty('--i', String(order(token.key)[1] % 4));
     };
 
-    const mint = (token: BoardToken): Piece =>
+    const mint = (token: BoardToken) =>
     {
         const node = element('div', 'lp absolute inset-s-0 inset-bs-0 inline-0 block-0', root);
         const shadow = element('img', `lp-shadow ${ SPRITE } block inset-s-[calc(var(--c)*-0.753)] inset-bs-[calc(var(--c)*-0.2588)] inline-[calc(var(--c)*1.506)] block-[calc(var(--c)*0.753)] opacity-[0.6] origin-[50%_34.375%] ${ STILL }`, node);
@@ -187,7 +187,7 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
         return piece;
     };
 
-    const halt = (piece: Piece): void =>
+    const halt = (piece: Piece) =>
     {
         piece.walk += 1;
         piece.moving = false;
@@ -209,7 +209,7 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
         }
     };
 
-    const layout = (): void =>
+    const layout = () =>
     {
         for (const piece of pieces.values())
         {
@@ -220,7 +220,7 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
         }
     };
 
-    const burst = (spot: { x: number; y: number }, colour: string): void =>
+    const burst = (spot: { x: number; y: number }, colour: string) =>
     {
         if (!motion)
         {
@@ -238,7 +238,7 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
         ).finished.then(() => ring.remove(), () => ring.remove());
     };
 
-    const land = (piece: Piece): void =>
+    const land = (piece: Piece) =>
     {
         piece.pawn.animate(
             [{ scale: '1 1' }, { scale: '1.05 0.93' }, { scale: '1 1' }],
@@ -246,7 +246,7 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
         );
     };
 
-    const walk = (piece: Piece, cells: readonly { col: number; row: number }[], from: { x: number; y: number }, done: () => void): void =>
+    const walk = (piece: Piece, cells: readonly { col: number; row: number }[], from: { x: number; y: number }, done: () => void) =>
     {
         halt(piece);
 
@@ -306,7 +306,7 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
         }));
     };
 
-    const arrive = (piece: Piece): void =>
+    const arrive = (piece: Piece) =>
     {
         piece.moving = false;
         piece.root.removeAttribute('data-moving');
@@ -315,7 +315,7 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
         layout();
     };
 
-    const home = (piece: Piece): void =>
+    const home = (piece: Piece) =>
     {
         const spot = spotOf(piece.token);
         const from = piece.root.style.translate;
@@ -331,7 +331,7 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
         ).finished.then(() => burst(spot, '#E8C36A'), () => undefined);
     };
 
-    const knock = (piece: Piece, from: { x: number; y: number }): void =>
+    const knock = (piece: Piece, from: { x: number; y: number }) =>
     {
         halt(piece);
 
@@ -388,7 +388,7 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
         }));
     };
 
-    const retire = (piece: Piece): void =>
+    const retire = (piece: Piece) =>
     {
         halt(piece);
 
@@ -402,12 +402,12 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
             .finished.then(() => piece.root.remove(), () => piece.root.remove());
     };
 
-    const face = (value: number): void =>
+    const face = (value: number) =>
     {
         die.style.setProperty('--face', String(Math.min(Math.max(value, 1), 6) - 1));
     };
 
-    const hideDie = (): void =>
+    const hideDie = () =>
     {
         window.clearTimeout(dieFade);
         root.removeAttribute('data-rolled');
@@ -419,7 +419,7 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
         }
     };
 
-    const fadeDie = (): void =>
+    const fadeDie = () =>
     {
         window.clearTimeout(dieFade);
         dieFade = later(DIE_HOLD_MS, () =>
@@ -434,7 +434,7 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
         });
     };
 
-    const roll = (was: number | null, now: number | null, turn: string | null): void =>
+    const roll = (was: number | null, now: number | null, turn: string | null) =>
     {
         if (was === now)
         {
@@ -487,7 +487,7 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
         glow.animate([{ opacity: 0 }, { opacity: 0, offset: 0.7 }, { opacity: 1 }], { duration: TUMBLE_MS });
     };
 
-    const spent = (value: number, colour: string | null, why: string | undefined): void =>
+    const spent = (value: number, colour: string | null, why: string | undefined) =>
     {
         for (const running of [...die.getAnimations(), ...glow.getAnimations()])
         {
@@ -523,7 +523,7 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
         });
     };
 
-    const celebrate = (winner: string): void =>
+    const celebrate = (winner: string) =>
     {
         sound?.play('win');
 
@@ -551,7 +551,7 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
         }
     };
 
-    const show = (next: BoardView): void =>
+    const show = (next: BoardView) =>
     {
         const previous = view;
 
@@ -643,7 +643,7 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
         }
     };
 
-    const pick = (event: PointerEvent): void =>
+    const pick = (event: PointerEvent) =>
     {
         const box = host.getBoundingClientRect();
         const key = pickNear(view.tokens, event.clientX - box.left, event.clientY - box.top, box.width);

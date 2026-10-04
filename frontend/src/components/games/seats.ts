@@ -40,7 +40,7 @@ export const INITIAL: Record<string, string> = {
  * renderer walks the same piece rather than blanking one square and lighting another. It is also
  * sixteen entries instead of two hundred and twenty-five.
  */
-export function seatsFor(board: LudoBoard, mine?: number): BoardToken[]
+export function seatsFor(board: LudoBoard, mine?: number)
 {
     const placed: BoardToken[] = [];
 

@@ -31,7 +31,7 @@ export default component Tabs(props: {
      * `nearest` rather than `center`, so a tab already in view is left where it is: scrolling a
      * strip that did not need scrolling is its own small confusion.
      */
-    const reveal = (id: string): void =>
+    const reveal = (id: string) =>
     {
         list?.querySelector<HTMLElement>(`[data-tab='${ id }']`)
             ?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
@@ -52,7 +52,7 @@ export default component Tabs(props: {
         return list === null ? undefined : dragScroll(list);
     }
 
-    const move = (from: string, step: number): void =>
+    const move = (from: string, step: number) =>
     {
         const index = props.items.findIndex((item) => item.id === from);
         const next = props.items[(index + step + props.items.length) % props.items.length];

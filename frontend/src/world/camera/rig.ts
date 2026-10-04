@@ -36,7 +36,7 @@ export interface Rig
     update(deltaMs: number): boolean;
 }
 
-export function createRig(shots: Shot[]): Rig
+export function createRig(shots: Shot[])
 {
     const camera = new PerspectiveCamera(30, 1, 0.05, 60);
 
@@ -66,7 +66,7 @@ export function createRig(shots: Shot[]): Rig
     const right = new Vector3();
     const lift = new Vector3();
 
-    const desire = (): void =>
+    const desire = () =>
     {
         const frame = focused ?? sampleShots(path, progress);
         desiredPosition.set(...frame.position);
@@ -74,7 +74,7 @@ export function createRig(shots: Shot[]): Rig
         desiredFov = frame.fov;
     };
 
-    const apply = (): void =>
+    const apply = () =>
     {
         forward.subVectors(target, position).normalize();
         right.crossVectors(forward, UP).normalize();

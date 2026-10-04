@@ -29,7 +29,7 @@ export const ludoEngine: Engine<LudoState, EngineAction> = {
 
     seats: [2, 3, 4],
 
-    create: (seats: readonly number[], draws: Draws): LudoState =>
+    create: (seats: readonly number[], draws: Draws) =>
         create(seats, draws.die(seats.length) - 1),
 
 
@@ -85,7 +85,7 @@ export const ludoEngine: Engine<LudoState, EngineAction> = {
         return legalMoves(state).map((piece) => ({ kind: 'move', seat, piece }));
     },
 
-    turnOf: (state: LudoState): number | null =>
+    turnOf: (state: LudoState) =>
         state.winner === null ? (state.players[state.turn]?.seat ?? null) : null,
 
     autoplay: (state: LudoState, seat: number): EngineAction | null =>
@@ -175,7 +175,7 @@ export const ludoEngine: Engine<LudoState, EngineAction> = {
      * An event with no seat is not one seat's doing - `finish` names a winner and `pass` ends a
      * turn - so it is skipped rather than attributed to whoever happens to be named elsewhere in it.
      */
-    tally: (events: readonly unknown[]): Map<number, Tally> =>
+    tally: (events: readonly unknown[]) =>
     {
         const bySeat = new Map<number, Tally>();
 
@@ -204,7 +204,7 @@ export const ludoEngine: Engine<LudoState, EngineAction> = {
         return bySeat;
     },
 
-    points: (tally: Tally): number =>
+    points: (tally: Tally) =>
         (tally.captures ?? 0) * XP_CAPTURE + (tally.home ?? 0) * XP_HOME
 };
 

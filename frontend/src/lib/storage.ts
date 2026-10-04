@@ -1,4 +1,4 @@
-export function remember(key: string, value: string): boolean
+export function remember(key: string, value: string)
 {
     try
     {
@@ -24,7 +24,7 @@ export function recall(key: string, allowed: readonly string[]): string | null
     }
 }
 
-export function forget(key: string): void
+export function forget(key: string)
 {
     try
     {
@@ -36,7 +36,7 @@ export function forget(key: string): void
     }
 }
 
-export function rememberJson(key: string, value: unknown): boolean
+export function rememberJson(key: string, value: unknown)
 {
     return remember(key, JSON.stringify(value));
 }

@@ -39,12 +39,12 @@ setConsoleFunction((level: string, message: string) =>
     }
 });
 
-export async function createWorld(options: WorldOptions): Promise<WorldHandle>
+export async function createWorld(options: WorldOptions)
 {
     const { canvas, context, callbacks } = options;
     let failed = false;
 
-    const fail = (reason: string): void =>
+    const fail = (reason: string) =>
     {
         if (!failed)
         {
@@ -58,7 +58,7 @@ export async function createWorld(options: WorldOptions): Promise<WorldHandle>
     let showcase: Showcase | null = null;
     let environment: Environment | null = null;
 
-    const release = (): void =>
+    const release = () =>
     {
         showcase?.dispose();
         environment?.dispose();
@@ -120,7 +120,7 @@ async function start(
     let width = 0;
     let height = 0;
 
-    const size = (): void =>
+    const size = () =>
     {
         width = Math.max(canvas.clientWidth, 1);
         height = Math.max(canvas.clientHeight, 1);
@@ -147,7 +147,7 @@ async function start(
         onExhausted: () => fail('The device could not keep up')
     });
 
-    const tick = (now: number): void =>
+    const tick = (now: number) =>
     {
         frame = 0;
         const delta = last === 0 ? 16 : now - last;
@@ -169,7 +169,7 @@ async function start(
         }
     };
 
-    const invalidate = (): void =>
+    const invalidate = () =>
     {
         if (running && !disposed && frame === 0)
         {
@@ -177,7 +177,7 @@ async function start(
         }
     };
 
-    const lost = (event: Event): void =>
+    const lost = (event: Event) =>
     {
         event.preventDefault();
         fail('The graphics context was lost');

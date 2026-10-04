@@ -24,7 +24,7 @@ const MAX_EPOCH = 2_147_483_646;
  * P-256 over the SPKI the device published, which this server already stores and already re-derives
  * the device id from.
  */
-async function signedByMinter(signingKey: string, commitment: string, signature: string): Promise<boolean>
+async function signedByMinter(signingKey: string, commitment: string, signature: string)
 {
     try
     {
@@ -146,7 +146,7 @@ export function createEpochService(db: DataSource)
     };
 
     /** A device this account holds, still valid, and able to be a party to the sealing. */
-    const mine = async (userId: string, deviceId: string): Promise<string | null> =>
+    const mine = async (userId: string, deviceId: string) =>
     {
         const row = await db.getRepository(Device).findOne({
             select: { signingKey: true },

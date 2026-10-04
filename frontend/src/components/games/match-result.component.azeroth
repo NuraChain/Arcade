@@ -20,7 +20,7 @@ export default component MatchResult(props: { match: MatchView; mine?: number; b
 
     derived emptied = props.match.outcome !== 'won';
 
-    derived headline = ((): string =>
+    derived headline = (() =>
     {
         if (emptied)
         {
@@ -42,19 +42,19 @@ export default component MatchResult(props: { match: MatchView; mine?: number; b
         return locale.t('match.won.them', { name: person === null ? champion.who : locale.text(person.displayName) });
     })();
 
-    const nameOf = (handle: string): string =>
+    const nameOf = (handle: string) =>
     {
         const person = people.byHandle(handle);
 
         return person === null ? handle : locale.text(person.displayName);
     };
 
-    const moved = (player: MatchPlayer): number | null =>
+    const moved = (player: MatchPlayer) =>
         player.ratingAfter === undefined || player.ratingBefore === undefined
             ? null
             : player.ratingAfter - player.ratingBefore;
 
-    const swing = (points: number, after: number): string =>
+    const swing = (points: number, after: number) =>
         `${ points >= 0 ? '+' : '−' }${ locale.n(Math.abs(points)) } · ${ locale.n(after) }`;
 
     <Panel pad="md" stack="md" tone={ emptied ? 'field' : 'accent' }>

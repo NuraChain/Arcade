@@ -7,7 +7,7 @@ const FOUR = { seat: 0, seats: 4, sideOf: (seat: number) => seat % 2 };
 
 const kinds = (beats: readonly Beat[]): string[] => beats.map((beat) => beat.kind);
 
-const at = (beats: readonly Beat[], kind: Beat['kind']): number => beats.find((beat) => beat.kind === kind)?.at ?? -1;
+const at = (beats: readonly Beat[], kind: Beat['kind']) => beats.find((beat) => beat.kind === kind)?.at ?? -1;
 
 describe('a card on the felt', () =>
 {

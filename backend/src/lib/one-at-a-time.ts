@@ -1,11 +1,11 @@
 type Querying = { query: (...args: never[]) => Promise<unknown> };
 
-export function oneAtATime<T extends Querying>(runner: T): T
+export function oneAtATime<T extends Querying>(runner: T)
 {
     const query = runner.query.bind(runner) as (...args: unknown[]) => Promise<unknown>;
     let tail: Promise<unknown> = Promise.resolve();
 
-    (runner as unknown as { query: (...args: unknown[]) => Promise<unknown> }).query = (...args: unknown[]): Promise<unknown> =>
+    (runner as unknown as { query: (...args: unknown[]) => Promise<unknown> }).query = (...args: unknown[]) =>
     {
         const next = tail.then(() => query(...args));
 

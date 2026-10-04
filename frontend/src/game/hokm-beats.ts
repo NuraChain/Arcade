@@ -57,12 +57,12 @@ export const CATCH_UP_ACTIONS = 12;
 export const gatherOrder = (cards: readonly Laid[], took: number): Laid[] =>
     [...cards.filter((one) => one.seat !== took), ...cards.filter((one) => one.seat === took)];
 
-export const gatherLength = (count: number): number => TIMING.GATHER + TIMING.GATHER_GAP * Math.max(0, count - 1);
+export const gatherLength = (count: number) => TIMING.GATHER + TIMING.GATHER_GAP * Math.max(0, count - 1);
 
-export const overflows = (actions: number, moves: readonly HokmMove[]): boolean =>
+export const overflows = (actions: number, moves: readonly HokmMove[]) =>
     actions > CATCH_UP_ACTIONS || moves.filter((move) => move.e === 'hand').length > 1;
 
-const dealerOf = (hakem: number, seats: number): number => (hakem - 1 + seats) % seats;
+const dealerOf = (hakem: number, seats: number) => (hakem - 1 + seats) % seats;
 
 function dealing(from: number, to: readonly number[], at: number, shuffle: boolean): { beat: Beat; ends: number }
 {
@@ -78,14 +78,14 @@ function dealing(from: number, to: readonly number[], at: number, shuffle: boole
 export function beatsOf(moves: readonly HokmMove[], felt: Felt, reader: Reader, heldFor = 0): Timeline
 {
     const beats: Beat[] = [];
-    const ours = (seat: number): boolean => reader.seat !== null && reader.sideOf(seat) === reader.sideOf(reader.seat);
+    const ours = (seat: number) => reader.seat !== null && reader.sideOf(seat) === reader.sideOf(reader.seat);
     let cards: Laid[] = [...felt.cards];
     let took = felt.took;
     let at = 0;
     let settled = 0;
     let tookAt = took === null ? null : -heldFor;
 
-    const gather = (hold: number): void =>
+    const gather = (hold: number) =>
     {
         if (took === null)
         {

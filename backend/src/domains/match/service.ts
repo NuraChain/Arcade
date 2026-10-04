@@ -15,7 +15,7 @@ import { hokmEngine } from './engines/hokm.ts';
 import { ludoEngine } from './engines/ludo.ts';
 import { pokerEngine } from './engines/poker.ts';
 import { turnMs } from './turns.ts';
-import type { MatchBoard, MatchLog } from '../../schemas.ts';
+import type { MatchLog } from '../../schemas.ts';
 import type { MatchHistory } from '../../schemas.ts';
 import type { Draws, Engine, TableConfig } from './engine.ts';
 import type { MatchPlay } from '../../schemas.ts';
@@ -187,12 +187,12 @@ function refuse(reason: string): never
  * rather than one this file hopes about. It is stated in `engine.ts` as a contract for the same
  * reason.
  */
-function revOf(state: unknown): number
+function revOf(state: unknown)
 {
     return (state as { rev: number }).rev;
 }
 
-function stateOf(match: Match): unknown
+function stateOf(match: Match)
 {
     return match.state;
 }
@@ -205,7 +205,7 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
 
     const byGame = new Map(engines.map((engine) => [engine.id, engine]));
 
-    const engineFor = (game: string): Engine | null => byGame.get(game) ?? null;
+    const engineFor = (game: string) => byGame.get(game) ?? null;
 
     /**
      * The one source of randomness in this domain, handed to engines rather than taken by them.
@@ -217,7 +217,7 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
      */
     const draws: Draws = { die: (sides: number) => pickBelow(sides) + 1 };
 
-    const seatsOf = async (runner: EntityManager | DataSource, matchId: string): Promise<MatchSeatRow[]> =>
+    const seatsOf = async (runner: EntityManager | DataSource, matchId: string) =>
         await runner.getRepository(MatchPlayer)
             .createQueryBuilder('p')
             .innerJoin('users', 'u', 'u.id = p.user_id')
@@ -262,7 +262,7 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
     const deadlineFrom = (mode: string): () => string =>
         () => `now() + make_interval(secs => ${ turnMs(mode) / 1000 })`;
 
-    const postpone = async (tx: EntityManager, matchId: string, mode: string): Promise<void> =>
+    const postpone = async (tx: EntityManager, matchId: string, mode: string) =>
     {
         await tx.getRepository(Match).update({ id: matchId, finishedAt: IsNull() }, { deadlineAt: deadlineFrom(mode) });
     };
@@ -278,7 +278,7 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
         events: unknown[],
         action: { seat: number; userId: string | null; kind: MatchAction['kind']; payload: Record<string, unknown>; key: string | null },
         mode: string
-    ): Promise<void> =>
+    ) =>
     {
         const ending = engine.finish(next);
         const over = ending !== null;
@@ -407,7 +407,7 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
             (await db.getRepository(MatchPlayer).find({ select: { userId: true }, where: { matchId } }))
                 .map((player) => player.userId),
 
-        liveFor: async (tableId: string): Promise<string | null> =>
+        liveFor: async (tableId: string) =>
             (await db.getRepository(Match).findOne({
                 select: { id: true },
                 where: { tableId, finishedAt: IsNull() }
@@ -483,7 +483,7 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
             };
         },
 
-        start: async (me: string, tableId: string): Promise<MatchLoad> =>
+        start: async (me: string, tableId: string) =>
         {
             if (!UUID.test(tableId))
             {
@@ -784,7 +784,7 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
             return new Map(live.map((row) => [row.id, engineFor(row.game)?.turnOf(row.state) === row.seat]));
         },
 
-        board: (game: string, state: unknown, seat: number | null): MatchBoard =>
+        board: (game: string, state: unknown, seat: number | null) =>
         {
             const engine = engineFor(game);
 
@@ -814,7 +814,7 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
         },
 
         /** Who sat where, for callers outside this module that need it without a viewer. */
-        seatsOf: async (matchId: string): Promise<MatchSeatRow[]> => await seatsOf(db, matchId),
+        seatsOf: async (matchId: string) => await seatsOf(db, matchId),
 
         expireNext: async (): Promise<Expired | null> =>
         {

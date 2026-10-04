@@ -28,15 +28,15 @@ export default component SocialPanel()
 
     derived recent = notifications.latest().slice(0, 5);
 
-    const personOf = (item: Notification): Person | null => item.actor === undefined ? null : people.byHandle(item.actor);
+    const personOf = (item: Notification) => item.actor === undefined ? null : people.byHandle(item.actor);
 
-    const whoOf = (item: Notification): string =>
+    const whoOf = (item: Notification) =>
     {
         const person = personOf(item);
         return person === null ? (item.actor ?? '') : person.displayName.split(' ')[0];
     };
 
-    const open = (item: Notification): void =>
+    const open = (item: Notification) =>
     {
         void notifications.markRead(item.id);
         const target = targetOf(item);

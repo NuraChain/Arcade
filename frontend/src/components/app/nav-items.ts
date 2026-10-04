@@ -11,7 +11,7 @@ export interface NavItem
     labelKey: MessageKey;
 }
 
-export function lit(item: NavItem, tab: Tab | undefined): boolean
+export function lit(item: NavItem, tab: Tab | undefined)
 {
     return tab !== undefined && (item.tab === tab || item.lights.includes(tab));
 }

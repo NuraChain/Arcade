@@ -3,4 +3,4 @@ export const TURN_MS: Readonly<Record<string, number>> = {
     turns: 24 * 60 * 60 * 1000
 };
 
-export const turnMs = (mode: string): number => TURN_MS[mode] ?? TURN_MS.live;
+export const turnMs = (mode: string) => TURN_MS[mode] ?? TURN_MS.live;

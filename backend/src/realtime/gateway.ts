@@ -69,12 +69,12 @@ const refusalOf = (error: unknown): { status: number; message: string } =>
         ? { status: error.status, message: error.message }
         : { status: 500, message: 'Something went wrong.' };
 
-const queue = (line: Line, work: () => Promise<void>): void =>
+const queue = (line: Line, work: () => Promise<void>) =>
 {
     line.tail = line.tail.then(work, work);
 };
 
-async function playOver(deps: GatewayDeps, connection: Connection, frame: Extract<ClientFrame, { t: 'play' }>): Promise<void>
+async function playOver(deps: GatewayDeps, connection: Connection, frame: Extract<ClientFrame, { t: 'play' }>)
 {
     const raw = { key: frame.key, ...(frame.rev === undefined ? {} : { rev: frame.rev }), play: frame.play };
     const input = matchPlayInput.safeParse(raw);
@@ -103,7 +103,7 @@ async function playOver(deps: GatewayDeps, connection: Connection, frame: Extrac
     }
 }
 
-async function resumeOver(deps: GatewayDeps, connection: Connection, frame: Extract<ClientFrame, { t: 'resume' }>): Promise<void>
+async function resumeOver(deps: GatewayDeps, connection: Connection, frame: Extract<ClientFrame, { t: 'resume' }>)
 {
     try
     {
@@ -197,7 +197,7 @@ export function attachRealtime(server: Server, deps: GatewayDeps): () => void
             let faults = 0;
             let faultsSince = 0;
 
-            const spend = (kind: string, at: number): boolean =>
+            const spend = (kind: string, at: number) =>
             {
                 const recent = (spent[kind] ?? []).filter((when) => at - when < BUDGET_WINDOW_MS);
 
@@ -226,7 +226,7 @@ export function attachRealtime(server: Server, deps: GatewayDeps): () => void
              */
             let refusing = false;
 
-            const handle = (text: string): void =>
+            const handle = (text: string) =>
             {
                 if (refusing)
                 {

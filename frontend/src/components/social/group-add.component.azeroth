@@ -42,7 +42,7 @@ export default component GroupAdd(props: OverlayProps & { group: GroupSummary })
 
     derived candidates = narrowed(everyone, query, (person) => [person.displayName, person.handle]);
 
-    const add = async (person: Person): Promise<void> =>
+    const add = async (person: Person) =>
     {
         if (pending !== '')
         {

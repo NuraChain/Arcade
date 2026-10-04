@@ -76,7 +76,7 @@ const BANDS: readonly [number, number][] = [
     [100_000, 5000]
 ];
 
-export function dense(count: number, scale = 1): number[]
+export function dense(count: number, scale = 1)
 {
     const out: number[] = [];
     let at = 0;
@@ -126,11 +126,11 @@ const EN = new Intl.NumberFormat('en-US');
 
 const FA = new Intl.NumberFormat('fa-IR', { useGrouping: true });
 
-export const scopeOf = (game: string | null): string => game ?? 'all';
+export const scopeOf = (game: string | null) => game ?? 'all';
 
-export const rungId = (game: string | null, family: string, step: number): string => `${ scopeOf(game) }-${ family }-${ step }`;
+export const rungId = (game: string | null, family: string, step: number) => `${ scopeOf(game) }-${ family }-${ step }`;
 
-export function reached(steps: readonly number[], value: number): number
+export function reached(steps: readonly number[], value: number)
 {
     let count = 0;
 
@@ -160,7 +160,7 @@ export function rungsOf(game: string | null, families: readonly Family[]): Rung[
     })));
 }
 
-export function measure(facts: LadderFacts, global: GlobalFacts, metric: Metric): number
+export function measure(facts: LadderFacts, global: GlobalFacts, metric: Metric)
 {
     switch (metric.of)
     {

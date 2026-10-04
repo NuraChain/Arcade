@@ -20,7 +20,7 @@ const SEP = String.fromCharCode(0x1f);
 export const RECOVERY_PROTOCOL = 'nura-e2ee/v1';
 
 /** The bytes a recovery key signs to confirm one device, once. */
-export function recoveryChallenge(accountId: string, deviceId: string, nonce: string): string
+export function recoveryChallenge(accountId: string, deviceId: string, nonce: string)
 {
     return [RECOVERY_PROTOCOL, 'recover', accountId, deviceId, nonce].join(SEP);
 }

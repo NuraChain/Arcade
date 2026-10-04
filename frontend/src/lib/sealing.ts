@@ -103,7 +103,7 @@ const failed = (failure: EpochFailure, blocked: MemberSeal | null = null): Epoch
  * Same reasoning as `seal-state.ts`: the curve code behind it is 14 KB gzip, and a thread where
  * nobody has a provable device never asks the question at all.
  */
-const checker = async (): Promise<typeof import('./attestation.ts').verifyPeerDevice> =>
+const checker = async () =>
     (await import('./attestation.ts')).verifyPeerDevice;
 
 /**
@@ -289,7 +289,7 @@ async function adopt(
  * `recallArchiveKey` answers null when recovery is not set up on this browser, which is the
  * ordinary case and not a failure.
  */
-async function keepEpochKey(conversationId: string, epoch: number, key: Uint8Array): Promise<void>
+async function keepEpochKey(conversationId: string, epoch: number, key: Uint8Array)
 {
     await rememberEpochKey(conversationId, epoch, key);
 
@@ -319,7 +319,7 @@ async function keepEpochKey(conversationId: string, epoch: number, key: Uint8Arr
 const signerCache = new Map<string, PeerSigner[]>();
 
 /** Every device that could have signed here, revoked ones included, fetched once per thread. */
-export async function signersFor(conversationId: string, refresh = false): Promise<PeerSigner[]>
+export async function signersFor(conversationId: string, refresh = false)
 {
     const held = signerCache.get(conversationId);
 
@@ -333,7 +333,7 @@ export async function signersFor(conversationId: string, refresh = false): Promi
     return answer.signers;
 }
 
-export function forgetSigners(): void
+export function forgetSigners()
 {
     signerCache.clear();
 }
@@ -441,7 +441,7 @@ export async function sealForSend(
  * not held yet renders its preview as locked until somebody opens it, which costs one request in
  * the place where one request is the point.
  */
-export function heldKey(conversationId: string, epoch: number): Promise<Uint8Array | null>
+export function heldKey(conversationId: string, epoch: number)
 {
     return recallEpochKey(conversationId, epoch);
 }

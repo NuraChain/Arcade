@@ -95,7 +95,7 @@ export const useChain = createStore((): ChainApi =>
      * it because the registry resolves every field in one language with fallback - a Persian
      * reader and an English one are asking the registry two different questions.
      */
-    const asked = (): string | null =>
+    const asked = () =>
     {
         const address = account.address();
         return address === null ? null : `${ address }:${ locale.locale() }`;
@@ -115,7 +115,7 @@ export const useChain = createStore((): ChainApi =>
      * chain id is not a claim, so it does not refuse - but a set one that disagrees with the
      * wallet means a publish would spend real gas writing somewhere nobody will ever read.
      */
-    const onRegistryChain = (): boolean =>
+    const onRegistryChain = () =>
     {
         const wanted = state.data()?.chainId ?? '';
         const held = wallet.chainId();
@@ -133,7 +133,7 @@ export const useChain = createStore((): ChainApi =>
         {
             let left = RECEIPT_TRIES;
 
-            const look = (): void =>
+            const look = () =>
             {
                 void wallet.settled(hash).then((status) =>
                 {

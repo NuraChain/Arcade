@@ -30,7 +30,7 @@ export function createFranking(secret: string)
 {
     const key = Buffer.from(hkdfSync('sha256', Buffer.from(secret, 'utf8'), Buffer.alloc(0), Buffer.from(LABEL, 'utf8'), 32));
 
-    const mac = (context: FrankContext): string =>
+    const mac = (context: FrankContext) =>
         createHmac('sha256', key).update(frankContext(context), 'utf8').digest('base64url');
 
     return {
@@ -43,7 +43,7 @@ export function createFranking(secret: string)
          * Constant time, because the comparison is against a MAC and `===` on a MAC leaks its
          * prefix to anybody willing to file a few thousand reports.
          */
-        holds(context: FrankContext, frank: string): boolean
+        holds(context: FrankContext, frank: string)
         {
             const made = Buffer.from(mac(context));
             const given = Buffer.from(frank);
@@ -62,7 +62,7 @@ export type Franking = ReturnType<typeof createFranking>;
  * the one the sender published. A reporter who changed a single character produces a different
  * commitment and the report is refused - which is the entire reason the mechanism exists.
  */
-export function discloses(frankingKey: string, text: string, commitment: string): boolean
+export function discloses(frankingKey: string, text: string, commitment: string)
 {
     let made: Buffer;
 

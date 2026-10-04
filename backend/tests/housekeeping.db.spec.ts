@@ -15,7 +15,7 @@ const active = url !== undefined && url !== '';
 let db: DataSource;
 let ports: Services;
 
-const count = async (table: string): Promise<number> =>
+const count = async (table: string) =>
     rowsOf<{ n: number }>(await db.query(`select count(*)::int as n from ${ table }`))[0].n;
 
 describe.skipIf(!active)('housekeeping, against a real database', () =>

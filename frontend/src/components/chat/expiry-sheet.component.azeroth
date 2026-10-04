@@ -36,7 +36,7 @@ export default component ExpirySheet(props: OverlayProps & { conversationId: str
 
     state busy = false;
 
-    const choose = async (seconds: number | null): Promise<void> =>
+    const choose = async (seconds: number | null) =>
     {
         if (busy)
         {

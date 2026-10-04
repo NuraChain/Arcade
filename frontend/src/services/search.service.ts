@@ -2,7 +2,7 @@ const MARKS = /[\u0300-\u036F]/g;
 const ARABIC_MARKS = /[\u064B-\u0652\u0670\u0640]/g;
 const INVISIBLE = /[\u200B-\u200F]/g;
 
-export function fold(value: string): string
+export function fold(value: string)
 {
     return value
         .normalize('NFD')
@@ -20,7 +20,7 @@ export function fold(value: string): string
         .trim();
 }
 
-export function rank(fields: readonly string[], needle: string): number
+export function rank(fields: readonly string[], needle: string)
 {
     if (needle === '')
     {

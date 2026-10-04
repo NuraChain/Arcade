@@ -12,7 +12,7 @@ const strip = (): HTMLElement =>
     return element;
 };
 
-const pointer = (type: string, x: number, pointerType = 'mouse'): PointerEvent =>
+const pointer = (type: string, x: number, pointerType = 'mouse') =>
     Object.assign(new MouseEvent(type, { clientX: x, button: 0, bubbles: true, cancelable: true }), { pointerId: 1, pointerType }) as unknown as PointerEvent;
 
 describe('dragging a strip with a mouse', () =>

@@ -6,7 +6,7 @@ export interface Leaving
     replace(to: string): void;
 }
 
-export function leave(go: Leaving, depth: number, parent: string | undefined): void
+export function leave(go: Leaving, depth: number, parent: string | undefined)
 {
     if (depth > 0)
     {

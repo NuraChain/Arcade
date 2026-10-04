@@ -62,7 +62,7 @@ export const STACKS: Record<number, readonly StackSpot[]> = {
     ]
 };
 
-export function stackSpot(index: number, count: number): StackSpot
+export function stackSpot(index: number, count: number)
 {
     const layout = STACKS[Math.min(Math.max(count, 1), 4)];
 
@@ -85,7 +85,7 @@ export function centreOf(col: number, row: number, size: number): Spot
 }
 
 /** How big a token should be drawn on a board `size` across. */
-export function tokenRadius(size: number): number
+export function tokenRadius(size: number)
 {
     return CELL * size * 0.40;
 }
@@ -100,7 +100,7 @@ export interface Pickable
 
 export const PICK_REACH = 1.25;
 
-export function pickNear(tokens: readonly Pickable[], x: number, y: number, size: number): string | null
+export function pickNear(tokens: readonly Pickable[], x: number, y: number, size: number)
 {
     const cell = CELL * size;
     let best: string | null = null;

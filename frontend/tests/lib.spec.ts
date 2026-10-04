@@ -178,12 +178,12 @@ describe('json storage', () =>
     const original = Object.getOwnPropertyDescriptor(window, 'localStorage');
     const memory = new Map<string, string>();
     const stub = {
-        getItem: (key: string): string | null => memory.get(key) ?? null,
-        setItem: (key: string, value: string): void =>
+        getItem: (key: string) => memory.get(key) ?? null,
+        setItem: (key: string, value: string) =>
         {
             memory.set(key, value);
         },
-        removeItem: (key: string): void =>
+        removeItem: (key: string) =>
         {
             memory.delete(key);
         }

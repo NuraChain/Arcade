@@ -42,13 +42,13 @@ afterEach(() =>
     resetRuntime();
 });
 
-const hide = (): void =>
+const hide = () =>
 {
     visibility = 'hidden';
     document.dispatchEvent(new Event('visibilitychange'));
 };
 
-const show = (): void =>
+const show = () =>
 {
     visibility = 'visible';
     document.dispatchEvent(new Event('visibilitychange'));

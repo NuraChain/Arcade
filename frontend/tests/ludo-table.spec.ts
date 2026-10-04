@@ -39,7 +39,7 @@ const ludo = (over: Partial<MatchView>, view: Partial<Ludo> = {}): MatchView => 
     ...over
 });
 
-const settle = async (): Promise<void> =>
+const settle = async () =>
 {
     for (let step = 0; step < 10; step += 1)
     {

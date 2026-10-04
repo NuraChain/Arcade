@@ -89,7 +89,7 @@ export default component MessageBubble(props: {
 
     derived quick = [...new Set([...(Array.isArray(settings.settings().recentEmoji) ? settings.settings().recentEmoji : []).filter(isEmoji), ...QUICK_REACTIONS])].slice(0, 3);
 
-    const pickFor = (anchor: HTMLElement | null): void =>
+    const pickFor = (anchor: HTMLElement | null) =>
     {
         if (device.coarse() || anchor === null)
         {
@@ -127,14 +127,14 @@ export default component MessageBubble(props: {
 
     derived firstName = person === null ? props.message.from : person.displayName.split(' ')[0];
 
-    const nameOf = (handle: string): string =>
+    const nameOf = (handle: string) =>
     {
         const person = people.byHandle(handle);
 
         return person === null ? handle : locale.text(person.displayName);
     };
 
-    derived said = ((): string =>
+    derived said = (() =>
     {
         const line = props.message.line;
         if (line === undefined)
@@ -160,7 +160,7 @@ export default component MessageBubble(props: {
         return quoted.from === props.me ? locale.t('common.you') : nameOf(quoted.from);
     })();
 
-    derived quoteText = ((): string =>
+    derived quoteText = (() =>
     {
         if (quoted === undefined)
         {
@@ -183,7 +183,7 @@ export default component MessageBubble(props: {
 
     derived game = props.message.ref?.game === undefined ? null : catalogue.byId(props.message.ref.game);
 
-    const sitDown = (): void =>
+    const sitDown = () =>
     {
         if (game === null)
         {

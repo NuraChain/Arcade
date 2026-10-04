@@ -144,7 +144,7 @@ const fresh = (): Engine => ({
 
 let engine = fresh();
 
-function maker(): ContextMaker | null
+function maker()
 {
     const scope = globalThis as unknown as { AudioContext?: ContextMaker; webkitAudioContext?: ContextMaker };
 
@@ -161,7 +161,7 @@ function busOf(cue: Cue): Bus
     return (SAMPLED as readonly Cue[]).includes(cue) ? 'foley' : 'ui';
 }
 
-export function offsetOf(samples: Float32Array, rate: number): number
+export function offsetOf(samples: Float32Array, rate: number)
 {
     const limit = Math.min(samples.length, Math.round(rate * 0.3));
 
@@ -176,7 +176,7 @@ export function offsetOf(samples: Float32Array, rate: number): number
     return 0;
 }
 
-function arm(): void
+function arm()
 {
     if (engine.armed || typeof window === 'undefined')
     {
@@ -191,7 +191,7 @@ function arm(): void
     }
 }
 
-function disarm(): void
+function disarm()
 {
     if (!engine.armed || typeof window === 'undefined')
     {
@@ -237,7 +237,7 @@ function build(): AudioContext | null
         master.gain.value = MASTER;
         master.connect(limiter);
 
-        const bus = (level: number): GainNode =>
+        const bus = (level: number) =>
         {
             const node = context.createGain();
             node.gain.value = level;
@@ -257,7 +257,7 @@ function build(): AudioContext | null
     }
 }
 
-function settle(context: AudioContext): void
+function settle(context: AudioContext)
 {
     if (context !== engine.context)
     {
@@ -277,7 +277,7 @@ function settle(context: AudioContext): void
     }
 }
 
-function unlock(): void
+function unlock()
 {
     if (engine.handles === 0)
     {
@@ -326,7 +326,7 @@ function unlock(): void
     load();
 }
 
-function load(): void
+function load()
 {
     const context = engine.context;
 
@@ -376,7 +376,7 @@ function route(context: AudioContext, into: AudioNode, pan: number | undefined):
     return panner;
 }
 
-function sample(context: AudioContext, cue: Sampled, takes: Take[], into: AudioNode, options: PlayOptions, done: () => void): void
+function sample(context: AudioContext, cue: Sampled, takes: Take[], into: AudioNode, options: PlayOptions, done: () => void)
 {
     const turn = engine.turn.get(cue) ?? 0;
     const take = takes[turn % takes.length];
@@ -396,7 +396,7 @@ function sample(context: AudioContext, cue: Sampled, takes: Take[], into: AudioN
     source.start(context.currentTime, take.offset);
 }
 
-function synth(context: AudioContext, voices: readonly Voice[], into: AudioNode, options: PlayOptions, done: () => void): void
+function synth(context: AudioContext, voices: readonly Voice[], into: AudioNode, options: PlayOptions, done: () => void)
 {
     const at = context.currentTime;
     const out = route(context, into, options.pan);
@@ -441,7 +441,7 @@ function synth(context: AudioContext, voices: readonly Voice[], into: AudioNode,
     last.onended = done;
 }
 
-function play(cue: Cue, options: PlayOptions): void
+function play(cue: Cue, options: PlayOptions)
 {
     const context = engine.context;
     const buses = engine.buses;
@@ -473,7 +473,7 @@ function play(cue: Cue, options: PlayOptions): void
     count.last = now;
     engine.voices.set(cue, count);
 
-    const done = (): void =>
+    const done = () =>
     {
         count.active = Math.max(0, count.active - 1);
     };
@@ -583,7 +583,7 @@ export function createSound(enabled: boolean): SoundHandle
     };
 }
 
-export function resetSound(): void
+export function resetSound()
 {
     disarm();
     void engine.context?.close?.().catch(() => undefined);

@@ -62,12 +62,12 @@ export function create(seats: readonly number[], first: number): LudoState
     };
 }
 
-export function indexOfSeat(state: LudoState, seat: number): number
+export function indexOfSeat(state: LudoState, seat: number)
 {
     return state.players.findIndex((player) => player.seat === seat);
 }
 
-export function isOver(state: LudoState): boolean
+export function isOver(state: LudoState)
 {
     return state.winner !== null;
 }
@@ -80,14 +80,14 @@ function clone(state: LudoState): LudoState
     };
 }
 
-function active(state: LudoState): number[]
+function active(state: LudoState)
 {
     return state.players
         .map((player, index) => (player.out ? -1 : index))
         .filter((index) => index >= 0);
 }
 
-function advance(state: LudoState): void
+function advance(state: LudoState)
 {
     const playing = active(state);
 
@@ -168,7 +168,7 @@ export function legalMoves(state: LudoState): number[]
     return moves;
 }
 
-function captureAt(state: LudoState, mover: number, progress: number, events: GameEvent[]): void
+function captureAt(state: LudoState, mover: number, progress: number, events: GameEvent[])
 {
     if (progress >= RING_STEPS)
     {
@@ -212,7 +212,7 @@ function captureAt(state: LudoState, mover: number, progress: number, events: Ga
     }
 }
 
-function finish(state: LudoState, events: GameEvent[]): void
+function finish(state: LudoState, events: GameEvent[])
 {
     const playing = active(state);
 
@@ -224,7 +224,7 @@ function finish(state: LudoState, events: GameEvent[]): void
     }
 }
 
-function roll(state: LudoState, seat: number, die: number, events: GameEvent[]): void
+function roll(state: LudoState, seat: number, die: number, events: GameEvent[])
 {
     state.die = die;
     events.push({ e: 'roll', seat, die });
@@ -256,7 +256,7 @@ function roll(state: LudoState, seat: number, die: number, events: GameEvent[]):
     advance(state);
 }
 
-function move(state: LudoState, seat: number, piece: number, events: GameEvent[]): void
+function move(state: LudoState, seat: number, piece: number, events: GameEvent[])
 {
     const player = state.players[state.turn];
     const die = state.die ?? 0;

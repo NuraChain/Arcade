@@ -87,7 +87,7 @@ describe('a disclosure', () =>
 {
     const key = randomBytes(32).toString('base64url');
 
-    const commitmentOf = (frankingKey: string, text: string): string =>
+    const commitmentOf = (frankingKey: string, text: string) =>
         createHmac('sha256', Buffer.from(frankingKey, 'base64url')).update(text, 'utf8').digest('base64url');
 
     it('checks out for the words it was made over', () =>

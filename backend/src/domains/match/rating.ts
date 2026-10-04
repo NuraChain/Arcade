@@ -43,11 +43,11 @@ export interface RatingMove
     after: number;
 }
 
-const expected = (mine: number, theirs: number): number => 1 / (1 + Math.pow(10, (theirs - mine) / 400));
+const expected = (mine: number, theirs: number) => 1 / (1 + Math.pow(10, (theirs - mine) / 400));
 
 const scored = (mine: number, theirs: number): number => (mine === theirs ? 0.5 : (mine < theirs ? 1 : 0));
 
-const clamp = (rating: number): number => Math.min(CEILING, Math.max(FLOOR, rating));
+const clamp = (rating: number) => Math.min(CEILING, Math.max(FLOOR, rating));
 
 /**
  * What each seat's rating becomes.

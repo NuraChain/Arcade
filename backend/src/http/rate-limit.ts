@@ -31,7 +31,7 @@ export function forPaths(matches: (pathname: string) => boolean, wrapper: Handle
  * anyway. The real handshake meter is `realtime/handshake-limit.ts`, because an upgraded socket
  * never reaches a middleware.
  */
-export function isMetered(pathname: string): boolean
+export function isMetered(pathname: string)
 {
     return pathname.startsWith('/api/') || pathname === '/api' || pathname === '/ws';
 }
@@ -48,7 +48,7 @@ export function isMetered(pathname: string): boolean
  * the proxy's address and this becomes a single global budget an attacker can exhaust for
  * everyone.
  */
-export function apiRateLimit(options: { limit?: number; windowMs?: number; trustProxy?: boolean } = {}): HandlerWrapper
+export function apiRateLimit(options: { limit?: number; windowMs?: number; trustProxy?: boolean } = {})
 {
     return forPaths(isMetered, rateLimit({
         limit: options.limit ?? 600,

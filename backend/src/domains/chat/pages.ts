@@ -2,7 +2,7 @@ export const THREAD_PAGE = 40;
 
 export const THREAD_MOST = 400;
 
-export function threadSize(asked: string | undefined): number
+export function threadSize(asked: string | undefined)
 {
     const wanted = Number.parseInt(asked ?? '', 10);
 

@@ -71,7 +71,7 @@ export const useCues = createStore((): CuesApi =>
         const live = useRealtime();
         const settings = useSettings();
 
-        const nameOf = (handle: string): string => people.byHandle(handle)?.displayName ?? handle;
+        const nameOf = (handle: string) => people.byHandle(handle)?.displayName ?? handle;
 
         /**
          * The chime, imported on first use. The sound engine must not sit in the shell chunk.
@@ -79,7 +79,7 @@ export const useCues = createStore((): CuesApi =>
         let sound: SoundHandle | null = null;
         const soundOn = (): boolean => untrack(() => settings.settings().sound);
 
-        const chime = (): void =>
+        const chime = () =>
         {
             if (!soundOn())
             {
@@ -95,7 +95,7 @@ export const useCues = createStore((): CuesApi =>
                 .catch(() => undefined);
         };
 
-        const announceChat = (id: string, from: string): void =>
+        const announceChat = (id: string, from: string) =>
         {
             toasts.show({
                 kind: 'live',

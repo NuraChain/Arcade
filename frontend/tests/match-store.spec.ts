@@ -37,11 +37,11 @@ const board = (rev: number, over: Partial<MatchView> = {}): MatchView => ({
     ...over
 });
 
-const rolled = (rev: number): MatchEvent => ({ rev, seat: 0, at: new Date(400_000).toISOString(), log: { kind: 'ludo', events: [] } } as unknown as MatchEvent);
+const rolled = (rev: number) => ({ rev, seat: 0, at: new Date(400_000).toISOString(), log: { kind: 'ludo', events: [] } } as unknown as MatchEvent);
 
 const matches = client.matches as unknown as Record<string, unknown>;
 
-const settle = async (): Promise<void> =>
+const settle = async () =>
 {
     for (let step = 0; step < 10; step += 1)
     {

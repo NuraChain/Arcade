@@ -17,7 +17,7 @@ vi.mock('../src/api.ts', async () => await import('./fake-api.ts'));
 
 const ADDRESS = '0x71C7656EC7ab88b098defB751B7401B5f6d8976F';
 
-const settle = async (): Promise<void> =>
+const settle = async () =>
 {
     for (let turn = 0; turn < 12; turn += 1)
     {
@@ -63,7 +63,7 @@ let listening: (() => void) | null = null;
  * Discovery has to be listening before the event fires - that is the whole shape of the protocol,
  * and a test that wrote straight into the registry would not prove the dialog reads it.
  */
-const announce = (rdns: string, name: string, provider: Eip1193Provider): void =>
+const announce = (rdns: string, name: string, provider: Eip1193Provider) =>
 {
     listening = listening ?? discoverWallets();
     window.dispatchEvent(new CustomEvent('eip6963:announceProvider', {

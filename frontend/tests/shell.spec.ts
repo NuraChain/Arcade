@@ -38,7 +38,7 @@ let clock: ManualClock;
 const memory = new Map<string, string>();
 const original = Object.getOwnPropertyDescriptor(window, 'localStorage');
 
-const settle = async (): Promise<void> =>
+const settle = async () =>
 {
     await Promise.resolve();
     await Promise.resolve();
@@ -55,12 +55,12 @@ beforeEach(() =>
     Object.defineProperty(window, 'localStorage', {
         configurable: true,
         value: {
-            getItem: (key: string): string | null => memory.get(key) ?? null,
-            setItem: (key: string, value: string): void =>
+            getItem: (key: string) => memory.get(key) ?? null,
+            setItem: (key: string, value: string) =>
             {
                 memory.set(key, value);
             },
-            removeItem: (key: string): void =>
+            removeItem: (key: string) =>
             {
                 memory.delete(key);
             }
@@ -327,8 +327,8 @@ describe('which destination every page belongs to', () =>
 {
     const app = routes.find((route) => route.path === '/app')!;
     const tabOf = (path: string) => routeMeta({ route: (app.children ?? []).find((child) => child.path === path)! } as never).tab;
-    const railFor = (path: string): string | undefined => RAIL.find((item) => lit(item, tabOf(path)))?.to;
-    const phoneFor = (path: string): string | undefined => NAV.find((item) => lit(item, tabOf(path)))?.to;
+    const railFor = (path: string) => RAIL.find((item) => lit(item, tabOf(path)))?.to;
+    const phoneFor = (path: string) => NAV.find((item) => lit(item, tabOf(path)))?.to;
 
     it('lights one rail item for every page the rail can reach, and the page itself for the rest', () =>
     {
@@ -378,7 +378,7 @@ describe('the shell’s destinations', () =>
 
 describe('the top bar', () =>
 {
-    const mount = async (immersive = false): Promise<HTMLElement> =>
+    const mount = async (immersive = false) =>
     {
         const Stub = (): HTMLElement => document.createElement('div');
         const router = createRouter({
@@ -521,7 +521,7 @@ describe('the top bar', () =>
 
 describe('the right panel', () =>
 {
-    const mount = async (): Promise<HTMLElement> =>
+    const mount = async () =>
     {
         const Stub = (): HTMLElement => document.createElement('div');
         const router = createRouter({ routes: [{ path: '/app', component: Stub }], history: createMemoryHistory('/app'), scroll: false });
@@ -659,7 +659,7 @@ describe('Page', () =>
             }) as Rendered);
         await settle();
 
-        const asInABrowser = (element: HTMLElement, start: number): void =>
+        const asInABrowser = (element: HTMLElement, start: number) =>
         {
             let position = start;
             Object.defineProperty(element, 'scrollTop', {

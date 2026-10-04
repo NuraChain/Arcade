@@ -70,7 +70,7 @@ export default component ToastHost()
      */
     const drags = new Map<string, ReturnType<typeof createDrag>>();
 
-    const dragFor = (id: string): ReturnType<typeof createDrag> =>
+    const dragFor = (id: string) =>
     {
         const existing = drags.get(id);
         if (existing !== undefined)
@@ -103,7 +103,7 @@ export default component ToastHost()
 
     derived queued = toasts.queued();
 
-    const held = (toast: Toast): boolean => !Number.isFinite(toast.duration);
+    const held = (toast: Toast) => !Number.isFinite(toast.duration);
 
     <Portal>
         <div

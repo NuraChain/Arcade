@@ -127,9 +127,9 @@ describe('HokmBoard', () =>
 
 describe('the table in motion', () =>
 {
-    const clock = (): ManualClock => runtime().clock as ManualClock;
+    const clock = () => runtime().clock as ManualClock;
 
-    const playing = (): MatchView => match({ phase: 'tricks', trump: 'spades', turn: 1, lead: 1, hand: [40, 41], plays: [] }, 0);
+    const playing = () => match({ phase: 'tricks', trump: 'spades', turn: 1, lead: 1, hand: [40, 41], plays: [] }, 0);
 
     const card = (rev: number, seat: number, at: number): MatchEvent => ({ rev, seat, at: '', log: { kind: 'hokm', moves: [{ e: 'card', seat, card: at }] } });
 
@@ -248,7 +248,7 @@ describe('the table in motion', () =>
         const [current, setCurrent] = createSignal(match({ phase: 'tricks', trump: 'spades', turn: 1, lead: 1, hand: [40, 41], plays: [] }, 0));
         const animate = vi.spyOn(Element.prototype, 'animate');
         const props = {
-            get match(): MatchView
+            get match()
             {
                 return current();
             }
@@ -294,9 +294,9 @@ describe('the table in motion', () =>
 
 describe('playing a card with a finger', () =>
 {
-    const turn = (): MatchView => match({ phase: 'tricks', trump: 'spades', turn: 0, lead: 0, hand: [0, 14, 30], plays: [0, 14] }, 0);
+    const turn = () => match({ phase: 'tricks', trump: 'spades', turn: 0, lead: 0, hand: [0, 14, 30], plays: [0, 14] }, 0);
 
-    const cardButton = (container: HTMLElement, card: number): HTMLButtonElement =>
+    const cardButton = (container: HTMLElement, card: number) =>
         container.querySelectorAll<HTMLButtonElement>('.card-hold')[[0, 14, 30].indexOf(card)];
 
     it('lifts the card on the first tap and plays it on the second, so a slip of the thumb costs nothing', () =>
@@ -348,7 +348,7 @@ describe('playing a card with a finger', () =>
 
 describe('playing ahead of the server', () =>
 {
-    const turn = (): MatchView => match({ phase: 'tricks', trump: 'spades', turn: 0, lead: 0, hand: [0, 14, 30], plays: [0, 14] }, 0);
+    const turn = () => match({ phase: 'tricks', trump: 'spades', turn: 0, lead: 0, hand: [0, 14, 30], plays: [0, 14] }, 0);
 
     const drive = (): ((events: MatchEvent[]) => void) =>
     {
@@ -359,7 +359,7 @@ describe('playing ahead of the server', () =>
         return (events) => setBatch((held) => ({ seq: held.seq + 1, events }));
     };
 
-    const press = (container: HTMLElement, card: number): void =>
+    const press = (container: HTMLElement, card: number) =>
         fire(container.querySelector<HTMLButtonElement>(`.card-hold[data-card="${ card }"]`)!, 'click');
 
     it('takes the card out of the hand and flies it to the felt at the press, before the server has answered', () =>
@@ -416,11 +416,11 @@ describe('playing ahead of the server', () =>
 
 describe('the game helpers', () =>
 {
-    const following = (): MatchView => match({ phase: 'tricks', trump: 'spades', turn: 0, lead: 3, trick: [34], hand: [38, 0, 40], plays: [38] }, 0);
+    const following = () => match({ phase: 'tricks', trump: 'spades', turn: 0, lead: 3, trick: [34], hand: [38, 0, 40], plays: [38] }, 0);
 
     const watching = (): MatchView => ({ ...match({ phase: 'tricks', trump: 'spades', turn: 0, lead: 3, trick: [34] }), mine: undefined });
 
-    const cardButton = (container: HTMLElement, card: number): HTMLButtonElement =>
+    const cardButton = (container: HTMLElement, card: number) =>
         container.querySelector<HTMLButtonElement>(`.card-hold[data-card="${ card }"]`)!;
 
     afterEach(() =>

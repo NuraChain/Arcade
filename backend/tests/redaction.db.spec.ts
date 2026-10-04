@@ -65,7 +65,7 @@ const secretEngine: Engine<SecretState, { seat: number }> = {
 
     seats: [2, 3, 4],
 
-    create: (): SecretState => stateFor(),
+    create: () => stateFor(),
 
     parse: (): { seat: number } => ({ seat: 0 }),
 
@@ -107,7 +107,7 @@ const secretEngine: Engine<SecretState, { seat: number }> = {
     points: (): number => 0
 };
 
-const makeUser = async (): Promise<string> =>
+const makeUser = async () =>
 {
     seq += 1;
 

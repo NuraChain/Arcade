@@ -61,7 +61,7 @@ export default component SettingsPage()
 
     useHead({ title: () => locale.t('settings.title') });
 
-    const save = async (patch: Parameters<typeof social.setPrivacy>[0]): Promise<void> =>
+    const save = async (patch: Parameters<typeof social.setPrivacy>[0]) =>
     {
         try
         {
@@ -75,7 +75,7 @@ export default component SettingsPage()
 
     derived current = settings.settings();
 
-    const hear = async (notice: Notice): Promise<void> =>
+    const hear = async (notice: Notice) =>
     {
         try
         {
@@ -129,7 +129,7 @@ export default component SettingsPage()
 
     let unbind: (() => void) | null = null;
 
-    const bindKey = (): void =>
+    const bindKey = () =>
     {
         if (binding)
         {
@@ -139,7 +139,7 @@ export default component SettingsPage()
 
         binding = true;
 
-        const heard = (event: KeyboardEvent): void =>
+        const heard = (event: KeyboardEvent) =>
         {
             if (event.code === 'Tab')
             {
@@ -176,7 +176,7 @@ export default component SettingsPage()
 
     state leaving = false;
 
-    const leave = async (): Promise<void> =>
+    const leave = async () =>
     {
         leaving = true;
         wallet.disconnect();
@@ -199,7 +199,7 @@ export default component SettingsPage()
 
     let pinned: (() => void) | null = null;
 
-    const spot = (): void =>
+    const spot = () =>
     {
         const page = body?.closest('.page') ?? null;
 
@@ -220,7 +220,7 @@ export default component SettingsPage()
         active = current?.id ?? SECTIONS[0].id;
     };
 
-    const go = (id: string): void =>
+    const go = (id: string) =>
     {
         active = id;
         pinned?.();

@@ -11,7 +11,7 @@ const runner = (): { query: (sql: string) => Promise<string>; peak: () => number
     return {
         order,
         peak: () => peak,
-        query: async (sql: string): Promise<string> =>
+        query: async (sql: string) =>
         {
             running += 1;
             peak = Math.max(peak, running);

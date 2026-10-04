@@ -7,12 +7,12 @@ export const GAME_HUE: Record<GameId, number> = {
     ludo: 265
 };
 
-export function gameArt(game: GameId): string
+export function gameArt(game: GameId)
 {
     return `/art/games/${ game }.svg`;
 }
 
-export function gameIcon(game: GameId): string
+export function gameIcon(game: GameId)
 {
     return `/art/games/${ game }-icon.svg`;
 }

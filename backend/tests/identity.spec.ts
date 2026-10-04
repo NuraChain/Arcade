@@ -12,7 +12,7 @@ import { hashToken, isAddress, mintNonce, mintToken, normalizeAddress, secretsMa
 const KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
 const signer = privateKeyToAccount(KEY);
 
-const challenge = (site = 'nura.games', deviceId?: string): string => signInText(site, 'a'.repeat(32), deviceId);
+const challenge = (site = 'nura.games', deviceId?: string) => signInText(site, 'a'.repeat(32), deviceId);
 
 describe('the sign-in text', () =>
 {
@@ -234,7 +234,7 @@ describe('handles', () =>
     it('offers the asked-for name first, then widening suffixes', () =>
     {
         let counter = 0;
-        const fixed = (): number => [0.42, 0.42, 0.7, 0.7][counter++] ?? 0.5;
+        const fixed = () => [0.42, 0.42, 0.7, 0.7][counter++] ?? 0.5;
 
         expect(candidatesFor('sara', 0, fixed)).toBe('sara');
 

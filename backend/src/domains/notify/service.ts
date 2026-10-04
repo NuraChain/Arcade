@@ -53,7 +53,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function createNotifyService(db: DataSource, social: SocialService)
 {
-    const clean = (ref: Record<string, string>): Record<string, string> =>
+    const clean = (ref: Record<string, string>) =>
     {
         const out: Record<string, string> = {};
         for (const [key, value] of Object.entries(ref))
@@ -123,7 +123,7 @@ export function createNotifyService(db: DataSource, social: SocialService)
             return true;
         },
 
-        async retract(userId: string, kind: NotificationKind, dedupeKey: string): Promise<void>
+        async retract(userId: string, kind: NotificationKind, dedupeKey: string)
         {
             await db.getRepository(Notification).delete({ userId, kind, dedupeKey });
         },
@@ -211,7 +211,7 @@ export function createNotifyService(db: DataSource, social: SocialService)
         },
 
         /** Marks one read. Mine only - the where clause is the authorisation. */
-        async markRead(me: string, id: string): Promise<void>
+        async markRead(me: string, id: string)
         {
             if (!UUID.test(id))
             {
@@ -224,12 +224,12 @@ export function createNotifyService(db: DataSource, social: SocialService)
             );
         },
 
-        async markAllRead(me: string): Promise<void>
+        async markAllRead(me: string)
         {
             await db.query('update notifications set read_at = now() where user_id = $1 and read_at is null', [me]);
         },
 
-        async dismiss(me: string, id: string): Promise<void>
+        async dismiss(me: string, id: string)
         {
             if (!UUID.test(id))
             {
@@ -246,7 +246,7 @@ export function createNotifyService(db: DataSource, social: SocialService)
          * re-subscribing replaces its own row rather than accumulating, and an endpoint that moves
          * between accounts follows the account that claimed it last.
          */
-        async subscribe(me: string, input: { endpoint: string; p256dh: string; auth: string; userAgent: string }): Promise<void>
+        async subscribe(me: string, input: { endpoint: string; p256dh: string; auth: string; userAgent: string })
         {
             await db.query(
                 `insert into push_subscriptions (user_id, endpoint, p256dh, auth, user_agent)
@@ -261,7 +261,7 @@ export function createNotifyService(db: DataSource, social: SocialService)
             );
         },
 
-        async unsubscribe(me: string, endpoint: string): Promise<void>
+        async unsubscribe(me: string, endpoint: string)
         {
             await db.getRepository(PushSubscription).delete({ userId: me, endpoint });
         },
@@ -276,7 +276,7 @@ export function createNotifyService(db: DataSource, social: SocialService)
         },
 
         /** A push service that says a subscription is gone. Marked, then swept. */
-        async retire(id: string): Promise<void>
+        async retire(id: string)
         {
             await db.query('update push_subscriptions set failed_at = now() where id = $1', [id]);
         }

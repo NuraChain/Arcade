@@ -7,7 +7,7 @@ export function dragScroll(scroller: HTMLElement): () => void
     let drag: { id: number; x: number; left: number; moved: boolean } | null = null;
     let swallowUntil = 0;
 
-    const capture = (id: number): boolean =>
+    const capture = (id: number) =>
     {
         try
         {
@@ -20,7 +20,7 @@ export function dragScroll(scroller: HTMLElement): () => void
         }
     };
 
-    const press = (event: PointerEvent): void =>
+    const press = (event: PointerEvent) =>
     {
         if (event.pointerType !== 'mouse' || event.button !== 0 || scroller.scrollWidth - scroller.clientWidth <= 1)
         {
@@ -29,7 +29,7 @@ export function dragScroll(scroller: HTMLElement): () => void
         drag = { id: event.pointerId, x: event.clientX, left: scroller.scrollLeft, moved: false };
     };
 
-    const slide = (event: PointerEvent): void =>
+    const slide = (event: PointerEvent) =>
     {
         if (drag === null || event.pointerId !== drag.id)
         {
@@ -52,7 +52,7 @@ export function dragScroll(scroller: HTMLElement): () => void
         scroller.scrollLeft = drag.left - dx;
     };
 
-    const release = (event: PointerEvent): void =>
+    const release = (event: PointerEvent) =>
     {
         if (drag === null || event.pointerId !== drag.id)
         {
@@ -68,7 +68,7 @@ export function dragScroll(scroller: HTMLElement): () => void
         delete scroller.dataset.dragging;
     };
 
-    const swallow = (event: Event): void =>
+    const swallow = (event: Event) =>
     {
         if (performance.now() < swallowUntil)
         {
@@ -77,7 +77,7 @@ export function dragScroll(scroller: HTMLElement): () => void
         }
     };
 
-    const still = (event: Event): void =>
+    const still = (event: Event) =>
     {
         if (drag !== null)
         {

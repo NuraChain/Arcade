@@ -41,14 +41,14 @@ export const useConnection = createStore((): ConnectionApi =>
     let unwatch: (() => void) | null = null;
     let stopListeners: (() => void) | null = null;
 
-    const forget = (): void =>
+    const forget = () =>
     {
         clearRestored?.();
         clearRestored = null;
         setRestored(false);
     };
 
-    const troubled = (): boolean =>
+    const troubled = () =>
     {
         if (!live.everConnected())
         {
@@ -107,8 +107,8 @@ export const useConnection = createStore((): ConnectionApi =>
 
             if (stopListeners === null)
             {
-                const went = (): void => setOffline(true);
-                const came = (): void => setOffline(false);
+                const went = () => setOffline(true);
+                const came = () => setOffline(false);
 
                 window.addEventListener('offline', went);
                 window.addEventListener('online', came);

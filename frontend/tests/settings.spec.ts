@@ -18,7 +18,7 @@ type Rendered = HTMLElement;
 
 let clock: ManualClock;
 
-const settle = async (): Promise<void> =>
+const settle = async () =>
 {
     for (let i = 0; i < 8; i++)
     {
@@ -27,7 +27,7 @@ const settle = async (): Promise<void> =>
     await new Promise((resolve) => setTimeout(resolve, 40));
 };
 
-const show = async (component: () => HTMLElement, at: string): Promise<HTMLElement> =>
+const show = async (component: () => HTMLElement, at: string) =>
 {
     const table: Route[] = [{ path: at, component }];
     const router = createRouter({ routes: table, history: createMemoryHistory(at), scroll: false });
@@ -102,7 +102,7 @@ describe('a guest seat', () =>
  */
 describe('the profile sheet', () =>
 {
-    const fill = (container: HTMLElement, id: string, value: string): void =>
+    const fill = (container: HTMLElement, id: string, value: string) =>
     {
         const field = container.querySelector(`#${ id }`) as HTMLInputElement | HTMLTextAreaElement;
         const proto = Object.getPrototypeOf(field) as object;
@@ -116,7 +116,7 @@ describe('the profile sheet', () =>
     const sheet = async (): Promise<HTMLElement> =>
     {
         closedWith = null;
-        const close = (value?: unknown): void =>
+        const close = (value?: unknown) =>
         {
             closedWith = value === true;
         };
@@ -127,7 +127,7 @@ describe('the profile sheet', () =>
         );
     };
 
-    const press = (container: HTMLElement, label: string): void =>
+    const press = (container: HTMLElement, label: string) =>
     {
         const button = [...container.querySelectorAll('button')].find((one) => one.textContent?.trim().startsWith(label));
         button?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -189,7 +189,7 @@ describe('the notification switches', () =>
         server.mutes = [{ kind: 'notice', id: 'turns' }];
         await useAccount().signIn('Alex');
         const container = await show(SettingsPage as unknown as () => HTMLElement, '/app/me/settings');
-        const switchFor = (label: string): HTMLElement =>
+        const switchFor = (label: string) =>
             [...container.querySelectorAll<HTMLElement>('[role="switch"]')].find((one) => one.querySelector('span span')?.textContent === label)!;
 
         expect(switchFor('Your turn in a turn-based game').getAttribute('aria-checked')).toBe('false');

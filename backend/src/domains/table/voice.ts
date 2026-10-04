@@ -5,7 +5,7 @@ import { TableSeat } from '../../entities/table-seat.entity.ts';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export async function voiceAllowed(db: DataSource, userId: string, tableId: string): Promise<boolean>
+export async function voiceAllowed(db: DataSource, userId: string, tableId: string)
 {
     if (!UUID.test(tableId))
     {

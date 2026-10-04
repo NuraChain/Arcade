@@ -43,7 +43,7 @@ export default component DiscoverPage()
 
     derived trending = [...catalogue.games].sort((a, b) => catalogue.stats(b.id).playersOnline - catalogue.stats(a.id).playersOnline).slice(0, 3);
 
-    const quickPlay = (game: GameId): void =>
+    const quickPlay = (game: GameId) =>
     {
         openTable(lobby.quick(game), navigate);
     };

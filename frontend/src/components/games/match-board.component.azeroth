@@ -47,7 +47,7 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
 
     derived turnSeat = ludo.seats.find((seat) => seat.seat === game.turn);
 
-    const nameFor = (seat: number | undefined): string =>
+    const nameFor = (seat: number | undefined) =>
     {
         const player = game.players.find((one) => one.seat === seat);
 
@@ -61,7 +61,7 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
 
     derived nameOf = nameFor(turnOf?.seat);
 
-    derived says = ((): string =>
+    derived says = (() =>
     {
         if (over)
         {
@@ -125,7 +125,7 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
 
     derived beats = ((): LudoBeat[] =>
     {
-        const colourOf = (seat: number | undefined): string | null =>
+        const colourOf = (seat: number | undefined) =>
             ludo.seats.find((one) => one.seat === seat)?.colour ?? null;
 
         return board.events().events.flatMap((event) => event.log.kind === 'ludo'
@@ -143,7 +143,7 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
         beats
     }))();
 
-    const pick = async (key: string): Promise<void> =>
+    const pick = async (key: string) =>
     {
         const [seat, piece] = key.split('-').map(Number);
 
@@ -155,7 +155,7 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
         await moveNow(piece);
     };
 
-    const moveNow = async (piece: number): Promise<void> =>
+    const moveNow = async (piece: number) =>
     {
         const seat = untrack(() => mine);
         const current = untrack(() => ludo);
@@ -175,7 +175,7 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
         }
     };
 
-    const moveSays = (piece: number): string =>
+    const moveSays = (piece: number) =>
     {
         const token = locale.n(piece + 1);
         const outcome = mine === undefined ? null : outcomeOf(ludo, mine, piece);

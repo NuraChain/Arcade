@@ -40,7 +40,7 @@ export default component SiteHeader(props: { cta?: boolean })
         returning = beenHere();
     }
 
-    const toggle = (): void =>
+    const toggle = () =>
     {
         open = !open;
         if (open && !loaded)

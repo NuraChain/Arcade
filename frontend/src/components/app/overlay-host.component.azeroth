@@ -10,7 +10,7 @@ export default component OverlayHost()
 
     mount
     {
-        const onKeyDown = (event: KeyboardEvent): void =>
+        const onKeyDown = (event: KeyboardEvent) =>
         {
             if (event.key !== 'Escape')
             {
@@ -23,7 +23,7 @@ export default component OverlayHost()
                 top.props.close();
             }
         };
-        const onFocusIn = (event: FocusEvent): void =>
+        const onFocusIn = (event: FocusEvent) =>
         {
             const top = overlay.top();
             if (top === null)

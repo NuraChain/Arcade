@@ -50,7 +50,7 @@ export default component GroupForm(props: OverlayProps & { group?: GroupSummary 
     // non-member gets "No such group.", and that sentence is the whole feature.
     derived privacyHint = locale.t(privacy === 'private' ? 'groups.privacy.privateHint' : 'groups.privacy.publicHint');
 
-    const submit = async (): Promise<void> =>
+    const submit = async () =>
     {
         touched = true;
         if (tooShort || pending)

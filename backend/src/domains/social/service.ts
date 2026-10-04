@@ -467,7 +467,7 @@ export function createSocialService(db: DataSource)
             return row?.fromUser ?? null;
         },
 
-        async answerRequest(me: string, requestId: string, outcome: 'accepted' | 'declined'): Promise<void>
+        async answerRequest(me: string, requestId: string, outcome: 'accepted' | 'declined')
         {
             await db.transaction(async (tx) =>
             {
@@ -498,7 +498,7 @@ export function createSocialService(db: DataSource)
         },
 
         /** Takes back a request I sent. Same shape as answering: the UPDATE is the authorisation. */
-        async withdrawRequest(me: string, otherId: string): Promise<void>
+        async withdrawRequest(me: string, otherId: string)
         {
             await db.query(
                 `update friend_requests
@@ -508,7 +508,7 @@ export function createSocialService(db: DataSource)
             );
         },
 
-        async removeFriend(me: string, otherId: string): Promise<void>
+        async removeFriend(me: string, otherId: string)
         {
             await db.getRepository(Friendship).delete([
                 { userId: me, friendId: otherId },
@@ -523,7 +523,7 @@ export function createSocialService(db: DataSource)
          * whether these accounts can reach each other, and whichever query ran first would win.
          * One transaction, and afterwards there is nothing to disagree about.
          */
-        async block(me: string, otherId: string): Promise<void>
+        async block(me: string, otherId: string)
         {
             if (me === otherId)
             {
@@ -552,12 +552,12 @@ export function createSocialService(db: DataSource)
             });
         },
 
-        async unblock(me: string, otherId: string): Promise<void>
+        async unblock(me: string, otherId: string)
         {
             await db.getRepository(Block).delete({ userId: me, blockedId: otherId });
         },
 
-        async setMute(me: string, kind: MuteSubject, subjectId: string, muted: boolean): Promise<void>
+        async setMute(me: string, kind: MuteSubject, subjectId: string, muted: boolean)
         {
             if (kind === 'notice' && !isNotice(subjectId))
             {
@@ -659,19 +659,19 @@ export function createSocialService(db: DataSource)
         },
 
         /** The decision every contact point asks, resolved from the database rather than guessed. */
-        async mayMessage(me: string, otherId: string): Promise<ReturnType<typeof mayMessage>>
+        async mayMessage(me: string, otherId: string)
         {
             const { mine, theirs, relation } = await bothEnds(me, otherId);
             return mayMessage(partyOf(mine), partyOf(theirs), relation);
         },
 
-        async maySeeOnline(me: string, otherId: string): Promise<boolean>
+        async maySeeOnline(me: string, otherId: string)
         {
             const { mine, theirs, relation } = await bothEnds(me, otherId);
             return maySeeOnline(partyOf(mine), partyOf(theirs), relation);
         },
 
-        async mayDiscover(me: string, otherId: string): Promise<boolean>
+        async mayDiscover(me: string, otherId: string)
         {
             const { relation } = await relationOf(me, otherId);
             return mayDiscover(relation);

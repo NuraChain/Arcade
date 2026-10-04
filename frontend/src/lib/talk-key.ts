@@ -1,6 +1,6 @@
 export const RESERVED_KEYS: ReadonlySet<string> = new Set(['Escape', 'Tab', 'Enter', 'Slash', 'BracketLeft']);
 
-export function keyName(code: string): string
+export function keyName(code: string)
 {
     if (/^Key[A-Z]$/.test(code))
     {

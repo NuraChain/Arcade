@@ -20,4 +20,4 @@ export const BOARDS: Readonly<Record<string, () => Promise<{ default: BoardCompo
     poker: () => import('./poker-board.component.azeroth')
 };
 
-export const drawable = (game: string): boolean => Object.hasOwn(BOARDS, game);
+export const drawable = (game: string) => Object.hasOwn(BOARDS, game);

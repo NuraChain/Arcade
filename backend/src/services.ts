@@ -139,7 +139,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
      */
     let pushing = 0;
 
-    const wake = (userId: string): void =>
+    const wake = (userId: string) =>
     {
         if (vapid === null || pushing >= PUSH_AT_ONCE)
         {
@@ -171,7 +171,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         actorId: string | null;
         ref: Record<string, string>;
         dedupeKey: string;
-    }): Promise<void> =>
+    }) =>
     {
         if (await notify.tell(input))
         {
@@ -180,13 +180,13 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         }
     };
 
-    const retract = async (userId: string, kind: Notification['kind'], dedupeKey: string): Promise<void> =>
+    const retract = async (userId: string, kind: Notification['kind'], dedupeKey: string) =>
     {
         await notify.retract(userId, kind, dedupeKey);
         live?.selfChanged(userId, 'notifications');
     };
 
-    const asNotification = (row: NotificationRow): Notification =>
+    const asNotification = (row: NotificationRow) =>
     {
         const item: Notification = {
             id: row.id,
@@ -209,7 +209,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
      * The client never takes it apart - it hands back the last one it was given - which is what
      * lets the keyset change shape later without a client release.
      */
-    const encodeCursor = (at: Date, id: string): string =>
+    const encodeCursor = (at: Date, id: string) =>
         Buffer.from(`${ at.toISOString() }|${ id }`, 'utf8').toString('base64url');
 
     const decodeCursor = (cursor: string | undefined): { at: Date; id: string } | null =>
@@ -225,7 +225,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
 
     const LIST_CURSOR = /^([0-9T:.\-Z]*)\|([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
 
-    const listCursorOf = (row: { last_at: Date | null; id: string }): string =>
+    const listCursorOf = (row: { last_at: Date | null; id: string }) =>
         Buffer.from(`${ row.last_at?.toISOString() ?? '' }|${ row.id }`, 'utf8').toString('base64url');
 
     const listAfter = (cursor: string | undefined): { at: Date | null; id: string } | null =>
@@ -242,7 +242,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         return at !== null && Number.isNaN(at.getTime()) ? null : { at, id: found[2] };
     };
 
-    const asMessage = (row: MessageRow): ChatMessage =>
+    const asMessage = (row: MessageRow) =>
     {
         const message: ChatMessage = {
             id: row.id,
@@ -291,7 +291,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         return message;
     };
 
-    const asReactions = (rows: MessageRow[]): Map<string, ChatReaction[]> =>
+    const asReactions = (rows: MessageRow[]) =>
     {
         const on = new Map<string, ChatReaction[]>();
 
@@ -335,7 +335,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
      * Every person-taking route goes through here, so "the wire speaks handles" is one
      * translation at the edge rather than a rule each route is trusted to remember.
      */
-    const mustResolve = async (handle: string): Promise<string> =>
+    const mustResolve = async (handle: string) =>
     {
         const row = await social.personByHandle(handle);
         if (row === null)
@@ -375,7 +375,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         };
     };
 
-    const asConversation = (row: ConversationRow): ConversationSummary =>
+    const asConversation = (row: ConversationRow) =>
     {
         const summary: ConversationSummary = {
             id: row.id,
@@ -434,7 +434,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         return summary;
     };
 
-    const asGroup = (row: GroupRow): GroupSummary =>
+    const asGroup = (row: GroupRow) =>
     {
         const summary: GroupSummary = {
             id: row.slug,
@@ -468,7 +468,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         return summary;
     };
 
-    const mustSee = async (me: string, slug: string): Promise<GroupRow> =>
+    const mustSee = async (me: string, slug: string) =>
     {
         const found = await group.bySlug(me, slug);
         if (found === null)
@@ -478,7 +478,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         return found;
     };
 
-    const reread = async (me: string, groupId: string): Promise<GroupRow> =>
+    const reread = async (me: string, groupId: string) =>
     {
         const found = await group.byId(me, groupId);
         if (found === null)
@@ -504,7 +504,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         actor: string | null,
         what: 'created' | 'joined' | 'left' | 'removed' | 'renamed' | 'owner' | 'closed' | 'opened',
         params: Record<string, string>
-    ): Promise<void> =>
+    ) =>
     {
         if (row.conversation_id === null)
         {
@@ -527,7 +527,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
      * group list (`social`). A `group` scope would carry no information the other two do not
      * already carry, and a wire grows for new information rather than for new vocabulary.
      */
-    const ring = async (row: GroupRow, ...also: string[]): Promise<void> =>
+    const ring = async (row: GroupRow, ...also: string[]) =>
     {
         if (row.conversation_id !== null)
         {
@@ -536,7 +536,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         live?.socialChanged(...await group.memberIds(row.id), ...also);
     };
 
-    const asTable = (row: TableRow): TableSummary =>
+    const asTable = (row: TableRow) =>
     {
         const summary: TableSummary = {
             id: row.id,
@@ -588,7 +588,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         return summary;
     };
 
-    const mustTable = async (me: string, tableId: string): Promise<TableRow> =>
+    const mustTable = async (me: string, tableId: string) =>
     {
         const found = await table.byId(me, tableId);
         if (found === null)
@@ -598,7 +598,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         return found;
     };
 
-    const ringTable = async (row: TableRow, ...also: string[]): Promise<void> =>
+    const ringTable = async (row: TableRow, ...also: string[]) =>
     {
         if (row.conversation_id !== null)
         {
@@ -642,7 +642,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         };
     };
 
-    const asMatch = (load: MatchLoad): MatchView =>
+    const asMatch = (load: MatchLoad) =>
     {
         const state = load.state;
 
@@ -722,9 +722,9 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
      * the chat store an id it would resolve as a conversation. It stays a doorbell: the frame
      * carries the match id and nothing about the move.
      */
-    const shipped = (view: MatchView): MatchView => matchView.parse(view);
+    const shipped = (view: MatchView) => matchView.parse(view);
 
-    const pushMatch = async (matchId: string, before: number): Promise<void> =>
+    const pushMatch = async (matchId: string, before: number) =>
     {
         if (live === undefined)
         {
@@ -774,7 +774,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
      * and the announcement is the courtesy, so a line that fails to write must not roll back a game
      * somebody won.
      */
-    const declareResult = async (matchId: string): Promise<void> =>
+    const declareResult = async (matchId: string) =>
     {
         const ending = await endingOf(db, matchId);
 
@@ -800,7 +800,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
      * the same table already uses - and one key shared by two kinds is two different things
      * collapsing into one row that says neither.
      */
-    const nudgeTurn = async (load: MatchLoad, actor: string | null): Promise<void> =>
+    const nudgeTurn = async (load: MatchLoad, actor: string | null) =>
     {
         if (load.match.finishedAt !== null)
         {
@@ -871,7 +871,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         pushes: `delete from push_subscriptions where failed_at is not null`
     };
 
-    const tidy = async (): Promise<Record<string, number>> =>
+    const tidy = async () =>
     {
         const gone: Record<string, number> = {};
 
@@ -940,7 +940,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
      * is no key here to hand anybody - this server holds none - so the only thing it can do about a
      * membership change is make sure nobody misses it.
      */
-    const ringRooms = async (userId: string): Promise<void> =>
+    const ringRooms = async (userId: string) =>
     {
         if (live === undefined)
         {
@@ -955,7 +955,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         }
     };
 
-    const ringShared = async (me: string, other: string): Promise<void> =>
+    const ringShared = async (me: string, other: string) =>
     {
         if (live === undefined)
         {
@@ -973,7 +973,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         }
     };
 
-    const ringProfile = async (userId: string): Promise<void> =>
+    const ringProfile = async (userId: string) =>
     {
         if (live === undefined)
         {
@@ -1121,7 +1121,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
      * filter is a payload one component forgets to filter. If it is not in the JSON, no render
      * path can leak it.
      */
-    const seenBy = (viewer: PersonRow, row: PersonRow, relation: Parameters<typeof maySeeOnline>[2]): PersonSummary =>
+    const seenBy = (viewer: PersonRow, row: PersonRow, relation: Parameters<typeof maySeeOnline>[2]) =>
     {
         const summary: PersonSummary = {
             // The handle, not the uuid. The browser keys people by handle - it is the public
@@ -1248,7 +1248,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         voice: {
             ice(me)
             {
-                const list = (value: string): string[] => value.split(',').map((one) => one.trim()).filter((one) => one !== '');
+                const list = (value: string) => value.split(',').map((one) => one.trim()).filter((one) => one !== '');
                 const stun = list(config.voiceStunUrls);
                 const turn = list(config.voiceTurnUrls);
                 const servers: VoiceIce['servers'] = stun.length === 0 ? [] : [{ urls: stun }];

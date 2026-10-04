@@ -15,7 +15,7 @@ function seeded(seed: number): { draws: Draws; next: () => number }
 {
     let state = (seed * 2654435761) >>> 0 || 1;
 
-    const next = (): number =>
+    const next = () =>
     {
         state ^= state << 13;
         state ^= state >>> 17;
@@ -43,7 +43,7 @@ const facts = (over: Partial<LadderFacts> = {}): LadderFacts => ({
     ...over
 });
 
-function talliesOf(engine: Engine): Set<string>
+function talliesOf(engine: Engine)
 {
     const names = new Set<string>();
 

@@ -13,7 +13,7 @@ import { hello, nudge, parseClientFrame, presence, REALTIME_WIRE, typing } from 
  * the parts that do not need one.
  */
 
-const request = (headers: Record<string, string>, address = '1.1.1.1'): IncomingMessage =>
+const request = (headers: Record<string, string>, address = '1.1.1.1') =>
     ({ headers, url: '/ws', socket: { remoteAddress: address } } as unknown as IncomingMessage);
 
 const COOKIE = 'nura.session=abc123';
@@ -81,7 +81,7 @@ describe('same origin', () =>
 
 describe('the handshake gate', () =>
 {
-    const gate = (origin: string, options: { host?: string; cookie?: string; configured?: string } = {}): boolean =>
+    const gate = (origin: string, options: { host?: string; cookie?: string; configured?: string } = {}) =>
         admit({
             origin: options.configured ?? 'http://localhost:3100',
             secureCookies: false,

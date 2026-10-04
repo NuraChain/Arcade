@@ -47,12 +47,12 @@ export default component SearchPage()
     const locale = useLocale();
     const catalogue = useCatalogue();
 
-    const gameName = (game: GameId): string => locale.t(catalogue.byId(game).nameKey);
+    const gameName = (game: GameId) => locale.t(catalogue.byId(game).nameKey);
     const search = useSearch();
     const chat = useChat();
     const groups = useGroups();
 
-    const whereOf = (conversationId: string): Conversation => chat.conversation(conversationId) ?? NOWHERE;
+    const whereOf = (conversationId: string) => chat.conversation(conversationId) ?? NOWHERE;
     const social = useSocial();
     const people = usePeople();
     const device = useDevice();
@@ -93,7 +93,7 @@ export default component SearchPage()
 
     derived recents = search.recents();
 
-    const run = (term: string): void =>
+    const run = (term: string) =>
     {
         search.setQuery(term);
         search.remember(term);

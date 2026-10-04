@@ -46,7 +46,7 @@ const openTable = async (
     host: string,
     seats: number,
     options: { privacy?: TablePrivacy; invitees?: string[]; roomId?: string } = {}
-): Promise<string> =>
+) =>
     (await tables.create(host, {
         game: 'seat-fixture',
         seats,
@@ -390,7 +390,7 @@ describe.skipIf(!active)('claiming a seat, against a real database', () =>
      */
     describe('who can see a table', () =>
     {
-        const befriend = async (a: string, b: string): Promise<void> =>
+        const befriend = async (a: string, b: string) =>
         {
             await db.query(
                 `insert into friendships (user_id, friend_id) values ($1, $2), ($2, $1)
@@ -399,7 +399,7 @@ describe.skipIf(!active)('claiming a seat, against a real database', () =>
             );
         };
 
-        const makeRoom = async (...members: string[]): Promise<string> =>
+        const makeRoom = async (...members: string[]) =>
         {
             const made = await db.query(
                 `insert into conversations (kind, pair_key) values ('direct', $1) returning id`,
@@ -512,7 +512,7 @@ describe.skipIf(!active)('claiming a seat, against a real database', () =>
             const roomless = await openTable(host, 4, { privacy: 'room' });
             const roomed = await openTable(host, 1 + 1, { privacy: 'public', roomId: room });
 
-            const read = async (id: string): Promise<string> =>
+            const read = async (id: string) =>
                 rowsOf<{ privacy: string }>(await db.query('select privacy from tables where id = $1', [id]))[0].privacy;
 
             expect(await read(roomless)).toBe('invite');

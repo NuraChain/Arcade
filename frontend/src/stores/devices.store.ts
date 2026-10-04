@@ -102,7 +102,7 @@ export const useDevices = createStore((): DevicesApi =>
     const [busy, setBusy] = createSignal(false);
     const [failure, setFailure] = createSignal<EnrolFailure | null>(null);
 
-    const who = (): string | null => account.user()?.id ?? null;
+    const who = () => account.user()?.id ?? null;
 
     const listing = createResource<Listing, string>(who, async (): Promise<Listing> =>
     {
@@ -121,15 +121,15 @@ export const useDevices = createStore((): DevicesApi =>
     }, { name: 'devices.list' });
 
     const devices = (): Device[] => listing.data()?.devices ?? [];
-    const current = (): string | null => listing.data()?.current ?? null;
+    const current = () => listing.data()?.current ?? null;
 
-    const look = async (): Promise<void> =>
+    const look = async () =>
     {
         setLocal(await keyStore().load());
         setLooked(true);
     };
 
-    const refresh = async (): Promise<void> =>
+    const refresh = async () =>
     {
         // The keyring FIRST, because everything below is a statement about this browser rather than
         // about the account, and a stale answer to "do I hold keys" is the one that lies.
@@ -144,7 +144,7 @@ export const useDevices = createStore((): DevicesApi =>
      * challenge is fetched and the wallet asked before anything is written. The signed message
      * names this device in its `Resources` line - the signature cannot be carried to another one.
      */
-    const publish = async (keys: DeviceKeys, label: string): Promise<void> =>
+    const publish = async (keys: DeviceKeys, label: string) =>
     {
         if (!account.isWallet())
         {
@@ -163,7 +163,7 @@ export const useDevices = createStore((): DevicesApi =>
         await client.devices.enrol({ input: { ...keys, label, nonce: challenge.nonce, signature } });
     };
 
-    const write = async (work: () => Promise<unknown>): Promise<void> =>
+    const write = async (work: () => Promise<unknown>) =>
     {
         setBusy(true);
         try

@@ -39,7 +39,7 @@ export function discoverWallets(onChange?: () => void): () => void
         return () => undefined;
     }
 
-    const onAnnounce = (event: Event): void =>
+    const onAnnounce = (event: Event) =>
     {
         const detail = (event as AnnounceEvent).detail;
         const rdns = detail?.info?.rdns;
@@ -66,7 +66,7 @@ export function discoverWallets(onChange?: () => void): () => void
     return () => window.removeEventListener('eip6963:announceProvider', onAnnounce);
 }
 
-export function forgetWallets(): void
+export function forgetWallets()
 {
     announced.clear();
 }
@@ -76,7 +76,7 @@ export function announcedWallets(): AnnouncedWallet[]
     return [...announced.values()];
 }
 
-export function rdnsOf(provider: Eip1193Provider | null): string
+export function rdnsOf(provider: Eip1193Provider | null)
 {
     if (provider === null)
     {
@@ -181,12 +181,12 @@ export function failureOf(error: unknown): WalletFailure
     return 'unknown';
 }
 
-export function isAddress(value: string): boolean
+export function isAddress(value: string)
 {
     return /^0x[0-9a-fA-F]{40}$/.test(value);
 }
 
-export function shortAddress(address: string, lead = 6, tail = 4): string
+export function shortAddress(address: string, lead = 6, tail = 4)
 {
     if (!isAddress(address))
     {
@@ -195,7 +195,7 @@ export function shortAddress(address: string, lead = 6, tail = 4): string
     return `${ address.slice(0, lead) }…${ address.slice(-tail) }`;
 }
 
-export function addressHue(address: string): number
+export function addressHue(address: string)
 {
     let hash = 0;
     for (let index = 2; index < address.length; index += 1)
@@ -217,13 +217,13 @@ export async function readAccounts(provider: Eip1193Provider): Promise<string[]>
     return Array.isArray(accounts) ? accounts.filter((entry): entry is string => typeof entry === 'string') : [];
 }
 
-export async function readChainId(provider: Eip1193Provider): Promise<string>
+export async function readChainId(provider: Eip1193Provider)
 {
     const chainId = await provider.request({ method: 'eth_chainId' });
     return typeof chainId === 'string' ? chainId : '';
 }
 
-export async function personalSign(provider: Eip1193Provider, address: string, message: string): Promise<string>
+export async function personalSign(provider: Eip1193Provider, address: string, message: string)
 {
     const signature = await provider.request({ method: 'personal_sign', params: [message, address] });
     return typeof signature === 'string' ? signature : '';
@@ -237,7 +237,7 @@ export async function personalSign(provider: Eip1193Provider, address: string, m
  * signed on that one: the wallet shows the person what they are about to send, which is the only
  * place that decision belongs.
  */
-export async function sendTransaction(provider: Eip1193Provider, from: string, to: string, data: string): Promise<string>
+export async function sendTransaction(provider: Eip1193Provider, from: string, to: string, data: string)
 {
     const hash = await provider.request({ method: 'eth_sendTransaction', params: [{ from, to, data }] });
     return typeof hash === 'string' ? hash : '';
@@ -259,7 +259,7 @@ export async function transactionReceipt(provider: Eip1193Provider, hash: string
     return (receipt as { status?: unknown }).status === '0x1';
 }
 
-export async function switchChain(provider: Eip1193Provider, chain: ChainConfig): Promise<boolean>
+export async function switchChain(provider: Eip1193Provider, chain: ChainConfig)
 {
     try
     {

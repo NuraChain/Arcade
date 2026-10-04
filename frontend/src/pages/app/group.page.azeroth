@@ -103,7 +103,7 @@ export default component GroupPage()
 
     derived game = (group?.game ?? null) as GameId | null;
 
-    const playTogether = (): void =>
+    const playTogether = () =>
     {
         if (group === null || group.conversationId === undefined)
         {
@@ -126,7 +126,7 @@ export default component GroupPage()
         );
     };
 
-    const edit = (): void =>
+    const edit = () =>
     {
         if (group !== null)
         {
@@ -134,7 +134,7 @@ export default component GroupPage()
         }
     };
 
-    const addSomebody = (): void =>
+    const addSomebody = () =>
     {
         if (group !== null)
         {
@@ -142,12 +142,12 @@ export default component GroupPage()
         }
     };
 
-    const join = async (one: GroupSummary): Promise<void> =>
+    const join = async (one: GroupSummary) =>
     {
         await attempt(groups.join(one.id), locale.t('groups.joined', { name: one.name }));
     };
 
-    const leave = async (one: GroupSummary): Promise<void> =>
+    const leave = async (one: GroupSummary) =>
     {
         const alone = one.memberCount <= 1;
         const yes = await overlay.open(
@@ -174,7 +174,7 @@ export default component GroupPage()
         }
     };
 
-    const removeMember = async (one: GroupSummary, person: Person): Promise<void> =>
+    const removeMember = async (one: GroupSummary, person: Person) =>
     {
         const who = person.displayName;
         const yes = await overlay.open(
@@ -194,7 +194,7 @@ export default component GroupPage()
         }
     };
 
-    const handOver = async (one: GroupSummary, person: Person): Promise<void> =>
+    const handOver = async (one: GroupSummary, person: Person) =>
     {
         const who = person.displayName;
         const yes = await overlay.open(

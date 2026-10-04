@@ -226,7 +226,7 @@ describe.skipIf(!active)('the social graph, against a real database', () =>
     {
         const [me, bridge, target, nobody] = [await makeUser(), await makeUser(), await makeUser(), await makeUser()];
 
-        const befriend = async (x: string, y: string): Promise<void> =>
+        const befriend = async (x: string, y: string) =>
         {
             await social.sendRequest(x, y);
             const { incoming } = await social.requests(y);

@@ -344,7 +344,7 @@ export function createIdentityService(db: DataSource, config: IdentityConfig)
         },
 
         /** Ends this session only. Other devices stay signed in. */
-        async signOut(sessionId: string): Promise<void>
+        async signOut(sessionId: string)
         {
             await db.query('update sessions set revoked_at = now() where id = $1 and revoked_at is null', [sessionId]);
         },
@@ -379,7 +379,7 @@ export function createIdentityService(db: DataSource, config: IdentityConfig)
          * spent on nothing. Most recently used wins, so an account with two linked wallets
          * shows the one it just signed in with.
          */
-        async profileFor(userId: string): Promise<ProfileRow | null>
+        async profileFor(userId: string)
         {
             const row = await db.getRepository(User).createQueryBuilder('u')
                 .select('u.id', 'id')
@@ -398,7 +398,7 @@ export function createIdentityService(db: DataSource, config: IdentityConfig)
             return row ?? null;
         },
 
-        async uploadAvatar(data: string): Promise<string>
+        async uploadAvatar(data: string)
         {
             const bytes = Buffer.from(data, 'base64');
             if (bytes.length === 0 || bytes.length > AVATAR_MAX_BYTES)
@@ -435,7 +435,7 @@ export function createIdentityService(db: DataSource, config: IdentityConfig)
          * query that joins the wallet address in, and a second composition here would be a second
          * chance to disagree with it.
          */
-        async setProfile(userId: string, input: { displayName: string; bio: string; avatar?: string | undefined }): Promise<ProfileRow>
+        async setProfile(userId: string, input: { displayName: string; bio: string; avatar?: string | undefined })
         {
             let avatar: string | null | undefined;
             if (input.avatar !== undefined && input.avatar !== '')
@@ -466,7 +466,7 @@ export function createIdentityService(db: DataSource, config: IdentityConfig)
         },
 
         /** Renames an account. The unique index arbitrates, exactly as it does at creation. */
-        async claimHandle(userId: string, wanted: string): Promise<string>
+        async claimHandle(userId: string, wanted: string)
         {
             const refusal = checkHandle(wanted);
             if (refusal !== null)

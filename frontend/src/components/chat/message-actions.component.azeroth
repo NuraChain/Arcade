@@ -37,18 +37,18 @@ export default component MessageActions(props: OverlayProps & {
 
     derived mine = props.message.from === props.me;
 
-    const react = (emoji: string): void =>
+    const react = (emoji: string) =>
     {
         props.close();
         props.onReact(emoji);
     };
 
-    const copy = async (): Promise<void> =>
+    const copy = async () =>
     {
         await copyText(props.message.text, 'chat.copied', { dedupe: 'chat-copy' });
     };
 
-    derived actions = ((): Action[] =>
+    derived actions = (() =>
     {
         const list: Action[] = [];
 

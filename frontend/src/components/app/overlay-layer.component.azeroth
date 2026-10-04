@@ -35,7 +35,7 @@ export default component OverlayLayer(props: { entry: OverlayEntry })
     const stops = (height: number): number[] =>
         (height >= device.height() * 0.6 ? [0, Math.round(height * HALF), height] : [0, height]);
 
-    const paint = (offset: number | null): void =>
+    const paint = (offset: number | null) =>
     {
         if (panel === null)
         {
@@ -45,7 +45,7 @@ export default component OverlayLayer(props: { entry: OverlayEntry })
         panel.style.transform = offset === null ? '' : `translateY(${ Math.max(0, offset) }px)`;
     };
 
-    const settleAt = (index: number, from: number | null): void =>
+    const settleAt = (index: number, from: number | null) =>
     {
         if (index === points.length - 1)
         {

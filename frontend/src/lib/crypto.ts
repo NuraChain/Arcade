@@ -85,10 +85,10 @@ const join = (...parts: Uint8Array[]): Uint8Array =>
 
 const randomBytes = (length: number): Uint8Array => crypto.getRandomValues(new Uint8Array(length));
 
-const importExchange = (key: PublicKey): Promise<CryptoKey> =>
+const importExchange = (key: PublicKey) =>
     crypto.subtle.importKey('spki', fromBase64Url(key) as BufferSource, { name: 'ECDH', namedCurve: 'P-256' }, false, []);
 
-const importVerifier = (key: PublicKey): Promise<CryptoKey> =>
+const importVerifier = (key: PublicKey) =>
     crypto.subtle.importKey('spki', fromBase64Url(key) as BufferSource, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify']);
 
 /**
@@ -98,7 +98,7 @@ const importVerifier = (key: PublicKey): Promise<CryptoKey> =>
  * because a `CryptoKey` for HKDF cannot be stored usefully and because the caller owns the bytes
  * and is going to zero them.
  */
-const deriveAes = async (secret: Uint8Array, salt: string, info: string): Promise<CryptoKey> =>
+const deriveAes = async (secret: Uint8Array, salt: string, info: string) =>
 {
     const base = await crypto.subtle.importKey('raw', secret as BufferSource, 'HKDF', false, ['deriveKey']);
 
@@ -119,13 +119,13 @@ const deriveAes = async (secret: Uint8Array, salt: string, info: string): Promis
  * caller was holding stops being a key, which closes the window where a later bug or a heap dump
  * reads one out of a value nobody remembered was still live.
  */
-export function forget(bytes: Uint8Array): void
+export function forget(bytes: Uint8Array)
 {
     bytes.fill(0);
 }
 
 /** A fresh epoch key: 32 bytes from the platform CSPRNG, belonging to nobody until it is wrapped. */
-export function mintEpochKey(): Uint8Array
+export function mintEpochKey()
 {
     return randomBytes(KEY_BYTES);
 }
@@ -219,7 +219,7 @@ export async function unwrapEpochKey(
 }
 
 /** The epoch key encrypting a fixed sentence about itself, so a wrong unwrap says so immediately. */
-export async function confirmationOf(epochKey: Uint8Array, conversationId: string, epoch: number): Promise<string>
+export async function confirmationOf(epochKey: Uint8Array, conversationId: string, epoch: number)
 {
     const key = await deriveAes(epochKey, conversationId, label(PROTOCOL, 'kcv', String(epoch)));
     const iv = randomBytes(IV_BYTES);
@@ -245,7 +245,7 @@ export async function checkConfirmation(
     conversationId: string,
     epoch: number,
     confirmation: string
-): Promise<boolean>
+)
 {
     try
     {
@@ -273,7 +273,7 @@ export async function checkConfirmation(
  * message - "ok", "yes", an address - is a value anybody could confirm by guessing, and this value
  * travels in the clear past a server that is not supposed to learn anything from it.
  */
-export async function commitmentOf(frankingKey: string, text: string): Promise<string>
+export async function commitmentOf(frankingKey: string, text: string)
 {
     const key = await crypto.subtle.importKey(
         'raw',
@@ -294,11 +294,11 @@ export async function commitmentOf(frankingKey: string, text: string): Promise<s
  * fix that by itself - the signature does - but it keeps each sender's ciphertexts under their own
  * key, so a nonce reuse by one device cannot cross-contaminate another's.
  */
-const senderKey = (epochKey: Uint8Array, conversationId: string, epoch: number, senderDeviceId: string): Promise<CryptoKey> =>
+const senderKey = (epochKey: Uint8Array, conversationId: string, epoch: number, senderDeviceId: string) =>
     deriveAes(epochKey, conversationId, label(PROTOCOL, 'send', String(epoch), senderDeviceId));
 
 /** The exact bytes a message signature covers: the AAD, then the nonce, then the ciphertext. */
-const signedBytes = (aad: string, iv: Uint8Array, ciphertext: Uint8Array): Uint8Array =>
+const signedBytes = (aad: string, iv: Uint8Array, ciphertext: Uint8Array) =>
     join(utf8.encode(aad), iv, ciphertext);
 
 /**
@@ -338,7 +338,7 @@ export async function sealText(
 }
 
 /** A fresh franking key. One per message, never reused, never derived. */
-export function mintFrankingKey(): string
+export function mintFrankingKey()
 {
     return toBase64Url(randomBytes(FRANK_BYTES));
 }
@@ -433,7 +433,7 @@ export async function signRecipients(
     minterDeviceId: string,
     recipients: readonly string[],
     confirmation: string
-): Promise<string>
+)
 {
     const signature = await crypto.subtle.sign(
         { name: 'ECDSA', hash: 'SHA-256' },
@@ -458,7 +458,7 @@ export async function verifyRecipients(
     recipients: readonly string[],
     confirmation: string,
     signature: string
-): Promise<boolean>
+)
 {
     try
     {

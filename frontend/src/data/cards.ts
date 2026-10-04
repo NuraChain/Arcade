@@ -27,7 +27,7 @@ export const SUIT_ICON: Record<Suit, IconName> = {
     spades: 'suit-spades'
 };
 
-export function suitOf(card: number): Suit
+export function suitOf(card: number)
 {
     return SUITS[Math.floor(card / RANKS.length)];
 }
@@ -53,7 +53,7 @@ export const FACE_KEY: Record<string, 'card.rank.jack' | 'card.rank.queen' | 'ca
 
 const RED: ReadonlySet<Suit> = new Set<Suit>(['diamonds', 'hearts']);
 
-export function arrangeHand(cards: readonly number[], trump?: Suit): number[]
+export function arrangeHand(cards: readonly number[], trump?: Suit)
 {
     const present = SUITS.filter((suit) => cards.some((card) => suitOf(card) === suit));
     const rest = present.filter((suit) => suit !== trump);

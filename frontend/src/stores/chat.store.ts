@@ -31,7 +31,7 @@ interface Typist
 
 let active: ChatSource = createApiSource();
 
-export function setChatSource(next: ChatSource | null): void
+export function setChatSource(next: ChatSource | null)
 {
     active = next ?? createApiSource();
 }
@@ -102,7 +102,7 @@ export const useChat = createStore((): ChatApi =>
     const people = usePeople();
     const groups = useGroups();
 
-    const meId = (): string => account.user()?.id ?? 'you';
+    const meId = () => account.user()?.id ?? 'you';
 
     const scopeKey = createMemo(() => `${ meId() }|${ [...social.blocked()].sort().join(',') }`);
 
@@ -121,7 +121,7 @@ export const useChat = createStore((): ChatApi =>
      * to have loaded the people involved. `want` asks once per handle and never refetches, so
      * re-running this on every list revalidation costs nothing.
      */
-    const ingest = (loaded: Conversation[]): void =>
+    const ingest = (loaded: Conversation[]) =>
     {
         people.want(loaded.flatMap((conversation) => conversation.participants));
         if (loaded.some((conversation) => conversation.groupId !== null))
@@ -166,7 +166,7 @@ export const useChat = createStore((): ChatApi =>
      * looking at. The list carries the unread counts and the last line, so it is the half that
      * always has to move.
      */
-    const queue = (work: () => Promise<unknown>): Promise<void> =>
+    const queue = (work: () => Promise<unknown>) =>
     {
         inFlight = inFlight
             .catch(() => undefined)
@@ -177,11 +177,11 @@ export const useChat = createStore((): ChatApi =>
         return inFlight;
     };
 
-    const revalidateList = (): Promise<void> => queue(() => list.refetch());
+    const revalidateList = () => queue(() => list.refetch());
 
     let listWaiting: Promise<void> | null = null;
 
-    const nudgedList = (): Promise<void> =>
+    const nudgedList = () =>
     {
         listWaiting ??= queue(async () =>
         {
@@ -191,11 +191,11 @@ export const useChat = createStore((): ChatApi =>
         return listWaiting;
     };
 
-    const revalidate = (): Promise<void> => queue(() => Promise.all([list.refetch(), thread.refetch()]));
+    const revalidate = () => queue(() => Promise.all([list.refetch(), thread.refetch()]));
 
     const threaders = new Set<(id: string | undefined) => void>();
 
-    const nudgedOpen = (id: string): Promise<void> => queue(async () =>
+    const nudgedOpen = (id: string) => queue(async () =>
     {
         await list.refetch();
 
@@ -212,17 +212,17 @@ export const useChat = createStore((): ChatApi =>
 
     const rows = (): ConversationRow[] => list.data()?.rows ?? [];
 
-    const rowOf = (id: string): ConversationRow | undefined => rows().find((row) => row.conversation.id === id);
+    const rowOf = (id: string) => rows().find((row) => row.conversation.id === id);
 
     const conversations = (): Conversation[] => rows().map((row) => row.conversation);
 
     const messages = (): Message[] => thread.data()?.messages ?? [];
 
-    const hasEarlier = (): boolean => thread.data()?.earlier === true;
+    const hasEarlier = () => thread.data()?.earlier === true;
 
-    const lastOf = (id: string): Message | undefined => rowOf(id)?.last ?? undefined;
+    const lastOf = (id: string) => rowOf(id)?.last ?? undefined;
 
-    const unread = (id: string): number =>
+    const unread = (id: string) =>
     {
         const row = rowOf(id);
         if (row === undefined)
@@ -237,7 +237,7 @@ export const useChat = createStore((): ChatApi =>
 
     const [replies, setReplies] = createSignal<Record<string, Message>>({});
 
-    const lifetimeOf = (id: string, at: number): number =>
+    const lifetimeOf = (id: string, at: number) =>
     {
         const after = rowOf(id)?.conversation.expireAfter ?? null;
 
@@ -246,7 +246,7 @@ export const useChat = createStore((): ChatApi =>
 
     let sweep: (() => void) | null = null;
 
-    const expire = (): void =>
+    const expire = () =>
     {
         const now = runtime().clock.now();
         const current = untrack(typists);
@@ -272,7 +272,7 @@ export const useChat = createStore((): ChatApi =>
         }
     };
 
-    const sweepSoon = (): void =>
+    const sweepSoon = () =>
     {
         sweep?.();
         sweep = null;
@@ -305,7 +305,7 @@ export const useChat = createStore((): ChatApi =>
      * they may simply have walked away. Every notice therefore carries its own deadline and the
      * indicator goes quiet on its own.
      */
-    const noteTyping = (who: string, conversationId: string): void =>
+    const noteTyping = (who: string, conversationId: string) =>
     {
         const now = runtime().clock.now();
         const current = untrack(typists);

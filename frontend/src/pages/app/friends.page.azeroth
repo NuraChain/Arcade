@@ -94,23 +94,23 @@ export default component FriendsPage()
 
     derived listed = visible(found, LIST_PAGE, listPage, paging);
 
-    const playWith = (person: Person): void =>
+    const playWith = (person: Person) =>
     {
         const game = catalogue.featured();
         openTable(lobby.host(game, catalogue.defaults(game), [person.id]), navigate);
     };
 
-    const message = (person: Person): void =>
+    const message = (person: Person) =>
     {
         void chat.openDirect(person.id).then((id) => navigate(`/app/chats/${ id }`));
     };
 
-    const more = (person: Person): void =>
+    const more = (person: Person) =>
     {
         overlay.open(PersonActions, { personId: person.id }, { label: locale.t('actions.title') });
     };
 
-    const makeGroup = (): void =>
+    const makeGroup = () =>
     {
         void overlay.open(GroupForm, {}, { label: locale.t('groups.createTitle') }).closed.then((made) =>
         {

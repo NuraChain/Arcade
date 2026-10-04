@@ -29,7 +29,7 @@ async function realKeys(): Promise<{ exchangeKey: string; signingKey: string }>
 }
 
 /** An enrolment the way the server really composes one: plain text, with the device on its own line. */
-const enrolMessage = (id: string, _address: string): string => [
+const enrolMessage = (id: string, _address: string) => [
     'Let this browser read and send your messages on Nura Games (nura.games).',
     '',
     deviceLine(id),

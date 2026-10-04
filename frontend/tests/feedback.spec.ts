@@ -9,7 +9,7 @@ import { useToasts } from '../src/stores/toasts.store.ts';
 
 const original = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
 
-const withClipboard = (writeText: ((text: string) => Promise<void>) | null): void =>
+const withClipboard = (writeText: ((text: string) => Promise<void>) | null) =>
 {
     Object.defineProperty(navigator, 'clipboard', {
         configurable: true,

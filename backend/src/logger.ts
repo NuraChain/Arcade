@@ -1,4 +1,4 @@
-import { createLogger, teeSink, terminalSink, type Logger } from '@azerothjs/logger';
+import { createLogger, teeSink, terminalSink } from '@azerothjs/logger';
 import { fileSink } from '@azerothjs/logger/node';
 
 import type { ServerConfig } from './env.ts';
@@ -36,7 +36,7 @@ const REDACT = [
  * dead. A tee keeps the terminal honest during development and still leaves an ndjson trail on
  * disk for anything after it.
  */
-export function createServerLogger(config: ServerConfig): Logger
+export function createServerLogger(config: ServerConfig)
 {
     return createLogger({
         level: config.env === 'production' ? 'info' : 'debug',

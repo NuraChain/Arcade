@@ -19,7 +19,7 @@ type Rendered = HTMLElement;
 
 let clock: ManualClock;
 
-const settle = async (): Promise<void> =>
+const settle = async () =>
 {
     await Promise.resolve();
     await Promise.resolve();
@@ -28,7 +28,7 @@ const settle = async (): Promise<void> =>
 
 const Stub = (): HTMLElement => document.createElement('div');
 
-const mountOnce = async (): Promise<void> =>
+const mountOnce = async () =>
 {
     const router = createRouter({
         routes: [{ path: '/x', component: Stub }],

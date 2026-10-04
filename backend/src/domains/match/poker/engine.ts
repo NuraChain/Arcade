@@ -27,22 +27,22 @@ const NEXT_STREET: Readonly<Record<Street, Street>> = { preflop: 'flop', flop: '
 
 const SETTLE_LIMIT = 1000;
 
-export function levelOf(state: PokerState): number
+export function levelOf(state: PokerState)
 {
     return state.opening + Math.floor((Math.max(1, state.hand) - 1) / HANDS_PER_LEVEL);
 }
 
-export function handsToNextLevel(state: PokerState): number
+export function handsToNextLevel(state: PokerState)
 {
     return HANDS_PER_LEVEL - ((Math.max(1, state.hand) - 1) % HANDS_PER_LEVEL);
 }
 
-export function chipsInPlay(state: PokerState): number
+export function chipsInPlay(state: PokerState)
 {
     return state.stacks.reduce((sum, chips) => sum + chips, 0) + state.put.reduce((sum, chips) => sum + chips, 0) + state.gone;
 }
 
-function draw(state: PokerState, die: Die): number
+function draw(state: PokerState, die: Die)
 {
     const used = new Set([...state.holes.flat(), ...state.board]);
     const remaining = DECK.filter((card) => !used.has(card));
@@ -51,14 +51,14 @@ function draw(state: PokerState, die: Die): number
     return remaining[pick - 1];
 }
 
-function commit(state: PokerState, seat: number, chips: number): void
+function commit(state: PokerState, seat: number, chips: number)
 {
     state.stacks[seat] -= chips;
     state.bets[seat] += chips;
     state.put[seat] += chips;
 }
 
-function raiseTo(state: PokerState, seat: number, to: number): void
+function raiseTo(state: PokerState, seat: number, to: number)
 {
     const increment = to - state.current;
 
@@ -71,12 +71,12 @@ function raiseTo(state: PokerState, seat: number, to: number): void
     commit(state, seat, to - state.bets[seat]);
 }
 
-function alive(state: PokerState): number[]
+function alive(state: PokerState)
 {
     return state.out.map((_, seat) => seat).filter((seat) => !state.out[seat]);
 }
 
-function startHand(state: PokerState, events: PokerEvent[], die: Die): void
+function startHand(state: PokerState, events: PokerEvent[], die: Die)
 {
     if (state.hand > 0)
     {
@@ -131,7 +131,7 @@ function startHand(state: PokerState, events: PokerEvent[], die: Die): void
     state.turn = nextToAct(state, bb) ?? bb;
 }
 
-function dealStreet(state: PokerState, events: PokerEvent[], die: Die): void
+function dealStreet(state: PokerState, events: PokerEvent[], die: Die)
 {
     const count = state.street === 'preflop' ? 3 : 1;
     const cards: number[] = [];
@@ -149,7 +149,7 @@ function dealStreet(state: PokerState, events: PokerEvent[], die: Die): void
     events.push({ e: 'board', street: state.street, cards });
 }
 
-function closeRound(state: PokerState): void
+function closeRound(state: PokerState)
 {
     state.bets = state.bets.map(() => 0);
     state.faced = state.faced.map(() => -1);
@@ -157,7 +157,7 @@ function closeRound(state: PokerState): void
     state.raise = blindsAt(levelOf(state)).big;
 }
 
-function bust(state: PokerState, events: PokerEvent[], won: readonly (Won & { eligible: number[] })[]): void
+function bust(state: PokerState, events: PokerEvent[], won: readonly (Won & { eligible: number[] })[])
 {
     const busted = alive(state).filter((seat) => state.stacks[seat] === 0);
     const remaining = alive(state).length - busted.length;
@@ -180,7 +180,7 @@ function bust(state: PokerState, events: PokerEvent[], won: readonly (Won & { el
     }
 }
 
-function finishHand(state: PokerState, events: PokerEvent[], showdown: boolean): void
+function finishHand(state: PokerState, events: PokerEvent[], showdown: boolean)
 {
     const refund = uncalled(state.put, state.folded);
 
@@ -245,7 +245,7 @@ function finishHand(state: PokerState, events: PokerEvent[], showdown: boolean):
     }
 }
 
-function settle(state: PokerState, events: PokerEvent[], die: Die): void
+function settle(state: PokerState, events: PokerEvent[], die: Die)
 {
     for (let guard = 0; guard < SETTLE_LIMIT; guard += 1)
     {
@@ -386,7 +386,7 @@ function act(state: PokerState, action: Exclude<PokerAction, { kind: 'forfeit' }
     return null;
 }
 
-function forfeit(state: PokerState, seat: number, reason: Exit, events: PokerEvent[]): void
+function forfeit(state: PokerState, seat: number, reason: Exit, events: PokerEvent[])
 {
     const place = alive(state).length;
 
@@ -399,7 +399,7 @@ function forfeit(state: PokerState, seat: number, reason: Exit, events: PokerEve
     events.push({ e: 'forfeit', seat, reason, place });
 }
 
-export function create(seats: number, blinds: keyof typeof OPENING, die: Die): PokerState
+export function create(seats: number, blinds: keyof typeof OPENING, die: Die)
 {
     const state: PokerState = {
         v: 1,

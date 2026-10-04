@@ -12,7 +12,7 @@ import { createHash, randomBytes, randomInt, timingSafeEqual } from 'node:crypto
  * deliberately so - `lib/random.ts` exists to make the mock data reproducible. A token minted
  * from a reproducible generator is a token anyone can reproduce.
  */
-export function mintToken(): string
+export function mintToken()
 {
     return randomBytes(32).toString('base64url');
 }
@@ -30,19 +30,19 @@ export function mintToken(): string
  * honest sentence is that the server rolls the dice, and commit-reveal is a mechanism to build
  * before any copy changes.
  */
-export function rollDie(): number
+export function rollDie()
 {
     return randomInt(1, 7);
 }
 
 /** One of `count` things, drawn the same way a die is. Used for who moves first. */
-export function pickBelow(count: number): number
+export function pickBelow(count: number)
 {
     return count <= 1 ? 0 : randomInt(0, count);
 }
 
 /** A nonce: 128 bits, hex, unpredictable. Same reasoning as above. */
-export function mintNonce(): string
+export function mintNonce()
 {
     return randomBytes(16).toString('hex');
 }
@@ -55,7 +55,7 @@ export function mintNonce(): string
  * nothing here and costs a round trip's latency on every single request. What this does buy is
  * that a leaked database cannot be replayed as a set of live sessions.
  */
-export function hashToken(token: string): string
+export function hashToken(token: string)
 {
     return createHash('sha256').update(token).digest('hex');
 }
@@ -66,7 +66,7 @@ export function hashToken(token: string): string
  * `===` on a secret leaks its prefix through timing. Lengths are compared first because
  * `timingSafeEqual` throws on a mismatch - that leak is the length, which is not the secret.
  */
-export function secretsMatch(left: string, right: string): boolean
+export function secretsMatch(left: string, right: string)
 {
     const a = Buffer.from(left);
     const b = Buffer.from(right);
@@ -81,14 +81,14 @@ export function secretsMatch(left: string, right: string): boolean
  * is how one person ends up with two accounts. The `citext` columns and their CHECK constraints
  * enforce the same rule one layer down.
  */
-export function normalizeAddress(address: string): string
+export function normalizeAddress(address: string)
 {
     return address.trim().toLowerCase();
 }
 
 const ADDRESS = /^0x[0-9a-f]{40}$/;
 
-export function isAddress(address: string): boolean
+export function isAddress(address: string)
 {
     return ADDRESS.test(normalizeAddress(address));
 }

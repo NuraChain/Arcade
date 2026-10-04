@@ -22,7 +22,7 @@ export interface PushSubscriptionKeys
     auth: string;
 }
 
-export function pushSupported(): boolean
+export function pushSupported()
 {
     return typeof navigator !== 'undefined'
         && 'serviceWorker' in navigator
@@ -37,7 +37,7 @@ export function pushSupported(): boolean
  * `PushManager.subscribe` takes the raw 65-byte uncompressed point as a `Uint8Array`, not the
  * base64url the server publishes, and it is specific about the length.
  */
-export function decodeKey(base64url: string): ArrayBuffer
+export function decodeKey(base64url: string)
 {
     const padded = base64url.replace(/-/g, '+').replace(/_/g, '/');
     const binary = atob(padded + '='.repeat((4 - padded.length % 4) % 4));
@@ -50,7 +50,7 @@ export function decodeKey(base64url: string): ArrayBuffer
     return bytes.buffer;
 }
 
-const encodeKey = (buffer: ArrayBuffer | null): string =>
+const encodeKey = (buffer: ArrayBuffer | null) =>
 {
     if (buffer === null)
     {

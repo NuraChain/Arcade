@@ -46,7 +46,7 @@ function applied(outcome: Outcome): { state: BackgammonState; events: Backgammon
     return outcome;
 }
 
-function layout(points: Record<number, number>): number[]
+function layout(points: Record<number, number>)
 {
     const checkers = Array.from({ length: 26 }, () => 0);
 
@@ -60,7 +60,7 @@ function layout(points: Record<number, number>): number[]
     return checkers;
 }
 
-const opened = (target: number, cube: boolean, faces: number[] = [6, 1]): BackgammonState => create(target, cube, scripted(faces));
+const opened = (target: number, cube: boolean, faces: number[] = [6, 1]) => create(target, cube, scripted(faces));
 
 function outcomeAfter(state: BackgammonState, seat: number): string | undefined
 {

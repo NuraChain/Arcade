@@ -20,7 +20,7 @@ export const backgammonEngine: Engine<BackgammonState, BackgammonAction> = {
 
     seats: SEATS,
 
-    create: (_seats: readonly number[], draws: Draws, table: TableConfig): BackgammonState =>
+    create: (_seats: readonly number[], draws: Draws, table: TableConfig) =>
         create(table.target > 0 ? table.target : 1, table.cube, roller(draws)),
 
     parse: (play: MatchPlay, seat: number): BackgammonAction | null =>
@@ -48,7 +48,7 @@ export const backgammonEngine: Engine<BackgammonState, BackgammonAction> = {
     apply: (state: BackgammonState, action: BackgammonAction, draws: Draws) =>
         apply(state, action, roller(draws)),
 
-    legal: (state: BackgammonState, seat: number): BackgammonAction[] => legalMoves(state, seat),
+    legal: (state: BackgammonState, seat: number) => legalMoves(state, seat),
 
     turnOf: (state: BackgammonState): number | null =>
     {
@@ -60,7 +60,7 @@ export const backgammonEngine: Engine<BackgammonState, BackgammonAction> = {
         return state.phase === 'double' ? 1 - state.turn : state.turn;
     },
 
-    autoplay: (state: BackgammonState, seat: number): BackgammonAction | null => autoplay(state, seat),
+    autoplay: (state: BackgammonState, seat: number) => autoplay(state, seat),
 
     finish: (state: BackgammonState): Ending | null =>
     {
@@ -112,11 +112,11 @@ export const backgammonEngine: Engine<BackgammonState, BackgammonAction> = {
         moves: (events as BackgammonEvent[]).map((event) => ({ ...event }))
     }),
 
-    tally: (events: readonly unknown[]): Map<number, Tally> =>
+    tally: (events: readonly unknown[]) =>
     {
         const bySeat = new Map<number, Tally>();
 
-        const bump = (seat: number, name: string): void =>
+        const bump = (seat: number, name: string) =>
         {
             const tally = bySeat.get(seat) ?? {};
 
@@ -155,6 +155,6 @@ export const backgammonEngine: Engine<BackgammonState, BackgammonAction> = {
         return bySeat;
     },
 
-    points: (tally: Tally): number =>
+    points: (tally: Tally) =>
         Math.min(XP_CAP, XP_GAME * (tally.games ?? 0) + XP_GAMMON * (tally.gammons ?? 0))
 };

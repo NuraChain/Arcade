@@ -25,7 +25,7 @@ import { useLocale } from '../../stores/locale.store.ts';
 import { useBoard } from '../../stores/match.store.ts';
 import { useSeal } from '../../stores/seal.store.ts';
 import { useToasts } from '../../stores/toasts.store.ts';
-import { useVoice, type VoicePerson } from '../../stores/voice.store.ts';
+import { useVoice } from '../../stores/voice.store.ts';
 import type { MessageKey } from '../../locales/en.ts';
 import Avatar from '../ui/avatar.component.azeroth';
 import Badge from '../ui/badge.component.azeroth';
@@ -62,12 +62,12 @@ export default component TableChat(props: {
 
     derived voiced = voice.people();
 
-    const voiceOf = (who: string): VoicePerson | undefined => voiced.find((person) => person.who === who);
+    const voiceOf = (who: string) => voiced.find((person) => person.who === who);
 
-    const hearable = (who: string): string | null =>
+    const hearable = (who: string) =>
         voice.table() !== null && voiceOf(who)?.me === false && voiceOf(who)?.talk === true ? who : null;
 
-    const voiceLine = (who: string): string =>
+    const voiceLine = (who: string) =>
     {
         const person = voiceOf(who);
 
@@ -135,7 +135,7 @@ export default component TableChat(props: {
         };
     }
 
-    const watch = (element: HTMLElement | null): void =>
+    const watch = (element: HTMLElement | null) =>
     {
         unstick?.();
         unstick = null;
@@ -172,7 +172,7 @@ export default component TableChat(props: {
         pending: seal.loading()
     });
 
-    const post = (text: string, restore: boolean): void =>
+    const post = (text: string, restore: boolean) =>
     {
         void chat.send(props.conversationId, text).then(() => haptic('tick')).catch((error) =>
         {
@@ -184,7 +184,7 @@ export default component TableChat(props: {
         });
     };
 
-    const send = (): void =>
+    const send = () =>
     {
         const text = draft.trim();
         if (text === '' || stop !== null)
@@ -195,7 +195,7 @@ export default component TableChat(props: {
         post(text, true);
     };
 
-    const quick = (key: MessageKey): void =>
+    const quick = (key: MessageKey) =>
     {
         if (stop === null)
         {
@@ -203,7 +203,7 @@ export default component TableChat(props: {
         }
     };
 
-    const nameOf = (handle: string): string =>
+    const nameOf = (handle: string) =>
     {
         if (handle === lobby.me())
         {
@@ -215,25 +215,25 @@ export default component TableChat(props: {
         return person === null ? handle : locale.text(person.displayName);
     };
 
-    const warn = (error: unknown): void =>
+    const warn = (error: unknown) =>
     {
         toasts.show({ kind: 'error', text: sealSentenceOf(error, locale.t), dedupe: 'table-chat-act' });
     };
 
-    const quoteOf = (quoted: string): Message | undefined => all.find((message) => message.id === quoted);
+    const quoteOf = (quoted: string) => all.find((message) => message.id === quoted);
 
-    const reply = (message: Message): void =>
+    const reply = (message: Message) =>
     {
         chat.setReplyTo(props.conversationId, message);
         requestAnimationFrame(() => list?.closest('section')?.querySelector<HTMLTextAreaElement>('textarea')?.focus());
     };
 
-    const react = (message: Message, emoji: string): void =>
+    const react = (message: Message, emoji: string) =>
     {
         void chat.react(message, emoji).then(() => haptic('tick')).catch(warn);
     };
 
-    const jump = (quoted: string): void =>
+    const jump = (quoted: string) =>
     {
         const target = list?.querySelector(`[data-message="${ quoted }"]`);
 
@@ -251,7 +251,7 @@ export default component TableChat(props: {
         );
     };
 
-    const remove = async (message: Message): Promise<void> =>
+    const remove = async (message: Message) =>
     {
         const yes = await overlay.open(
             ConfirmSheet,
@@ -265,7 +265,7 @@ export default component TableChat(props: {
         }
     };
 
-    const actions = (message: Message, pick?: boolean): void =>
+    const actions = (message: Message, pick?: boolean) =>
     {
         void import('../chat/message-actions.component.azeroth').then((module) => overlay.open(
             module.default,

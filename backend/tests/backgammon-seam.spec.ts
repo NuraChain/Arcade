@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
 import type { Draws } from '../src/domains/match/engine.ts';
-import type { BackgammonState } from '../src/domains/match/backgammon/state.ts';
 import { backgammonEngine } from '../src/domains/match/engines/backgammon.ts';
 import { backgammonBoard, backgammonLog, backgammonPlay, matchBoard, matchLog, matchPlay } from '../src/schemas.ts';
 
@@ -9,7 +8,7 @@ function seeded(seed: number): { draws: Draws; next: () => number }
 {
     let value = seed;
 
-    const next = (): number =>
+    const next = () =>
     {
         value |= 0;
         value = (value + 0x6d2b79f5) | 0;
@@ -22,7 +21,7 @@ function seeded(seed: number): { draws: Draws; next: () => number }
     return { draws: { die: (sides: number) => 1 + Math.floor(next() * sides) }, next };
 }
 
-const opened = (seed: number, target: number, cube: boolean): BackgammonState =>
+const opened = (seed: number, target: number, cube: boolean) =>
     backgammonEngine.create([0, 1], seeded(seed).draws, { target, cube, blinds: 'low' });
 
 describe('whose turn the board says it is', () =>

@@ -42,7 +42,7 @@ export function manualClock(start = 0): ManualClock
     let seq = 0;
     let queue: Due[] = [];
 
-    const schedule = (ms: number, fn: () => void): Due =>
+    const schedule = (ms: number, fn: () => void) =>
     {
         seq += 1;
         const entry: Due = { at: current + Math.max(0, ms), seq, fn, cancelled: false };
@@ -50,7 +50,7 @@ export function manualClock(start = 0): ManualClock
         return entry;
     };
 
-    const nextDue = (limit: number): Due | undefined =>
+    const nextDue = (limit: number) =>
     {
         let best: Due | undefined;
         for (const entry of queue)
@@ -83,7 +83,7 @@ export function manualClock(start = 0): ManualClock
         {
             let stopped = false;
             let entry: Due | null = null;
-            const tick = (): void =>
+            const tick = () =>
             {
                 if (stopped)
                 {

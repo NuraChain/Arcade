@@ -74,7 +74,7 @@ export const useSettings = createStore((): SettingsApi =>
 {
     const [settings, setSettings] = createSignal<Settings>(initial());
 
-    const same = (a: Settings, b: Settings): boolean =>
+    const same = (a: Settings, b: Settings) =>
         (Object.keys(a) as (keyof Settings)[]).every((key) => a[key] === b[key]);
 
     return {

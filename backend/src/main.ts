@@ -239,7 +239,7 @@ expiries.unref();
 
 const TIDY_MS = 24 * 60 * 60 * 1000;
 
-const tidyNow = (): void =>
+const tidyNow = () =>
 {
     void ports.jobs.tidy()
         .then((gone) => log.info('housekeeping', gone))
@@ -257,7 +257,7 @@ const TURN_SWEEP_BUDGET_MS = 4_000;
 
 let turns: NodeJS.Timeout | null = null;
 
-const sweepTurns = (): void =>
+const sweepTurns = () =>
 {
     void ports.jobs.sweepTurns(TURN_SWEEP_BUDGET_MS)
         .then(({ played, stuck }) =>

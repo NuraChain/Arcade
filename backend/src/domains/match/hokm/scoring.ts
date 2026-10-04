@@ -19,7 +19,7 @@ import { deckFor } from './cards.ts';
  * Derived rather than tabulated: the deck is sized so that it divides, so the hand length IS the
  * division. 52/4 is 13, 51/3 is 17, 50/2 is 25 - and a fourth player count would need nothing here.
  */
-export function trickCount(seats: number): number
+export function trickCount(seats: number)
 {
     return deckFor(seats).length / seats;
 }
@@ -32,7 +32,7 @@ export function trickCount(seats: number): number
  * rule reads thirteen. Writing it as the constant 7 would have made the two-handed game end at the
  * seventh of twenty-five tricks, with eighteen still to play.
  */
-export function winningTricks(seats: number): number
+export function winningTricks(seats: number)
 {
     return Math.floor(trickCount(seats) / 2) + 1;
 }
@@ -51,13 +51,13 @@ export const TRIPLE_SWEEP = 7;
  * no teams and a side IS a seat, which is why every scoring function below takes SIDES rather than
  * seats and the caller decides what a side is.
  */
-export function teamOf(seat: number): number
+export function teamOf(seat: number)
 {
     return seat % 2;
 }
 
 /** The dealer is the player to the Hâkem's left, which in an anticlockwise game is the seat before. */
-export function dealerOf(hakem: number, seats: number): number
+export function dealerOf(hakem: number, seats: number)
 {
     return (hakem + seats - 1) % seats;
 }
@@ -71,7 +71,7 @@ export function dealerOf(hakem: number, seats: number): number
  * free - `dealerOf(hakem + 1)` IS the old Hâkem - so there is nothing to store and nothing that can
  * disagree with itself.
  */
-export function nextHakem(hakem: number, seats: number, hakemHeld: boolean): number
+export function nextHakem(hakem: number, seats: number, hakemHeld: boolean)
 {
     return hakemHeld ? hakem : (hakem + 1) % seats;
 }
@@ -165,7 +165,7 @@ export function tripleResult(tricks: readonly number[], hakem: number, played: n
 }
 
 /** The first side to the target - seven by default - takes the match. */
-export function matchWinner(points: readonly number[], target: number): number | null
+export function matchWinner(points: readonly number[], target: number)
 {
     const reached = points.findIndex((total) => total >= target);
 

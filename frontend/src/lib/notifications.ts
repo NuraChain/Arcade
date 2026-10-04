@@ -21,7 +21,7 @@ const SAYS: Record<NotificationKind, MessageKey> = {
     'message': 'notify.message'
 };
 
-export function sayOf(item: Notification, who: string, locale: Pick<LocaleApi, 't' | 'plural'>): string
+export function sayOf(item: Notification, who: string, locale: Pick<LocaleApi, 't' | 'plural'>)
 {
     return item.kind === 'message'
         ? locale.plural('notify.message', item.count, { who })

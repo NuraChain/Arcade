@@ -4,7 +4,7 @@ const QUALITY = 0.85;
 const encode = (canvas: HTMLCanvasElement, type: string): Promise<Blob | null> =>
     new Promise((resolve) => canvas.toBlob(resolve, type, QUALITY));
 
-const base64Of = (bytes: Uint8Array): string =>
+const base64Of = (bytes: Uint8Array) =>
 {
     let binary = '';
     for (const byte of bytes)

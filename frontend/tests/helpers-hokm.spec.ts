@@ -8,7 +8,7 @@ import type { HokmBoard } from '../src/data/match.ts';
 
 const SUIT_OF: Record<string, Suit> = { C: 'clubs', D: 'diamonds', H: 'hearts', S: 'spades' };
 
-const card = (name: string): number =>
+const card = (name: string) =>
 {
     const rank = name.slice(0, -1) as Rank;
 

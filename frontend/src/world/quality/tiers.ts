@@ -44,7 +44,7 @@ export function pickTier(profile: DeviceProfile): Choice
     return { tier: profile.cores >= 8 ? 'high' : 'medium', set: 'desktop' };
 }
 
-export function pixelRatioFor(tier: QualityTier, devicePixelRatio: number, width: number, height: number): number
+export function pixelRatioFor(tier: QualityTier, devicePixelRatio: number, width: number, height: number)
 {
     const area = Math.max(width * height, 1);
     return Math.min(devicePixelRatio, 2, Math.sqrt(PIXEL_BUDGET[tier] / area));

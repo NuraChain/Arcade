@@ -31,12 +31,12 @@ export default component TableMenu(props: OverlayProps & {
 
     derived current = settings.settings();
 
-    const copyCode = (): void =>
+    const copyCode = () =>
     {
         void copyText(props.code, 'play.dock.codeCopied', { dedupe: 'table-code' });
     };
 
-    derived entries = ((): Entry[] =>
+    derived entries = (() =>
     {
         const list: Entry[] = [
             {

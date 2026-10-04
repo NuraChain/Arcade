@@ -37,7 +37,10 @@
     "@azerothjs/cli": "2.1.0",
     "@types/node": "^24.10.1",
     "@types/pg": "^8.15.6",
+    "eslint": "^10.7.0",
+    "jiti": "^2.7.0",
     "typescript": "^6.0.3",
+    "typescript-eslint": "^8.64.0",
     "vitest": "^4.1.9"
   }
 }

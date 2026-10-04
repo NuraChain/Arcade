@@ -30,13 +30,13 @@ export function recallSearchTerms(): string[]
     return recallJson(RECENTS_KEY, isTerms) ?? [];
 }
 
-export function rememberSearchTerms(terms: string[]): void
+export function rememberSearchTerms(terms: string[])
 {
     rememberJson(RECENTS_KEY, terms);
 }
 
 /** Drops them. Called from the same place the keys and the archive are surrendered. */
-export function forgetSearchTerms(): void
+export function forgetSearchTerms()
 {
     remember(RECENTS_KEY, JSON.stringify([]));
 }

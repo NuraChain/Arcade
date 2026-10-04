@@ -43,7 +43,7 @@ interface Walkout
     walked: boolean;
 }
 
-const walkoutsOf = (tx: EntityManager, matchId: string): Promise<Walkout[]> =>
+const walkoutsOf = (tx: EntityManager, matchId: string) =>
     tx.getRepository(MatchAction)
         .createQueryBuilder('a')
         .select('a.seat', 'seat')
@@ -84,7 +84,7 @@ export interface Recorder
 export function createRecorder(achieve: AchieveService): Recorder
 {
     return {
-        async finish(tx, matchId, engine, state): Promise<void>
+        async finish(tx, matchId, engine, state)
         {
             const game = engine.id;
             const players = await tx.getRepository(MatchPlayer).find({ where: { matchId }, order: { userId: 'ASC' } });
@@ -105,12 +105,12 @@ export function createRecorder(achieve: AchieveService): Recorder
                 where: players.map((player) => ({ userId: player.userId, game }))
             });
 
-            const ratingOf = (userId: string): number =>
+            const ratingOf = (userId: string) =>
                 existing.find((row) => row.userId === userId)?.rating ?? 1200;
 
             const outcome = engine.finish(state)?.outcome ?? 'abandoned';
             const places = engine.standings(state);
-            const placeOf = (seat: number): number => places.find((one) => one.seat === seat)?.place ?? players.length;
+            const placeOf = (seat: number) => places.find((one) => one.seat === seat)?.place ?? players.length;
 
             const field: Standing[] = players.map((player) => ({
                 seat: player.seat,

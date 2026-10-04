@@ -42,7 +42,7 @@ export default component ReactionRow(props: {
         return all;
     }, []);
 
-    const nameOf = (handle: string): string =>
+    const nameOf = (handle: string) =>
     {
         if (handle === props.me)
         {

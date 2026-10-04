@@ -13,7 +13,7 @@ import type { IconName } from '../icons/registry.ts';
 export const CRESTS: IconName[] = ['crest-crown', 'crest-cup', 'crest-castle', 'crest-moon', 'crest-sprout'];
 
 /** The crest this value names, or the first one - a group always has a face. */
-export function crestOf(value: string): IconName
+export function crestOf(value: string)
 {
     return (CRESTS as string[]).includes(value) ? value as IconName : CRESTS[0];
 }

@@ -216,7 +216,7 @@ describe('pull resistance', () =>
     });
 });
 
-function touch(target: HTMLElement, type: string, x: number, y: number): void
+function touch(target: HTMLElement, type: string, x: number, y: number)
 {
     const point = { identifier: 1, clientX: x, clientY: y, target } as unknown as Touch;
     const event = new Event(type, { bubbles: true, cancelable: true });
@@ -270,7 +270,7 @@ describe('page gestures', () =>
         document.body.append(page);
         const added = vi.spyOn(page, 'addEventListener');
         const release = attachGestures(page, { rtl: () => false, refresh: vi.fn(), back: vi.fn() });
-        const blocking = (): number => added.mock.calls.filter(([type, , options]) => type === 'touchmove' && (options as AddEventListenerOptions)?.passive === false).length;
+        const blocking = () => added.mock.calls.filter(([type, , options]) => type === 'touchmove' && (options as AddEventListenerOptions)?.passive === false).length;
 
         touch(page, 'touchstart', 200, 300);
         expect(blocking(), 'a mid-list scroll waited on a listener that can never act').toBe(0);
@@ -315,7 +315,7 @@ describe('page gestures', () =>
     });
 });
 
-function pointer(target: HTMLElement, type: string, x: number, y: number, kind = 'touch'): void
+function pointer(target: HTMLElement, type: string, x: number, y: number, kind = 'touch')
 {
     const event = new Event(type, { bubbles: true, cancelable: true });
     Object.defineProperty(event, 'clientX', { value: x });

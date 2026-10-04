@@ -80,7 +80,7 @@ function watchErrors(log: Logger): ErrorObserver
     };
 }
 
-export function buildApp(deps: AppDeps): App
+export function buildApp(deps: AppDeps)
 {
     const app = new App({ observe: deps.observe, onError: watchErrors(deps.log) });
 

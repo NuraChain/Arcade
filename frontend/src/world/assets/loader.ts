@@ -30,7 +30,7 @@ function texturesOf(material: Material): Texture[]
     return Object.values(material).filter((value): value is Texture => value instanceof Texture);
 }
 
-function decal(material: Material): MeshBasicMaterial
+function decal(material: Material)
 {
     const source = material as Material & { map?: Texture | null };
     return new MeshBasicMaterial({

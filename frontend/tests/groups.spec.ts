@@ -17,7 +17,7 @@ import '../src/locales/app-catalogue.ts';
 
 let clock: ReturnType<typeof manualClock>;
 
-const settle = async (): Promise<void> =>
+const settle = async () =>
 {
     for (let turn = 0; turn < 12; turn += 1)
     {

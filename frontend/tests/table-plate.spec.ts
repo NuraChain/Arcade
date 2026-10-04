@@ -56,7 +56,7 @@ describe('the seat plate every table draws', () =>
     it('writes out only the states worth reading, and says the last miss in the danger tone', () =>
     {
         const locale = useLocale();
-        const player = (timeouts: number, result?: MatchPlayer['result']): MatchPlayer => ({ seat: 1, who: 'sara.k', timeouts, ...(result === undefined ? {} : { result }) }) as MatchPlayer;
+        const player = (timeouts: number, result?: MatchPlayer['result']) => ({ seat: 1, who: 'sara.k', timeouts, ...(result === undefined ? {} : { result }) }) as MatchPlayer;
 
         expect(plateTag(locale, player(0), false)).toBeNull();
         expect(plateTag(locale, player(1), false)?.tone).toBe('gold');

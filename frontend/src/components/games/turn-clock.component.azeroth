@@ -40,17 +40,17 @@ export default component TurnClock(props: { remainingMs?: number; over: boolean;
 
         let stop: (() => void) | null = null;
 
-        const tick = (): void =>
+        const tick = () =>
         {
             now = runtime().clock.now();
         };
 
-        const run = (): void =>
+        const run = () =>
         {
             stop ??= runtime().clock.every(1000, tick);
         };
 
-        const rest = (): void =>
+        const rest = () =>
         {
             stop?.();
             stop = null;
@@ -61,7 +61,7 @@ export default component TurnClock(props: { remainingMs?: number; over: boolean;
             run();
         }
 
-        const watch = (): void =>
+        const watch = () =>
         {
             if (document.visibilityState === 'visible')
             {

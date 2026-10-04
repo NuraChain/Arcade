@@ -37,7 +37,7 @@ export const normalizeHandle = normalizeName;
  * names. Folding on the second would quietly turn "sara.k" into "sarak" and create it,
  * instead of telling the person the name is taken.
  */
-function wellShaped(handle: string): boolean
+function wellShaped(handle: string)
 {
     const normalized = normalizeHandle(handle);
     return normalized.length >= 2 && normalized.length <= 32 && SHAPE.test(normalized);
@@ -76,7 +76,7 @@ export function checkHandle(handle: string): HandleRefusal | null
  * result is still only a request: `checkHandle` decides whether it may be used, and the unique
  * index decides whether it is free.
  */
-export function handleFromName(name: string): string
+export function handleFromName(name: string)
 {
     const cleaned = normalizeHandle(name);
     return wellShaped(cleaned) ? cleaned : cleaned.replace(/[^\p{L}\p{N}]+/gu, '');
@@ -88,7 +88,7 @@ export function handleFromName(name: string): string
  * Collisions are possible - 16^6 is not many - which is why this only ever SUGGESTS. The claim
  * itself goes through `claimHandle`, which lets the database arbitrate.
  */
-export function handleFromAddress(address: string): string
+export function handleFromAddress(address: string)
 {
     return address.replace(/^0x/i, '').slice(0, 6).toLowerCase();
 }
@@ -99,7 +99,7 @@ export function handleFromAddress(address: string): string
  * No separator before the tail: a handle is typed and read aloud, and `sara01` is one word where
  * `sara-01` is two. 26 leaves room for the widest tail inside a 32-character column.
  */
-export function candidatesFor(wanted: string, attempt: number, random: () => number): string
+export function candidatesFor(wanted: string, attempt: number, random: () => number)
 {
     return candidateFor(wanted, attempt, random, { stem: 26, join: '' });
 }

@@ -40,7 +40,7 @@ const config = {
     servePages: false
 } as unknown as ServerConfig;
 
-function fakeDb(answers: { initialized: boolean; query?: () => Promise<unknown> }): DataSource
+function fakeDb(answers: { initialized: boolean; query?: () => Promise<unknown> })
 {
     return {
         isInitialized: answers.initialized,
@@ -48,7 +48,7 @@ function fakeDb(answers: { initialized: boolean; query?: () => Promise<unknown> 
     } as unknown as DataSource;
 }
 
-const call = (app: ReturnType<typeof buildApp>, path: string): Promise<Response> =>
+const call = (app: ReturnType<typeof buildApp>, path: string) =>
     app.handle(new Request(`http://local${ path }`));
 
 describe('health', () =>

@@ -43,9 +43,9 @@ const PROBE = 'nura_schema_probe';
 let base: DataSource;
 let built: DataSource;
 
-const probeUrl = (): string => new URL(url ?? '').toString().replace(/\/[^/]*$/, `/${ PROBE }`);
+const probeUrl = () => new URL(url ?? '').toString().replace(/\/[^/]*$/, `/${ PROBE }`);
 
-const pick = async (db: DataSource, sql: string): Promise<string[]> =>
+const pick = async (db: DataSource, sql: string) =>
     rowsOf<{ k: string }>(await db.query(sql)).map((row) => row.k).sort();
 
 describe.skipIf(!active)('the schema the entities build', () =>

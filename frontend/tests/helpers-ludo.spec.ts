@@ -25,7 +25,7 @@ const position = (pieces: number[][], die: number | null, turn = 0, sixes = die 
     };
 };
 
-const boardOf = (state: LudoState, seat: number | null = state.players[state.turn].seat): LudoBoard =>
+const boardOf = (state: LudoState, seat: number | null = state.players[state.turn].seat) =>
     ludoEngine.view(state, seat) as LudoBoard;
 
 describe('what a ludo move does', () =>
@@ -65,7 +65,7 @@ describe('what a ludo move does', () =>
     it('agrees with the engine over whole games at two, three and four', () =>
     {
         let seed = 11;
-        const next = (): number =>
+        const next = () =>
         {
             seed = (seed * 48271) % 2147483647;
             return seed;

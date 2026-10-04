@@ -58,7 +58,7 @@ export function columnOf(point: number): Column
     return { x: BAR_LEFT + BAR_WIDTH + (point - 19) * POINT_WIDTH, row: 'top' };
 }
 
-export function stackAt(row: Row, index: number, base: number = row === 'top' ? TOP : BOTTOM): number
+export function stackAt(row: Row, index: number, base: number = row === 'top' ? TOP : BOTTOM)
 {
     const offset = RADIUS + index * RADIUS * 2;
 

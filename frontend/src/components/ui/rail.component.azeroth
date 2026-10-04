@@ -18,7 +18,7 @@ export default component Rail(props: { children?: Child; label?: string; bleed?:
 
     let scroller: HTMLElement | null = null;
 
-    const measure = (): void =>
+    const measure = () =>
     {
         if (scroller === null)
         {
@@ -30,7 +30,7 @@ export default component Rail(props: { children?: Child; label?: string; bleed?:
         atEnd = extent <= 1 || travelled >= extent - 1;
     };
 
-    const step = (direction: 1 | -1): void =>
+    const step = (direction: 1 | -1) =>
     {
         if (scroller === null)
         {

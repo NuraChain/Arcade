@@ -24,7 +24,7 @@ class FakeWire implements Wire
     /** A peer that has stopped reading: `drain` never settles, so the outbox is what grows. */
     public stalled = false;
 
-    send(data: string): boolean
+    send(data: string)
     {
         if (this.stalled)
         {
@@ -34,7 +34,7 @@ class FakeWire implements Wire
         return !this.backpressure;
     }
 
-    async drain(): Promise<void>
+    async drain()
     {
         if (this.stalled)
         {
@@ -43,12 +43,12 @@ class FakeWire implements Wire
         this.backpressure = false;
     }
 
-    close(code = 1000, reason = ''): void
+    close(code = 1000, reason = '')
     {
         this.closed ??= { code, reason };
     }
 
-    framesOf(kind: ServerFrame['t']): ServerFrame[]
+    framesOf(kind: ServerFrame['t'])
     {
         return this.sent.filter((frame) => frame.t === kind);
     }
@@ -78,7 +78,7 @@ interface World
 
 let world: World;
 
-function build(): World
+function build()
 {
     const state: World = {
         hub: null as unknown as Hub,
@@ -144,7 +144,7 @@ async function connect(userId: string, sessionId = `s-${ userId }`): Promise<{ c
     return { connection, wire, bound };
 }
 
-const settle = async (): Promise<void> =>
+const settle = async () =>
 {
     await world.hub.flush();
     await Promise.resolve();
@@ -838,7 +838,7 @@ describe('voice at a table', () =>
 {
     const TABLE = 't-1';
 
-    const seat = (...handles: string[]): void =>
+    const seat = (...handles: string[]) =>
     {
         for (const handle of handles)
         {
@@ -846,13 +846,13 @@ describe('voice at a table', () =>
         }
     };
 
-    const rest = async (): Promise<void> =>
+    const rest = async () =>
     {
         await new Promise((resolve) => setTimeout(resolve, 0));
         world.hub.flush();
     };
 
-    const lastVoice = (wire: FakeWire): Extract<ServerFrame, { t: 'voice' }> | undefined =>
+    const lastVoice = (wire: FakeWire) =>
         wire.framesOf('voice').at(-1) as Extract<ServerFrame, { t: 'voice' }> | undefined;
 
     it('tells everybody in the room who else is in it, and who is muted', async () =>

@@ -42,9 +42,9 @@ export function createDrag(options: DragOptions): Drag
     let locked: DragAxis | null = null;
     let tracking = false;
 
-    const along = (x: number, y: number): number => (wanted === 'y' ? y - originY : x - originX);
+    const along = (x: number, y: number) => (wanted === 'y' ? y - originY : x - originX);
 
-    const clamp = (value: number): number => (signed ? value : Math.max(0, value));
+    const clamp = (value: number) => (signed ? value : Math.max(0, value));
 
     return {
         start(x, y, at)

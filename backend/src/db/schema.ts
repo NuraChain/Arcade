@@ -56,7 +56,7 @@ export const HAND_BUILT_INDEX_NAMES: readonly string[] = INDEXES_TYPEORM_CANNOT_
     .filter((name) => name !== '')
     .sort();
 
-export async function createExtensions(db: DataSource): Promise<void>
+export async function createExtensions(db: DataSource)
 {
     for (const extension of REQUIRED_EXTENSIONS)
     {
@@ -64,7 +64,7 @@ export async function createExtensions(db: DataSource): Promise<void>
     }
 }
 
-export async function createUnexpressibleIndexes(db: DataSource): Promise<void>
+export async function createUnexpressibleIndexes(db: DataSource)
 {
     for (const statement of INDEXES_TYPEORM_CANNOT_EXPRESS)
     {
@@ -96,7 +96,7 @@ export async function createUnexpressibleIndexes(db: DataSource): Promise<void>
  * `not valid` is deliberately NOT used. A constraint that is not validated is one that lets the
  * rows it was added to stop obeying it, which is the opposite of why any of these exist.
  */
-export async function rewriteChecks(db: DataSource): Promise<void>
+export async function rewriteChecks(db: DataSource)
 {
     for (const entity of db.entityMetadatas)
     {
@@ -113,7 +113,7 @@ export async function rewriteChecks(db: DataSource): Promise<void>
     }
 }
 
-export async function syncSchema(db: DataSource): Promise<void>
+export async function syncSchema(db: DataSource)
 {
     await createExtensions(db);
     await db.synchronize();

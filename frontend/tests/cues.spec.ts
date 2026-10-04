@@ -17,7 +17,7 @@ import '../src/locales/app-catalogue.ts';
 
 let clock: ManualClock;
 
-const settle = async (): Promise<void> =>
+const settle = async () =>
 {
     for (let turn = 0; turn < 8; turn += 1)
     {
@@ -25,7 +25,7 @@ const settle = async (): Promise<void> =>
     }
 };
 
-const establish = (): void =>
+const establish = () =>
 {
     useSession().reset();
     useSession().establish({
@@ -39,7 +39,7 @@ const establish = (): void =>
     });
 };
 
-const laterMessageIn = (id: string): void =>
+const laterMessageIn = (id: string) =>
 {
     const row = server.conversations.find((one) => one.id === id)!;
     const after = Date.parse(row.last!.clientAt ?? row.last!.at) + 60_000;

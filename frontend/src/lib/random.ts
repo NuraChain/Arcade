@@ -7,7 +7,7 @@ export interface Random
     chance(probability: number): boolean;
 }
 
-export function hashSeed(...parts: Array<string | number>): number
+export function hashSeed(...parts: Array<string | number>)
 {
     let hash = 0x811C9DC5;
     /**
@@ -31,7 +31,7 @@ export function createRandom(seed: number): Random
 {
     let state = seed >>> 0;
 
-    const next = (): number =>
+    const next = () =>
     {
         state = (state + 0x6D2B79F5) >>> 0;
         let t = state;

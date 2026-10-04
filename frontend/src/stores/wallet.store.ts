@@ -75,7 +75,7 @@ export const useWallet = createStore((): WalletApi =>
     let late: (() => void) | null = null;
     let discovery: (() => void) | null = null;
 
-    const provider = (): Eip1193Provider | null =>
+    const provider = () =>
     {
         if (injected === null)
         {
@@ -85,7 +85,7 @@ export const useWallet = createStore((): WalletApi =>
         return injected;
     };
 
-    const onAccounts = (...args: unknown[]): void =>
+    const onAccounts = (...args: unknown[]) =>
     {
         const accounts = Array.isArray(args[0]) ? (args[0] as string[]) : [];
         if (accounts.length === 0)
@@ -97,12 +97,12 @@ export const useWallet = createStore((): WalletApi =>
         setAddress(accounts[0]);
     };
 
-    const onChain = (...args: unknown[]): void =>
+    const onChain = (...args: unknown[]) =>
     {
         setChainId(typeof args[0] === 'string' ? args[0] : '');
     };
 
-    const why = (step: string, reason: unknown): void =>
+    const why = (step: string, reason: unknown) =>
     {
         console.warn('[wallet]', step, reason);
     };
@@ -125,7 +125,7 @@ export const useWallet = createStore((): WalletApi =>
         }
     };
 
-    const release = (): void =>
+    const release = () =>
     {
         listening?.();
         discovery?.();
@@ -379,7 +379,7 @@ export const useWallet = createStore((): WalletApi =>
                 setPresent(injected !== null);
             });
 
-            const undiscover = (): void =>
+            const undiscover = () =>
             {
                 discovery?.();
                 discovery = null;
@@ -390,14 +390,14 @@ export const useWallet = createStore((): WalletApi =>
             {
                 if (typeof window !== 'undefined' && late === null)
                 {
-                    late = (): void =>
+                    late = () =>
                     {
                         injected = null;
                         provider();
                     };
                     window.addEventListener('ethereum#initialized', late, { once: true });
                 }
-                return (): void =>
+                return () =>
                 {
                     if (late !== null && typeof window !== 'undefined')
                     {
@@ -410,7 +410,7 @@ export const useWallet = createStore((): WalletApi =>
             if (listening !== null)
             {
                 const already = listening;
-                return (): void =>
+                return () =>
                 {
                     already();
                     undiscover();
@@ -426,14 +426,14 @@ export const useWallet = createStore((): WalletApi =>
                 }
             }).catch(() => undefined);
             void readChainId(wallet).then((id) => setChainId(id)).catch(() => undefined);
-            listening = (): void =>
+            listening = () =>
             {
                 wallet.removeListener?.('accountsChanged', onAccounts);
                 wallet.removeListener?.('chainChanged', onChain);
                 listening = null;
             };
             const stopListening = listening;
-            return (): void =>
+            return () =>
             {
                 stopListening();
                 undiscover();

@@ -10,7 +10,7 @@ export default component CoachLine(props: { tip: Tip | null; class?: string })
 
     state open = false;
 
-    const toggle = (): void =>
+    const toggle = () =>
     {
         open = !open;
     };

@@ -83,7 +83,7 @@ export interface MessageAad
  * re-attributing one; binding `conversationId` stops it moving a line into a thread it was never
  * said in. None of these is hypothetical - each one is something a database row makes trivial.
  */
-export function messageAad(aad: MessageAad): string
+export function messageAad(aad: MessageAad)
 {
     return [
         PROTOCOL,
@@ -139,7 +139,7 @@ export interface EpochCommitment
  * The ids are sorted here rather than trusted in the order they arrive, so two honest clients
  * holding the same set always produce the same string.
  */
-export function epochCommitment(commitment: EpochCommitment): string
+export function epochCommitment(commitment: EpochCommitment)
 {
     return [
         PROTOCOL,
@@ -161,7 +161,7 @@ export function epochCommitment(commitment: EpochCommitment): string
  * ciphertext" and "wrong AAD" all at once. Bound to the conversation and the epoch, so a
  * confirmation copied from elsewhere does not verify either.
  */
-export function epochConfirmationText(conversationId: string, epoch: number): string
+export function epochConfirmationText(conversationId: string, epoch: number)
 {
     return [PROTOCOL, 'kcv', conversationId, String(epoch)].join(SEP);
 }
@@ -174,7 +174,7 @@ export function epochConfirmationText(conversationId: string, epoch: number): st
  * Reusing one string in two roles is the classic way a protocol with correct primitives is broken
  * anyway, and one joiner shared with the AAD is what keeps the two from drifting apart.
  */
-export function label(...parts: string[]): string
+export function label(...parts: string[])
 {
     return parts.join(SEP);
 }
@@ -205,7 +205,7 @@ export interface FrankContext
  * What it deliberately does not give is bulk access: a disclosure covers exactly one message, the
  * one the reporter picked, and proves nothing about any other.
  */
-export function frankContext(context: FrankContext): string
+export function frankContext(context: FrankContext)
 {
     return [
         PROTOCOL,
@@ -220,7 +220,7 @@ export function frankContext(context: FrankContext): string
 }
 
 /** The sorted, comma-joined recipient list, exactly as it is stored and signed. */
-export function recipientList(deviceIds: readonly string[]): string
+export function recipientList(deviceIds: readonly string[])
 {
     return [...deviceIds].sort().join(',');
 }

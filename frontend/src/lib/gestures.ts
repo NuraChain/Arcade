@@ -5,7 +5,7 @@ export const PULL_MAX = 116;
 export const BACK_EDGE = 30;
 export const BACK_SHARE = 0.32;
 
-export function resist(raw: number): number
+export function resist(raw: number)
 {
     const pull = Math.max(0, raw);
     return pull <= 40 ? pull : Math.min(PULL_MAX, 40 + (pull - 40) * 0.42);
@@ -32,7 +32,7 @@ export function attachGestures(element: HTMLElement, hooks: GestureHooks): () =>
     let lastMain = 0;
     let speed = 0;
 
-    const reset = (): void =>
+    const reset = () =>
     {
         if (mode === 'pull')
         {
@@ -46,7 +46,7 @@ export function attachGestures(element: HTMLElement, hooks: GestureHooks): () =>
         pointer = -1;
     };
 
-    const onStart = (event: TouchEvent): void =>
+    const onStart = (event: TouchEvent) =>
     {
         if (event.touches.length !== 1)
         {
@@ -74,7 +74,7 @@ export function attachGestures(element: HTMLElement, hooks: GestureHooks): () =>
 
     let watching = false;
 
-    const unwatch = (): void =>
+    const unwatch = () =>
     {
         if (watching)
         {
@@ -95,7 +95,7 @@ export function attachGestures(element: HTMLElement, hooks: GestureHooks): () =>
         return null;
     };
 
-    const onMove = (event: TouchEvent): void =>
+    const onMove = (event: TouchEvent) =>
     {
         if (mode === 'reject' || pointer === -1)
         {
@@ -154,7 +154,7 @@ export function attachGestures(element: HTMLElement, hooks: GestureHooks): () =>
         }
     };
 
-    const onEnd = (): void =>
+    const onEnd = () =>
     {
         unwatch();
         const settled = mode;
@@ -183,7 +183,7 @@ export function attachGestures(element: HTMLElement, hooks: GestureHooks): () =>
         }
     };
 
-    const cancel = (): void =>
+    const cancel = () =>
     {
         unwatch();
         reset();

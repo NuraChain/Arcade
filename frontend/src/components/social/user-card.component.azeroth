@@ -17,7 +17,7 @@ export default component UserCard(props: { person: Person; onAdd: (id: string) =
 
     derived relation = social.relation(props.person.id);
 
-    derived reason = ((): string =>
+    derived reason = (() =>
     {
         const why = social.reasonFor(props.person.id);
         if (why.kind === 'mutual')

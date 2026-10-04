@@ -2,7 +2,7 @@ import { AVATAR_DOT, AVATAR_SIZE, type AvatarSize } from './variants.ts';
 
 export type Presence = 'online' | 'away' | 'offline' | null;
 
-export function initialsOf(name: string): string
+export function initialsOf(name: string)
 {
     const trimmed = name.trim();
     if (/^0x/i.test(trimmed))

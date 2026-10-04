@@ -36,7 +36,7 @@ let alice: TestDevice;
 let bob: TestDevice;
 let mallory: TestDevice;
 
-const devices = async (): Promise<void> =>
+const devices = async () =>
 {
     alice ??= await makeDevice(TEST_ACCOUNTS.alex);
     bob ??= await makeDevice(TEST_ACCOUNTS.other);
@@ -50,7 +50,7 @@ const devices = async (): Promise<void> =>
  * that seal contains - a stale one is exactly the malformed message `openText` is meant to refuse,
  * and every test below would fail for that reason rather than its own.
  */
-const commitTo = async (text: string): Promise<void> =>
+const commitTo = async (text: string) =>
 {
     commitment = await commitmentOf(FRANK, text);
 };

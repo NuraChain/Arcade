@@ -13,14 +13,14 @@ const JUMBO_MAX = 3;
 
 const graphemes = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
 
-export function jumboOf(text: string): boolean
+export function jumboOf(text: string)
 {
     const parts = [...graphemes.segment(text.replace(/\s+/g, ''))].map((part) => part.segment);
 
     return parts.length > 0 && parts.length <= JUMBO_MAX && parts.every(isEmoji);
 }
 
-const element = <K extends keyof HTMLElementTagNameMap>(tag: K, className: string, children: readonly Node[] = []): HTMLElementTagNameMap[K] =>
+const element = <K extends keyof HTMLElementTagNameMap>(tag: K, className: string, children: readonly Node[] = []) =>
 {
     const node = document.createElement(tag);
 
@@ -34,7 +34,7 @@ const element = <K extends keyof HTMLElementTagNameMap>(tag: K, className: strin
     return node;
 };
 
-function reveal(node: HTMLElement): void
+function reveal(node: HTMLElement)
 {
     node.dataset.shown = 'true';
     node.removeAttribute('role');
@@ -162,7 +162,7 @@ function reserved(options: PaintOptions, block: boolean): HTMLElement
     return slot;
 }
 
-export function paintMarkdown(host: HTMLElement, text: string, options: PaintOptions): void
+export function paintMarkdown(host: HTMLElement, text: string, options: PaintOptions)
 {
     const nodes = jumboOf(text)
         ? [element('p', 'text-ui-4xl leading-tight', [document.createTextNode(text.trim())])]

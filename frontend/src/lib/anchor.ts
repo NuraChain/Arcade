@@ -67,7 +67,7 @@ function opposite(side: 'top' | 'bottom' | 'left' | 'right'): 'top' | 'bottom' |
     return side === 'left' ? 'right' : 'left';
 }
 
-function fits(side: 'top' | 'bottom' | 'left' | 'right', anchor: Box, floating: Size, viewport: Viewport, gap: number, padding: number): boolean
+function fits(side: 'top' | 'bottom' | 'left' | 'right', anchor: Box, floating: Size, viewport: Viewport, gap: number, padding: number)
 {
     if (side === 'top')
     {
@@ -84,7 +84,7 @@ function fits(side: 'top' | 'bottom' | 'left' | 'right', anchor: Box, floating: 
     return anchor.x + anchor.width + gap + floating.width <= viewport.width - padding;
 }
 
-function clamp(value: number, low: number, high: number): number
+function clamp(value: number, low: number, high: number)
 {
     return Math.min(Math.max(value, low), Math.min(high, Math.max(low, high)));
 }

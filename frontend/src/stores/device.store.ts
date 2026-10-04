@@ -17,7 +17,7 @@ export function postureFor(width: number): Posture
 
 export const SHORT_MAX = 540;
 
-export function bareFor(immersive: boolean, posture: Posture, height: number): boolean
+export function bareFor(immersive: boolean, posture: Posture, height: number)
 {
     return immersive && (posture === 'phone' || height <= SHORT_MAX);
 }
@@ -55,9 +55,9 @@ export interface DeviceApi
     stop(): void;
 }
 
-const hasWindow = (): boolean => typeof window !== 'undefined';
+const hasWindow = () => typeof window !== 'undefined';
 
-function media(query: string): boolean
+function media(query: string)
 {
     return hasWindow() && typeof window.matchMedia === 'function' ? window.matchMedia(query).matches : false;
 }
@@ -73,7 +73,7 @@ export const useDevice = createStore((): DeviceApi =>
     const [forced, setForced] = createSignal<Posture | null>(null);
     const [forcedCoarse, setForcedCoarse] = createSignal<boolean | null>(null);
 
-    const measure = (): void =>
+    const measure = () =>
     {
         if (!hasWindow())
         {
@@ -87,13 +87,13 @@ export const useDevice = createStore((): DeviceApi =>
 
     let watching: (() => void) | null = null;
 
-    const stop = (): void =>
+    const stop = () =>
     {
         watching?.();
         watching = null;
     };
 
-    const start = (): (() => void) =>
+    const start = () =>
     {
         if (watching !== null)
         {
@@ -104,8 +104,8 @@ export const useDevice = createStore((): DeviceApi =>
             return stop;
         }
 
-        const onCoarse = (event: MediaQueryListEvent): void => setCoarse(event.matches);
-        const onMotion = (event: MediaQueryListEvent): void => setReducedMotion(event.matches);
+        const onCoarse = (event: MediaQueryListEvent) => setCoarse(event.matches);
+        const onMotion = (event: MediaQueryListEvent) => setReducedMotion(event.matches);
         const pointer = typeof window.matchMedia === 'function' ? window.matchMedia('(pointer: coarse)') : null;
         const motion = typeof window.matchMedia === 'function' ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
         const viewport = window.visualViewport ?? null;
@@ -115,7 +115,7 @@ export const useDevice = createStore((): DeviceApi =>
         pointer?.addEventListener('change', onCoarse);
         motion?.addEventListener('change', onMotion);
 
-        watching = (): void =>
+        watching = () =>
         {
             window.removeEventListener('resize', measure);
             viewport?.removeEventListener('resize', measure);

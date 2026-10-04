@@ -12,7 +12,7 @@ const DAY = 24 * HOUR;
 
 describe('interpolation', () =>
 {
-    const plain = (value: number): string => String(value);
+    const plain = (value: number) => String(value);
 
     it('fills named placeholders and leaves unknown ones as written', () =>
     {

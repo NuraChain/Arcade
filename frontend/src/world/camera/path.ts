@@ -19,7 +19,7 @@ export interface Frame
     fov: number;
 }
 
-function at(shots: Shot[], index: number): Shot
+function at(shots: Shot[], index: number)
 {
     return shots[Math.min(Math.max(index, 0), shots.length - 1)];
 }
@@ -51,13 +51,13 @@ export function sampleShots(shots: Shot[], progress: number): Frame
     };
 }
 
-export function damping(rate: number, deltaMs: number): number
+export function damping(rate: number, deltaMs: number)
 {
     const frames = Math.min(deltaMs, 100) / (1000 / 60);
     return 1 - Math.pow(1 - rate, frames);
 }
 
-export function progressAt(scrollY: number, arrivals: readonly number[]): number
+export function progressAt(scrollY: number, arrivals: readonly number[])
 {
     const last = arrivals.length - 1;
     if (last <= 0 || scrollY <= arrivals[0])

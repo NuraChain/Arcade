@@ -82,7 +82,7 @@ export default component SignInPage()
         return locale.t(refusal === 'shape' ? 'signIn.handleShape' : 'signIn.handleShort');
     })();
 
-    const leave = (): void =>
+    const leave = () =>
     {
         navigate(safeNext(query().next), { replace: true });
     };
@@ -103,7 +103,7 @@ export default component SignInPage()
     state chooserOpen = false;
     state chooserLoaded = false;
 
-    const openChooser = (): void =>
+    const openChooser = () =>
     {
         chooserOpen = true;
         if (chooserLoaded)
@@ -126,7 +126,7 @@ export default component SignInPage()
      * every retry, and `void submit()` left an unhandled rejection behind. Guest sign-in, which is
      * the actual onboarding for anybody without a wallet, was dead until the page was reloaded.
      */
-    const submit = async (): Promise<void> =>
+    const submit = async () =>
     {
         touched = true;
         refused = null;

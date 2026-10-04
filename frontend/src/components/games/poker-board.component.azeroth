@@ -50,9 +50,9 @@ export default component PokerBoard(props: { match: MatchView; starting?: boolea
 
     derived count = view?.seats.length ?? game.seats;
 
-    derived whoAt = (seat: number): string => game.players.find((one) => one.seat === seat)?.who ?? '';
+    derived whoAt = (seat: number) => game.players.find((one) => one.seat === seat)?.who ?? '';
 
-    derived nameOf = (seat: number): string =>
+    derived nameOf = (seat: number) =>
     {
         if (seat === mine)
         {
@@ -65,7 +65,7 @@ export default component PokerBoard(props: { match: MatchView; starting?: boolea
         return person === null ? who : locale.text(person.displayName);
     };
 
-    derived chips = (value: number): string => locale.n(value);
+    derived chips = (value: number) => locale.n(value);
 
     derived myTurn = view !== null && !over && mine !== undefined && view.turn === mine;
 
@@ -138,7 +138,7 @@ export default component PokerBoard(props: { match: MatchView; starting?: boolea
         return locale.t(hand.board ? 'helpers.poker.board' : 'helpers.poker.best', { hand: named });
     })();
 
-    derived costSays = ((): string =>
+    derived costSays = (() =>
     {
         const call = outcome?.call;
 
@@ -159,7 +159,7 @@ export default component PokerBoard(props: { match: MatchView; starting?: boolea
 
     derived chosen = Math.min(high, Math.max(low, amount));
 
-    derived potSized = (share: number): number =>
+    derived potSized = (share: number) =>
     {
         const target = highest + Math.round(((view?.pot ?? 0) + toCall) * share);
 
@@ -214,17 +214,17 @@ export default component PokerBoard(props: { match: MatchView; starting?: boolea
         ? locale.t('poker.allin', { chips: chips(high) })
         : (highest === 0 ? locale.t('poker.betTo', { chips: chips(chosen) }) : locale.t('poker.raiseTo', { chips: chips(chosen) }));
 
-    const rankSays = (card: number): string =>
+    const rankSays = (card: number) =>
     {
         const rank = rankOf(card);
 
         return FACE_KEY[rank] === undefined ? locale.n(Number(rank)) : locale.t(FACE_KEY[rank]);
     };
 
-    const cardSays = (card: number): string =>
+    const cardSays = (card: number) =>
         locale.t('hokm.card', { rank: rankSays(card), suit: locale.t(`hokm.suit.${ suitOf(card) }` as never) });
 
-    const cardsSay = (cards: readonly number[]): string => locale.list(cards.map(cardSays));
+    const cardsSay = (cards: readonly number[]) => locale.list(cards.map(cardSays));
 
     derived says = ((): string =>
     {
@@ -276,7 +276,7 @@ export default component PokerBoard(props: { match: MatchView; starting?: boolea
         });
     })();
 
-    const send = async (verb: PokerVerb, amount?: number): Promise<void> =>
+    const send = async (verb: PokerVerb, amount?: number) =>
     {
         const current = untrack(() => view);
         const seat = untrack(() => mine);
@@ -294,13 +294,13 @@ export default component PokerBoard(props: { match: MatchView; starting?: boolea
         }
     };
 
-    const act = async (verb: 'fold' | 'check' | 'call' | 'allin'): Promise<void> =>
+    const act = async (verb: 'fold' | 'check' | 'call' | 'allin') =>
     {
         haptic('select');
         await send(verb);
     };
 
-    const raise = async (): Promise<void> =>
+    const raise = async () =>
     {
         haptic('select');
         raising = false;

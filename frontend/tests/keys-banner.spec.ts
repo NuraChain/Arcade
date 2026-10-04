@@ -29,7 +29,7 @@ vi.mock('../src/api.ts', async () => await import('./fake-api.ts'));
 
 const setGap = (enrolment as unknown as { setGap: (value: Gap) => void }).setGap;
 
-const settle = async (): Promise<void> =>
+const settle = async () =>
 {
     for (let turn = 0; turn < 6; turn += 1)
     {

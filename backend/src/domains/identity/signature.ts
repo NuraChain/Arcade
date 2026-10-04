@@ -12,10 +12,10 @@ import { deviceLine } from '../device/resource.ts';
  * bytes. The address and the expiry are not: the signature recovers the address, and the server
  * holds the expiry beside the nonce.
  */
-const body = (statement: string, nonce: string, deviceId?: string): string =>
+const body = (statement: string, nonce: string, deviceId?: string) =>
     [statement, '', ...(deviceId === undefined ? [] : [deviceLine(deviceId)]), `Nonce: ${ nonce }`].join('\n');
 
-export function signInText(site: string, nonce: string, deviceId?: string): string
+export function signInText(site: string, nonce: string, deviceId?: string)
 {
     return body(
         deviceId === undefined
@@ -26,7 +26,7 @@ export function signInText(site: string, nonce: string, deviceId?: string): stri
     );
 }
 
-export function deviceText(site: string, nonce: string, deviceId: string): string
+export function deviceText(site: string, nonce: string, deviceId: string)
 {
     return body(`Let this browser read and send your messages on Nura Games (${ site }).`, nonce, deviceId);
 }

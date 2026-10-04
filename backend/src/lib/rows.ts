@@ -36,7 +36,7 @@ export function firstRow<T>(result: unknown): T | null
 }
 
 /** How many rows a mutation touched, whether or not it used `returning`. */
-export function affectedBy(result: unknown): number
+export function affectedBy(result: unknown)
 {
     if (Array.isArray(result) && result.length === 2 && Array.isArray(result[0]) && typeof result[1] === 'number')
     {

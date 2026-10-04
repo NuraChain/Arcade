@@ -43,7 +43,7 @@ export type Outcome = { ok: true; state: HokmState; events: HokmEvent[] } | { ok
 /** A shuffle, drawn from the server's generator so the engine holds no randomness of its own. */
 export type Deal = (sides: number) => number;
 
-function shuffled(cards: number[], deal: Deal): number[]
+function shuffled(cards: number[], deal: Deal)
 {
     const order = [...cards];
 
@@ -96,7 +96,7 @@ function dealHand(state: HokmState, deal: Deal): HokmState
  * The remaining cards are taken in the same shuffled order the opening five came from, so a hand is
  * a deterministic function of one shuffle rather than of two.
  */
-function dealRest(state: HokmState, deal: Deal): number[][]
+function dealRest(state: HokmState, deal: Deal)
 {
     const held = new Set(state.hands.flat());
     const rest = shuffled(deckFor(state.seats).filter((card) => !held.has(card)), deal);
@@ -122,7 +122,7 @@ function dealRest(state: HokmState, deal: Deal): number[][]
     return hands;
 }
 
-export function create(seats: number, target: number, deal: Deal): HokmState
+export function create(seats: number, target: number, deal: Deal)
 {
     const hakem = deal(seats) - 1;
 
@@ -148,7 +148,7 @@ export function create(seats: number, target: number, deal: Deal): HokmState
     }, deal);
 }
 
-export function dealerSeat(state: HokmState): number
+export function dealerSeat(state: HokmState)
 {
     return dealerOf(state.hakem, state.seats);
 }

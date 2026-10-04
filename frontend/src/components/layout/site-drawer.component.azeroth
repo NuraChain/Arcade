@@ -30,9 +30,9 @@ export default component SiteDrawer(props: {
 
     let captured = false;
 
-    const toward = (x: number): number => (locale.dir() === 'rtl' ? -x : x);
+    const toward = (x: number) => (locale.dir() === 'rtl' ? -x : x);
 
-    const slide = (offset: number | null): void =>
+    const slide = (offset: number | null) =>
     {
         if (dialog !== null)
         {
@@ -41,7 +41,7 @@ export default component SiteDrawer(props: {
         }
     };
 
-    const sync = (open: boolean): void =>
+    const sync = (open: boolean) =>
     {
         if (dialog === null)
         {
@@ -67,7 +67,7 @@ export default component SiteDrawer(props: {
         sync(props.open);
     }
 
-    const play = (): void =>
+    const play = () =>
     {
         props.close();
         connect.show();

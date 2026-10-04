@@ -16,17 +16,17 @@ function defaults(): Runtime
 
 let current: Runtime = defaults();
 
-export function runtime(): Runtime
+export function runtime()
 {
     return current;
 }
 
-export function setRuntime(patch: Partial<Runtime>): void
+export function setRuntime(patch: Partial<Runtime>)
 {
     current = { ...current, ...patch };
 }
 
-export function resetRuntime(): void
+export function resetRuntime()
 {
     current = defaults();
 }

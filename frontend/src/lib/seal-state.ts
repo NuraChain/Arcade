@@ -40,7 +40,7 @@ export type MemberSealState =
  * Anchoring to the wallet the account signs in with means a fabricated device has to carry that
  * address too - so the lie has to be told in a second place, one the product shows a person.
  */
-const attestedByTheAccount = (member: ConversationDevices['members'][number], device: PeerDevice): boolean =>
+const attestedByTheAccount = (member: ConversationDevices['members'][number], device: PeerDevice) =>
     member.address !== undefined && device.address.toLowerCase() === member.address.toLowerCase();
 
 export interface MemberSeal
@@ -101,7 +101,7 @@ export interface Sealability
  *
  * The module is cached after the first call, so a thread that does verify pays once.
  */
-const checker = async (): Promise<typeof import('./attestation.ts').verifyPeerDevice> =>
+const checker = async () =>
     (await import('./attestation.ts')).verifyPeerDevice;
 
 async function sealOf(member: ConversationDevices['members'][number], me: string): Promise<MemberSeal>

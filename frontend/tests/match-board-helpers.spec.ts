@@ -49,7 +49,7 @@ const CAPTURE = position([10, -1, -1, -1], [38, -1, -1, -1], 2);
 
 const SIX = position([10, -1, -1, -1], [-1, -1, -1, -1], 6);
 
-const settle = async (): Promise<void> =>
+const settle = async () =>
 {
     for (let step = 0; step < 10; step += 1)
     {
@@ -122,7 +122,7 @@ describe('the ludo helpers, and the switch for each', () =>
     {
         const locale = useLocale();
         const container = await show(ludo(CAPTURE));
-        const lit = (): number => container.querySelectorAll('.lp[data-movable]').length;
+        const lit = () => container.querySelectorAll('.lp[data-movable]').length;
 
         for (let wait = 0; wait < 20 && container.querySelector('.lp') === null; wait += 1)
         {
@@ -147,7 +147,7 @@ describe('the ludo helpers, and the switch for each', () =>
         const [batch, setBatch] = createSignal<EventBatch>({ seq: 0, events: [] });
         const [current, setCurrent] = createSignal(ludo(SIX));
         const props = {
-            get match(): MatchView
+            get match()
             {
                 return current();
             }
@@ -155,7 +155,7 @@ describe('the ludo helpers, and the switch for each', () =>
 
         const animate = Element.prototype.animate;
 
-        vi.spyOn(Element.prototype, 'animate').mockImplementation(function (this: Element, ...args: Parameters<Element['animate']>): Animation
+        vi.spyOn(Element.prototype, 'animate').mockImplementation(function (this: Element, ...args: Parameters<Element['animate']>)
         {
             const running = animate.apply(this, args);
 
@@ -168,7 +168,7 @@ describe('the ludo helpers, and the switch for each', () =>
         await settle();
 
         const container = renderTest(() => MatchBoard(props) as HTMLElement).container;
-        const note = (): string | null => container.querySelector('[role="note"]')?.textContent ?? null;
+        const note = () => container.querySelector('[role="note"]')?.textContent ?? null;
 
         expect(note()).toContain(locale.t('helpers.ludo.tip.six'));
 

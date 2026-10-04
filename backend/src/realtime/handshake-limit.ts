@@ -30,7 +30,7 @@ export interface HandshakeLimit
  */
 const HELD_MAX = 4096;
 
-export const addressKey = (address: string): string =>
+export const addressKey = (address: string) =>
 {
     if (address.startsWith('::ffff:'))
     {

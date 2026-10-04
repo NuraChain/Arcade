@@ -41,7 +41,7 @@ export default component Tooltip(props: {
 
     derived tipId = props.id ?? `tip-${ props.label.replace(/[^a-zA-Z0-9]+/g, '-').toLowerCase() }`;
 
-    const settle = (): void =>
+    const settle = () =>
     {
         if (host === null || bubble === null)
         {
@@ -70,13 +70,13 @@ export default component Tooltip(props: {
      */
     let watching: (() => void) | null = null;
 
-    const unwatch = (): void =>
+    const unwatch = () =>
     {
         watching?.();
         watching = null;
     };
 
-    const hide = (): void =>
+    const hide = () =>
     {
         cancel?.();
         cancel = null;
@@ -89,18 +89,18 @@ export default component Tooltip(props: {
         }
     };
 
-    const watch = (): void =>
+    const watch = () =>
     {
         if (watching !== null)
         {
             return;
         }
 
-        const onMoved = (): void => hide();
+        const onMoved = () => hide();
         window.addEventListener('scroll', onMoved, true);
         window.addEventListener('resize', onMoved, { passive: true });
 
-        watching = (): void =>
+        watching = () =>
         {
             window.removeEventListener('scroll', onMoved, true);
             window.removeEventListener('resize', onMoved);
@@ -115,7 +115,7 @@ export default component Tooltip(props: {
      * flashed a bubble with no text in it on hover. The alternative was making each such caller
      * duplicate its markup in a `<Show>` and its `fallback`, which is two copies of one element.
      */
-    const show = (immediate: boolean): void =>
+    const show = (immediate: boolean) =>
     {
         if (shown || props.label === '')
         {
@@ -156,7 +156,7 @@ export default component Tooltip(props: {
      * and a tooltip must not be the thing that breaks a render; an engine without it shows the
      * tooltip as before.
      */
-    const tabbedTo = (target: EventTarget | null): boolean =>
+    const tabbedTo = (target: EventTarget | null) =>
     {
         if (!(target instanceof Element))
         {

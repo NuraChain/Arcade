@@ -7,19 +7,19 @@ export function attachHold(element: HTMLElement, run: () => void): () => void
     let release: (() => void) | null = null;
     let touching = false;
 
-    const swallow = (event: Event): void =>
+    const swallow = (event: Event) =>
     {
         event.preventDefault();
         event.stopPropagation();
     };
 
-    const disarm = (): void =>
+    const disarm = () =>
     {
         release?.();
         release = null;
     };
 
-    const arm = (): void =>
+    const arm = () =>
     {
         disarm();
         document.addEventListener('click', swallow, true);
@@ -40,7 +40,7 @@ export function attachHold(element: HTMLElement, run: () => void): () => void
         }
     });
 
-    const down = (event: PointerEvent): void =>
+    const down = (event: PointerEvent) =>
     {
         touching = event.pointerType !== 'mouse';
         if (!touching || !event.isPrimary)
@@ -50,11 +50,11 @@ export function attachHold(element: HTMLElement, run: () => void): () => void
         press.start(event.clientX, event.clientY);
     };
 
-    const move = (event: PointerEvent): void => press.move(event.clientX, event.clientY);
+    const move = (event: PointerEvent) => press.move(event.clientX, event.clientY);
     const up = (): void => void press.end();
-    const cancel = (): void => press.cancel();
+    const cancel = () => press.cancel();
 
-    const menu = (event: Event): void =>
+    const menu = (event: Event) =>
     {
         if (touching)
         {

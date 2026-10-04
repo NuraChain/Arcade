@@ -8,7 +8,7 @@ export interface ChainConfig
     site: string;
 }
 
-function fromEnv(key: string): string
+function fromEnv(key: string)
 {
     const value = (import.meta.env as Record<string, string | undefined>)[key];
     if (value === undefined)
@@ -31,7 +31,7 @@ export const NURA_CHAIN: ChainConfig = {
     site: fromEnv('VITE_NURA_SITE')
 };
 
-export function chainIsConfigured(chain: ChainConfig = NURA_CHAIN): boolean
+export function chainIsConfigured(chain: ChainConfig = NURA_CHAIN)
 {
     return /^0x[0-9a-fA-F]+$/.test(chain.chainId) && chain.rpcUrls.length > 0;
 }

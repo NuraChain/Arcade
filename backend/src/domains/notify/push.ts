@@ -30,7 +30,7 @@ export interface VapidKeys
     subject: string;
 }
 
-const base64url = (input: Buffer): string => input.toString('base64url');
+const base64url = (input: Buffer) => input.toString('base64url');
 
 /**
  * The DER wrapper a raw P-256 scalar needs before Node will import it as a key.
@@ -41,7 +41,7 @@ const base64url = (input: Buffer): string => input.toString('base64url');
  */
 const imported = new Map<string, ReturnType<typeof createPrivateKey>>();
 
-function privateKeyFrom(raw: string): ReturnType<typeof createPrivateKey>
+function privateKeyFrom(raw: string)
 {
     const held = imported.get(raw);
 
@@ -55,7 +55,7 @@ function privateKeyFrom(raw: string): ReturnType<typeof createPrivateKey>
     return key;
 }
 
-function importKey(raw: string): ReturnType<typeof createPrivateKey>
+function importKey(raw: string)
 {
     const scalar = Buffer.from(raw, 'base64url');
     if (scalar.length !== 32)
@@ -76,7 +76,7 @@ function joseFrom(der: Buffer): Buffer
         offset += der[1] & 0x7f;
     }
 
-    const read = (): Buffer =>
+    const read = () =>
     {
         const length = der[offset + 1];
         const value = der.subarray(offset + 2, offset + 2 + length);
@@ -94,7 +94,7 @@ function joseFrom(der: Buffer): Buffer
  * is none of the push service's business at this layer. `exp` is deliberately short - twelve
  * hours is the standard's ceiling and there is no reason to sit near it.
  */
-export function vapidToken(endpoint: string, keys: VapidKeys, now: number): string
+export function vapidToken(endpoint: string, keys: VapidKeys, now: number)
 {
     const audience = new URL(endpoint).origin;
 

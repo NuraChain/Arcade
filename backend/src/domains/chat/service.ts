@@ -117,7 +117,7 @@ const EXPIRY_SLACK_MS = 60_000;
  * and nowhere else: a second spelling of this function is a second conversation for a pair that
  * already has one.
  */
-export function pairKeyOf(a: string, b: string): string
+export function pairKeyOf(a: string, b: string)
 {
     return a < b ? `${ a }:${ b }` : `${ b }:${ a }`;
 }
@@ -160,7 +160,7 @@ export function createChatService(db: DataSource, social: SocialService, frankin
      * is checked here instead, and it answers exactly as a conversation that does not exist. Any
      * other answer tells somebody whether the person who blocked them is still in there.
      */
-    const mustBeMember = async (me: string, conversationId: string): Promise<{ pinned: boolean; last_read_at: Date }> =>
+    const mustBeMember = async (me: string, conversationId: string) =>
     {
         const row = await membership(me, conversationId);
         if (row === null)
@@ -218,7 +218,7 @@ export function createChatService(db: DataSource, social: SocialService, frankin
     };
 
     /** One person's handle, which two message builders both want and neither owns. */
-    const handleOf = async (userId: string): Promise<string | null> =>
+    const handleOf = async (userId: string) =>
     {
         const row = await db.getRepository(User).findOne({ select: { handle: true }, where: { id: userId } });
         return row?.handle ?? null;
@@ -739,7 +739,7 @@ export function createChatService(db: DataSource, social: SocialService, frankin
          * their own expiry signed into them, and nothing here can reach back and shorten or extend
          * one. Turning it on does not delete history, and the copy says so.
          */
-        async setExpiry(me: string, conversationId: string, seconds: number | null): Promise<number | null>
+        async setExpiry(me: string, conversationId: string, seconds: number | null)
         {
             await mustBeMember(me, conversationId);
 
@@ -765,7 +765,7 @@ export function createChatService(db: DataSource, social: SocialService, frankin
             return affectedBy(gone);
         },
 
-        async markRead(me: string, conversationId: string): Promise<void>
+        async markRead(me: string, conversationId: string)
         {
             await mustBeMember(me, conversationId);
             await db.query(
@@ -774,7 +774,7 @@ export function createChatService(db: DataSource, social: SocialService, frankin
             );
         },
 
-        async setPinned(me: string, conversationId: string, pinned: boolean): Promise<void>
+        async setPinned(me: string, conversationId: string, pinned: boolean)
         {
             await mustBeMember(me, conversationId);
             await db.getRepository(ConversationMember).update({ conversationId, userId: me }, { pinned });

@@ -97,7 +97,7 @@ export interface ChatSource
     reset(): void;
 }
 
-const byAt = (a: Message, b: Message): number => a.at - b.at;
+const byAt = (a: Message, b: Message) => a.at - b.at;
 
 /**
  * Every live source, so the plaintext they hold can be thrown away from outside them.
@@ -119,7 +119,7 @@ const live = new Set<{ reset(): void }>();
  * search, and read the previous person's messages without needing a key at all, because the
  * plaintext outlived the keys that produced it.
  */
-export function forgetArchive(): void
+export function forgetArchive()
 {
     for (const source of live)
     {
@@ -155,14 +155,14 @@ export function forgetArchive(): void
  */
 export const ARCHIVE_MAX = 5000;
 
-export function createApiSource(): ChatSource
+export function createApiSource()
 {
     const archive = new Map<string, Message>();
 
     /** Whose messages are in this Map. Set the first time anything is read for somebody. */
     let openedFor = '';
 
-    const remember = (message: Message): Message =>
+    const remember = (message: Message) =>
     {
         // A message that has run out leaves the archive rather than being replaced in it. The
         // archive is what `search.store.ts` reads, so a disappearing message that stayed here would
@@ -210,7 +210,7 @@ export function createApiSource(): ChatSource
         text: string,
         locked: MessageFailure | null,
         signed?: { from: string; frankingKey: string; plain: string; reply?: string; fwd?: true; reactions: Reaction[] }
-    ): Message =>
+    ) =>
     {
         const params = Object.fromEntries(
             Object.entries(wire.payload?.params ?? {}).filter((entry): entry is [string, string] => entry[1] !== undefined)
@@ -251,7 +251,7 @@ export function createApiSource(): ChatSource
     const openCached = async (
         wire: ChatMessage,
         keyFor: (epoch: number) => Promise<Uint8Array | null>
-    ): Promise<OpenedMessage> =>
+    ) =>
     {
         const key = `${ wire.id }|${ wire.signature ?? '' }`;
         const held = opens.get(key);
@@ -280,7 +280,7 @@ export function createApiSource(): ChatSource
         return fresh;
     };
 
-    const zero = async (given: readonly Promise<Uint8Array | null>[]): Promise<void> =>
+    const zero = async (given: readonly Promise<Uint8Array | null>[]) =>
     {
         for (const bytes of await Promise.all(given.map((one) => one.catch(() => null))))
         {
@@ -288,7 +288,7 @@ export function createApiSource(): ChatSource
         }
     };
 
-    const openHeld = async (id: string, wire: ChatMessage): Promise<Message> =>
+    const openHeld = async (id: string, wire: ChatMessage) =>
     {
         const given: Promise<Uint8Array | null>[] = [];
 
@@ -382,7 +382,7 @@ export function createApiSource(): ChatSource
         expiresAt: number,
         kind: 'text' | 'reaction',
         target?: string
-    ): Promise<void> =>
+    ) =>
     {
         const secrets = await keyStore().secrets();
 
@@ -507,7 +507,7 @@ export function createApiSource(): ChatSource
             // fetching one per message would ask the server for the same wrap forty times.
             const keys = new Map<number, Promise<Uint8Array | null>>();
 
-            const keyFor = (epoch: number): Promise<Uint8Array | null> =>
+            const keyFor = (epoch: number) =>
             {
                 const held = keys.get(epoch);
                 if (held !== undefined)

@@ -77,7 +77,7 @@ export default component Page(props: { children?: Child; padded?: boolean; width
      */
     let depth = 0;
 
-    const track = (): void =>
+    const track = () =>
     {
         depth = root?.scrollTop ?? depth;
     };
@@ -88,7 +88,7 @@ export default component Page(props: { children?: Child; padded?: boolean; width
 
     derived indicator = busy ? PULL_ARM : pull;
 
-    const refresh = (): void =>
+    const refresh = () =>
     {
         if (busy || props.onRefresh === undefined)
         {
@@ -101,7 +101,7 @@ export default component Page(props: { children?: Child; padded?: boolean; width
         settle = runtime().clock.after(620, () => busy = false);
     };
 
-    const exit = (): void =>
+    const exit = () =>
     {
         haptic('tick');
         leave({ back, replace }, shell.depth(), parent);

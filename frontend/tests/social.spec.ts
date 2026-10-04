@@ -32,12 +32,12 @@ beforeEach(() =>
     Object.defineProperty(window, 'localStorage', {
         configurable: true,
         value: {
-            getItem: (key: string): string | null => memory.get(key) ?? null,
-            setItem: (key: string, value: string): void =>
+            getItem: (key: string) => memory.get(key) ?? null,
+            setItem: (key: string, value: string) =>
             {
                 memory.set(key, value);
             },
-            removeItem: (key: string): void =>
+            removeItem: (key: string) =>
             {
                 memory.delete(key);
             }
@@ -426,7 +426,7 @@ describe('chat store', () =>
         // and opening a message is elliptic-curve and AES work rather than a field copy. Waiting
         // for the flag rather than for a fixed tick is what the test meant in the first place -
         // that nothing had to ask, not that it finished within one macrotask.
-        const settled = async (loading: () => boolean): Promise<void> =>
+        const settled = async (loading: () => boolean) =>
         {
             for (let turn = 0; turn < 40 && loading(); turn += 1)
             {

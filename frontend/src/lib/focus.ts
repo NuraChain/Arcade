@@ -8,12 +8,12 @@ const SELECTOR = [
     '[contenteditable="true"]'
 ].join(',');
 
-function visible(element: HTMLElement): boolean
+function visible(element: HTMLElement)
 {
     return element.getClientRects().length > 0 || element === document.activeElement;
 }
 
-export function tabbables(root: HTMLElement): HTMLElement[]
+export function tabbables(root: HTMLElement)
 {
     return Array.from(root.querySelectorAll<HTMLElement>(SELECTOR)).filter((element) =>
         !element.hasAttribute('inert') && element.closest('[inert]') === null && visible(element));
@@ -29,12 +29,12 @@ export function firstTabbable(root: HTMLElement): HTMLElement | null
     return tabbables(root)[0] ?? null;
 }
 
-export function isInside(root: HTMLElement, node: Node | null): boolean
+export function isInside(root: HTMLElement, node: Node | null)
 {
     return node !== null && root.contains(node);
 }
 
-export function focusQuietly(element: HTMLElement | null): void
+export function focusQuietly(element: HTMLElement | null)
 {
     if (element === null)
     {

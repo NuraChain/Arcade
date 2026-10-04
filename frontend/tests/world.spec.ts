@@ -13,7 +13,7 @@ const BEATS = ['arrival', 'games', 'together', 'compete', 'finale'];
 
 const PATH: Shot[] = BEATS.map((name, index) => ({ at: index / (BEATS.length - 1), ...SHOTS[name] }));
 
-const tan = (degrees: number): number => Math.tan((degrees * Math.PI) / 360);
+const tan = (degrees: number) => Math.tan((degrees * Math.PI) / 360);
 
 describe('the shot list', () =>
 {
@@ -267,7 +267,7 @@ describe('the gate', () =>
 
 describe('governor', () =>
 {
-    const run = (governor: ReturnType<typeof createGovernor>, ms: number, frames: number): void =>
+    const run = (governor: ReturnType<typeof createGovernor>, ms: number, frames: number) =>
     {
         for (let index = 0; index < frames; index += 1)
         {
@@ -330,7 +330,7 @@ describe('governor', () =>
 
 describe('camera rig', () =>
 {
-    const settle = (rig: ReturnType<typeof createRig>, frames = 600): boolean =>
+    const settle = (rig: ReturnType<typeof createRig>, frames = 600) =>
     {
         let moving = true;
         for (let frame = 0; frame < frames && moving; frame += 1)
@@ -340,7 +340,7 @@ describe('camera rig', () =>
         return moving;
     };
 
-    const near = (rig: ReturnType<typeof createRig>, point: readonly number[]): number =>
+    const near = (rig: ReturnType<typeof createRig>, point: readonly number[]) =>
         Math.hypot(rig.camera.position.x - point[0], rig.camera.position.y - point[1], rig.camera.position.z - point[2]);
 
     it('starts already framed on the first beat, and at rest', () =>

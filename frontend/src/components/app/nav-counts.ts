@@ -28,9 +28,9 @@ export function useNavCounts(): NavCounts
         notifications: () => notifications.unread()
     };
 
-    const countOf = (item: NavItem): number => counts[item.tab]?.() ?? 0;
+    const countOf = (item: NavItem) => counts[item.tab]?.() ?? 0;
 
-    const labelOf = (item: NavItem): string =>
+    const labelOf = (item: NavItem) =>
     {
         const count = countOf(item);
         switch (item.tab)

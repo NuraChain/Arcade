@@ -17,7 +17,7 @@ export const SLUG_MAX = 48;
 /** What survives before a collision tail is appended, leaving room for `-0000` in the column. */
 const STEM = 40;
 
-const trimDashes = (value: string): string => value.replace(/^-+|-+$/g, '');
+const trimDashes = (value: string) => value.replace(/^-+|-+$/g, '');
 
 /**
  * Slugs nobody may claim, because holding one shadows a route under `/app/groups/`.
@@ -61,7 +61,7 @@ export function checkSlug(slug: string): SlugRefusal | null
  * string rather than to something invented, and the caller falls back to a word the product owns
  * instead of pretending the name produced a slug.
  */
-export function slugFromName(name: string): string
+export function slugFromName(name: string)
 {
     const folded = trimDashes(normalizeName(name).replace(/[^\p{L}\p{N}]+/gu, '-'));
     return trimDashes(folded.slice(0, STEM));
@@ -74,7 +74,7 @@ export function slugFromName(name: string): string
  * typo where `friday-night-crew-07` reads as the second one. The stem is trimmed of hyphens
  * first, or a name cut at exactly the wrong character produces `crew--07`.
  */
-export function candidatesFor(wanted: string, attempt: number, random: () => number): string
+export function candidatesFor(wanted: string, attempt: number, random: () => number)
 {
     const base = trimDashes(normalizeName(wanted).slice(0, STEM));
     return candidateFor(base, attempt, random, { stem: STEM, join: '-' });

@@ -36,7 +36,7 @@ const salt = mintSalt();
 let phrase: string;
 let keys: Awaited<ReturnType<typeof deriveRecovery>>;
 
-const ready = async (): Promise<void> =>
+const ready = async () =>
 {
     phrase ??= mintPhrase();
     keys ??= await deriveRecovery(phrase, salt);
@@ -192,7 +192,7 @@ describe('the vault', () =>
 
 describe('proving the phrase to the server', () =>
 {
-    const verifier = async (publicKey: string): Promise<CryptoKey> =>
+    const verifier = async (publicKey: string) =>
     {
         const point = fromBase64Url(publicKey);
 
@@ -212,7 +212,7 @@ describe('proving the phrase to the server', () =>
         );
     };
 
-    const holds = async (publicKey: string, signature: string, challenge: string): Promise<boolean> =>
+    const holds = async (publicKey: string, signature: string, challenge: string) =>
         crypto.subtle.verify(
             { name: 'ECDSA', hash: 'SHA-256' },
             await verifier(publicKey),

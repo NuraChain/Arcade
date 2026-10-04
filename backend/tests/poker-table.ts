@@ -6,7 +6,7 @@ import type { PokerAction, PokerEvent, PokerState } from '../src/domains/match/p
 
 const SUIT_OF: Readonly<Record<string, Suit>> = { C: 'clubs', D: 'diamonds', H: 'hearts', S: 'spades' };
 
-export function card(name: string): number
+export function card(name: string)
 {
     const rank = name.slice(0, -1);
 
@@ -22,7 +22,7 @@ export function seeded(seed: number): Die & { next: () => number }
 {
     let value = (seed * 2654435761) >>> 0 || 1;
 
-    const next = (): number =>
+    const next = () =>
     {
         value ^= value << 13;
         value ^= value >>> 17;
@@ -40,7 +40,7 @@ export function rig(button: number, cards: readonly number[]): Die
     const dealt = new Set<number>();
     let opened = false;
 
-    return (sides: number): number =>
+    return (sides: number) =>
     {
         if (!opened)
         {

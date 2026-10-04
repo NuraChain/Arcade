@@ -2,7 +2,7 @@ export const DEVICE_ID_LENGTH = 22;
 
 const SHAPE = /^[A-Za-z0-9_-]{22}$/;
 
-export function isDeviceId(value: string): boolean
+export function isDeviceId(value: string)
 {
     return SHAPE.test(value);
 }
@@ -20,7 +20,7 @@ export function fromBase64Url(value: string): Uint8Array
     return bytes;
 }
 
-export function toBase64Url(bytes: Uint8Array): string
+export function toBase64Url(bytes: Uint8Array)
 {
     let binary = '';
     for (const byte of bytes)
@@ -31,7 +31,7 @@ export function toBase64Url(bytes: Uint8Array): string
 }
 
 /** Whether this browser can do any of this at all. False on an insecure origin, and in some private modes. */
-export function cryptoAvailable(): boolean
+export function cryptoAvailable()
 {
     return typeof globalThis.crypto !== 'undefined' && typeof globalThis.crypto.subtle !== 'undefined';
 }
@@ -48,7 +48,7 @@ export function cryptoAvailable(): boolean
  * the other half, and `tests/devices.spec.ts` runs both over the same vectors - two independent
  * implementations of one formula are two chances to disagree, and the test is what stops them.
  */
-export async function deviceIdFrom(exchangeKey: string, signingKey: string): Promise<string>
+export async function deviceIdFrom(exchangeKey: string, signingKey: string)
 {
     const exchange = fromBase64Url(exchangeKey);
     const signing = fromBase64Url(signingKey);
@@ -70,7 +70,7 @@ export async function deviceIdFrom(exchangeKey: string, signingKey: string): Pro
  * its own, without trusting anybody, and a row that fails this is rendered as `tampered` and never
  * as a device.
  */
-export async function deviceVerifies(device: { id: string; exchangeKey: string; signingKey: string }): Promise<boolean>
+export async function deviceVerifies(device: { id: string; exchangeKey: string; signingKey: string })
 {
     if (!isDeviceId(device.id))
     {

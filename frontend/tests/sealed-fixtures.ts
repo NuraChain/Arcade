@@ -56,11 +56,11 @@ export interface SealedFixtures
     messages: Record<string, ChatMessage[]>;
 }
 
-export const accountIdOf = (handle: string): string => `u-${ handle }`;
+export const accountIdOf = (handle: string) => `u-${ handle }`;
 
-const keyFor = (index: number): Hex => `0x${ (index + 1).toString(16).padStart(64, '0') }` as Hex;
+const keyFor = (index: number) => `0x${ (index + 1).toString(16).padStart(64, '0') }` as Hex;
 
-const at = (minutesAgo: number): string => new Date(1_700_000_000_000 - minutesAgo * 60_000).toISOString();
+const at = (minutesAgo: number) => new Date(1_700_000_000_000 - minutesAgo * 60_000).toISOString();
 
 export async function buildSealedFixtures(): Promise<SealedFixtures>
 {

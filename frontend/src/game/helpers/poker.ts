@@ -19,7 +19,7 @@ export interface PokerOutcome
 
 const RANK_BASE = 13;
 
-const digit = (score: number, place: number): number => Math.floor(score / RANK_BASE ** place) % RANK_BASE;
+const digit = (score: number, place: number) => Math.floor(score / RANK_BASE ** place) % RANK_BASE;
 
 export function namedHand(hole: readonly number[], board: readonly number[]): Named | null
 {
@@ -46,7 +46,7 @@ export function namedHand(hole: readonly number[], board: readonly number[]): Na
     };
 }
 
-function playing(view: PokerBoard, mine: number | undefined): boolean
+function playing(view: PokerBoard, mine: number | undefined)
 {
     const row = view.seats.find((one) => one.seat === mine);
 

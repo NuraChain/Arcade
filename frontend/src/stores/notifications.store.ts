@@ -46,7 +46,7 @@ export const useNotifications = createStore((): NotificationsApi =>
 {
     const account = useAccount();
 
-    const who = (): string | null => account.user()?.id ?? null;
+    const who = () => account.user()?.id ?? null;
 
     const [older, setOlder] = createSignal<Notification[]>([]);
     const [tailCursor, setTailCursor] = createSignal<string | undefined>(undefined);
@@ -73,11 +73,11 @@ export const useNotifications = createStore((): NotificationsApi =>
     );
 
     /** Where the next page starts: the head's cursor until `more` has run, then the tail's. */
-    const nextCursor = (): string | undefined => (older().length === 0 ? first.data()?.cursor : tailCursor());
+    const nextCursor = () => (older().length === 0 ? first.data()?.cursor : tailCursor());
 
     let inFlight: Promise<void> = Promise.resolve();
 
-    const queue = (work: () => Promise<unknown>): Promise<void> =>
+    const queue = (work: () => Promise<unknown>) =>
     {
         inFlight = inFlight.catch(() => undefined).then(async () =>
         {
@@ -93,14 +93,14 @@ export const useNotifications = createStore((): NotificationsApi =>
      * head onto stale tails is how a list shows one row twice. Somebody who was deep in their
      * history asks for it again, which costs one request and is always right.
      */
-    const revalidate = (): Promise<void> => queue(async () =>
+    const revalidate = () => queue(async () =>
     {
         setOlder([]);
         setTailCursor(undefined);
         await Promise.all([first.refetch(), untrack(notice) === null ? undefined : everything.refetch()]);
     });
 
-    const keep = (change: (rows: Notification[]) => Notification[]): Promise<void> => queue(async () =>
+    const keep = (change: (rows: Notification[]) => Notification[]) => queue(async () =>
     {
         setOlder(change(untrack(older)));
         await Promise.all([first.refetch(), untrack(notice) === null ? undefined : everything.refetch()]);

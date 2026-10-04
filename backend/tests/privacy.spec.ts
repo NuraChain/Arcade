@@ -31,7 +31,7 @@ const adult = (id: string, overrides: Partial<Party> = {}): Party => ({
     ...overrides
 });
 
-const minor = (id: string, overrides: Partial<Party> = {}): Party => adult(id, { isMinor: true, allowStrangerMessages: false, ...overrides });
+const minor = (id: string, overrides: Partial<Party> = {}) => adult(id, { isMinor: true, allowStrangerMessages: false, ...overrides });
 
 const STRANGERS: Relation[] = ['none', 'incoming', 'outgoing'];
 

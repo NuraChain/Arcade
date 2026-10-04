@@ -92,7 +92,7 @@ export interface BoardApi
 
 let keys = 0;
 
-const mintKey = (): string =>
+const mintKey = () =>
 {
     keys += 1;
 
@@ -116,7 +116,7 @@ export const useBoard = createStore((): BoardApi =>
 {
     const account = useAccount();
 
-    const who = (): string | null => account.user()?.id ?? null;
+    const who = () => account.user()?.id ?? null;
 
     const [openId, setOpenId] = createSignal('');
     const [busy, setBusy] = createSignal(false);
@@ -146,7 +146,7 @@ export const useBoard = createStore((): BoardApi =>
 
     let inFlight: Promise<void> = Promise.resolve();
 
-    const revalidate = (): Promise<void> =>
+    const revalidate = () =>
     {
         inFlight = inFlight.catch(() => undefined).then(async () =>
         {
@@ -177,7 +177,7 @@ export const useBoard = createStore((): BoardApi =>
 
     const waiting = new Map<string, (reply: ReplyFrame) => void>();
 
-    const heard = (match: MatchView, batch: readonly MatchEvent[]): void =>
+    const heard = (match: MatchView, batch: readonly MatchEvent[]) =>
     {
         const held = untrack(board);
         const base = held !== null && held.id === match.id ? held.rev : -1;
@@ -232,7 +232,7 @@ export const useBoard = createStore((): BoardApi =>
             });
         });
 
-    const catchUp = async (): Promise<void> =>
+    const catchUp = async () =>
     {
         const current = untrack(board);
 
@@ -381,7 +381,7 @@ export const useBoard = createStore((): BoardApi =>
 
             let cancel: (() => void) | null = null;
 
-            const poll = (): void =>
+            const poll = () =>
             {
                 cancel = runtime().clock.after(POLL_MS, () =>
                 {

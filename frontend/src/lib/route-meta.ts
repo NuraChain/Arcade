@@ -33,7 +33,7 @@ export function parentOf(match: RouteMatch | null): string | undefined
     return parent.replace(/:(\w+)/g, (whole, name: string) => match.params[name] === undefined ? whole : encodeURIComponent(match.params[name]));
 }
 
-export function defineMeta(meta: RouteMeta): Record<string, unknown>
+export function defineMeta(meta: RouteMeta)
 {
     return meta as Record<string, unknown>;
 }

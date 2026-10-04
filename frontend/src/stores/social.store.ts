@@ -89,12 +89,12 @@ export const useSocial = createStore((): SocialApi =>
     const account = useAccount();
     const people = usePeople();
 
-    const meId = (): string => account.user()?.id ?? '';
+    const meId = () => account.user()?.id ?? '';
 
     const [pendingMutes, setPendingMutes] = createSignal<Record<string, boolean>>({});
     const [held, setHeld] = createSignal<Privacy | null>(null);
 
-    const who = (): string | null => account.user()?.id ?? null;
+    const who = () => account.user()?.id ?? null;
 
     // Every payload that carries a person files them with `people.store`, which is the only thing
     // that knows a handle's name now. A store that fetched people and did not hand them over would
@@ -118,7 +118,7 @@ export const useSocial = createStore((): SocialApi =>
 
     const [wanted, setWanted] = createSignal<Record<string, boolean>>({});
 
-    const asked = (what: string) => (): string | null => (wanted()[what] === true ? who() : null);
+    const asked = (what: string) => () => (wanted()[what] === true ? who() : null);
 
     const suggested = createResource(asked('suggestions'), async () =>
     {
@@ -138,13 +138,13 @@ export const useSocial = createStore((): SocialApi =>
 
     const OPEN: Privacy = { allowStrangerMessages: true, showOnline: true, isMinor: false };
 
-    const privacy = (): Privacy => held() ?? privacyRead.data() ?? OPEN;
+    const privacy = () => held() ?? privacyRead.data() ?? OPEN;
 
-    const muteKey = (kind: MuteSubject, id: string): string => `${ kind }:${ id }`;
+    const muteKey = (kind: MuteSubject, id: string) => `${ kind }:${ id }`;
 
     const mutes = (): { kind: MuteSubject; id: string }[] => graph.data()?.mutes ?? [];
 
-    const isMuted = (kind: MuteSubject, id: string): boolean =>
+    const isMuted = (kind: MuteSubject, id: string) =>
         pendingMutes()[muteKey(kind, id)] ?? mutes().some((entry) => entry.kind === kind && entry.id === id);
 
     const stable = (): ((next: string[]) => string[]) =>
@@ -164,9 +164,9 @@ export const useSocial = createStore((): SocialApi =>
     const heldFriends = stable();
     const heldBlocked = stable();
 
-    const friends = (): string[] => heldFriends((graph.data()?.friends ?? []).map((person) => person.id));
+    const friends = () => heldFriends((graph.data()?.friends ?? []).map((person) => person.id));
 
-    const blocked = (): string[] => heldBlocked((graph.data()?.blocked ?? []).map((person) => person.id));
+    const blocked = () => heldBlocked((graph.data()?.blocked ?? []).map((person) => person.id));
 
     const asRequest = (wire: { id: string; from: string; to: string; at: string }): FriendRequest => ({
         id: wire.id,
@@ -198,7 +198,7 @@ export const useSocial = createStore((): SocialApi =>
      * they must follow the graph, or a block would leave a person sitting in a directory already
      * on screen.
      */
-    const revalidate = (): Promise<void> =>
+    const revalidate = () =>
     {
         inFlight = inFlight
             .catch(() => undefined)
@@ -239,7 +239,7 @@ export const useSocial = createStore((): SocialApi =>
         return 'none';
     };
 
-    const write = async (call: () => Promise<unknown>): Promise<void> =>
+    const write = async (call: () => Promise<unknown>) =>
     {
         await call();
         await revalidate();
@@ -247,7 +247,7 @@ export const useSocial = createStore((): SocialApi =>
 
     const [busy, setBusy] = createSignal<Readonly<Record<string, Promise<void>>>>({});
 
-    const once = (key: string, call: () => Promise<unknown>): Promise<void> =>
+    const once = (key: string, call: () => Promise<unknown>) =>
     {
         const running = untrack(busy)[key];
 

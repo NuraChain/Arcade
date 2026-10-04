@@ -54,7 +54,7 @@ export default component WatchBoard(props: { watch: MatchWatch })
         }).catch(() => undefined);
     }
 
-    const retry = (): void =>
+    const retry = () =>
     {
         drawn = '';
         attempt += 1;

@@ -62,15 +62,15 @@ export default component HomePage()
 
     derived panelShown = device.posture() === 'sidebar' && device.social();
 
-    const quickPlay = (game: GameId): void =>
+    const quickPlay = (game: GameId) =>
     {
         openTable(lobby.quick(game), navigate);
     };
 
-    const said = (row: MatchHistoryEntry): string =>
+    const said = (row: MatchHistoryEntry) =>
         locale.t(`home.recent.${ row.result }`, { game: locale.t(catalogue.byId(row.game as GameId).nameKey) });
 
-    const moved = (row: MatchHistoryEntry): number | null =>
+    const moved = (row: MatchHistoryEntry) =>
         row.ratingAfter === undefined || row.ratingBefore === undefined || row.ratingAfter === row.ratingBefore
             ? null
             : row.ratingAfter - row.ratingBefore;

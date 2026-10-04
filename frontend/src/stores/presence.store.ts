@@ -51,9 +51,9 @@ export const usePresence = createStore((): PresenceApi =>
         return index;
     };
 
-    const of = (id: string): Presence => current()?.get(id) ?? UNKNOWN;
+    const of = (id: string) => current()?.get(id) ?? UNKNOWN;
 
-    const up = (id: string): boolean => of(id).state === 'online';
+    const up = (id: string) => of(id).state === 'online';
 
     return {
         of,

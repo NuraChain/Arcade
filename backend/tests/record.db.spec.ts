@@ -39,7 +39,7 @@ let seq = 0;
 
 const HOME = [FINISHED, FINISHED, FINISHED, FINISHED];
 
-const makeUser = async (): Promise<string> =>
+const makeUser = async () =>
 {
     seq += 1;
 
@@ -163,7 +163,7 @@ describe.skipIf(!active)('a record, against a real database', () =>
         await db.query('delete from users');
     });
 
-    const recorder = (): ReturnType<typeof createRecorder> => createRecorder(createAchieveService(db));
+    const recorder = () => createRecorder(createAchieveService(db));
 
     describe('a game somebody won', () =>
     {
@@ -356,7 +356,7 @@ describe.skipIf(!active)('a record, against a real database', () =>
      */
     describe('the leaderboard', () =>
     {
-        const stat = async (user: string, xp: number, rating: number, played: number): Promise<void> =>
+        const stat = async (user: string, xp: number, rating: number, played: number) =>
         {
             await db.query(
                 `insert into player_stats (user_id, game, rating, peak_rating, played, won, xp)
@@ -383,7 +383,7 @@ describe.skipIf(!active)('a record, against a real database', () =>
 
             const board = await achieve.leaderboardOf('ludo', 'all');
             const ranks = new Map(board.standings.map((row) => [row.handle, row.rank]));
-            const handleOf = async (id: string): Promise<string> =>
+            const handleOf = async (id: string) =>
                 rowsOf<{ handle: string }>(await db.query('select handle from users where id = $1', [id]))[0].handle;
 
             expect(ranks.get(await handleOf(top))).toBe(1);
@@ -489,7 +489,7 @@ describe.skipIf(!active)('a record, against a real database', () =>
         {
             const state = board([HOME, [12, YARD, YARD, YARD]], 0);
 
-            const rolls = async (matchId: string, count: number): Promise<void> =>
+            const rolls = async (matchId: string, count: number) =>
             {
                 await db.query(
                     `insert into match_actions (match_id, rev, seat, kind, payload, events, state)

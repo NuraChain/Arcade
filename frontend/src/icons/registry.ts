@@ -57,7 +57,7 @@ export const ICONS: Partial<Record<IconName, IconNode>> = {
     'idea': Lightbulb
 };
 
-export function registerIcons(more: Readonly<Partial<Record<IconName, IconNode>>>): void
+export function registerIcons(more: Readonly<Partial<Record<IconName, IconNode>>>)
 {
     Object.assign(ICONS, more);
 }

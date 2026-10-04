@@ -69,7 +69,7 @@ export default component PersonRecord(props: { handle: string; history?: boolean
         count: one.earned
     }));
 
-    const openLadder = (family: AchievementFamily): void =>
+    const openLadder = (family: AchievementFamily) =>
     {
         void import('./achievement-ladder-sheet.component.azeroth').then((module) => overlay.open(
             module.default,
@@ -78,14 +78,14 @@ export default component PersonRecord(props: { handle: string; history?: boolean
         ));
     };
 
-    const nameOf = (handle: string): string =>
+    const nameOf = (handle: string) =>
     {
         const person = people.byHandle(handle);
 
         return person === null ? handle : locale.text(person.displayName);
     };
 
-    const beside = (players: readonly string[]): string =>
+    const beside = (players: readonly string[]) =>
         players.filter((one) => one !== props.handle).map(nameOf).join(locale.t('list.separator'));
 
     <>

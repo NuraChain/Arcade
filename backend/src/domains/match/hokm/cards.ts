@@ -32,7 +32,7 @@ export function legalCards(hand: readonly number[], led: Suit | null): number[]
  * the suit that was LED wins. A card of any other suit cannot win however high it is - that is what
  * makes discarding a losing ace ordinary rather than a bug.
  */
-export function trickWinner(played: readonly number[], trump: Suit): number
+export function trickWinner(played: readonly number[], trump: Suit)
 {
     const led = suitOf(played[0]);
 
@@ -75,7 +75,7 @@ export function trickWinner(played: readonly number[], trump: Suit): number
  * lowest suits in order and never anything else. Everything downstream is derived from the length
  * of what comes back, which is why adding a player count here is the whole change.
  */
-export function deckFor(seats: number): number[]
+export function deckFor(seats: number)
 {
     const dropped = seats === 3 ? 1 : (seats === 2 ? 2 : 0);
 

@@ -23,7 +23,7 @@ export default component PushToggle()
     state key = '';
     state busy = false;
 
-    const settle = async (): Promise<void> =>
+    const settle = async () =>
     {
         if (!pushSupported())
         {
@@ -53,7 +53,7 @@ export default component PushToggle()
         void settle();
     }
 
-    const turnOn = async (): Promise<void> =>
+    const turnOn = async () =>
     {
         busy = true;
         try
@@ -77,7 +77,7 @@ export default component PushToggle()
         }
     };
 
-    const turnOff = async (): Promise<void> =>
+    const turnOff = async () =>
     {
         busy = true;
         try

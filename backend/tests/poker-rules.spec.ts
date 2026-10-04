@@ -8,7 +8,7 @@ import { hand, play, seated, seeded } from './poker-table.ts';
 
 const strength = (names: string) => evaluate(hand(names));
 
-const beats = (winner: string, loser: string): void =>
+const beats = (winner: string, loser: string) =>
 {
     expect(strength(winner).score, `${ winner } should beat ${ loser }`).toBeGreaterThan(strength(loser).score);
 };
@@ -197,7 +197,7 @@ describe('the pots', () =>
     });
 });
 
-function conserved(state: PokerState, total: number): void
+function conserved(state: PokerState, total: number)
 {
     expect(chipsInPlay(state)).toBe(total);
     expect(state.stacks.every((chips) => chips >= 0)).toBe(true);

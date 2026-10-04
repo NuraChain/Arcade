@@ -163,15 +163,15 @@ export function createHub(deps: HubDeps): Hub
     const pendingSocial = new Set<string>();
     let timer: ReturnType<typeof setTimeout> | null = null;
 
-    const held = (connection: Connection): Held => connection as Held;
+    const held = (connection: Connection) => connection as Held;
 
     const rooms = new Map<string, Map<string, { socket: Held; muted: boolean }>>();
 
     const talks = new Map<string, boolean>();
 
-    const pairOf = (a: string, b: string): string => (a < b ? `${ a }|${ b }` : `${ b }|${ a }`);
+    const pairOf = (a: string, b: string) => (a < b ? `${ a }|${ b }` : `${ b }|${ a }`);
 
-    const roster = (tableId: string): void =>
+    const roster = (tableId: string) =>
     {
         const room = rooms.get(tableId);
 
@@ -194,7 +194,7 @@ export function createHub(deps: HubDeps): Hub
         }
     };
 
-    const forget = (userId: string): void =>
+    const forget = (userId: string) =>
     {
         for (const room of rooms.values())
         {
@@ -213,7 +213,7 @@ export function createHub(deps: HubDeps): Hub
         }
     };
 
-    const leave = (tableId: string, connectionId: string, tell: boolean): void =>
+    const leave = (tableId: string, connectionId: string, tell: boolean) =>
     {
         const room = rooms.get(tableId);
 
@@ -250,7 +250,7 @@ export function createHub(deps: HubDeps): Hub
         }
     };
 
-    const partyOf = (userId: string): Party | null => edges.get(userId)?.party ?? null;
+    const partyOf = (userId: string) => edges.get(userId)?.party ?? null;
 
     /**
      * The relationship between two accounts, from what is already in memory.
@@ -278,7 +278,7 @@ export function createHub(deps: HubDeps): Hub
         return mine.friends.has(subject) ? 'friend' : 'none';
     };
 
-    const visible = (viewer: string, subject: string): boolean =>
+    const visible = (viewer: string, subject: string) =>
     {
         const watching = partyOf(viewer);
         const watched = partyOf(subject);
@@ -293,7 +293,7 @@ export function createHub(deps: HubDeps): Hub
         return maySeeOnline(watching, watched, relationFor(viewer, subject));
     };
 
-    const pump = (connection: Held): void =>
+    const pump = (connection: Held) =>
     {
         if (connection.pumping)
         {
@@ -333,7 +333,7 @@ export function createHub(deps: HubDeps): Hub
      * on rather than the order their promises happened to settle. One pump drains the queue, and
      * nothing else writes to the socket.
      */
-    const emit = (connection: Held, build: (n: number) => ServerFrame): void =>
+    const emit = (connection: Held, build: (n: number) => ServerFrame) =>
     {
         if (!connection.alive)
         {
@@ -363,7 +363,7 @@ export function createHub(deps: HubDeps): Hub
 
     const connectionsOf = (userId: string): Held[] => [...(byUser.get(userId) ?? [])];
 
-    const publish = (userIds: Iterable<string>, build: (n: number) => ServerFrame): void =>
+    const publish = (userIds: Iterable<string>, build: (n: number) => ServerFrame) =>
     {
         for (const userId of userIds)
         {
@@ -374,7 +374,7 @@ export function createHub(deps: HubDeps): Hub
         }
     };
 
-    const entriesFor = (viewer: string): PresenceEntry[] =>
+    const entriesFor = (viewer: string) =>
     {
         const out: PresenceEntry[] = [];
         for (const [userId, record] of online)
@@ -389,14 +389,14 @@ export function createHub(deps: HubDeps): Hub
         return out;
     };
 
-    const sendSnapshot = (connection: Held): void =>
+    const sendSnapshot = (connection: Held) =>
     {
         emit(connection, (n) => presence(n, true, entriesFor(connection.userId)));
     };
 
-    const handleOf = (userId: string): string => edges.get(userId)?.handle ?? userId;
+    const handleOf = (userId: string) => edges.get(userId)?.handle ?? userId;
 
-    const retalk = async (moved: ReadonlySet<string>): Promise<void> =>
+    const retalk = async (moved: ReadonlySet<string>) =>
     {
         for (const [tableId, room] of [...rooms])
         {
@@ -417,7 +417,7 @@ export function createHub(deps: HubDeps): Hub
         }
     };
 
-    const reload = async (userIds: readonly string[]): Promise<void> =>
+    const reload = async (userIds: readonly string[]) =>
     {
         const cached = userIds.filter((userId) => edges.has(userId));
 
@@ -498,7 +498,7 @@ export function createHub(deps: HubDeps): Hub
         await retalk(moved);
     };
 
-    const recheck = async (tableId: string): Promise<void> =>
+    const recheck = async (tableId: string) =>
     {
         const members = [...(rooms.get(tableId)?.values() ?? [])];
         const verdicts = await Promise.all(members.map((member) => deps.voiceAllowed(member.socket.userId, tableId)));
@@ -512,7 +512,7 @@ export function createHub(deps: HubDeps): Hub
         });
     };
 
-    const unwatch = (userId: string, tableId: string): void =>
+    const unwatch = (userId: string, tableId: string) =>
     {
         const set = watchers.get(tableId);
         set?.delete(userId);
@@ -523,7 +523,7 @@ export function createHub(deps: HubDeps): Hub
         }
     };
 
-    const forgetViews = (userId: string): void =>
+    const forgetViews = (userId: string) =>
     {
         for (const tableId of viewed.get(userId) ?? [])
         {
@@ -532,7 +532,7 @@ export function createHub(deps: HubDeps): Hub
         viewed.delete(userId);
     };
 
-    const schedule = (): void =>
+    const schedule = () =>
     {
         if (timer !== null)
         {
@@ -550,13 +550,13 @@ export function createHub(deps: HubDeps): Hub
 
     const later = new Set<ReturnType<typeof setTimeout>>();
 
-    function flush(): Promise<void>
+    function flush()
     {
         flushing = flushing.then(drain, drain);
         return flushing;
     }
 
-    async function drain(): Promise<void>
+    async function drain()
     {
         const chat = [...pendingChat.entries()];
         const social = [...pendingSocial];
@@ -593,7 +593,7 @@ export function createHub(deps: HubDeps): Hub
         ]);
     }
 
-    const markOnline = (userId: string, state: PresenceState): void =>
+    const markOnline = (userId: string, state: PresenceState) =>
     {
         const current = online.get(userId);
         if (current === undefined)
@@ -607,7 +607,7 @@ export function createHub(deps: HubDeps): Hub
         }
     };
 
-    const announce = (userId: string, except?: Held): void =>
+    const announce = (userId: string, except?: Held) =>
     {
         const record = online.get(userId);
         const handle = edges.get(userId)?.handle ?? userId;

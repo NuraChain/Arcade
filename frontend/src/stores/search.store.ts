@@ -63,7 +63,7 @@ export const useSearch = createStore((): SearchApi =>
     const [scope, setScope] = createSignal<SearchScope>('all');
     const [recents, setRecents] = createSignal<string[]>(recallSearchTerms());
 
-    const keep = (terms: string[]): void =>
+    const keep = (terms: string[]) =>
     {
         setRecents(terms);
         rememberSearchTerms(terms);
@@ -92,7 +92,7 @@ export const useSearch = createStore((): SearchApi =>
             return empty;
         }
         const tag = locale.locale();
-        const want = (kind: SearchScope): boolean => scope() === 'all' || scope() === kind;
+        const want = (kind: SearchScope) => scope() === 'all' || scope() === kind;
 
         const people = want('people')
             ? ranked(social.people(), needle, (person) => [person.handle, pickText(person.displayName, tag), pickText(person.bio, tag)])
@@ -163,7 +163,7 @@ export const useSearch = createStore((): SearchApi =>
     };
 });
 
-export function groupFor(id: string): GroupSummary | undefined
+export function groupFor(id: string)
 {
     return useGroups().byId(id);
 }

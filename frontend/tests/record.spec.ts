@@ -19,7 +19,7 @@ vi.mock('../src/api.ts', async () => await import('./fake-api.ts'));
 
 type Rendered = HTMLElement;
 
-const settle = async (): Promise<void> =>
+const settle = async () =>
 {
     for (let i = 0; i < 8; i += 1)
     {
@@ -43,7 +43,7 @@ const family = (id: string, game: string | undefined, extra: Partial<Achievement
 
 const WON_LUDO = family('won', 'ludo', { have: 12, earned: 11, next: { step: 12, need: 15, tier: 'bronze', blurb: { en: 'Win 15 games of Ludo.', fa: '۱۵ بازی منچ را ببر.' } } });
 
-const show = async (game?: string): Promise<HTMLElement> =>
+const show = async (game?: string) =>
 {
     const Stub = (): HTMLElement => document.createElement('div');
     const routes: Route[] = [{ path: '/app', component: Stub }];

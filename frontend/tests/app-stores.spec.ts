@@ -33,12 +33,12 @@ beforeEach(() =>
     Object.defineProperty(window, 'localStorage', {
         configurable: true,
         value: {
-            getItem: (key: string): string | null => memory.get(key) ?? null,
-            setItem: (key: string, value: string): void =>
+            getItem: (key: string) => memory.get(key) ?? null,
+            setItem: (key: string, value: string) =>
             {
                 memory.set(key, value);
             },
-            removeItem: (key: string): void =>
+            removeItem: (key: string) =>
             {
                 memory.delete(key);
             }
@@ -291,7 +291,7 @@ describe('toasts', () =>
         const toasts = useToasts();
         const stop = toasts.start();
 
-        const reject = (reason: string): void =>
+        const reject = (reason: string) =>
         {
             window.dispatchEvent(Object.assign(new Event('unhandledrejection'), { reason, promise: null }));
         };

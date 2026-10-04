@@ -7,7 +7,7 @@ export interface Done
     kind?: ToastKind;
 }
 
-export async function attempt(work: Promise<unknown>, done?: Done | string): Promise<boolean>
+export async function attempt(work: Promise<unknown>, done?: Done | string)
 {
     try
     {

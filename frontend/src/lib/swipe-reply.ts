@@ -6,7 +6,7 @@ export const SWIPE_REPLY = 56;
 
 const SWIPE_MAX = 80;
 
-export function swipeReach(offset: number, rtl: boolean): number
+export function swipeReach(offset: number, rtl: boolean)
 {
     const toward = rtl ? offset : -offset;
 
@@ -19,7 +19,7 @@ export function attachSwipeReply(row: HTMLElement, cue: HTMLElement | null, rtl:
     let reach = 0;
     let armed = false;
 
-    const paint = (distance: number): void =>
+    const paint = (distance: number) =>
     {
         const lead = rtl() ? distance : -distance;
         row.style.transform = distance === 0 ? '' : `translateX(${ lead }px)`;
@@ -31,7 +31,7 @@ export function attachSwipeReply(row: HTMLElement, cue: HTMLElement | null, rtl:
         }
     };
 
-    const settle = (): void =>
+    const settle = () =>
     {
         row.style.transition = 'transform 180ms ease-out';
         paint(0);
@@ -41,7 +41,7 @@ export function attachSwipeReply(row: HTMLElement, cue: HTMLElement | null, rtl:
         });
     };
 
-    const down = (event: PointerEvent): void =>
+    const down = (event: PointerEvent) =>
     {
         if (event.pointerType !== 'touch')
         {
@@ -53,7 +53,7 @@ export function attachSwipeReply(row: HTMLElement, cue: HTMLElement | null, rtl:
         drag.start(event.clientX, event.clientY, event.timeStamp);
     };
 
-    const move = (event: PointerEvent): void =>
+    const move = (event: PointerEvent) =>
     {
         if (!drag.active())
         {
@@ -81,7 +81,7 @@ export function attachSwipeReply(row: HTMLElement, cue: HTMLElement | null, rtl:
         }
     };
 
-    const up = (event: PointerEvent): void =>
+    const up = (event: PointerEvent) =>
     {
         if (!drag.active())
         {

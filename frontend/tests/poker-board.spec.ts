@@ -42,7 +42,7 @@ const match = (view: Partial<Poker>, mine: number | null = 0, seats = 6): MatchV
     }
 });
 
-const button = (container: HTMLElement, label: string): HTMLButtonElement | undefined =>
+const button = (container: HTMLElement, label: string) =>
     [...container.querySelectorAll('button')].find((one) => one.textContent?.trim() === label) as HTMLButtonElement | undefined;
 
 const place = (container: HTMLElement, name: string): { x: number; y: number } =>

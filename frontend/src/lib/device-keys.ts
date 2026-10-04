@@ -71,7 +71,7 @@ export interface KeyStore
 const read = <T>(mode: IDBTransactionMode, work: (store: IDBObjectStore) => IDBRequest<T>): Promise<T> =>
     transact(DEVICE_STORE, mode, work);
 
-const exportPublic = async (key: CryptoKey): Promise<string> =>
+const exportPublic = async (key: CryptoKey) =>
     toBase64Url(new Uint8Array(await crypto.subtle.exportKey('spki', key)));
 
 /**
@@ -155,18 +155,18 @@ const browserKeyStore: KeyStore & { record(): Promise<KeyRecord | null> } =
 
 let active: KeyStore = browserKeyStore;
 
-export function keyStore(): KeyStore
+export function keyStore()
 {
     return active;
 }
 
 /** Swaps the store. The specs use it; nothing in the product does. */
-export function setKeyStore(store: KeyStore): void
+export function setKeyStore(store: KeyStore)
 {
     active = store;
 }
 
-export function resetKeyStore(): void
+export function resetKeyStore()
 {
     active = browserKeyStore;
 }

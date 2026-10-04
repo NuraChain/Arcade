@@ -55,20 +55,20 @@ export default component EmojiPicker(props: { onPick: (emoji: string) => void; f
         }))
         .filter((group) => group.emoji.length > 0);
 
-    const pick = (emoji: string): void =>
+    const pick = (emoji: string) =>
     {
         settings.update({ recentEmoji: [emoji, ...recent.filter((one) => one !== emoji)].slice(0, RECENT_MAX) });
         props.onPick(emoji);
     };
 
-    const jump = (id: EmojiGroup | 'recent'): void =>
+    const jump = (id: EmojiGroup | 'recent') =>
     {
         active = id;
         query = '';
         scroller?.querySelector(`[data-group="${ id }"]`)?.scrollIntoView({ block: 'start' });
     };
 
-    const follow = (): void =>
+    const follow = () =>
     {
         if (scroller === null)
         {

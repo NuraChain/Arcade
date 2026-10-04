@@ -13,7 +13,7 @@ export interface CuesHand
  * Putting the import behind this tiny module moves the table into a lazy chunk of its own; the
  * shell pays a static import of a few dozen bytes and starts the store one promise later.
  */
-export function startCues(hand: CuesHand, navigate: (to: string) => void, stops: (() => void)[]): void
+export function startCues(hand: CuesHand, navigate: (to: string) => void, stops: (() => void)[])
 {
     void import('./cues.store.ts')
         .then((module) =>

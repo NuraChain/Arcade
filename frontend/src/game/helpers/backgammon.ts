@@ -31,12 +31,12 @@ export function outcomeOf(side: Side, hop: Hop): Outcome | null
     return hit ? 'hit' : null;
 }
 
-export function hits(outcome: Outcome | null): boolean
+export function hits(outcome: Outcome | null)
 {
     return outcome === 'hit' || outcome === 'enterHit';
 }
 
-function stepsWith(side: Side, die: number): Hop[]
+function stepsWith(side: Side, die: number)
 {
     const found: Hop[] = [];
 

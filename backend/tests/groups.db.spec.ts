@@ -38,7 +38,7 @@ async function makeUser(): Promise<string>
     return rowsOf<{ id: string }>(rows)[0].id;
 }
 
-const make = async (owner: string, name: string, privacy: 'private' | 'public' = 'public'): ReturnType<typeof groups.create> =>
+const make = async (owner: string, name: string, privacy: 'private' | 'public' = 'public') =>
     groups.create(owner, { name, blurb: '', crest: 'crest-crown', hue: 40, game: null, privacy });
 
 describe.skipIf(!active)('groups, against a real database', () =>

@@ -24,7 +24,7 @@ export const EPOCH_STORE = 'epochs';
 
 const STORES = [DEVICE_STORE, VAULT_STORE, EPOCH_STORE];
 
-export function keyringAvailable(): boolean
+export function keyringAvailable()
 {
     return typeof globalThis.indexedDB !== 'undefined';
 }
@@ -52,7 +52,7 @@ export async function transact<T>(
     store: string,
     mode: IDBTransactionMode,
     work: (store: IDBObjectStore) => IDBRequest<T>
-): Promise<T>
+)
 {
     const database = await openDatabase();
 

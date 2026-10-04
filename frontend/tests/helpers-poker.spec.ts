@@ -10,7 +10,7 @@ import type { PokerBoard } from '../src/data/match.ts';
 
 const SUIT_OF: Record<string, Suit> = { C: 'clubs', D: 'diamonds', H: 'hearts', S: 'spades' };
 
-const card = (name: string): number =>
+const card = (name: string) =>
 {
     const rank = name.slice(0, -1) as Rank;
 
@@ -133,7 +133,7 @@ const seeded = (seed: number): { die: (sides: number) => number; next: () => num
 {
     let value = (seed * 2654435761) >>> 0 || 1;
 
-    const next = (): number =>
+    const next = () =>
     {
         value ^= value << 13;
         value ^= value >>> 17;
@@ -145,10 +145,10 @@ const seeded = (seed: number): { die: (sides: number) => number; next: () => num
     return { die: (sides) => 1 + Math.floor(next() * sides), next };
 };
 
-const boardOf = (state: PokerState, seat: number | null): PokerBoard =>
+const boardOf = (state: PokerState, seat: number | null) =>
     pokerEngine.view(state, seat) as PokerBoard;
 
-function falsehoods(state: PokerState, seat: number, draws: { die: (sides: number) => number }): string[]
+function falsehoods(state: PokerState, seat: number, draws: { die: (sides: number) => number })
 {
     const view = boardOf(state, seat);
     const tip = coachOf(view, seat);
@@ -157,7 +157,7 @@ function falsehoods(state: PokerState, seat: number, draws: { die: (sides: numbe
     const holding = !state.out[seat] && !state.folded[seat];
     const acting = pokerEngine.turnOf(state) === seat;
     const faults: string[] = [];
-    const wrong = (what: string): void =>
+    const wrong = (what: string) =>
     {
         faults.push(`seat ${ seat }: ${ what }`);
     };
@@ -189,7 +189,7 @@ function falsehoods(state: PokerState, seat: number, draws: { die: (sides: numbe
         wrong(`priced the call at ${ JSON.stringify(outcome?.call) } against ${ JSON.stringify(priced) }`);
     }
 
-    const accepts = (action: PokerAction): boolean => pokerEngine.apply(state, action, draws).ok;
+    const accepts = (action: PokerAction) => pokerEngine.apply(state, action, draws).ok;
 
     if (tip === null)
     {
