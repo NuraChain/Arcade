@@ -129,4 +129,5 @@ export type PokerRefusal =
     | 'nothing-to-call'
     | 'cannot-raise'
     | 'raise-too-small'
-    | 'raise-too-large';
+    | 'raise-too-large'
+    | 'unplayable';

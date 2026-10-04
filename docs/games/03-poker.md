@@ -92,7 +92,15 @@ no separate branch for the transition.
   chips out after every action of random games at every table size.
 - **The odd chip** goes to the first winner left of the button.
 - **An all-in runout resolves inside one `apply`**, and when a hand ends the next is dealt inside
-  the same `apply`. A client never sees a state waiting on nobody.
+  the same `apply`. A client never sees a state waiting on nobody. More than one hand passes in one
+  `apply` only when the blinds alone put everybody but one player all in, so nobody can act.
+- **A state the engine cannot advance is refused, never written.** `settle` stops at a bound, and an
+  `apply` that reaches it, or that would leave the button or the turn on no seat, is the refusal
+  `unplayable`, so the state stays where it was. The sweep then postpones the match and logs it as an
+  `unplayable match`. Before this, the bound ended `settle` silently: the first sweep after the dead
+  button went in met a match created without `sb` and `bb`, dealt about 250 hands nobody could act in,
+  and wrote a live state with no button and no turn, which every read then refused as a contract
+  violation.
 
 ### Showdown
 
@@ -159,8 +167,8 @@ A play is `{ kind: 'poker', verb: 'fold' | 'check' | 'call' | 'raise' | 'allin',
 ## Refusals
 
 `game-over`, `not-playing` and `not-your-turn` are shared with the other games; poker adds
-`cannot-check`, `nothing-to-call`, `cannot-raise`, `raise-too-small` and `raise-too-large`, each a
-409 with its own sentence in `SAYS`.
+`cannot-check`, `nothing-to-call`, `cannot-raise`, `raise-too-small`, `raise-too-large` and
+`unplayable`, each a 409 with its own sentence in `SAYS`.
 
 ## What a game leaves behind
 
@@ -176,7 +184,8 @@ A play is `{ kind: 'poker', verb: 'fold' | 'check' | 'call' | 'raise' | 'allin',
   the move to heads-up, and the big blind's walk through random games), the odd chip, the blind
   schedule, and placements.
 - `poker-engine.spec.ts` — the catalogue, parsing and wire bounds, every refusal, autoplay, the next
-  hand dealt inside `apply`, the all-in runout, walkouts, the facts `finish` reports and the places a forfeit takes, the turn key, tally and points.
+  hand dealt inside `apply`, the all-in runout, the `unplayable` refusal and whole games played by
+  `autoplay` alone with a parsing board and somebody on turn at every step, walkouts, the facts `finish` reports and the places a forfeit takes, the turn key, tally and points.
 - `poker-seam.spec.ts` — the forgery on `view` and `log`, spectators, folded hands never shown.
 - `engine-contract.spec.ts` plays random matches at 2, 6 and 9 inside its 20,000-action bound.
 

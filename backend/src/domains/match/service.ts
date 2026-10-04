@@ -138,7 +138,8 @@ export const REFUSALS = {
     'nothing-to-call': 'conflict',
     'cannot-raise': 'conflict',
     'raise-too-small': 'conflict',
-    'raise-too-large': 'conflict'
+    'raise-too-large': 'conflict',
+    'unplayable': 'conflict'
 } as const satisfies Record<string, 'forbidden' | 'conflict'>;
 
 const SAYS: Record<keyof typeof REFUSALS, string> = {
@@ -159,7 +160,8 @@ const SAYS: Record<keyof typeof REFUSALS, string> = {
     'nothing-to-call': 'There is nothing to call.',
     'cannot-raise': 'You cannot raise now.',
     'raise-too-small': 'That raise is below the minimum.',
-    'raise-too-large': 'You do not have that many chips.'
+    'raise-too-large': 'You do not have that many chips.',
+    'unplayable': 'This game cannot go on from where it stands.'
 };
 
 function refuse(reason: string): never

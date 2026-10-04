@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import { pokerEngine } from '../src/domains/match/engines/poker.ts';
-import { apply, chipsInPlay, create } from '../src/domains/match/poker/engine.ts';
+import { apply, autoplay, chipsInPlay, create } from '../src/domains/match/poker/engine.ts';
 import type { PokerAction, PokerEvent, PokerState } from '../src/domains/match/poker/state.ts';
 import { GAME_SEEDS } from '../src/db/seed-reference.ts';
-import { matchBoard, matchLog, matchPlay } from '../src/schemas.ts';
+import { matchBoard, matchLog, matchPlay, pokerBoard } from '../src/schemas.ts';
 import { play, seated, seeded } from './poker-table.ts';
 
 const draws = (seed: number) => ({ die: seeded(seed) });
@@ -359,6 +359,105 @@ describe('what a game leaves behind', () =>
         expect(pokerEngine.points({ hands: 40, pots: 6, showdowns: 3, knockouts: 2 })).toBe(12);
         expect(pokerEngine.points({ pots: 60, knockouts: 8 })).toBe(25);
         expect(pokerEngine.points({})).toBe(0);
+    });
+});
+
+describe('a state the engine cannot advance', () =>
+{
+    const VERBS = new Set(['fold', 'check', 'call', 'raise', 'allin']);
+
+    it('is refused rather than written, like the match the sweep left on hand 253 with nobody on turn', () =>
+    {
+        const { sb: _sb, bb: _bb, ...before } = create(2, 'low', seeded(7));
+        const stored = before as PokerState;
+        const action = autoplay(stored, stored.turn);
+
+        expect(action).not.toBeNull();
+        expect(apply(stored, action!, seeded(7))).toEqual({ ok: false, reason: 'unplayable' });
+        expect(stored.hand).toBe(1);
+    });
+
+    it('is refused when the button came back from storage as nothing', () =>
+    {
+        const state = { ...create(6, 'low', seeded(8)), button: null } as unknown as PokerState;
+
+        expect(apply(state, { kind: 'call', seat: state.turn }, seeded(8))).toEqual({ ok: false, reason: 'unplayable' });
+    });
+
+    it('never arises from the clock alone: autoplay plays whole games with somebody on turn and a board the wire takes', () =>
+    {
+        for (const seats of [2, 6, 9])
+        {
+            for (let game = 0; game < 12; game += 1)
+            {
+                const die = seeded(seats * 31 + game);
+                const sweep = game % 2 === 1;
+                const misses = Array.from({ length: seats }, () => 0);
+                let state = create(seats, 'low', die);
+                let steps = 0;
+
+                while (state.winner === null && steps < 20_000)
+                {
+                    const where = `${ seats } seats, game ${ game }, step ${ steps }`;
+                    const turn = state.turn;
+                    const action: PokerAction = sweep && misses[turn] === 2
+                        ? forfeit(turn, 'timeout')
+                        : autoplay(state, turn)!;
+                    const outcome = apply(state, action, die);
+
+                    expect(outcome.ok, `${ where }: ${ outcome.ok ? '' : outcome.reason }`).toBe(true);
+
+                    if (!outcome.ok)
+                    {
+                        break;
+                    }
+
+                    misses[turn] += 1;
+
+                    const hands = outcome.events.reduce<PokerEvent[][]>((split, event) =>
+                    {
+                        if (event.e === 'deal')
+                        {
+                            split.push([]);
+                        }
+
+                        split[split.length - 1].push(event);
+
+                        return split;
+                    }, [[]]).slice(1);
+
+                    for (const played of hands.filter((events) => events.some((event) => event.e === 'end')))
+                    {
+                        const end = played.find((event) => event.e === 'end');
+                        const shown = played.flatMap((event) => (event.e === 'show' ? [event.seat] : [])).sort((a, b) => a - b);
+
+                        expect(played.some((event) => VERBS.has(event.e)), `${ where }: a hand passed with somebody able to act`).toBe(false);
+                        expect(shown, `${ where }: a hand nobody acted in went to showdown with everybody all in`).toEqual(end?.e === 'end' ? [...end.dealt].sort((a, b) => a - b) : []);
+                    }
+
+                    state = outcome.state;
+                    steps += 1;
+
+                    if (state.winner !== null)
+                    {
+                        break;
+                    }
+
+                    expect(Number.isInteger(state.turn) && state.turn >= 0 && state.turn < seats, `${ where }: turn`).toBe(true);
+                    expect(Number.isInteger(state.button) && state.button >= 0 && state.button < seats, `${ where }: button`).toBe(true);
+
+                    for (const reader of [state.turn, null])
+                    {
+                        const view = pokerEngine.view(state, reader);
+
+                        pokerBoard.parse(view);
+                        expect(view).toHaveProperty('turn', state.turn);
+                    }
+                }
+
+                expect(state.winner, `${ seats } seats, game ${ game }`).not.toBeNull();
+            }
+        }
     });
 });
 

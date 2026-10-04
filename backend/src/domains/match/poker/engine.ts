@@ -268,13 +268,18 @@ function finishHand(state: PokerState, events: PokerEvent[], showdown: boolean)
     }
 }
 
+function isSeat(state: PokerState, seat: number)
+{
+    return Number.isInteger(seat) && seat >= 0 && seat < state.seats;
+}
+
 function settle(state: PokerState, events: PokerEvent[], die: Die)
 {
     for (let guard = 0; guard < SETTLE_LIMIT; guard += 1)
     {
         if (state.winner !== null)
         {
-            return;
+            return true;
         }
 
         const holding = state.out.map((_, seat) => seat).filter((seat) => inHand(state, seat));
@@ -291,9 +296,9 @@ function settle(state: PokerState, events: PokerEvent[], die: Die)
             continue;
         }
 
-        if (state.turn >= 0 && needsToAct(state, state.turn))
+        if (isSeat(state, state.turn) && needsToAct(state, state.turn))
         {
-            return;
+            return isSeat(state, state.button);
         }
 
         const next = nextToAct(state, Math.max(0, state.turn));
@@ -301,7 +306,7 @@ function settle(state: PokerState, events: PokerEvent[], die: Die)
         if (next !== null)
         {
             state.turn = next;
-            return;
+            return isSeat(state, state.button);
         }
 
         closeRound(state);
@@ -326,6 +331,8 @@ function settle(state: PokerState, events: PokerEvent[], die: Die)
         dealStreet(state, events, die);
         state.turn = nextToAct(state, state.button) ?? state.button;
     }
+
+    return false;
 }
 
 function refuse(reason: PokerRefusal): Applied
@@ -497,7 +504,11 @@ export function apply(state: PokerState, action: PokerAction, die: Die): Applied
         }
     }
 
-    settle(next, events, die);
+    if (!settle(next, events, die))
+    {
+        return refuse('unplayable');
+    }
+
     next.rev = state.rev + 1;
 
     return { ok: true, state: next, events };
