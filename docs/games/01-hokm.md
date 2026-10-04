@@ -126,6 +126,11 @@ order: following suit, the lowest card of the suit led; void, the lowest card th
 trump only when nothing else is left); leading, the lowest card of the longest suit that is not trump.
 Ties go to the lower rank, then to suit order, so the same hand always plays the same card.
 
+**An abandoned finish says so in the log (HOKM-09).** The action that ends a match by forfeit logs
+`{ e: 'forfeit', seat, reason }` (`resign`, `left` or `timeout`) and then `finish`, to every reader
+alike; a played-out match never logs a `forfeit`. `hokm-engine.spec.ts` and `hokm-seam.spec.ts` pin
+both, through the wire schema.
+
 ---
 
 ## Client

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { hokmEngine } from '../src/domains/match/engines/hokm.ts';
 import type { HokmState } from '../src/domains/match/hokm/state.ts';
-import { hokmBoard, hokmPlay, matchBoard, matchPlay } from '../src/schemas.ts';
+import { hokmBoard, hokmPlay, matchBoard, matchLog, matchPlay } from '../src/schemas.ts';
 
 /**
  * A hokm hand is the first thing in this product that one player may see and another may not, and
@@ -218,6 +218,29 @@ describe('what one seat may see of another', () =>
 
 describe('the hokm wire', () =>
 {
+    it('tells every reader who stopped the match and how, beside the finish it caused', () =>
+    {
+        for (const reason of ['resign', 'left', 'timeout'] as const)
+        {
+            const quit = hokmEngine.apply(opened(4, 9), hokmEngine.forfeit(2, reason), seeded(1));
+
+            expect(quit.ok).toBe(true);
+
+            if (!quit.ok)
+            {
+                return;
+            }
+
+            for (const reader of [null, 0, 1, 2, 3])
+            {
+                expect(matchLog.parse(hokmEngine.log(quit.events, reader)), `${ reason } read by ${ reader }`).toEqual({
+                    kind: 'hokm',
+                    moves: [{ e: 'forfeit', seat: 2, reason }, { e: 'finish', side: 1 }]
+                });
+            }
+        }
+    });
+
     it('is a member of the shared unions, discriminated by the game name', () =>
     {
         const board = hokmEngine.view(opened(4, 3), 0);

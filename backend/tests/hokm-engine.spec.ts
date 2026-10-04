@@ -6,7 +6,7 @@ import { hokmEngine } from '../src/domains/match/engines/hokm.ts';
 import { SEATS, apply, autoplay, create, dealerSeat, legalMoves } from '../src/domains/match/hokm/engine.ts';
 import { GAME_SEEDS } from '../src/db/seed-reference.ts';
 import { trickCount } from '../src/domains/match/hokm/scoring.ts';
-import { sideCount, sideOf, type HokmState } from '../src/domains/match/hokm/state.ts';
+import { sideCount, sideOf, type HokmEvent, type HokmState } from '../src/domains/match/hokm/state.ts';
 
 /**
  * The state machine, exercised the way `ludo-purity.spec.ts` exercises ludo's: thousands of real
@@ -639,6 +639,59 @@ describe('walking away', () =>
         expect(quit.state.winner).not.toBeNull();
         expect(sideOf((state.hakem + 1) % 4, 4)).not.toBe(quit.state.winner);
         expect(quit.state.out[(state.hakem + 1) % 4]).toBe(true);
+    });
+
+    for (const reason of ['resign', 'left', 'timeout'] as const)
+    {
+        it(`logs who stopped and how (${ reason }) in the action that ends the match`, () =>
+        {
+            for (const seats of SEATS)
+            {
+                const state = create(seats, 7, seeded(13 + seats));
+                const seat = (state.hakem + 1) % seats;
+                const quit = apply(state, hokmEngine.forfeit(seat, reason), seeded(1));
+
+                expect(quit.ok).toBe(true);
+
+                if (!quit.ok)
+                {
+                    return;
+                }
+
+                expect(quit.events, `${ seats } players`).toEqual([
+                    { e: 'forfeit', seat, reason },
+                    { e: 'finish', side: quit.state.winner }
+                ]);
+            }
+        });
+    }
+
+    it('finishes a played-out match with no forfeit anywhere in its log', () =>
+    {
+        for (const seats of SEATS)
+        {
+            const deal = seeded(77 + seats);
+            const log: HokmEvent[][] = [];
+
+            let state = create(seats, 7, deal);
+
+            for (let action = 0; state.winner === null && action < 20000; action += 1)
+            {
+                const step = apply(state, autoplay(state, hokmEngine.turnOf(state)!, deal)!, deal);
+
+                if (!step.ok)
+                {
+                    throw new Error(step.reason);
+                }
+
+                log.push(step.events);
+                state = step.state;
+            }
+
+            expect(state.winner, `${ seats } players`).not.toBeNull();
+            expect(log.flat().filter((event) => event.e === 'forfeit'), `${ seats } players`).toEqual([]);
+            expect(log.at(-1)?.at(-1), `${ seats } players`).toEqual({ e: 'finish', side: state.winner });
+        }
     });
 
     it('counts two sides at four players and one per seat otherwise', () =>
