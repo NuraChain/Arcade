@@ -133,7 +133,7 @@ export function longest(side: Side, dice: readonly number[])
     return deepest(side, dice, new Map());
 }
 
-function forcedDie(side: Side, roll: readonly number[], need: number): number | null
+export function forcedDie(side: Side, roll: readonly number[], need: number): number | null
 {
     if (need !== 1 || roll[0] === roll[1])
     {

@@ -1,11 +1,19 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 
 import { coachOf, hits, outcomeOf, type Moment, type Outcome } from '../src/game/helpers/backgammon.ts';
 import { START, type Hop, type Side } from '../../backend/src/domains/match/backgammon/board.ts';
-import { stage } from '../../backend/src/domains/match/backgammon/moves.ts';
+import type * as moves from '../../backend/src/domains/match/backgammon/moves.ts';
+import { forcedDie, stage } from '../../backend/src/domains/match/backgammon/moves.ts';
 import type { Tip } from '../src/game/helpers/tip.ts';
 import { en } from '../src/locales/en/index.ts';
 import { fa } from '../src/locales/fa/index.ts';
+
+vi.mock('../../backend/src/domains/match/backgammon/moves.ts', async (importOriginal) =>
+{
+    const actual: typeof moves = await importOriginal();
+
+    return { ...actual, forcedDie: vi.fn(actual.forcedDie) };
+});
 
 const row = (points: Record<number, number>): number[] =>
     Array.from({ length: 26 }, (_, point) => points[point] ?? 0);
@@ -91,6 +99,18 @@ describe('the backgammon rules coach', () =>
     it.each(cases)('%s', (_, at, expected) =>
     {
         expect(coachOf(at)).toEqual(expected);
+    });
+
+    it('asks the server rules which die is forced rather than keeping a copy of its own', () =>
+    {
+        const asked = vi.mocked(forcedDie);
+
+        asked.mockClear();
+        expect(coachOf(moment({ side: onlyOne, dice: [5, 6] }))).toEqual({ key: 'helpers.backgammon.higher', params: { die: 6 } });
+        expect(asked).toHaveBeenCalledWith(onlyOne, [5, 6], 1);
+
+        asked.mockReturnValueOnce(null);
+        expect(coachOf(moment({ side: onlyOne, dice: [5, 6] }))).toBeNull();
     });
 
     it('offers only the hops that keep both dice in play, which is what the coach is explaining', () =>

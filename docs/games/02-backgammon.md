@@ -35,7 +35,7 @@ Canonical ruleset: [bkgm.com rules](https://bkgm.com/rules.html) and
 
 ```
 board.ts      constants (OFF 0, BAR 25, 15 checkers, the start), Side, Hop, pips, facing
-moves.ts      the move search: canStep, step, longest, turns, settle
+moves.ts      the move search: canStep, step, longest, forcedDie, turns, settle
 cube.ts       whether the cube is live, and mayDouble
 scoring.ts    single / gammon / backgammon, their values, the Crawford transition
 state.ts      the state, the actions, the events, the refusals
@@ -214,7 +214,9 @@ SVG from `frontend/src/game/backgammon-layout.ts`, with the reader's home bottom
 their seat. A turn is staged one hop at a time - tap a checker, then where it goes, or pick a move
 from the list of buttons under the board - and `stage()` from the server's own `moves.ts` decides
 which hops are left after each one. Undo takes a staged hop back; "Play the move" sends the whole
-turn once it is complete. See CLAUDE.md, *Backgammon*.
+turn once it is complete. The rules coach (`frontend/src/game/helpers/backgammon.ts`) names the
+higher die from the same module's `forcedDie`, the function `turns` uses, and keeps no copy of the
+rule. See CLAUDE.md, *Backgammon*.
 
 `tools/qa/backgammon-pass.mjs` plays whole matches at 1, 3 and 5 points over the real api.
 

@@ -1,5 +1,5 @@
 import { BAR, OFF, allHome, facing, type Hop, type Side } from '../../../../backend/src/domains/match/backgammon/board.ts';
-import { canStep, diceOf, landing, longest, stage } from '../../../../backend/src/domains/match/backgammon/moves.ts';
+import { canStep, diceOf, forcedDie, landing, longest, stage } from '../../../../backend/src/domains/match/backgammon/moves.ts';
 import type { Tip } from './tip.ts';
 
 export type Outcome = 'hit' | 'enter' | 'enterHit' | 'off';
@@ -55,17 +55,17 @@ function binding(side: Side, dice: readonly number[], offered: readonly Hop[]): 
 {
     const [low, high] = [Math.min(dice[0], dice[1]), Math.max(dice[0], dice[1])];
     const lows = stepsWith(side, low);
-    const highs = stepsWith(side, high);
     const need = longest(side, diceOf(dice));
+    const forced = forcedDie(side, dice, need);
 
-    if (need === 1 && lows.length > 0 && highs.length > 0)
+    if (forced !== null && lows.length > 0)
     {
-        return { key: 'helpers.backgammon.higher', params: { die: high } };
+        return { key: 'helpers.backgammon.higher', params: { die: forced } };
     }
 
     const keys = new Set(offered.map((hop) => `${ hop.from }/${ hop.to }`));
 
-    if (need === 2 && [...lows, ...highs].some((hop) => !keys.has(`${ hop.from }/${ hop.to }`)))
+    if (need === 2 && [...lows, ...stepsWith(side, high)].some((hop) => !keys.has(`${ hop.from }/${ hop.to }`)))
     {
         return { key: 'helpers.backgammon.both' };
     }

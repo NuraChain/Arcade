@@ -852,7 +852,9 @@ the hops some complete legal turn still continues with - so the board highlights
 can move, only destinations they can reach, and enables "Play the move" exactly when the turn is
 whole. The browser imports it from `backend/src/domains/match/backgammon/`, the way ludo's path code
 imports `ludo/board.ts`: a second copy of the forced-move rules in the client would agree with the
-server right up until the position where it mattered. A staged turn is local until it is sent, so
+server right up until the position where it mattered. The rules coach asks the same module's
+`forcedDie` which die a one-die turn must play; it kept its own "play the higher" rule until that was
+found. A staged turn is local until it is sent, so
 Undo costs nothing and nothing is ever half-played on the wire.
 
 **Every move is a button as well as a tap.** The board is one inline SVG drawn from
