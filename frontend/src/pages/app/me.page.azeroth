@@ -2,6 +2,7 @@ import { createResource, useHead } from 'azerothjs';
 
 import Page from '../../components/app/page.component.azeroth';
 import PersonRecord, { type RecordPart } from '../../components/social/person-record.component.azeroth';
+import ChainFaceFailed from '../../components/social/chain-face-failed.component.azeroth';
 import ProfileHeader from '../../components/social/profile-header.component.azeroth';
 import Badge from '../../components/ui/badge.component.azeroth';
 import Tabs from '../../components/ui/tabs.component.azeroth';
@@ -87,6 +88,12 @@ export default component MePage()
         { name: 'chain.nfts' }
     );
 
+    const retryChain = () =>
+    {
+        face.refetch();
+        nfts.refetch();
+    };
+
     derived nftStat = nfts.data()?.configured === true
         ? [{ label: locale.t('profile.stat.nfts'), value: nfts.data()!.total, to: '/app/me/nfts' }]
         : [];
@@ -157,6 +164,10 @@ export default component MePage()
                             </span>
                         }
                     />
+
+                    <Show when={ face.error() !== null }>
+                        { () => <ChainFaceFailed onRetry={ retryChain } /> }
+                    </Show>
 
                     <Show when={ !account.isWallet() }>
                         { () =>

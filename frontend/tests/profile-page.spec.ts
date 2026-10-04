@@ -138,6 +138,28 @@ describe('my profile page', () =>
         expect(container.textContent).not.toContain('On your Nura Profile');
     });
 
+    it('says the Nura Profile could not be read, rather than drawing an empty one, and tries again', async () =>
+    {
+        signIn('wallet');
+        server.chain = { configured: true, profile: null };
+        server.chainFaces['dana.w'] = { username: 'dana', displayName: 'Dana on chain', bio: 'Chain bio', avatar: '' };
+        server.refuse = 'chain-unreachable';
+        const container = await page();
+
+        const alert = [...container.querySelectorAll('[role=alert]')].find((one) => one.textContent?.includes('could not read the Nura Profile'));
+        expect(alert).toBeDefined();
+        expect(container.textContent).not.toContain('Chain bio');
+
+        server.refuse = null;
+        const retry = [...container.querySelectorAll('button')].find((one) => one.textContent?.trim() === 'Try again') as HTMLButtonElement;
+        retry.click();
+        await settle();
+
+        expect(container.textContent).toContain('Chain bio');
+        expect(container.textContent).not.toContain('could not read the Nura Profile');
+        expect(server.calls.filter((call) => call === 'chain.person')).toHaveLength(2);
+    });
+
     it('is empty but for the handle when there is no Nura Profile', async () =>
     {
         signIn('wallet');

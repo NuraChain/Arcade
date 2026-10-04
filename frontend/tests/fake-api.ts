@@ -24,7 +24,7 @@ import {
 } from './fixtures.ts';
 import { accountIdOf, buildSealedFixtures } from './sealed-fixtures.ts';
 
-export type Refusal = 'challenge-unreachable' | 'bad-signature' | 'wallet-unreachable' | 'guest-reserved' | 'guest-unreachable';
+export type Refusal = 'challenge-unreachable' | 'bad-signature' | 'wallet-unreachable' | 'guest-reserved' | 'guest-unreachable' | 'chain-unreachable';
 
 function hueOf(text: string)
 {
@@ -628,6 +628,10 @@ export const client =
         async person({ params }: { params: { handle: string } })
         {
             server.calls.push('chain.person');
+            if (server.refuse === 'chain-unreachable')
+            {
+                throw new ApiError(500, 'internal', 'The request took too long to respond.', undefined);
+            }
             const face = server.chainFaces[params.handle];
             return { configured: server.chain.configured, ...(face === undefined ? {} : { profile: { ...face } }) };
         },

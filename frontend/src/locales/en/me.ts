@@ -74,6 +74,7 @@ export const me = {
     'profile.failed': 'That did not save. Check your connection and try again.',
     'profile.handleCopy': 'Copy handle',
     'profile.handleCopied': 'Handle copied',
+    'profile.chainFailed': 'We could not read the Nura Profile on {chain}, so the name, bio and picture may be missing.',
     'profile.joined': 'Joined {date}',
     'profile.pictureTitle': 'Profile picture',
     'profile.pictureView': 'View picture',

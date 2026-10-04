@@ -77,6 +77,7 @@ export const me: Pick<Dictionary, keyof typeof reference> = {
     'profile.failed': 'ذخیره نشد. اتصالت را بررسی کن و دوباره امتحان کن.',
     'profile.handleCopy': 'کپی شناسه',
     'profile.handleCopied': 'شناسه کپی شد',
+    'profile.chainFailed': 'پروفایل نورا روی {chain} خوانده نشد، پس ممکن است نام، بیو و عکس نمایش داده نشوند.',
     'profile.joined': 'عضو از {date}',
     'profile.pictureTitle': 'تصویر پروفایل',
     'profile.pictureView': 'دیدن تصویر',
