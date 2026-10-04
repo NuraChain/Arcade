@@ -14,7 +14,7 @@ import { backgammonEngine } from './engines/backgammon.ts';
 import { hokmEngine } from './engines/hokm.ts';
 import { ludoEngine } from './engines/ludo.ts';
 import { pokerEngine } from './engines/poker.ts';
-import { turnMs } from './turns.ts';
+import { nextMissForfeits, turnMs } from './turns.ts';
 import type { MatchLog } from '../../schemas.ts';
 import type { MatchHistory } from '../../schemas.ts';
 import type { Draws, Engine, TableConfig } from './engine.ts';
@@ -63,8 +63,6 @@ interface HistoryRow
 const UNIQUE_VIOLATION = '23505';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-const MAX_TIMEOUTS = 3;
 
 export type Applied = 'now' | 'already' | 'stale';
 
@@ -869,7 +867,7 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
                         where: { matchId: match.id, seat }
                     });
 
-                    const forfeiting = (chair?.timeouts ?? 0) + 1 >= MAX_TIMEOUTS;
+                    const forfeiting = nextMissForfeits(chair?.timeouts ?? 0);
 
                     const action = forfeiting
                         ? engine.forfeit(seat, 'timeout')

@@ -646,11 +646,12 @@ frame kind that costs something is metered by one ten-second budget (`voice` 30,
 **A turn that runs out is played, not punished.** The sweep finds due matches by Postgres `now()` -
 never `MoreThan(new Date())`, because the deadline is written by Postgres too (`commit` sets it as
 `now() + make_interval(...)`) and a Node clock would disagree with it - asks the engine's
-`autoplay`, and bumps `timeouts`. The third miss IN A ROW forfeits that seat: any action a person
-takes puts their count back to zero, because a count that only ever grew forfeited somebody for three
-misses spread across a whole match, and a Sit & Go is two hundred decisions a seat. When forfeits
-leave one player standing the match ends `abandoned`. The server's own actions are written with
-`user_id = null`, which is what distinguishes them in the ledger.
+`autoplay`, and bumps `timeouts`. The third miss IN A ROW (`MISSES_ALLOWED`, asked through
+`nextMissForfeits`) forfeits that seat: any action a person takes puts their count back to zero,
+because a count that only ever grew forfeited somebody for three misses spread across a whole match,
+and a Sit & Go is two hundred decisions a seat. When forfeits leave one player standing the match
+ends `abandoned`. The server's own actions are written with `user_id = null`, which is what
+distinguishes them in the ledger.
 
 **The clock is the SERVER's, counted from the moment its answer arrived.** `matchView.remainingMs` is
 worked out when the response is composed, and `TurnClock` counts down from the instant it lands -
@@ -1249,9 +1250,14 @@ the moment anything a player needs is below the fold.
 - `TablePlate` is the one seat plate for all four games: avatar with the speaking ring and a turn ring
   that runs from `remainingMs` over the turn's full length, a marker (crown, dealer, checker colour,
   seat initial), the game's facts, a one-line tag for what is unusual (`plate-tag.ts`), a trailing
-  slot (the ludo die) and the chat bubble. The turn length is `turnMs(mode)` from
-  `backend/src/domains/match/turns.ts`, a zero-import module the server's deadline and the browser's
-  ring both read. A watcher is sent no `remainingMs`, so a watcher sees no ring.
+  slot (the ludo die) and the chat bubble. The turn length is `turnMs(mode)` and the miss rule is
+  `nextMissForfeits(timeouts)` over `MISSES_ALLOWED`, all from `backend/src/domains/match/turns.ts`, a
+  zero-import module: the server's deadline reads `turnMs` and the sweep's forfeit asks
+  `nextMissForfeits`, and so do the browser's ring and its last-chance tag (`plate-tag.ts`, the ludo
+  `YardBadge`). The COMPARISON is shared, not just the number - three copies of `>=` over one constant
+  would leave the warning a miss early the day the sweep's own comparison moved - and
+  `table-plate.spec.ts` and `ludo-table.spec.ts` move the rule under both tags and require them to
+  follow. A watcher is sent no `remainingMs`, so a watcher sees no ring.
 - Hokm decides one row of cards or two from the stage's measured size (`room`), because two rows are
   only worth their height when one row would squeeze each card below a readable strip.
 - `MatchResult` overlays the stage rather than pushing it down.
