@@ -115,9 +115,12 @@ export const play: Pick<Dictionary, keyof typeof reference> = {
     'play.table.sitDown': 'یک صندلی بردار',
     'play.table.satDown': 'نشستی.',
     'play.table.tooLate': 'یکی زودتر آخرین صندلی را گرفت.',
+    'play.table.playing': 'سر این میز بازی در جریان است. وقتی تمام شد می‌توانی بنشینی.',
 
     'play.leave.title': 'از میز بلند شوی؟',
     'play.leave.lead': 'صندلی‌ات آزاد می‌شود. تا وقتی خالی است می‌توانی برگردی.',
+    'play.leave.forfeit': 'بازی هنوز ادامه دارد، پس رفتنت یعنی واگذاری و باخت. صندلی‌ات تا پایان بازی خالی می‌ماند.',
+    'play.leave.locked': 'بازی بدون تو ادامه پیدا می‌کند. صندلی‌ات تا پایان آن خالی می‌ماند.',
     'play.leave.last': 'آخرین نفری، پس میز پشت سرت بسته می‌شود.',
 
     'play.close.title': 'این میز بسته شود؟',

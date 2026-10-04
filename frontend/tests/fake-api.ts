@@ -1438,6 +1438,11 @@ export const client =
                 return { table: restate(table), seat: held.seat };
             }
 
+            if (table.matchId !== undefined)
+            {
+                throw new ApiError(409, 'playing', 'A game is being played at that table.', undefined);
+            }
+
             const free = table.chairs.find((chair) =>
                 chair.who === undefined && (chair.invited === undefined || chair.invited === server.me));
 

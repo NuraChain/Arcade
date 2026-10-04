@@ -1953,7 +1953,23 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 const before = await mustTable(me, tableId);
                 const people = await table.peopleAt(before.id);
 
-                await table.leave(me, before.id);
+                const { walked } = await table.leave(me, before.id, (tx) => match.walkOut(tx, me, before.id));
+
+                if (walked !== null)
+                {
+                    await courtesy('game push', () => pushMatch(walked.matchId, walked.before));
+
+                    const load = await match.peek(walked.matchId);
+
+                    if (load !== null && load.match.finishedAt === null)
+                    {
+                        await courtesy('turn notice', () => nudgeTurn(load, me));
+                    }
+                    else if (load !== null)
+                    {
+                        await courtesy('result line', () => declareResult(walked.matchId));
+                    }
+                }
 
                 if (before.conversation_id !== null)
                 {

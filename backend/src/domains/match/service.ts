@@ -715,6 +715,47 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
             return { load: (await read(me, matchId)) as MatchLoad, applied, before };
         },
 
+        walkOut: async (tx: EntityManager, me: string, tableId: string) =>
+        {
+            const match = await tx.getRepository(Match).findOne({
+                where: { tableId, finishedAt: IsNull() },
+                lock: { mode: 'pessimistic_write' }
+            });
+
+            if (match === null)
+            {
+                return null;
+            }
+
+            const seat = await tx.getRepository(MatchPlayer).findOne({
+                select: { seat: true, result: true },
+                where: { matchId: match.id, userId: me }
+            });
+            const engine = engineFor(match.game);
+
+            if (seat === null || seat.result !== null || engine === null)
+            {
+                return null;
+            }
+
+            const outcome = engine.apply(stateOf(match), engine.forfeit(seat.seat, 'left'), draws);
+
+            if (!outcome.ok)
+            {
+                return null;
+            }
+
+            await commit(tx, match, engine, outcome.state, outcome.events, {
+                seat: seat.seat,
+                userId: me,
+                kind: 'forfeit',
+                payload: { verb: 'left' },
+                key: null
+            }, await modeOf(tx, match.tableId));
+
+            return { matchId: match.id, before: match.rev };
+        },
+
         /**
          * The board as ONE viewer may see it, from whichever engine is playing this game.
          *

@@ -187,7 +187,7 @@ describe.skipIf(!active)('claiming a seat, against a real database', () =>
         await tables.claimSeat(other, tableId);
         expect((await tables.byId(host, tableId))!.status).toBe('ready');
 
-        await tables.leave(other, tableId);
+        await tables.leave(other, tableId, async () => null);
         expect((await tables.byId(host, tableId))!.status).toBe('open');
 
         // The status is derived where it is READ, not written alongside the seat. A chair that
@@ -217,9 +217,9 @@ describe.skipIf(!active)('claiming a seat, against a real database', () =>
         const host = await makeUser();
         const tableId = await openTable(host, 2);
 
-        const outcome = await tables.leave(host, tableId);
+        const outcome = await tables.leave(host, tableId, async () => null);
 
-        expect(outcome).toEqual({ left: true, closed: true });
+        expect(outcome).toEqual({ left: true, closed: true, walked: null });
         expect((await tables.byId(host, tableId))!.status).toBe('closed');
     });
 
@@ -229,7 +229,7 @@ describe.skipIf(!active)('claiming a seat, against a real database', () =>
         const late = await makeUser();
         const tableId = await openTable(host, 2);
 
-        await tables.leave(host, tableId);
+        await tables.leave(host, tableId, async () => null);
         await expect(tables.claimSeat(late, tableId)).rejects.toThrow();
     });
 
@@ -290,7 +290,7 @@ describe.skipIf(!active)('claiming a seat, against a real database', () =>
         );
         expect(rowsOf<{ n: number }>(seated)[0].n).toBe(2);
 
-        await tables.leave(other, tableId);
+        await tables.leave(other, tableId, async () => null);
 
         const left = await db.query(
             `select count(*)::int as n from conversation_members cm

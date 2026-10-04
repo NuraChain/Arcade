@@ -112,9 +112,12 @@ export const play = {
     'play.table.sitDown': 'Take a seat',
     'play.table.satDown': 'You are in.',
     'play.table.tooLate': 'Somebody took the last chair first.',
+    'play.table.playing': 'A game is being played at this table. You can sit down once it ends.',
 
     'play.leave.title': 'Leave the table?',
     'play.leave.lead': 'Your chair goes back. You can take it again while it is free.',
+    'play.leave.forfeit': 'The game is still on, so leaving forfeits it as a loss. Your chair stays empty until the game ends.',
+    'play.leave.locked': 'The game goes on without you. Your chair stays empty until it ends.',
     'play.leave.last': 'You are the last one here, so the table closes behind you.',
 
     'play.close.title': 'Close this table?',

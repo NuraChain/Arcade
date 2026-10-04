@@ -33,7 +33,7 @@ import Panel from '../../components/ui/panel.component.azeroth';
 import type { MatchView } from '../../api.ts';
 import { plainOf } from '../../lib/markdown.ts';
 import { holdScreen } from '../../lib/wake-lock.ts';
-import { seatedMax } from '../../lib/open-table.ts';
+import { leaveLead, seatedMax, tablePlaying } from '../../lib/open-table.ts';
 import { copyText } from '../../lib/clipboard.ts';
 import { BOARDS, drawable, rematchOf, type BoardComponent, type Rematch } from '../../components/games/boards.ts';
 import { turnMs } from '../../../../backend/src/domains/match/turns.ts';
@@ -517,7 +517,9 @@ export default component PlayPage()
         }
         catch (error)
         {
-            toasts.show({ kind: 'warning', text: locale.t(seatedMax(error) ? 'play.seatedMax' : 'common.actionFailed'), dedupe: 'sit-down' });
+            const why = seatedMax(error) ? 'play.seatedMax' : tablePlaying(error) ? 'play.table.playing' : 'common.actionFailed';
+
+            toasts.show({ kind: 'warning', text: locale.t(why), dedupe: 'sit-down' });
         }
     };
 
@@ -527,12 +529,12 @@ export default component PlayPage()
         {
             return;
         }
-        const last = table.taken <= 1;
+        const lead = leaveLead(seated ? board.match() ?? null : null, table.taken);
         const yes = await overlay.open(
             ConfirmSheet,
             {
                 title: locale.t('play.leave.title'),
-                lead: locale.t(last ? 'play.leave.last' : 'play.leave.lead'),
+                lead: locale.t(lead),
                 confirm: locale.t('play.lobby.leave'),
                 destructive: true
             },
@@ -644,13 +646,6 @@ export default component PlayPage()
                                         hostVoice={ amHost && table!.status !== 'closed' ? table!.voice : undefined }
                                         onHostVoice={ switchVoice }
                                     />
-                                    <Show when={ !seated && table?.matchId !== undefined && (table?.taken ?? 0) < (table?.seats ?? 0) }>
-                                        { () =>
-                                            <Button variant="primary" size="sm" leading="seat" onClick={ () => void sitDown() }>
-                                                { locale.t('play.table.sitDown') }
-                                            </Button>
-                                        }
-                                    </Show>
                                     <Show when={ floating && hasChat && !cardOpen }>
                                         { () =>
                                             <button

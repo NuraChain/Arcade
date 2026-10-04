@@ -49,6 +49,19 @@ describe('the judge', () =>
     });
 });
 
+describe('the ways a seat stops', () =>
+{
+    it('are each written by the match service, leaving included', () =>
+    {
+        const source = read('domains/match/service.ts');
+
+        for (const reason of ['resign', 'timeout', 'left'])
+        {
+            expect(source, `nothing forfeits a seat with '${ reason }'`).toMatch(new RegExp(`forfeit\\([^)]*'${ reason }'\\)`));
+        }
+    });
+});
+
 describe('the shared path', () =>
 {
     for (const name of SHARED)

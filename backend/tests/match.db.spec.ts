@@ -87,6 +87,9 @@ const seatedTable = async (seats: number): Promise<{ tableId: string; players: s
     return { tableId: table.id, players };
 };
 
+const walkOut = async (who: string, tableId: string) =>
+    await tables.leave(who, tableId, (tx) => matches.walkOut(tx, who, tableId));
+
 const countActions = async (matchId: string) =>
     Number(rowsOf<{ n: string }>(await db.query(
         `select count(*) as n from match_actions where match_id = $1`,
@@ -289,7 +292,7 @@ describe.skipIf(!active)('a match, against a real database', () =>
         {
             const { tableId, players } = await seatedTable(3);
             await matches.start(players[0], tableId);
-            await tables.leave(players[1], tableId);
+            await walkOut(players[1], tableId);
 
             await expect(matches.start(players[1], tableId)).rejects.toMatchObject({ status: 404, message: 'No table there.' });
         });
@@ -298,7 +301,7 @@ describe.skipIf(!active)('a match, against a real database', () =>
         {
             const { tableId, players } = await seatedTable(3);
             await matches.start(players[0], tableId);
-            await tables.leave(players[1], tableId);
+            await walkOut(players[1], tableId);
             const newcomer = await makeUser();
 
             await db.getRepository(TableSeat).update({ tableId, seat: 1 }, { userId: newcomer, joinedAt: new Date() });
@@ -844,6 +847,68 @@ describe.skipIf(!active)('a match, against a real database', () =>
         });
     });
 
+    describe('leaving a live match', () =>
+    {
+        const forfeitsOf = async (matchId: string) =>
+            rowsOf<{ user_id: string | null; verb: string }>(await db.query(
+                `select user_id, payload ->> 'verb' as verb from match_actions
+                  where match_id = $1 and kind = 'forfeit'
+                  order by rev`,
+                [matchId]
+            ));
+
+        it('is a walkout: a rated loss paid nothing, and no contest for a survivor who never played', async () =>
+        {
+            const { tableId, players } = await seatedTable(2);
+            const load = await matches.start(players[0], tableId);
+
+            const left = await walkOut(players[1], tableId);
+
+            expect(left).toMatchObject({ left: true, walked: { matchId: load.match.id, before: load.match.rev } });
+            expect(await forfeitsOf(load.match.id)).toEqual([{ user_id: players[1], verb: 'left' }]);
+
+            const seats = new Map(rowsOf<{ user_id: string; result: string; xp: number; rating_after: number | null }>(await db.query(
+                `select user_id, result, xp, rating_after from match_players where match_id = $1`,
+                [load.match.id]
+            )).map((row) => [row.user_id, row]));
+
+            expect(seats.get(players[1])).toMatchObject({ result: 'abandoned', xp: 0 });
+            expect(seats.get(players[1])!.rating_after).toBeLessThan(1200);
+            expect(seats.get(players[0])).toMatchObject({ result: 'void', xp: 0, rating_after: null });
+            expect(await matches.liveFor(tableId)).toBeNull();
+        });
+
+        it('keeps the chair it left out of anybody else’s reach until the game is over', async () =>
+        {
+            const { tableId, players } = await seatedTable(3);
+            const load = await matches.start(players[0], tableId);
+            const newcomer = await makeUser();
+
+            await walkOut(players[1], tableId);
+
+            await expect(tables.claimSeat(newcomer, tableId)).rejects.toMatchObject({ status: 409, code: 'playing' });
+            expect((await tables.open(newcomer, { game: 'ludo', mode: null }, 20)).map((row) => row.id)).not.toContain(tableId);
+
+            await matches.act(players[2], load.match.id, { play: null, key: 'gives-up' });
+
+            expect(await matches.liveFor(tableId)).toBeNull();
+            expect((await tables.open(newcomer, { game: 'ludo', mode: null }, 20)).map((row) => row.id)).toContain(tableId);
+            expect(await tables.claimSeat(newcomer, tableId)).toBe(1);
+        });
+
+        it('writes no second forfeit for somebody who had already resigned', async () =>
+        {
+            const { tableId, players } = await seatedTable(3);
+            const load = await matches.start(players[0], tableId);
+
+            await matches.act(players[1], load.match.id, { play: null, key: 'resigns' });
+
+            expect(await walkOut(players[1], tableId)).toMatchObject({ left: true, walked: null });
+            expect(await forfeitsOf(load.match.id)).toEqual([{ user_id: players[1], verb: 'resign' }]);
+            expect(await matches.liveFor(tableId)).toBe(load.match.id);
+        });
+    });
+
     describe('playing again at the same table', () =>
     {
         const readyAt = async (tableId: string) =>
@@ -1041,11 +1106,12 @@ describe.skipIf(!active)('a match, against a real database', () =>
             const live = await matches.start(players[0], tableId);
             const due = matches.turnOf('ludo', live.state)!;
 
-            await tables.leave(players[due], tableId);
+            await walkOut(players[due], tableId);
 
             const newcomer = await makeUser();
 
-            expect(await tables.claimSeat(newcomer, tableId), 'the newcomer landed in some other chair').toBe(due);
+            await db.getRepository(TableSeat).update({ tableId, seat: due }, { userId: newcomer, joinedAt: new Date() });
+
             expect((await matches.turnsAt(newcomer, [live.match.id])).has(live.match.id)).toBe(false);
         });
     });

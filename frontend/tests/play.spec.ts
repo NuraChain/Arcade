@@ -33,6 +33,8 @@ import { useRealtime } from '../src/stores/realtime.store.ts';
 import { useConnection } from '../src/stores/connection.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
 import { useSettings } from '../src/stores/settings.store.ts';
+import { useToasts } from '../src/stores/toasts.store.ts';
+import { leaveLead } from '../src/lib/open-table.ts';
 import { client, server } from './fake-api.ts';
 import { socket } from './fake-realtime.ts';
 
@@ -422,6 +424,82 @@ describe('PlayPage', () =>
         {
             delete matches.view;
         }
+    });
+
+    describe('a chair while a game is being played', () =>
+    {
+        const sitDown = (container: HTMLElement) =>
+            [...container.querySelectorAll('button')].find((one) => one.textContent?.trim() === useLocale().t('play.table.sitDown'));
+
+        const watchingAt = async () =>
+        {
+            const id = await useLobby().host('ludo', defaultTable('ludo'), []);
+            const held = server.tables.find((one) => one.id === id)!;
+
+            delete held.chairs[0].who;
+            held.chairs[1].who = 'sara.k';
+
+            return held;
+        };
+
+        const opened = (id: string) =>
+        {
+            const table: Route[] = [{ path: '/app/play/:id', component: (): HTMLElement => PlayPage() as HTMLElement }];
+            const router = createRouter({ routes: table, history: createMemoryHistory(`/app/play/${ id }`), scroll: false });
+
+            return renderTest(() => RouterProvider({ router, children: () => Routes({}) }) as Rendered).container;
+        };
+
+        it('is not offered to somebody watching, however many chairs are empty', async () =>
+        {
+            const held = await watchingAt();
+            held.matchId = 'live-1';
+            const container = opened(held.id);
+
+            await vi.waitFor(() => expect(container.textContent).toContain(held.code), { timeout: 4000 });
+            await settle();
+
+            expect(held.taken).toBeLessThan(held.seats);
+            expect(sitDown(container)).toBeUndefined();
+        });
+
+        it('says a game began first when the claim is refused for that', async () =>
+        {
+            const held = await watchingAt();
+            useToasts().reset();
+            const container = opened(held.id);
+
+            await vi.waitFor(() => expect(sitDown(container)).toBeDefined(), { timeout: 4000 });
+
+            held.matchId = 'live-2';
+            fire(sitDown(container)!, 'click');
+
+            await vi.waitFor(() => expect(useToasts().items().map((one) => one.text)).toContain(useLocale().t('play.table.playing')), { timeout: 4000 });
+            expect(held.chairs.some((chair) => chair.who === 'alex')).toBe(false);
+        });
+    });
+
+    describe('what leaving says', () =>
+    {
+        const at = (finishedAt: string | undefined, result: string | undefined) =>
+            ({ finishedAt, mine: 0, players: [{ seat: 0, result }, { seat: 1 }] }) as unknown as Parameters<typeof leaveLead>[0];
+
+        it('warns a player still in a live game that leaving forfeits it', () =>
+        {
+            expect(leaveLead(at(undefined, undefined), 2)).toBe('play.leave.forfeit');
+        });
+
+        it('tells a player who already gave up that the chair stays empty until the game ends', () =>
+        {
+            expect(leaveLead(at(undefined, 'abandoned'), 2)).toBe('play.leave.locked');
+        });
+
+        it('offers the chair back once the game is over, and closes an empty table', () =>
+        {
+            expect(leaveLead(at('2026-10-04T12:00:00Z', 'won'), 2)).toBe('play.leave.lead');
+            expect(leaveLead(null, 2)).toBe('play.leave.lead');
+            expect(leaveLead(null, 1)).toBe('play.leave.last');
+        });
     });
 
     describe('playing again once a game is over', () =>

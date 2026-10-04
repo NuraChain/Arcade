@@ -1,5 +1,5 @@
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@azerothjs/http';
-import { IsNull, Not, type DataSource } from 'typeorm';
+import { IsNull, Not, type DataSource, type EntityManager } from 'typeorm';
 
 import { Conversation } from '../../entities/conversation.entity.ts';
 import { Game } from '../../entities/game.entity.ts';
@@ -693,6 +693,11 @@ export function createTableService(db: DataSource, social: SocialService)
                 return table.mine;
             }
 
+            if (table.status === 'playing')
+            {
+                throw new ConflictError('A game is being played at that table.', { code: 'playing' });
+            }
+
             await mustHaveRoom(me);
 
             if (table.host !== null)
@@ -739,6 +744,8 @@ export function createTableService(db: DataSource, social: SocialService)
                                          limit 1
                                          for update skip locked)
                             and user_id is null
+                            and not exists (select 1 from matches m
+                                             where m.table_id = $1 and m.finished_at is null)
                           returning seat`,
                         [tableId, me]
                     );
@@ -794,18 +801,24 @@ export function createTableService(db: DataSource, social: SocialService)
         },
 
         /** Gives the chair back. A table nobody is sitting at closes itself. */
-        async leave(me: string, tableId: string): Promise<{ left: boolean; closed: boolean }>
+        async leave<Walked>(
+            me: string,
+            tableId: string,
+            forfeit: (tx: EntityManager) => Promise<Walked | null>
+        ): Promise<{ left: boolean; closed: boolean; walked: Walked | null }>
         {
             await mustSee(me, tableId);
 
             return db.transaction(async (tx) =>
             {
+                const walked = await forfeit(tx);
+
                 const freed = await tx.getRepository(TableSeat)
                     .update({ tableId, userId: me }, { userId: null, joinedAt: null, ready: false });
 
                 if ((freed.affected ?? 0) === 0)
                 {
-                    return { left: false, closed: false };
+                    return { left: false, closed: false, walked };
                 }
 
                 await tx.createQueryBuilder()
@@ -827,10 +840,10 @@ export function createTableService(db: DataSource, social: SocialService)
                         { id: tableId, status: Not('closed') },
                         { status: 'closed', closedAt: () => 'now()' }
                     );
-                    return { left: true, closed: true };
+                    return { left: true, closed: true, walked };
                 }
 
-                return { left: true, closed: false };
+                return { left: true, closed: false, walked };
             });
         },
 

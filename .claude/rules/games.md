@@ -221,7 +221,10 @@ one game, and each put somebody at the wrong table silently:
 
 - **A table with a game running is not open.** A player who left mid-game frees a chair, and the list
   offered it - to a newcomer who would sit in a chair with no seat in the match. `open()` excludes any
-  table with an unfinished match.
+  table with an unfinished match, and the chair itself cannot be taken until the match is over:
+  `claimSeat` refuses with the code `playing`, which the browser turns into its own sentence, and the
+  claim's UPDATE carries `not exists` over an unfinished match as the belt. The play page no longer
+  offers a watcher "Sit down" while a game is on.
 - **Quick play means live.** A `turns` table is a day per move, and landing in one from a button
   called Quick play is a correspondence game nobody chose. The list takes a `mode` and quick play
   asks for `live`.
@@ -273,8 +276,9 @@ Somebody can sit at as many tables as they like, and a turn-based game is only p
 can. `GET /tables/mine` answers `yourTurn` on every seated table with a live match, and the ENGINE
 answers it: `match.turnsAt` loads the live matches in one read and asks each game's `turnOf`,
 because no SQL can know how hokm's trump pause or ludo's six decides whose go it is. The reader's
-seat comes from `match_players`, never from the table chair: a chair can change hands mid-match,
-and whoever sits in it then holds no seat in the game and has no go to be told about. A
+seat comes from `match_players`, never from the table chair: a chair no longer changes hands
+mid-match, but a chair and a seat are still two rows, and somebody in a chair the match never dealt
+them holds no seat in the game and has no go to be told about. A
 table with no match, or a finished one, has no `yourTurn` at all rather than a `false` - there is
 no go to be had there.
 
@@ -617,7 +621,21 @@ unfinished match exists, for the same reason `ready` is read from occupied chair
 force, because playing has two ways to end - a win and a timeout cascade - and a stored copy would
 go stale the first time one of them forgot. Closing is NOT a third: `close` refuses while a match is
 live, because a host who could close the table mid-game could erase a loss by leaving. Last one out
-still closes it, since everybody has gone and the forfeits that follow are the honest result.
+still closes it, since everybody has gone and each of them has already forfeited.
+
+**Leaving a live match is a forfeit with reason `left`.** It used to free the chair and nothing else,
+so the leaver stayed in the match while the sweep played their turns and forfeited them three misses
+later as a TIMEOUT - which the judge pays when the seat had played its share, so walking out of a lost
+game banked the finish. `table.leave` now takes a forfeit callback and calls it FIRST inside its
+transaction; `services.ts` passes `match.walkOut`, which locks the live match, and only then is the
+chair freed, so the locks are taken match first and seats second, the order a finish takes them in.
+The forfeit row names the leaver (`user_id`, `payload.verb = 'left'`), so the judge reads a walkout: a
+rated loss, no XP, and the survivors `void` unless they and the leaver were both engaged. Somebody whose
+seat already has a result - they resigned, or the clock took them - leaves without a second forfeit.
+The push, the turn notice and the result line follow through `courtesy()`, exactly as after a move.
+The leave sheet says so mid-match ("leaving forfeits it as a loss"), and keeps "your chair goes back"
+for everybody else. `match.db.spec.ts` holds the walkout, the chair that stays empty until the end,
+and the resignation that leaves no second row.
 
 **A game is played OVER the socket, and a move is delivered rather than rung.** For chat the socket is a
 doorbell; for a game it is the delivery, and the cost that forced it is measured: as a doorbell, a move

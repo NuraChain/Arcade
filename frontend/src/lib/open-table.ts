@@ -1,4 +1,4 @@
-import { ApiError } from '../api.ts';
+import { ApiError, type MatchView } from '../api.ts';
 import { useLocale } from '../stores/locale.store.ts';
 import { useToasts } from '../stores/toasts.store.ts';
 
@@ -29,6 +29,20 @@ import { useToasts } from '../stores/toasts.store.ts';
  * store to write it.
  */
 export const seatedMax = (error: unknown) => error instanceof ApiError && error.code === 'seated-max';
+
+export const tablePlaying = (error: unknown) => error instanceof ApiError && error.code === 'playing';
+
+export function leaveLead(live: Pick<MatchView, 'finishedAt' | 'mine' | 'players'> | null, taken: number)
+{
+    if (live !== null && live.finishedAt === undefined)
+    {
+        const mine = live.players.find((one) => one.seat === live.mine);
+
+        return mine !== undefined && mine.result === undefined ? 'play.leave.forfeit' : 'play.leave.locked';
+    }
+
+    return taken <= 1 ? 'play.leave.last' : 'play.leave.lead';
+}
 
 export function openTable(made: Promise<string>, go: (to: string) => void, settled?: () => void)
 {
