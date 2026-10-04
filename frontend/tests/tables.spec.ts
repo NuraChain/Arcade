@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { cleanup } from '@azerothjs/testing';
+import { cleanup, fire, renderTest } from '@azerothjs/testing';
 
+import CreateGameForm from '../src/components/games/create-game-form.component.azeroth';
 import { defaultTable, TABLE_RULES } from '../src/data/tables.ts';
 import { GAMES } from '../src/data/games.ts';
 import { manualClock } from '../src/lib/clock.ts';
@@ -66,6 +67,31 @@ describe('what a table config may say', () =>
         {
             expect(Object.keys(TABLE_RULES[game.id]), game.id).not.toContain('fairness');
         }
+    });
+});
+
+describe('the create form', () =>
+{
+    const cubeSwitch = (container: HTMLElement) =>
+        [...container.querySelectorAll<HTMLButtonElement>('[role="switch"]')].find((one) => one.textContent?.includes('Doubling cube'))!;
+
+    const chip = (container: HTMLElement, label: string) =>
+        [...container.querySelectorAll<HTMLButtonElement>('button')].find((one) => one.textContent?.trim() === label)!;
+
+    it('offers no cube in a one-point match and says why, then offers it again at three points', () =>
+    {
+        const backgammon = GAMES.find((game) => game.id === 'backgammon')!;
+        const { container } = renderTest(() => CreateGameForm({ game: backgammon, onCreated: () => undefined }) as HTMLElement);
+
+        expect(cubeSwitch(container).getAttribute('aria-checked')).toBe('false');
+        expect(cubeSwitch(container).disabled).toBe(true);
+        expect(cubeSwitch(container).textContent).toContain('A one-point match has no cube');
+
+        fire(chip(container, '3 points'), 'click');
+
+        expect(cubeSwitch(container).getAttribute('aria-checked')).toBe('true');
+        expect(cubeSwitch(container).disabled).toBe(false);
+        expect(cubeSwitch(container).textContent).toContain('double what the game is worth');
     });
 });
 

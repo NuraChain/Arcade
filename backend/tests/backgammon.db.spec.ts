@@ -49,13 +49,18 @@ const makeUser = async () =>
     ))[0].id;
 };
 
-const started = async (cube = false) =>
+const started = async ({ cube = false, target = 3, row }: { cube?: boolean; target?: number; row?: boolean } = {}) =>
 {
     const players = [await makeUser(), await makeUser()];
     const table = await tables.create(players[0], {
         game: 'backgammon', seats: 2, mode: 'live', privacy: 'public',
-        target: 3, cube, blinds: 'low', chat: true, voice: false, invitees: []
+        target, cube, blinds: 'low', chat: true, voice: false, invitees: []
     });
+
+    if (row !== undefined)
+    {
+        await db.query(`update tables set cube = $2 where id = $1`, [table.id, row]);
+    }
 
     await tables.claimSeat(players[1], table.id);
 
@@ -66,7 +71,7 @@ const started = async (cube = false) =>
 
     const load = await matches.start(players[0], table.id);
 
-    return { matchId: load.match.id, userAt: new Map(load.players.map((one) => [one.seat, one.user_id])) };
+    return { tableId: table.id, matchId: load.match.id, userAt: new Map(load.players.map((one) => [one.seat, one.user_id])) };
 };
 
 const missesOf = async (matchId: string) =>
@@ -220,9 +225,34 @@ describe.skipIf(!active)('a backgammon match judged, against a real database', (
         ]);
     });
 
+    it('opens a one-point table with no cube whatever the form asked for, and plays it without one', async () =>
+    {
+        const { tableId, matchId } = await started({ cube: true, target: 1 });
+        const state = await stateOf(matchId);
+
+        expect(rowsOf<{ cube: boolean }>(await db.query(`select cube from tables where id = $1`, [tableId]))).toEqual([{ cube: false }]);
+        expect(state).toMatchObject({ target: 1, cubed: false });
+        expect([0, 1].flatMap((seat) => backgammonEngine.legal(state, seat)).some((action) => action.kind === 'double')).toBe(false);
+    });
+
+    it('starts a one-point match with no cube even when the table row claims one', async () =>
+    {
+        const { matchId } = await started({ cube: true, target: 1, row: true });
+
+        expect(await stateOf(matchId)).toMatchObject({ target: 1, cubed: false });
+    });
+
+    it('keeps the cube the form asked for at three points', async () =>
+    {
+        const { tableId, matchId } = await started({ cube: true });
+
+        expect(rowsOf<{ cube: boolean }>(await db.query(`select cube from tables where id = $1`, [tableId]))).toEqual([{ cube: true }]);
+        expect(await stateOf(matchId)).toMatchObject({ target: 3, cubed: true });
+    });
+
     it('folds an expired roll and move of the cube holder into one miss and one deadline', async () =>
     {
-        const { matchId, userAt } = await started(true);
+        const { matchId, userAt } = await started({ cube: true });
         const holder = backgammonEngine.turnOf(await stateOf(matchId))!;
         const doubler = 1 - holder;
 

@@ -12,6 +12,7 @@ import { firstRow } from '../../lib/rows.ts';
 import { ConversationMember } from '../../entities/conversation-member.entity.ts';
 import { TableSeat } from '../../entities/table-seat.entity.ts';
 import type { SocialService } from '../social/service.ts';
+import { cubeLive } from '../match/backgammon/cube.ts';
 
 /**
  * What the catalogue says a table of this game may be.
@@ -569,7 +570,7 @@ export function createTableService(db: DataSource, social: SocialService)
                 ? (input.privacy === 'room' ? 'invite' : input.privacy)
                 : 'room';
 
-            const cube = rules.has_cube && input.cube;
+            const cube = cubeLive(input.target, rules.has_cube && input.cube);
             const blinds = rules.has_blinds ? input.blinds : 'low';
 
             if (input.invitees.length > input.seats - 1)
