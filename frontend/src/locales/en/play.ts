@@ -315,7 +315,7 @@ export const play = {
     'backgammon.moves': 'Moves you can make',
     'poker.table': 'Poker table',
     'poker.board': 'Cards on the table',
-    'poker.pot': 'Pot {chips}',
+    'poker.pot': 'Total pot {chips}',
     'poker.main': 'main pot {chips}',
     'poker.side': 'side pot {chips}',
     'poker.dealer': 'Dealer',

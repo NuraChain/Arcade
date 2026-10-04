@@ -80,6 +80,9 @@ no separate branch for the transition.
   preflop, last on every later street.
 - **The big blind is owed in full** even when the player in the big blind is all-in for less; the
   excess comes back as an uncalled bet.
+- **A fold is always legal**, even when checking costs nothing: `legal` lists it on every turn and
+  `apply` has always taken it. The table still offers only Check then, because folding for nothing
+  throws away a hand for no reason and the bar should not invite it.
 - **Nobody may raise into a table that cannot answer.** With every other player all-in, the choices
   are fold or call.
 - **An uncalled bet is returned** to the player who made it, and never to somebody who folded: a
@@ -183,7 +186,8 @@ A play is `{ kind: 'poker', verb: 'fold' | 'check' | 'call' | 'raise' | 'allin',
 round it from the reader's chair, clockwise - the next player to act after the reader sits to their
 LEFT, which is the opposite of hokm's rotation and the direction a real poker table deals. Each bet is
 drawn between its seat and the pot, the button is a "D" on its seat, and the community cards and the
-pot sit in the middle. The action bar offers only what the engine accepts: Check when there is nothing
+pot sit in the middle. The middle says "Total pot": it is every chip committed this hand, the bets
+still in front of the seats included, and the word stops anybody adding those bets on top of it. The action bar offers only what the engine accepts: Check when there is nothing
 to call, otherwise Fold and "Call 40"; a raise is a slider over the server's `minRaiseTo`..`maxRaiseTo`
 with Min, Half pot and Pot presets and a button that says "Raise to 120" ("Bet" when nobody has bet
 this street, "All in" at the top). A spectator gets the table and nothing to press.

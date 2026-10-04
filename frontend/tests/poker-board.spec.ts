@@ -162,6 +162,16 @@ describe('PokerBoard', () =>
         expect(container.querySelector('[role="slider"]')).toBeNull();
     });
 
+    it('calls the pot in the middle the total, because it counts the bets still in front of the seats', () =>
+    {
+        const { container } = renderTest(() => PokerBoard({
+            match: match({ pot: 70, seats: Array.from({ length: 6 }, (_, seat) => ({ seat, stack: 1500, bet: seat === 4 ? 40 : 0, folded: false, allIn: false, out: false })) })
+        }) as Rendered);
+
+        expect(container.textContent).toContain('Total pot 70');
+        expect(container.querySelector('.poker-bet')?.textContent).toContain('40');
+    });
+
     it('names a side pot only when somebody is all in', () =>
     {
         const even = renderTest(() => PokerBoard({ match: match({}) }) as Rendered);

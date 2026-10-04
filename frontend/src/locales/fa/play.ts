@@ -318,7 +318,7 @@ export const play: Pick<Dictionary, keyof typeof reference> = {
     'backgammon.moves': 'حرکت‌هایی که می‌توانی بکنی',
     'poker.table': 'میز پوکر',
     'poker.board': 'کارت‌های روی میز',
-    'poker.pot': 'پات {chips}',
+    'poker.pot': 'کل پات {chips}',
     'poker.main': 'پات اصلی {chips}',
     'poker.side': 'پات فرعی {chips}',
     'poker.dealer': 'دیلر',

@@ -510,9 +510,7 @@ export function legalMoves(state: PokerState, seat: number): PokerAction[]
         return [];
     }
 
-    const moves: PokerAction[] = toCall(state, seat) === 0
-        ? [{ kind: 'check', seat }]
-        : [{ kind: 'fold', seat }, { kind: 'call', seat }];
+    const moves: PokerAction[] = [{ kind: 'fold', seat }, toCall(state, seat) === 0 ? { kind: 'check', seat } : { kind: 'call', seat }];
 
     if (mayRaise(state, seat))
     {

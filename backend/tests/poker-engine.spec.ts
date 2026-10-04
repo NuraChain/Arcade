@@ -106,6 +106,21 @@ describe('the refusals', () =>
         expect(apply(state, { kind: 'call', seat: 1 }, die)).toEqual({ ok: false, reason: 'nothing-to-call' });
     });
 
+    it('never refuse a fold, so the legal moves list one beside a free check', () =>
+    {
+        const dealt = seated([1500, 1500], 0, ['AS AH', 'KS KH']);
+        const die = dealt.die;
+        let state = dealt.state;
+
+        state = play(state, { kind: 'call', seat: 0 }, die).state;
+
+        expect(pokerEngine.legal(state, 1).map((move) => move.kind)).toEqual(['fold', 'check', 'raise', 'allin']);
+
+        const folded = play(state, { kind: 'fold', seat: 1 }, die);
+
+        expect(folded.events).toContainEqual({ e: 'pot', amount: 40, winners: [0] });
+    });
+
     it('refuse a raise nobody could answer', () =>
     {
         const dealt = seated([1500, 1500, 1500], 0, ['AS AH', 'KS KH', 'QS QH']);
