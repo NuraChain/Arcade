@@ -642,6 +642,7 @@ export default component PlayPage()
                                         upright={ playing === 'ludo' }
                                         onChat={ floating ? undefined : openChat }
                                         onResign={ resigning ? () => void resign() : undefined }
+                                        onLeave={ seated && showing ? () => void leave() : undefined }
                                         voice={ talkable ? table!.id : undefined }
                                         hostVoice={ amHost && table!.status !== 'closed' ? table!.voice : undefined }
                                         onHostVoice={ switchVoice }

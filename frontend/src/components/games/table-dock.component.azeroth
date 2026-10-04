@@ -20,6 +20,7 @@ export default component TableDock(props: {
     target?: HTMLElement | null;
     onChat?: () => void;
     onResign?: () => void;
+    onLeave?: () => void;
     upright?: boolean;
     voice?: string;
     hostVoice?: boolean;
@@ -70,7 +71,8 @@ export default component TableDock(props: {
                 full,
                 ...(props.hostVoice === undefined || props.onHostVoice === undefined ? {} : { voice: props.hostVoice, onVoice: props.onHostVoice }),
                 ...(canFullscreen() ? { onFullscreen: toggleFull } : {}),
-                ...(props.onResign === undefined ? {} : { onResign: props.onResign })
+                ...(props.onResign === undefined ? {} : { onResign: props.onResign }),
+                ...(props.onLeave === undefined ? {} : { onLeave: props.onLeave })
             },
             { label: locale.t('play.menu.title') }
         );
@@ -117,6 +119,18 @@ export default component TableDock(props: {
                         label={ locale.t('match.resign') }
                         variant="ghost"
                         onClick={ () => props.onResign?.() }
+                    />
+                }
+            </Show>
+
+            <Show when={ props.onLeave !== undefined }>
+                { () =>
+                    <IconButton
+                        icon="sign-out"
+                        label={ locale.t('play.lobby.leave') }
+                        variant="ghost"
+                        flip
+                        onClick={ () => props.onLeave?.() }
                     />
                 }
             </Show>

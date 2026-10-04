@@ -981,6 +981,33 @@ describe('the table’s chat and its controls', () =>
         expect(container.textContent).not.toContain('Give up');
     });
 
+    it('offers leaving the table from the sheet once a game is on the board, last of all', () =>
+    {
+        const close = vi.fn();
+        const leave = vi.fn();
+        const container = renderTest(() => TableMenu({ overlayId: 'menu', close, code: 'XD6H9N', full: false, onResign: vi.fn(), onLeave: leave }) as Rendered).container;
+        const entries = [...container.querySelectorAll('ul button')];
+
+        expect(entries.map((one) => one.textContent?.trim()).slice(-2)).toEqual(['Give up', 'Leave table']);
+
+        fire(entries[entries.length - 1] as HTMLElement, 'click');
+
+        expect(close).toHaveBeenCalledTimes(1);
+        expect(leave).toHaveBeenCalledTimes(1);
+    });
+
+    it('offers leaving in the dock only when the page passes it', () =>
+    {
+        const leave = vi.fn();
+
+        expect(button(renderTest(() => TableDock({}) as Rendered).container, 'Leave table')).toBeUndefined();
+
+        const withIt = renderTest(() => TableDock({ onLeave: leave }) as Rendered).container;
+        fire(button(withIt, 'Leave table')!, 'click');
+
+        expect(leave).toHaveBeenCalledTimes(1);
+    });
+
     it('offers giving up in the dock only when there is a game to give up', () =>
     {
         const resign = vi.fn();

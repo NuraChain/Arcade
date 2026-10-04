@@ -12,6 +12,7 @@ interface Entry
     icon: IconName;
     label: string;
     danger?: boolean;
+    flip?: boolean;
     run: () => void;
 }
 
@@ -22,6 +23,7 @@ export default component TableMenu(props: OverlayProps & {
     onVoice?: () => void;
     onFullscreen?: () => void;
     onResign?: () => void;
+    onLeave?: () => void;
 })
 {
     const locale = useLocale();
@@ -103,6 +105,18 @@ export default component TableMenu(props: OverlayProps & {
             });
         }
 
+        if (props.onLeave !== undefined)
+        {
+            list.push({
+                id: 'leave',
+                icon: 'sign-out',
+                label: locale.t('play.lobby.leave'),
+                danger: true,
+                flip: true,
+                run: () => props.onLeave?.()
+            });
+        }
+
         return list;
     })();
 
@@ -126,7 +140,7 @@ export default component TableMenu(props: OverlayProps & {
                             entry.run();
                         } }
                     >
-                        <Icon name={ entry.icon } size={ 18 } />
+                        <Icon name={ entry.icon } size={ 18 } class={ entry.flip === true ? 'icon-flip' : '' } />
                         <span class="min-w-0 flex-1 truncate">{ entry.label }</span>
                     </button>
                 </li>
