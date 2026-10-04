@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { rankOf, suitOf } from '../src/domains/match/cards/cards.ts';
-import { deckFor } from '../src/domains/match/hokm/cards.ts';
+import { cardOf, rankOf, suitOf } from '../src/domains/match/cards/cards.ts';
+import { autoCard, deckFor } from '../src/domains/match/hokm/cards.ts';
 import { hokmEngine } from '../src/domains/match/engines/hokm.ts';
 import { SEATS, apply, autoplay, create, dealerSeat, legalMoves } from '../src/domains/match/hokm/engine.ts';
 import { GAME_SEEDS } from '../src/db/seed-reference.ts';
@@ -223,6 +223,97 @@ describe('a hokm match always ends', () =>
             expect(longest).toBeGreaterThan(100);
         }, 30_000);
     }
+});
+
+describe('what the sweep plays for an absent seat', () =>
+{
+    for (const seats of SEATS)
+    {
+        it(`plays autoCard's choice from the legal moves at ${ seats } players, over whole matches`, () =>
+        {
+            const faults: string[] = [];
+
+            for (let match = 0; match < 20; match += 1)
+            {
+                const deal = seeded(match * 104729 + seats * 31);
+
+                let state = create(seats, 7, deal);
+
+                for (let action = 0; state.winner === null && action < 20000; action += 1)
+                {
+                    const seat = hokmEngine.turnOf(state)!;
+                    const move = autoplay(state, seat, deal);
+                    const legal = legalMoves(state, seat);
+
+                    if (move === null || !legal.some((one) => JSON.stringify(one) === JSON.stringify(move)))
+                    {
+                        faults.push(`match ${ match } action ${ action }: ${ JSON.stringify(move) } is not legal`);
+                        break;
+                    }
+
+                    if (move.kind === 'card' && move.card !== autoCard(state.hands[seat], state.trick, state.trump!))
+                    {
+                        faults.push(`match ${ match } action ${ action }: played ${ move.card }, not autoCard's choice`);
+                        break;
+                    }
+
+                    const step = apply(state, move, deal);
+
+                    if (!step.ok)
+                    {
+                        faults.push(`match ${ match } action ${ action }: ${ step.reason }`);
+                        break;
+                    }
+
+                    state = step.state;
+                }
+            }
+
+            expect(faults).toEqual([]);
+        }, 30_000);
+    }
+
+    it('leads low from a long plain suit rather than the lowest card in suit order', () =>
+    {
+        const state: HokmState = {
+            ...create(4, 7, seeded(5)),
+            phase: 'tricks',
+            trump: 'hearts',
+            hakem: 0,
+            turn: 0,
+            lead: 0,
+            trick: [],
+            hands: [
+                [cardOf('clubs', '2'), cardOf('diamonds', '5'), cardOf('diamonds', '9'), cardOf('diamonds', '4'), cardOf('hearts', 'A')],
+                [cardOf('spades', '2')],
+                [cardOf('spades', '3')],
+                [cardOf('spades', '4')]
+            ]
+        };
+
+        expect(autoplay(state, 0, seeded(1))).toEqual({ kind: 'card', seat: 0, card: cardOf('diamonds', '4') });
+    });
+
+    it('keeps its trumps when void and holding a plain card', () =>
+    {
+        const state: HokmState = {
+            ...create(4, 7, seeded(5)),
+            phase: 'tricks',
+            trump: 'clubs',
+            hakem: 0,
+            turn: 1,
+            lead: 0,
+            trick: [cardOf('hearts', '5')],
+            hands: [
+                [cardOf('spades', '2')],
+                [cardOf('clubs', '2'), cardOf('diamonds', '9'), cardOf('spades', '4')],
+                [cardOf('spades', '3')],
+                [cardOf('spades', '5')]
+            ]
+        };
+
+        expect(autoplay(state, 1, seeded(1))).toEqual({ kind: 'card', seat: 1, card: cardOf('spades', '4') });
+    });
 });
 
 describe('a trick is taken by the rules', () =>

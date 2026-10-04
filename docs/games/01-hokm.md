@@ -120,6 +120,12 @@ win by one pays the rating and the 10 XP finish and nothing else (D26).
 
 **A match is a sequence.** One `matches` row = one match to 7. Hand results are ledger events.
 
+**What the sweep plays for an absent seat (HOKM-06).** The trump call is the suit the Hâkem holds
+most of. A card is `autoCard` in `hokm/cards.ts`, chosen from the legal moves by RANK, never by suit
+order: following suit, the lowest card of the suit led; void, the lowest card that is not trump (a
+trump only when nothing else is left); leading, the lowest card of the longest suit that is not trump.
+Ties go to the lower rank, then to suit order, so the same hand always plays the same card.
+
 ---
 
 ## Client

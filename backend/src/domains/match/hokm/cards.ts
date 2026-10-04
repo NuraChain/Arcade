@@ -22,6 +22,34 @@ export function legalCards(hand: readonly number[], led: Suit | null): number[]
     return following.length > 0 ? following : [...hand];
 }
 
+function lowest(cards: readonly number[])
+{
+    return cards.reduce((low, card) =>
+        (rankOf(card) < rankOf(low) || (rankOf(card) === rankOf(low) && card < low) ? card : low), cards[0]);
+}
+
+export function autoCard(hand: readonly number[], trick: readonly number[], trump: Suit)
+{
+    const led = trick.length === 0 ? null : suitOf(trick[0]);
+    const legal = legalCards(hand, led);
+    const plain = legal.filter((card) => suitOf(card) !== trump);
+
+    if (plain.length === 0)
+    {
+        return lowest(legal);
+    }
+
+    if (led !== null)
+    {
+        return lowest(plain);
+    }
+
+    const length = (suit: Suit) => plain.filter((card) => suitOf(card) === suit).length;
+    const longest = Math.max(...SUITS.map(length));
+
+    return lowest(plain.filter((card) => length(suitOf(card)) === longest));
+}
+
 /**
  * Which of the cards played to a trick took it, as an INDEX into what was played.
  *

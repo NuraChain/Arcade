@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { DECK, RANKS, SUITS, cardOf, nameOf, rankOf, suitOf } from '../src/domains/match/cards/cards.ts';
-import { deckFor, legalCards, trickWinner } from '../src/domains/match/hokm/cards.ts';
+import { autoCard, deckFor, legalCards, trickWinner } from '../src/domains/match/hokm/cards.ts';
 import { dealerOf, duelResult, matchWinner, nextHakem, teamOf, trickCount, tripleResult, winningTricks } from '../src/domains/match/hokm/scoring.ts';
 
 /**
@@ -129,6 +129,89 @@ describe('following suit', () =>
     it('offers the whole hand when you are void, trumps included', () =>
     {
         expect(legalCards(hand, 'diamonds').sort()).toEqual([...hand].sort());
+    });
+});
+
+describe('the card the sweep plays for an absent seat', () =>
+{
+    const cards = (...names: [Parameters<typeof cardOf>[0], Parameters<typeof cardOf>[1]][]) =>
+        names.map(([suit, rank]) => cardOf(suit, rank));
+
+    it('leads the lowest card of the longest suit that is not trump', () =>
+    {
+        const hand = cards(['clubs', '2'], ['clubs', '3'], ['diamonds', '4'], ['diamonds', '5'], ['diamonds', '9'], ['hearts', 'A']);
+
+        expect(nameOf(autoCard(hand, [], 'hearts'))).toBe('4D');
+    });
+
+    it('leads from the plain suits even when trump is the longest', () =>
+    {
+        const hand = cards(['clubs', 'K'], ['clubs', '8'], ['spades', '2'], ['spades', '3'], ['spades', '4'], ['spades', '5']);
+
+        expect(nameOf(autoCard(hand, [], 'spades'))).toBe('8C');
+    });
+
+    it('breaks a tie in length by the lower card', () =>
+    {
+        const hand = cards(['clubs', 'Q'], ['clubs', 'K'], ['diamonds', '3'], ['diamonds', '9']);
+
+        expect(nameOf(autoCard(hand, [], 'spades'))).toBe('3D');
+    });
+
+    it('leads the lowest trump from a hand of nothing else', () =>
+    {
+        const hand = cards(['spades', '9'], ['spades', '3'], ['spades', 'A']);
+
+        expect(nameOf(autoCard(hand, [], 'spades'))).toBe('3S');
+    });
+
+    it('follows with the lowest card of the suit led', () =>
+    {
+        const hand = cards(['clubs', '2'], ['diamonds', '7'], ['diamonds', '2'], ['diamonds', 'A']);
+
+        expect(nameOf(autoCard(hand, [cardOf('diamonds', 'K')], 'clubs'))).toBe('2D');
+    });
+
+    it('follows a trump lead with the lowest trump', () =>
+    {
+        const hand = cards(['clubs', '2'], ['spades', 'J'], ['spades', '6']);
+
+        expect(nameOf(autoCard(hand, [cardOf('spades', 'K')], 'spades'))).toBe('6S');
+    });
+
+    it('throws the lowest card that is not trump when void in the suit led', () =>
+    {
+        const hand = cards(['clubs', '2'], ['diamonds', '9'], ['spades', '4'], ['spades', 'A']);
+
+        expect(nameOf(autoCard(hand, [cardOf('hearts', '5')], 'clubs'))).toBe('4S');
+    });
+
+    it('breaks a tie in rank by suit order', () =>
+    {
+        const hand = cards(['diamonds', '4'], ['spades', '4'], ['clubs', '2']);
+
+        expect(nameOf(autoCard(hand, [cardOf('hearts', '5')], 'clubs'))).toBe('4D');
+    });
+
+    it('trumps low when void and holding nothing but trump', () =>
+    {
+        const hand = cards(['spades', '9'], ['spades', '3']);
+
+        expect(nameOf(autoCard(hand, [cardOf('hearts', '5')], 'spades'))).toBe('3S');
+    });
+
+    it('only ever names a legal card', () =>
+    {
+        for (let seed = 0; seed < 400; seed += 1)
+        {
+            const hand = DECK.filter((card) => (card * 7 + seed * 13) % 9 === seed % 9).slice(0, 1 + (seed % 13));
+            const lead = DECK[(seed * 31) % 52];
+            const trick = seed % 3 === 0 ? [] : [lead];
+            const trump = SUITS[seed % 4];
+            const led = trick.length === 0 ? null : suitOf(trick[0]);
+
+            expect(legalCards(hand, led), `seed ${ seed }`).toContain(autoCard(hand, trick, trump));
+        }
     });
 });
 

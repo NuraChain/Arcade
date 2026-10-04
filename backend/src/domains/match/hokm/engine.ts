@@ -1,5 +1,5 @@
 import { SUITS, suitOf, type Suit } from '../cards/cards.ts';
-import { deckFor, legalCards, trickWinner } from './cards.ts';
+import { autoCard, deckFor, legalCards, trickWinner } from './cards.ts';
 import { dealerOf, duelResult, matchWinner, nextHakem, trickCount, tripleResult, winningTricks } from './scoring.ts';
 import { sideCount, sideOf, seatsOfSide, type HokmAction, type HokmEvent, type HokmRefusal, type HokmState } from './state.ts';
 
@@ -369,7 +369,7 @@ export function apply(state: HokmState, action: HokmAction, deal: Deal): Outcome
  * turns ends a seat elsewhere, and this is only ever "take their turn for them".
  *
  * Trump goes to the suit they hold most of, which is the one decision in the game a beginner is
- * taught; a card is the lowest legal one, which loses the trick without throwing away a winner.
+ * taught; a card is `autoCard`'s, which plays low by rank and keeps trumps back.
  */
 export function autoplay(state: HokmState, seat: number, deal: Deal): HokmAction | null
 {
@@ -390,6 +390,7 @@ export function autoplay(state: HokmState, seat: number, deal: Deal): HokmAction
 
     void deal;
 
-    return moves.reduce((low, move) =>
-        ((move as { card: number }).card < (low as { card: number }).card ? move : low), moves[0]);
+    const card = autoCard(state.hands[seat], state.trick, state.trump as Suit);
+
+    return moves.find((move) => move.kind === 'card' && move.card === card) ?? null;
 }
