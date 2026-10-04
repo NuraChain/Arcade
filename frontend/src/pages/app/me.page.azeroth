@@ -10,6 +10,7 @@ import { signOut } from '../../components/app/sign-out.ts';
 import Panel from '../../components/ui/panel.component.azeroth';
 import EmptyState from '../../components/ui/empty-state.component.azeroth';
 import IconButton from '../../components/ui/icon-button.component.azeroth';
+import { COPY_CHIP } from '../../components/ui/variants.ts';
 import { client } from '../../api.ts';
 import Icon from '../../icons/icon.component.azeroth';
 import { shortAddress } from '../../lib/wallet.ts';
@@ -130,13 +131,13 @@ export default component MePage()
                             <Show when={ account.isWallet() }>
                                 <button
                                     type="button"
-                                    class="relative inline-flex h-6 cursor-pointer items-center gap-1.5 rounded-full border border-line bg-raised px-2.5 text-ui-xs font-semibold text-muted transition-colors hover:border-accent hover:text-text coarse:before:absolute coarse:before:-inset-y-2.5 coarse:before:inset-x-0 coarse:before:content-['']"
+                                    class={ COPY_CHIP }
                                     aria-label={ locale.t('wallet.address.copy') }
                                     onClick={ () => void copyAddress() }
                                 >
-                                    <Icon name="key" size={ 12 } class="text-live" />
+                                    <Icon name="key" size={ 12 } class="shrink-0 text-live" />
                                     <span class="tally">{ shortAddress(account.address() ?? '') }</span>
-                                    <Icon name="copy" size={ 12 } class="text-accent" />
+                                    <Icon name="copy" size={ 12 } class="shrink-0 text-accent" />
                                 </button>
                             </Show>
                         }

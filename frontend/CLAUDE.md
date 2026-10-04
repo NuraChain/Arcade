@@ -183,6 +183,12 @@ Edit profile, Share and Sign out, in that order, so nothing wraps at 390. Sign o
 signs back into a guest seat. Top to bottom it reads the owner's order: the wallet
 chip (`eyebrow`, `/app/me` only), the @handle chip, the join date, the name, the bio - both chips
 look alike and copy on a tap, and a name that is empty is kept only as the screen reader's heading.
+Both are `COPY_CHIP` from `variants.ts`, a 24px pill. On a coarse pointer each one sits in a row of
+its own padded to 44px (`coarse:py-2.5`), and its `::before` reaches exactly to the row's edges, so
+its touch area covers neither the other chip nor the join date. A `::before` is placed against the
+PADDING box, so with the 1px border the inset is `-inset-y-2.75`. It was `-2.5`, which made the area
+42px, and the rows had no padding, so the matrix's probe landed on the join date (and the wallet
+chip's on the handle chip) at every touch width. `profile-page.spec.ts` holds that arithmetic.
 The picture is a button when the page passes `onPicture`: on `/app/me` it opens the profile sheet in
 `only: 'picture'` mode, which holds nothing but the picture, and on somebody else's page it opens
 `PicturePreview` with Download and Close when there is a picture to show. The ordinary Edit sheet

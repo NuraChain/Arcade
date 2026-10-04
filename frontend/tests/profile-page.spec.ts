@@ -170,6 +170,37 @@ describe('my profile page', () =>
         expect(chip!.compareDocumentPosition(name) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     });
 
+    it('gives each copy chip a 44px row of its own on a coarse pointer, which its touch area fills and never leaves', async () =>
+    {
+        signIn('wallet');
+        useSession().establish({ ...useSession().account()!, joinedAt: '2026-03-01T00:00:00.000Z' });
+        const container = await page();
+        const px = (element: Element, prefix: string) =>
+        {
+            const token = [...element.classList].find((one) => one.startsWith(prefix));
+            expect(token, `${ prefix } on "${ element.className }"`).toBeDefined();
+            return Number(token!.slice(prefix.length)) * 4;
+        };
+
+        const chips = ['Copy wallet address', 'Copy handle'].map((label) => container.querySelector(`button[aria-label="${ label }"]`)!);
+        for (const chip of chips)
+        {
+            const row = chip.parentElement!;
+            const pad = px(row, 'coarse:py-');
+            const border = chip.classList.contains('border') ? 1 : 0;
+
+            expect(row.children).toHaveLength(1);
+            expect(chip.classList).toContain('coarse:before:absolute');
+            expect(chip.classList).toContain('coarse:before:inset-x-0');
+            expect(px(chip, 'h-') + 2 * pad).toBeGreaterThanOrEqual(44);
+            expect(px(chip, 'coarse:before:-inset-y-') - border).toBe(pad);
+        }
+
+        expect(chips[0]!.parentElement!.nextElementSibling).toBe(chips[1]!.parentElement);
+        expect(chips[1]!.parentElement!.nextElementSibling?.textContent).toContain('Joined');
+        expect(chips[0]!.className).toBe(chips[1]!.className);
+    });
+
     it('has no Overview and no About section', async () =>
     {
         signIn('wallet');
