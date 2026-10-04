@@ -168,7 +168,7 @@ export function legalMoves(state: LudoState): number[]
     return moves;
 }
 
-function captureAt(state: LudoState, mover: number, progress: number, events: GameEvent[])
+function captureAt(state: LudoState, mover: number, moving: number, progress: number, events: GameEvent[])
 {
     if (progress >= RING_STEPS)
     {
@@ -192,9 +192,9 @@ function captureAt(state: LudoState, mover: number, progress: number, events: Ga
 
         const victim = state.players[other];
 
-        for (let piece = 0; piece < victim.pieces.length; piece += 1)
+        for (let token = 0; token < victim.pieces.length; token += 1)
         {
-            const at = victim.pieces[piece];
+            const at = victim.pieces[token];
 
             if (at < 0 || at >= RING_STEPS)
             {
@@ -206,8 +206,8 @@ function captureAt(state: LudoState, mover: number, progress: number, events: Ga
                 continue;
             }
 
-            victim.pieces[piece] = YARD;
-            events.push({ e: 'capture', seat: player.seat, piece: mover, victim: victim.seat, victimPiece: piece });
+            victim.pieces[token] = YARD;
+            events.push({ e: 'capture', seat: player.seat, piece: moving, victim: victim.seat, victimPiece: token });
         }
     }
 }
@@ -274,7 +274,7 @@ function move(state: LudoState, seat: number, piece: number, events: GameEvent[]
         events.push({ e: 'step', seat, piece, from, to });
     }
 
-    captureAt(state, state.turn, to, events);
+    captureAt(state, state.turn, piece, to, events);
 
     if (to === FINISHED)
     {

@@ -327,6 +327,44 @@ describe('capturing', () =>
     });
 });
 
+describe('the capture event names the moving token, the captured token and its owner', () =>
+{
+    const captures = (events: GameEvent[]) => events.filter((event) => event.e === 'capture');
+
+    const yellowOnTurn = (red: number[]) =>
+    {
+        let state = create([2, 5], 1);
+        state = place(state, 5, [YARD, YARD, 1, YARD]);
+        state = place(state, 2, red);
+
+        return withDie(state, 3);
+    };
+
+    it('names the mover by seat and token, and the victim by seat and token, for a single capture', () =>
+    {
+        expect(ringIndex('yellow', 4)).toBe(ringIndex('red', 30));
+        expect(SAFE).not.toContain(ringIndex('red', 30));
+
+        const { state, events } = ok(apply(yellowOnTurn([YARD, 10, YARD, 30]), { kind: 'move', seat: 5, piece: 2 }));
+
+        expect(state.players[0].pieces).toEqual([YARD, 10, YARD, YARD]);
+        expect(captures(events)).toEqual([
+            { e: 'capture', seat: 5, piece: 2, victim: 2, victimPiece: 3 }
+        ]);
+    });
+
+    it('writes one event per captured token when a whole stack goes home', () =>
+    {
+        const { state, events } = ok(apply(yellowOnTurn([YARD, 30, 10, 30]), { kind: 'move', seat: 5, piece: 2 }));
+
+        expect(state.players[0].pieces).toEqual([YARD, YARD, 10, YARD]);
+        expect(captures(events)).toEqual([
+            { e: 'capture', seat: 5, piece: 2, victim: 2, victimPiece: 1 },
+            { e: 'capture', seat: 5, piece: 2, victim: 2, victimPiece: 3 }
+        ]);
+    });
+});
+
 describe('the home column', () =>
 {
     it('takes an exact count and refuses an overshoot', () =>
