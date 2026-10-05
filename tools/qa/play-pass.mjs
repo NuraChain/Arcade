@@ -391,6 +391,9 @@ try
     // ---------------------------------------------------------------- 5. what it left behind
     console.log('\n[5] what the game left on the profiles');
     {
+        const answered = dana.page.waitForResponse((one) => new URL(one.url()).pathname === '/api/matches/history')
+            .then((one) => one.json()).catch(() => ({ matches: [] }));
+
         await dana.page.goto(`${ BASE }/app/me`, { waitUntil: 'networkidle' });
         await dana.page.waitForTimeout(SETTLE_MS);
 
@@ -398,7 +401,6 @@ try
             [...document.querySelectorAll('main h2')].map((one) => one.textContent?.trim()));
 
         record('the profile opens on the achievements', sections.includes('Achievements'), sections.join(', ').slice(0, 80));
-        record('and the games it has played', sections.includes('Recent games'));
 
         await dana.page.getByRole('tab', { name: 'Games' }).click();
         await dana.page.waitForTimeout(SETTLE_MS);
@@ -407,13 +409,26 @@ try
             [...document.querySelectorAll('main h2')].map((one) => one.textContent?.trim()));
 
         record('and its Games tab has the record', games.includes('Record'), games.join(', ').slice(0, 80));
+        record('and the games it has played', games.includes('Recent games'));
 
-        const history = await dana.page.evaluate(() =>
-            [...document.querySelectorAll('main li')]
-                .map((one) => one.textContent?.replace(/\s+/g, ' ').trim() ?? '')
-                .filter((text) => /^(Won|Lost|Left)/.test(text)));
+        const rows = await dana.page.evaluate(() =>
+        {
+            const recent = [...document.querySelectorAll('main section')]
+                .find((one) => one.querySelector('h2')?.textContent?.trim() === 'Recent games');
 
-        record('the game just played is in the history', history.length > 0, history[0]?.slice(0, 60));
+            return [...recent?.querySelectorAll('li') ?? []]
+                .map((one) => one.textContent?.replace(/\s+/g, ' ').trim() ?? '');
+        });
+
+        const filed = (await answered).matches ?? [];
+        const at = filed.findIndex((one) => one.id === match);
+        const said = { won: 'Won', lost: 'Lost', abandoned: 'Left', void: 'No contest' }[filed[at]?.result];
+        const row = rows[at] ?? '';
+
+        record('the recent games list every game the page was sent', filed.length > 0 && rows.length === filed.length,
+            `${ rows.length } shown, ${ filed.length } sent`);
+        record('the game just played is in the history', at >= 0 && said !== undefined
+            && row.startsWith(said) && row.includes('Ludo'), row.slice(0, 60));
 
         /**
          * The line the table's own thread records. `chat.line.result` and `MessageKind: 'result'`
