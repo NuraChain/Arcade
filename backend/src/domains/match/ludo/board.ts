@@ -139,6 +139,11 @@ export function isSafeRing(index: number)
     return SAFE.includes(index);
 }
 
+export function capturesAt(colour: LudoColour, progress: number)
+{
+    return progress === 0 || (progress > 0 && progress < RING_STEPS && !isSafeRing(ringIndex(colour, progress)));
+}
+
 export function coloursFor(seats: number): readonly LudoColour[]
 {
     if (seats === 2)

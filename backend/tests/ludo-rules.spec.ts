@@ -775,18 +775,64 @@ describe('a starred square never captures', () =>
 
         expect(landings).toBeGreaterThan(SAFE.length * 4);
     });
+});
 
-    it('leaves an opponent on a start square when a token enters onto it', () =>
+describe('a token coming out of the yard captures on its own start square', () =>
+{
+    const progressOnRedStart = (colour: 'green' | 'yellow' | 'blue') => (ENTRY.red - ENTRY[colour] + 52) % 52;
+
+    const captures = (events: GameEvent[]) => events.filter((event) => event.e === 'capture');
+
+    it('sends home an opponent standing on the start square', () =>
     {
-        const square = ENTRY.green;
+        const start = withDie(place(table(2), 1, [progressOnRedStart('yellow'), 10, YARD, YARD]), 6);
 
-        let state = place(table(4), 0, [progressAt('red', square), YARD, YARD, YARD]);
-        state = withDie({ ...state, turn: 1 }, 6);
+        expect(ringIndex('yellow', progressOnRedStart('yellow'))).toBe(ENTRY.red);
 
-        const { state: after, events } = ok(apply(state, { kind: 'move', seat: 1, piece: 0 }));
+        const { state, events } = ok(apply(start, { kind: 'move', seat: 0, piece: 0 }));
 
-        expect(kinds(events)).toEqual(['enter']);
-        expect(after.players[0].pieces[0]).toBe(square);
-        expect(ringIndex('green', after.players[1].pieces[0])).toBe(square);
+        expect(state.players[0].pieces[0]).toBe(0);
+        expect(state.players[1].pieces).toEqual([YARD, 10, YARD, YARD]);
+        expect(kinds(events)).toEqual(['enter', 'capture']);
+        expect(captures(events)).toEqual([{ e: 'capture', seat: 0, piece: 0, victim: 1, victimPiece: 0 }]);
+        expect(state.turn, 'the six still earns its roll').toBe(0);
+        expect(state.die).toBeNull();
     });
+
+    it('sends home every opponent token there, whatever its colour', () =>
+    {
+        let start = place(table(4), 1, [progressOnRedStart('green'), progressOnRedStart('green'), YARD, YARD]);
+        start = place(start, 3, [progressOnRedStart('blue'), YARD, YARD, YARD]);
+        start = withDie(start, 6);
+
+        const { state, events } = ok(apply(start, { kind: 'move', seat: 0, piece: 2 }));
+
+        expect(state.players[0].pieces).toEqual([0, YARD, YARD, YARD]);
+        expect(state.players[1].pieces).toEqual([YARD, YARD, YARD, YARD]);
+        expect(state.players[3].pieces).toEqual([YARD, YARD, YARD, YARD]);
+        expect(captures(events).map((event) => event.e === 'capture' && [event.victim, event.victimPiece])).toEqual([[1, 0], [1, 1], [3, 0]]);
+    });
+
+    it('leaves its own tokens on the start square where they are', () =>
+    {
+        const start = withDie(place(table(2), 0, [0, YARD, YARD, YARD]), 6);
+        const { state, events } = ok(apply(start, { kind: 'move', seat: 0, piece: 1 }));
+
+        expect(state.players[0].pieces).toEqual([0, 0, YARD, YARD]);
+        expect(captures(events)).toEqual([]);
+    });
+
+    it('captures nobody when a token moves onto any start square instead of coming out on it', () =>
+    {
+        let start = place(table(4), 0, [ENTRY.yellow - 2, YARD, YARD, YARD]);
+        start = withDie(place(start, 1, [ENTRY.yellow - ENTRY.green, YARD, YARD, YARD]), 2);
+
+        const { state, events } = ok(apply(start, { kind: 'move', seat: 0, piece: 0 }));
+
+        expect(ringIndex('red', state.players[0].pieces[0])).toBe(ENTRY.yellow);
+        expect(state.players[1].pieces[0]).toBe(ENTRY.yellow - ENTRY.green);
+        expect(captures(events)).toEqual([]);
+    });
+
+    it.todo('sends home an opponent block standing on the start square when a token comes out onto it');
 });

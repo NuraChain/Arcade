@@ -18,8 +18,9 @@
  * tries to find a six" - a full yard rolling one to five simply passes. And entering is a choice
  * among the legal moves, with any yard token eligible on any six.
  *
- * The rest: capture on exact landing only, never by passing over; eight starred squares where
- * nobody is sent home; an exact count into the five home cells, with an overshoot simply absent
+ * The rest: capture on exact landing only, never by passing over; eight starred squares where no
+ * landing sends anybody home, except that a token coming out of its yard sends home every opponent
+ * on its own start square (D27); an exact count into the five home cells, with an overshoot simply absent
  * from the legal set; three consecutive sixes end the turn and the third grants no roll; a
  * capture or a finish on a six still earns the roll.
  */
@@ -29,8 +30,8 @@ import {
     RING_STEPS,
     TOKENS_PER_PLAYER,
     YARD,
+    capturesAt,
     coloursFor,
-    isSafeRing,
     ringIndex,
     type LudoColour
 } from './board.ts';
@@ -177,18 +178,14 @@ function entering(state: LudoState, piece: number)
 
 function captureAt(state: LudoState, mover: number, moving: number, progress: number, events: GameEvent[])
 {
-    if (progress >= RING_STEPS)
-    {
-        return;
-    }
-
     const player = state.players[mover];
-    const square = ringIndex(player.colour, progress);
 
-    if (isSafeRing(square))
+    if (!capturesAt(player.colour, progress))
     {
         return;
     }
+
+    const square = ringIndex(player.colour, progress);
 
     for (let other = 0; other < state.players.length; other += 1)
     {

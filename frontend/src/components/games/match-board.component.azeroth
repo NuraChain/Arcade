@@ -172,7 +172,9 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
 
         if (outcome?.kind === 'enter')
         {
-            return locale.t('match.move.enter', { token });
+            return help.hintOutcome && outcome.count !== undefined
+                ? locale.plural('helpers.ludo.move.enterCapture', outcome.count, { token })
+                : locale.t('match.move.enter', { token });
         }
 
         if (help.hintOutcome && outcome?.kind === 'home')

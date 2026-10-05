@@ -32,6 +32,9 @@ describe('what a ludo move does', () =>
 {
     const cases: { name: string; pieces: number[][]; die: number; turn?: number; piece: number; says: LudoOutcome | null }[] = [
         { name: 'a six brings a token out', pieces: [YARD, YARD], die: 6, piece: 0, says: { kind: 'enter' } },
+        { name: 'coming out sends home an opponent on the start square', pieces: [YARD, [26, 10, -1, -1]], die: 6, piece: 0, says: { kind: 'enter', count: 1 } },
+        { name: 'coming out sends home every colour on the start square', pieces: [YARD, [39, 39, -1, -1], YARD, [13, -1, -1, -1]], die: 6, piece: 0, says: { kind: 'enter', count: 3 } },
+        { name: 'landing on the start square of another colour takes nothing', pieces: [[24, -1, -1, -1], [13, -1, -1, -1], YARD, YARD], die: 2, piece: 0, says: { kind: 'safe' } },
         { name: 'landing exactly on a token sends it home', pieces: [[10, -1, -1, -1], [38, -1, -1, -1]], die: 2, piece: 0, says: { kind: 'capture', victim: 1, count: 1 } },
         { name: 'two tokens sharing the square both go', pieces: [[10, -1, -1, -1], [38, 38, -1, -1]], die: 2, piece: 0, says: { kind: 'capture', victim: 1, count: 2 } },
         { name: 'passing over a token takes nothing', pieces: [[10, -1, -1, -1], [37, -1, -1, -1]], die: 2, piece: 0, says: { kind: 'step' } },
@@ -72,6 +75,7 @@ describe('what a ludo move does', () =>
         };
 
         let checked = 0;
+        let entries = 0;
 
         for (const count of [2, 3, 4])
         {
@@ -115,7 +119,7 @@ describe('what a ludo move does', () =>
 
                     const captures = moved.events.filter((event) => event.e === 'capture');
 
-                    expect(said?.kind === 'capture').toBe(captures.length > 0);
+                    expect(said?.kind === 'capture' || (said?.kind === 'enter' && said.count !== undefined)).toBe(captures.length > 0);
                     expect(said?.kind === 'home').toBe(moved.events.some((event) => event.e === 'home'));
                     expect(said?.kind === 'enter').toBe(moved.events.some((event) => event.e === 'enter'));
 
@@ -125,6 +129,12 @@ describe('what a ludo move does', () =>
                         expect(captures.every((event) => event.e === 'capture' && event.victim === said.victim)).toBe(true);
                     }
 
+                    if (said?.kind === 'enter' && said.count !== undefined)
+                    {
+                        expect(said.count).toBe(captures.length);
+                        entries += 1;
+                    }
+
                     checked += 1;
                     state = moved.state;
                 }
@@ -132,6 +142,7 @@ describe('what a ludo move does', () =>
         }
 
         expect(checked).toBeGreaterThan(1000);
+        expect(entries, 'some self-played entry must capture').toBeGreaterThan(0);
     });
 });
 
@@ -161,7 +172,7 @@ describe('the rule that matters now', () =>
         },
         { name: 'a star shields the token a move lands on', pieces: [[5, -1, -1, -1], [34, -1, -1, -1]], die: 3, key: 'helpers.ludo.tip.star' },
         { name: 'the star matters more than the six', pieces: [[2, -1, -1, -1], [34, -1, -1, -1]], die: 6, key: 'helpers.ludo.tip.star' },
-        { name: 'coming out onto a start star somebody holds takes nothing', pieces: [YARD, [26, -1, -1, -1]], die: 6, key: 'helpers.ludo.tip.star' },
+        { name: 'coming out onto a start star somebody holds is a capture rather than a shield', pieces: [YARD, [26, -1, -1, -1]], die: 6, key: 'helpers.ludo.tip.six' },
         { name: 'home needs the exact count', pieces: [[54, 10, -1, -1], YARD], die: 3, key: 'helpers.ludo.tip.exact' },
         { name: 'an ordinary roll needs no tip', pieces: [[10, -1, -1, -1], YARD], die: 3, key: null },
         { name: 'nothing while somebody else plays', pieces: [[10, -1, -1, -1], [3, -1, -1, -1]], die: null, turn: 1, key: null },

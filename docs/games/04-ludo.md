@@ -10,8 +10,9 @@ square and never block, an attacker takes a whole stack, eight squares are safe,
 player home ends the game. Free to play. No wagering of any kind.
 
 Every rule below is either **cited** (a source and the words it uses) or labelled **house rule**
-(no accepted source says it, or the sources disagree and the product chose). Two clauses are
-**open choices** that the owner has not settled; they are at the end of the matrix.
+(no accepted source says it, or the sources disagree and the product chose). Rules the owner settled
+after the first draft carry their decision number (D27 onward) and date. One clause is still an
+**open choice**; it is at the end of the matrix.
 
 ---
 
@@ -81,10 +82,10 @@ six is a governing body: Ludo has none, and every source calls its own rules one
 | C1 | A token that lands exactly on an opponent sends it back to its yard, where it needs a six like any other. | cited: [WP] "the opposing token is returned to its respective home point"; [MoG] "the piece jumped upon is returned to its starting circle"; [setare] «مهره سبز دوباره باید به بیرون از صفحه بازی بروند و با تاس ۶ بعدی به بازی بیاورید» |
 | C2 | Capture is on the exact landing square only, never by passing over. | cited: [Schmidt] "Wer mit dem letzten Punkt seiner Augenzahl auf ein Feld trifft ... schlägt diese Figur"; [fekravaran] «اگر مهره شما دقیقاً روی خانه‌ای بیفتد...» |
 | C3 | **An attacker captures the whole stack**: every opponent token on the landing square goes home, whoever owns them. | house rule: the consequence of M5 (a stack that cannot block has to fall somehow). Against: [WP] and [MoG], where a stack is a block nobody can land on |
-| C4 | Nobody is captured on any of the eight safe squares. A token landing on one shares it with whoever is there. | cited: S5's sources. A safe square that refused the landing would be a block, which M5 rules out |
+| C4 | No ordinary move captures on any of the eight safe squares. A token landing on one shares it with whoever is there. The one exception is C7. | cited: S5's sources. A safe square that refused the landing would be a block, which M5 rules out |
 | C5 | The home lane is private: no other colour can enter it, so nothing there can be captured. | cited: [WP] "A player's home column squares are always "safe", since no opponent may enter them."; [fekravaran] «مهره‌ای که وارد خانه پایانی شود ... قابل زدن نیست» |
 | C6 | Own tokens are never captured. | cited: [Schmidt] "Eigene Steine können nicht geschlagen werden" |
-| C7 | **Open choice:** entering onto your own start square captures nobody, even an opponent standing there. | see *Open choices*, O1 |
+| C7 | **A token coming out of the yard captures on its own start square** (D27, the owner's decision of 2026-10-05): every opponent token standing there goes home, whatever its colour. A token arriving on any start square by an ordinary move still captures nobody, so a start square stays safe for tokens passing through. | cited: [Schmidt] "Steht dagegen eine fremde Figur auf dem Feld A, wird sie geschlagen." (an opponent on your start square is captured); [WP] *Differences* (Denmark): "If the entry space is occupied by another player's piece, that piece is captured."; [fekravaran] «اگر بازیکن دیگری روی خانه امن شما قرار بگیرد، می‌توانید مهره او را بزنید» ("if another player stands on your safe square, you can hit their piece"). Against: [faWP] counts the start square among the safe points with no exception. See *Decided choices* |
 
 ### End
 
@@ -113,28 +114,30 @@ six is a governing body: Ludo has none, and every source calls its own rules one
 
 ---
 
-## Open choices
+## Decided choices
 
-Two behaviours the engine has and the tests pin that no settled rule decides. They stay as they are
-until the owner chooses. Each says what changing it would take.
-
-**O1. Does entering capture an opponent on your own start square?** The engine says **no**: a start
-square is one of the eight safe squares, so a token entering onto it shares the square with whoever
-is there. The sources split:
+**D27 (2026-10-05, the owner): a token coming out of the yard captures on its own start square.**
+This was open choice O1 in the first draft, where the engine treated a start square like every other
+safe square and an entering token simply shared it. The sources split:
 
 | captures on entry | start square safe for everybody | silent |
 |---|---|---|
-| [Schmidt] "Steht dagegen eine fremde Figur auf dem Feld A, wird sie geschlagen." (an opponent on your start square is captured) | [faWP] «نقطه شروع جز نقطه‌های امن محسوب می‌شود» (no owner qualifier) | [setare] protects the OWNER's token only («اگر مهره شما روی آن باشد، مهره رنگ دیگری نمی‌تواند مهره شما را بزند», "while YOUR piece is on it, no other colour can hit it") and says nothing about a visitor |
+| [Schmidt] "Steht dagegen eine fremde Figur auf dem Feld A, wird sie geschlagen." | [faWP] «نقطه شروع جز نقطه‌های امن محسوب می‌شود» (no owner qualifier) | [setare] protects the OWNER's token only («اگر مهره شما روی آن باشد، مهره رنگ دیگری نمی‌تواند مهره شما را بزند», "while YOUR piece is on it, no other colour can hit it") and says nothing about a visitor |
 | [WP] *Differences* (Denmark): "If the entry space is occupied by another player's piece, that piece is captured." | | [MoG] and base [WP]: no safe start squares at all |
-| [fekravaran] «اگر بازیکن دیگری روی خانه امن شما قرار بگیرد، می‌توانید مهره او را بزنید» ("if another player stands on your safe square, you can hit their piece") | | |
+| [fekravaran] «اگر بازیکن دیگری روی خانه امن شما قرار بگیرد، می‌توانید مهره او را بزنید» | | |
 
-Three sources, one of them Iranian, capture; one Iranian source makes the square safe for all. Your
-own tokens reach your start square only by entering, so "capture on entry" and [fekravaran]'s "you
-can hit a visitor on your safe square" are the same rule. Pinned by `ludo-rules.spec.ts`, *a starred
-square never captures* → *leaves an opponent on a start square when a token enters onto it*. To
-change it: `captureAt` skips the safe-square test when the mover's progress is 0, the helper
-`outcomeOf` must then call such an entry a capture, and the coach's star tip must stop calling a
-visitor on somebody else's start square safe.
+Your own tokens reach your start square only by coming out, so "capture on entry" and
+[fekravaran]'s "you can hit a visitor on your safe square" are one rule. `capturesAt` in
+`ludo/board.ts` is the single statement of it, read by the engine's `captureAt`, the move helper
+`outcomeOf` and the coach. `ludo-rules.spec.ts` pins it in *a token coming out of the yard captures on
+its own start square*.
+
+---
+
+## Open choices
+
+One behaviour the engine has and the tests pin that no settled rule decides. It stays as it is until
+the owner chooses.
 
 **O2. Does a six with nothing to move count toward the three sixes?** The engine says **yes**: the
 count goes up when the six is rolled, before the engine asks whether anything can move, so three

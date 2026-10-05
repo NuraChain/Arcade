@@ -108,6 +108,19 @@ describe('the ludo helpers, and the switch for each', () =>
         expect(moveWords(container)).toEqual([locale.t('match.move.step', { token: '1', die: '2' })]);
     });
 
+    it('says a token coming out sends home whoever stands on the start square, and only that it comes out once told not to', async () =>
+    {
+        const locale = useLocale();
+        const container = await show(ludo(position([-1, -1, -1, -1], [26, 10, -1, -1], 6)));
+
+        expect(moveWords(container)).toEqual([locale.plural('helpers.ludo.move.enterCapture', 1, { token: '1' })]);
+
+        useSettings().update({ hintOutcome: false });
+        await settle();
+
+        expect(moveWords(container)).toEqual([locale.t('match.move.enter', { token: '1' })]);
+    });
+
     it('coaches the rule that matters, and goes quiet once told to', async () =>
     {
         const container = await show(ludo(SIX));

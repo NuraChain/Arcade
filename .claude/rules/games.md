@@ -456,7 +456,9 @@ these was wrong in the first engine:
   requirement to finish a previous one first.
 
 The rest is the ordinary game and is worth stating because each half is a test: capture happens on
-exact landing only and never by passing over; the eight starred squares send nobody home; the five
+exact landing only and never by passing over; the eight starred squares send nobody home, except
+that a token coming out of the yard onto its OWN start square sends home whoever stands there (D27,
+one rule in `capturesAt`); the five
 home cells need an exact count, and an overshoot is simply absent from the legal set rather than
 refused after the fact; three consecutive sixes end the turn and the third grants no roll; a capture
 or a finish on a six still earns the roll.

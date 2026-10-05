@@ -1,9 +1,9 @@
-import { FINISHED, RING_STEPS, YARD, cellAt, isSafeRing, ringIndex, type LudoColour } from '../../../../backend/src/domains/match/ludo/board.ts';
+import { FINISHED, RING_STEPS, YARD, capturesAt, cellAt, ringIndex, type LudoColour } from '../../../../backend/src/domains/match/ludo/board.ts';
 import type { LudoBoard, LudoSeat } from '../../data/match.ts';
 import type { Tip } from './tip.ts';
 
 export type LudoOutcome =
-    | { kind: 'enter' }
+    | { kind: 'enter'; count?: number }
     | { kind: 'capture'; victim: number; count: number }
     | { kind: 'safe' }
     | { kind: 'home' }
@@ -96,7 +96,9 @@ export function outcomeOf(board: LudoBoard, seat: number, piece: number): LudoOu
 
     if (mover.tokens.find((one) => one.piece === piece)?.at === YARD)
     {
-        return { kind: 'enter' };
+        const victims = standingOn(board, seat, squareOf(mover, 0));
+
+        return victims.length === 0 ? { kind: 'enter' } : { kind: 'enter', count: victims.length };
     }
 
     if (to === FINISHED)
@@ -111,7 +113,7 @@ export function outcomeOf(board: LudoBoard, seat: number, piece: number): LudoOu
 
     const square = squareOf(mover, to);
 
-    if (isSafeRing(square))
+    if (!capturesAt(mover.colour as LudoColour, to))
     {
         return { kind: 'safe' };
     }
@@ -131,9 +133,7 @@ const starShields = (board: LudoBoard, me: LudoSeat, die: number) =>
             return false;
         }
 
-        const square = squareOf(me, to);
-
-        return isSafeRing(square) && standingOn(board, me.seat, square).length > 0;
+        return !capturesAt(me.colour as LudoColour, to) && standingOn(board, me.seat, squareOf(me, to)).length > 0;
     });
 
 const ends = (me: LudoSeat, piece: number, die: number) =>
