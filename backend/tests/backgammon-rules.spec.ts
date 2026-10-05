@@ -70,7 +70,7 @@ const scripted = (faces: number[]): ((sides: number) => number) =>
 function stateWith(overrides: Partial<BackgammonState>): BackgammonState
 {
     return {
-        ...create(3, true, scripted([6, 1])),
+        ...create(3, true, scripted([6, 1])).state,
         ...overrides
     };
 }
@@ -624,7 +624,7 @@ describe('the doubling cube', () =>
 {
     it('is dead in a one-point match', () =>
     {
-        const state = create(1, true, scripted([6, 1]));
+        const state = create(1, true, scripted([6, 1])).state;
 
         expect(state.cubed).toBe(false);
         expect(mayDouble({ ...state, phase: 'roll' }, state.turn)).toBe(false);
@@ -632,7 +632,7 @@ describe('the doubling cube', () =>
 
     it('is off when the table was opened without one', () =>
     {
-        expect(create(5, false, scripted([6, 1])).cubed).toBe(false);
+        expect(create(5, false, scripted([6, 1])).state.cubed).toBe(false);
     });
 
     it('may be turned by either player while it is centred, and only by its owner after a take', () =>

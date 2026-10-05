@@ -24,7 +24,7 @@ function playOut(seats: number, seed: number, check: (state: PokerState, events:
 {
     const die = seeded(seed);
     const draws = { die };
-    let state = pokerEngine.create(Array.from({ length: seats }, (_, seat) => seat), draws, { target: 0, cube: false, blinds: 'low' });
+    let state = pokerEngine.create(Array.from({ length: seats }, (_, seat) => seat), draws, { target: 0, cube: false, blinds: 'low' }).state;
     const events: PokerEvent[] = [];
     const faults: string[] = [];
     let actions = 0;
@@ -99,13 +99,13 @@ describe('what one seat may see of another', () =>
 
     it('proves the forgery would catch a leak', () =>
     {
-        const state = pokerEngine.create([0, 1, 2], { die: seeded(8) }, { target: 0, cube: false, blinds: 'low' });
+        const state = pokerEngine.create([0, 1, 2], { die: seeded(8) }, { target: 0, cube: false, blinds: 'low' }).state;
         const leaky = (target: PokerState) => JSON.stringify({ ...pokerEngine.view(target, 0), peek: target.holes[1] });
 
         expect(leaky(forgeHoles(state, 1))).not.toBe(leaky(state));
         expect(JSON.stringify(pokerEngine.view(forgeHoles(state, 1), 0))).toBe(JSON.stringify(pokerEngine.view(state, 0)));
 
-        const heads = pokerEngine.create([0, 1], { die: seeded(8) }, { target: 0, cube: false, blinds: 'low' });
+        const heads = pokerEngine.create([0, 1], { die: seeded(8) }, { target: 0, cube: false, blinds: 'low' }).state;
         const folded = pokerEngine.apply(heads, { kind: 'fold', seat: heads.turn }, { die: seeded(9) });
 
         expect(folded.ok).toBe(true);
@@ -123,7 +123,7 @@ describe('what one seat may see of another', () =>
 
     it('shows a reader their own hole cards and a spectator none at all', () =>
     {
-        const state = pokerEngine.create([0, 1, 2, 3, 4, 5], { die: seeded(21) }, { target: 0, cube: false, blinds: 'low' });
+        const state = pokerEngine.create([0, 1, 2, 3, 4, 5], { die: seeded(21) }, { target: 0, cube: false, blinds: 'low' }).state;
 
         for (let seat = 0; seat < 6; seat += 1)
         {
@@ -140,7 +140,7 @@ describe('what one seat may see of another', () =>
 
     it('stops sending a player their cards once they have folded them', () =>
     {
-        const state = pokerEngine.create([0, 1, 2, 3, 4, 5], { die: seeded(21) }, { target: 0, cube: false, blinds: 'low' });
+        const state = pokerEngine.create([0, 1, 2, 3, 4, 5], { die: seeded(21) }, { target: 0, cube: false, blinds: 'low' }).state;
         const seat = pokerEngine.turnOf(state)!;
         const folded = pokerEngine.apply(state, { kind: 'fold', seat }, { die: seeded(22) });
 
@@ -225,7 +225,7 @@ describe('what one seat may see of another', () =>
 
     it('holds no future board card anywhere in the state', () =>
     {
-        const state = pokerEngine.create([0, 1, 2, 3, 4, 5, 6, 7, 8], { die: seeded(33) }, { target: 0, cube: false, blinds: 'low' });
+        const state = pokerEngine.create([0, 1, 2, 3, 4, 5, 6, 7, 8], { die: seeded(33) }, { target: 0, cube: false, blinds: 'low' }).state;
         const known = new Set([...state.holes.flat(), ...state.board]);
 
         expect(state.board).toEqual([]);

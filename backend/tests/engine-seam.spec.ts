@@ -4,7 +4,13 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
-import { matchPlayer, matchView } from '../src/schemas.ts';
+import type { Engine } from '../src/domains/match/engine.ts';
+import { backgammonEngine } from '../src/domains/match/engines/backgammon.ts';
+import { hokmEngine } from '../src/domains/match/engines/hokm.ts';
+import { ludoEngine } from '../src/domains/match/engines/ludo.ts';
+import { pokerEngine } from '../src/domains/match/engines/poker.ts';
+import { matchLog, matchPlayer, matchView } from '../src/schemas.ts';
+import { seeded } from './poker-table.ts';
 
 /**
  * The layer ABOVE the engine, and the two things that keep it a seam rather than a folder.
@@ -166,5 +172,46 @@ describe('what a player asked for', () =>
 
             expect(rest.match(/\bpayload\b/g), `${ name } reads a play's payload`).toBeNull();
         }
+    });
+});
+
+describe('the opening', () =>
+{
+    const OPENINGS: readonly [Engine, number][] = [[ludoEngine, 4], [hokmEngine, 4], [backgammonEngine, 2], [pokerEngine, 6]];
+
+    const forged = (events: readonly unknown[], reader: number | null) => events.map((event) =>
+    {
+        const one = event as { seat?: number; cards?: number[] };
+
+        return Array.isArray(one.cards) && one.seat !== reader ? { ...one, cards: one.cards.map((card) => (card + 26) % 52) } : event;
+    });
+
+    it.each(OPENINGS.map(([engine, count]) => [engine.id, engine, count] as const))('%s hands back what happened at the opening beside the state, and no log of it shows a reader the cards of another seat', (_id, engine, count) =>
+    {
+        const seats = Array.from({ length: count }, (_, seat) => seat);
+        const opened = engine.create(seats, { die: seeded(5) }, { target: 0, cube: true, blinds: 'low' });
+
+        expect(Array.isArray(opened.events)).toBe(true);
+        expect(engine.turnOf(opened.state)).not.toBeNull();
+
+        for (const reader of [...seats, null])
+        {
+            const log = engine.log(opened.events, reader);
+
+            matchLog.parse(log);
+            expect(JSON.stringify(engine.log(forged(opened.events, reader), reader)), `${ engine.id } for ${ reader }`).toBe(JSON.stringify(log));
+        }
+    });
+
+    it('carries the opening of every game that has one: the deal, the blinds, the Hakem and the roll', () =>
+    {
+        const kinds = (engine: Engine, count: number) => engine
+            .create(Array.from({ length: count }, (_, seat) => seat), { die: seeded(9) }, { target: 0, cube: true, blinds: 'low' })
+            .events.map((event) => (event as { e: string }).e);
+
+        expect(kinds(ludoEngine, 4)).toEqual([]);
+        expect(kinds(hokmEngine, 4)).toEqual(['deal']);
+        expect(kinds(backgammonEngine, 2)[0]).toBe('opening');
+        expect(kinds(pokerEngine, 6)).toEqual(['deal', 'blind', 'blind', 'hole', 'hole', 'hole', 'hole', 'hole', 'hole']);
     });
 });

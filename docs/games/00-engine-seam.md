@@ -102,7 +102,7 @@ Three of those rows are concepts the platform does not have at all: **per-seat p
 ```
 Engine<State, Action>
     id
-    create(seats, config, draws)   -> State
+    create(seats, config, draws)   -> { state, events }   // the opening, and what happened in it
     apply(state, action, draws)    -> { ok: true, next } | { ok: false, reason }
     legal(state, seat)             -> Action[]
     view(state, seat | null)       -> unknown        // per viewer. the whole redaction story
@@ -136,6 +136,12 @@ Two contracts the existing code already imposes and the seam must state explicit
   does this, and it is why the timeout sweep can fold actions over a state.
 - **Every state carries a top-level `rev`**, because `matches_rev_matches_state` reads
   `(state->>'rev')::int`.
+- **The opening is an event batch like any other.** `create` returns the events of the opening -
+  poker's deal, blinds and holes, hokm's `deal`, backgammon's opening roll, nothing for ludo - and
+  `start` writes them as the ledger's first row, kind `open`, seat -1, at the opening revision, which
+  is 1 for every engine. `log` redacts them per reader exactly as it redacts a move's, and `since`
+  from revision 0 and the `game` frame `start` pushes both carry them. Returning only a state threw
+  the opening away (PK-08).
 
 `draws` is passed IN rather than taken by the engine, so the engine stays pure and import-free —
 the rule `ludo-purity.spec.ts` enforces. The server owns `node:crypto`.
@@ -338,7 +344,8 @@ Two schema changes fell out, both re-recorded as part of this:
 - `match_actions_kind_known` was `roll | move | forfeit`. What the platform actually reads is
   whether somebody STOPPED - `record.ts` tells a walkout from a timeout by asking whether a forfeit
   names a person - and nothing branches on the others, so it is `play | forfeit` and the verb lives
-  in `payload` where the engine's own words belong.
+  in `payload` where the engine's own words belong. `open` joined them later, for the opening row
+  above.
 - **`match_players.colour` is gone.** Its own docblock said it was what `match_players` is joined on
   to draw a board; that stopped being true at step 3, when the board became the engine's to compose,
   and nothing had read it since. A column nothing writes and nothing reads is the dead weight this

@@ -551,7 +551,7 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
             }
 
             const seats = chairs.map((chair) => chair.seat);
-            const state = engine.create(seats, draws, { target: table.target, cube: table.cube, blinds: table.blinds as TableConfig['blinds'] });
+            const { state, events } = engine.create(seats, draws, { target: table.target, cube: table.cube, blinds: table.blinds as TableConfig['blinds'] });
 
             const matchId = await db.transaction(async (tx) =>
             {
@@ -562,8 +562,8 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
                  * rather than a failure - the same shape the seat claim gives a double tap.
                  */
                 const inserted = firstRow<{ id: string }>(await tx.query(
-                    `insert into matches (table_id, game, variant, seats, state, rev, deadline_at)
-                     select $1, $2, 'standard', $3::smallint, $4::jsonb, $7::int, now() + ($5 || ' milliseconds')::interval
+                    `insert into matches (table_id, game, variant, seats, state, opening, rev, deadline_at)
+                     select $1, $2, 'standard', $3::smallint, $4::jsonb, $4::jsonb, $7::int, now() + ($5 || ' milliseconds')::interval
                       where not exists (select 1 from matches where table_id = $1 and finished_at is null)
                         and (select count(*) from table_seats s where s.table_id = $1 and s.user_id is not null) = $6::bigint
                         and not exists (select 1 from table_seats s where s.table_id = $1 and s.ready = false)
@@ -581,6 +581,18 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
                     seat: chair.seat,
                     userId: chair.userId as string
                 })));
+
+                await tx.getRepository(MatchAction).insert({
+                    matchId: inserted.id,
+                    rev: revOf(state),
+                    seat: -1,
+                    userId: null,
+                    kind: 'open',
+                    payload: {},
+                    events: events as Record<string, unknown>[],
+                    state: state as Record<string, unknown>,
+                    idempotencyKey: null
+                });
 
                 return inserted.id;
             }).catch((error: unknown) =>

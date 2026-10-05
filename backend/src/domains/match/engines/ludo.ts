@@ -23,7 +23,7 @@ export const ludoEngine: Engine<LudoState, EngineAction> = {
     seats: [2, 3, 4],
 
     create: (seats: readonly number[], draws: Draws) =>
-        create(seats, draws.die(seats.length) - 1),
+        ({ state: create(seats, draws.die(seats.length) - 1), events: [] }),
 
 
 

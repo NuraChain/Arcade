@@ -245,7 +245,7 @@ describe('every word against the server\'s own table', () =>
     {
         const { die, next } = seeded(seats * 31);
         const draws = { die };
-        let state = pokerEngine.create(Array.from({ length: seats }, (_, seat) => seat), draws, { target: 0, cube: false, blinds: 'low' });
+        let state = pokerEngine.create(Array.from({ length: seats }, (_, seat) => seat), draws, { target: 0, cube: false, blinds: 'low' }).state;
         const faults: string[] = [];
         const seen = new Set<string>();
         let actions = 0;

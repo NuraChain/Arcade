@@ -434,7 +434,7 @@ export function create(seats: number, blinds: keyof typeof OPENING, die: Die)
     const state: PokerState = {
         v: 1,
         game: 'poker',
-        rev: 0,
+        rev: 1,
         seats,
         opening: OPENING[blinds],
         hand: 0,
@@ -462,10 +462,12 @@ export function create(seats: number, blinds: keyof typeof OPENING, die: Die)
         winner: null
     };
 
-    startHand(state, [], die);
-    settle(state, [], die);
+    const events: PokerEvent[] = [];
 
-    return state;
+    startHand(state, events, die);
+    settle(state, events, die);
+
+    return { state, events };
 }
 
 export function apply(state: PokerState, action: PokerAction, die: Die): Applied

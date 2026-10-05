@@ -127,7 +127,7 @@ describe('the deal pauses before trump is named', () =>
     {
         for (const seats of [3, 4])
         {
-            const state = create(seats, 7, seeded(seats));
+            const state = create(seats, 7, seeded(seats)).state;
 
             expect(state.phase, `${ seats } players`).toBe('trump');
             expect(state.hands[state.hakem], `${ seats } players`).toHaveLength(5);
@@ -144,7 +144,7 @@ describe('the deal pauses before trump is named', () =>
 
     it('deals five to each of two players and leaves the other forty-two in the stock', () =>
     {
-        const state = create(2, 7, seeded(2));
+        const state = create(2, 7, seeded(2)).state;
 
         expect(state.phase).toBe('trump');
         expect(state.hands.map((hand) => hand.length)).toEqual([5, 5]);
@@ -155,7 +155,7 @@ describe('the deal pauses before trump is named', () =>
 
     it('offers the trump call to the Hâkem and to nobody else', () =>
     {
-        const state = create(4, 7, seeded(9));
+        const state = create(4, 7, seeded(9)).state;
 
         expect(legalMoves(state, state.hakem)).toHaveLength(4);
 
@@ -170,7 +170,7 @@ describe('the deal pauses before trump is named', () =>
 
     it('fills every hand once trump is named, and only then', () =>
     {
-        const opened = create(4, 7, seeded(3));
+        const opened = create(4, 7, seeded(3)).state;
         const called = apply(opened, { kind: 'trump', seat: opened.hakem, suit: 'hearts' }, seeded(4));
 
         expect(called.ok).toBe(true);
@@ -188,7 +188,7 @@ describe('the deal pauses before trump is named', () =>
 
     it('seats the dealer to the Hâkem left', () =>
     {
-        const state = create(4, 7, seeded(11));
+        const state = create(4, 7, seeded(11)).state;
 
         expect(dealerSeat(state)).toBe((state.hakem + 3) % 4);
     });
@@ -207,7 +207,7 @@ describe('a hokm match always ends', () =>
             {
                 const deal = seeded(match * 7919 + seats);
 
-                let state = create(seats, 7, deal);
+                let state = create(seats, 7, deal).state;
                 let actions = 0;
 
                 while (state.winner === null && actions < 20000)
@@ -279,7 +279,7 @@ describe('what the sweep plays for an absent seat', () =>
             {
                 const deal = seeded(match * 104729 + seats * 31);
 
-                let state = create(seats, 7, deal);
+                let state = create(seats, 7, deal).state;
 
                 for (let action = 0; state.winner === null && action < 20000; action += 1)
                 {
@@ -334,7 +334,7 @@ describe('what the sweep plays for an absent seat', () =>
     it('leads low from a long plain suit rather than the lowest card in suit order', () =>
     {
         const state: HokmState = {
-            ...create(4, 7, seeded(5)),
+            ...create(4, 7, seeded(5)).state,
             phase: 'tricks',
             trump: 'hearts',
             hakem: 0,
@@ -355,7 +355,7 @@ describe('what the sweep plays for an absent seat', () =>
     it('keeps its trumps when void and holding a plain card', () =>
     {
         const state: HokmState = {
-            ...create(4, 7, seeded(5)),
+            ...create(4, 7, seeded(5)).state,
             phase: 'tricks',
             trump: 'clubs',
             hakem: 0,
@@ -385,7 +385,7 @@ describe('a trick is taken by the rules', () =>
     {
         const deal = seeded(21);
 
-        let state = create(4, 7, deal);
+        let state = create(4, 7, deal).state;
 
         const called = apply(state, { kind: 'trump', seat: state.hakem, suit: 'spades' }, deal);
 
@@ -450,7 +450,7 @@ describe('a trick is taken by the rules', () =>
     {
         const deal = seeded(64);
 
-        let state = create(4, 7, deal);
+        let state = create(4, 7, deal).state;
 
         expect(state.took).toBeNull();
 
@@ -512,7 +512,7 @@ describe('a trick is taken by the rules', () =>
     {
         const deal = seeded(9);
 
-        let state = create(4, 7, deal);
+        let state = create(4, 7, deal).state;
 
         for (let step = 0; step < 4000 && state.winner === null; step += 1)
         {
@@ -550,7 +550,7 @@ describe('a trick is taken by the rules', () =>
     {
         const deal = seeded(4);
 
-        let state = create(4, 7, deal);
+        let state = create(4, 7, deal).state;
 
         expect(state.round).toBe(1);
 
@@ -584,7 +584,7 @@ describe('a trick is taken by the rules', () =>
 
 describe('refusing what is not a move', () =>
 {
-    const opened = () => create(4, 7, seeded(5));
+    const opened = () => create(4, 7, seeded(5)).state;
 
     it('refuses a trump call from anybody but the Hâkem', () =>
     {
@@ -633,7 +633,7 @@ describe('refusing what is not a move', () =>
     {
         const deal = seeded(31);
 
-        let state = create(4, 7, deal);
+        let state = create(4, 7, deal).state;
 
         const called = apply(state, { kind: 'trump', seat: state.hakem, suit: 'spades' }, deal);
 
@@ -695,7 +695,7 @@ function stepOf(state: HokmState, action: HokmAction, deal: (sides: number) => n
 function twoHanded(seed: number)
 {
     const deal = seeded(seed);
-    const opened = create(2, 7, deal);
+    const opened = create(2, 7, deal).state;
 
     return { state: stepOf(opened, { kind: 'trump', seat: opened.hakem, suit: 'spades' }, deal).state, deal };
 }
@@ -867,8 +867,8 @@ describe('refusing a discard or a draw', () =>
 {
     it('refuses a discard outside the discard', () =>
     {
-        const opened = create(2, 7, seeded(41));
-        const fourDeal = create(4, 7, seeded(41));
+        const opened = create(2, 7, seeded(41)).state;
+        const fourDeal = create(4, 7, seeded(41)).state;
         const four = stepOf(fourDeal, { kind: 'trump', seat: fourDeal.hakem, suit: 'clubs' }, seeded(2)).state;
         const { state } = drawing(41);
 
@@ -917,8 +917,8 @@ describe('refusing a discard or a draw', () =>
     it('refuses a keep or a pass with nothing on offer', () =>
     {
         const { state } = twoHanded(49);
-        const opened = create(2, 7, seeded(49));
-        const fourDeal = create(4, 7, seeded(49));
+        const opened = create(2, 7, seeded(49)).state;
+        const fourDeal = create(4, 7, seeded(49)).state;
         const four = stepOf(fourDeal, { kind: 'trump', seat: fourDeal.hakem, suit: 'hearts' }, seeded(3)).state;
 
         expect(apply(state, { kind: 'keep', seat: state.hakem }, seeded(1))).toEqual({ ok: false, reason: 'not-drawing' });
@@ -958,7 +958,7 @@ describe('refusing a discard or a draw', () =>
         for (const seats of [3, 4])
         {
             const deal = seeded(57 + seats);
-            let state = create(seats, 7, deal);
+            let state = create(seats, 7, deal).state;
 
             for (let action = 0; action < 400 && state.winner === null; action += 1)
             {
@@ -983,7 +983,7 @@ describe('a kot at two players', () =>
         hands[loser] = [cardOf('hearts', '3'), cardOf('hearts', '4'), cardOf('hearts', '5')];
 
         const state: HokmState = {
-            ...create(2, 7, seeded(9)),
+            ...create(2, 7, seeded(9)).state,
             phase: 'tricks',
             trump: 'spades',
             hakem: 0,
@@ -1014,7 +1014,7 @@ describe('walking away', () =>
 {
     it('ends the whole match, not the hand', () =>
     {
-        const state = create(4, 7, seeded(13));
+        const state = create(4, 7, seeded(13)).state;
         const quit = apply(state, { kind: 'forfeit', seat: (state.hakem + 1) % 4, reason: 'resign' }, seeded(1));
 
         expect(quit.ok).toBe(true);
@@ -1035,7 +1035,7 @@ describe('walking away', () =>
         {
             for (const seats of SEATS)
             {
-                const state = create(seats, 7, seeded(13 + seats));
+                const state = create(seats, 7, seeded(13 + seats)).state;
                 const seat = (state.hakem + 1) % seats;
                 const quit = apply(state, hokmEngine.forfeit(seat, reason), seeded(1));
 
@@ -1061,7 +1061,7 @@ describe('walking away', () =>
             const deal = seeded(77 + seats);
             const log: HokmEvent[][] = [];
 
-            let state = create(seats, 7, deal);
+            let state = create(seats, 7, deal).state;
 
             for (let action = 0; state.winner === null && action < 20000; action += 1)
             {
@@ -1112,21 +1112,21 @@ describe('what a finished match reports', () =>
 
     it('places a side that walked out last, however many points it had', () =>
     {
-        const ended = forfeited({ ...create(3, 7, seeded(5)), points: [1, 5, 2] }, 1);
+        const ended = forfeited({ ...create(3, 7, seeded(5)).state, points: [1, 5, 2] }, 1);
 
         expect(placesOf(ended)).toEqual([2, 3, 1]);
     });
 
     it('lets two sides level on points share a place', () =>
     {
-        const ended: HokmState = { ...create(3, 7, seeded(5)), points: [7, 3, 3], winner: 0 };
+        const ended: HokmState = { ...create(3, 7, seeded(5)).state, points: [7, 3, 3], winner: 0 };
 
         expect(placesOf(ended)).toEqual([1, 2, 2]);
     });
 
     it('names both partners at the target and leaves nobody unsettled', () =>
     {
-        const ended: HokmState = { ...create(4, 7, seeded(5)), points: [7, 4], winner: 0 };
+        const ended: HokmState = { ...create(4, 7, seeded(5)).state, points: [7, 4], winner: 0 };
 
         expect(hokmEngine.finish(ended)).toEqual({ winners: [0, 2], unsettled: [], trailing: [] });
         expect(placesOf(ended)).toEqual([1, 2, 1, 2]);
@@ -1134,8 +1134,8 @@ describe('what a finished match reports', () =>
 
     it('leaves everybody still at the table unsettled when a forfeit stopped it', () =>
     {
-        const four = forfeited({ ...create(4, 7, seeded(5)), points: [2, 4] }, 1);
-        const three = forfeited({ ...create(3, 7, seeded(5)), points: [1, 5, 2] }, 1);
+        const four = forfeited({ ...create(4, 7, seeded(5)).state, points: [2, 4] }, 1);
+        const three = forfeited({ ...create(3, 7, seeded(5)).state, points: [1, 5, 2] }, 1);
 
         expect(hokmEngine.finish(four)).toEqual({ winners: [0, 2], unsettled: [0, 2, 3], trailing: [] });
         expect(placesOf(four)).toEqual([1, 2, 1, 2]);
@@ -1144,10 +1144,10 @@ describe('what a finished match reports', () =>
 
     it('names the seats still at the table whose side trailed a side still in play', () =>
     {
-        const behind = forfeited({ ...create(4, 7, seeded(5)), points: [4, 2] }, 1);
-        const onTricks = forfeited({ ...create(4, 7, seeded(5)), points: [3, 3], tricks: [1, 2, 0, 2] }, 0);
-        const level = forfeited({ ...create(4, 7, seeded(5)), points: [3, 3], tricks: [1, 1, 1, 1] }, 3);
-        const threeOnTricks = forfeited({ ...create(3, 7, seeded(5)), points: [2, 0, 2], tricks: [1, 4, 3] }, 1);
+        const behind = forfeited({ ...create(4, 7, seeded(5)).state, points: [4, 2] }, 1);
+        const onTricks = forfeited({ ...create(4, 7, seeded(5)).state, points: [3, 3], tricks: [1, 2, 0, 2] }, 0);
+        const level = forfeited({ ...create(4, 7, seeded(5)).state, points: [3, 3], tricks: [1, 1, 1, 1] }, 3);
+        const threeOnTricks = forfeited({ ...create(3, 7, seeded(5)).state, points: [2, 0, 2], tricks: [1, 4, 3] }, 1);
 
         expect(hokmEngine.finish(behind)?.trailing).toEqual([3]);
         expect(hokmEngine.finish(onTricks)?.trailing).toEqual([2]);
@@ -1167,7 +1167,7 @@ describe('one turn on the clock', () =>
 {
     it('keeps the trump call and the lead on one key, and gives every trick a fresh one', () =>
     {
-        let state = create(4, 7, seeded(21));
+        let state = create(4, 7, seeded(21)).state;
         const keys: string[] = [hokmEngine.turnKey(state)];
         const deal = seeded(3);
 
@@ -1196,7 +1196,7 @@ describe('one turn on the clock', () =>
 
     it('gives the trump call, each discard, each draw and the opening lead a turn each at two players', () =>
     {
-        let state = create(2, 7, seeded(23));
+        let state = create(2, 7, seeded(23)).state;
         const deal = seeded(4);
         let actions = 0;
 

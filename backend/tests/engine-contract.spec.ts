@@ -48,7 +48,7 @@ function eachState(engine: Engine, count: number, game: number, visit: (state: u
 {
     const { draws, next } = seeded(game * 53 + count * 7 + 1);
     const seats = Array.from({ length: count }, (_, seat) => seat);
-    let state = engine.create(seats, draws, { target: 0, cube: true, blinds: 'low' });
+    let state = engine.create(seats, draws, { target: 0, cube: true, blinds: 'low' }).state;
     let actions = 0;
 
     while (engine.finish(state) === null)
@@ -211,7 +211,7 @@ describe.each(ENGINES.map((engine) => [engine.id, engine] as const))('the %s eng
             {
                 const { draws, next } = seeded(game * 97 + count);
                 const seats = Array.from({ length: count }, (_, seat) => seat);
-                let state = engine.create(seats, draws, { target: 0, cube: true, blinds: 'low' });
+                let state = engine.create(seats, draws, { target: 0, cube: true, blinds: 'low' }).state;
                 const events: unknown[] = [];
                 const forfeits: Forfeit[] = [];
                 let actions = 0;

@@ -53,7 +53,7 @@ function talliesOf(engine: Engine)
         {
             const { draws, next } = seeded(game * 131 + count);
             const seats = Array.from({ length: count }, (_, seat) => seat);
-            let state = engine.create(seats, draws, { target: 0, cube: true, blinds: 'low' });
+            let state = engine.create(seats, draws, { target: 0, cube: true, blinds: 'low' }).state;
             const events: unknown[] = [];
 
             while (engine.finish(state) === null)

@@ -22,7 +22,7 @@ const rowsOf = (seats: readonly number[]) => seats.map((seat) => ({
 
 function finishedSitAndGo()
 {
-    let state = pokerEngine.create([0, 1, 2, 3, 4, 5], draws(6), table);
+    let state = pokerEngine.create([0, 1, 2, 3, 4, 5], draws(6), table).state;
     const stayer = state.turn;
 
     for (const step of [1, 2, 3, 4, 5])
@@ -72,7 +72,7 @@ describe('the envelope of a finished match', () =>
 
     it('puts four-handed hokm partners on one side', () =>
     {
-        const state = hokmEngine.create([0, 1, 2, 3], draws(3), { target: 7, cube: false, blinds: 'low' });
+        const state = hokmEngine.create([0, 1, 2, 3], draws(3), { target: 7, cube: false, blinds: 'low' }).state;
         const players = envelopeOf(hokmEngine, state, rowsOf([0, 1, 2, 3]), true);
 
         expect(players.map((player) => player.side)).toEqual([0, 1, 0, 1]);
@@ -80,7 +80,7 @@ describe('the envelope of a finished match', () =>
 
     it('says nothing about a side or a place while the match is still going', () =>
     {
-        const state = pokerEngine.create([0, 1, 2, 3, 4, 5], draws(6), table);
+        const state = pokerEngine.create([0, 1, 2, 3, 4, 5], draws(6), table).state;
         const players = envelopeOf(pokerEngine, state, rowsOf([0, 1, 2, 3, 4, 5]), false);
 
         expect(players.every((player) => player.place === undefined && player.side === undefined)).toBe(true);

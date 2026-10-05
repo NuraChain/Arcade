@@ -60,7 +60,7 @@ function layout(points: Record<number, number>)
     return checkers;
 }
 
-const opened = (target: number, cube: boolean, faces: number[] = [6, 1]) => create(target, cube, scripted(faces));
+const opened = (target: number, cube: boolean, faces: number[] = [6, 1]) => create(target, cube, scripted(faces)).state;
 
 function finishAfter(state: BackgammonState, seat: number)
 {
@@ -76,13 +76,27 @@ describe('the opening roll', () =>
         expect(state.turn).toBe(0);
         expect(state.dice).toEqual([5, 2]);
         expect(state.phase).toBe('move');
-        expect(state.rev).toBe(0);
+        expect(state.rev).toBe(1);
         expect(state.round).toBe(1);
 
         const other = opened(3, true, [1, 6]);
 
         expect(other.turn).toBe(1);
         expect(other.dice).toEqual([1, 6]);
+    });
+
+    it('puts the opening roll in the stream, where the ledger keeps it', () =>
+    {
+        const { state, events } = backgammonEngine.create([0, 1], { die: scripted([5, 2]) }, { target: 3, cube: true, blinds: 'low' });
+
+        expect(events[0]).toEqual({ e: 'opening', seat: 0, dice: [5, 2] });
+        expect(state.turn).toBe(0);
+        expect(state.rev).toBe(1);
+
+        for (const reader of [0, 1, null])
+        {
+            expect(backgammonEngine.log(events, reader)).toMatchObject({ kind: 'backgammon', moves: expect.arrayContaining([{ e: 'opening', seat: 0, dice: [5, 2] }]) });
+        }
     });
 
     it('rolls again on a tie', () =>
@@ -127,7 +141,7 @@ describe('the opening roll', () =>
 
     it('turns a table with no target into a one-point match with a dead cube', () =>
     {
-        const state = backgammonEngine.create([0, 1], { die: scripted([6, 1]) }, { target: 0, cube: true, blinds: 'low' });
+        const state = backgammonEngine.create([0, 1], { die: scripted([6, 1]) }, { target: 0, cube: true, blinds: 'low' }).state;
 
         expect(state.target).toBe(1);
         expect(state.cubed).toBe(false);
@@ -441,7 +455,7 @@ describe('autoplay', () =>
         for (let seed = 0; seed < 100; seed += 1)
         {
             const die = dieFrom(seeded(seed));
-            let state = create(5, true, die);
+            let state = create(5, true, die).state;
 
             while (state.round === 1 && state.turns <= 2 && state.winner === null)
             {
@@ -568,7 +582,7 @@ describe('a match always ends', () =>
                 {
                     const random = seeded(target * 1000 + (cube ? 500 : 0) + match);
                     const die = dieFrom(random);
-                    let state = create(target, cube, die);
+                    let state = create(target, cube, die).state;
                     let actions = 0;
 
                     while (state.winner === null && actions < 5000)

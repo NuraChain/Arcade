@@ -60,7 +60,7 @@ export function create(seats: readonly number[], first: number): LudoState
         turn: first % players.length,
         die: null,
         sixes: 0,
-        rev: 0,
+        rev: 1,
         winner: null
     };
 }

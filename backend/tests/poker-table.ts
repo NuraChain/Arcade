@@ -92,7 +92,7 @@ export function seated(
         ...later
     ];
     const die = rig(button, sequence);
-    const state = create(stacks.length, opening, die);
+    const state = create(stacks.length, opening, die).state;
 
     state.stacks = stacks.map((chips, seat) => chips - state.put[seat]);
     state.start = [...stacks];

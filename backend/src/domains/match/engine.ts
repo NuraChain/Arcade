@@ -92,6 +92,12 @@ export interface TableConfig
     blinds: 'low' | 'mid' | 'high';
 }
 
+export interface Opened<S>
+{
+    state: S;
+    events: unknown[];
+}
+
 export interface Engine<S = unknown, A = unknown>
 {
     /** The `games.id` this engine plays. One engine, one game. */
@@ -99,7 +105,7 @@ export interface Engine<S = unknown, A = unknown>
 
     readonly seats: readonly number[];
 
-    create(seats: readonly number[], draws: Draws, table: TableConfig): S;
+    create(seats: readonly number[], draws: Draws, table: TableConfig): Opened<S>;
 
     /**
      * What a caller asked for, turned into something this engine will act on - or null.

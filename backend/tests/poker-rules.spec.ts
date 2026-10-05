@@ -245,7 +245,7 @@ describe('side pots at the table', () =>
             for (let game = 0; game < 8; game += 1)
             {
                 const die = seeded(seats * 1000 + game);
-                let state = create(seats, 'low', die);
+                let state = create(seats, 'low', die).state;
                 let actions = 0;
 
                 while (state.winner === null && actions < 20_000)
@@ -562,7 +562,7 @@ describe('the dead button, TDA 2026 Rule 34', () =>
             for (let game = 0; game < 6; game += 1)
             {
                 const die = seeded(seats * 7919 + game);
-                let state = create(seats, 'low', die);
+                let state = create(seats, 'low', die).state;
                 const out = new Set<number>();
                 const hands = [{ button: state.button, posted: [state.bets.indexOf(10), state.bets.indexOf(20)], out: new Set<number>() }];
                 let actions = 0;
@@ -665,7 +665,7 @@ describe('the blinds', () =>
     it('rise every ten hands through the schedule', () =>
     {
         const die = seeded(3);
-        let state = create(2, 'low', die);
+        let state = create(2, 'low', die).state;
         const seen: [number, number, number][] = [];
 
         while (state.hand <= 21)
@@ -682,9 +682,9 @@ describe('the blinds', () =>
 
     it('start where the table asked', () =>
     {
-        expect(create(2, 'low', seeded(1)).bets.filter((chips) => chips > 0).sort((a, b) => a - b)).toEqual([10, 20]);
-        expect(create(2, 'mid', seeded(1)).bets.filter((chips) => chips > 0).sort((a, b) => a - b)).toEqual([25, 50]);
-        expect(create(2, 'high', seeded(1)).bets.filter((chips) => chips > 0).sort((a, b) => a - b)).toEqual([50, 100]);
+        expect(create(2, 'low', seeded(1)).state.bets.filter((chips) => chips > 0).sort((a, b) => a - b)).toEqual([10, 20]);
+        expect(create(2, 'mid', seeded(1)).state.bets.filter((chips) => chips > 0).sort((a, b) => a - b)).toEqual([25, 50]);
+        expect(create(2, 'high', seeded(1)).state.bets.filter((chips) => chips > 0).sort((a, b) => a - b)).toEqual([50, 100]);
     });
 
     it('follow the published schedule and then double', () =>

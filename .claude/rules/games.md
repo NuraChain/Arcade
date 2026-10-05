@@ -574,11 +574,22 @@ and into `match_actions.payload`, the column a player's REQUEST writes. The payl
 for and nothing about what happened; what the die came up is in `events`. `tests/ludo-dice.spec.ts`
 reads `schemas.ts` and `api.ts` as text to keep it that way.
 
-**`match_actions.kind` is `play` or `forfeit`, and nothing else.** It was `roll | move | forfeit`,
-which is ludo's vocabulary on the ledger every game writes to. What the platform actually reads is
-whether somebody STOPPED - `record.ts` tells a walkout from a timeout by asking whether a forfeit
-names a person - and how many decisions a seat made itself, which it counts from `payload ->> 'verb'`
-on the rows that name a person, so the verb lives in `payload` where an engine's own words belong.
+**`match_actions.kind` is `play`, `forfeit` or `open`, and nothing else.** It was `roll | move |
+forfeit`, which is ludo's vocabulary on the ledger every game writes to. What the platform actually
+reads is whether somebody STOPPED - `record.ts` tells a walkout from a timeout by asking whether a
+forfeit names a person - and how many decisions a seat made itself, which it counts from
+`payload ->> 'verb'` on the rows that name a person, so the verb lives in `payload` where an engine's
+own words belong.
+
+**The opening is the first row of every ledger (PK-08).** `Engine.create` returns `{ state, events }`,
+and `start` writes those events as an `open` row at the opening revision - seat -1, no person, no
+key - in the transaction that inserts the match, and writes the same state to `matches.opening`. Every
+engine opens at revision 1, so the ledger is gapless from 1 and `since?rev=0` reads the whole game,
+opening included: poker's first deal and blinds (the `hole` events stay in the row and `log` drops
+them, exactly as for every later hand), hokm's first `deal`, backgammon's opening roll; ludo's opening
+has nothing to say and its row is empty. `start` pushes from the revision before it, so every seat is
+handed the opening through the same `game` frame as a move. It used to be thrown away: hand one began
+mid-hand in the feed, and a board's beats had no deal to draw.
 
 **`asMatch` reads no state at all.** The seats come from `match_players`, the turn from
 `engine.turnOf`, and the winner from `matches.winner_seat`, which the recorder writes from the judge's
@@ -838,8 +849,8 @@ is not a decision anybody at the table made. The engine reports the fact; the ju
 **The log needs no filtering and that is a fact about what is LOGGED.** A card is played face up, a
 trump is called aloud, a trick is taken in front of the table and a hand is written on a score sheet.
 The private things are the deal, the draw and the cards put face down, and none of them is an event -
-a `discard` or a `draw` names only the seat - so nothing private ever enters an append-only ledger that
-`since` replays from revision zero forever.
+a `deal` names only the Hâkem, a `discard` or a `draw` only the seat - so nothing private ever enters
+an append-only ledger that `since` replays from revision zero forever.
 
 **`hokm-seam.spec.ts` tests information FLOW, not fields**, and the first version of it was wrong in
 a way worth keeping. It serialised a seat's view and searched the bytes for another seat's card
@@ -858,7 +869,8 @@ the create form offers and the database already stores. Ludo ignores the argumen
 **The opening revision belongs to the engine.** `start` wrote the literal `0` beside the state the
 engine had just built - this layer deciding a number the engine owns - and
 `matches_rev_matches_state` caught it as a 500 on Start the first time an engine opened at anything
-else. It writes `revOf(state)` now.
+else. It writes `revOf(state)` now, which is 1 for every engine: the opening is the first thing that
+happened, and it has a ledger row like everything after it.
 
 **`tools/qa/hokm-pass.mjs` plays whole matches at two, three and four over the real api**, and it
 checks one thing ludo's pass structurally cannot: every seat reads `GET /matches/:id` for ITSELF

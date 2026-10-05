@@ -488,7 +488,7 @@ describe.skipIf(!active)('a record, against a real database', () =>
         it('pays a poker win played out after somebody quit in full', async () =>
         {
             const state: PokerState = {
-                ...pokerEngine.create([0, 1, 2], { die: () => 1 }, { target: 0, cube: false, blinds: 'low' }),
+                ...pokerEngine.create([0, 1, 2], { die: () => 1 }, { target: 0, cube: false, blinds: 'low' }).state,
                 out: [false, true, true],
                 places: [1, 3, 2],
                 winner: 0

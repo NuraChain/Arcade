@@ -92,10 +92,11 @@ function opening(previous: BackgammonState, die: Die, events: BackgammonEvent[])
 
 export function create(target: number, cube: boolean, die: Die)
 {
-    return opening({
+    const events: BackgammonEvent[] = [];
+    const state = opening({
         v: 1,
         game: 'backgammon',
-        rev: 0,
+        rev: 1,
         target,
         cubed: cubeLive(target, cube),
         score: [0, 0],
@@ -109,7 +110,9 @@ export function create(target: number, cube: boolean, die: Die)
         owner: null,
         turns: 0,
         winner: null
-    }, die, []);
+    }, die, events);
+
+    return { state, events };
 }
 
 function endGame(state: BackgammonState, winner: number, how: GameKind, die: Die, events: BackgammonEvent[]): BackgammonState

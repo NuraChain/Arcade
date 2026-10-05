@@ -2050,7 +2050,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             {
                 const load = await match.start(me, tableId);
 
-                await courtesy('game push', () => pushMatch(load.match.id, load.match.rev));
+                await courtesy('game push', () => pushMatch(load.match.id, load.match.rev - 1));
                 live?.tableChanged(tableId, await table.peopleAt(tableId));
 
                 return asMatch(load);

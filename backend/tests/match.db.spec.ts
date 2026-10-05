@@ -54,7 +54,7 @@ const makeUser = async () =>
     ))[0].id;
 };
 
-const seatedTable = async (seats: number): Promise<{ tableId: string; players: string[] }> =>
+const seatedTable = async (seats: number, game = 'ludo'): Promise<{ tableId: string; players: string[] }> =>
 {
     const players: string[] = [];
 
@@ -64,7 +64,7 @@ const seatedTable = async (seats: number): Promise<{ tableId: string; players: s
     }
 
     const table = await tables.create(players[0], {
-        game: 'ludo',
+        game,
         seats,
         mode: 'live',
         privacy: 'public',
@@ -94,7 +94,7 @@ const walkOut = async (who: string, tableId: string) =>
 
 const countActions = async (matchId: string) =>
     Number(rowsOf<{ n: string }>(await db.query(
-        `select count(*) as n from match_actions where match_id = $1`,
+        `select count(*) as n from match_actions where match_id = $1 and kind <> 'open'`,
         [matchId]
     ))[0].n);
 
@@ -346,6 +346,31 @@ describe.skipIf(!active)('a match, against a real database', () =>
         });
     });
 
+    describe('the opening', () =>
+    {
+        it('writes the opening deal to the ledger, readable from revision zero with every hole kept back', async () =>
+        {
+            const { tableId, players } = await seatedTable(2, 'poker');
+            const load = await matches.start(players[0], tableId);
+
+            expect(load.match.rev).toBe(1);
+
+            const read = await Promise.all(players.map((player) => matches.since(player, load.match.id, 0)));
+            const watched = await matches.feed(load.match.id, 0);
+
+            for (const entries of [...read.map((one) => one?.events ?? []), watched?.events(null) ?? []])
+            {
+                expect(entries.map((entry) => entry.rev)).toEqual([1]);
+                expect((entries[0].log as { kind: string; moves: { e: string }[] }).moves.map((move) => move.e)).toEqual(['deal', 'blind', 'blind']);
+            }
+
+            expect(rowsOf<{ kind: string; seat: number; user_id: string | null }>(await db.query(
+                `select kind, seat, user_id from match_actions where match_id = $1 order by rev`,
+                [load.match.id]
+            ))).toEqual([{ kind: 'open', seat: -1, user_id: null }]);
+        });
+    });
+
     describe('acting', () =>
     {
         it('applies a retried action once, however many times it arrives', async () =>
@@ -365,7 +390,7 @@ describe.skipIf(!active)('a match, against a real database', () =>
 
             const after = await matches.view(actor, load.match.id);
 
-            expect(after!.match.rev).toBe(1);
+            expect(after!.match.rev).toBe(load.match.rev + 1);
         });
 
         it('writes nothing for an action composed against a board that has moved', async () =>
@@ -375,9 +400,9 @@ describe.skipIf(!active)('a match, against a real database', () =>
             const turn = (load.state as LudoState).players[(load.state as LudoState).turn].seat;
             const actor = players[turn];
 
-            await matches.act(actor, load.match.id, { play: ROLL, rev: 0, key: 'first' });
+            await matches.act(actor, load.match.id, { play: ROLL, rev: load.match.rev, key: 'first' });
 
-            const stale = await matches.act(actor, load.match.id, { play: ROLL, rev: 0, key: 'second' });
+            const stale = await matches.act(actor, load.match.id, { play: ROLL, rev: load.match.rev, key: 'second' });
 
             expect(stale.applied).toBe('stale');
             expect(await countActions(load.match.id)).toBe(1);
@@ -708,7 +733,7 @@ describe.skipIf(!active)('a match, against a real database', () =>
             expect(await clock.expireNext()).toEqual({ matchId: load.match.id, game: 'ludo', played: true, before: load.match.rev });
 
             const swept = rowsOf<{ seat: number; user_id: string | null }>(await db.query(
-                `select seat, user_id from match_actions where match_id = $1 order by rev`,
+                `select seat, user_id from match_actions where match_id = $1 and kind <> 'open' order by rev`,
                 [load.match.id]
             ));
 
@@ -1196,7 +1221,7 @@ describe.skipIf(!active)('a match, against a real database', () =>
             }
 
             const rows = rowsOf<{ rev: number; user_id: string | null; state: HokmState }>(await db.query(
-                `select rev, user_id, state from match_actions where match_id = $1 order by rev`,
+                `select rev, user_id, state from match_actions where match_id = $1 and kind <> 'open' order by rev`,
                 [load.match.id]
             ));
 
@@ -1226,7 +1251,7 @@ describe.skipIf(!active)('a match, against a real database', () =>
                 const feed = await matches.since(user, load.match.id, 0);
                 const moves = feed!.events.flatMap((one) => (one.log.kind === 'hokm' ? one.log.moves : []));
 
-                expect(moves.map((move) => move.e)).toEqual(['trump', 'discard', 'discard', ...Array.from({ length: 21 }, () => 'draw')]);
+                expect(moves.map((move) => move.e)).toEqual(['deal', 'trump', 'discard', 'discard', ...Array.from({ length: 21 }, () => 'draw')]);
                 expect(moves.filter((move) => move.card !== undefined)).toEqual([]);
 
                 const board = hokmEngine.view(feed!.load.state as HokmState, feed!.load.mine);

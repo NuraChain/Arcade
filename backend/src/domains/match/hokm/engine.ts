@@ -162,10 +162,10 @@ export function create(seats: number, target: number, deal: Deal)
 {
     const hakem = deal(seats) - 1;
 
-    return dealHand({
+    const state = dealHand({
         v: 1,
         game: 'hokm',
-        rev: 0,
+        rev: 1,
         seats,
         target,
         round: 0,
@@ -185,6 +185,10 @@ export function create(seats: number, target: number, deal: Deal)
         out: Array.from({ length: seats }, () => false),
         winner: null
     }, deal);
+
+    const events: HokmEvent[] = [{ e: 'deal', hakem }];
+
+    return { state, events };
 }
 
 export function dealerSeat(state: HokmState)

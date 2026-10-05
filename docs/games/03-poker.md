@@ -53,6 +53,12 @@ they have to, and `view` never builds another seat's.
 
 Hole cards go out two rounds, starting left of the button. The first button is drawn from `draws`.
 
+**The first hand is in the ledger like every other.** `create` returns the opening's events beside the
+state - the `deal`, both `blind`s and a `hole` per seat - and `start` writes them as the match's `open`
+row at revision 1, so `since?rev=0` and the `game` frame `start` pushes both carry hand one's deal and
+blinds, and `log` drops the holes for every reader as it does for every later hand. Before, `create`
+returned only the state and hand one started mid-hand in the feed.
+
 ### The button and the blinds
 
 **The button is dead, as TDA 2026 Rule 34 asks of every tournament.** The BIG BLIND is what moves:

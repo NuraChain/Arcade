@@ -65,7 +65,7 @@ const secretEngine: Engine<SecretState, { seat: number }> = {
 
     seats: [2, 3, 4],
 
-    create: () => stateFor(),
+    create: () => ({ state: stateFor(), events: [] }),
 
     parse: (): { seat: number } => ({ seat: 0 }),
 

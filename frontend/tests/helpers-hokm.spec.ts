@@ -158,7 +158,7 @@ describe('against the engine', () =>
         {
             const deal = seeded(match * 31 + 5);
 
-            let state = create(2, 7, deal);
+            let state = create(2, 7, deal).state;
 
             for (let step = 0; step < 600 && state.winner === null; step += 1)
             {
@@ -194,7 +194,7 @@ describe('against the engine', () =>
             const deal = seeded(match * 7919 + seats);
             const pick = seeded(match * 104_729 + seats);
 
-            let state = create(seats, 7, deal);
+            let state = create(seats, 7, deal).state;
             let losers: number[] = [];
 
             for (let step = 0; step < 400 && state.winner === null; step += 1)

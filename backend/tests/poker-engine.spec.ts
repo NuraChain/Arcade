@@ -41,7 +41,7 @@ describe('the catalogue and the engine agree', () =>
 
     it('gives everybody fifteen hundred chips', () =>
     {
-        const state = pokerEngine.create([0, 1, 2, 3, 4, 5], draws(4), { target: 0, cube: false, blinds: 'low' });
+        const state = pokerEngine.create([0, 1, 2, 3, 4, 5], draws(4), { target: 0, cube: false, blinds: 'low' }).state;
 
         expect(chipsInPlay(state)).toBe(9000);
         expect(state.start).toEqual([1500, 1500, 1500, 1500, 1500, 1500]);
@@ -92,7 +92,7 @@ describe('the refusals', () =>
             expect(apply(state, action, die), `${ action.kind } by ${ action.seat }`).toEqual({ ok: false, reason });
         }
 
-        expect(state.rev).toBe(0);
+        expect(state.rev).toBe(1);
     });
 
     it('refuse a call when there is nothing to call', () =>
@@ -178,7 +178,7 @@ describe('a hand that ends', () =>
         expect(step.state.hand).toBe(2);
         expect(step.state.holes.every((cards) => cards.length === 2)).toBe(true);
         expect(pokerEngine.turnOf(step.state)).toBe(1);
-        expect(step.state.rev).toBe(1);
+        expect(step.state.rev).toBe(2);
     });
 
     it('runs an all-in out to the river in one apply', () =>
@@ -201,7 +201,7 @@ describe('a walkout', () =>
 {
     it('busts only the seat that left, and the table plays on', () =>
     {
-        const state = pokerEngine.create([0, 1, 2, 3, 4, 5], draws(9), { target: 0, cube: false, blinds: 'low' });
+        const state = pokerEngine.create([0, 1, 2, 3, 4, 5], draws(9), { target: 0, cube: false, blinds: 'low' }).state;
         const leaver = (state.turn + 2) % 6;
         const step = applied(state, forfeit(leaver));
 
@@ -217,7 +217,7 @@ describe('a walkout', () =>
 
     it('passes the turn on when the seat on turn walks out', () =>
     {
-        const state = pokerEngine.create([0, 1, 2, 3, 4, 5], draws(9), { target: 0, cube: false, blinds: 'low' });
+        const state = pokerEngine.create([0, 1, 2, 3, 4, 5], draws(9), { target: 0, cube: false, blinds: 'low' }).state;
         const step = applied(state, forfeit(state.turn, 'timeout'));
 
         expect(pokerEngine.turnOf(step.state)).toBe((state.turn + 1) % 6);
@@ -245,7 +245,7 @@ describe('how a game ended', () =>
 
     it('names the other seat when somebody walks heads-up, however early', () =>
     {
-        const state = pokerEngine.create([0, 1], draws(5), table);
+        const state = pokerEngine.create([0, 1], draws(5), table).state;
         const ended = applied(state, forfeit(1 - state.turn)).state;
 
         expect(pokerEngine.finish(ended)).toEqual({ winners: [state.turn], unsettled: [], trailing: [] });
@@ -265,7 +265,7 @@ describe('how a game ended', () =>
 
     it('places everybody who walked out by the order they left', () =>
     {
-        let state = pokerEngine.create([0, 1, 2, 3, 4, 5], draws(6), table);
+        let state = pokerEngine.create([0, 1, 2, 3, 4, 5], draws(6), table).state;
         const stayer = state.turn;
         const order = [1, 2, 3, 4, 5].map((step) => (stayer + step) % 6);
 
@@ -307,7 +307,7 @@ describe('one turn on the clock', () =>
 {
     it('gives a fresh key to the seat that folded one hand and opens the next', () =>
     {
-        const state = pokerEngine.create([0, 1], draws(5), { target: 0, cube: false, blinds: 'low' });
+        const state = pokerEngine.create([0, 1], draws(5), { target: 0, cube: false, blinds: 'low' }).state;
         const opener = state.turn;
         const raise = pokerEngine.legal(state, opener).find((one) => one.kind === 'raise')!;
         const raised = applied(state, raise).state;
@@ -321,7 +321,7 @@ describe('one turn on the clock', () =>
 
     it('keeps the key while a seat that is not on turn walks out', () =>
     {
-        const state = pokerEngine.create([0, 1, 2, 3, 4, 5], draws(6), { target: 0, cube: false, blinds: 'low' });
+        const state = pokerEngine.create([0, 1, 2, 3, 4, 5], draws(6), { target: 0, cube: false, blinds: 'low' }).state;
         const away = (state.turn + 3) % 6;
         const after = applied(state, forfeit(away)).state;
 
@@ -362,13 +362,37 @@ describe('what a game leaves behind', () =>
     });
 });
 
+describe('the opening deal', () =>
+{
+    it('reaches the ledger: the first deal, both blinds and every hole, with the holes kept out of every log', () =>
+    {
+        const opened = pokerEngine.create([0, 1, 2, 3, 4, 5], draws(4), { target: 0, cube: false, blinds: 'low' });
+        const state = opened.state;
+        const events = opened.events as PokerEvent[];
+
+        expect(state.rev).toBe(1);
+        expect(events[0]).toEqual({ e: 'deal', hand: 1, button: state.button, small: 10, big: 20 });
+        expect(events.filter((event) => event.e === 'blind')).toEqual([
+            { e: 'blind', seat: state.sb, amount: 10 },
+            { e: 'blind', seat: state.bb, amount: 20 }
+        ]);
+        expect(events.flatMap((event) => (event.e === 'hole' ? [[event.seat, event.cards]] : [])).sort((a, b) => Number(a[0]) - Number(b[0])))
+            .toEqual(state.holes.map((cards, seat) => [seat, cards]));
+
+        for (const reader of [0, 1, 2, 3, 4, 5, null])
+        {
+            expect(pokerEngine.log(events, reader)).toEqual({ kind: 'poker', moves: events.filter((event) => event.e !== 'hole') });
+        }
+    });
+});
+
 describe('a state the engine cannot advance', () =>
 {
     const VERBS = new Set(['fold', 'check', 'call', 'raise', 'allin']);
 
     it('is refused rather than written, like the match the sweep left on hand 253 with nobody on turn', () =>
     {
-        const { sb: _sb, bb: _bb, ...before } = create(2, 'low', seeded(7));
+        const { sb: _sb, bb: _bb, ...before } = create(2, 'low', seeded(7)).state;
         const stored = before as PokerState;
         const action = autoplay(stored, stored.turn);
 
@@ -379,7 +403,7 @@ describe('a state the engine cannot advance', () =>
 
     it('is refused when the button came back from storage as nothing', () =>
     {
-        const state = { ...create(6, 'low', seeded(8)), button: null } as unknown as PokerState;
+        const state = { ...create(6, 'low', seeded(8)).state, button: null } as unknown as PokerState;
 
         expect(apply(state, { kind: 'call', seat: state.turn }, seeded(8))).toEqual({ ok: false, reason: 'unplayable' });
     });
@@ -393,7 +417,7 @@ describe('a state the engine cannot advance', () =>
                 const die = seeded(seats * 31 + game);
                 const sweep = game % 2 === 1;
                 const misses = Array.from({ length: seats }, () => 0);
-                let state = create(seats, 'low', die);
+                let state = create(seats, 'low', die).state;
                 let steps = 0;
 
                 while (state.winner === null && steps < 20_000)
@@ -466,7 +490,7 @@ describe('every payload the wire carries', () =>
     it('parses at every step of a real game', () =>
     {
         const die = seeded(12);
-        let state = create(6, 'high', die);
+        let state = create(6, 'high', die).state;
         const events: PokerEvent[] = [];
 
         for (let action = 0; action < 400 && state.winner === null; action += 1)
