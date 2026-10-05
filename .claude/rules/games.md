@@ -697,7 +697,8 @@ them in the ledger, and is why no turn the sweep played ever counts towards a se
 
 **One deadline and one miss per TURN, not per action.** A turn is `sameTurn` in `service.ts`: the
 same `turnOf` AND the same `turnKey`, which each engine derives from its own state (ludo's turn index,
-backgammon's turn counter, hokm's round and tricks taken, poker's hand and actions taken). `commit`
+backgammon's turn counter, hokm's round and tricks taken - and at two players the phase and the stock
+size, so each discard and draw is its own turn - poker's hand and actions taken). `commit`
 re-arms the deadline only when the game goes on and the action ended the turn, so a ludo roll and its
 move, a backgammon roll and its move, and the hokm Hâkem's trump and opening lead each share ONE
 deadline (LUDO-01, BG-07): a roll no longer buys a fresh clock for the move after it. An action from a seat that is not on turn (a resignation at three or more) changes neither half, so it
@@ -764,12 +765,12 @@ bytes in `matches.state` AND in `match_actions.state` on every action, which is 
 the domain; ludo made the same call for its pieces. `cardOf` and `nameOf` exist so the rules suite
 reads like a rule book instead of like integers.
 
-**The deck is stripped until it divides, and every other number is derived from that.** 52 at four,
-51 at three (Pagat drops *"one of the 2's"*), and 50 at two - the house rule the product implements,
-two twos out and twenty-five each, rather than Pagat's keep-or-reject draw over a stock.
-`trickCount` is the deck over the seats and `winningTricks` is more than half of that, so the famous
-seven is a MAJORITY rather than a constant: written as a literal 7 the two-handed hand would end on
-the seventh of twenty-five tricks with eighteen still in hand.
+**The deck is stripped until it divides at three and four, and every other number is derived from
+that.** 52 at four and 51 at three (Pagat drops *"one of the 2's"*); `trickCount` is the deck over the
+seats and `winningTricks` is more than half of that, so the famous seven is a MAJORITY rather than a
+constant. Two players use all 52, because half of them go face down in the draw (below), and
+`trickCount(2)` is Pagat's *"each player should have 13 cards in hand"* - so the same majority reads
+seven there too.
 
 **The three-handed game keeps its own rules and they are the counter-intuitive ones.** The sweep is
 a literal seven of seventeen, not a majority. A hand ends early the moment a lead cannot be EQUALLED
@@ -783,20 +784,42 @@ divisible by three so all three cannot tie.
 partner receive nothing until trump is named, so they cannot signal. This deals to the Hâkem ALONE:
 during `trump` there is no other hand in the state at all, so no view, no snapshot and no event can
 leak one even if somebody later writes a careless projection. A pause that left three hands lying in
-the state would be a pause that depended on every reader being careful.
+the state would be a pause that depended on every reader being careful. At two there is no partner to
+signal to, and Pagat deals the dealer five at once, so both hands are in the state during `trump`.
 
-**Two phases, not eight.** The plan sketched a seven-state enum walking the deal round by round; what
-a caller can DO is name trump or play a card, so those are the phases. Rounds of five and four are a
-dealing ritual with no decision in them, and a state nobody can act in only exists to be stepped
-past. There is no `deal.ts` and no `rotation.ts` for the same reason.
+**A phase is a decision somebody makes, so there are four, not eight.** The plan sketched a
+seven-state enum walking the deal round by round; what a caller can DO is name trump, put cards face
+down, keep or pass a drawn card, or play a card, so those are the phases (`trump`, `discard`, `draw`,
+`tricks`), and the middle two exist only at two players. Rounds of five and four are a dealing ritual
+with no decision in them, and a state nobody can act in only exists to be stepped past. There is no
+`deal.ts` and no `rotation.ts` for the same reason.
+
+**Two players play Pagat's draw game (D20).** Five each; the Hâkem names trump and puts three face
+down, the dealer two; then the Hâkem draws first and the two alternate. A drawer looks at the offered
+card and either keeps it, then looks at the next and must put it face down (*"having looked at it"*),
+or puts it face down and must keep the next. Twenty-one draws - eleven to the Hâkem - empty the
+42-card stock and leave thirteen each, and the Hâkem leads. The Hâkem sees 27 cards and the dealer 25,
+so through every trick the Hâkem cannot place twelve cards and the dealer fourteen; `hokm-seam.spec.ts`
+holds both numbers at every action. The stock is an unordered set in the stored state and each card is
+lifted from it with the injected `Draws` at the moment it is drawn, as poker does, so no snapshot says
+what comes next; a view carries only its COUNT. **There is no discard pile anywhere**: a card put face
+down is removed and written nowhere, and the `discard` request's cards sit in `match_actions.payload`,
+which nothing reads back but the verb (`engine-seam.spec.ts`). `offer` reaches only the drawer, and
+`glimpse` - the card the drawer looked at after a keep - only that seat, until its next draw; the last
+ones stay until the first card of the hand is played, or the Hâkem would never see the card his
+eleventh draw put down. Every 2P action is a turn of its own (`turnKey` adds the phase and the stock
+size there), so an absent Hâkem is forfeited on his first draw. Autoplay chooses from `legalMoves` only
+- `putAway` (the lowest cards, a trump counting thirteen higher) and `worthKeeping` (a trump or a ten
+or better), both exported from `hokm/cards.ts` so the coach gives the sweep's advice. The refusals are
+`not-discarding`, `discard-count`, `not-drawing` and `tricks-not-started`.
 
 **A forfeit ends the MATCH, not the hand.** Four-handed hokm cannot be played three-handed, so there
 is nothing to continue with; the side left standing is named so the board can stop, and `finish`
 reports every seat still at the table as `unsettled`, because the game stopped before it decided
 their order. The judge never rates two unsettled sides against each other: the three-handed survivors
 are not rated against one another. The quitter takes a rated loss, team against team; the opponents
-win only if they and the quitter had each played a hand's worth of cards (`engagement`: 7 at three and
-four, 13 at two). `standings` puts a side with a seat out LAST whatever its points and lets sides
+win only if they and the quitter had each played a hand's worth of cards (`engagement`: 7 cards at
+every player count). `standings` puts a side with a seat out LAST whatever its points and lets sides
 level on points share a place (HOKM-03: a 3P tie used to be broken by seat number).
 
 **The score at the forfeit decides who gains by it (D25).** `finish` also reports `trailing`: every
@@ -814,8 +837,9 @@ is not a decision anybody at the table made. The engine reports the fact; the ju
 
 **The log needs no filtering and that is a fact about what is LOGGED.** A card is played face up, a
 trump is called aloud, a trick is taken in front of the table and a hand is written on a score sheet.
-The one private thing is the deal, and the deal is not an event - so nothing private ever enters an
-append-only ledger that `since` replays from revision zero forever.
+The private things are the deal, the draw and the cards put face down, and none of them is an event -
+a `discard` or a `draw` names only the seat - so nothing private ever enters an append-only ledger that
+`since` replays from revision zero forever.
 
 **`hokm-seam.spec.ts` tests information FLOW, not fields**, and the first version of it was wrong in
 a way worth keeping. It serialised a seat's view and searched the bytes for another seat's card
@@ -838,9 +862,11 @@ else. It writes `revOf(state)` now.
 
 **`tools/qa/hokm-pass.mjs` plays whole matches at two, three and four over the real api**, and it
 checks one thing ludo's pass structurally cannot: every seat reads `GET /matches/:id` for ITSELF
-after every turn, and no answer ever carries a card that reader is not holding. `hokm-seam.spec.ts`
-proves the engine composes per seat; this proves it survives the route, the projector, the
-serialiser and the wire.
+after every turn, and no answer ever carries a card that reader is not holding. At two players it also
+checks that the offer reaches the drawer and nobody else, that at every first lead the Hâkem cannot
+place twelve cards and the dealer fourteen, and that no `discard` or `draw` in the replay names a card.
+`hokm-seam.spec.ts` proves the engine composes per seat; this proves it survives the route, the
+projector, the serialiser and the wire.
 
 **`games.status` for hokm is `available` now**, which is what `table.create` joins on - so the flip
 is the thing that opens the door, and it happened in the commit that made it true. `status` is never
@@ -1157,6 +1183,14 @@ winner's plate; a hand ends on a "+n" banner or a kot; the deal throws backs fro
   last revision and the whole rematch plays in silence. `hokm-board.spec.ts` fails without it.
 - **The Hâkem is the one ACTING during the trump call**, so they get the turn chime and the
   countdown ticks then; `acting` is that, and `myTurn` stays what decides which cards can be played.
+- **The two-handed draw is drawn on the felt and rings once.** A stock pile with its count sits at the
+  felt's edge; a draw flies one card back from it to the drawer (`draw` beat) and a discard is a sound
+  with nothing flying. The drawer alone gets a panel shaped like the trump chooser - the card, Keep and
+  Take the next card - and the seat putting cards down toggles them in the hand, with a confirm that
+  enables only at the exact count and a "5/13" chip beside the clock. Nothing on screen describes the
+  cards put face down beyond the drawer's own "The 9 of hearts went face down". The turn alternates on
+  every draw, so the turn chime rings on a seat's FIRST draw of the hand and the draw's card-slide is
+  the cue after that.
 - **`mount` runs in a microtask**, so a spec that renders a component and advances the manual clock
   in the same tick advances it before the component's timers exist. `turn-clock.spec.ts` awaits one.
 
@@ -1218,10 +1252,11 @@ matrix reads overflow, hit targets, a landmark and the console, and a missing ba
 none of them. The only way to know is to fetch the url again from inside the page and read what came
 back - every layer of it, so a table whose felt loaded and whose ornaments did not still fails; the
 check answers 0 for a broken file and -1 for no such element, because a pass asking the
-wrong browser at the wrong moment is a different failure from a broken build. It was asked at the
-DEAL first, and at two players the deal pauses with cards in the Hâkem's hand and nowhere else - so
-it passed or failed on which fixture happened to be Hâkem. It is asked after trump is called now, of
-the browser that did not call it.
+wrong browser at the wrong moment is a different failure from a broken build. It is asked after trump
+is called, of the browser that did not call it. The pass then puts the cards face down by pressing them
+(the confirm only enables at the exact count), presses Keep and Take the next card for four draws with
+the offer present in the drawer's browser and absent from the other, and finishes the draw over the api
+before it clicks cards.
 
 **`backgammon-play-pass.mjs` and `poker-play-pass.mjs` are the other two games' siblings**, and share
 `tools/qa/seats.mjs` - the browser, the wallet sign-in and the recorder the first two each wrote out
@@ -1289,8 +1324,8 @@ their place round the table - bottom, then right, top and left at four; top-righ
 three; top at two - and the trick lies between each seat and the centre. On a phone the order is
 table, hand, then the tiles, so the cards you are holding are never below the fold; on a wide
 container the tiles (trump, score, last trick) are a column beside the table. The hand fans with a
-step that shrinks to fit, and breaks into two rows past thirteen, because twenty-five cards in one
-row on a phone is a strip twelve pixels wide per card.
+step that shrinks to fit, and breaks into two rows past thirteen, because the seventeen cards of the
+three-handed game in one row on a phone is a strip too narrow to read.
 
 **Sort is the reader's, and it moves nothing on the server.** `arrangeHand` puts trump first,
 alternates the colours after it and holds each suit high to low, which is how people hold cards; the
@@ -1348,8 +1383,9 @@ the moment anything a player needs is below the fold.
 - Poker's raise is a toggle that opens the slider over the table, so the bar is one row of actions;
   the last hand is a `<details>` chip on the felt, which keeps a spectator's page free of buttons.
 
-**The gate is `tools/qa/fit-pass.mjs`.** It opens a live hokm-2, hokm-4, poker-2, poker-6, backgammon
-and ludo-4 table over the api (dana.w plus guests), advances each to a state with the most controls,
+**The gate is `tools/qa/fit-pass.mjs`.** It opens a live hokm-2, hokm-2-draw, hokm-4, poker-2, poker-6,
+backgammon and ludo-4 table over the api (dana.w plus guests), advances each to a state with the most
+controls (hokm-2 through the draw to the opening lead, hokm-2-draw to the Hâkem's last offer),
 and opens every page as the seat whose turn it is at 360x740, 390x844, 768x1024, 1024x768, 1280x720,
 1280x800, 1440x900, 1920x1080, 740x360 and 844x390, with the chat closed and open, then as a stranger
 watching. It fails on a scrolling page, a plate, the surface or any button outside the viewport, and
@@ -1548,7 +1584,7 @@ stop and be timed out to dodge a loss, and four-handed partners were rated again
   its tally would have been the moves the SWEEP made for it.
 - **Everybody else is rated against a quitter only if they and the quitter are both ENGAGED** - own
   decisions at least `engagement(seats).after`: ludo 6 rolls, backgammon 4 moves or cube actions,
-  hokm one hand's cards (7 at three and four, 13 at two), poker 3 betting actions with the blinds
+  hokm seven cards played at every player count, poker 3 betting actions with the blinds
   excluded - and only if the survivor was not `trailing`. Against a side with no quitter a seat is
   always rated, unless both are unsettled; then it is rated only when it is `trailing` and a member of
   its own side WALKED (the four-handed partner above).

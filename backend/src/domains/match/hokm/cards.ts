@@ -1,4 +1,4 @@
-import { DECK, SUITS, rankOf, suitOf, type Suit } from '../cards/cards.ts';
+import { DECK, RANKS, SUITS, rankOf, suitOf, type Suit } from '../cards/cards.ts';
 
 /**
  * What this hand may legally play against the suit that was led.
@@ -20,6 +20,23 @@ export function legalCards(hand: readonly number[], led: Suit | null): number[]
     const following = hand.filter((card) => suitOf(card) === led);
 
     return following.length > 0 ? following : [...hand];
+}
+
+const TEN = 8;
+
+export function worthKeeping(card: number, trump: Suit)
+{
+    return suitOf(card) === trump || rankOf(card) >= TEN;
+}
+
+export function putAway(hand: readonly number[], count: number, trump: Suit)
+{
+    const worth = (card: number) => rankOf(card) + (suitOf(card) === trump ? RANKS.length : 0);
+
+    return [...hand]
+        .sort((a, b) => worth(a) - worth(b) || a - b)
+        .slice(0, count)
+        .sort((a, b) => a - b);
 }
 
 function lowest(cards: readonly number[])
@@ -93,19 +110,16 @@ export function trickWinner(played: readonly number[], trump: Suit)
 }
 
 /**
- * The deck this many players are dealt from, which is 52 minus however many twos it takes to divide.
+ * The deck this many players are dealt from.
  *
  * Fifty-two does not divide by three, so the three-handed game drops one two - Pagat says *"one of
- * the 2's"* without saying which, so this picks the lowest club and stays picked. The two-handed
- * game drops two of them for the same reason: fifty cards, twenty-five each, everything dealt.
- *
- * A deck that dropped a DIFFERENT two each hand would be a rule nobody wrote, so the choice is the
- * lowest suits in order and never anything else. Everything downstream is derived from the length
- * of what comes back, which is why adding a player count here is the whole change.
+ * the 2's"* without saying which, so this picks the lowest club and stays picked. A deck that
+ * dropped a DIFFERENT two each hand would be a rule nobody wrote. The two-handed game keeps all
+ * fifty-two, because half of them go face down in the draw rather than into a hand.
  */
 export function deckFor(seats: number)
 {
-    const dropped = seats === 3 ? 1 : (seats === 2 ? 2 : 0);
+    const dropped = seats === 3 ? 1 : 0;
 
     return DECK.filter((card) => !(rankOf(card) === 0 && SUITS.indexOf(suitOf(card)) < dropped));
 }

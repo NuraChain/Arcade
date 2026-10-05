@@ -216,7 +216,8 @@ describe('who the headline says won', () =>
             points: players.length === 4 ? [7, 3] : players.map(() => 0),
             target: 7,
             round: 4,
-            needed: 7
+            needed: 7,
+            full: 13
         }
     } as MatchView);
 

@@ -112,6 +112,8 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
 
     state sending: number | null = null;
 
+    state away: readonly number[] = [];
+
     derived game = props.match;
 
     derived view = hokmOf(game);
@@ -153,6 +155,20 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
             return view.hakem === mine
                 ? locale.t('hokm.trump.yours')
                 : locale.t('hokm.trump.theirs', { name: nameOf(view.hakem) });
+        }
+
+        if (view.phase === 'discard')
+        {
+            return view.turn === mine
+                ? locale.t('hokm.discard.yours', { count: locale.n(view.discard ?? 0) })
+                : locale.t('hokm.discard.theirs', { name: nameOf(view.turn) });
+        }
+
+        if (view.phase === 'draw')
+        {
+            return view.turn === mine
+                ? locale.t('hokm.draw.yours')
+                : locale.t('hokm.draw.theirs', { name: nameOf(view.turn) });
         }
 
         return view.turn === mine
@@ -210,6 +226,20 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
 
     derived choosing = view !== null && !over && view.phase === 'trump' && view.hakem === mine;
 
+    derived due = view !== null && !over && view.phase === 'discard' && view.turn === mine ? (view.discard ?? 0) : 0;
+
+    derived discarding = due > 0;
+
+    derived picks = discarding && view !== null ? away.filter((card) => view!.hand.includes(card)) : [];
+
+    derived offered = view !== null && !over && view.phase === 'draw' && view.turn === mine && view.offer !== undefined ? { card: view.offer } : null;
+
+    derived drawing = offered !== null;
+
+    derived glimpsed = view !== null && !over && view.glimpse !== undefined ? { card: view.glimpse } : null;
+
+    derived filling = view !== null && !over && mine !== undefined && (view.phase === 'discard' || view.phase === 'draw');
+
     derived tagOf = (seat: number) => plateTag(locale, game.players.find((one) => one.seat === seat), over);
 
     derived hints = settings.settings();
@@ -225,7 +255,7 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
 
     derived outcome = aimedAt === null ? null : outcomeFor(aimedAt);
 
-    derived tip = view === null || over ? null : coachOf(view, mine);
+    derived tip = view === null || over ? null : coachOf(view, mine, game.seats);
 
     derived hand = view === null ? [] : (sorted ? arrangeHand(view.hand, view.trump) : [...view.hand]).filter((card) => card !== sending);
 
@@ -358,6 +388,37 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
         await board.play({ kind: 'hokm', verb: 'trump', suit });
     };
 
+    const toggleAway = (card: number) =>
+    {
+        if (!discarding)
+        {
+            return;
+        }
+
+        away = picks.includes(card) ? picks.filter((one) => one !== card) : [...picks, card];
+        haptic('tick');
+    };
+
+    const putDown = async () =>
+    {
+        if (picks.length !== due)
+        {
+            return;
+        }
+
+        const cards = [...picks].sort((a, b) => a - b);
+
+        away = [];
+        haptic('select');
+        await board.play({ kind: 'hokm', verb: 'discard', cards });
+    };
+
+    const draw = async (verb: 'keep' | 'reject') =>
+    {
+        haptic('select');
+        await board.play({ kind: 'hokm', verb });
+    };
+
     let arena: HTMLElement | null = null;
     let layer: HTMLElement | null = null;
     let sound: SoundHandle | null = null;
@@ -368,6 +429,7 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
     let lastRev = untrack(() => props.match.rev);
     let heardSeq = untrack(() => board.events().seq);
     let wasActing = untrack(() => acting);
+    let chimedDraw = -1;
     let settled: Felt = untrack(() => felt);
     let heldSince: number | null = null;
     let holding: (() => void) | null = null;
@@ -545,9 +607,44 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
         });
     };
 
+    const drawTo = (seat: number, duration: number) =>
+    {
+        const stock = find('.hokm-stock-pile');
+        const start = stock === null || layer === null ? null : rectIn(layer, stock);
+        const hand = seat === props.match.mine ? find('.hokm-hand') : null;
+        const end = hand !== null && layer !== null ? rectIn(layer, hand) : seatRect(seat);
+        const box = end === null ? null : sized(end, BACK_W, BACK_W * 288 / 204);
+
+        sound?.play('card-slide', { pan: panOf(box) });
+
+        if (layer === null || start === null || box === null || quiet())
+        {
+            return;
+        }
+
+        fly(layer, cardNode(null, BACK_W), sized(start, BACK_W, BACK_W * 288 / 204), box, {
+            duration,
+            easing: EASE.fly,
+            toOpacity: 0,
+            fadeFrom: 0.8
+        });
+    };
+
     const run = (beat: Beat) =>
     {
         const spectator = props.match.mine === undefined;
+
+        if (beat.kind === 'discard')
+        {
+            sound?.play('card-place', { gain: 0.5 });
+            return;
+        }
+
+        if (beat.kind === 'draw')
+        {
+            drawTo(beat.seat, beat.duration);
+            return;
+        }
 
         if (beat.kind === 'card')
         {
@@ -797,10 +894,18 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
 
         untrack(() =>
         {
-            if (yours && !wasActing)
+            const now = hokmOf(props.match);
+            const drawn = now !== null && now.phase === 'draw';
+
+            if (yours && !wasActing && !(drawn && chimedDraw === now.round))
             {
                 sound?.play('turn', { urgent: true });
                 haptic('ready');
+            }
+
+            if (yours && drawn)
+            {
+                chimedDraw = now.round;
             }
 
             wasActing = yours;
@@ -916,7 +1021,20 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
                             </div>
                         </For>
 
-                        <Show when={ laid.cards.length === 0 && !over && !choosing }>
+                        <Show when={ view?.stock !== undefined }>
+                            { () =>
+                                <div class="hokm-stock" aria-hidden="true">
+                                    <span class="hokm-stock-pile">
+                                        <For each={ [0, 1, 2].slice(0, Math.min(3, view?.stock ?? 0)) } key={ (back) => back } let={ back }>
+                                            <span class="card-back" style={ `--i: ${ back }` }></span>
+                                        </For>
+                                    </span>
+                                    <span class="hokm-chip hokm-stock-count"><span class="tally">{ locale.n(view?.stock ?? 0) }</span></span>
+                                </div>
+                            }
+                        </Show>
+
+                        <Show when={ laid.cards.length === 0 && !over && !choosing && !drawing }>
                             { () =>
                                 <div class="hokm-centre" dir={ locale.dir() } aria-hidden="true">
                                     <Icon name="crest-crown" size={ 18 } class="text-gold" />
@@ -958,6 +1076,21 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
                                     </ul>
                                 </div>
                             }
+                        </Show>
+
+                        <Show when={ offered } let={ drawn }>
+                            <div class="hokm-choose hokm-draw" dir={ locale.dir() }>
+                                <p class="hokm-choose-title">{ locale.t('hokm.draw.title') }</p>
+                                <span class="hokm-draw-card"><CardFace card={ drawn.card } /></span>
+                                <div class="flex flex-col gap-2">
+                                    <Button variant="primary" size="sm" block disabled={ board.busy() } onClick={ () => void draw('keep') }>
+                                        { locale.t('hokm.draw.keep', { card: cardSays(drawn.card) }) }
+                                    </Button>
+                                    <Button variant="secondary" size="sm" block disabled={ board.busy() } onClick={ () => void draw('reject') }>
+                                        { locale.t('hokm.draw.next') }
+                                    </Button>
+                                </div>
+                            </div>
                         </Show>
 
                         <For each={ laid.cards } key={ (one) => one.card } let={ one }>
@@ -1007,6 +1140,9 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
                                 <h3>{ locale.t('hokm.trump') }</h3>
                                 <p>{ view?.trump === undefined ? locale.t('hokm.trump.none') : locale.t(`hokm.suit.${ view!.trump! }` as never) }</p>
                                 <p>{ view!.hakem === mine ? locale.t('hokm.hakem.you') : locale.t('hokm.hakem', { name: nameOf(view!.hakem) }) }</p>
+                                <Show when={ view?.stock !== undefined }>
+                                    { () => <p>{ locale.plural('hokm.stock', view?.stock ?? 0) }</p> }
+                                </Show>
                             </section>
                             <section>
                                 <h3>{ locale.t('hokm.score') }</h3>
@@ -1044,12 +1180,12 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
                                         type="button"
                                         class="card-hold"
                                         data-card={ card }
-                                        data-legal={ myTurn ? (hints.hintMoves ? (legal.has(card) ? 'true' : 'false') : 'hidden') : 'idle' }
-                                        data-picked={ chosen === card ? 'true' : undefined }
-                                        disabled={ !legal.has(card) || board.busy() }
-                                        aria-label={ cardLabel(card) }
-                                        aria-pressed={ device.coarse() ? chosen === card : undefined }
-                                        onClick={ () => touchCard(card) }
+                                        data-legal={ discarding ? 'true' : (myTurn ? (hints.hintMoves ? (legal.has(card) ? 'true' : 'false') : 'hidden') : 'idle') }
+                                        data-picked={ chosen === card || picks.includes(card) ? 'true' : undefined }
+                                        disabled={ discarding ? board.busy() : (!legal.has(card) || board.busy()) }
+                                        aria-label={ discarding ? cardSays(card) : cardLabel(card) }
+                                        aria-pressed={ discarding ? picks.includes(card) : (device.coarse() ? chosen === card : undefined) }
+                                        onClick={ () => (discarding ? toggleAway(card) : touchCard(card)) }
                                         onPointerEnter={ (event) => (event.pointerType === 'mouse' ? aim(card) : undefined) }
                                         onPointerLeave={ () => unaim(card) }
                                         onFocus={ () => aim(card) }
@@ -1091,6 +1227,14 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
                                 <span class="tally text-white/60">/{ locale.n(view!.target) }</span>
                             </span>
                         </span>
+                        <Show when={ filling }>
+                            { () =>
+                                <span class="hokm-chip hokm-filled">
+                                    <span class="tally" aria-hidden="true">{ locale.n(view?.hand.length ?? 0) }/{ locale.n(view?.full ?? 0) }</span>
+                                    <span class="sr-only">{ locale.t('hokm.filled', { held: locale.n(view?.hand.length ?? 0), full: locale.n(view?.full ?? 0) }) }</span>
+                                </span>
+                            }
+                        </Show>
                         <TurnClock remainingMs={ game.remainingMs } over={ over } yours={ acting } />
                         <Show when={ (view?.hand.length ?? 0) > 1 }>
                             { () =>
@@ -1104,6 +1248,18 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
                     <Show when={ mine !== undefined }>
                         { () =>
                             <div class="flex min-h-11 min-w-0 flex-col justify-center gap-1">
+                                <Show when={ discarding }>
+                                    { () =>
+                                        <span class="glow-cta mx-auto flex w-full max-w-[22rem] rounded-control">
+                                            <Button variant="primary" size="lg" leading="cards" block loading={ board.busy() } disabled={ picks.length !== due } onClick={ () => void putDown() }>
+                                                { locale.t('hokm.discard.put', { count: locale.n(due) }) }
+                                            </Button>
+                                        </span>
+                                    }
+                                </Show>
+                                <Show when={ glimpsed } let={ seen }>
+                                    <p class="text-center text-ui-xs text-muted">{ locale.t('hokm.draw.glimpse', { card: cardSays(seen.card) }) }</p>
+                                </Show>
                                 <Show when={ chosen !== null }>
                                     { () =>
                                         <span class="glow-cta mx-auto flex w-full max-w-[22rem] rounded-control">

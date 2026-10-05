@@ -225,3 +225,51 @@ describe('motion', () =>
         expect(SNAP_LINEAR.startsWith('linear(0,') && SNAP_LINEAR.endsWith(' 1)')).toBe(true);
     });
 });
+
+describe('the two-handed draw', () =>
+{
+    const TWO = { seat: 0, seats: 2, sideOf: (seat: number) => seat };
+
+    it('deals the first five to both players at once', () =>
+    {
+        const deal = beatsOf([{ e: 'deal', hakem: 1 }], EMPTY, TWO).beats[0];
+
+        expect(deal).toMatchObject({ kind: 'deal', from: 0, to: [1, 0], shuffle: true });
+    });
+
+    it('deals nothing more when trump is named', () =>
+    {
+        const { beats } = beatsOf([{ e: 'trump', seat: 1, suit: 'hearts' }], EMPTY, TWO);
+
+        expect(kinds(beats)).toEqual(['trump']);
+    });
+
+    it('flies one card back from the stock to whoever drew', () =>
+    {
+        const { beats, ends } = beatsOf([{ e: 'draw', seat: 1 }], EMPTY, TWO);
+
+        expect(beats).toEqual([{ at: 0, kind: 'draw', seat: 1, duration: TIMING.DEAL_FLY }]);
+        expect(ends).toBe(TIMING.DEAL_FLY);
+    });
+
+    it('lets one draw finish before the next one flies', () =>
+    {
+        const { beats } = beatsOf([{ e: 'draw', seat: 1 }, { e: 'draw', seat: 0 }], EMPTY, TWO);
+
+        expect(beats.map((beat) => beat.at)).toEqual([0, TIMING.DEAL_FLY]);
+    });
+
+    it('puts cards face down with a sound and nothing flying', () =>
+    {
+        const { beats } = beatsOf([{ e: 'discard', seat: 0 }], EMPTY, TWO);
+
+        expect(beats).toEqual([{ at: 0, kind: 'discard', seat: 0 }]);
+    });
+
+    it('speeds a draw up with the rest of a timeline that has fallen behind', () =>
+    {
+        const timeline = scaled(beatsOf([{ e: 'draw', seat: 1 }], EMPTY, TWO), 0.5);
+
+        expect(timeline.beats[0]).toMatchObject({ kind: 'draw', at: 0, duration: TIMING.DEAL_FLY / 2 });
+    });
+});

@@ -150,3 +150,21 @@ describe('the shared envelope', () =>
         expect(Object.keys(parsed)).not.toContain('tokens');
     });
 });
+
+describe('what a player asked for', () =>
+{
+    it('is written to the ledger and read back for its verb alone, so the cards put face down stay there', () =>
+    {
+        const readers = ['domains/match/service.ts', 'domains/match/watch.ts', 'domains/match/record.ts', 'domains/match/levels.ts', 'domains/achieve/service.ts', 'db/schema.ts'];
+
+        for (const name of readers)
+        {
+            const rest = read(name)
+                .replace(/\bpayload\s*:/g, '')
+                .replace(/\baction\.payload\b/g, '')
+                .replace(/\bpayload ->> 'verb'/g, '');
+
+            expect(rest.match(/\bpayload\b/g), `${ name } reads a play's payload`).toBeNull();
+        }
+    });
+});

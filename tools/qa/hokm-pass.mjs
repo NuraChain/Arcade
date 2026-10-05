@@ -182,9 +182,18 @@ const run = async () =>
         const hakemSeat = opening[0].hakem;
         const dealt = opening.filter((one) => one.held > 0);
 
-        ok('only the Hâkem has been dealt during the pause',
-            dealt.length === 1 && dealt[0].seat === hakemSeat && dealt[0].held === 5,
-            opening.map((one) => `${ one.seat }:${ one.held }`).join(' '));
+        if (seats === 2)
+        {
+            ok('both players hold five during the pause, and the stock the rest',
+                dealt.length === 2 && dealt.every((one) => one.held === 5),
+                opening.map((one) => `${ one.seat }:${ one.held }`).join(' '));
+        }
+        else
+        {
+            ok('only the Hâkem has been dealt during the pause',
+                dealt.length === 1 && dealt[0].seat === hakemSeat && dealt[0].held === 5,
+                opening.map((one) => `${ one.seat }:${ one.held }`).join(' '));
+        }
 
         const waiting = players.find((player) => seatOf.get(player.handle) !== hakemSeat);
         const blocked = await waiting.post(`/matches/${ matchId }/play`, {
@@ -199,7 +208,12 @@ const run = async () =>
         let leaks = 0;
         let hands = 0;
         let kots = 0;
+        let gaps = 0;
+        let firstLeads = 0;
+        let round = -1;
+        let seenBy = new Map();
 
+        const heldBy = new Map();
         const byHandle = new Map(players.map((player) => [seatOf.get(player.handle), player]));
 
         let state = (await players[0].get(`/matches/${ matchId }`)).body;
@@ -229,11 +243,58 @@ const run = async () =>
                     leaks += 1;
                     console.log(`        seat ${ seat } holds a card already on the table: ${ nameOf(seen.hand[0]) }`);
                 }
+
+                if ((seen.offer !== undefined) !== (seen.phase === 'draw' && seat === seen.turn))
+                {
+                    leaks += 1;
+                    console.log(`        seat ${ seat } was ${ seen.offer === undefined ? 'not ' : '' }shown an offer during ${ seen.phase }, seat ${ seen.turn } on turn`);
+                }
+
+                if (seats === 2)
+                {
+                    if (seen.round !== round)
+                    {
+                        round = seen.round;
+                        seenBy = new Map();
+                    }
+
+                    const known = seenBy.get(seat) ?? new Set();
+
+                    for (const card of [...seen.hand, ...seen.trick, ...(seen.took?.cards ?? []), ...(seen.offer === undefined ? [] : [seen.offer]), ...(seen.glimpse === undefined ? [] : [seen.glimpse])])
+                    {
+                        known.add(card);
+                    }
+
+                    seenBy.set(seat, known);
+                    heldBy.set(seat, seen.hand);
+                }
+            }
+
+            if (seats === 2 && board.phase === 'tricks' && board.trick.length === 0 && board.seats.every((row) => row.tricks === 0) && seenBy.size === 2)
+            {
+                firstLeads += 1;
+
+                for (const [seat, known] of seenBy)
+                {
+                    const theirs = heldBy.get(1 - seat) ?? [];
+                    const gap = Array.from({ length: 52 }, (_, card) => card).filter((card) => !known.has(card) && !theirs.includes(card)).length;
+                    const want = seat === board.hakem ? 12 : 14;
+
+                    if (gap !== want)
+                    {
+                        gaps += 1;
+                        console.log(`        seat ${ seat } could not place ${ gap } cards at the first lead, not ${ want }`);
+                    }
+                }
             }
 
             const play = board.phase === 'trump'
                 ? { kind: 'hokm', verb: 'trump', suit: SUITS[Math.floor(Math.random() * 4)] }
-                : { kind: 'hokm', verb: 'card', card: board.plays[0] };
+                : board.phase === 'discard'
+                    ? { kind: 'hokm', verb: 'discard', cards: board.hand.slice(0, board.discard) }
+                    : board.phase === 'draw'
+                        ? { kind: 'hokm', verb: Math.random() < 0.5 ? 'keep' : 'reject' }
+                        : { kind: 'hokm', verb: 'card', card: board.plays[0] };
 
             if (board.phase === 'tricks' && board.plays.length === 0)
             {
@@ -283,6 +344,12 @@ const run = async () =>
 
         ok('no seat was ever handed another seat cards', leaks === 0, `${ leaks } leaks over ${ turns } turns`);
 
+        if (seats === 2)
+        {
+            ok('the Hâkem cannot place twelve cards and the dealer fourteen, at every first lead', gaps === 0 && firstLeads > 0,
+                `${ firstLeads } first leads, ${ gaps } wrong`);
+        }
+
         ok('the match reaches a winner', state.finishedAt !== undefined, `after ${ turns } turns`);
         ok('and names one', state.winner !== undefined, `seat ${ state.winner }`);
         ok('over hands that were really scored', hands >= 7, `${ hands } hands, ${ kots } of them kot`);
@@ -299,6 +366,12 @@ const run = async () =>
         const named = (replay.body.events ?? []).every((entry) => entry.log?.kind === 'hokm');
 
         ok('and the log says which game it is', named);
+
+        const drawn = (replay.body.events ?? []).flatMap((entry) => entry.log?.moves ?? []).filter((move) => move.e === 'discard' || move.e === 'draw');
+
+        ok('a discard or a draw in the log names the seat and no card',
+            drawn.every((move) => Object.keys(move).sort().join() === 'e,seat') && (seats !== 2 || drawn.length > 0),
+            `${ drawn.length } entries`);
 
         const after = await players[0].post(`/matches/${ matchId }/play`, {
             key: `late-${ Date.now() }`,

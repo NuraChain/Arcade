@@ -972,6 +972,50 @@ html:has(.site-drawer[open])
     text-align: center;
 }
 
+.hokm-draw-card
+{
+    --card-w: clamp(3rem, 14cqmin, 4.5rem);
+
+    display: flex;
+    justify-content: center;
+}
+
+.hokm-stock
+{
+    --back-w: clamp(1.75rem, 8cqmin, 2.75rem);
+
+    position: absolute;
+    z-index: 1;
+    top: 50%;
+    left: 8%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.3rem;
+    translate: 0 -50%;
+    pointer-events: none;
+}
+
+.hokm-stock-pile
+{
+    position: relative;
+    display: block;
+    inline-size: calc(var(--back-w) + 4px);
+    block-size: calc(var(--back-w) * 288 / 204 + 4px);
+}
+
+.hokm-stock-pile > .card-back
+{
+    position: absolute;
+    left: calc(var(--i) * 2px);
+    top: calc(4px - var(--i) * 2px);
+}
+
+.hokm-stock-count
+{
+    padding-inline: 0.5rem;
+}
+
 .hokm-bar-facts
 {
     display: none;
@@ -981,7 +1025,9 @@ html:has(.site-drawer[open])
 {
     .hokm-felt-info,
     .hokm-centre,
-    .hokm-last-tile
+    .hokm-last-tile,
+    .hokm-draw .hokm-choose-title,
+    .hokm-draw-card
     {
         display: none;
     }

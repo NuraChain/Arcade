@@ -2,7 +2,7 @@ import { TIMING } from './motion.ts';
 
 export interface HokmMove
 {
-    e: 'trump' | 'card' | 'trick' | 'hand' | 'deal' | 'forfeit' | 'finish';
+    e: 'trump' | 'card' | 'trick' | 'hand' | 'deal' | 'discard' | 'draw' | 'forfeit' | 'finish';
     seat?: number;
     suit?: string;
     card?: number;
@@ -39,6 +39,8 @@ export type Beat =
     | { at: number; kind: 'clear' }
     | { at: number; kind: 'trump'; suit: string; ours: boolean }
     | { at: number; kind: 'deal'; from: number; to: readonly number[]; gap: number; duration: number; shuffle: boolean }
+    | { at: number; kind: 'discard'; seat: number }
+    | { at: number; kind: 'draw'; seat: number; duration: number }
     | { at: number; kind: 'hand'; side: number; points: number; kot: boolean; ours: boolean }
     | { at: number; kind: 'finish'; won: boolean };
 
@@ -153,7 +155,8 @@ export function beatsOf(moves: readonly HokmMove[], felt: Felt, reader: Reader, 
             gather(TIMING.HOLD_MIN);
             at = Math.max(at, settled);
 
-            const dealt = dealing(dealerOf(move.hakem, reader.seats), [move.hakem], at, true);
+            const dealer = dealerOf(move.hakem, reader.seats);
+            const dealt = dealing(dealer, reader.seats === 2 ? [move.hakem, dealer] : [move.hakem], at, true);
 
             beats.push(dealt.beat);
             at = dealt.ends;
@@ -169,11 +172,34 @@ export function beatsOf(moves: readonly HokmMove[], felt: Felt, reader: Reader, 
 
             beats.push({ at, kind: 'trump', suit: move.suit, ours: move.seat !== undefined && move.seat === reader.seat });
 
+            if (reader.seats === 2)
+            {
+                at += TIMING.FADE;
+                settled = at;
+                return;
+            }
+
             const order = Array.from({ length: reader.seats }, (_, step) => (dealerOf(hakem, reader.seats) + 1 + step) % reader.seats);
             const dealt = dealing(dealerOf(hakem, reader.seats), order, at + TIMING.FADE, false);
 
             beats.push(dealt.beat);
             at = dealt.ends;
+            settled = at;
+            return;
+        }
+
+        if (move.e === 'discard' && move.seat !== undefined)
+        {
+            at = Math.max(at, settled);
+            beats.push({ at, kind: 'discard', seat: move.seat });
+            return;
+        }
+
+        if (move.e === 'draw' && move.seat !== undefined)
+        {
+            at = Math.max(at, settled);
+            beats.push({ at, kind: 'draw', seat: move.seat, duration: TIMING.DEAL_FLY });
+            at += TIMING.DEAL_FLY;
             settled = at;
             return;
         }
@@ -198,7 +224,7 @@ export function scaled(timeline: Timeline, factor: number): Timeline
 {
     const quick = (beat: Beat): Beat =>
     {
-        if (beat.kind === 'card')
+        if (beat.kind === 'card' || beat.kind === 'draw')
         {
             return { ...beat, at: beat.at * factor, duration: beat.duration * factor };
         }

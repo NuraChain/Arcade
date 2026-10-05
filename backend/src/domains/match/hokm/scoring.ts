@@ -13,24 +13,25 @@ import { deckFor } from './cards.ts';
  * the rotation in those words and they come out as one line each.
  */
 
+const DRAWN = 13;
+
 /**
- * How many tricks a hand holds, which is simply everybody's cards.
+ * How many tricks a hand holds, which is everybody's cards.
  *
- * Derived rather than tabulated: the deck is sized so that it divides, so the hand length IS the
- * division. 52/4 is 13, 51/3 is 17, 50/2 is 25 - and a fourth player count would need nothing here.
+ * At three and four players the deck is sized so that it divides, so the hand length IS the
+ * division: 52/4 is 13 and 51/3 is 17. At two, *"each player should have 13 cards in hand"* once
+ * the stock is drawn, with the other half of the deck face down.
  */
 export function trickCount(seats: number)
 {
-    return deckFor(seats).length / seats;
+    return seats === 2 ? DRAWN : deckFor(seats).length / seats;
 }
 
 /**
  * The tricks that take a hand between two sides: more than half of them, so it cannot be equalled.
  *
- * Seven of thirteen at four players is the number everybody knows the game by, and it is a majority
- * rather than a magic seven - at two players, where a stripped deck deals twenty-five each, the same
- * rule reads thirteen. Writing it as the constant 7 would have made the two-handed game end at the
- * seventh of twenty-five tricks, with eighteen still to play.
+ * Seven of thirteen is the number everybody knows the game by, at two players and at four, and it
+ * is a majority rather than a magic seven.
  */
 export function winningTricks(seats: number)
 {

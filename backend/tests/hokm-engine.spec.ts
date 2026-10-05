@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import { cardOf, rankOf, suitOf } from '../src/domains/match/cards/cards.ts';
-import { autoCard, deckFor } from '../src/domains/match/hokm/cards.ts';
+import { autoCard, deckFor, putAway, worthKeeping } from '../src/domains/match/hokm/cards.ts';
 import { hokmEngine } from '../src/domains/match/engines/hokm.ts';
 import { SEATS, apply, autoplay, create, dealerSeat, legalMoves } from '../src/domains/match/hokm/engine.ts';
 import { GAME_SEEDS } from '../src/db/seed-reference.ts';
 import { trickCount } from '../src/domains/match/hokm/scoring.ts';
-import { sideCount, sideOf, type HokmEvent, type HokmState } from '../src/domains/match/hokm/state.ts';
+import { sideCount, sideOf, type HokmAction, type HokmEvent, type HokmState } from '../src/domains/match/hokm/state.ts';
 
 /**
  * The state machine, exercised the way `ludo-purity.spec.ts` exercises ludo's: thousands of real
@@ -37,11 +37,42 @@ function seeded(seed: number): (sides: number) => number
 
 function wrong(state: HokmState): string | null
 {
-    const seen = state.hands.flat().concat(state.trick);
+    const offered = state.offer === null ? [] : [state.offer];
+    const glimpsed = state.glimpse.filter((card): card is number => card !== null);
+    const seen = state.hands.flat().concat(state.trick, state.stock, offered, glimpsed);
 
     if (new Set(seen).size !== seen.length)
     {
         return 'a card is in two places at once';
+    }
+
+    if ((state.offer !== null) !== (state.phase === 'draw'))
+    {
+        return `an offer of ${ state.offer } during ${ state.phase }`;
+    }
+
+    const opening = state.phase === 'tricks' && state.trick.length === 0 && state.tricks.every((count) => count === 0);
+
+    if (state.phase !== 'draw' && !opening && glimpsed.length > 0)
+    {
+        return `a glimpse during ${ state.phase }`;
+    }
+
+    if (state.stock.length > 0 && (state.seats !== 2 || state.phase === 'tricks'))
+    {
+        return `a stock of ${ state.stock.length } at ${ state.seats } players during ${ state.phase }`;
+    }
+
+    if (state.phase === 'draw')
+    {
+        const held = state.hands.flat().length;
+        const draws = held - 5;
+        const putDown = deckFor(2).length - held - state.stock.length - 1;
+
+        if (putDown !== 5 + draws)
+        {
+            return `${ putDown } cards face down after ${ draws } draws`;
+        }
     }
 
     for (const card of seen)
@@ -61,7 +92,7 @@ function wrong(state: HokmState): string | null
     {
         const dealt = state.hands.map((hand) => hand.length);
 
-        if (dealt.some((size, seat) => (seat === state.hakem ? size !== 5 : size !== 0)))
+        if (dealt.some((size, seat) => (seat === state.hakem || state.seats === 2 ? size !== 5 : size !== 0)))
         {
             return `the pause dealt ${ dealt.join('/') }`;
         }
@@ -92,9 +123,9 @@ describe('the deal pauses before trump is named', () =>
      * Hâkem has declared the trump suit."* Dealing only the Hâkem is stronger than the letter of
      * that and simpler: there is no partner hand to withhold because there is no partner hand.
      */
-    it('gives the Hâkem five cards and everybody else none', () =>
+    it('gives the Hâkem five cards and everybody else none, at three and four players', () =>
     {
-        for (const seats of SEATS)
+        for (const seats of [3, 4])
         {
             const state = create(seats, 7, seeded(seats));
 
@@ -109,6 +140,17 @@ describe('the deal pauses before trump is named', () =>
                 }
             }
         }
+    });
+
+    it('deals five to each of two players and leaves the other forty-two in the stock', () =>
+    {
+        const state = create(2, 7, seeded(2));
+
+        expect(state.phase).toBe('trump');
+        expect(state.hands.map((hand) => hand.length)).toEqual([5, 5]);
+        expect(state.stock).toHaveLength(42);
+        expect(state.offer).toBeNull();
+        expect(new Set([...state.hands.flat(), ...state.stock]).size).toBe(52);
     });
 
     it('offers the trump call to the Hâkem and to nobody else', () =>
@@ -254,6 +296,22 @@ describe('what the sweep plays for an absent seat', () =>
                     if (move.kind === 'card' && move.card !== autoCard(state.hands[seat], state.trick, state.trump!))
                     {
                         faults.push(`match ${ match } action ${ action }: played ${ move.card }, not autoCard's choice`);
+                        break;
+                    }
+
+                    const due = seat === state.hakem ? 3 : 2;
+
+                    if (move.kind === 'discard' && JSON.stringify(move.cards) !== JSON.stringify(putAway(state.hands[seat], due, state.trump!)))
+                    {
+                        faults.push(`match ${ match } action ${ action }: put ${ move.cards.join(',') } down, not putAway's choice`);
+                        break;
+                    }
+
+                    const drawn = worthKeeping(state.offer ?? 0, state.trump ?? 'clubs') ? 'keep' : 'reject';
+
+                    if ((move.kind === 'keep' || move.kind === 'reject') && move.kind !== drawn)
+                    {
+                        faults.push(`match ${ match } action ${ action }: chose ${ move.kind } over ${ drawn }`);
                         break;
                     }
 
@@ -622,6 +680,336 @@ describe('refusing what is not a move', () =>
     });
 });
 
+function stepOf(state: HokmState, action: HokmAction, deal: (sides: number) => number)
+{
+    const outcome = apply(state, action, deal);
+
+    if (!outcome.ok)
+    {
+        throw new Error(`${ action.kind }: ${ outcome.reason }`);
+    }
+
+    return outcome;
+}
+
+function twoHanded(seed: number)
+{
+    const deal = seeded(seed);
+    const opened = create(2, 7, deal);
+
+    return { state: stepOf(opened, { kind: 'trump', seat: opened.hakem, suit: 'spades' }, deal).state, deal };
+}
+
+function drawing(seed: number)
+{
+    const { state, deal } = twoHanded(seed);
+    const discarded = stepOf(state, legalMoves(state, state.hakem)[0], deal).state;
+
+    return { state: stepOf(discarded, legalMoves(discarded, discarded.turn)[0], deal).state, deal };
+}
+
+const ascending = (cards: readonly number[]) => cards.every((card, index) => index === 0 || cards[index - 1] < card);
+
+describe('the two-handed draw', () =>
+{
+    it('asks the Hâkem to put three face down, then the dealer two', () =>
+    {
+        const { state, deal } = twoHanded(3);
+        const hakem = state.hakem;
+        const dealer = dealerSeat(state);
+
+        expect(state.phase).toBe('discard');
+        expect(state.turn).toBe(hakem);
+        expect(state.hands.map((hand) => hand.length)).toEqual([5, 5]);
+
+        const first = legalMoves(state, hakem);
+
+        expect(first).toHaveLength(10);
+        expect(first.every((move) => move.kind === 'discard' && move.cards.length === 3 && ascending(move.cards)
+            && move.cards.every((card) => state.hands[hakem].includes(card)))).toBe(true);
+        expect(legalMoves(state, dealer)).toEqual([]);
+
+        const put = stepOf(state, first[0], deal);
+
+        expect(put.events).toEqual([{ e: 'discard', seat: hakem }]);
+        expect(put.state.phase).toBe('discard');
+        expect(put.state.turn).toBe(dealer);
+        expect(put.state.hands[hakem]).toHaveLength(2);
+
+        const second = legalMoves(put.state, dealer);
+
+        expect(second).toHaveLength(10);
+        expect(second.every((move) => move.kind === 'discard' && move.cards.length === 2 && ascending(move.cards))).toBe(true);
+
+        const drawn = stepOf(put.state, second[0], deal);
+
+        expect(drawn.events).toEqual([{ e: 'discard', seat: dealer }]);
+        expect(drawn.state.phase).toBe('draw');
+        expect(drawn.state.turn).toBe(hakem);
+        expect(drawn.state.hands[dealer]).toHaveLength(3);
+        expect(drawn.state.stock).toHaveLength(41);
+        expect(drawn.state.offer).not.toBeNull();
+        expect(drawn.state.stock).not.toContain(drawn.state.offer);
+        expect(legalMoves(drawn.state, hakem)).toEqual([{ kind: 'keep', seat: hakem }, { kind: 'reject', seat: hakem }]);
+        expect(legalMoves(drawn.state, dealer)).toEqual([]);
+    });
+
+    it('keeps the offer and puts the next card face down, having looked at it', () =>
+    {
+        const { state, deal } = drawing(5);
+        const seat = state.turn;
+        const offer = state.offer!;
+        const kept = stepOf(state, { kind: 'keep', seat }, deal);
+        const after = kept.state;
+        const glimpse = after.glimpse[seat]!;
+
+        expect(kept.events).toEqual([{ e: 'draw', seat }]);
+        expect(after.hands[seat]).toEqual([...state.hands[seat], offer].sort((a, b) => a - b));
+        expect(state.stock.length - after.stock.length).toBe(2);
+        expect(glimpse).not.toBeNull();
+        expect(state.stock).toContain(glimpse);
+        expect(after.stock).not.toContain(glimpse);
+        expect(after.hands.flat()).not.toContain(glimpse);
+        expect(after.turn).toBe(1 - seat);
+        expect(state.stock).toContain(after.offer);
+        expect(after.stock).not.toContain(after.offer);
+    });
+
+    it('passes the offer face down and takes the next card instead', () =>
+    {
+        const { state, deal } = drawing(5);
+        const seat = state.turn;
+        const offer = state.offer!;
+        const after = stepOf(state, { kind: 'reject', seat }, deal).state;
+        const added = after.hands[seat].filter((card) => !state.hands[seat].includes(card));
+
+        expect(added).toHaveLength(1);
+        expect(added[0]).not.toBe(offer);
+        expect(state.stock).toContain(added[0]);
+        expect([...after.hands.flat(), ...after.stock, after.offer]).not.toContain(offer);
+        expect(after.glimpse[seat]).toBeNull();
+        expect(state.stock.length - after.stock.length).toBe(2);
+    });
+
+    it('alternates twenty-one draws, eleven to the Hâkem, and ends on thirteen each with the Hâkem to lead', () =>
+    {
+        let { state, deal } = drawing(7);
+        const hakem = state.hakem;
+        const drawsBy = [0, 0];
+        let taken = 0;
+
+        while (state.phase === 'draw')
+        {
+            const seat = state.turn;
+            const step = stepOf(state, { kind: taken % 3 === 2 ? 'reject' : 'keep', seat }, deal);
+
+            drawsBy[seat] += step.events.filter((event) => event.e === 'draw').length;
+            state = step.state;
+            taken += 1;
+
+            expect(taken).toBeLessThan(30);
+        }
+
+        expect(taken).toBe(21);
+        expect(drawsBy[hakem]).toBe(11);
+        expect(drawsBy[1 - hakem]).toBe(10);
+        expect(state.phase).toBe('tricks');
+        expect(state.hands.map((hand) => hand.length)).toEqual([13, 13]);
+        expect(state.stock).toEqual([]);
+        expect(state.offer).toBeNull();
+        expect(state.glimpse[hakem]).toBeNull();
+        expect(state.glimpse[1 - hakem]).not.toBeNull();
+
+        const led = stepOf(state, legalMoves(state, hakem)[0], deal).state;
+
+        expect(led.glimpse).toEqual([null, null]);
+        expect(state.turn).toBe(hakem);
+        expect(state.lead).toBe(hakem);
+        expect(legalMoves(state, hakem)).toHaveLength(13);
+    });
+
+    it('leaves none of the twenty-six cards put face down anywhere, for the rest of the hand', () =>
+    {
+        let { state, deal } = twoHanded(11);
+
+        while (state.phase !== 'tricks')
+        {
+            state = stepOf(state, autoplay(state, state.turn, deal)!, deal).state;
+        }
+
+        const round = state.round;
+        const down = deckFor(2).filter((card) => !state.hands.flat().includes(card));
+
+        expect(down).toHaveLength(26);
+
+        while (state.round === round && state.winner === null)
+        {
+            const step = stepOf(state, autoplay(state, state.turn, deal)!, deal);
+            const fields = [
+                ...step.state.hands.flat(),
+                ...step.state.trick,
+                ...(step.state.took?.cards ?? []),
+                ...step.state.stock,
+                ...step.events.flatMap((event) => (event.e === 'card' ? [event.card] : []))
+            ];
+
+            if (step.state.round === round)
+            {
+                expect(fields.filter((card) => down.includes(card))).toEqual([]);
+            }
+
+            state = step.state;
+        }
+    });
+});
+
+describe('refusing a discard or a draw', () =>
+{
+    it('refuses a discard outside the discard', () =>
+    {
+        const opened = create(2, 7, seeded(41));
+        const fourDeal = create(4, 7, seeded(41));
+        const four = stepOf(fourDeal, { kind: 'trump', seat: fourDeal.hakem, suit: 'clubs' }, seeded(2)).state;
+        const { state } = drawing(41);
+
+        expect(apply(opened, { kind: 'discard', seat: opened.hakem, cards: opened.hands[opened.hakem].slice(0, 3) }, seeded(1)))
+            .toEqual({ ok: false, reason: 'not-discarding' });
+        expect(apply(four, { kind: 'discard', seat: four.turn, cards: four.hands[four.turn].slice(0, 3) }, seeded(1)))
+            .toEqual({ ok: false, reason: 'not-discarding' });
+        expect(apply(state, { kind: 'discard', seat: state.turn, cards: state.hands[state.turn].slice(0, 2) }, seeded(1)))
+            .toEqual({ ok: false, reason: 'not-discarding' });
+    });
+
+    it('refuses a discard from the seat not on turn', () =>
+    {
+        const { state } = twoHanded(43);
+        const dealer = dealerSeat(state);
+
+        expect(apply(state, { kind: 'discard', seat: dealer, cards: state.hands[dealer].slice(0, 2) }, seeded(1)))
+            .toEqual({ ok: false, reason: 'not-your-turn' });
+    });
+
+    it('refuses the wrong number of cards, or one card twice', () =>
+    {
+        const { state, deal } = twoHanded(45);
+        const hand = state.hands[state.hakem];
+        const refuse = (one: HokmState, cards: number[]) => apply(one, { kind: 'discard', seat: one.turn, cards }, seeded(1));
+
+        expect(refuse(state, hand.slice(0, 2))).toEqual({ ok: false, reason: 'discard-count' });
+        expect(refuse(state, hand.slice(0, 4))).toEqual({ ok: false, reason: 'discard-count' });
+        expect(refuse(state, [hand[0], hand[0], hand[1]])).toEqual({ ok: false, reason: 'discard-count' });
+
+        const dealerTurn = stepOf(state, legalMoves(state, state.hakem)[0], deal).state;
+
+        expect(refuse(dealerTurn, dealerTurn.hands[dealerTurn.turn].slice(0, 3))).toEqual({ ok: false, reason: 'discard-count' });
+    });
+
+    it('refuses a card the player does not hold', () =>
+    {
+        const { state } = twoHanded(47);
+        const hand = state.hands[state.hakem];
+        const theirs = state.hands[dealerSeat(state)][0];
+
+        expect(apply(state, { kind: 'discard', seat: state.hakem, cards: [hand[0], hand[1], theirs] }, seeded(1)))
+            .toEqual({ ok: false, reason: 'no-such-card' });
+    });
+
+    it('refuses a keep or a pass with nothing on offer', () =>
+    {
+        const { state } = twoHanded(49);
+        const opened = create(2, 7, seeded(49));
+        const fourDeal = create(4, 7, seeded(49));
+        const four = stepOf(fourDeal, { kind: 'trump', seat: fourDeal.hakem, suit: 'hearts' }, seeded(3)).state;
+
+        expect(apply(state, { kind: 'keep', seat: state.hakem }, seeded(1))).toEqual({ ok: false, reason: 'not-drawing' });
+        expect(apply(opened, { kind: 'reject', seat: opened.hakem }, seeded(1))).toEqual({ ok: false, reason: 'not-drawing' });
+        expect(apply(four, { kind: 'keep', seat: four.turn }, seeded(1))).toEqual({ ok: false, reason: 'not-drawing' });
+    });
+
+    it('refuses a keep or a pass from the seat not on turn', () =>
+    {
+        const { state } = drawing(51);
+
+        expect(apply(state, { kind: 'keep', seat: 1 - state.turn }, seeded(1))).toEqual({ ok: false, reason: 'not-your-turn' });
+        expect(apply(state, { kind: 'reject', seat: 1 - state.turn }, seeded(1))).toEqual({ ok: false, reason: 'not-your-turn' });
+    });
+
+    it('refuses a card in the discard and in the draw', () =>
+    {
+        const discarding = twoHanded(53).state;
+        const { state } = drawing(53);
+
+        expect(apply(discarding, { kind: 'card', seat: discarding.turn, card: discarding.hands[discarding.turn][0] }, seeded(1)))
+            .toEqual({ ok: false, reason: 'tricks-not-started' });
+        expect(apply(state, { kind: 'card', seat: state.turn, card: state.hands[state.turn][0] }, seeded(1)))
+            .toEqual({ ok: false, reason: 'tricks-not-started' });
+    });
+
+    it('refuses a second trump call during the discard', () =>
+    {
+        const { state } = twoHanded(55);
+
+        expect(apply(state, { kind: 'trump', seat: state.hakem, suit: 'clubs' }, seeded(1)))
+            .toEqual({ ok: false, reason: 'trump-already-set' });
+    });
+
+    it('never offers a discard or a draw at three or four players', () =>
+    {
+        for (const seats of [3, 4])
+        {
+            const deal = seeded(57 + seats);
+            let state = create(seats, 7, deal);
+
+            for (let action = 0; action < 400 && state.winner === null; action += 1)
+            {
+                const seat = hokmEngine.turnOf(state)!;
+
+                expect(legalMoves(state, seat).every((move) => move.kind === 'trump' || move.kind === 'card'), `${ seats } players`).toBe(true);
+
+                state = stepOf(state, autoplay(state, seat, deal)!, deal).state;
+            }
+        }
+    });
+});
+
+describe('a kot at two players', () =>
+{
+    const seventh = (tricks: number[], winner: number) =>
+    {
+        const loser = 1 - winner;
+        const hands: number[][] = [[], []];
+
+        hands[winner] = [cardOf('spades', 'A'), cardOf('clubs', '4'), cardOf('clubs', '5')];
+        hands[loser] = [cardOf('hearts', '3'), cardOf('hearts', '4'), cardOf('hearts', '5')];
+
+        const state: HokmState = {
+            ...create(2, 7, seeded(9)),
+            phase: 'tricks',
+            trump: 'spades',
+            hakem: 0,
+            turn: winner,
+            lead: winner,
+            trick: [],
+            stock: [],
+            offer: null,
+            glimpse: [null, null],
+            hands,
+            tricks
+        };
+
+        const led = stepOf(state, { kind: 'card', seat: winner, card: cardOf('spades', 'A') }, seeded(1));
+
+        return stepOf(led.state, { kind: 'card', seat: loser, card: cardOf('hearts', '3') }, seeded(1)).events.find((event) => event.e === 'hand');
+    };
+
+    it('pays the Hâkem two for the first seven, the other player three, and one otherwise, with cards still in hand', () =>
+    {
+        expect(seventh([6, 0], 0)).toEqual({ e: 'hand', side: 0, seats: [0], points: 2, kot: true });
+        expect(seventh([0, 6], 1)).toEqual({ e: 'hand', side: 1, seats: [1], points: 3, kot: true });
+        expect(seventh([6, 1], 0)).toEqual({ e: 'hand', side: 0, seats: [0], points: 1, kot: false });
+    });
+});
+
 describe('walking away', () =>
 {
     it('ends the whole match, not the hand', () =>
@@ -767,11 +1155,11 @@ describe('what a finished match reports', () =>
         expect(hokmEngine.finish(threeOnTricks)?.trailing).toEqual([0]);
     });
 
-    it('counts a hand of cards as engagement: seven at three and four, a whole hand at two', () =>
+    it('counts seven cards played as engagement, at every player count', () =>
     {
         expect(hokmEngine.engagement(4)).toEqual({ verbs: ['card'], after: 7 });
         expect(hokmEngine.engagement(3)).toEqual({ verbs: ['card'], after: 7 });
-        expect(hokmEngine.engagement(2)).toEqual({ verbs: ['card'], after: 13 });
+        expect(hokmEngine.engagement(2)).toEqual({ verbs: ['card'], after: 7 });
     });
 });
 
@@ -805,17 +1193,41 @@ describe('one turn on the clock', () =>
 
         expect(keys[1]).toBe(keys[0]);
     });
+
+    it('gives the trump call, each discard, each draw and the opening lead a turn each at two players', () =>
+    {
+        let state = create(2, 7, seeded(23));
+        const deal = seeded(4);
+        let actions = 0;
+
+        while (state.phase !== 'tricks' || state.trick.length === 0)
+        {
+            const before = state;
+            const step = apply(state, autoplay(state, hokmEngine.turnOf(state)!, deal)!, deal);
+
+            if (!step.ok)
+            {
+                throw new Error(step.reason);
+            }
+
+            state = step.state;
+            actions += 1;
+
+            const moved = hokmEngine.turnOf(state) !== hokmEngine.turnOf(before) || hokmEngine.turnKey(state) !== hokmEngine.turnKey(before);
+
+            expect(moved, `action ${ actions } stayed on one turn`).toBe(true);
+            expect(actions).toBeLessThan(30);
+        }
+
+        expect(actions).toBe(25);
+    });
 });
 
 describe('what the catalogue may offer', () =>
 {
     /**
-     * The rule that stops the gap above becoming a lie on a screen.
-     *
      * A seat count in `game_rules.seats` is a promise the create form makes and `table.create`
-     * enforces - open a table at it and Start is expected to deal. Two-handed hokm has a draw phase
-     * this engine does not implement, so offering `2` would seat two people at a table that can
-     * never begin, or worse, deal them a game that is not hokm.
+     * enforces - open a table at it and Start is expected to deal.
      */
     it('never offers a seat count the hokm engine cannot play', () =>
     {

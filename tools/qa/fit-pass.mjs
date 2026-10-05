@@ -20,6 +20,7 @@ const SIZES = [
 
 const GAMES = [
     { id: 'hokm-2', game: 'hokm', seats: 2, mode: 'turns', target: 7 },
+    { id: 'hokm-2-draw', game: 'hokm', seats: 2, mode: 'turns', target: 7, stop: 'draw' },
     { id: 'hokm-4', game: 'hokm', seats: 4, mode: 'turns', target: 7 },
     { id: 'poker-2', game: 'poker', seats: 2, mode: 'live', target: 0 },
     { id: 'poker-6', game: 'poker', seats: 6, mode: 'live', target: 0 },
@@ -93,19 +94,40 @@ const play = async (player, id, rev, move, key) =>
 
 const advance = async (spec, table) =>
 {
-    const state = await matchOf(dana, table.matchId);
-    const actor = table.bySeat.get(state.turn);
-
-    if (spec.game === 'hokm' && state.view.phase === 'trump')
+    for (let step = 0; step < 40; step += 1)
     {
-        const mine = await matchOf(actor, table.matchId);
+        const state = await matchOf(dana, table.matchId);
+        const actor = table.bySeat.get(state.turn);
+        const key = `fit-${ step }-${ table.matchId }`;
 
-        await play(actor, table.matchId, mine.rev, { kind: 'hokm', verb: 'trump', suit: 'spades' }, `fit-trump-${ table.matchId }`);
-    }
+        if (spec.game === 'hokm' && state.view.phase === 'trump')
+        {
+            const mine = await matchOf(actor, table.matchId);
 
-    if (spec.game === 'backgammon' && state.view.phase === 'roll')
-    {
-        await play(actor, table.matchId, state.rev, { kind: 'backgammon', verb: 'roll' }, `fit-roll-${ table.matchId }`);
+            await play(actor, table.matchId, mine.rev, { kind: 'hokm', verb: 'trump', suit: 'spades' }, key);
+            continue;
+        }
+
+        if (spec.game === 'hokm' && state.view.phase === 'discard')
+        {
+            const mine = await matchOf(actor, table.matchId);
+
+            await play(actor, table.matchId, mine.rev, { kind: 'hokm', verb: 'discard', cards: mine.view.hand.slice(0, mine.view.discard) }, key);
+            continue;
+        }
+
+        if (spec.game === 'hokm' && state.view.phase === 'draw' && !(spec.stop === 'draw' && state.view.stock === 1))
+        {
+            await play(actor, table.matchId, state.rev, { kind: 'hokm', verb: 'keep' }, key);
+            continue;
+        }
+
+        if (spec.game === 'backgammon' && state.view.phase === 'roll')
+        {
+            await play(actor, table.matchId, state.rev, { kind: 'backgammon', verb: 'roll' }, key);
+        }
+
+        return;
     }
 };
 

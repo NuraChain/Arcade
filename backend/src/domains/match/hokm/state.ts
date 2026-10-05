@@ -7,13 +7,14 @@ import type { Suit } from '../cards/cards.ts';
  * ledger, exactly as the seam doc argues: one rating move, one history line, one row somebody's
  * profile counts. A row per hand would make a table flicker between ready and playing all evening.
  *
- * **`hands` is the only private thing in here and it never leaves through `view`.** Everything else
- * - the trick on the table, who took what, the trump, the score - is face up at a real table and is
- * face up here. That is why the log needs no filtering: the deal is not an event, so there is
+ * **`hands`, `stock`, `offer` and `glimpse` are the private things in here and none of them leaves
+ * through `view` but to the one seat entitled to it.** Everything else - the trick on the table, who
+ * took what, the trump, the score - is face up at a real table and is face up here. That is why the
+ * log needs no filtering: the deal, the draw and the cards put face down are not events, so there is
  * nothing private in the event stream to redact.
  */
 
-export type HokmPhase = 'trump' | 'tricks';
+export type HokmPhase = 'trump' | 'discard' | 'draw' | 'tricks';
 
 /**
  * The trick that was just gathered, which is the only part of a hokm table that exists for a moment
@@ -69,6 +70,12 @@ export interface HokmState
     /** Per seat, and the reason `view` takes a viewer. */
     hands: number[][];
 
+    stock: number[];
+
+    offer: number | null;
+
+    glimpse: (number | null)[];
+
     turn: number;
 
     /** The seat that led the trick in progress, so the cards on the table have an owner each. */
@@ -94,6 +101,9 @@ export interface HokmState
 export type HokmAction =
     | { kind: 'trump'; seat: number; suit: Suit }
     | { kind: 'card'; seat: number; card: number }
+    | { kind: 'discard'; seat: number; cards: number[] }
+    | { kind: 'keep'; seat: number }
+    | { kind: 'reject'; seat: number }
     | { kind: 'forfeit'; seat: number; reason: string };
 
 export type HokmEvent =
@@ -107,6 +117,8 @@ export type HokmEvent =
      */
     | { e: 'hand'; side: number; seats: number[]; points: number; kot: boolean }
     | { e: 'deal'; hakem: number }
+    | { e: 'discard'; seat: number }
+    | { e: 'draw'; seat: number }
     | { e: 'forfeit'; seat: number; reason: string }
     | { e: 'finish'; side: number };
 
@@ -119,6 +131,9 @@ export type HokmRefusal =
     | 'not-playing'
     | 'trump-already-set'
     | 'tricks-not-started'
+    | 'not-discarding'
+    | 'discard-count'
+    | 'not-drawing'
     | 'not-the-hakem'
     | 'must-follow-suit'
     | 'no-such-card'

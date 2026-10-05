@@ -1,4 +1,4 @@
-import { legalCards, trickWinner } from '../../../../backend/src/domains/match/hokm/cards.ts';
+import { legalCards, trickWinner, worthKeeping } from '../../../../backend/src/domains/match/hokm/cards.ts';
 import { SUITS, suitOf } from '../../../../backend/src/domains/match/cards/cards.ts';
 import type { HokmBoard } from '../../data/match.ts';
 import type { Tip } from './tip.ts';
@@ -41,7 +41,7 @@ function naming(hand: readonly number[]): Tip
         : { key: `helpers.hokm.tip.name.${ SUITS[at] }` };
 }
 
-export function coachOf(view: Pick<HokmBoard, 'phase' | 'hakem' | 'turn' | 'trump' | 'hand' | 'trick'>, mine: number | undefined): Tip | null
+export function coachOf(view: Pick<HokmBoard, 'phase' | 'hakem' | 'turn' | 'trump' | 'hand' | 'trick' | 'offer'>, mine: number | undefined, seats: number): Tip | null
 {
     if (mine === undefined)
     {
@@ -50,12 +50,32 @@ export function coachOf(view: Pick<HokmBoard, 'phase' | 'hakem' | 'turn' | 'trum
 
     if (view.phase === 'trump')
     {
-        return view.hakem === mine ? naming(view.hand) : { key: 'helpers.hokm.tip.wait' };
+        if (view.hakem === mine)
+        {
+            return naming(view.hand);
+        }
+
+        return { key: seats === 2 ? 'helpers.hokm.tip.wait.draw' : 'helpers.hokm.tip.wait' };
     }
 
     if (view.turn !== mine)
     {
         return null;
+    }
+
+    if (view.phase === 'discard')
+    {
+        return { key: 'helpers.hokm.tip.away' };
+    }
+
+    if (view.phase === 'draw')
+    {
+        if (view.offer === undefined || view.trump === undefined)
+        {
+            return null;
+        }
+
+        return { key: worthKeeping(view.offer, view.trump) ? 'helpers.hokm.tip.keep' : 'helpers.hokm.tip.pass' };
     }
 
     if (view.trick.length === 0)

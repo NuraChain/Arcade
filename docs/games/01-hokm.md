@@ -86,11 +86,44 @@ This is exactly the case the seam's `view(state, seat)` exists for. A single sha
 the whole deal. The test that must exist: **during `TRUMP`, seat 1's view contains five cards and
 seat 2's view contains zero** — asserted on the serialised bytes, not on a getter.
 
-### Two-player draw
+### Two-player draw (built, D20)
 
-Keep/reject over a face-down stock, Hâkem first, a kept card forcing the next to be discarded and a
-rejected card forcing the next to be kept, until 13 each. The stock is **shoe state**: never in any
-view, never in a snapshot, never in an event.
+Pagat's game, from his own words: *"The dealer deals 5 cards at once to Hâkem and 5 to himself."*
+The Hâkem names trump and puts 3 face down, then the dealer puts 2 face down. Then the Hâkem draws
+first and the two alternate: the drawer looks at the offered card and either keeps it, then looks at
+the next card and must put it face down (*"having looked at it"*), or puts it face down and must keep
+the next. Twenty-one draws (11 to the Hâkem, 10 to the dealer) empty the 42-card stock and leave 13
+each. The Hâkem leads; first to 7 tricks wins the hand, and the first 7 pay 2 to the Hâkem or 3 to
+the dealer.
+
+| | Hâkem | Dealer |
+|---|---|---|
+| Opening hand, then face down | 5, 3 | 5, 2 |
+| Draws | 11 | 10 |
+| Final hand | 13 | 13 |
+| Cards seen | 27 | 25 |
+| Unknown minus the other's hand, through every trick | 12 | 14 |
+
+- **Phases** are `trump`, `discard`, `draw` and `tricks`; verbs `discard` (2 or 3 cards, ascending),
+  `keep` and `reject`, which name no card. Refusals: `not-discarding`, `discard-count`, `not-drawing`,
+  and `tricks-not-started` for a card before the tricks.
+- **The stock lives in the stored state as an unordered set**, and each card is lifted from it with the
+  injected `Draws` at the moment it is drawn, as poker does - so no snapshot says what comes next. It
+  is never in a view or an event: a view carries only its COUNT (42 during trump and discard, then
+  down two per draw, the lifted offer not counted).
+- **There is no discard pile anywhere.** A card put face down is removed and written nowhere. The
+  `discard` request's cards are in `match_actions.payload`, which only the verb is ever read back
+  from (`engine-seam.spec.ts` holds it).
+- **`offer`** is shown only to the drawer. **`glimpse`** - the card the drawer looked at after a keep -
+  is shown only to that seat, until its next draw; the last ones stay until the first card of the
+  hand is played, so the Hâkem sees the card his eleventh draw put down.
+- **`discard`** on the board is the count due, for the seat on turn; **`full`** is the size of a full
+  hand (13, 17 at three).
+- **Events** `discard` and `draw` carry the seat only.
+- **Each action is a turn of its own** at two players: the trump call, each discard, each draw and the
+  opening lead each get a deadline and a miss, so an absent Hâkem is forfeited on his first draw.
+- **Autoplay** picks from `legalMoves` only: `putAway` (the lowest cards, a trump counting thirteen
+  higher, ascending) and `worthKeeping` (a trump or any ten or better), both in `hokm/cards.ts`.
 
 ---
 
@@ -111,7 +144,7 @@ whatever its points, and sides level on points share a place (HOKM-03). When som
 `finish` reports every seat still at the table as `unsettled`, and as `trailing` each of those whose
 side was behind a side still in play - fewer points, or level on points and fewer tricks in the hand
 in progress (D25). The quitter takes a rated loss. The opponents win only if they and the quitter had
-each played a hand's worth of cards (7 at three and four players, 13 at two) and they were not
+each played a hand's worth of cards (7 at every player count) and they were not
 trailing, so a three-handed survivor who was behind the other one is `void` rather than paid for the
 quitter's exit. The partner of a four-handed WALKOUT shares the team's rated loss when the team was
 trailing and both of them had played a hand's worth of cards, and is `void` when it was level or

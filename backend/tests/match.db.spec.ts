@@ -15,6 +15,8 @@ import { syncSchema } from '../src/db/schema.ts';
 import { rowsOf } from '../src/lib/rows.ts';
 import { legalMoves } from '../src/domains/match/ludo/engine.ts';
 import { ludoEngine } from '../src/domains/match/engines/ludo.ts';
+import { hokmEngine } from '../src/domains/match/engines/hokm.ts';
+import type { HokmState } from '../src/domains/match/hokm/state.ts';
 import type { Draws, Engine } from '../src/domains/match/engine.ts';
 import type { EngineAction, LudoState } from '../src/domains/match/ludo/state.ts';
 
@@ -1164,5 +1166,90 @@ describe.skipIf(!active)('a match, against a real database', () =>
 
             expect(seen!.load.match.rev).toBe(opening + 1);
         });
+    });
+
+    describe('the two-handed hokm draw', () =>
+    {
+        it('sweeps an absent pair through the whole draw, and nothing put face down reaches either of them or a watcher', async () =>
+        {
+            const players = [await makeUser(), await makeUser()];
+            const table = await tables.create(players[0], {
+                game: 'hokm', seats: 2, mode: 'live', privacy: 'public',
+                target: 7, cube: false, blinds: 'low', chat: true, voice: false, invitees: []
+            });
+
+            await tables.claimSeat(players[1], table.id);
+
+            for (const player of players)
+            {
+                await tables.setReady(player, table.id, true);
+            }
+
+            const load = await matches.start(players[0], table.id);
+
+            for (let sweep = 0; sweep < 24; sweep += 1)
+            {
+                await db.query(`update match_players set timeouts = 0 where match_id = $1`, [load.match.id]);
+                await db.query(`update matches set deadline_at = now() - interval '1 second' where id = $1`, [load.match.id]);
+
+                expect((await matches.expireNext())?.played, `sweep ${ sweep }`).toBe(true);
+            }
+
+            const rows = rowsOf<{ rev: number; user_id: string | null; state: HokmState }>(await db.query(
+                `select rev, user_id, state from match_actions where match_id = $1 order by rev`,
+                [load.match.id]
+            ));
+
+            expect(rows).toHaveLength(24);
+            expect(rows.every((row) => row.user_id === null)).toBe(true);
+
+            const last = rows[rows.length - 1].state;
+
+            expect(last.phase).toBe('tricks');
+            expect(last.hands.map((hand) => hand.length)).toEqual([13, 13]);
+            expect(last.trick).toEqual([]);
+
+            const down = new Set<number>();
+
+            for (const state of [load.state as HokmState, ...rows.map((row) => row.state)])
+            {
+                const live = new Set([...state.hands.flat(), ...state.stock, ...(state.offer === null ? [] : [state.offer])]);
+
+                Array.from({ length: 52 }, (_, card) => card).filter((card) => !live.has(card)).forEach((card) => down.add(card));
+            }
+
+            expect(down.size).toBe(26);
+
+            for (const seat of [0, 1])
+            {
+                const user = load.players.find((one) => one.seat === seat)!.user_id;
+                const feed = await matches.since(user, load.match.id, 0);
+                const moves = feed!.events.flatMap((one) => (one.log.kind === 'hokm' ? one.log.moves : []));
+
+                expect(moves.map((move) => move.e)).toEqual(['trump', 'discard', 'discard', ...Array.from({ length: 21 }, () => 'draw')]);
+                expect(moves.filter((move) => move.card !== undefined)).toEqual([]);
+
+                const board = hokmEngine.view(feed!.load.state as HokmState, feed!.load.mine);
+
+                expect(board.kind === 'hokm' && board.hand.some((card) => down.has(card))).toBe(false);
+            }
+
+            const watching = createWatchService(db, (matchId) => matches.seatsOf(matchId));
+
+            for (const row of rows)
+            {
+                await db.query(
+                    `update match_actions set created_at = case when rev <= $2 then now() - interval '1 minute' else now() end where match_id = $1`,
+                    [load.match.id, row.rev]
+                );
+
+                const seen = await watching.delayed(load.match.id);
+                const board = hokmEngine.view(seen!.load.state as HokmState, null);
+
+                expect(seen!.load.match.rev, `revision ${ row.rev }`).toBe(row.rev);
+                expect(board.kind === 'hokm' && (board.hand.length > 0 || board.offer !== undefined || board.glimpse !== undefined || board.trick.length > 0))
+                    .toBe(false);
+            }
+        }, 60_000);
     });
 });

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { DECK, RANKS, SUITS, cardOf, nameOf, rankOf, suitOf } from '../src/domains/match/cards/cards.ts';
-import { autoCard, deckFor, legalCards, trickWinner } from '../src/domains/match/hokm/cards.ts';
+import { autoCard, deckFor, legalCards, putAway, trickWinner, worthKeeping } from '../src/domains/match/hokm/cards.ts';
 import { dealerOf, duelResult, matchWinner, nextHakem, teamOf, trickCount, tripleResult, winningTricks } from '../src/domains/match/hokm/scoring.ts';
 
 /**
@@ -49,32 +49,30 @@ describe('a card is a number', () =>
 
     /**
      * Twos come off the bottom in a fixed order and only as many as the division needs - one for
-     * three players, two for the two-handed house rule, none for four. Dropping a different two each
-     * hand would be a rule nobody wrote, and a deck that did not divide would leave cards undealt.
+     * three players, none for four. Dropping a different two each hand would be a rule nobody wrote.
+     * The two-handed game keeps all fifty-two, because half of them go face down in the draw.
      */
-    it('strips only as many twos as the seat count needs', () =>
+    it('strips a two only for the three-handed game', () =>
     {
         expect(deckFor(4)).toHaveLength(52);
         expect(deckFor(3)).toHaveLength(51);
-        expect(deckFor(2)).toHaveLength(50);
+        expect(deckFor(2)).toHaveLength(52);
 
         expect(deckFor(4).filter((card) => rankOf(card) === 0)).toHaveLength(4);
         expect(deckFor(3).filter((card) => rankOf(card) === 0)).toHaveLength(3);
-        expect(deckFor(2).filter((card) => rankOf(card) === 0)).toHaveLength(2);
+        expect(deckFor(2).filter((card) => rankOf(card) === 0)).toHaveLength(4);
 
-        expect(deckFor(2)).not.toContain(cardOf('clubs', '2'));
-        expect(deckFor(2)).not.toContain(cardOf('diamonds', '2'));
-        expect(deckFor(2)).toContain(cardOf('hearts', '2'));
+        expect(deckFor(3)).not.toContain(cardOf('clubs', '2'));
+        expect(deckFor(2)).toContain(cardOf('clubs', '2'));
     });
 
     /**
-     * The deck is stripped until it divides, so every card is dealt and nothing is left over. That
-     * is what lets `trickCount` be a division rather than a table, and it is the only thing the
-     * two-handed house rule changes: drop two of the twos and deal all fifty.
+     * At three and four the deck divides and every card is dealt. At two, *"each player should have
+     * 13 cards in hand"* once the stock is gone, so half the deck is held and half goes face down.
      */
-    it('deals every card out, at every player count', () =>
+    it('deals every card out at three and four players, and half the deck into hands at two', () =>
     {
-        for (const seats of [2, 3, 4])
+        for (const seats of [3, 4])
         {
             expect(deckFor(seats).length % seats, `${ seats } players`).toBe(0);
             expect(seats * trickCount(seats), `${ seats } players`).toBe(deckFor(seats).length);
@@ -82,19 +80,18 @@ describe('a card is a number', () =>
 
         expect(trickCount(4)).toBe(13);
         expect(trickCount(3)).toBe(17);
-        expect(trickCount(2)).toBe(25);
-        expect(deckFor(2)).toHaveLength(50);
+        expect(trickCount(2)).toBe(13);
+        expect(2 * trickCount(2) * 2).toBe(deckFor(2).length);
     });
 
     /**
-     * A hand is taken by MORE THAN HALF the tricks, not by a constant seven. Seven of thirteen is
-     * where the number everybody knows comes from; at twenty-five cards each the same rule reads
-     * thirteen, and a literal 7 would have ended a two-handed hand with eighteen tricks unplayed.
+     * A hand is taken by MORE THAN HALF the tricks, which is seven of thirteen at two players and at
+     * four alike.
      */
     it('needs a majority of the tricks to take a hand', () =>
     {
         expect(winningTricks(4)).toBe(7);
-        expect(winningTricks(2)).toBe(13);
+        expect(winningTricks(2)).toBe(7);
 
         for (const seats of [2, 4])
         {
@@ -129,6 +126,34 @@ describe('following suit', () =>
     it('offers the whole hand when you are void, trumps included', () =>
     {
         expect(legalCards(hand, 'diamonds').sort()).toEqual([...hand].sort());
+    });
+});
+
+describe('what the sweep does in the two-handed draw for an absent seat', () =>
+{
+    it('keeps a trump and anything ten or better, and passes the rest', () =>
+    {
+        expect(worthKeeping(cardOf('spades', '2'), 'spades')).toBe(true);
+        expect(worthKeeping(cardOf('hearts', '10'), 'spades')).toBe(true);
+        expect(worthKeeping(cardOf('hearts', 'A'), 'spades')).toBe(true);
+        expect(worthKeeping(cardOf('hearts', '9'), 'spades')).toBe(false);
+        expect(worthKeeping(cardOf('clubs', '2'), 'spades')).toBe(false);
+    });
+
+    it('puts the lowest cards face down, counting a trump thirteen higher, in ascending order', () =>
+    {
+        const hand = [cardOf('spades', '2'), cardOf('hearts', '3'), cardOf('diamonds', '4'), cardOf('clubs', 'K'), cardOf('hearts', '9')]
+            .sort((a, b) => a - b);
+
+        expect(putAway(hand, 3, 'spades').map(nameOf)).toEqual(['4D', '3H', '9H']);
+        expect(putAway(hand, 2, 'spades').map(nameOf)).toEqual(['4D', '3H']);
+    });
+
+    it('breaks a tie in worth by suit order', () =>
+    {
+        const hand = [cardOf('clubs', '5'), cardOf('diamonds', '5'), cardOf('hearts', '5'), cardOf('spades', 'K'), cardOf('spades', 'A')];
+
+        expect(putAway(hand, 2, 'hearts').map(nameOf)).toEqual(['5C', '5D']);
     });
 });
 
@@ -280,17 +305,18 @@ describe('scoring a hand between two sides', () =>
     });
 
     /**
-     * The same three rules at the two-handed threshold, because the number is the only thing that
-     * differs. Seven tricks out of twenty-five is not a hand - it is a third of one.
+     * *"The first player to take 7 tricks wins the hand and scores 1 point. If Hâkem wins the first
+     * 7 tricks he scores 2 points instead of 1. If Hâkem's opponent wins by taking the first 7
+     * tricks, he scores 3 points instead of 1."*
      */
-    it('counts to thirteen in the two-handed game and not to seven', () =>
+    it('races to seven in the two-handed game too', () =>
     {
         const needed = winningTricks(2);
 
-        expect(duelResult([7, 4], 0, needed)).toBeNull();
-        expect(duelResult([13, 9], 0, needed)).toEqual({ side: 0, points: 1 });
-        expect(duelResult([13, 0], 0, needed)).toEqual({ side: 0, points: 2 });
-        expect(duelResult([0, 13], 0, needed)).toEqual({ side: 1, points: 3 });
+        expect(duelResult([6, 6], 0, needed)).toBeNull();
+        expect(duelResult([7, 4], 0, needed)).toEqual({ side: 0, points: 1 });
+        expect(duelResult([7, 0], 0, needed)).toEqual({ side: 0, points: 2 });
+        expect(duelResult([0, 7], 0, needed)).toEqual({ side: 1, points: 3 });
     });
 });
 

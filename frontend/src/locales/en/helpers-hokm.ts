@@ -13,6 +13,10 @@ export const helpersHokm = {
     'helpers.hokm.tip.name.hearts': 'You hold more hearts than any other suit. The hakem usually names the suit they hold most of.',
     'helpers.hokm.tip.name.spades': 'You hold more spades than any other suit. The hakem usually names the suit they hold most of.',
     'helpers.hokm.tip.wait': 'The hakem names trump from their first five cards. The rest of the deal waits until they have.',
+    'helpers.hokm.tip.wait.draw': 'The hakem names trump from their first five cards. Then you both put cards face down and draw from the stock until you each hold thirteen.',
+    'helpers.hokm.tip.away': 'Put down the cards you will miss least: low ones, and none of the trump suit if you can help it.',
+    'helpers.hokm.tip.keep': 'Worth keeping: a trump, or a ten or better. Keep it and the next card goes face down.',
+    'helpers.hokm.tip.pass': 'A low card outside trump. Pass it face down and you must keep the next one, whatever it is.',
     'helpers.hokm.tip.lead': 'You lead, so any card may start the trick. Everybody else has to follow its suit while they hold it.',
     'helpers.hokm.tip.trump': 'You have none of the suit that was led, so any card goes, and a trump takes the trick unless a higher one beats it.',
     'helpers.hokm.tip.discard': 'You have none of the suit that was led and no trump, so no card you hold can take this trick. Throw one you will not miss.'

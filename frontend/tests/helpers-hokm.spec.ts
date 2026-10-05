@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 
 import { cardOf, RANKS, suitOf, type Rank, type Suit } from '../../backend/src/domains/match/cards/cards.ts';
-import { apply, create, legalMoves } from '../../backend/src/domains/match/hokm/engine.ts';
+import { apply, autoplay, create, legalMoves } from '../../backend/src/domains/match/hokm/engine.ts';
 import type { HokmEvent, HokmState } from '../../backend/src/domains/match/hokm/state.ts';
 import { coachOf, outcomeOf } from '../src/game/helpers/hokm.ts';
 import type { HokmBoard } from '../src/data/match.ts';
@@ -94,12 +94,33 @@ describe('coachOf', () =>
         ['', 'helpers.hokm.tip.name']
     ])('tells the hakem holding %s: %s', (hand, key) =>
     {
-        expect(coachOf(seen({ phase: 'trump', hakem: 1, trump: undefined, hand: cards(hand) }), 1)?.key).toBe(key);
+        expect(coachOf(seen({ phase: 'trump', hakem: 1, trump: undefined, hand: cards(hand) }), 1, 4)?.key).toBe(key);
     });
 
     it('tells everybody else what the pause in the deal is', () =>
     {
-        expect(coachOf(seen({ phase: 'trump', hakem: 0, trump: undefined, hand: [] }), 2)?.key).toBe('helpers.hokm.tip.wait');
+        expect(coachOf(seen({ phase: 'trump', hakem: 0, trump: undefined, hand: [] }), 2, 4)?.key).toBe('helpers.hokm.tip.wait');
+    });
+
+    it('tells the other player at two that the draw comes after trump, not the rest of the deal', () =>
+    {
+        expect(coachOf(seen({ phase: 'trump', hakem: 0, trump: undefined, hand: cards('2C 3C 4C 5C 6C') }), 1, 2)?.key).toBe('helpers.hokm.tip.wait.draw');
+    });
+
+    it('says what to put face down, to the seat putting cards down and nobody else', () =>
+    {
+        expect(coachOf(seen({ phase: 'discard', turn: 1, hand: cards('2C 3C 4C 5C 6C') }), 1, 2)?.key).toBe('helpers.hokm.tip.away');
+        expect(coachOf(seen({ phase: 'discard', turn: 0, hand: cards('2C 3C 4C') }), 1, 2)).toBeNull();
+    });
+
+    it.each([
+        ['10H', 'helpers.hokm.tip.keep'],
+        ['2S', 'helpers.hokm.tip.keep'],
+        ['9H', 'helpers.hokm.tip.pass']
+    ])('advises the drawer looking at %s: %s', (offer, key) =>
+    {
+        expect(coachOf(seen({ phase: 'draw', turn: 1, trump: 'spades', offer: card(offer) }), 1, 2)?.key).toBe(key);
+        expect(coachOf(seen({ phase: 'draw', turn: 0, trump: 'spades', offer: undefined }), 1, 2)).toBeNull();
     });
 
     it.each([
@@ -112,23 +133,56 @@ describe('coachOf', () =>
         ['10S', '2C 3D', 'helpers.hokm.tip.discard']
     ])('on %s holding %s says %s', (trick, hand, key) =>
     {
-        expect(coachOf(seen({ trick: cards(trick), hand: cards(hand) }), 1)?.key ?? null).toBe(key);
+        expect(coachOf(seen({ trick: cards(trick), hand: cards(hand) }), 1, 4)?.key ?? null).toBe(key);
     });
 
     it('says nothing while it is somebody else\'s turn', () =>
     {
-        expect(coachOf(seen({ turn: 2, trick: cards('10H') }), 1)).toBeNull();
+        expect(coachOf(seen({ turn: 2, trick: cards('10H') }), 1, 4)).toBeNull();
     });
 
     it('says nothing at all to somebody watching', () =>
     {
-        expect(coachOf(seen({ phase: 'trump' }), undefined)).toBeNull();
-        expect(coachOf(seen(), undefined)).toBeNull();
+        expect(coachOf(seen({ phase: 'trump' }), undefined, 4)).toBeNull();
+        expect(coachOf(seen(), undefined, 4)).toBeNull();
     });
 });
 
 describe('against the engine', () =>
 {
+    it('gives the drawer the same advice the sweep would take, at every draw of whole matches', () =>
+    {
+        let draws = 0;
+
+        for (let match = 0; match < 4; match += 1)
+        {
+            const deal = seeded(match * 31 + 5);
+
+            let state = create(2, 7, deal);
+
+            for (let step = 0; step < 600 && state.winner === null; step += 1)
+            {
+                const seat = state.phase === 'trump' ? state.hakem : state.turn;
+                const move = autoplay(state, seat, deal)!;
+
+                if (state.phase === 'draw')
+                {
+                    const coached = coachOf({ phase: state.phase, hakem: state.hakem, turn: state.turn, trump: state.trump ?? undefined, hand: state.hands[seat], trick: state.trick, offer: state.offer ?? undefined }, seat, 2);
+
+                    expect(coached?.key).toBe(move.kind === 'keep' ? 'helpers.hokm.tip.keep' : 'helpers.hokm.tip.pass');
+                    draws += 1;
+                }
+
+                const outcome = apply(state, move, deal);
+
+                expect(outcome.ok).toBe(true);
+                state = outcome.ok ? outcome.state : state;
+            }
+        }
+
+        expect(draws).toBeGreaterThan(40);
+    });
+
     const viewOf = (state: HokmState): Pick<HokmBoard, 'trick' | 'trump'> => ({ trick: state.trick, trump: state.trump ?? undefined });
 
     it.each([2, 3, 4])('agrees with who really took every trick of whole hands at %i players', (seats) =>
@@ -162,7 +216,7 @@ describe('against the engine', () =>
                         losers = [...losers, seat];
                     }
 
-                    const coached = coachOf({ phase: state.phase, hakem: state.hakem, turn: state.turn, trump: state.trump ?? undefined, hand: state.hands[seat], trick: state.trick }, seat);
+                    const coached = coachOf({ phase: state.phase, hakem: state.hakem, turn: state.turn, trump: state.trump ?? undefined, hand: state.hands[seat], trick: state.trick }, seat, seats);
 
                     expect(coached?.key === 'hokm.follow').toBe(moves.length < state.hands[seat].length);
 

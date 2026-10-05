@@ -1,5 +1,5 @@
 import { SUITS, suitOf, type Suit } from '../cards/cards.ts';
-import { autoCard, deckFor, legalCards, trickWinner } from './cards.ts';
+import { autoCard, deckFor, legalCards, putAway, trickWinner, worthKeeping } from './cards.ts';
 import { dealerOf, duelResult, matchWinner, nextHakem, trickCount, tripleResult, winningTricks } from './scoring.ts';
 import { sideCount, sideOf, seatsOfSide, type HokmAction, type HokmEvent, type HokmRefusal, type HokmState } from './state.ts';
 
@@ -11,24 +11,19 @@ import { sideCount, sideOf, seatsOfSide, type HokmAction, type HokmEvent, type H
  * one nothing can fold. Randomness arrives as a `deal` argument rather than being taken, so there
  * is nothing in here to subvert and the same state with the same shuffle always plays the same.
  *
- * **Two phases, not eight.** The plan sketched a seven-state enum walking the deal round by round;
- * what a caller can actually DO is name trump or play a card, so those are the phases. Rounds of
- * four and five are a dealing ritual with no decision in them, and a state nobody can act in is a
- * state that only exists to be stepped past.
+ * **A phase is a decision somebody makes.** Naming trump, putting cards face down, keeping or
+ * passing a drawn card, and playing a card. Rounds of four and five are a dealing ritual with no
+ * decision in them, and a state nobody can act in is a state that only exists to be stepped past.
  */
 
 /**
- * The player counts this engine actually plays, and it is not all of them.
+ * The player counts this engine plays.
  *
- * All three are one game with a different deck: deal the Hâkem five, pause for trump, fill every
- * hand, play tricks until a side has more than half of them.
- *
- * The two-handed game is the house rule rather than Pagat's. Pagat deals five each and then runs a
- * keep-or-reject draw over a face-down stock; what is played is simpler and is what this implements
- * - **drop two of the twos, deal all fifty cards, twenty-five each.** Nothing else moves, because
- * every number downstream is derived from the deck: the hand is the deck over the seats, and the
- * tricks that win it are more than half of that. `hokm-engine.spec.ts` asserts the catalogue never
- * offers a count this list does not hold.
+ * Three and four are one game with a different deck: deal the Hâkem five, pause for trump, fill
+ * every hand, play tricks until a side has more than half of them. Two is Pagat's draw game: five
+ * each, trump, three face down from the Hâkem and two from the dealer, then twenty-one draws from
+ * the stock until each holds thirteen. `hokm-engine.spec.ts` asserts the catalogue never offers a
+ * count this list does not hold.
  */
 export const SEATS: readonly number[] = [2, 3, 4];
 
@@ -58,23 +53,30 @@ function shuffled(cards: number[], deal: Deal)
 }
 
 /**
- * The Hâkem's five, and NOBODY else's anything.
+ * The Hâkem's five, and at three and four players NOBODY else's anything.
  *
  * Pagat pauses the deal so the Hâkem's partner cannot signal what they hold before trump is named.
  * Dealing only the Hâkem satisfies that and more: during `trump` there is no other hand in the
  * state at all, so no view, no snapshot and no event can leak one even if somebody later writes a
- * careless projection. A pause that left three hands lying in the state would be a pause that
- * depended on every reader being careful.
+ * careless projection. At two there is no partner, and Pagat deals the dealer five at once.
  */
 const OPENING = 5;
+
+const byNumber = (a: number, b: number) => a - b;
 
 function dealHand(state: HokmState, deal: Deal): HokmState
 {
     const order = shuffled(deckFor(state.seats), deal);
+    const duel = state.seats === 2;
 
     const hands = Array.from({ length: state.seats }, () => [] as number[]);
 
-    hands[state.hakem] = order.slice(0, OPENING).sort((a, b) => a - b);
+    hands[state.hakem] = order.slice(0, OPENING).sort(byNumber);
+
+    if (duel)
+    {
+        hands[dealerOf(state.hakem, state.seats)] = order.slice(OPENING, OPENING * 2).sort(byNumber);
+    }
 
     return {
         ...state,
@@ -82,6 +84,9 @@ function dealHand(state: HokmState, deal: Deal): HokmState
         phase: 'trump',
         trump: null,
         hands,
+        stock: duel ? order.slice(OPENING * 2).sort(byNumber) : [],
+        offer: null,
+        glimpse: Array.from({ length: state.seats }, () => null),
         turn: state.hakem,
         lead: state.hakem,
         trick: [],
@@ -90,8 +95,39 @@ function dealHand(state: HokmState, deal: Deal): HokmState
     };
 }
 
+export function discardDue(state: HokmState, seat: number)
+{
+    return seat === state.hakem ? 3 : 2;
+}
+
+function lift(stock: readonly number[], deal: Deal)
+{
+    const pick = Math.min(stock.length, Math.max(1, Math.floor(deal(stock.length))));
+
+    return { card: stock[pick - 1], stock: stock.filter((_, index) => index !== pick - 1) };
+}
+
+function offerTo(state: HokmState, seat: number, deal: Deal): HokmState
+{
+    const { card, stock } = lift(state.stock, deal);
+
+    return { ...state, turn: seat, offer: card, stock };
+}
+
+function subsets(cards: readonly number[], size: number): number[][]
+{
+    if (size === 0)
+    {
+        return [[]];
+    }
+
+    return cards.flatMap((card, index) =>
+        subsets(cards.slice(index + 1), size - 1).map((rest) => [card, ...rest]));
+}
+
 /**
- * The rest of the deal, once trump is named: everybody up to a full hand, the Hâkem included.
+ * The rest of the deal at three and four players, once trump is named: everybody up to a full hand,
+ * the Hâkem included.
  *
  * The remaining cards are taken in the same shuffled order the opening five came from, so a hand is
  * a deterministic function of one shuffle rather than of two.
@@ -137,6 +173,9 @@ export function create(seats: number, target: number, deal: Deal)
         phase: 'trump',
         trump: null,
         hands: [],
+        stock: [],
+        offer: null,
+        glimpse: [],
         turn: hakem,
         lead: hakem,
         trick: [],
@@ -170,6 +209,16 @@ export function legalMoves(state: HokmState, seat: number): HokmAction[]
     if (seat !== state.turn)
     {
         return [];
+    }
+
+    if (state.phase === 'discard')
+    {
+        return subsets(state.hands[seat], discardDue(state, seat)).map((cards) => ({ kind: 'discard', seat, cards } as HokmAction));
+    }
+
+    if (state.phase === 'draw')
+    {
+        return [{ kind: 'keep', seat }, { kind: 'reject', seat }];
     }
 
     const led = state.trick.length === 0 ? null : suitOf(state.trick[0]);
@@ -225,6 +274,75 @@ function abandon(state: HokmState): HokmState
     return { ...state, winner: best };
 }
 
+function discard(state: HokmState, seat: number, cards: readonly number[], deal: Deal): Outcome
+{
+    if (state.phase !== 'discard')
+    {
+        return { ok: false, reason: 'not-discarding' };
+    }
+
+    if (seat !== state.turn)
+    {
+        return { ok: false, reason: 'not-your-turn' };
+    }
+
+    const due = discardDue(state, seat);
+
+    if (cards.length !== due || new Set(cards).size !== due)
+    {
+        return { ok: false, reason: 'discard-count' };
+    }
+
+    if (!cards.every((card) => state.hands[seat].includes(card)))
+    {
+        return { ok: false, reason: 'no-such-card' };
+    }
+
+    const hands = state.hands.map((held, index) => (index === seat ? held.filter((card) => !cards.includes(card)) : held));
+    const next: HokmState = { ...state, rev: state.rev + 1, hands };
+    const events: HokmEvent[] = [{ e: 'discard', seat }];
+
+    return seat === state.hakem
+        ? { ok: true, state: { ...next, turn: dealerOf(state.hakem, state.seats) }, events }
+        : { ok: true, state: offerTo({ ...next, phase: 'draw' }, state.hakem, deal), events };
+}
+
+function draw(state: HokmState, seat: number, keep: boolean, deal: Deal): Outcome
+{
+    if (state.phase !== 'draw' || state.offer === null)
+    {
+        return { ok: false, reason: 'not-drawing' };
+    }
+
+    if (seat !== state.turn)
+    {
+        return { ok: false, reason: 'not-your-turn' };
+    }
+
+    const { card: second, stock } = lift(state.stock, deal);
+    const taken = keep ? state.offer : second;
+    const hands = state.hands.map((held, index) => (index === seat ? [...held, taken].sort(byNumber) : held));
+    const glimpse = state.glimpse.map((card, index) => (index === seat ? (keep ? second : null) : card));
+    const next: HokmState = { ...state, rev: state.rev + 1, hands, stock, glimpse, offer: null };
+    const events: HokmEvent[] = [{ e: 'draw', seat }];
+
+    if (stock.length > 0)
+    {
+        return { ok: true, state: offerTo(next, (seat + 1) % state.seats, deal), events };
+    }
+
+    return {
+        ok: true,
+        state: {
+            ...next,
+            phase: 'tricks',
+            turn: state.hakem,
+            lead: state.hakem
+        },
+        events
+    };
+}
+
 export function apply(state: HokmState, action: HokmAction, deal: Deal): Outcome
 {
     if (state.winner !== null)
@@ -267,19 +385,25 @@ export function apply(state: HokmState, action: HokmAction, deal: Deal): Outcome
             return { ok: false, reason: 'not-the-hakem' };
         }
 
+        const called = { ...state, rev: state.rev + 1, trump: action.suit, turn: state.hakem, lead: state.hakem };
+
         return {
             ok: true,
-            state: {
-                ...state,
-                rev: state.rev + 1,
-                phase: 'tricks',
-                trump: action.suit,
-                hands: dealRest(state, deal),
-                turn: state.hakem,
-                lead: state.hakem
-            },
+            state: state.seats === 2
+                ? { ...called, phase: 'discard' }
+                : { ...called, phase: 'tricks', hands: dealRest(state, deal) },
             events: [{ e: 'trump', seat: action.seat, suit: action.suit }]
         };
+    }
+
+    if (action.kind === 'discard')
+    {
+        return discard(state, action.seat, action.cards, deal);
+    }
+
+    if (action.kind === 'keep' || action.kind === 'reject')
+    {
+        return draw(state, action.seat, action.kind === 'keep', deal);
     }
 
     if (state.phase !== 'tricks')
@@ -313,7 +437,7 @@ export function apply(state: HokmState, action: HokmAction, deal: Deal): Outcome
 
     const trick = [...state.trick, action.card];
 
-    let next: HokmState = { ...state, rev: state.rev + 1, hands, trick };
+    let next: HokmState = { ...state, rev: state.rev + 1, hands, trick, glimpse: state.glimpse.map(() => null) };
 
     if (trick.length < state.seats)
     {
@@ -369,7 +493,9 @@ export function apply(state: HokmState, action: HokmAction, deal: Deal): Outcome
  * turns ends a seat elsewhere, and this is only ever "take their turn for them".
  *
  * Trump goes to the suit they hold most of, which is the one decision in the game a beginner is
- * taught; a card is `autoCard`'s, which plays low by rank and keeps trumps back.
+ * taught; the cards put face down are `putAway`'s, a drawn card is kept when `worthKeeping` says so,
+ * and a card played is `autoCard`'s, which plays low by rank and keeps trumps back. Every answer is
+ * one of `legalMoves`, so the sweep cannot play anything a person could not.
  */
 export function autoplay(state: HokmState, seat: number, deal: Deal): HokmAction | null
 {
@@ -380,17 +506,33 @@ export function autoplay(state: HokmState, seat: number, deal: Deal): HokmAction
         return null;
     }
 
+    void deal;
+
     if (state.phase === 'trump')
     {
         const counts = SUITS.map((suit) => state.hands[seat].filter((card) => suitOf(card) === suit).length);
-        const best = counts.indexOf(Math.max(...counts));
+        const best = SUITS[counts.indexOf(Math.max(...counts))];
 
-        return { kind: 'trump', seat, suit: SUITS[best] };
+        return moves.find((move) => move.kind === 'trump' && move.suit === best) ?? null;
     }
 
-    void deal;
+    const trump = state.trump as Suit;
 
-    const card = autoCard(state.hands[seat], state.trick, state.trump as Suit);
+    if (state.phase === 'discard')
+    {
+        const cards = putAway(state.hands[seat], discardDue(state, seat), trump).join();
+
+        return moves.find((move) => move.kind === 'discard' && move.cards.join() === cards) ?? null;
+    }
+
+    if (state.phase === 'draw')
+    {
+        const kind = state.offer !== null && worthKeeping(state.offer, trump) ? 'keep' : 'reject';
+
+        return moves.find((move) => move.kind === kind) ?? null;
+    }
+
+    const card = autoCard(state.hands[seat], state.trick, trump);
 
     return moves.find((move) => move.kind === 'card' && move.card === card) ?? null;
 }

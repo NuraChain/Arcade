@@ -42,6 +42,7 @@ const match = (view: Partial<Hokm>, mine = 1): MatchView => ({
         target: 7,
         round: 1,
         needed: 7,
+        full: 13,
         ...view
     }
 });
@@ -500,5 +501,118 @@ describe('the game helpers', () =>
 
         expect(container.querySelector('[role="note"]')).toBeNull();
         expect(container.querySelector('.hokm-outcome')).toBeNull();
+    });
+});
+
+describe('the two-handed draw', () =>
+{
+    const two = (view: Partial<Hokm>, mine: number | null): MatchView => ({
+        ...match({
+            hakem: 0,
+            dealer: 1,
+            trump: 'spades',
+            points: [0, 0],
+            seats: [0, 1].map((seat) => ({ seat, side: seat, held: 5, tricks: 0, out: false })),
+            ...view
+        }, mine ?? 0),
+        seats: 2,
+        players: [0, 1].map((seat) => ({ seat, who: `dana${ seat }`, timeouts: 0 })) as MatchView['players'],
+        ...(mine === null ? { mine: undefined } : {})
+    });
+
+    const drawing = (mine: number | null) => two({ phase: 'draw', turn: 0, stock: 39, hand: [1, 15, 27, 40, 41, 50, 51], ...(mine === 0 ? { offer: 12 } : {}) }, mine);
+
+    const named = (container: HTMLElement, words: string) =>
+        [...container.querySelectorAll<HTMLButtonElement>('button')].find((button) => button.textContent?.includes(words)) ?? null;
+
+    it('offers the drawn card and its two choices to the drawer alone', () =>
+    {
+        const drawer = renderTest(() => HokmBoard({ match: drawing(0) }) as Rendered);
+
+        expect(drawer.container.querySelector('.hokm-draw .card-face')).not.toBeNull();
+        expect(named(drawer.container, 'Keep the')).not.toBeNull();
+        expect(named(drawer.container, 'Take the next card')).not.toBeNull();
+        drawer.unmount();
+
+        for (const reader of [1, null])
+        {
+            const other = renderTest(() => HokmBoard({ match: drawing(reader) }) as Rendered);
+
+            expect(other.container.querySelector('.hokm-draw'), `reader ${ reader }`).toBeNull();
+            expect(named(other.container, 'Take the next card'), `reader ${ reader }`).toBeNull();
+            other.unmount();
+        }
+    });
+
+    it('keeps or passes the drawn card through the board', () =>
+    {
+        const play = vi.spyOn(useBoard(), 'play').mockResolvedValue('now');
+        const { container } = renderTest(() => HokmBoard({ match: drawing(0) }) as Rendered);
+
+        fire(named(container, 'Keep the')!, 'click');
+        fire(named(container, 'Take the next card')!, 'click');
+
+        expect(play.mock.calls.map(([body]) => body)).toEqual([
+            { kind: 'hokm', verb: 'keep' },
+            { kind: 'hokm', verb: 'reject' }
+        ]);
+    });
+
+    it('shows the stock as a count to everybody and the hand as so many of thirteen to its holder', () =>
+    {
+        const drawer = renderTest(() => HokmBoard({ match: drawing(0) }) as Rendered);
+
+        expect(drawer.container.querySelector('.hokm-stock')?.textContent).toContain('39');
+        expect(drawer.container.querySelector('.hokm-filled')?.textContent).toContain('7/13');
+        expect(drawer.container.querySelector('.hokm-filled')?.textContent).toContain('7 of 13 cards');
+        drawer.unmount();
+
+        const watcher = renderTest(() => HokmBoard({ match: drawing(null) }) as Rendered);
+
+        expect(watcher.container.querySelector('.hokm-stock')?.textContent).toContain('39');
+        expect(watcher.container.querySelector('.hokm-filled')).toBeNull();
+    });
+
+    it('lets the seat putting cards down choose them, and confirms only at the exact count', () =>
+    {
+        useDevice().overrideCoarse(false);
+        const play = vi.spyOn(useBoard(), 'play').mockResolvedValue('now');
+        const { container } = renderTest(() => HokmBoard({ match: two({ phase: 'discard', turn: 0, discard: 3, stock: 42, hand: [3, 14, 27, 40, 51] }, 0) }) as Rendered);
+        const hold = (card: number) => container.querySelector<HTMLButtonElement>(`.card-hold[data-card="${ card }"]`)!;
+        const confirm = () => named(container, 'Put these 3 face down')!;
+
+        expect(hold(3).disabled).toBe(false);
+        expect(hold(3).getAttribute('aria-pressed')).toBe('false');
+        expect(confirm().disabled).toBe(true);
+
+        [51, 3, 27].forEach((card) => fire(hold(card), 'click'));
+
+        expect(hold(3).getAttribute('aria-pressed')).toBe('true');
+        expect(confirm().disabled).toBe(false);
+
+        fire(hold(40), 'click');
+
+        expect(confirm().disabled).toBe(true);
+
+        fire(hold(40), 'click');
+        fire(confirm(), 'click');
+
+        expect(play).toHaveBeenCalledWith({ kind: 'hokm', verb: 'discard', cards: [3, 27, 51] });
+    });
+
+    it('gives the seat waiting on a discard nothing to press', () =>
+    {
+        const { container } = renderTest(() => HokmBoard({ match: two({ phase: 'discard', turn: 0, stock: 42, hand: [3, 14, 27, 40, 51] }, 1) }) as Rendered);
+
+        expect([...container.querySelectorAll<HTMLButtonElement>('.card-hold')].every((button) => button.disabled)).toBe(true);
+        expect(named(container, 'face down')).toBeNull();
+    });
+
+    it('tells the drawer which card their keep put face down, and draws nothing else about the cards put down', () =>
+    {
+        const { container } = renderTest(() => HokmBoard({ match: two({ phase: 'draw', turn: 1, stock: 37, glimpse: 9, hand: [1, 15, 27, 40, 41, 50] }, 0) }) as Rendered);
+
+        expect(container.textContent).toContain('went face down');
+        expect(container.querySelector('[class*="discard"], [class*="burn"]')).toBeNull();
     });
 });

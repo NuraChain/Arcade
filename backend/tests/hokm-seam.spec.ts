@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { hokmEngine } from '../src/domains/match/engines/hokm.ts';
-import type { HokmState } from '../src/domains/match/hokm/state.ts';
+import type { HokmAction, HokmState } from '../src/domains/match/hokm/state.ts';
 import { hokmBoard, hokmPlay, matchBoard, matchLog, matchPlay } from '../src/schemas.ts';
 
 /**
@@ -51,6 +51,30 @@ function forged(hand: readonly number[]): number[]
 const opened = (seats: number, seed: number) =>
     hokmEngine.create(Array.from({ length: seats }, (_, seat) => seat), seeded(seed), { target: 7, cube: false, blinds: 'low' }) as HokmState;
 
+function step(state: HokmState, action: HokmAction, dice = draws)
+{
+    const outcome = hokmEngine.apply(state, action, dice);
+
+    if (!outcome.ok)
+    {
+        throw new Error(`${ action.kind }: ${ outcome.reason }`);
+    }
+
+    return outcome.state as HokmState;
+}
+
+function boardOf(state: HokmState, reader: number | null)
+{
+    const board = hokmEngine.view(state, reader);
+
+    if (board.kind !== 'hokm')
+    {
+        throw new Error('not a hokm board');
+    }
+
+    return board;
+}
+
 describe('what one seat may see of another', () =>
 {
     /**
@@ -81,6 +105,59 @@ describe('what one seat may see of another', () =>
         expect(JSON.stringify(hokmEngine.view(forgery, (state.hakem + 1) % 4)),
             'a waiting seat view moved when the Hâkem cards changed')
             .toBe(JSON.stringify(theirs));
+    });
+
+    it('keeps each two-handed view blind to the other hand and to the stock, during the trump call', () =>
+    {
+        const state = opened(2, 7);
+
+        for (const reader of [0, 1, null])
+        {
+            const base = JSON.stringify(hokmEngine.view(state, reader));
+            const forgery = {
+                ...state,
+                hands: state.hands.map((hand, seat) => (seat === reader ? hand : forged(hand))),
+                stock: forged(state.stock)
+            };
+
+            expect(JSON.stringify(hokmEngine.view(forgery, reader)), `reader ${ reader }`).toBe(base);
+        }
+    });
+
+    it('shows the offer to the drawer alone, a glimpse to the seat that looked alone, and the stock as a count', () =>
+    {
+        const start = opened(2, 19);
+        const called = step(start, { kind: 'trump', seat: start.hakem, suit: 'hearts' });
+        const hakem = called.hakem;
+        const dealer = 1 - hakem;
+
+        expect(boardOf(called, hakem).discard).toBe(3);
+        expect(boardOf(called, dealer).discard).toBeUndefined();
+        expect(boardOf(called, null).stock).toBe(42);
+        expect(boardOf(called, hakem).full).toBe(13);
+
+        const put = step(called, hokmEngine.legal(called, hakem)[0]);
+
+        expect(boardOf(put, dealer).discard).toBe(2);
+        expect(boardOf(put, hakem).discard).toBeUndefined();
+
+        const drawing = step(put, hokmEngine.legal(put, dealer)[0]);
+
+        expect(boardOf(drawing, hakem).offer).toBe(drawing.offer);
+        expect(boardOf(drawing, dealer).offer).toBeUndefined();
+        expect(boardOf(drawing, null).offer).toBeUndefined();
+        expect(boardOf(drawing, dealer).stock).toBe(41);
+
+        const kept = step(drawing, { kind: 'keep', seat: hakem });
+
+        expect(boardOf(kept, hakem).glimpse).toBe(kept.glimpse[hakem]);
+        expect(boardOf(kept, dealer).glimpse).toBeUndefined();
+        expect(boardOf(kept, null).glimpse).toBeUndefined();
+        expect(boardOf(kept, dealer).offer).toBe(kept.offer);
+        expect(boardOf(kept, null).seats.map((row) => row.held)).toEqual(kept.hands.map((hand) => hand.length));
+        expect(boardOf(opened(3, 1), null).full).toBe(17);
+        expect(boardOf(opened(4, 1), null).full).toBe(13);
+        expect(boardOf(opened(4, 1), null).stock).toBeUndefined();
     });
 
     /**
@@ -117,6 +194,32 @@ describe('what one seat may see of another', () =>
                             faults.push(`${ seats }p action ${ actions }: seat ${ reader } moved with seat ${ other } hand`);
                         }
                     }
+
+                    const hidden = {
+                        ...state,
+                        stock: forged(state.stock),
+                        offer: state.offer === null || reader === state.turn ? state.offer : (state.offer + 26) % 52,
+                        glimpse: state.glimpse.map((card, seat) => (card === null || seat === reader ? card : (card + 26) % 52))
+                    };
+
+                    if (JSON.stringify(hokmEngine.view(hidden, reader)) !== base)
+                    {
+                        faults.push(`${ seats }p action ${ actions }: seat ${ reader } moved with the stock, the offer or a glimpse`);
+                    }
+                }
+
+                const watched = JSON.stringify(hokmEngine.view(state, null));
+                const everything = {
+                    ...state,
+                    hands: state.hands.map(forged),
+                    stock: forged(state.stock),
+                    offer: state.offer === null ? null : (state.offer + 26) % 52,
+                    glimpse: state.glimpse.map((card) => (card === null ? null : (card + 26) % 52))
+                };
+
+                if (JSON.stringify(hokmEngine.view(everything, null)) !== watched)
+                {
+                    faults.push(`${ seats }p action ${ actions }: a watcher moved with something face down`);
                 }
 
                 const turn = hokmEngine.turnOf(state);
@@ -216,8 +319,200 @@ describe('what one seat may see of another', () =>
     });
 });
 
+const DECK = Array.from({ length: 52 }, (_, card) => card);
+
+const shownTo = (state: HokmState, reader: number | null) =>
+{
+    const board = boardOf(state, reader);
+
+    return {
+        board,
+        cards: [...board.hand, ...board.plays, ...board.trick, ...(board.took?.cards ?? []), ...(board.offer === undefined ? [] : [board.offer])]
+    };
+};
+
+describe('what a two-handed view can never tell', () =>
+{
+    it('leaves the Hâkem twelve cards and the dealer fourteen they cannot place, through every trick', () =>
+    {
+        const faults: string[] = [];
+        let starts = 0;
+
+        for (const seed of [3, 13, 23, 33])
+        {
+            const dice = seeded(seed + 1);
+            let state = opened(2, seed);
+            let round = -1;
+            let seen = [new Set<number>(), new Set<number>()];
+
+            for (let action = 0; action < 400 && hokmEngine.finish(state) === null; action += 1)
+            {
+                if (state.round !== round)
+                {
+                    round = state.round;
+                    seen = [new Set<number>(), new Set<number>()];
+                }
+
+                for (const reader of [0, 1])
+                {
+                    const { board, cards } = shownTo(state, reader);
+
+                    for (const card of [...cards, ...(board.glimpse === undefined ? [] : [board.glimpse])])
+                    {
+                        seen[reader].add(card);
+                    }
+                }
+
+                if (state.phase === 'tricks')
+                {
+                    const hakem = state.hakem;
+                    const dealer = 1 - hakem;
+
+                    if (state.trick.length === 0 && state.tricks.every((count) => count === 0))
+                    {
+                        starts += 1;
+
+                        if (seen[hakem].size !== 27 || seen[dealer].size !== 25 || [...seen[hakem]].some((card) => seen[dealer].has(card)))
+                        {
+                            faults.push(`seed ${ seed } round ${ round }: saw ${ seen[hakem].size } and ${ seen[dealer].size } at the first lead`);
+                        }
+                    }
+
+                    for (const reader of [hakem, dealer])
+                    {
+                        const gap = DECK.filter((card) => !seen[reader].has(card) && !state.hands[1 - reader].includes(card)).length;
+
+                        if (gap !== (reader === hakem ? 12 : 14))
+                        {
+                            faults.push(`seed ${ seed } action ${ action }: seat ${ reader } cannot place ${ gap }`);
+                        }
+                    }
+                }
+
+                state = step(state, hokmEngine.autoplay(state, hokmEngine.turnOf(state)!, dice)!, dice);
+            }
+        }
+
+        expect(faults.slice(0, 5)).toEqual([]);
+        expect(starts).toBeGreaterThan(4);
+    });
+});
+
+describe('nothing put face down reaches any payload', () =>
+{
+    it('never shows a card put face down again, but to the drawer who looked at it, and logs only who did what', () =>
+    {
+        const faults: string[] = [];
+
+        for (const seed of [5, 15, 25])
+        {
+            const dice = seeded(seed + 2);
+            let state = opened(2, seed);
+            let round = state.round;
+            let played = new Set<number>();
+
+            for (let action = 0; action < 400 && hokmEngine.finish(state) === null; action += 1)
+            {
+                if (state.round !== round)
+                {
+                    round = state.round;
+                    played = new Set<number>();
+                }
+
+                const live = new Set([...state.hands.flat(), ...state.stock, ...(state.offer === null ? [] : [state.offer])]);
+                const down = new Set(DECK.filter((card) => !live.has(card) && !played.has(card)));
+
+                for (const reader of [0, 1, null])
+                {
+                    const { board, cards } = shownTo(state, reader);
+                    const leaked = cards.filter((card) => down.has(card));
+
+                    if (leaked.length > 0)
+                    {
+                        faults.push(`seed ${ seed } action ${ action }: reader ${ reader } shown ${ leaked.join(',') } after it went down`);
+                    }
+
+                    if ((board.glimpse ?? null) !== (reader === null ? null : state.glimpse[reader]))
+                    {
+                        faults.push(`seed ${ seed } action ${ action }: reader ${ reader } shown a glimpse that is not theirs`);
+                    }
+                }
+
+                const outcome = hokmEngine.apply(state, hokmEngine.autoplay(state, hokmEngine.turnOf(state)!, dice)!, dice);
+
+                if (!outcome.ok)
+                {
+                    faults.push(`seed ${ seed } action ${ action }: ${ outcome.reason }`);
+                    break;
+                }
+
+                const logs = [0, 1, null].map((reader) => JSON.stringify(matchLog.parse(hokmEngine.log(outcome.events, reader))));
+
+                if (new Set(logs).size !== 1)
+                {
+                    faults.push(`seed ${ seed } action ${ action }: the log differs by reader`);
+                }
+
+                const log = hokmEngine.log(outcome.events, null);
+
+                for (const move of log.kind === 'hokm' ? log.moves : [])
+                {
+                    if ((move.e === 'discard' || move.e === 'draw') && Object.keys(move).sort().join() !== 'e,seat')
+                    {
+                        faults.push(`seed ${ seed } action ${ action }: a ${ move.e } logged ${ Object.keys(move).join() }`);
+                    }
+
+                    if (move.e === 'card' && move.card !== undefined)
+                    {
+                        played.add(move.card);
+                    }
+                }
+
+                state = outcome.state as HokmState;
+            }
+        }
+
+        expect(faults.slice(0, 5)).toEqual([]);
+    });
+});
+
 describe('the hokm wire', () =>
 {
+    it('carries a two-handed board in the discard and the draw without dropping a field', () =>
+    {
+        const start = opened(2, 29);
+        const called = step(start, { kind: 'trump', seat: start.hakem, suit: 'clubs' });
+        const put = step(called, hokmEngine.legal(called, called.hakem)[0]);
+        const drawing = step(put, hokmEngine.legal(put, put.turn)[0]);
+        const kept = step(drawing, { kind: 'keep', seat: drawing.turn });
+
+        for (const [state, reader] of [[called, called.hakem], [drawing, drawing.turn], [kept, drawing.turn], [kept, kept.turn]] as const)
+        {
+            const board = hokmEngine.view(state, reader);
+
+            expect(matchBoard.parse(board)).toEqual(board);
+        }
+    });
+
+    it('reads the draw verbs, and a discard only with its cards', () =>
+    {
+        expect(hokmEngine.parse({ kind: 'hokm', verb: 'discard', cards: [3, 9, 40] }, 1)).toEqual({ kind: 'discard', seat: 1, cards: [3, 9, 40] });
+        expect(hokmEngine.parse({ kind: 'hokm', verb: 'keep' }, 0)).toEqual({ kind: 'keep', seat: 0 });
+        expect(hokmEngine.parse({ kind: 'hokm', verb: 'reject' }, 0)).toEqual({ kind: 'reject', seat: 0 });
+        expect(hokmEngine.parse({ kind: 'hokm', verb: 'discard' }, 0)).toBeNull();
+        expect(hokmEngine.parse({ kind: 'hokm', verb: 'reject', card: 7 }, 0)).toBeNull();
+        expect(hokmEngine.parse({ kind: 'hokm', verb: 'keep', cards: [7, 8] }, 0)).toBeNull();
+    });
+
+    it('refuses anything but two or three cards face down, and a card off the deck', () =>
+    {
+        expect(hokmPlay.safeParse({ kind: 'hokm', verb: 'discard', cards: [1, 2, 3] }).ok).toBe(true);
+        expect(hokmPlay.safeParse({ kind: 'hokm', verb: 'discard', cards: [1, 2] }).ok).toBe(true);
+        expect(hokmPlay.safeParse({ kind: 'hokm', verb: 'discard', cards: [1, 2, 3, 4] }).ok).toBe(false);
+        expect(hokmPlay.safeParse({ kind: 'hokm', verb: 'discard', cards: [1] }).ok).toBe(false);
+        expect(hokmPlay.safeParse({ kind: 'hokm', verb: 'discard', cards: [1, 2, 52] }).ok).toBe(false);
+    });
+
     it('tells every reader who stopped the match and how, beside the finish it caused', () =>
     {
         for (const reason of ['resign', 'left', 'timeout'] as const)
@@ -272,7 +567,8 @@ describe('the hokm wire', () =>
             points: [0, 0],
             target: 7,
             round: 1,
-            needed: 7
+            needed: 7,
+            full: 13
         });
 
         expect(Object.keys(parsed.seats[0]).sort()).toEqual(['held', 'out', 'seat', 'side', 'tricks']);

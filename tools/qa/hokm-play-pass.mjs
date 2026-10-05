@@ -54,8 +54,8 @@ const SEATS = ['dana.w', 'mina'];
 /**
  * How many cards are played by CLICKING before the rest of the match goes over the api.
  *
- * Two-handed hokm is twenty-five tricks a hand and up to thirteen hands, which is far too long to
- * click through; what has to be proved by clicking is that a card can be played at all, that the
+ * Two-handed hokm is a draw of twenty-one cards and up to thirteen tricks a hand, over as many as
+ * thirteen hands, which is far too long to click through; what has to be proved by clicking is that a card can be played at all, that the
  * other browser sees it, and that the trick gathers. Six cards is three complete tricks at two
  * players - enough for a trick to be taken, gathered, and led again.
  */
@@ -279,25 +279,116 @@ try
         await offered.click();
         await caller.page.waitForTimeout(SETTLE_MS);
 
-        const filled = await hand(caller.page);
+        await other.page.waitForTimeout(SETTLE_MS);
 
-        record('calling it fills the hand', filled.length === 25, `${ filled.length } cards`);
+        const filled = await hand(other.page);
+
+        record('the other player holds five too, from the same deal', filled.length === 5, `${ filled.length } cards`);
 
         const seen = await other.page.evaluate(() =>
             document.querySelector('main')?.textContent?.includes('Clubs') === true);
 
         record('and the other browser is told what trump is', seen);
-
-        /**
-         * Asked HERE rather than at the deal, and asked of the browser that did not call trump.
-         *
-         * At two players the deal pauses with cards in the Hâkem's hand and nowhere else, so before
-         * this moment the other browser holds no card to measure - a first version asked anyway and
-         * passed or failed on which fixture happened to be Hâkem.
-         */
-        await other.page.waitForTimeout(SETTLE_MS);
-
         record('the deck the cards are cut from really loaded', await loaded(other.page, '.card-face') > 0);
+        record('the stock is on the felt with its count', await caller.page.evaluate(() =>
+            document.querySelector('main .hokm-stock')?.textContent?.includes('42') === true));
+    }
+
+    // ---------------------------------------------------------------- 3b. the cards put face down
+    console.log('\n[3b] the cards put face down, chosen by pressing them');
+    {
+        const board = await (await dana.request.get(`${ BASE }/api/matches/${ match }`)).json();
+        const caller = board.view.hakem === board.mine ? dana : mina;
+        const other = caller === dana ? mina : dana;
+
+        for (const [who, count, waiting] of [[caller, 3, other], [other, 2, caller]])
+        {
+            await who.page.waitForTimeout(SETTLE_MS);
+
+            const confirm = who.page.getByRole('button', { name: `Put these ${ count } face down` }).first();
+
+            record(`the seat putting ${ count } down is asked to choose, and cannot confirm yet`, await confirm.isDisabled().catch(() => false));
+            record('and the other seat is given nothing to press', await pressable(waiting.page, /face down/) === null);
+
+            const held = await hand(who.page);
+
+            for (const one of held.slice(0, count))
+            {
+                await who.page.getByRole('button', { name: one.says, exact: true }).first().click();
+            }
+
+            record(`choosing exactly ${ count } lets it confirm`, await confirm.isEnabled().catch(() => false));
+
+            await confirm.click();
+            await who.page.waitForTimeout(SETTLE_MS);
+
+            const left = await hand(who.page);
+
+            record(`putting them down leaves ${ 5 - count } in the hand`, left.length === 5 - count, `${ left.length } cards`);
+        }
+    }
+
+    // ---------------------------------------------------------------- 3c. the draw
+    console.log('\n[3c] drawing, with the offer in the drawer\'s browser and nowhere else');
+    {
+        let pressed = 0;
+
+        for (let attempt = 0; attempt < 12 && pressed < 4; attempt += 1)
+        {
+            const state = await (await dana.request.get(`${ BASE }/api/matches/${ match }`)).json();
+
+            if (state.view.phase !== 'draw') { break; }
+
+            const drawer = state.view.turn === state.mine ? dana : mina;
+            const waiting = drawer === dana ? mina : dana;
+
+            await drawer.page.waitForTimeout(SETTLE_MS);
+
+            const keep = await pressable(drawer.page, /^Keep the /);
+            const next = await pressable(drawer.page, /^Take the next card$/);
+
+            record(`draw ${ pressed + 1 }: the drawer is shown the card and both choices`, keep !== null && next !== null);
+            record(`draw ${ pressed + 1 }: the other browser is shown neither`,
+                await pressable(waiting.page, /^Take the next card$/) === null
+                    && await waiting.page.evaluate(() => document.querySelector('main .hokm-draw') === null));
+
+            const before = (await hand(drawer.page)).length;
+
+            await (pressed % 2 === 0 ? keep : next)?.click();
+            await drawer.page.waitForTimeout(SETTLE_MS);
+
+            record(`draw ${ pressed + 1 }: the hand grows by one`, (await hand(drawer.page)).length === before + 1);
+
+            pressed += 1;
+        }
+
+        record('draws were made by pressing Keep and Take the next card', pressed === 4, `${ pressed } draws`);
+
+        const players = {};
+
+        for (const who of [dana, mina])
+        {
+            players[(await (await who.request.get(`${ BASE }/api/matches/${ match }`)).json()).mine] = who;
+        }
+
+        for (let step = 0; step < 40; step += 1)
+        {
+            const state = await (await dana.request.get(`${ BASE }/api/matches/${ match }`)).json();
+
+            if (state.view.phase !== 'draw') { break; }
+
+            await players[state.view.turn].request.post(`${ BASE }/api/matches/${ match }/play`, {
+                data: { key: `draw-${ step }`, rev: state.rev, play: { kind: 'hokm', verb: 'keep' } }
+            });
+        }
+
+        const done = await (await dana.request.get(`${ BASE }/api/matches/${ match }`)).json();
+
+        record('the draw ends on thirteen each, with the Hâkem to lead', done.view.phase === 'tricks'
+            && done.view.seats.every((row) => row.held === 13) && done.view.turn === done.view.hakem,
+            `${ done.view.phase }, ${ done.view.seats.map((row) => row.held).join('/') }`);
+
+        await dana.page.waitForTimeout(SETTLE_MS);
     }
 
     // ---------------------------------------------------------------- 4. cards played by clicking
@@ -415,7 +506,11 @@ try
             const mine = await (await who.request.get(`${ BASE }/api/matches/${ match }`)).json();
             const play = mine.view.phase === 'trump'
                 ? { kind: 'hokm', verb: 'trump', suit: 'spades' }
-                : { kind: 'hokm', verb: 'card', card: mine.view.plays[0] };
+                : mine.view.phase === 'discard'
+                    ? { kind: 'hokm', verb: 'discard', cards: mine.view.hand.slice(0, mine.view.discard) }
+                    : mine.view.phase === 'draw'
+                        ? { kind: 'hokm', verb: 'keep' }
+                        : { kind: 'hokm', verb: 'card', card: mine.view.plays[0] };
 
             const answer = await who.request.post(`${ BASE }/api/matches/${ match }/play`, {
                 data: { key: `hokm-play-pass-${ key++ }`, play }

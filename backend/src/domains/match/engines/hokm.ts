@@ -1,6 +1,6 @@
 import { suitOf, type Suit } from '../cards/cards.ts';
 import { legalCards } from '../hokm/cards.ts';
-import { apply, autoplay, create, dealerSeat, legalMoves, SEATS } from '../hokm/engine.ts';
+import { apply, autoplay, create, dealerSeat, discardDue, legalMoves, SEATS } from '../hokm/engine.ts';
 import { TRIPLE_SWEEP, trickCount, winningTricks } from '../hokm/scoring.ts';
 import { seatsOfSide, sideCount, sideOf, type HokmAction, type HokmEvent, type HokmState } from '../hokm/state.ts';
 import type { Draws, Ending, Engine, ForfeitReason, Placement, TableConfig, Tally } from '../engine.ts';
@@ -19,9 +19,10 @@ const gone = (state: HokmState, side: number) => seatsOfSide(side, state.seats).
  * and an adapter is plumbing.
  *
  * **`view` is the reason this game needed the seam at all.** Ludo could have shipped with one
- * payload for everybody because a ludo board is face up; a hokm hand is not, and the trump pause
- * means that for the first action of every hand there is exactly one player in the world entitled
- * to see anything. That is composed here, per seat, and never filtered after the fact.
+ * payload for everybody because a ludo board is face up; a hokm hand is not, the trump pause at three
+ * and four means that for the first action of every hand exactly one player is entitled to see
+ * anything, and the two-handed draw adds an offer and a glimpse only the drawer may see. That is
+ * composed here, per seat, and never filtered after the fact.
  */
 export const hokmEngine: Engine<HokmState, HokmAction> = {
     id: 'hokm',
@@ -48,6 +49,16 @@ export const hokmEngine: Engine<HokmState, HokmAction> = {
         if (play.verb === 'trump')
         {
             return play.suit === undefined ? null : { kind: 'trump', seat, suit: play.suit as Suit };
+        }
+
+        if (play.verb === 'discard')
+        {
+            return play.cards === undefined || play.card !== undefined ? null : { kind: 'discard', seat, cards: [...play.cards] };
+        }
+
+        if (play.verb === 'keep' || play.verb === 'reject')
+        {
+            return play.card !== undefined || play.cards !== undefined ? null : { kind: play.verb, seat };
         }
 
         return play.card === undefined ? null : { kind: 'card', seat, card: play.card };
@@ -118,7 +129,12 @@ export const hokmEngine: Engine<HokmState, HokmAction> = {
 
     engagement: (seats: number) => ({ verbs: ['card'], after: seats === 3 ? TRIPLE_SWEEP : winningTricks(seats) }),
 
-    turnKey: (state: HokmState) => `${ state.round }.${ state.tricks.reduce((total, count) => total + count, 0) }`,
+    turnKey: (state: HokmState) =>
+    {
+        const played = `${ state.round }.${ state.tricks.reduce((total, count) => total + count, 0) }`;
+
+        return state.seats === 2 && state.phase !== 'tricks' ? `${ played }.${ state.phase }.${ state.stock.length }` : played;
+    },
 
     view: (state: HokmState, seat: number | null): MatchBoard =>
     {
@@ -150,12 +166,20 @@ export const hokmEngine: Engine<HokmState, HokmAction> = {
             points: [...state.points],
             target: state.target,
             round: state.round,
-            needed: state.seats === 3 ? trickCount(3) : winningTricks(state.seats)
+            needed: state.seats === 3 ? trickCount(3) : winningTricks(state.seats),
+            full: trickCount(state.seats)
         };
 
+        const drawing = seat !== null && seat === state.turn;
+        const due = state.phase === 'discard' && drawing ? { discard: discardDue(state, seat) } : {};
+        const offer = state.phase === 'draw' && drawing && state.offer !== null ? { offer: state.offer } : {};
+        const glimpse = seat === null || (state.glimpse[seat] ?? null) === null ? {} : { glimpse: state.glimpse[seat] as number };
+        const stock = state.seats === 2 && state.phase !== 'tricks' ? { stock: state.stock.length } : {};
+        const composed: MatchBoard = { ...board, ...due, ...offer, ...glimpse, ...stock };
+
         const gathered = state.took === null
-            ? board
-            : { ...board, took: { lead: state.took.lead, cards: [...state.took.cards], seat: state.took.seat } };
+            ? composed
+            : { ...composed, took: { lead: state.took.lead, cards: [...state.took.cards], seat: state.took.seat } };
 
         return state.trump === null ? gathered : { ...gathered, trump: state.trump };
     },
@@ -164,8 +188,9 @@ export const hokmEngine: Engine<HokmState, HokmAction> = {
      * Every event, to everybody, and here that is a fact about the LEDGER rather than a filter.
      *
      * A card is played face up, a trump is called out loud, a trick is taken in front of the table
-     * and a hand is written on a score sheet. The one private thing in hokm is the deal, and the
-     * deal is not an event - so there is nothing in this stream to withhold from anybody, and
+     * and a hand is written on a score sheet. The private things in hokm are the deal, the draw and
+     * the cards put face down, and none of them is an event - a discard or a draw names only the
+     * seat - so there is nothing in this stream to withhold from anybody, and
      * `hokm-seam.spec.ts` asserts a whole match's log holds no card its player did not play.
      */
     log: (events: readonly unknown[]): MatchLog => ({

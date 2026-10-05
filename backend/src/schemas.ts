@@ -1249,13 +1249,15 @@ export const ludoBoard = object({
  * as a flag. What the others hold is a COUNT, which is what you can see across a real table, and
  * the trick in front of everybody is face up because it is face up.
  *
- * During `trump` every count but the Hâkem's is zero, because the deal has not happened: the
- * privacy is in the state rather than in this projection, so a careless reader has nothing to leak.
+ * During `trump` at three and four every count but the Hâkem's is zero, because the deal has not
+ * happened: the privacy is in the state rather than in this projection, so a careless reader has
+ * nothing to leak. At two, `offer` and `glimpse` reach only the drawer, the stock is a count, and
+ * nothing describes a card put face down.
  */
 export const hokmBoard = object({
     kind: literal('hokm'),
 
-    phase: enumOf(['trump', 'tricks']),
+    phase: enumOf(['trump', 'discard', 'draw', 'tricks']),
 
     hakem: number(),
 
@@ -1301,7 +1303,12 @@ export const hokmBoard = object({
     /** Points that win the match, and tricks that win a hand - both from the deck and the table. */
     target: number(),
     round: number(),
-    needed: number()
+    needed: number(),
+    full: number({ int: true, min: 13, max: 17 }),
+    offer: number({ int: true, min: 0, max: 51 }).optional(),
+    glimpse: number({ int: true, min: 0, max: 51 }).optional(),
+    stock: number({ int: true, min: 0, max: 42 }).optional(),
+    discard: number({ int: true, min: 2, max: 3 }).optional()
 });
 
 export const backgammonBoard = object({
@@ -1453,7 +1460,7 @@ export const ludoLog = object({
  * readable by asking for revision zero.
  */
 export const hokmMove = object({
-    e: enumOf(['trump', 'card', 'trick', 'hand', 'deal', 'forfeit', 'finish']),
+    e: enumOf(['trump', 'card', 'trick', 'hand', 'deal', 'discard', 'draw', 'forfeit', 'finish']),
     seat: number().optional(),
     suit: string().optional(),
     card: number().optional(),
@@ -1468,9 +1475,10 @@ export const hokmMove = object({
  * Hokm's log needs no filtering and that is a property of what is LOGGED, not of the filter.
  *
  * A card is played face up, a trump is declared out loud, a trick is taken in front of everybody
- * and a hand is scored on a sheet - every event here is public at a real table. The deal is not an
- * event at all, which is what keeps the one private thing in the game out of an append-only ledger
- * that `since` hands back from revision zero forever.
+ * and a hand is scored on a sheet - every event here is public at a real table. The deal, the draw
+ * and the cards put face down are not events - a discard or a draw names only the seat - which keeps
+ * the private things in the game out of an append-only ledger that `since` hands back from revision
+ * zero forever.
  */
 export const hokmLog = object({
     kind: literal('hokm'),
@@ -1583,7 +1591,9 @@ export const ludoPlay = object({
 });
 
 /**
- * What a player asks a hokm board to do: name the trump, or play one of their own cards.
+ * What a player asks a hokm board to do: name the trump, put cards face down, keep or pass a drawn
+ * card, or play one of their own cards. Keep and pass name no card, because the payload is stored as
+ * asked and a pass naming its card would write a face-down card into the ledger.
  *
  * `card` is bounded to the deck here rather than trusted, for the reason every bounded column in
  * this file states - an out-of-range number reaching Postgres comes back as a 500 that any signed-in
@@ -1591,9 +1601,10 @@ export const ludoPlay = object({
  */
 export const hokmPlay = object({
     kind: literal('hokm'),
-    verb: enumOf(['trump', 'card']),
+    verb: enumOf(['trump', 'card', 'discard', 'keep', 'reject']),
     suit: enumOf(['clubs', 'diamonds', 'hearts', 'spades']).optional(),
-    card: number({ int: true, min: 0, max: 51 }).optional()
+    card: number({ int: true, min: 0, max: 51 }).optional(),
+    cards: array(number({ int: true, min: 0, max: 51 }), { min: 2, max: 3 }).optional()
 });
 
 export const backgammonHop = object({
