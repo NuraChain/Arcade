@@ -461,8 +461,6 @@ export const useRealtime = createStore((): RealtimeApi =>
         close = active.open({
             onOpen()
             {
-                const back = everConnected();
-
                 connectedAt = runtime().clock.now();
                 setEverConnected(true);
                 announce('connected');
@@ -473,12 +471,9 @@ export const useRealtime = createStore((): RealtimeApi =>
                     armProbe();
                 }
 
-                if (back)
+                for (const scope of SCOPES)
                 {
-                    for (const scope of SCOPES)
-                    {
-                        nudge(scope, undefined);
-                    }
+                    nudge(scope, undefined);
                 }
             },
 

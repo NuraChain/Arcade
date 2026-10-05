@@ -1166,10 +1166,20 @@ saw the old state.
 and the request leaves the bell. It used to ring the plain doorbell, which left the two new friends
 invisible to each other's presence until a reconnect.
 
-**Coming back re-reads everything.** Every connection after the first rings every scope once with no
-id, whether the socket dropped or slept behind a hidden tab. A store answers a bare scope as "read it
-all again", which is what catches every doorbell that rang while nobody was listening - only three
-stores re-read after a drop before, and none after an idle.
+**Every connection re-reads everything, the first one included.** Each one rings every scope once
+with no id - on boot, after a drop, after a sleep behind a hidden tab. A store answers a bare scope as
+"read it all again", which is what catches every doorbell that rang while nobody was listening - only
+three stores re-read after a drop before, and none after an idle.
+
+The first connection is not exempt, because it is never first. The stores read over HTTP the moment
+the shell renders, on a pooled connection, while the socket is a new one: the server binds it about
+3ms after the upgrade, but a browser opening `ws://localhost` spends about 300ms first (the api listens
+on 127.0.0.1 only, so the attempt on `::1` has to fail), and no deployment makes that gap zero. A
+doorbell rung in between reached no socket. The realtime pass blocked `omid.k` as
+soon as his chats list had painted after a page load, the hub published both chat doorbells 150ms
+later, his socket bound 130ms after that, and the two threads the block hid stayed in his list until a
+reload. A second tab is the same window, and a server-side replay would miss it: the account already
+has a socket, so nothing looks missed. The price is one re-read per store per page load.
 
 **A voice call HOLDS the socket.** A hidden tab lets its socket go after a minute, and the server
 empties the voice room when the socket closes - so switching away from a call hung it up for good.

@@ -198,6 +198,7 @@ describe('the notifications store', () =>
 
         useRealtime().start();
         socket.accept();
+        clock.advance(NUDGE_WINDOW_MS);
         await notifications.refresh();
         server.calls = [];
 

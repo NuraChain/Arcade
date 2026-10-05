@@ -254,6 +254,7 @@ describe('the groups store', () =>
 
         useRealtime().start();
         socket.accept();
+        clock.advance(NUDGE_WINDOW_MS);
         await groups.refresh();
         server.calls = [];
 
@@ -272,6 +273,7 @@ describe('the groups store', () =>
 
         useRealtime().start();
         socket.accept();
+        clock.advance(NUDGE_WINDOW_MS);
         await groups.refresh();
         server.calls = [];
 

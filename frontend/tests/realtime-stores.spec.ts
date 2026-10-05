@@ -57,6 +57,7 @@ beforeEach(() =>
 
     useRealtime().start();
     socket.accept();
+    clock.advance(NUDGE_WINDOW_MS);
 });
 
 afterEach(() =>
@@ -199,6 +200,26 @@ describe('the chat doorbell', () =>
         expect(server.calls).toContain('chat.list');
         expect(server.calls).not.toContain('chat.messages');
 
+        stop();
+    });
+
+    it('drops a thread a block took away between reading the list and the socket standing up', async () =>
+    {
+        useRealtime().reset();
+        socket.reset();
+
+        const chat = useChat();
+        const stop = chat.start();
+        useRealtime().start();
+
+        await chat.refresh();
+        await vi.waitFor(() => expect(chat.conversations().some((one) => one.id === 'c-reza')).toBe(true));
+        server.conversations = server.conversations.filter((row) => row.id !== 'c-reza');
+
+        socket.accept();
+        clock.advance(NUDGE_WINDOW_MS);
+
+        await vi.waitFor(() => expect(chat.conversations().some((one) => one.id === 'c-reza')).toBe(false));
         stop();
     });
 

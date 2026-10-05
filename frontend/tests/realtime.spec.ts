@@ -251,6 +251,22 @@ describe('the realtime store', () =>
         expect(socket.opens, 'a call in a background tab stayed hung up').toBe(2);
     });
 
+    it('rings every doorbell once when it first stands up, because every store read before it was listening', () =>
+    {
+        const live = useRealtime();
+        const heard: string[] = [];
+        live.onNudge((scope, id) => heard.push(`${ scope }:${ id ?? '' }`));
+        live.start();
+
+        clock.advance(NUDGE_WINDOW_MS);
+        expect(heard, 'nothing rings while the socket is still connecting').toEqual([]);
+
+        socket.accept();
+        clock.advance(NUDGE_WINDOW_MS);
+
+        expect(heard.sort()).toEqual(['chat:', 'game:', 'me:', 'social:', 'table:']);
+    });
+
     it('rings every doorbell once when it comes back from idle, so nothing missed while away stays missed', () =>
     {
         const live = useRealtime();
@@ -258,9 +274,8 @@ describe('the realtime store', () =>
         live.onNudge((scope, id) => heard.push(`${ scope }:${ id ?? '' }`));
         live.start();
         socket.accept();
-
         clock.advance(NUDGE_WINDOW_MS);
-        expect(heard, 'the first connection is not a return').toEqual([]);
+        heard.length = 0;
 
         hide();
         clock.advance(IDLE_MS + 1000);
@@ -276,6 +291,7 @@ describe('the realtime store', () =>
         const live = useRealtime();
         live.start();
         socket.accept();
+        clock.advance(NUDGE_WINDOW_MS);
         socket.drop();
 
         window.dispatchEvent(new Event('online'));
@@ -344,10 +360,11 @@ describe('what arrives on the socket', () =>
     {
         const live = useRealtime();
         const heard = vi.fn();
-        live.onNudge(heard);
 
         live.start();
         socket.accept();
+        clock.advance(NUDGE_WINDOW_MS);
+        live.onNudge(heard);
 
         socket.deliver({ v: 1, t: 'nudge', n: 1, scope: 'chat', id: 'c-1', at: 0 });
         socket.deliver({ v: 1, t: 'nudge', n: 2, scope: 'chat', id: 'c-1', at: 0 });
@@ -365,10 +382,11 @@ describe('what arrives on the socket', () =>
     {
         const live = useRealtime();
         const heard = vi.fn();
-        live.onNudge(heard);
 
         live.start();
         socket.accept();
+        clock.advance(NUDGE_WINDOW_MS);
+        live.onNudge(heard);
 
         socket.deliver({ v: 1, t: 'nudge', n: 1, scope: 'chat', id: 'c-1', at: 0 });
         socket.deliver({ v: 1, t: 'nudge', n: 2, scope: 'chat', id: 'c-2', at: 0 });
