@@ -1,11 +1,13 @@
-import { CELL, HOME_SCALE, MARGIN, pickNear, stackSpot } from '../layout.ts';
+import { BLOCK, CELL, HOME_SCALE, MARGIN, pickNear, stackSpot } from '../layout.ts';
 import { createSound, type SoundHandle } from '../sound.ts';
-import { FINISHED, YARD, pathBetween, type LudoColour } from './path.ts';
+import { FINISHED, RING_STEPS, YARD, pathBetween, type LudoColour } from './path.ts';
 import type { BoardHandle, BoardOptions, BoardToken, BoardView } from '../bridge.ts';
 
 const C = CELL * 100;
 
 const DROP = 0.10;
+
+const FRONT = 30;
 
 const STEP_MS = 120;
 
@@ -29,6 +31,7 @@ interface Spot
     x: number;
     y: number;
     scale: number;
+    front?: boolean;
 }
 
 interface Piece
@@ -128,8 +131,8 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
             return { ...base, scale: 1 };
         }
 
-        const together = view.tokens
-            .filter((one) => one.at !== YARD && one.at !== FINISHED && one.col === token.col && one.row === token.row)
+        const around = view.tokens.filter((one) => one.at !== YARD && one.at !== FINISHED && one.col === token.col && one.row === token.row);
+        const together = around
             .map((one) => one.key)
             .sort((a, b) =>
             {
@@ -138,17 +141,19 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
 
                 return seatA - seatB || pieceA - pieceB;
             });
+        const index = Math.max(0, together.indexOf(token.key));
+        const block = around.length === BLOCK.length && around.every((one) => one.colour === token.colour && one.at < RING_STEPS);
+        const place = block ? BLOCK[index] : stackSpot(index, together.length);
 
-        const place = stackSpot(Math.max(0, together.indexOf(token.key)), together.length);
-
-        return { x: base.x + place.dx * C, y: base.y + place.dy * C, scale: place.scale };
+        return { x: base.x + place.dx * C, y: base.y + place.dy * C, scale: place.scale, front: place.front === true };
     };
 
     const place = (piece: Piece, spot: Spot) =>
     {
         piece.root.style.translate = at(spot);
         piece.root.style.scale = String(spot.scale);
-        piece.root.style.zIndex = String(Math.round(spot.y * 10));
+        piece.root.style.zIndex = String(Math.round(spot.y * 10) + (spot.front === true ? FRONT : 0));
+        piece.root.toggleAttribute('data-stacked', spot.front === true);
     };
 
     const dress = (piece: Piece) =>
@@ -163,7 +168,7 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
     const mint = (token: BoardToken) =>
     {
         const node = element('div', 'lp absolute inset-s-0 inset-bs-0 inline-0 block-0', root);
-        const shadow = element('img', `lp-shadow ${ SPRITE } block inset-s-[calc(var(--c)*-0.753)] inset-bs-[calc(var(--c)*-0.2588)] inline-[calc(var(--c)*1.506)] block-[calc(var(--c)*0.753)] opacity-[0.6] origin-[50%_34.375%] ${ STILL }`, node);
+        const shadow = element('img', `lp-shadow ${ SPRITE } block [.lp[data-stacked]_&]:hidden inset-s-[calc(var(--c)*-0.753)] inset-bs-[calc(var(--c)*-0.2588)] inline-[calc(var(--c)*1.506)] block-[calc(var(--c)*0.753)] opacity-[0.6] origin-[50%_34.375%] ${ STILL }`, node);
         const ring = element('span', `${ SPRITE } hidden inset-s-[calc(var(--c)*-0.6)] inset-bs-[calc(var(--c)*-0.3)] inline-[calc(var(--c)*1.2)] block-[calc(var(--c)*0.6)] bg-[radial-gradient(closest-side,rgb(255_255_255/0.3),rgb(255_255_255/0.3)_40%,transparent_42%)] [.lp[data-movable]_&]:block`, node);
         const lift = element('span', `lp-lift absolute inset-s-0 inset-bs-0 ${ STILL } [.lb[data-still]_.lp[data-movable]_&]:[translate:0_calc(var(--c)*-0.06)]`, node);
         const pawn = element('img', `lp-pawn ${ SPRITE } block inset-s-[calc(var(--c)*-0.8435)] inset-bs-[calc(var(--c)*-1.3114)] inline-[calc(var(--c)*1.687)] block-[calc(var(--c)*1.687)] origin-[50%_77.73%] [.lp[data-movable]_&]:pointer-events-auto [.lp[data-movable]_&]:cursor-pointer [.lp[data-movable]:hover_&]:[filter:brightness(1.08)] ${ STILL }`, lift);

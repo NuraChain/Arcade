@@ -443,17 +443,22 @@ stops the client's fallback disagreeing.
 
 **The ruleset is written down, and four of its clauses are where a generic Ludo goes wrong.** It is
 Variant B - the common Iranian rules, written out clause by clause with a source or a "house rule"
-label for each in `docs/games/04-ludo.md`, which also lists the two open choices - and every one of
-these was wrong in the first engine:
+label for each in `docs/games/04-ludo.md`, which also lists what is still open - and the clauses
+below were each wrong in the first engine or changed by the owner since:
 
-- **Own tokens share a square and never block each other**, on the track and in the home lane alike.
-  There are no barriers; a token moves through an occupied square freely.
+- **Two tokens of one colour make a block** (owner, 2026-10-05, D28, replacing Variant B's "stacks
+  never block"). No other colour may land on it or pass it, it cannot be captured, and no third token
+  joins it; its owner may pass it and break it up. One `obstacle` in `ludo/board.ts` says what stops a
+  move, and the engine and the browser's helpers both read it.
+- **Your start square holds one of your own tokens at a time** (D28, kept by the owner): no token
+  comes out while one of yours stands there. Coming out still captures an opponent - or an opponent
+  block - standing on your start (D27).
 - **A six with no legal move still earns the extra roll.** Only a non-six with nothing to do ends the
   turn.
 - **There is no "three tries to find a six".** A full yard rolling one to five simply passes. That
   rule belongs to other variants and was invented here.
-- **Entering is a choice**, not an obligation: any yard token may come out on any six, with no
-  requirement to finish a previous one first.
+- **Entering is a choice**, not an obligation: any yard token may come out on any six while your
+  start square is free of your own tokens, with no requirement to finish a previous one first.
 
 The rest is the ordinary game and is worth stating because each half is a test: capture happens on
 exact landing only and never by passing over; the eight starred squares send nobody home, except
@@ -953,7 +958,8 @@ was a smudge at phone size and a sticker at desktop size, and the yard, the plat
 words already say whose piece it is.
 
 **A finished pawn stays on the board**, at 0.62 in its colour's triangle (`HOME_SLOTS`), where it used
-to vanish from the view entirely. Two to four pawns on one square stand side by side (`STACKS`), and
+to vanish from the view entirely. Two pawns of one colour on a ring square are a block and are drawn
+one on the other; pawns that share a square otherwise stand side by side (`STACKS`), and
 `game.spec.ts` holds every footprint inside its tile - which is how it found that the art spec's own
 two-pawn layout overhung the square.
 

@@ -11,16 +11,17 @@
  * `apply` never throws. A refusal is a value, because the timeout job folds actions over a state
  * and a function that throws for ordinary control flow is one you cannot fold.
  *
- * The ruleset is the one written down for this product - Variant B, the common Iranian rules - and
- * four of its clauses are where a generic Ludo implementation goes wrong. Own pieces MAY share a
- * square and never block each other, on the track or in the home lane. A six with no legal move
+ * The ruleset is the one written down for this product (`docs/games/04-ludo.md`) - Variant B, the
+ * common Iranian rules, with the owner's decisions of 2026-10-05. Two of a player's own tokens on a
+ * ring square are a block (D28): no opponent lands on it or passes it, its owner passes freely, no
+ * third token joins, and a start square holds one token of its own colour. A six with no legal move
  * still earns the extra roll; only a non-six with nothing to do ends the turn. There is no "three
  * tries to find a six" - a full yard rolling one to five simply passes. And entering is a choice
  * among the legal moves, with any yard token eligible on any six.
  *
  * The rest: capture on exact landing only, never by passing over; eight starred squares where no
  * landing sends anybody home, except that a token coming out of its yard sends home every opponent
- * on its own start square (D27); an exact count into the five home cells, with an overshoot simply absent
+ * on its own start square, a block included (D27); an exact count into the five home cells, with an overshoot simply absent
  * from the legal set; three consecutive sixes end the turn and the third grants no roll; a
  * capture or a finish on a six still earns the roll.
  */
@@ -32,6 +33,7 @@ import {
     YARD,
     capturesAt,
     coloursFor,
+    obstacle,
     ringIndex,
     type LudoColour
 } from './board.ts';
@@ -148,7 +150,9 @@ export function legalMoves(state: LudoState): number[]
 
     for (let piece = 0; piece < player.pieces.length; piece += 1)
     {
-        if (destination(player, piece, state.die) === null)
+        const to = destination(player, piece, state.die);
+
+        if (to === null || obstacle(state.players, state.turn, piece, to) !== null)
         {
             continue;
         }

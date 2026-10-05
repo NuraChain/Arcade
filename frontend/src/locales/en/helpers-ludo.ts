@@ -13,5 +13,7 @@ export const helpersLudo = {
     'helpers.ludo.tip.six': 'A six: after this move you roll again.',
     'helpers.ludo.tip.threeSixes': 'Three sixes in a row end the turn, and the third one is not played.',
     'helpers.ludo.tip.star': 'Stars are safe: landing on one sends nobody home. Only a token coming out onto its own start does.',
+    'helpers.ludo.tip.blocked': 'Two tokens of one colour make a block: no other colour can land on it or pass it, and no third token can join.',
+    'helpers.ludo.tip.start': 'Your start square holds one of your own tokens at a time: move it on before bringing out another.',
     'helpers.ludo.tip.exact': 'Home takes the exact count, so a token too close for this roll stays where it is.'
 };

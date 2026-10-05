@@ -144,6 +144,40 @@ export function capturesAt(colour: LudoColour, progress: number)
     return progress === 0 || (progress > 0 && progress < RING_STEPS && !isSafeRing(ringIndex(colour, progress)));
 }
 
+export interface Walker
+{
+    colour: LudoColour;
+    pieces: readonly number[];
+}
+
+export type Obstacle = 'block' | 'full' | 'start';
+
+const standing = (walker: Walker, square: number, except: number) =>
+    walker.pieces.filter((at, piece) => piece !== except && at >= 0 && at < RING_STEPS && ringIndex(walker.colour, at) === square).length;
+
+export function obstacle(walkers: readonly Walker[], mover: number, piece: number, to: number): Obstacle | null
+{
+    const own = walkers[mover];
+    const from = own.pieces[piece];
+
+    if (from === YARD)
+    {
+        return standing(own, ENTRY[own.colour], piece) > 0 ? 'start' : null;
+    }
+
+    for (let step = from + 1; step <= to && step < RING_STEPS; step += 1)
+    {
+        const square = ringIndex(own.colour, step);
+
+        if (walkers.some((other, index) => index !== mover && standing(other, square, -1) >= 2))
+        {
+            return 'block';
+        }
+    }
+
+    return to < RING_STEPS && standing(own, ringIndex(own.colour, to), piece) >= 2 ? 'full' : null;
+}
+
 export function coloursFor(seats: number): readonly LudoColour[]
 {
     if (seats === 2)

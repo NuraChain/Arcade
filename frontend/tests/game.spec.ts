@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { CELL, GRID, HOME_SCALE, HOME_SLOTS, MARGIN, NEST, NEST_RADIUS, RIM, STACKS, centreOf, pickNear, tokenRadius } from '../src/game/layout.ts';
+import { BLOCK, CELL, GRID, HOME_SCALE, HOME_SLOTS, MARGIN, NEST, NEST_RADIUS, RIM, STACKS, centreOf, pickNear, tokenRadius } from '../src/game/layout.ts';
 import { FINISHED, YARD, pathBetween } from '../src/game/board/path.ts';
 import { createLudoBoard } from '../src/game/board/ludo-board.ts';
 import { createSound, offsetOf, resetSound } from '../src/game/sound.ts';
@@ -888,9 +888,18 @@ describe('a finished pawn stands in its own triangle', () =>
         expect(home.every((token) => !token.playable)).toBe(true);
     });
 
+    it('draws a block as one pawn standing on the other, the upper one in front', () =>
+    {
+        expect(BLOCK).toHaveLength(2);
+        expect(BLOCK[0].dx).toBe(BLOCK[1].dx);
+        expect(BLOCK[1].dy).toBeLessThan(BLOCK[0].dy);
+        expect(BLOCK[1].front).toBe(true);
+        expect(BLOCK[0].front).toBeFalsy();
+    });
+
     it('fits every pawn of a stack inside the square it shares', () =>
     {
-        for (const layout of Object.values(STACKS))
+        for (const layout of [...Object.values(STACKS), BLOCK])
         {
             for (const spot of layout)
             {
@@ -919,6 +928,24 @@ describe('a roll that passes the turn is still seen', () =>
         expect(host.querySelector('.lb')!.hasAttribute('data-rolled')).toBe(true);
         expect(host.querySelector('.lb-die')!.getAttribute('data-spent')).toBe('no-move');
         expect((host.querySelector('.lb-die') as HTMLElement).style.getPropertyValue('--face')).toBe('2');
+
+        handle.dispose();
+        host.remove();
+    });
+
+    it('stacks two tokens of one colour on a ring square, and keeps two colours side by side', async () =>
+    {
+        const host = document.createElement('div');
+        document.body.append(host);
+        const token = (key: string, colour: string, col: number) => ({ key, colour, at: 10, col, row: 6, playable: false });
+        const view = { ...empty, tokens: [token('0-0', 'red', 4), token('0-1', 'red', 4), token('1-0', 'red', 8), token('2-0', 'green', 8)] };
+        const handle = await createLudoBoard({ host, plate: '', view, reducedMotion: true, sound: false });
+
+        await tick(10);
+
+        const stacked = [...host.querySelectorAll('.lp')].filter((piece) => piece.hasAttribute('data-stacked'));
+
+        expect(stacked).toHaveLength(1);
 
         handle.dispose();
         host.remove();

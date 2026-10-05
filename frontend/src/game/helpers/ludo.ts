@@ -1,4 +1,4 @@
-import { FINISHED, RING_STEPS, YARD, capturesAt, cellAt, ringIndex, type LudoColour } from '../../../../backend/src/domains/match/ludo/board.ts';
+import { FINISHED, RING_STEPS, YARD, capturesAt, cellAt, obstacle, ringIndex, type LudoColour, type Walker } from '../../../../backend/src/domains/match/ludo/board.ts';
 import type { LudoBoard, LudoSeat } from '../../data/match.ts';
 import type { Tip } from './tip.ts';
 
@@ -13,6 +13,7 @@ export interface LudoHappened
 {
     e: string;
     seat?: number;
+    die?: number;
     why?: string;
 }
 
@@ -136,6 +137,36 @@ const starShields = (board: LudoBoard, me: LudoSeat, die: number) =>
         return !capturesAt(me.colour as LudoColour, to) && standingOn(board, me.seat, squareOf(me, to)).length > 0;
     });
 
+const walkersOf = (board: LudoBoard): Walker[] =>
+    board.seats.map((one) => ({
+        colour: one.colour as LudoColour,
+        pieces: [...one.tokens].sort((a, b) => a.piece - b.piece).map((token) => token.at)
+    }));
+
+const stoppedBy = (board: LudoBoard, me: LudoSeat, die: number): Tip | null =>
+{
+    const walkers = walkersOf(board);
+    const mover = board.seats.indexOf(me);
+    const reasons = me.tokens.map((token) =>
+    {
+        if (token.at === FINISHED || (token.at === YARD && die !== 6))
+        {
+            return null;
+        }
+
+        const to = landing(me, token.piece, die);
+
+        return to === null || to > FINISHED ? null : obstacle(walkers, mover, token.piece, to);
+    });
+
+    if (reasons.some((reason) => reason === 'block' || reason === 'full'))
+    {
+        return { key: 'helpers.ludo.tip.blocked' };
+    }
+
+    return reasons.includes('start') ? { key: 'helpers.ludo.tip.start' } : null;
+};
+
 const ends = (me: LudoSeat, piece: number, die: number) =>
     landing(me, piece, die) === FINISHED && me.tokens.every((token) => token.piece === piece || token.at === FINISHED);
 
@@ -155,6 +186,13 @@ export function coachOf(board: LudoBoard, mine: number | undefined, turn: number
 
     const me = board.seats.find((one) => one.seat === mine);
 
+    if (turn !== mine && lastTurn?.e === 'pass' && lastTurn.why === 'no-move' && lastTurn.seat === mine && me !== undefined)
+    {
+        const rolled = recent.slice(0, recent.lastIndexOf(lastTurn)).reverse().find((one) => one.e === 'roll' && one.seat === mine);
+
+        return rolled?.die === undefined ? null : stoppedBy(board, me, rolled.die);
+    }
+
     if (turn !== mine || me === undefined || me.out)
     {
         return null;
@@ -162,6 +200,14 @@ export function coachOf(board: LudoBoard, mine: number | undefined, turn: number
 
     if (board.die === undefined)
     {
+        const last = recent.at(-1);
+        const wasted = last?.e === 'roll' && last.seat === mine && last.die === 6 ? stoppedBy(board, me, 6) : null;
+
+        if (wasted !== null)
+        {
+            return wasted;
+        }
+
         const waiting = me.tokens.filter((token) => token.at !== FINISHED);
 
         return waiting.length > 0 && waiting.every((token) => token.at === YARD) ? { key: 'helpers.ludo.tip.yard' } : null;
@@ -170,6 +216,13 @@ export function coachOf(board: LudoBoard, mine: number | undefined, turn: number
     if (starShields(board, me, board.die))
     {
         return { key: 'helpers.ludo.tip.star' };
+    }
+
+    const stopped = stoppedBy(board, me, board.die);
+
+    if (stopped !== null)
+    {
+        return stopped;
     }
 
     if (me.tokens.some((token) => token.at >= 0 && token.at < FINISHED && !board.moves.includes(token.piece)))

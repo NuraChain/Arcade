@@ -48,6 +48,7 @@ export interface StackSpot
     dx: number;
     dy: number;
     scale: number;
+    front?: boolean;
 }
 
 export const STACKS: Record<number, readonly StackSpot[]> = {
@@ -61,6 +62,11 @@ export const STACKS: Record<number, readonly StackSpot[]> = {
         { dx: 0.19, dy: 0.10, scale: 0.62 }
     ]
 };
+
+export const BLOCK: readonly StackSpot[] = [
+    { dx: 0, dy: 0.08, scale: 0.84 },
+    { dx: 0, dy: -0.16, scale: 0.84, front: true }
+];
 
 export function stackSpot(index: number, count: number)
 {
