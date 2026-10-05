@@ -336,7 +336,7 @@
         "groups_name_present :: CHECK ((length(btrim(name)) > 0))",
         "groups_privacy_known :: CHECK (((privacy)::text = ANY ((ARRAY['private'::character varying, 'public'::character varying])::text[])))",
         "groups_slug_shape :: CHECK ((((length((slug)::text) >= 2) AND (length((slug)::text) <= 48)) AND (slug !~ '[[:space:][:cntrl:]]'::citext) AND (slug !~ '^-'::citext) AND (slug !~ '-$'::citext) AND (slug !~ '[/?#@!$&''()*+,;=:%<>\"|{}^~._]'::citext) AND (strpos(slug, '['::citext) = 0) AND (strpos(slug, ']'::citext) = 0) AND (strpos((slug)::text, chr(92)) = 0)))",
-        "match_actions_kind_known :: CHECK (((kind)::text = ANY ((ARRAY['play'::character varying, 'forfeit'::character varying])::text[])))",
+        "match_actions_kind_known :: CHECK (((kind)::text = ANY ((ARRAY['play'::character varying, 'forfeit'::character varying, 'open'::character varying])::text[])))",
         "match_actions_rev_positive :: CHECK ((rev > 0))",
         "match_players_rating_pairs :: CHECK (((rating_before IS NULL) = (rating_after IS NULL)))",
         "match_players_result_known :: CHECK (((result IS NULL) OR ((result)::text = ANY ((ARRAY['won'::character varying, 'lost'::character varying, 'abandoned'::character varying, 'void'::character varying])::text[]))))",

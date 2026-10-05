@@ -12,7 +12,7 @@ import { User } from './user.entity.ts';
  * and nothing anywhere branches on the others. The verb itself is in `payload`, where the engine's
  * own words belong.
  */
-export type MatchActionKind = 'play' | 'forfeit';
+export type MatchActionKind = 'play' | 'forfeit' | 'open';
 
 /**
  * Every action that was accepted, in order.
@@ -32,14 +32,14 @@ export type MatchActionKind = 'play' | 'forfeit';
  * person, and `SET NULL` because a deleted account must not take the dice history with it.
  */
 /**
- * `kind` is the ENGINE's own action vocabulary, plus one word every engine must share.
+ * `kind` is what the PLATFORM reads, never an engine's own word: the verb lives in `payload`.
  *
- * `forfeit` is generic and reserved: `record.ts` reads it to tell a walkout from a timeout, so an
- * engine that spells a resignation any other way silently breaks XP and the abandoned count. The
- * rest are ludo's, and each game that lands widens this list in its own commit - a typo in a kind
- * is a row nothing can ever fold, which is the kind of state a CHECK exists to make impossible.
+ * `play` is anything done in the game, by a person or by the sweep. `forfeit` is somebody stopping,
+ * which `record.ts` reads to tell a walkout from a timeout. `open` is the first row of every match:
+ * `start` writes the engine's opening events there at the opening revision, with seat -1 because
+ * nobody acted - so a poker deal or a backgammon opening roll is in the catch-up feed like any move.
  */
-@Check('match_actions_kind_known', `kind in ('play', 'forfeit')`)
+@Check('match_actions_kind_known', `kind in ('play', 'forfeit', 'open')`)
 @Check('match_actions_rev_positive', `rev > 0`)
 @Index('match_actions_rev', ['matchId', 'rev'], { unique: true })
 @Index('match_actions_idem', ['matchId', 'userId', 'idempotencyKey'], { unique: true, where: `idempotency_key is not null` })
