@@ -33,6 +33,7 @@ import Panel from '../../components/ui/panel.component.azeroth';
 import type { MatchView } from '../../api.ts';
 import { plainOf } from '../../lib/markdown.ts';
 import { holdScreen } from '../../lib/wake-lock.ts';
+import { watchEdge, watchFold, watchSheet, type SheetSize } from '../../lib/sheet-room.ts';
 import { leaveLead, seatedMax, tablePlaying } from '../../lib/open-table.ts';
 import { copyText } from '../../lib/clipboard.ts';
 import { BOARDS, drawable, rematchOf, type BoardComponent, type Rematch } from '../../components/games/boards.ts';
@@ -62,7 +63,9 @@ export default component PlayPage()
 
     state chatWide = false;
 
-    let arena: HTMLElement | null = null;
+    state arena: HTMLElement | null = null;
+
+    let sheetBox: HTMLElement | null = null;
 
     state starting = false;
 
@@ -249,6 +252,60 @@ export default component PlayPage()
     derived cardOpen = floating && hasChat && railOpen;
 
     derived sheetVisible = !floating && hasChat && chatOpen;
+
+    derived halfSheet = sheetVisible && !sideways && !chatWide;
+
+    state sheet: SheetSize | null = null;
+
+    effect
+    {
+        if (!halfSheet || arena === null || sheetBox === null)
+        {
+            sheet = null;
+            return;
+        }
+
+        onCleanup(watchSheet(arena, sheetBox, (size) => sheet = size));
+    }
+
+    derived over = halfSheet && sheet !== null && sheet.height > sheet.pad;
+
+    state folded = false;
+
+    effect
+    {
+        if (sheetVisible || floating || sideways || arena === null)
+        {
+            folded = false;
+            return;
+        }
+
+        onCleanup(watchFold(arena, (fold) => folded = fold));
+    }
+
+    derived besideSheet = sheetVisible && sideways;
+
+    derived underHead = sheetVisible && !sideways && chatWide;
+
+    state head = 0;
+
+    effect
+    {
+        const header = underHead ? arena?.querySelector<HTMLElement>('header') ?? null : null;
+
+        if (header === null)
+        {
+            head = 0;
+            return;
+        }
+
+        onCleanup(watchEdge(header, (bottom) => head = bottom));
+    }
+
+    derived rowStyle = [
+        halfSheet && sheet !== null ? `--sheet: ${ sheet.pad }px; --sheet-h: ${ sheet.height }px` : '',
+        underHead && head > 0 ? `--head: ${ head }px` : ''
+    ].filter(Boolean).join('; ');
 
     derived chatShown = cardOpen || sheetVisible;
 
@@ -626,14 +683,18 @@ export default component PlayPage()
 
         <Show when={ table !== null && table.status !== 'closed' }>
             { () =>
-                <div class="flex min-h-0 flex-1 gap-4">
+                <div class="flex min-h-0 flex-1 gap-4" style={ rowStyle === '' ? undefined : rowStyle }>
                     <div
                         ref={ (element) => arena = element }
-                        class={ () => [ 'flex min-h-0 min-w-0 flex-1 flex-col gap-2 bg-void', sheetVisible && !sideways && !chatWide ? 'pb-[48dvh]' : '', cardOpen ? (chatWide ? 'pe-[31.5rem]' : 'pe-[24.5rem]') : '' ].filter(Boolean).join(' ') }
+                        data-sheet={ over ? 'over' : (halfSheet ? 'half' : undefined) }
+                        class={ () => [ 'flex min-h-0 min-w-0 flex-1 flex-col gap-2 bg-void', halfSheet ? 'pb-[var(--sheet,48dvh)]' : '', cardOpen ? (chatWide ? 'pe-[31.5rem]' : 'pe-[24.5rem]') : '' ].filter(Boolean).join(' ') }
                     >
                         <PlayHeader
                             table={ table! }
-                            others={ lobby.seated().filter((one) => one.id !== table!.id) }
+                            others={ lobby.seated().filter((one) => one.id !== table?.id) }
+                            compact={ halfSheet || besideSheet || folded }
+                            bare={ besideSheet }
+                            class={ besideSheet ? (chatWide ? 'pe-[min(30rem,85vw)]' : 'pe-[min(23rem,60vw)]') : undefined }
                             tools={
                                 <span class="flex items-center gap-2">
                                     <TableDock
@@ -780,6 +841,7 @@ export default component PlayPage()
                     <Show when={ hasChat }>
                         { () =>
                             <div
+                                ref={ (element) => sheetBox = element }
                                 class={ () => [
                                     'flex flex-col overflow-hidden bg-field',
                                     floating
@@ -794,7 +856,7 @@ export default component PlayPage()
                                             ]
                                             : [
                                                 'table-sheet fixed inset-x-0 bottom-0 z-30 rounded-t-sheet border-t border-line-strong',
-                                                chatWide ? 'top-3' : 'h-[48dvh]'
+                                                chatWide ? 'top-[calc(var(--head,0.5rem)+0.25rem)]' : 'h-[var(--sheet-h,48dvh)]'
                                             ]).join(' '),
                                     chatShown ? '' : 'hidden'
                                 ].filter(Boolean).join(' ') }

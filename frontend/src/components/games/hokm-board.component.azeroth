@@ -919,9 +919,85 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
         untrack(() => sound?.setEnabled(on));
     }
 
+    state cramped = false;
+
+    let judging = 0;
+
+    let judgedAt = '';
+
+    let feltWatch: ResizeObserver | null = null;
+
+    let watchedFelt: Element | null = null;
+
+    const judgeFelt = () =>
+    {
+        judging = 0;
+
+        const table = arena?.querySelector<HTMLElement>('.hokm-table') ?? null;
+
+        if (table !== watchedFelt && feltWatch !== null)
+        {
+            if (watchedFelt !== null)
+            {
+                feltWatch.unobserve(watchedFelt);
+            }
+
+            if (table !== null)
+            {
+                feltWatch.observe(table);
+            }
+
+            watchedFelt = table;
+        }
+
+        if (table === null)
+        {
+            return;
+        }
+
+        const size = `${ Math.round(room.width) }x${ Math.round(room.height) }`;
+        const solids = [...table.querySelectorAll('.hokm-seat .table-plate, .hokm-seat .hokm-pile')]
+            .map((one) => one.getBoundingClientRect())
+            .filter((box) => box.width > 0 && box.height > 0);
+        const clash = [...table.querySelectorAll('.hokm-felt-info > .hokm-chip')].some((chip) =>
+        {
+            const box = chip.getBoundingClientRect();
+
+            return box.width > 0 && solids.some((other) => box.left < other.right && other.left < box.right && box.top < other.bottom && other.top < box.bottom);
+        });
+        const next = clash || (size === judgedAt && cramped);
+
+        judgedAt = size;
+
+        if (next !== cramped)
+        {
+            cramped = next;
+        }
+    };
+
+    const judgeSoon = () =>
+    {
+        if (judging === 0 && typeof requestAnimationFrame !== 'undefined')
+        {
+            judging = requestAnimationFrame(judgeFelt);
+        }
+    };
+
+    effect
+    {
+        void room;
+        void plates;
+
+        untrack(judgeSoon);
+    }
+
     mount
     {
         sound = createSound(untrack(() => settings.settings().sound));
+
+        void document.fonts?.ready.then(judgeSoon);
+
+        feltWatch = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(judgeSoon);
 
         const watcher = typeof ResizeObserver === 'undefined' || arena === null
             ? null
@@ -943,13 +1019,20 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
         return () =>
         {
             watcher?.disconnect();
+            feltWatch?.disconnect();
+
+            if (judging !== 0)
+            {
+                cancelAnimationFrame(judging);
+            }
+
             stopAll();
             sound?.dispose();
             sound = null;
         };
     }
 
-    <div data-rev={ props.match.rev } class="table-stage hokm-stage" ref={ (element) => arena = element }>
+    <div data-rev={ props.match.rev } data-felt={ cramped ? 'cramped' : undefined } class="table-stage hokm-stage" ref={ (element) => arena = element }>
         <div class="table-grid">
             <Show when={ view !== null }>
                 { () =>

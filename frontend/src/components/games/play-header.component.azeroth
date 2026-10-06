@@ -13,7 +13,7 @@ import type { TableSummary } from '../../api.ts';
 import { copyText } from '../../lib/clipboard.ts';
 import { leave, useShell } from '../../stores/shell.store.ts';
 
-export default component PlayHeader(props: { table: TableSummary; others: TableSummary[]; tools?: Child })
+export default component PlayHeader(props: { table: TableSummary; others: TableSummary[]; tools?: Child; compact?: boolean; bare?: boolean; class?: string })
 {
     const locale = useLocale();
     const shell = useShell();
@@ -29,7 +29,11 @@ export default component PlayHeader(props: { table: TableSummary; others: TableS
 
     derived nameOf = (game: string) => locale.t(catalogue.byId(game as GameId).nameKey);
 
-    derived waiting = props.others.filter((table) => table.yourTurn === true).length;
+    derived waitingOn = props.others.filter((table) => table.yourTurn === true);
+
+    derived waiting = waitingOn.length;
+
+    derived listed = props.compact === true ? waitingOn : [...waitingOn, ...props.others.filter((table) => table.yourTurn !== true)];
 
     const connection = useConnection();
 
@@ -37,7 +41,7 @@ export default component PlayHeader(props: { table: TableSummary; others: TableS
 
     derived linked = link === 'online' || link === 'restored';
 
-    <header class="@container min-w-0">
+    <header class={ () => [ '@container min-w-0', props.class ?? '' ].filter(Boolean).join(' ') }>
         <div class="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
             <div class="flex min-w-0 flex-1 items-center gap-3">
                 <IconButton icon="back" label={ locale.t('app.nav.back') } onClick={ goBack } flip class="shrink-0" />
@@ -85,13 +89,21 @@ export default component PlayHeader(props: { table: TableSummary; others: TableS
                 </div>
             </div>
 
-            <Show when={ props.tools !== undefined }>
+            <Show when={ props.tools !== undefined && props.bare !== true }>
                 { () => <div class="order-2 shrink-0 @2xl:order-3">{ props.tools }</div> }
             </Show>
 
-            <Show when={ props.others.length > 0 }>
+            <Show when={ listed.length > 0 }>
                 { () =>
-                    <nav class="play-others order-3 flex min-w-0 basis-full items-center @2xl:order-2 @2xl:max-w-[45%] @2xl:shrink-0 @2xl:basis-auto" aria-label={ locale.t('play.tables') }>
+                    <nav
+                        class={ () => [
+                            'play-others flex min-w-0 items-center',
+                            props.compact === true
+                                ? 'order-1 max-w-[6.5rem] shrink-0'
+                                : 'order-3 basis-full @2xl:order-2 @2xl:max-w-[45%] @2xl:shrink-0 @2xl:basis-auto'
+                        ].join(' ') }
+                        aria-label={ locale.t('play.tables') }
+                    >
                         <p class="sr-only">
                             { locale.t('play.tables') }
                             <Show when={ waiting > 0 }>
@@ -100,24 +112,40 @@ export default component PlayHeader(props: { table: TableSummary; others: TableS
                         </p>
                         <Rail class="-mx-1 max-w-full" inner="px-1">
                         <ul class="flex shrink-0 gap-2">
-                            <For each={ props.others } key={ (table) => table.id } let={ table }>
+                            <For each={ listed } key={ (table) => table.id } let={ table }>
                                 <li class="shrink-0">
-                                    <Link
-                                        to={ `/app/play/${ table.id }` }
-                                        class={ () => [
-                                            'flex h-11 items-center gap-2 rounded-full border ps-1.5 pe-3 text-ui-sm font-semibold transition-colors',
-                                            table.yourTurn === true
-                                                ? 'border-live/50 bg-live/10 text-text hover:bg-live/15'
-                                                : 'border-line bg-field text-muted hover:border-line-strong hover:text-text'
-                                        ].join(' ') }
+                                    <Show
+                                        when={ props.compact === true }
+                                        fallback={
+                                            <Link
+                                                to={ `/app/play/${ table.id }` }
+                                                class={ () => [
+                                                    'flex h-11 items-center gap-2 rounded-full border ps-1.5 pe-3 text-ui-sm font-semibold transition-colors',
+                                                    table.yourTurn === true
+                                                        ? 'border-live/50 bg-live/10 text-text hover:bg-live/15'
+                                                        : 'border-line bg-field text-muted hover:border-line-strong hover:text-text'
+                                                ].join(' ') }
+                                            >
+                                                <GameIcon game={ table.game as GameId } class="h-8 w-8" />
+                                                <span class="max-w-[9rem] truncate">{ nameOf(table.game) }</span>
+                                                <span class="shrink-0 text-ui-xs font-normal uppercase tracking-wide opacity-70">{ table.code }</span>
+                                                <Show when={ table.yourTurn === true }>
+                                                    { () => <Badge dot text={ locale.t('card.yourTurn') } tone="live" /> }
+                                                </Show>
+                                            </Link>
+                                        }
                                     >
-                                        <GameIcon game={ table.game as GameId } class="h-8 w-8" />
-                                        <span class="max-w-[9rem] truncate">{ nameOf(table.game) }</span>
-                                        <span class="shrink-0 text-ui-xs font-normal uppercase tracking-wide opacity-70">{ table.code }</span>
-                                        <Show when={ table.yourTurn === true }>
-                                            { () => <Badge dot text={ locale.t('card.yourTurn') } tone="live" /> }
-                                        </Show>
-                                    </Link>
+                                        { () =>
+                                            <Link
+                                                to={ `/app/play/${ table.id }` }
+                                                class="relative flex h-11 w-11 items-center justify-center rounded-full border border-live/50 bg-live/10 transition-colors hover:bg-live/15"
+                                            >
+                                                <GameIcon game={ table.game as GameId } class="h-8 w-8" />
+                                                <span class="absolute -end-0.5 -top-0.5 h-3 w-3 rounded-full border-2 border-void bg-live" aria-hidden="true"></span>
+                                                <span class="sr-only">{ nameOf(table.game) } <span class="tally">{ table.code }</span>, { locale.t('card.yourTurn') }</span>
+                                            </Link>
+                                        }
+                                    </Show>
                                 </li>
                             </For>
                         </ul>

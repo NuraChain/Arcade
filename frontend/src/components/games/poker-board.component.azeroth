@@ -10,6 +10,7 @@ import Button from '../ui/button.component.azeroth';
 import Slider from '../ui/slider.component.azeroth';
 import Icon from '../../icons/icon.component.azeroth';
 import { FACE_KEY, rankOf, suitOf } from '../../data/cards.ts';
+import { seatBets, type Box } from '../../game/chip-spot.ts';
 import { pokerOf } from '../../data/match.ts';
 import { coachOf, outcomeOf, predicted, type PokerVerb } from '../../game/helpers/poker.ts';
 import { useBoard } from '../../stores/match.store.ts';
@@ -25,9 +26,11 @@ const RADIUS_X = 41;
 
 const RADIUS_Y = 40;
 
-const BET_REACH = 0.5;
-
 const BOARD_SLOTS = [0, 1, 2, 3, 4];
+
+const CHIP_GAP = 4;
+
+const SHORT_FELT_REM = 16;
 
 export default component PokerBoard(props: { match: MatchView; starting?: boolean; onAgain?: () => void; rematch?: Rematch; speech?: Record<string, string>; turnMs?: number })
 {
@@ -100,9 +103,105 @@ export default component PokerBoard(props: { match: MatchView; starting?: boolea
         untrack(() => cues.setEnabled(on));
     }
 
+    let root: HTMLElement | null = null;
+
+    state short = false;
+
+    let laying = 0;
+
+    const seatChips = () =>
+    {
+        laying = 0;
+
+        const felt = root?.querySelector<HTMLElement>('.poker-table') ?? null;
+
+        if (felt === null)
+        {
+            return;
+        }
+
+        const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+        const shallow = felt.getBoundingClientRect().height < SHORT_FELT_REM * rem;
+
+        if (shallow !== short)
+        {
+            short = shallow;
+            reseat();
+            return;
+        }
+
+        const solid = (element: Element): Box[] =>
+        {
+            const box = element.getBoundingClientRect();
+
+            return box.width > 0 && box.height > 0 ? [box] : [];
+        };
+        const reach = (element: Element): Box[] =>
+        {
+            const halo = getComputedStyle(element, '::before');
+            const out = (side: string) => Math.max(0, -(parseFloat(side) || 0));
+
+            return solid(element).map((box) => ({ left: box.left - out(halo.left), top: box.top - out(halo.top), right: box.right + out(halo.right), bottom: box.bottom + out(halo.bottom) }));
+        };
+        const chips = [...felt.querySelectorAll<HTMLElement>('.poker-seat > .poker-bet')];
+        const spots = seatBets(
+            chips.map((chip) => ({ plate: chip.parentElement!.getBoundingClientRect(), width: chip.offsetWidth, height: chip.offsetHeight })),
+            felt.getBoundingClientRect(),
+            [...felt.querySelectorAll('.table-plate')].flatMap(solid),
+            [...felt.querySelectorAll('.poker-centre > *, .poker-chips .poker-chip')].flatMap(reach),
+            CHIP_GAP
+        );
+
+        chips.forEach((chip, index) =>
+        {
+            const spot = spots[index];
+
+            if (spot === null)
+            {
+                chip.style.removeProperty('left');
+                chip.style.removeProperty('top');
+                chip.style.removeProperty('translate');
+                return;
+            }
+
+            const from = chip.parentElement!.getBoundingClientRect();
+
+            chip.style.left = `${ (spot.left - from.left).toFixed(1) }px`;
+            chip.style.top = `${ (spot.top - from.top).toFixed(1) }px`;
+            chip.style.translate = 'none';
+        });
+    };
+
+    const reseat = () =>
+    {
+        if (laying === 0 && typeof requestAnimationFrame !== 'undefined')
+        {
+            laying = requestAnimationFrame(seatChips);
+        }
+    };
+
     mount
     {
-        return () => cues.dispose();
+        const watcher = typeof ResizeObserver === 'undefined' || root === null ? null : new ResizeObserver(reseat);
+
+        if (watcher !== null && root !== null)
+        {
+            watcher.observe(root);
+        }
+
+        void document.fonts?.ready.then(reseat);
+
+        return () =>
+        {
+            watcher?.disconnect();
+
+            if (laying !== 0)
+            {
+                cancelAnimationFrame(laying);
+            }
+
+            cues.dispose();
+        };
     }
 
     derived toCall = view?.toCall ?? 0;
@@ -183,11 +282,16 @@ export default component PokerBoard(props: { match: MatchView; starting?: boolea
             place,
             x: 50 + cos * RADIUS_X,
             y: 50 + sin * RADIUS_Y,
-            betX: 50 + cos * RADIUS_X * BET_REACH,
-            betY: 50 + sin * RADIUS_Y * BET_REACH,
             live: !row.folded && !row.out
         };
     });
+
+    effect
+    {
+        void plates;
+
+        untrack(reseat);
+    }
 
     derived turnSeat = view?.turn;
 
@@ -299,7 +403,7 @@ export default component PokerBoard(props: { match: MatchView; starting?: boolea
         await (chosen >= high ? send('allin') : send('raise', chosen));
     };
 
-    <div data-rev={ props.match.rev } class="table-stage poker-stage">
+    <div data-rev={ props.match.rev } data-felt={ short ? 'short' : undefined } class="table-stage poker-stage" ref={ (element) => root = element }>
         <div class="table-grid">
             <Show when={ view !== null }>
                 { () =>
@@ -310,7 +414,7 @@ export default component PokerBoard(props: { match: MatchView; starting?: boolea
                                     <Icon name="coins" size={ 12 } class="shrink-0 text-gold" />
                                     <span class="tally">{ chips(view!.blinds.small) }/{ chips(view!.blinds.big) }</span>
                                     <span class="text-white/60">·</span>
-                                    <span>{ locale.t(`poker.street.${ view!.street }` as never) }</span>
+                                    <span class="min-w-0 truncate">{ locale.t(`poker.street.${ view!.street }` as never) }</span>
                                     <span class="sr-only">
                                         { locale.t('poker.blinds') }, { locale.plural('poker.next', view!.blinds.next) }, { locale.t('poker.hand', { n: locale.n(view!.hand) }) }, { locale.t('poker.level', { level: locale.n(view!.blinds.level) }) }
                                     </span>
@@ -319,7 +423,7 @@ export default component PokerBoard(props: { match: MatchView; starting?: boolea
                                 <details class="poker-last">
                                     <summary class="poker-chip">
                                         <Icon name="history" size={ 12 } class="shrink-0 text-gold" />
-                                        <span>{ locale.t('poker.last') }</span>
+                                        <span class="min-w-0 truncate">{ locale.t('poker.last') }</span>
                                     </summary>
                                     <div class="poker-last-panel" dir={ locale.dir() }>
                                         <Show
@@ -388,41 +492,38 @@ export default component PokerBoard(props: { match: MatchView; starting?: boolea
                             </div>
 
                             <For each={ plates } key={ (plate) => plate.row.seat } let={ plate }>
-                                <div class="contents">
+                                <div class="poker-seat" data-seat={ plate.row.seat } style={ `--x: ${ plate.x.toFixed(2) }; --y: ${ plate.y.toFixed(2) }` }>
+                                    <TablePlate
+                                        who={ whoAt(plate.row.seat) }
+                                        name={ nameOf(plate.row.seat) }
+                                        turn={ !over && turnSeat === plate.row.seat }
+                                        remainingMs={ game.remainingMs }
+                                        turnMs={ props.turnMs }
+                                        dim={ !plate.live }
+                                        tag={ stateOf(plate.row)?.text }
+                                        tone={ stateOf(plate.row)?.tone }
+                                        bubble={ props.speech?.[whoAt(plate.row.seat)] }
+                                        below={ plate.y < 50 }
+                                        anchor={ plate.x > 60 ? 'end' : (plate.x < 40 ? 'start' : 'centre') }
+                                        marker={ view!.button === plate.row.seat ? <span class="poker-dealer" title={ locale.t('poker.dealer') }>D</span> : undefined }
+                                        facts={ <span class="tally font-bold text-gold">{ chips(plate.row.stack) }</span> }
+                                    />
+                                    <Show when={ plate.live && plate.row.seat !== mine }>
+                                        { () =>
+                                            <span class="poker-backs" aria-hidden="true">
+                                                <span class="card-back -rotate-6"></span>
+                                                <span class="card-back -ms-1.5 rotate-6"></span>
+                                            </span>
+                                        }
+                                    </Show>
                                     <Show when={ plate.row.bet > 0 }>
                                         { () =>
-                                            <span class="poker-bet" style={ `left: ${ plate.betX.toFixed(2) }%; top: ${ plate.betY.toFixed(2) }%` }>
+                                            <span class="poker-bet">
                                                 <span class="h-2.5 w-2.5 rounded-full border-2 border-dashed border-white bg-madder" aria-hidden="true"></span>
                                                 <span class="tally">{ chips(plate.row.bet) }</span>
                                             </span>
                                         }
                                     </Show>
-
-                                    <div class="poker-seat" data-seat={ plate.row.seat } style={ `left: ${ plate.x.toFixed(2) }%; top: ${ plate.y.toFixed(2) }%` }>
-                                        <TablePlate
-                                            who={ whoAt(plate.row.seat) }
-                                            name={ nameOf(plate.row.seat) }
-                                            turn={ !over && turnSeat === plate.row.seat }
-                                            remainingMs={ game.remainingMs }
-                                            turnMs={ props.turnMs }
-                                            dim={ !plate.live }
-                                            tag={ stateOf(plate.row)?.text }
-                                            tone={ stateOf(plate.row)?.tone }
-                                            bubble={ props.speech?.[whoAt(plate.row.seat)] }
-                                            below={ plate.y < 50 }
-                                            anchor={ plate.x > 60 ? 'end' : (plate.x < 40 ? 'start' : 'centre') }
-                                            marker={ view!.button === plate.row.seat ? <span class="poker-dealer" title={ locale.t('poker.dealer') }>D</span> : undefined }
-                                            facts={ <span class="tally font-bold text-gold">{ chips(plate.row.stack) }</span> }
-                                        />
-                                        <Show when={ plate.live && plate.row.seat !== mine }>
-                                            { () =>
-                                                <span class="poker-backs" aria-hidden="true">
-                                                    <span class="card-back -rotate-6"></span>
-                                                    <span class="card-back -ms-1.5 rotate-6"></span>
-                                                </span>
-                                            }
-                                        </Show>
-                                    </div>
                                 </div>
                             </For>
                         </div>

@@ -226,6 +226,11 @@ html:has(.site-drawer[open])
     pointer-events: none;
 }
 
+.ludo-grid > .table-fit
+{
+    --fit-min: 20rem;
+}
+
 @container stage (min-width: 44rem) and (min-aspect-ratio: 3 / 2)
 {
     .table-grid.ludo-grid
@@ -349,6 +354,13 @@ html:has(.site-drawer[open])
 {
     grid-area: top;
     min-inline-size: 0;
+}
+
+@property --fit-min
+{
+    syntax: '<length>';
+    inherits: false;
+    initial-value: 0px;
 }
 
 .table-fit
@@ -777,6 +789,25 @@ html:has(.site-drawer[open])
     }
 }
 
+.hokm-stage .table-fit
+{
+    --fit-min: 13rem;
+}
+
+.hokm-table > *
+{
+    --edge: 4cqh;
+    --plate-h: 2.625rem;
+    --pile-h: calc(0.35rem + clamp(0.85rem, 4.6cqmin, 1.9rem) * 288 / 204);
+    --trick-gap: 4px;
+    --top-room: calc(var(--edge) + var(--plate-h) + var(--pile-h));
+    --foot-room: calc(var(--edge) + var(--plate-h));
+    --band: calc(100cqh - var(--top-room) - var(--foot-room) - 2 * var(--trick-gap));
+    --trick-w: min(clamp(2.6rem, 12cqmin, 4.75rem), (var(--band) - 2 * var(--trick-gap)) / 2.85);
+    --trick-h: calc(var(--trick-w) * 288 / 204);
+    --side-w: min(5.75rem, 46.5cqw - 1.5 * var(--trick-w) - 3 * var(--trick-gap));
+}
+
 @container stage (max-width: 36rem)
 {
     .hokm-stage .table-fit
@@ -871,7 +902,7 @@ html:has(.site-drawer[open])
 {
     flex-direction: column;
     gap: 0.2rem;
-    max-inline-size: 5.75rem;
+    max-inline-size: var(--side-w);
     padding: 0.4rem 0.4rem 0.35rem;
     border-radius: 0.9rem;
     text-align: center;
@@ -925,6 +956,53 @@ html:has(.site-drawer[open])
     position: absolute;
     top: 0;
     left: calc((100% - var(--back-w)) * var(--i) / max(1, var(--n) - 1));
+}
+
+@container (max-height: 17.5rem)
+{
+    .hokm-table > *
+    {
+        --edge: 2.5cqh;
+        --plate-h: 1.875rem;
+        --pile-h: 0px;
+    }
+
+    .hokm-seat[data-side='top']
+    {
+        top: var(--edge);
+    }
+
+    .hokm-seat[data-side='bottom']
+    {
+        bottom: var(--edge);
+    }
+
+    .hokm-seat:is([data-side='top-left'], [data-side='top-right'])
+    {
+        top: var(--edge);
+    }
+
+    .hokm-seat .hokm-pile
+    {
+        display: none;
+    }
+
+    .hokm-seat .table-plate
+    {
+        padding-block: 0.125rem;
+    }
+
+    .hokm-seat .table-plate-avatar > [role='img']
+    {
+        inline-size: 1.5rem;
+        block-size: 1.5rem;
+        font-size: var(--text-ui-2xs);
+    }
+
+    .hokm-seat .table-plate-text
+    {
+        line-height: 1.05;
+    }
 }
 
 .hokm-centre
@@ -1038,6 +1116,26 @@ html:has(.site-drawer[open])
     }
 }
 
+[data-sheet] :is(.hokm-felt-info, .hokm-centre, .hokm-last-tile, .hokm-draw .hokm-choose-title, .hokm-draw-card)
+{
+    display: none;
+}
+
+[data-sheet] .hokm-bar-facts
+{
+    display: flex;
+}
+
+.hokm-stage[data-felt='cramped'] .hokm-felt-info
+{
+    visibility: hidden;
+}
+
+.hokm-stage[data-felt='cramped'] .hokm-bar-facts
+{
+    display: flex;
+}
+
 .hokm-last-tile
 {
     position: absolute;
@@ -1064,12 +1162,15 @@ html:has(.site-drawer[open])
 
 .hokm-trick
 {
-    --card-w: clamp(2.6rem, 12cqmin, 4.75rem);
+    --card-w: var(--trick-w);
+    --mid: calc(var(--top-room) + var(--trick-gap) + var(--band) / 2);
+    --reach-y: clamp(var(--trick-h) / 2 + var(--trick-gap) / 2, clamp(2.9rem, 15cqmin, 7rem), var(--band) / 2 - var(--trick-h) / 2);
+    --reach-x: clamp(var(--trick-w) + 2 * var(--trick-gap), clamp(2.6rem, 13cqmin, 6.5rem), 46.5cqw - var(--side-w) - var(--trick-gap) - var(--trick-w) / 2);
 
     position: absolute;
     z-index: 1;
-    left: calc(50% + var(--dx) * clamp(2.6rem, 13cqmin, 6.5rem));
-    top: calc(50% + var(--dy) * clamp(2.9rem, 15cqmin, 7rem));
+    left: calc(50% + var(--dx) * var(--reach-x));
+    top: calc(var(--mid) + var(--dy) * var(--reach-y));
     translate: -50% -50%;
     rotate: var(--tilt);
     filter: drop-shadow(0 3px 5px rgb(0 0 0 / 0.45));
@@ -1306,7 +1407,7 @@ html:has(.site-drawer[open])
     filter: drop-shadow(0 18px 28px rgb(0 0 0 / 0.55));
 }
 
-@container fit (min-aspect-ratio: 9 / 8)
+@container fit (min-aspect-ratio: 9 / 8) or (max-height: 19.5rem)
 {
     .poker-table
     {
@@ -1314,6 +1415,11 @@ html:has(.site-drawer[open])
 
         background-image: url('/board/poker-ornaments-wide.svg'), url('/board/poker-table-wide.webp');
     }
+}
+
+.poker-stage .table-fit
+{
+    --fit-min: 12.5rem;
 }
 
 .poker-chips
@@ -1411,11 +1517,31 @@ html:has(.site-drawer[open])
     translate: -50% -50%;
 }
 
+.poker-seat
+{
+    --dx: calc((50 - var(--x)) * var(--ratio));
+    --dy: calc(50 - var(--y));
+    --reach: max(var(--dx), -1 * var(--dx), var(--dy), -1 * var(--dy));
+    --ux: calc(var(--dx) / var(--reach));
+    --uy: calc(var(--dy) / var(--reach));
+
+    position: absolute;
+    z-index: 3;
+    left: calc(var(--x) * 1%);
+    top: calc(var(--y) * 1%);
+    translate:
+        clamp(var(--x) * -1cqw, -50%, (100 - var(--x)) * 1cqw - 100%)
+        clamp(var(--y) * -1cqh, -50%, (100 - var(--y)) * 1cqh - 100%);
+}
+
 .poker-bet
 {
     position: absolute;
     z-index: 2;
+    left: calc(50% + var(--ux) * (50% + 0.25rem));
+    top: calc(50% + var(--uy) * (50% + 0.25rem));
     display: flex;
+    inline-size: max-content;
     align-items: center;
     gap: 0.25rem;
     padding: 0.125rem 0.5rem;
@@ -1424,21 +1550,29 @@ html:has(.site-drawer[open])
     color: white;
     font-size: var(--text-ui-2xs);
     font-weight: 700;
-    translate: -50% -50%;
+    line-height: 1rem;
+    white-space: nowrap;
+    translate: calc((var(--ux) - 1) * 50%) calc((var(--uy) - 1) * 50%);
 }
 
-.poker-seat
+.poker-table > *
 {
-    position: absolute;
-    z-index: 3;
-    translate: -50% -50%;
+    --plate-w: 5.25rem;
+}
+
+.poker-chips > .poker-chip,
+.poker-last > summary
+{
+    min-inline-size: 0;
+    max-inline-size: calc((97cqw - var(--plate-w)) / 2 - 0.5rem);
+    overflow: hidden;
 }
 
 .poker-seat .table-plate
 {
     flex-direction: column;
     gap: 0.15rem;
-    inline-size: 5.25rem;
+    inline-size: var(--plate-w);
     padding: 0.3rem 0.25rem 0.35rem;
     border-radius: 0.8rem;
     text-align: center;
@@ -1455,19 +1589,34 @@ html:has(.site-drawer[open])
     max-inline-size: 100%;
 }
 
+.poker-backs
+{
+    --back-w: 0.8rem;
+
+    position: absolute;
+    left: 0.35rem;
+    top: 0.3rem;
+    display: flex;
+    pointer-events: none;
+}
+
 @container (min-width: 36rem)
 {
-    .poker-seat .table-plate
+    .poker-table > *
     {
-        inline-size: 6.5rem;
+        --plate-w: 6.5rem;
     }
 }
 
 @container (max-width: 22rem)
 {
+    .poker-table > *
+    {
+        --plate-w: 4rem;
+    }
+
     .poker-seat .table-plate
     {
-        inline-size: 4rem;
         padding: 0.2rem;
     }
 
@@ -1478,15 +1627,13 @@ html:has(.site-drawer[open])
     }
 }
 
-.poker-backs
+@container (max-height: 20rem)
 {
-    --back-w: 0.8rem;
-
-    position: absolute;
-    left: 0.35rem;
-    top: 0.3rem;
-    display: flex;
-    pointer-events: none;
+    .poker-seat .table-plate-avatar,
+    .poker-backs
+    {
+        display: none;
+    }
 }
 
 .poker-dealer
@@ -1552,6 +1699,24 @@ html:has(.site-drawer[open])
     }
 }
 
+[data-sheet] :is(.poker-chips > .poker-chip, .poker-cost),
+.poker-stage[data-felt='short'] .poker-chips > .poker-chip
+{
+    display: none;
+}
+
+[data-sheet] .poker-last,
+.poker-stage[data-felt='short'] .poker-last
+{
+    margin-inline-start: auto;
+}
+
+[data-sheet] .poker-bar-facts,
+.poker-stage[data-felt='short'] .poker-bar-facts
+{
+    display: flex;
+}
+
 @media (max-height: 540px)
 {
     .play-others
@@ -1571,7 +1736,8 @@ html:has(.site-drawer[open])
 
     .poker-bar > .poker-raise
     {
-        inset: auto auto 0.5rem 0.5rem;
+        inset-block: auto 0.5rem;
+        inset-inline: 0.5rem auto;
         inline-size: min(22rem, 62%);
     }
 }
@@ -1599,6 +1765,9 @@ html:has(.site-drawer[open])
 
 .bg-stage .table-fit
 {
+    --plates: 6.5rem;
+    --fit-min: calc(16rem / 1.2195 + var(--plates));
+
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -1608,7 +1777,35 @@ html:has(.site-drawer[open])
 
 .bg-stage .table-fit > *
 {
-    inline-size: min(100cqw, (100cqh - 6.5rem) * 1.2195);
+    inline-size: min(100cqw, (100cqh - var(--plates)) * 1.2195);
+}
+
+[data-sheet] .bg-stage .table-fit
+{
+    --plates: 3.25rem;
+
+    display: grid;
+    grid-template-columns: repeat(2, calc(min(100cqw, (100cqh - var(--plates)) * 1.2195) / 2));
+    grid-template-areas: 'them me' 'board board';
+    align-content: center;
+    justify-content: center;
+    gap: 0.5rem 0;
+}
+
+[data-sheet] .bg-stage .table-fit > .table-surface
+{
+    grid-area: board;
+}
+
+[data-sheet] .bg-stage .bg-plate-in
+{
+    grid-area: them;
+    inline-size: auto;
+}
+
+[data-sheet] .bg-stage .bg-plate-in[data-me]
+{
+    grid-area: me;
 }
 
 .bg-plate
@@ -1646,6 +1843,16 @@ html:has(.site-drawer[open])
     {
         display: none;
     }
+}
+
+[data-sheet] .bg-info
+{
+    display: none;
+}
+
+[data-sheet] .table-bar .coach-line
+{
+    display: none;
 }
 
 .bg-checker

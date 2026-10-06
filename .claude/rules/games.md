@@ -1394,16 +1394,54 @@ the moment anything a player needs is below the fold.
 - `MatchResult` overlays the stage rather than pushing it down.
 - Poker's raise is a toggle that opens the slider over the table, so the bar is one row of actions;
   the last hand is a `<details>` chip on the felt, which keeps a spectator's page free of buttons.
+- A poker plate is centred on the rail, at 10% and 90% of the table's height, and is CLAMPED onto the
+  table (`.poker-seat`, a `translate` over the table's own `cqw`/`cqh`), because a plate with its avatar
+  and a tag is 93px: on a 266px table - a phone held sideways, reader folded - it hung 20px past the
+  edge. On a table 20rem tall or less the avatar goes, as it already did under 22rem wide.
+- **A bet is a child of its own seat and is placed by measurement.** The clamp alone moved the plate
+  over the chip at half the radius: an all-in reader's 1,500 hid under their own plate on a short
+  table, and so did a tagged top seat's. Fixed CSS geometry could not promise clearance at every
+  size - six plates, six chips, five cards and the pot on a 320x200 table leave pixels, not margins -
+  so `seatBets` (`game/chip-spot.ts`, pure) tries the twelve spots beside each plate (each side; centred,
+  then flush with either end), keeps those on the table, and takes the one that touches nothing, nearest
+  the pot. The most constrained bet is seated first, and a plate weighs a thousand times anything else,
+  so a table too crowded for a clean answer overlaps two bets before it lets a plate cover one. The
+  board re-seats on every view change and on a resize, in a frame; before that the CSS default puts the
+  chip on the plate's side facing the pot (`--ux`/`--uy`, from the seat's place and the table's own
+  `--ratio`).
 
 **The gate is `tools/qa/fit-pass.mjs`.** It opens a live hokm-2, hokm-2-draw, hokm-4, poker-2, poker-6,
 backgammon and ludo-4 table over the api (dana.w plus guests), advances each to a state with the most
-controls (hokm-2 through the draw to the opening lead, hokm-2-draw to the Hâkem's last offer),
-and opens every page as the seat whose turn it is at 360x740, 390x844, 768x1024, 1024x768, 1280x720,
-1280x800, 1440x900, 1920x1080, 740x360 and 844x390, with the chat closed and open, then as a stranger
-watching. It fails on a scrolling page, a plate, the surface or any button outside the viewport, and
-a button whose centre hits something else. Two exceptions are deliberate: a button in a horizontally
-scrolling rail is judged by its rail, and a phone held sideways lets the open chat overlay the bar,
-because there the chat has nowhere else to be and closing it brings the controls back. It removes
+controls (hokm-2 through the draw to the opening lead, hokm-2-draw to the Hâkem's last offer), seats
+every player at a parked ludo table that never starts, so every page carries the other-tables row -
+the tallest header a seated player gets; while only dana had other tables, a cell passed or failed on
+whether the opening roll or the Hâkem draw put her on turn. Three poker cells exist for the plates:
+poker-6-folded opens each page as a seat that has folded (no hole cards, so no hand row, so the
+tallest table and the biggest plates), poker-6-allin as a seat that has shoved (a tag and a 1,500
+bet in front of the reader), and poker-2-facing as the seat facing a shove (a tagged top seat with
+the big bet), and poker-6-crowd as the seat to act after a limp and three all-ins over the blinds - six
+chips round a pot of three shoves, the most a table carries. Two hokm cells have a trick on the felt:
+hokm-2-follow opens as the dealer facing the Hâkem's lead, the card the reader has to follow, and
+hokm-4-trick as the seat to play to three cards and as the leader watching them. Each re-makes its
+state per cell, because a live turn lasts thirty seconds. It opens every page as the seat whose turn
+it is at 360x740, 390x844, 375x667, 360x640, 768x1024, 1024x768, 1280x720, 1280x800, 1440x900,
+1920x1080, 740x360 and 844x390, with the chat closed and open, then as a stranger watching. It fails
+on a scrolling page, a plate, the surface or any button outside the viewport, a button whose centre
+hits something else, a surface under its game's usable size (`USABLE`, by short and long side), a
+plate on the table that reaches past its edge, a felt chip on a plate, a bet chip whose centre hits
+anything but itself, a bet chip that meets a plate, another chip, the cards, the pot or the felt's own
+chips and their tap areas, a trick card that meets a plate, a pile of backs or another trick card or
+whose centre or either index corner hits anything but the card, and an open bottom sheet whose top
+edge is above the bottom of the board's fit cell. Three exceptions are deliberate: a button in a
+horizontally scrolling rail is judged by its rail; the open chat may overlay the bar on a phone held
+sideways, and on an upright phone too short for the board and the chat together (`data-sheet="over"`),
+because there the chat has nowhere else to be and closing it brings the controls back - never
+anything inside the fit cell, which is the board; and the reader's own open raise slider may cover a
+chip, because it is an overlay they opened. Two things keep a live game from failing a cell for the
+wrong reason: a cell whose game ended while it was measured - a poker seat nobody plays is forfeited
+after three thirty-second turns - is measured again on a fresh deal, up to three deals, and only the
+last is recorded; and every table is left as soon as its cells are done, the reader first, so a
+result line from a game the pass has finished with never puts a toast over a later cell. It removes
 `#azeroth-devtools` first, which only exists under vite. `--only`, `--sizes`, `--shots` and `--keep`
 narrow a run; every run writes its screenshots to a folder of its own under `out/fit`, because
 Windows refuses to overwrite a PNG something else still has open. `npm run qa` reports `scroll` and
@@ -1474,6 +1512,12 @@ chips in the felt's top corners at every size, and the last trick is a tile in i
 full sentences they abbreviate are the `.hokm-side` summary, which is screen-reader only. On a stage
 24rem tall or less - a phone sideways, or upright with the chat open - the chips, the centre caption and
 the last trick would sit on top of the plates, so they leave the felt and the chips move into the bar.
+A narrow table does the same for the chips alone: upright at 360x740 the tall table is 289px wide under
+a 127px top plate, and both chips sat 16px under it. The board measures it rather than guessing a
+width - a chip touching a plate or a pile sets `data-felt="cramped"` on the stage, the chips go
+`visibility: hidden` (so they keep their box and the next measurement is of the same layout) and the
+bar shows the trump and the score. It is only ever re-judged from scratch when the stage changes size;
+otherwise it can turn on and never off, so the bar cannot grow a chip, shrink the table and bounce.
 
 **The table's chat floats, and the board keeps the width.** It used to be a full-height column docked
 beside the game, and the owner called the whole thing ugly: a third of the screen for a thread that
@@ -1487,6 +1531,62 @@ closed - `settings.railOpen` keeps its old name and now means "the card is open"
 open the table makes room for it, so it never covers the board or the bottom-right player's plate.
 Everywhere else - a phone held upright, and an upright tablet - it is the bottom sheet, half the
 screen first and the whole screen on request.
+
+**The half sheet yields to the board; the board does not shrink to fit the sheet.** At a fixed 48dvh
+the stage at 360x740 was 261px, backgammon's board was drawn 47x39 and hokm-4's table 79x49 - and a
+gate that accepted anything over a pixel passed both. Now every board declares its floor as
+`--fit-min` on its `.table-fit` (a registered `<length>`, so it reads back in px), and
+`lib/sheet-room.ts` measures the fit cell by a `ResizeObserver` in a frame and writes two lengths on
+the row. `--sheet` is the ROOM, `clamp(0, sheet + fit - floor, max(48dvh, the chat's floor))`, and the
+arena's bottom padding reads it, so the board never goes under its floor for the chat's sake.
+`--sheet-h` is the sheet's own height: the room, or the chat's floor where that is taller - its
+header, its notice, its composer and one line of the thread (`chatNeeds().least`). Within one open
+the room only ever gets smaller - a sheet that grew back whenever the bar got shorter would bob the
+composer up and down every turn - and it starts again from 48dvh when the screen's height changes.
+
+**When the screen cannot hold both, the board wins and the chat lies over the bar.** It took the whole
+screen under the header for a while (`data-sheet="full"`), which at 360x740 - one of the commonest
+phones there is - hid every board the moment a guest, whose unsealed notice is four lines, opened the
+chat, and its gate skipped every board check because nothing was visible. Now the sheet is taller than
+its room (`data-sheet="over"`) and covers the bottom of the bar - the hint, the clock, at worst the
+hand - while the board above it stays whole at its floor, and closing the chat brings the controls
+back, as on a phone held sideways. It never reaches above the fit cell: past that the notice gives up
+its height first (`data-yield` on its wrapper, a `min-h-12` scroller that keeps its first line), so
+the floor it can shrink to is the header, the composer, the first line of the notice and the thread's
+inset (`chatNeeds().bare`), and only a chat that cannot keep even that reaches over the board, because
+a composer cut in half is worse than a board short of a few pixels. Shrinking the sheet under its
+floor without the notice yielding was refused: the composer went off the bottom of the screen.
+
+The floors are the boards' own needs, and `fit-pass.mjs` holds the surface to each (`USABLE`):
+backgammon 16rem wide, where the two 1.75rem dice still clear the point tips (124 of the 820 viewBox
+units) and a checker is 15.7px across - the move list is the 44px path, because a point column is
+17px wide on any phone; ludo 13rem, where the roll die in the middle (3.2 cells) is still a 44px
+target, in a 20rem fit cell with its plates; hokm a 13rem fit cell for a table of 12rem by 18rem,
+the height four trick cards at their 2.6rem minimum need clear of the top plate and the bottom one
+(`--top-room`, `--band` and `--trick-w` on the table, with the piles of backs and the avatars gone
+under 17.5rem); poker 12.5rem by 20rem, five 1.6rem cards and the pot with six compact plates round
+them. Poker's tall table is drawn only in a fit cell at least 19.5rem tall, its own usable height
+(`or (max-height: 19.5rem)` beside the 9:8 aspect test): at 360x640 an all-in reader's 328x295 cell is
+just under 9:8, and drew a 236x295 tall table where the wide one is 328x205.
+
+**While the half sheet is open the table takes its short layout explicitly** (`data-sheet`, `half`
+or `over`, on the arena), the same rules a stage 24rem tall gets: hokm's trump and score leave the felt for the bar,
+poker's blinds chip and cost line go, backgammon's match line and pick hint go and its two plates share
+one row above the board, and every board's coach line goes - a 44px note on a touch screen, and the
+difference between hokm-2's opening lead and ludo's first roll keeping their floors at 360x740 or
+not. It used to get the short layout for free, because the 48dvh sheet made the stage that short; a
+sheet that yields leaves the stage taller than 24rem with the table at its floor, and hokm's felt chips
+sat on its plates. Closing the chat brings all of it back.
+
+**And the other tables fold into the title row** (`PlayHeader`'s `compact`): only the ones waiting on
+the reader, each a 44px game icon with a live dot and its name, code and "Your go" as its accessible
+text, with the hidden count beside them. Their own row was 52px of a phone the sheet now shares.
+Hiding the row outright, as the first attempt did, took the "your turn at another table" signal and
+the spoken count with it. With nothing waiting nothing is drawn; closing the sheet brings the row back.
+The chat need not be open: at 360x640 the row alone put backgammon's board at 236x193 and a folded
+poker reader's at 236x295, under both floors, so `watchFold` folds it whenever the fit cell is under
+its floor with the sheet closed, and unfolds it only when the screen's height changes - folding grows
+the board, so a fold re-judged on every layout would fold and unfold forever.
 
 The rule is about which way the SPARE ROOM runs, not about width. It used to float the card at
 every width above a phone and make room only at sidebar width, so a phone turned sideways (844x390,

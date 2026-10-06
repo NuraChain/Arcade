@@ -42,6 +42,37 @@ type Rendered = HTMLElement;
 
 const chunk = vi.hoisted(() => ({ asked: 0 }));
 
+const sheetSize = vi.hoisted(() => ({ forced: null as null | { pad: number; height: number }, fold: null as null | boolean }));
+
+vi.mock('../src/lib/sheet-room.ts', async (real) =>
+{
+    const actual = await real<typeof import('../src/lib/sheet-room.ts')>();
+
+    return {
+        ...actual,
+        watchSheet: (arena: HTMLElement, sheet: HTMLElement, settle: (size: { pad: number; height: number } | null) => void) =>
+        {
+            if (sheetSize.forced === null)
+            {
+                return actual.watchSheet(arena, sheet, settle);
+            }
+
+            settle(sheetSize.forced);
+            return () => undefined;
+        },
+        watchFold: (arena: HTMLElement, settle: (fold: boolean) => void) =>
+        {
+            if (sheetSize.fold === null)
+            {
+                return actual.watchFold(arena, settle);
+            }
+
+            settle(sheetSize.fold);
+            return () => undefined;
+        }
+    };
+});
+
 vi.mock('../src/components/games/match-board.component.azeroth', () =>
 {
     chunk.asked += 1;
@@ -196,13 +227,43 @@ describe('PlayHeader', () =>
         ...extra
     }) as never;
 
-    const mount = (current: never, others: never[]): HTMLElement =>
+    const mount = (current: never, others: never[], compact = false): HTMLElement =>
     {
         const Stub = (): HTMLElement => document.createElement('div');
         const routes: Route[] = [{ path: '/app', component: Stub, children: [{ path: 'play/:id', component: Stub }] }];
         const router = createRouter({ routes, history: createMemoryHistory('/app/play/one'), scroll: false });
-        return renderTest(() => RouterProvider({ router, children: () => PlayHeader({ table: current, others }) }) as Rendered).container;
+        return renderTest(() => RouterProvider({ router, children: () => PlayHeader({ table: current, others, compact }) }) as Rendered).container;
     };
+
+    it('keeps only the tables waiting on the reader when compact, each a named switch in the title row, with the count still spoken', () =>
+    {
+        const container = mount(table('one', 'hokm'), [table('two', 'ludo', { yourTurn: true }), table('three', 'hokm', { yourTurn: false }), table('four', 'poker', { yourTurn: true })], true);
+        const links = [...container.querySelectorAll('nav a')] as HTMLAnchorElement[];
+
+        expect(links.map((link) => link.getAttribute('href'))).toEqual(['/app/play/two', '/app/play/four']);
+        expect(links[0].textContent).toContain('Ludo');
+        expect(links[0].textContent).toContain('TWO');
+        expect(links[0].textContent).toContain('Your go');
+        expect(links[0].querySelector('.sr-only')).not.toBeNull();
+        expect(container.querySelector('nav')!.classList.contains('order-1')).toBe(true);
+        expect(container.querySelector('nav p')?.textContent).toContain('2');
+        expect(container.querySelector('nav p')?.textContent).toContain('waiting on you');
+    });
+
+    it('puts the tables waiting on the reader first, so the signal is never scrolled out of a row that overflows', () =>
+    {
+        const container = mount(table('one', 'hokm'), [table('two', 'ludo', { yourTurn: false }), table('three', 'hokm', { yourTurn: true }), table('four', 'poker'), table('five', 'backgammon', { yourTurn: true })]);
+        const links = [...container.querySelectorAll('nav a')].map((link) => link.getAttribute('href'));
+
+        expect(links).toEqual(['/app/play/three', '/app/play/five', '/app/play/two', '/app/play/four']);
+    });
+
+    it('draws nothing for the other tables when compact and none of them is waiting', () =>
+    {
+        const container = mount(table('one', 'hokm'), [table('two', 'ludo', { yourTurn: false })], true);
+
+        expect(container.querySelector('nav')).toBeNull();
+    });
 
     it('names the game and its pace, and says nothing about other tables when there are none', () =>
     {
@@ -774,7 +835,26 @@ describe('the table’s chat and its controls', () =>
         useLobby().reset();
         useDevice().override(null);
         useSettings().update({ railOpen: true });
+        sheetSize.forced = null;
+        sheetSize.fold = null;
+
+        for (const one of server.tables)
+        {
+            delete one.yourTurn;
+        }
     });
+
+    const headerEndsAt = (bottom: number) =>
+    {
+        const real = HTMLElement.prototype.getBoundingClientRect;
+
+        return vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement)
+        {
+            return this.tagName === 'HEADER'
+                ? { bottom, top: 8, height: bottom - 8, left: 0, right: 844, width: 844, x: 0, y: 8, toJSON: () => ({}) } as DOMRect
+                : real.call(this);
+        });
+    };
 
     const open = async (posture: 'phone' | 'rail' | 'sidebar') =>
     {
@@ -877,11 +957,14 @@ describe('the table’s chat and its controls', () =>
         useDevice().stop();
     });
 
-    it('opens the chat on a phone turned sideways only when asked, as a sheet down the side', async () =>
+    it('opens the chat on a phone turned sideways only when asked, as a sheet down the side, and the header makes room beside it', async () =>
     {
         screen(844, 390);
         useSettings().update({ railOpen: true });
+        const waiting = await useLobby().host('hokm', defaultTable('hokm'), []);
+        server.tables.find((one) => one.id === waiting)!.yourTurn = true;
         const container = await open('rail');
+        const header = (): HTMLElement => container.querySelector('header')!;
 
         expect(rail(container)).toBeNull();
         expect(container.querySelector('.table-sheet:not(.hidden)')).toBeNull();
@@ -889,11 +972,24 @@ describe('the table’s chat and its controls', () =>
         fire(await found(container, 'Show chat'), 'click');
         await settle();
 
-        const sheet = container.querySelector('.table-sheet:not(.hidden)')!;
+        const sheet = container.querySelector<HTMLElement>('.table-sheet:not(.hidden)')!;
 
         expect(sheet.className).toContain('inset-y-0');
-        expect(sheet.className).not.toContain('h-[48dvh]');
-        expect(container.querySelector('[class*="pb-[48dvh]"]')).toBeNull();
+        expect(sheet.className).toContain('w-[min(23rem,60vw)]');
+        expect(sheet.className).not.toContain('h-[var(--sheet-h,48dvh)]');
+        expect(container.querySelector('[class*="pb-[var(--sheet"]')).toBeNull();
+        expect(container.querySelector('[data-sheet]')).toBeNull();
+        expect(header().className).toContain('pe-[min(23rem,60vw)]');
+        expect(button(header(), 'Show chat')).toBeUndefined();
+        expect(header().querySelector('nav.play-others')!.classList.contains('order-1')).toBe(true);
+        expect([...header().querySelectorAll('nav.play-others a')].map((link) => link.getAttribute('href'))).toEqual([`/app/play/${ waiting }`]);
+        expect(header().querySelector('nav.play-others p')!.textContent).toContain('waiting on you');
+
+        fire(await found(sheet, 'Hide chat'), 'click');
+        await settle();
+
+        expect(header().className).not.toContain('pe-[');
+        expect(button(header(), 'Show chat')).toBeDefined();
     });
 
     it('floats the chat beside the board in a landscape window with height to spare, and makes room for it', async () =>
@@ -918,7 +1014,7 @@ describe('the table’s chat and its controls', () =>
         fire(await found(container, 'Show chat'), 'click');
         await settle();
 
-        expect(container.querySelector('.table-sheet')!.className).toContain('h-[48dvh]');
+        expect(container.querySelector('.table-sheet')!.className).toContain('h-[var(--sheet-h,48dvh)]');
     });
 
     it('opens the chat over the table on a phone, half the screen first, and can take all of it', async () =>
@@ -930,19 +1026,129 @@ describe('the table’s chat and its controls', () =>
         fire(button(container, 'Show chat')!, 'click');
         await settle();
 
-        expect(container.querySelector('.table-sheet')!.className).toContain('h-[48dvh]');
+        expect(container.querySelector('.table-sheet')!.className).toContain('h-[var(--sheet-h,48dvh)]');
         await vi.waitFor(() => expect(button(container, 'Make the chat bigger')).toBeDefined(), { timeout: 5000 });
+
+        const edge = headerEndsAt(62);
 
         fire(button(container, 'Make the chat bigger')!, 'click');
         await settle();
 
-        expect(container.querySelector('.table-sheet')!.className).toContain('top-3');
+        expect(container.querySelector('.table-sheet')!.className).toContain('top-[calc(var(--head,0.5rem)+0.25rem)]');
+        expect(container.querySelector('.table-sheet')!.className).not.toContain('h-[var(--sheet-h,48dvh)]');
+        await vi.waitFor(() => expect(container.querySelector<HTMLElement>('.table-sheet')!.parentElement!.style.getPropertyValue('--head')).toBe('62px'), { timeout: 2000 });
+        edge.mockRestore();
 
         fire(button(container, 'Hide chat')!, 'click');
         await settle();
 
         expect(container.querySelector('.table-sheet:not(.hidden)')).toBeNull();
         expect(button(container, 'Show chat')).not.toBeUndefined();
+    });
+
+    it('folds the other tables into the title row while the chat takes the bottom of a phone, keeping the ones waiting on the reader', async () =>
+    {
+        const waiting = await useLobby().host('hokm', defaultTable('hokm'), []);
+        await useLobby().host('backgammon', defaultTable('backgammon'), []);
+        server.tables.find((one) => one.id === waiting)!.yourTurn = true;
+
+        const container = await open('phone');
+        const others = (): HTMLElement | null => container.querySelector('nav.play-others');
+        const links = (): HTMLAnchorElement[] => [...container.querySelectorAll<HTMLAnchorElement>('nav.play-others a')];
+
+        await vi.waitFor(() => expect(links().length).toBeGreaterThanOrEqual(2), { timeout: 4000 });
+        const all = links().length;
+        expect(container.querySelector('[data-sheet]')).toBeNull();
+
+        fire(button(container, 'Show chat')!, 'click');
+        await settle();
+
+        expect(container.querySelector('[data-sheet="half"]')).not.toBeNull();
+        expect(container.querySelector('[data-sheet="half"]')!.className).toContain('pb-[var(--sheet,48dvh)]');
+        expect(others()!.classList.contains('order-1')).toBe(true);
+        expect(others()!.classList.contains('basis-full')).toBe(false);
+        expect(links().map((link) => link.getAttribute('href'))).toEqual([`/app/play/${ waiting }`]);
+        expect(links()[0].textContent).toContain('Hokm');
+        expect(links()[0].textContent).toContain('Your go');
+        expect(others()!.querySelector('p')!.textContent).toContain('waiting on you');
+
+        fire(button(container, 'Hide chat')!, 'click');
+        await settle();
+
+        expect(container.querySelector('[data-sheet]')).toBeNull();
+        expect(links()).toHaveLength(all);
+        expect(others()!.classList.contains('basis-full')).toBe(true);
+    });
+
+    it('lays the chat over the bar on a phone too short for it and the board, and leaves the board its floor above it', async () =>
+    {
+        const waiting = await useLobby().host('hokm', defaultTable('hokm'), []);
+        server.tables.find((one) => one.id === waiting)!.yourTurn = true;
+        sheetSize.forced = { pad: 148, height: 192 };
+
+        const container = await open('phone');
+        const links = (): HTMLAnchorElement[] => [...container.querySelectorAll<HTMLAnchorElement>('nav.play-others a')];
+
+        await vi.waitFor(() => expect(links().length).toBeGreaterThanOrEqual(1), { timeout: 4000 });
+
+        fire(button(container, 'Show chat')!, 'click');
+        await settle();
+
+        const arena = container.querySelector<HTMLElement>('[data-sheet]')!;
+        const sheet = container.querySelector<HTMLElement>('.table-sheet:not(.hidden)')!;
+
+        await found(sheet, 'Hide chat');
+
+        expect(arena.dataset.sheet).toBe('over');
+        expect(arena.className).toContain('pb-[var(--sheet,48dvh)]');
+        expect(sheet.className).toContain('h-[var(--sheet-h,48dvh)]');
+        expect(sheet.className).not.toContain('top-[');
+        expect(sheet.parentElement!.style.getPropertyValue('--sheet')).toBe('148px');
+        expect(sheet.parentElement!.style.getPropertyValue('--sheet-h')).toBe('192px');
+        expect(button(container, 'Make the chat bigger')).toBeDefined();
+        expect(container.querySelector('nav.play-others')!.classList.contains('order-1')).toBe(true);
+        expect(links().some((link) => link.getAttribute('href') === `/app/play/${ waiting }` && (link.textContent ?? '').includes('Your go'))).toBe(true);
+
+        fire(button(sheet, 'Hide chat')!, 'click');
+        await settle();
+
+        expect(container.querySelector('[data-sheet]')).toBeNull();
+        expect(container.querySelector('.table-sheet:not(.hidden)')).toBeNull();
+    });
+
+    it('keeps the half sheet the room the board can spare, and writes it where the sheet and the arena both read it', async () =>
+    {
+        sheetSize.forced = { pad: 262, height: 262 };
+
+        const container = await open('phone');
+
+        fire(button(container, 'Show chat')!, 'click');
+        await settle();
+
+        const arena = container.querySelector<HTMLElement>('[data-sheet]')!;
+
+        expect(arena.dataset.sheet).toBe('half');
+        expect(arena.className).toContain('pb-[var(--sheet,48dvh)]');
+        expect(arena.parentElement!.style.getPropertyValue('--sheet')).toBe('262px');
+        expect(arena.parentElement!.style.getPropertyValue('--sheet-h')).toBe('262px');
+        expect(container.querySelector('.table-sheet')!.className).toContain('h-[var(--sheet-h,48dvh)]');
+    });
+
+    it('folds the other tables into the title row with the chat closed when the board would otherwise fall under its floor', async () =>
+    {
+        const waiting = await useLobby().host('hokm', defaultTable('hokm'), []);
+        await useLobby().host('backgammon', defaultTable('backgammon'), []);
+        server.tables.find((one) => one.id === waiting)!.yourTurn = true;
+        sheetSize.fold = true;
+
+        const container = await open('phone');
+        const links = (): HTMLAnchorElement[] => [...container.querySelectorAll<HTMLAnchorElement>('nav.play-others a')];
+
+        await vi.waitFor(() => expect(links().map((link) => link.getAttribute('href'))).toEqual([`/app/play/${ waiting }`]), { timeout: 4000 });
+
+        expect(container.querySelector('[data-sheet]')).toBeNull();
+        expect(container.querySelector('nav.play-others')!.classList.contains('order-1')).toBe(true);
+        expect(container.querySelector('nav.play-others p')!.textContent).toContain('waiting on you');
     });
 
     it('gathers the table’s tools into one sheet on a phone, and gives up only after it has closed', () =>
