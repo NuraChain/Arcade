@@ -951,346 +951,346 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
 
     <div data-rev={ props.match.rev } class="table-stage hokm-stage" ref={ (element) => arena = element }>
         <div class="table-grid">
-        <Show when={ view !== null }>
-            { () =>
-                <div class="table-fit">
-                    <div class="table-surface hokm-table">
-                        <div class="hokm-felt-info" aria-hidden="true">
-                            <span class="hokm-chip">
-                                <Show
-                                    when={ view?.trump !== undefined }
-                                    fallback={ <Icon name="crest-crown" size={ 12 } class="shrink-0 text-gold" /> }
-                                >
-                                    { () =>
-                                        <span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-text">
-                                            <Icon name={ SUIT_ICON[view!.trump!] } size={ 12 } class={ RED_SUITS.includes(view!.trump!) ? 'text-danger-fill' : 'text-bright-ink' } />
-                                        </span>
-                                    }
-                                </Show>
-                                <span>{ locale.t('hokm.round', { n: locale.n(view!.round) }) }</span>
-                            </span>
-                            <span class="hokm-chip">
-                                <For each={ sides } key={ (side) => side.index } let={ side }>
-                                    <span class="flex items-center gap-1">
-                                        <span class={ () => [ 'h-2 w-2 rounded-full bg-current', SIDE_TONE[side.index % SIDE_TONE.length] ].join(' ') }></span>
-                                        <span class="tally font-bold text-white">{ locale.n(side.points) }</span>
-                                    </span>
-                                </For>
-                                <span class="tally text-white/60">/{ locale.n(view!.target) }</span>
-                            </span>
-                        </div>
-
-                        <For each={ plates } key={ (plate) => plate.row.seat } let={ plate }>
-                            <div class="hokm-seat" data-side={ plate.side } data-seat={ plate.row.seat }>
-                                <TablePlate
-                                    who={ whoAt(plate.row.seat) }
-                                    name={ nameOf(plate.row.seat) }
-                                    turn={ !over && plate.row.seat === view!.turn }
-                                    remainingMs={ game.remainingMs }
-                                    turnMs={ props.turnMs }
-                                    dim={ plate.row.out }
-                                    tag={ tagOf(plate.row.seat)?.text }
-                                    tone={ tagOf(plate.row.seat)?.tone }
-                                    bubble={ props.speech?.[whoAt(plate.row.seat)] }
-                                    below={ plate.side !== 'bottom' }
-                                    anchor={ plate.side.endsWith('right') ? 'end' : (plate.side.endsWith('left') ? 'start' : 'centre') }
-                                    marker={ plate.row.seat === view!.hakem ? <Icon name="crest-crown" size={ 14 } class="text-gold" /> : undefined }
-                                    facts={
-                                        <span class="contents">
-                                            <span class="flex items-center gap-0.5" aria-hidden="true">
-                                                <Icon name="trophy" size={ 11 } class={ SIDE_TONE[plate.row.side % SIDE_TONE.length] } />
-                                                <span class="tally">{ locale.n(plate.row.tricks) }</span>
-                                            </span>
-                                            <span class="flex items-center gap-0.5" aria-hidden="true">
-                                                <Icon name="cards" size={ 11 } />
-                                                <span class="tally">{ locale.n(plate.row.held) }</span>
-                                            </span>
-                                            <span class="sr-only">{ locale.plural('hokm.tricks', plate.row.tricks) }, { locale.plural('hokm.held', plate.row.held) }</span>
-                                        </span>
-                                    }
-                                />
-                                <Show when={ plate.backs.length > 0 }>
-                                    { () =>
-                                        <span class="hokm-pile" style={ `--n: ${ plate.backs.length }` } aria-hidden="true">
-                                            <For each={ plate.backs } key={ (back) => back } let={ back }>
-                                                <span class="card-back" style={ `--i: ${ back }` }></span>
-                                            </For>
-                                        </span>
-                                    }
-                                </Show>
-                            </div>
-                        </For>
-
-                        <Show when={ view?.stock !== undefined }>
-                            { () =>
-                                <div class="hokm-stock" aria-hidden="true">
-                                    <span class="hokm-stock-pile">
-                                        <For each={ [0, 1, 2].slice(0, Math.min(3, view?.stock ?? 0)) } key={ (back) => back } let={ back }>
-                                            <span class="card-back" style={ `--i: ${ back }` }></span>
-                                        </For>
-                                    </span>
-                                    <span class="hokm-chip hokm-stock-count"><span class="tally">{ locale.n(view?.stock ?? 0) }</span></span>
-                                </div>
-                            }
-                        </Show>
-
-                        <Show when={ laid.cards.length === 0 && !over && !choosing && !drawing }>
-                            { () =>
-                                <div class="hokm-centre" dir={ locale.dir() } aria-hidden="true">
-                                    <Icon name="crest-crown" size={ 18 } class="text-gold" />
-                                    <span class="font-display text-ui-lg font-bold">{ locale.t('games.hokm.name') }</span>
-                                    <span class="text-ui-2xs font-semibold text-gold">{ locale.t('hokm.round', { n: locale.n(view!.round) }) }</span>
-                                    <Show when={ view?.trump !== undefined }>
+            <Show when={ view !== null }>
+                { () =>
+                    <div class="table-fit">
+                        <div class="table-surface hokm-table">
+                            <div class="hokm-felt-info" aria-hidden="true">
+                                <span class="hokm-chip">
+                                    <Show
+                                        when={ view?.trump !== undefined }
+                                        fallback={ <Icon name="crest-crown" size={ 12 } class="shrink-0 text-gold" /> }
+                                    >
                                         { () =>
-                                            <span class="flex items-center gap-1 text-ui-2xs">
-                                                <Icon name={ SUIT_ICON[view!.trump!] } size={ 12 } class={ RED_SUITS.includes(view!.trump!) ? 'text-danger' : 'text-white' } />
-                                                <span>{ locale.t(`hokm.suit.${ view!.trump! }` as never) }</span>
+                                            <span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-text">
+                                                <Icon name={ SUIT_ICON[view!.trump!] } size={ 12 } class={ RED_SUITS.includes(view!.trump!) ? 'text-danger-fill' : 'text-bright-ink' } />
                                             </span>
                                         }
                                     </Show>
-                                    <span class="text-ui-2xs font-semibold text-white">{ says }</span>
-                                </div>
-                            }
-                        </Show>
+                                    <span>{ locale.t('hokm.round', { n: locale.n(view!.round) }) }</span>
+                                </span>
+                                <span class="hokm-chip">
+                                    <For each={ sides } key={ (side) => side.index } let={ side }>
+                                        <span class="flex items-center gap-1">
+                                            <span class={ () => [ 'h-2 w-2 rounded-full bg-current', SIDE_TONE[side.index % SIDE_TONE.length] ].join(' ') }></span>
+                                            <span class="tally font-bold text-white">{ locale.n(side.points) }</span>
+                                        </span>
+                                    </For>
+                                    <span class="tally text-white/60">/{ locale.n(view!.target) }</span>
+                                </span>
+                            </div>
 
-                        <Show when={ choosing }>
-                            { () =>
-                                <div class="hokm-choose" dir={ locale.dir() }>
-                                    <p class="hokm-choose-title">{ locale.t('hokm.trump.choose') }</p>
-                                    <ul class="grid grid-cols-2 gap-2">
-                                        <For each={ [...SUITS] } key={ (suit) => suit } let={ suit }>
-                                            <li class="flex min-w-0">
-                                                <button
-                                                    type="button"
-                                                    class="flex min-h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-tile border border-white/15 bg-void/85 px-2 text-ui-sm font-semibold text-text shadow-2 transition hover:border-accent hover:bg-lifted disabled:cursor-not-allowed disabled:opacity-50"
-                                                    disabled={ board.busy() }
-                                                    onClick={ () => void callTrump(suit) }
-                                                >
-                                                    <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-text">
-                                                        <Icon name={ SUIT_ICON[suit] } size={ 16 } class={ RED_SUITS.includes(suit) ? 'text-danger-fill' : 'text-bright-ink' } />
-                                                    </span>
-                                                    <span class="truncate">{ locale.t(`hokm.suit.${ suit }` as never) }</span>
-                                                </button>
-                                            </li>
+                            <For each={ plates } key={ (plate) => plate.row.seat } let={ plate }>
+                                <div class="hokm-seat" data-side={ plate.side } data-seat={ plate.row.seat }>
+                                    <TablePlate
+                                        who={ whoAt(plate.row.seat) }
+                                        name={ nameOf(plate.row.seat) }
+                                        turn={ !over && plate.row.seat === view!.turn }
+                                        remainingMs={ game.remainingMs }
+                                        turnMs={ props.turnMs }
+                                        dim={ plate.row.out }
+                                        tag={ tagOf(plate.row.seat)?.text }
+                                        tone={ tagOf(plate.row.seat)?.tone }
+                                        bubble={ props.speech?.[whoAt(plate.row.seat)] }
+                                        below={ plate.side !== 'bottom' }
+                                        anchor={ plate.side.endsWith('right') ? 'end' : (plate.side.endsWith('left') ? 'start' : 'centre') }
+                                        marker={ plate.row.seat === view!.hakem ? <Icon name="crest-crown" size={ 14 } class="text-gold" /> : undefined }
+                                        facts={
+                                            <span class="contents">
+                                                <span class="flex items-center gap-0.5" aria-hidden="true">
+                                                    <Icon name="trophy" size={ 11 } class={ SIDE_TONE[plate.row.side % SIDE_TONE.length] } />
+                                                    <span class="tally">{ locale.n(plate.row.tricks) }</span>
+                                                </span>
+                                                <span class="flex items-center gap-0.5" aria-hidden="true">
+                                                    <Icon name="cards" size={ 11 } />
+                                                    <span class="tally">{ locale.n(plate.row.held) }</span>
+                                                </span>
+                                                <span class="sr-only">{ locale.plural('hokm.tricks', plate.row.tricks) }, { locale.plural('hokm.held', plate.row.held) }</span>
+                                            </span>
+                                        }
+                                    />
+                                    <Show when={ plate.backs.length > 0 }>
+                                        { () =>
+                                            <span class="hokm-pile" style={ `--n: ${ plate.backs.length }` } aria-hidden="true">
+                                                <For each={ plate.backs } key={ (back) => back } let={ back }>
+                                                    <span class="card-back" style={ `--i: ${ back }` }></span>
+                                                </For>
+                                            </span>
+                                        }
+                                    </Show>
+                                </div>
+                            </For>
+
+                            <Show when={ view?.stock !== undefined }>
+                                { () =>
+                                    <div class="hokm-stock" aria-hidden="true">
+                                        <span class="hokm-stock-pile">
+                                            <For each={ [0, 1, 2].slice(0, Math.min(3, view?.stock ?? 0)) } key={ (back) => back } let={ back }>
+                                                <span class="card-back" style={ `--i: ${ back }` }></span>
+                                            </For>
+                                        </span>
+                                        <span class="hokm-chip hokm-stock-count"><span class="tally">{ locale.n(view?.stock ?? 0) }</span></span>
+                                    </div>
+                                }
+                            </Show>
+
+                            <Show when={ laid.cards.length === 0 && !over && !choosing && !drawing }>
+                                { () =>
+                                    <div class="hokm-centre" dir={ locale.dir() } aria-hidden="true">
+                                        <Icon name="crest-crown" size={ 18 } class="text-gold" />
+                                        <span class="font-display text-ui-lg font-bold">{ locale.t('games.hokm.name') }</span>
+                                        <span class="text-ui-2xs font-semibold text-gold">{ locale.t('hokm.round', { n: locale.n(view!.round) }) }</span>
+                                        <Show when={ view?.trump !== undefined }>
+                                            { () =>
+                                                <span class="flex items-center gap-1 text-ui-2xs">
+                                                    <Icon name={ SUIT_ICON[view!.trump!] } size={ 12 } class={ RED_SUITS.includes(view!.trump!) ? 'text-danger' : 'text-white' } />
+                                                    <span>{ locale.t(`hokm.suit.${ view!.trump! }` as never) }</span>
+                                                </span>
+                                            }
+                                        </Show>
+                                        <span class="text-ui-2xs font-semibold text-white">{ says }</span>
+                                    </div>
+                                }
+                            </Show>
+
+                            <Show when={ choosing }>
+                                { () =>
+                                    <div class="hokm-choose" dir={ locale.dir() }>
+                                        <p class="hokm-choose-title">{ locale.t('hokm.trump.choose') }</p>
+                                        <ul class="grid grid-cols-2 gap-2">
+                                            <For each={ [...SUITS] } key={ (suit) => suit } let={ suit }>
+                                                <li class="flex min-w-0">
+                                                    <button
+                                                        type="button"
+                                                        class="flex min-h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-tile border border-white/15 bg-void/85 px-2 text-ui-sm font-semibold text-text shadow-2 transition hover:border-accent hover:bg-lifted disabled:cursor-not-allowed disabled:opacity-50"
+                                                        disabled={ board.busy() }
+                                                        onClick={ () => void callTrump(suit) }
+                                                    >
+                                                        <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-text">
+                                                            <Icon name={ SUIT_ICON[suit] } size={ 16 } class={ RED_SUITS.includes(suit) ? 'text-danger-fill' : 'text-bright-ink' } />
+                                                        </span>
+                                                        <span class="truncate">{ locale.t(`hokm.suit.${ suit }` as never) }</span>
+                                                    </button>
+                                                </li>
+                                            </For>
+                                        </ul>
+                                    </div>
+                                }
+                            </Show>
+
+                            <Show when={ offered } let={ drawn }>
+                                <div class="hokm-choose hokm-draw" dir={ locale.dir() }>
+                                    <p class="hokm-choose-title">{ locale.t('hokm.draw.title') }</p>
+                                    <span class="hokm-draw-card"><CardFace card={ drawn.card } /></span>
+                                    <div class="flex flex-col gap-2">
+                                        <Button variant="primary" size="sm" block disabled={ board.busy() } onClick={ () => void draw('keep') }>
+                                            { locale.t('hokm.draw.keep', { card: cardSays(drawn.card) }) }
+                                        </Button>
+                                        <Button variant="secondary" size="sm" block disabled={ board.busy() } onClick={ () => void draw('reject') }>
+                                            { locale.t('hokm.draw.next') }
+                                        </Button>
+                                    </div>
+                                </div>
+                            </Show>
+
+                            <For each={ laid.cards } key={ (one) => one.card } let={ one }>
+                                <div
+                                    class="hokm-trick"
+                                    data-card={ one.card }
+                                    data-landing={ landing.includes(one.card) ? 'true' : undefined }
+                                    data-took={ one.seat === laid.took ? 'true' : 'false' }
+                                    style={ `--dx: ${ REACH[one.side][0] }; --dy: ${ REACH[one.side][1] }; --tilt: ${ ((one.card * 37) % 11) - 5 }deg` }
+                                    aria-hidden="true"
+                                >
+                                    <CardFace card={ one.card } />
+                                </div>
+                            </For>
+
+                            <Show when={ view?.took !== undefined }>
+                                { () =>
+                                    <div class="hokm-last-tile" aria-hidden="true">
+                                        <span class="hokm-last-title">{ locale.t('hokm.lastTrick') }</span>
+                                        <ul class="hokm-last">
+                                            <For each={ view!.took!.cards } key={ (card) => card } let={ card }>
+                                                <li><CardFace card={ card } /></li>
+                                            </For>
+                                        </ul>
+                                    </div>
+                                }
+                            </Show>
+
+                            <Show when={ banner !== null }>
+                                { () =>
+                                    <div class="hokm-banner" data-kot={ banner!.kot ? 'true' : 'false' } data-ours={ banner!.ours ? 'true' : 'false' } dir={ locale.dir() } aria-hidden="true">
+                                        <Show when={ banner!.kot } fallback={ <span class="tally">+{ locale.n(banner!.points) }</span> }>
+                                            { () => <span>{ locale.t('hokm.kot') }</span> }
+                                        </Show>
+                                    </div>
+                                }
+                            </Show>
+
+                            <ul class="sr-only">
+                                <For each={ laid.cards } key={ (one) => one.card } let={ one }>
+                                    <li>{ locale.t('hokm.played', { name: nameOf(one.seat), card: cardSays(one.card) }) }</li>
+                                </For>
+                            </ul>
+
+                            <aside class="hokm-side sr-only" aria-label={ locale.t('hokm.summary') }>
+                                <section>
+                                    <h3>{ locale.t('hokm.trump') }</h3>
+                                    <p>{ view?.trump === undefined ? locale.t('hokm.trump.none') : locale.t(`hokm.suit.${ view!.trump! }` as never) }</p>
+                                    <p>{ view!.hakem === mine ? locale.t('hokm.hakem.you') : locale.t('hokm.hakem', { name: nameOf(view!.hakem) }) }</p>
+                                    <Show when={ view?.stock !== undefined }>
+                                        { () => <p>{ locale.plural('hokm.stock', view?.stock ?? 0) }</p> }
+                                    </Show>
+                                </section>
+                                <section>
+                                    <h3>{ locale.t('hokm.score') }</h3>
+                                    <p>{ locale.t('hokm.round', { n: locale.n(view!.round) }) }</p>
+                                    <dl>
+                                        <For each={ sides } key={ (side) => side.index } let={ side }>
+                                            <div>
+                                                <dt>{ side.names }</dt>
+                                                <dd>
+                                                    <span>{ locale.t('hokm.points', { points: locale.n(side.points), target: locale.n(view!.target) }) }</span>
+                                                    <span>{ locale.plural('hokm.tricks', side.tricks) }</span>
+                                                </dd>
+                                            </div>
                                         </For>
-                                    </ul>
-                                </div>
-                            }
-                        </Show>
+                                    </dl>
+                                </section>
+                                <section>
+                                    <h3>{ locale.t('hokm.lastTrick') }</h3>
+                                    <p>{ view?.took === undefined ? locale.t('hokm.lastTrick.none') : locale.t('hokm.table.took', { name: nameOf(view!.took!.seat) }) }</p>
+                                </section>
+                            </aside>
+                        </div>
+                    </div>
+                }
+            </Show>
 
-                        <Show when={ offered } let={ drawn }>
-                            <div class="hokm-choose hokm-draw" dir={ locale.dir() }>
-                                <p class="hokm-choose-title">{ locale.t('hokm.draw.title') }</p>
-                                <span class="hokm-draw-card"><CardFace card={ drawn.card } /></span>
-                                <div class="flex flex-col gap-2">
-                                    <Button variant="primary" size="sm" block disabled={ board.busy() } onClick={ () => void draw('keep') }>
-                                        { locale.t('hokm.draw.keep', { card: cardSays(drawn.card) }) }
-                                    </Button>
-                                    <Button variant="secondary" size="sm" block disabled={ board.busy() } onClick={ () => void draw('reject') }>
-                                        { locale.t('hokm.draw.next') }
-                                    </Button>
-                                </div>
-                            </div>
-                        </Show>
-
-                        <For each={ laid.cards } key={ (one) => one.card } let={ one }>
-                            <div
-                                class="hokm-trick"
-                                data-card={ one.card }
-                                data-landing={ landing.includes(one.card) ? 'true' : undefined }
-                                data-took={ one.seat === laid.took ? 'true' : 'false' }
-                                style={ `--dx: ${ REACH[one.side][0] }; --dy: ${ REACH[one.side][1] }; --tilt: ${ ((one.card * 37) % 11) - 5 }deg` }
-                                aria-hidden="true"
-                            >
-                                <CardFace card={ one.card } />
-                            </div>
+            <Show when={ view !== null && !over && rows.length > 0 }>
+                { () =>
+                    <div class="table-hand hokm-hands" style={ `--rows: ${ rows.length }` }>
+                        <For each={ rows } key={ (_, index) => index } let={ row }>
+                            <ul class="hokm-hand" style={ `--n: ${ row.length }` } aria-label={ locale.t('hokm.hand') }>
+                                <For each={ row } key={ (card) => card } let={ card } index={ index }>
+                                    <li style={ fan(index, row.length) }>
+                                        <button
+                                            type="button"
+                                            class="card-hold"
+                                            data-card={ card }
+                                            data-legal={ discarding ? 'true' : (myTurn ? (hints.hintMoves ? (legal.has(card) ? 'true' : 'false') : 'hidden') : 'idle') }
+                                            data-picked={ chosen === card || picks.includes(card) ? 'true' : undefined }
+                                            disabled={ discarding ? board.busy() : (!legal.has(card) || board.busy()) }
+                                            aria-label={ discarding ? cardSays(card) : cardLabel(card) }
+                                            aria-pressed={ discarding ? picks.includes(card) : (device.coarse() ? chosen === card : undefined) }
+                                            onClick={ () => (discarding ? toggleAway(card) : touchCard(card)) }
+                                            onPointerEnter={ (event) => (event.pointerType === 'mouse' ? aim(card) : undefined) }
+                                            onPointerLeave={ () => unaim(card) }
+                                            onFocus={ () => aim(card) }
+                                            onBlur={ () => unaim(card) }
+                                        >
+                                            <CardFace card={ card } />
+                                        </button>
+                                    </li>
+                                </For>
+                            </ul>
                         </For>
+                    </div>
+                }
+            </Show>
 
-                        <Show when={ view?.took !== undefined }>
-                            { () =>
-                                <div class="hokm-last-tile" aria-hidden="true">
-                                    <span class="hokm-last-title">{ locale.t('hokm.lastTrick') }</span>
-                                    <ul class="hokm-last">
-                                        <For each={ view!.took!.cards } key={ (card) => card } let={ card }>
-                                            <li><CardFace card={ card } /></li>
-                                        </For>
-                                    </ul>
-                                </div>
-                            }
-                        </Show>
+            <Show when={ view !== null && !over }>
+                { () =>
+                    <section class="table-bar hokm-play">
+                        <div class="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+                            <p class="min-w-0 flex-[1_1_6.5rem] truncate text-ui-base font-semibold text-text" aria-live="polite">{ says }</p>
+                            <span class="hokm-bar-facts" aria-hidden="true">
+                                <span class="hokm-chip">
+                                    <Show
+                                        when={ view?.trump !== undefined }
+                                        fallback={ <Icon name="crest-crown" size={ 12 } class="shrink-0 text-gold" /> }
+                                    >
+                                        { () =>
+                                            <span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-text">
+                                                <Icon name={ SUIT_ICON[view!.trump!] } size={ 12 } class={ RED_SUITS.includes(view!.trump!) ? 'text-danger-fill' : 'text-bright-ink' } />
+                                            </span>
+                                        }
+                                    </Show>
+                                    <For each={ sides } key={ (side) => side.index } let={ side }>
+                                        <span class="flex items-center gap-1">
+                                            <span class={ () => [ 'h-2 w-2 rounded-full bg-current', SIDE_TONE[side.index % SIDE_TONE.length] ].join(' ') }></span>
+                                            <span class="tally font-bold text-white">{ locale.n(side.points) }</span>
+                                        </span>
+                                    </For>
+                                    <span class="tally text-white/60">/{ locale.n(view!.target) }</span>
+                                </span>
+                            </span>
+                            <Show when={ filling }>
+                                { () =>
+                                    <span class="hokm-chip hokm-filled">
+                                        <span class="tally" aria-hidden="true">{ locale.n(view?.hand.length ?? 0) }/{ locale.n(view?.full ?? 0) }</span>
+                                        <span class="sr-only">{ locale.t('hokm.filled', { held: locale.n(view?.hand.length ?? 0), full: locale.n(view?.full ?? 0) }) }</span>
+                                    </span>
+                                }
+                            </Show>
+                            <TurnClock remainingMs={ game.remainingMs } over={ over } yours={ acting } />
+                            <Show when={ (view?.hand.length ?? 0) > 1 }>
+                                { () =>
+                                    <Button variant="secondary" size="sm" leading="sort" pressed={ sorted } onClick={ () => sorted = !sorted }>
+                                        { locale.t('hokm.sort') }
+                                    </Button>
+                                }
+                            </Show>
+                        </div>
 
-                        <Show when={ banner !== null }>
+                        <Show when={ mine !== undefined }>
                             { () =>
-                                <div class="hokm-banner" data-kot={ banner!.kot ? 'true' : 'false' } data-ours={ banner!.ours ? 'true' : 'false' } dir={ locale.dir() } aria-hidden="true">
-                                    <Show when={ banner!.kot } fallback={ <span class="tally">+{ locale.n(banner!.points) }</span> }>
-                                        { () => <span>{ locale.t('hokm.kot') }</span> }
+                                <div class="flex min-h-11 min-w-0 flex-col justify-center gap-1">
+                                    <Show when={ discarding }>
+                                        { () =>
+                                            <span class="glow-cta mx-auto flex w-full max-w-[22rem] rounded-control">
+                                                <Button variant="primary" size="lg" leading="cards" block loading={ board.busy() } disabled={ picks.length !== due } onClick={ () => void putDown() }>
+                                                    { locale.t('hokm.discard.put', { count: locale.n(due) }) }
+                                                </Button>
+                                            </span>
+                                        }
+                                    </Show>
+                                    <Show when={ glimpsed } let={ seen }>
+                                        <p class="text-center text-ui-xs text-muted">{ locale.t('hokm.draw.glimpse', { card: cardSays(seen.card) }) }</p>
+                                    </Show>
+                                    <Show when={ chosen !== null }>
+                                        { () =>
+                                            <span class="glow-cta mx-auto flex w-full max-w-[22rem] rounded-control">
+                                                <Button variant="primary" size="lg" leading="cards" block loading={ board.busy() } label={ cardLabel(chosen!) } onClick={ () => void playCard(chosen!) }>
+                                                    { locale.t('hokm.play', { card: cardSays(chosen!) }) }
+                                                </Button>
+                                            </span>
+                                        }
+                                    </Show>
+                                    <Show when={ hints.hintOutcome && myTurn }>
+                                        { () => <p class="hokm-outcome min-h-5 text-center text-ui-xs font-semibold text-text" aria-hidden="true">{ outcome ?? '' }</p> }
+                                    </Show>
+                                    <Show when={ chosen === null }>
+                                        { () =>
+                                            <span class="contents">
+                                                <CoachLine tip={ tip } />
+                                                <Show when={ myTurn && device.coarse() }>
+                                                    { () => <p class="text-center text-ui-xs text-muted">{ locale.t('hokm.pick') }</p> }
+                                                </Show>
+                                                <Show when={ myTurn && legal.size < (view?.hand.length ?? 0) && !(hints.hintRules && tip !== null) }>
+                                                    { () => <p class="text-center text-ui-xs text-muted">{ locale.t('hokm.follow') }</p> }
+                                                </Show>
+                                            </span>
+                                        }
                                     </Show>
                                 </div>
                             }
                         </Show>
-
-                        <ul class="sr-only">
-                            <For each={ laid.cards } key={ (one) => one.card } let={ one }>
-                                <li>{ locale.t('hokm.played', { name: nameOf(one.seat), card: cardSays(one.card) }) }</li>
-                            </For>
-                        </ul>
-
-                        <aside class="hokm-side sr-only" aria-label={ locale.t('hokm.summary') }>
-                            <section>
-                                <h3>{ locale.t('hokm.trump') }</h3>
-                                <p>{ view?.trump === undefined ? locale.t('hokm.trump.none') : locale.t(`hokm.suit.${ view!.trump! }` as never) }</p>
-                                <p>{ view!.hakem === mine ? locale.t('hokm.hakem.you') : locale.t('hokm.hakem', { name: nameOf(view!.hakem) }) }</p>
-                                <Show when={ view?.stock !== undefined }>
-                                    { () => <p>{ locale.plural('hokm.stock', view?.stock ?? 0) }</p> }
-                                </Show>
-                            </section>
-                            <section>
-                                <h3>{ locale.t('hokm.score') }</h3>
-                                <p>{ locale.t('hokm.round', { n: locale.n(view!.round) }) }</p>
-                                <dl>
-                                    <For each={ sides } key={ (side) => side.index } let={ side }>
-                                        <div>
-                                            <dt>{ side.names }</dt>
-                                            <dd>
-                                                <span>{ locale.t('hokm.points', { points: locale.n(side.points), target: locale.n(view!.target) }) }</span>
-                                                <span>{ locale.plural('hokm.tricks', side.tricks) }</span>
-                                            </dd>
-                                        </div>
-                                    </For>
-                                </dl>
-                            </section>
-                            <section>
-                                <h3>{ locale.t('hokm.lastTrick') }</h3>
-                                <p>{ view?.took === undefined ? locale.t('hokm.lastTrick.none') : locale.t('hokm.table.took', { name: nameOf(view!.took!.seat) }) }</p>
-                            </section>
-                        </aside>
-                    </div>
-                </div>
-            }
-        </Show>
-
-        <Show when={ view !== null && !over && rows.length > 0 }>
-            { () =>
-                <div class="table-hand hokm-hands" style={ `--rows: ${ rows.length }` }>
-                    <For each={ rows } key={ (_, index) => index } let={ row }>
-                        <ul class="hokm-hand" style={ `--n: ${ row.length }` } aria-label={ locale.t('hokm.hand') }>
-                            <For each={ row } key={ (card) => card } let={ card } index={ index }>
-                                <li style={ fan(index, row.length) }>
-                                    <button
-                                        type="button"
-                                        class="card-hold"
-                                        data-card={ card }
-                                        data-legal={ discarding ? 'true' : (myTurn ? (hints.hintMoves ? (legal.has(card) ? 'true' : 'false') : 'hidden') : 'idle') }
-                                        data-picked={ chosen === card || picks.includes(card) ? 'true' : undefined }
-                                        disabled={ discarding ? board.busy() : (!legal.has(card) || board.busy()) }
-                                        aria-label={ discarding ? cardSays(card) : cardLabel(card) }
-                                        aria-pressed={ discarding ? picks.includes(card) : (device.coarse() ? chosen === card : undefined) }
-                                        onClick={ () => (discarding ? toggleAway(card) : touchCard(card)) }
-                                        onPointerEnter={ (event) => (event.pointerType === 'mouse' ? aim(card) : undefined) }
-                                        onPointerLeave={ () => unaim(card) }
-                                        onFocus={ () => aim(card) }
-                                        onBlur={ () => unaim(card) }
-                                    >
-                                        <CardFace card={ card } />
-                                    </button>
-                                </li>
-                            </For>
-                        </ul>
-                    </For>
-                </div>
-            }
-        </Show>
-
-        <Show when={ view !== null && !over }>
-            { () =>
-                <section class="table-bar hokm-play">
-                    <div class="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-                        <p class="min-w-0 flex-[1_1_6.5rem] truncate text-ui-base font-semibold text-text" aria-live="polite">{ says }</p>
-                        <span class="hokm-bar-facts" aria-hidden="true">
-                            <span class="hokm-chip">
-                                <Show
-                                    when={ view?.trump !== undefined }
-                                    fallback={ <Icon name="crest-crown" size={ 12 } class="shrink-0 text-gold" /> }
-                                >
-                                    { () =>
-                                        <span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-text">
-                                            <Icon name={ SUIT_ICON[view!.trump!] } size={ 12 } class={ RED_SUITS.includes(view!.trump!) ? 'text-danger-fill' : 'text-bright-ink' } />
-                                        </span>
-                                    }
-                                </Show>
-                                <For each={ sides } key={ (side) => side.index } let={ side }>
-                                    <span class="flex items-center gap-1">
-                                        <span class={ () => [ 'h-2 w-2 rounded-full bg-current', SIDE_TONE[side.index % SIDE_TONE.length] ].join(' ') }></span>
-                                        <span class="tally font-bold text-white">{ locale.n(side.points) }</span>
-                                    </span>
-                                </For>
-                                <span class="tally text-white/60">/{ locale.n(view!.target) }</span>
-                            </span>
-                        </span>
-                        <Show when={ filling }>
-                            { () =>
-                                <span class="hokm-chip hokm-filled">
-                                    <span class="tally" aria-hidden="true">{ locale.n(view?.hand.length ?? 0) }/{ locale.n(view?.full ?? 0) }</span>
-                                    <span class="sr-only">{ locale.t('hokm.filled', { held: locale.n(view?.hand.length ?? 0), full: locale.n(view?.full ?? 0) }) }</span>
-                                </span>
-                            }
-                        </Show>
-                        <TurnClock remainingMs={ game.remainingMs } over={ over } yours={ acting } />
-                        <Show when={ (view?.hand.length ?? 0) > 1 }>
-                            { () =>
-                                <Button variant="secondary" size="sm" leading="sort" pressed={ sorted } onClick={ () => sorted = !sorted }>
-                                    { locale.t('hokm.sort') }
-                                </Button>
-                            }
-                        </Show>
-                    </div>
-
-                    <Show when={ mine !== undefined }>
-                        { () =>
-                            <div class="flex min-h-11 min-w-0 flex-col justify-center gap-1">
-                                <Show when={ discarding }>
-                                    { () =>
-                                        <span class="glow-cta mx-auto flex w-full max-w-[22rem] rounded-control">
-                                            <Button variant="primary" size="lg" leading="cards" block loading={ board.busy() } disabled={ picks.length !== due } onClick={ () => void putDown() }>
-                                                { locale.t('hokm.discard.put', { count: locale.n(due) }) }
-                                            </Button>
-                                        </span>
-                                    }
-                                </Show>
-                                <Show when={ glimpsed } let={ seen }>
-                                    <p class="text-center text-ui-xs text-muted">{ locale.t('hokm.draw.glimpse', { card: cardSays(seen.card) }) }</p>
-                                </Show>
-                                <Show when={ chosen !== null }>
-                                    { () =>
-                                        <span class="glow-cta mx-auto flex w-full max-w-[22rem] rounded-control">
-                                            <Button variant="primary" size="lg" leading="cards" block loading={ board.busy() } label={ cardLabel(chosen!) } onClick={ () => void playCard(chosen!) }>
-                                                { locale.t('hokm.play', { card: cardSays(chosen!) }) }
-                                            </Button>
-                                        </span>
-                                    }
-                                </Show>
-                                <Show when={ hints.hintOutcome && myTurn }>
-                                    { () => <p class="hokm-outcome min-h-5 text-center text-ui-xs font-semibold text-text" aria-hidden="true">{ outcome ?? '' }</p> }
-                                </Show>
-                                <Show when={ chosen === null }>
-                                    { () =>
-                                        <span class="contents">
-                                            <CoachLine tip={ tip } />
-                                            <Show when={ myTurn && device.coarse() }>
-                                                { () => <p class="text-center text-ui-xs text-muted">{ locale.t('hokm.pick') }</p> }
-                                            </Show>
-                                            <Show when={ myTurn && legal.size < (view?.hand.length ?? 0) && !(hints.hintRules && tip !== null) }>
-                                                { () => <p class="text-center text-ui-xs text-muted">{ locale.t('hokm.follow') }</p> }
-                                            </Show>
-                                        </span>
-                                    }
-                                </Show>
-                            </div>
-                        }
-                    </Show>
-                </section>
-            }
-        </Show>
+                    </section>
+                }
+            </Show>
         </div>
 
         <Show when={ over }>
