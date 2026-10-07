@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { cleanup, fire, renderTest } from '@azerothjs/testing';
-import { RouterProvider, Routes, createMemoryHistory, createRouter, type Route } from 'azerothjs';
+import { RouterProvider, Routes, createMemoryHistory, createRouter, createSignal, type Route } from 'azerothjs';
 
 /** The handles this suite seats. A presence frame names people, and these are the people. */
 const SEATED = ['alex', 'sara.k', 'reza.t', 'mina', 'nima.f', 'leila.a'];
@@ -2115,5 +2115,30 @@ describe('the table’s chat and its controls', () =>
         fire(button(withIt, 'Give up')!, 'click');
 
         expect(resign).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps the host\'s voice switch, and whoever is on it, when it is pressed', () =>
+    {
+        const [voice, setVoice] = createSignal(true);
+        const container = renderTest(() => TableDock({
+            get hostVoice()
+            {
+                return voice();
+            },
+            onHostVoice: () => setVoice(!voice())
+        }) as Rendered).container;
+        const control = button(container, 'Turn voice off for this table')!;
+
+        control.focus();
+        fire(control, 'click');
+
+        expect(button(container, 'Turn voice on for this table'), 'the switch was drawn again').toBe(control);
+        expect(document.activeElement).toBe(control);
+        expect(control.getAttribute('aria-pressed')).toBe('false');
+
+        fire(control, 'click');
+
+        expect(button(container, 'Turn voice off for this table')).toBe(control);
+        expect(control.getAttribute('aria-pressed')).toBe('true');
     });
 });

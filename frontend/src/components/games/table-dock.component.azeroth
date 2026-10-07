@@ -35,6 +35,8 @@ export default component TableDock(props: {
 
     derived sound = settings.settings().sound;
 
+    derived hosting = props.hostVoice !== undefined && props.onHostVoice !== undefined;
+
     mount
     {
         const onChanged = () =>
@@ -88,7 +90,7 @@ export default component TableDock(props: {
                 onClick={ () => settings.update({ sound: !sound }) }
             />
 
-            <Show when={ props.hostVoice !== undefined && props.onHostVoice !== undefined }>
+            <Show when={ hosting }>
                 { () =>
                     <IconButton
                         icon={ props.hostVoice === true ? 'voice' : 'voice-off' }
