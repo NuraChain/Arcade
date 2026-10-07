@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { cleanup } from '@azerothjs/testing';
 
 import { manualClock, type ManualClock } from '../src/lib/clock.ts';
@@ -211,6 +211,22 @@ describe('the cues store', () =>
         await settle();
 
         expect(document.title).toBe('Nura Games');
+    });
+
+    it('owns the effects it makes, so arming it outside a component warns about nothing', () =>
+    {
+        const warned = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+        try
+        {
+            useCues().start()();
+
+            expect(warned.mock.calls.map((call) => String(call[0])).filter((line) => line.includes('no owner'))).toEqual([]);
+        }
+        finally
+        {
+            warned.mockRestore();
+        }
     });
 
     it('stops cueing once it is stopped', async () =>

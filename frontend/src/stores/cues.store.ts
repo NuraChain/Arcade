@@ -1,4 +1,4 @@
-import { createEffect, createStore, untrack } from 'azerothjs';
+import { createEffect, createRoot, createStore, untrack } from 'azerothjs';
 
 import type { SoundHandle } from '../game/sound.ts';
 import { NOTIFICATION_ICON, sayOf, targetOf } from '../lib/notifications.ts';
@@ -107,7 +107,7 @@ export const useCues = createStore((): CuesApi =>
             chime();
         };
 
-        const trackChat = createEffect(() =>
+        const trackChat = () => createEffect(() =>
         {
             const rows = chat.conversations();
             const busy = chat.listLoading();
@@ -150,7 +150,7 @@ export const useCues = createStore((): CuesApi =>
             }
         }, { name: 'cues.chat' });
 
-        const trackRequests = createEffect(() =>
+        const trackRequests = () => createEffect(() =>
         {
             const requests = social.incoming();
             const busy = social.loading();
@@ -187,7 +187,7 @@ export const useCues = createStore((): CuesApi =>
             requestCount = requests.length;
         }, { name: 'cues.requests' });
 
-        const trackNotices = createEffect(() =>
+        const trackNotices = () => createEffect(() =>
         {
             const unread = notifications.unread();
             const busy = notifications.loading();
@@ -229,7 +229,7 @@ export const useCues = createStore((): CuesApi =>
             noticeCount = unread;
         }, { name: 'cues.notices' });
 
-        const trackTitle = createEffect(() =>
+        const trackTitle = () => createEffect(() =>
         {
             const total = chat.totalUnread() + notifications.unread() + social.incoming().length + lobby.waiting().length;
 
@@ -239,12 +239,19 @@ export const useCues = createStore((): CuesApi =>
             }
         }, { name: 'cues.title' });
 
-        return () =>
+        const end = createRoot((dispose) =>
         {
             trackChat();
             trackRequests();
             trackNotices();
             trackTitle();
+
+            return dispose;
+        });
+
+        return () =>
+        {
+            end();
             sound?.dispose();
 
             if (typeof document !== 'undefined')

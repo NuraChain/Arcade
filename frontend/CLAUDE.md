@@ -560,6 +560,13 @@ landing-page concern, not an app one. Everything else starts in the shell, in th
 `effect` — that forms a cycle and the scheduler gives up with "Reactive flush did not settle".
 Use the updater form (`setX((current) => …)`, which does not subscribe) or `untrack`.
 
+**An effect a store makes is made under a root.** Nothing is being built when a store's body runs, or
+when the shell starts one a promise after it mounts, so an effect made there has no owner and
+development says so on every load. The cues store's four trackers are made under one `createRoot` and
+stopping the store disposes the root; `cues.spec.ts` arms it outside a component and expects no
+warning. Nothing leaked before (the store called every disposer), but four warnings on every page were
+the one console line the hand-run passes failed on against the development server.
+
 **Every sub-page has a way back, and it is the top bar's.** A route's `meta.parent` names where it
 belongs, with `:param` placeholders filled from the match (`/app/games/:slug` for the create page), and
 `parentOf` resolves it. The top bar draws a back arrow for any route with a parent - on a phone it
