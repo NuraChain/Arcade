@@ -3,7 +3,7 @@ import { cleanup, fire, renderTest } from '@azerothjs/testing';
 import { RouterProvider, createMemoryHistory, createRouter, type Route } from 'azerothjs';
 
 import WatchPage from '../src/pages/app/watch.page.azeroth';
-import { manualClock } from '../src/lib/clock.ts';
+import { manualClock, type ManualClock } from '../src/lib/clock.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import '../src/locales/app-catalogue.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
@@ -12,6 +12,8 @@ import { server } from './fake-api.ts';
 vi.mock('../src/api.ts', async () => await import('./fake-api.ts'));
 
 type Rendered = HTMLElement;
+
+let clock: ManualClock;
 
 const settle = async () =>
 {
@@ -45,7 +47,8 @@ beforeEach(() =>
 {
     cleanup();
     resetRuntime();
-    setRuntime({ clock: manualClock(5000), seed: 4 });
+    clock = manualClock(5000);
+    setRuntime({ clock, seed: 4 });
     useLocale().setLocale('en');
     server.reset();
 });
@@ -62,6 +65,29 @@ describe('the live games page', () =>
         const links = [...container.querySelectorAll<HTMLAnchorElement>('a')].filter((one) => one.textContent?.trim() === 'Watch');
 
         expect(links.map((one) => one.getAttribute('href'))).toEqual(['/app/play/table-hokm', '/app/play/table-ludo']);
+    });
+
+    it('keeps the games it has listed through its own re-read, and adds one that started since', async () =>
+    {
+        server.watching = [row('table-hokm', 'hokm'), row('table-ludo', 'ludo')];
+
+        const container = await show();
+        const list = container.querySelector('ul');
+        const listed = [...container.querySelectorAll('ul > li')];
+        const reads = server.calls.filter((call) => call === 'tables.watchable').length;
+
+        expect(listed).toHaveLength(2);
+
+        server.watching = [...server.watching, row('table-poker', 'poker')];
+        clock.advance(15_000);
+        await settle();
+
+        const after = [...container.querySelectorAll('ul > li')];
+
+        expect(server.calls.filter((call) => call === 'tables.watchable').length).toBeGreaterThan(reads);
+        expect(container.querySelector('ul')).toBe(list);
+        expect(after).toHaveLength(3);
+        expect(after.slice(0, 2)).toEqual(listed);
     });
 
     it('narrows the list to one game and says so when nobody is playing it', async () =>

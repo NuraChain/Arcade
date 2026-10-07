@@ -57,6 +57,10 @@ export default component WatchPage()
 
     derived failed = tables.error() !== null && rows.length === 0;
 
+    derived listed = rows.length > 0;
+
+    derived nobody = !loading && !failed && !listed;
+
     effect
     {
         const handles = rows.flatMap((row) => row.players);
@@ -116,7 +120,7 @@ export default component WatchPage()
                 { () => <ErrorState title={ locale.t('state.errorTitle') } lead={ locale.t('state.errorLead') } onRetry={ () => void tables.refetch() } class="py-10" /> }
             </Show>
 
-            <Show when={ !loading && !failed && rows.length === 0 }>
+            <Show when={ nobody }>
                 { () =>
                     <EmptyState
                         icon="activity"
@@ -129,7 +133,7 @@ export default component WatchPage()
                 }
             </Show>
 
-            <Show when={ rows.length > 0 }>
+            <Show when={ listed }>
                 { () =>
                     <ul class="flex flex-col divide-y divide-line overflow-hidden rounded-panel border border-line bg-field" aria-label={ locale.t('watch.page.title') }>
                         <For each={ shown } key={ (row) => row.id } let={ row }>
