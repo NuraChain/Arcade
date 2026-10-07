@@ -52,6 +52,18 @@ export default component NftsPage()
 
     derived offline = first.data()?.configured === false;
 
+    derived holding = items.length > 0;
+
+    derived awaited = first.loading() && !holding;
+
+    derived refused = !first.loading() && failed;
+
+    derived guest = !account.isWallet();
+
+    derived bare = !first.loading() && !failed && !offline && !guest && !holding;
+
+    derived further = items.length < total;
+
     const more = async () =>
     {
         if (paging)
@@ -92,7 +104,7 @@ export default component NftsPage()
             { ...(account.isWallet() ? { lead: locale.t('nfts.lead', { address: shortAddress(account.address() ?? ''), chain: NURA_CHAIN.name }) } : {}) }
         />
 
-        <Show when={ !account.isWallet() }>
+        <Show when={ guest }>
             { () => <EmptyState icon="wallet" title={ locale.t('nfts.guest') } action={ locale.t('app.nav.profile') } to="/app/me" /> }
         </Show>
 
@@ -100,7 +112,7 @@ export default component NftsPage()
             { () => <EmptyState icon="image" title={ locale.t('nfts.off') } action={ locale.t('app.nav.profile') } to="/app/me" /> }
         </Show>
 
-        <Show when={ first.loading() && items.length === 0 }>
+        <Show when={ awaited }>
             { () =>
                 <div class="grid grid-cols-2 gap-3 @xl:grid-cols-3 @4xl:grid-cols-4 @6xl:grid-cols-5" aria-hidden="true">
                     <Skeleton class="aspect-[4/5] w-full rounded-panel" />
@@ -111,15 +123,15 @@ export default component NftsPage()
             }
         </Show>
 
-        <Show when={ !first.loading() && failed }>
+        <Show when={ refused }>
             { () => <ErrorState title={ locale.t('nfts.failed') } onRetry={ () => first.refetch() } /> }
         </Show>
 
-        <Show when={ !first.loading() && !failed && !offline && account.isWallet() && items.length === 0 }>
+        <Show when={ bare }>
             { () => <EmptyState icon="image" title={ locale.t('nfts.empty') } lead={ locale.t('nfts.emptyLead', { chain: NURA_CHAIN.name }) } /> }
         </Show>
 
-        <Show when={ items.length > 0 }>
+        <Show when={ holding }>
             { () =>
                 <div class="flex flex-col gap-3">
                     <p class="text-ui-sm text-muted"><span class="tally">{ locale.n(total) }</span> { locale.t('nfts.held') }</p>
@@ -158,7 +170,7 @@ export default component NftsPage()
                         { () => <p class="text-center text-ui-xs text-danger">{ locale.t('nfts.moreFailed') }</p> }
                     </Show>
 
-                    <Show when={ items.length < total }>
+                    <Show when={ further }>
                         { () => <LoadMore label={ locale.t('nfts.more') } loading={ paging } onMore={ () => void more() } /> }
                     </Show>
                 </div>

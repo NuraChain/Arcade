@@ -125,6 +125,29 @@ describe('the NFT page', () =>
         expect([...container.querySelectorAll('button')].some((one) => one.textContent?.includes('Show more'))).toBe(false);
     });
 
+    it('keeps the tokens already shown when more are read, pictures and all', async () =>
+    {
+        signIn('wallet');
+        server.nfts = { configured: true, items: Array.from({ length: 30 }, (_, i) => token(i + 10)) };
+
+        const container = await page();
+        const list = container.querySelector('ul');
+        const shown = [...container.querySelectorAll('ul > li')];
+        const picture = container.querySelector('ul img');
+
+        expect(picture).not.toBeNull();
+
+        [...container.querySelectorAll('button')].find((one) => one.textContent?.includes('Show more'))!.click();
+        await settle();
+
+        const after = [...container.querySelectorAll('ul > li')];
+
+        expect(after).toHaveLength(30);
+        expect(container.querySelector('ul')).toBe(list);
+        expect(after.slice(0, 24)).toEqual(shown);
+        expect(container.querySelector('ul img')).toBe(picture);
+    });
+
     it('says an empty wallet is empty', async () =>
     {
         signIn('wallet');
