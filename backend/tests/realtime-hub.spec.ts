@@ -989,6 +989,58 @@ describe('voice at a table', () =>
         expect(lastVoice(alex.wire)?.peers.find((peer) => peer.who === 'sara.k')?.muted).toBe(false);
     });
 
+    it('lets two players who join in the same moment hear each other', async () =>
+    {
+        seat('alex', 'sara.k', 'mina');
+        const alex = await connect('alex');
+        const sara = await connect('sara.k');
+        const mina = await connect('mina');
+
+        world.hub.voice(alex.connection, TABLE, true, false);
+        await rest();
+        world.hub.voice(sara.connection, TABLE, true, false);
+        world.hub.voice(mina.connection, TABLE, true, false);
+        await rest();
+
+        const everybody = [['alex', true], ['sara.k', true], ['mina', true]];
+
+        expect(lastVoice(alex.wire)?.peers.map((peer) => [peer.who, peer.talk])).toEqual(everybody);
+        expect(lastVoice(sara.wire)?.peers.map((peer) => [peer.who, peer.talk])).toEqual(everybody);
+        expect(lastVoice(mina.wire)?.peers.map((peer) => [peer.who, peer.talk])).toEqual(everybody);
+    });
+
+    it('keeps both of two players who open a call in the same moment', async () =>
+    {
+        seat('alex', 'sara.k');
+        const alex = await connect('alex');
+        const sara = await connect('sara.k');
+
+        world.hub.voice(alex.connection, TABLE, true, false);
+        world.hub.voice(sara.connection, TABLE, true, false);
+        await rest();
+
+        expect(world.hub.voiceOf(TABLE)).toEqual(['alex', 'sara.k']);
+        expect(lastVoice(alex.wire)?.peers.map((peer) => [peer.who, peer.talk])).toEqual([['alex', true], ['sara.k', true]]);
+        expect(lastVoice(sara.wire)?.peers.map((peer) => [peer.who, peer.talk])).toEqual([['alex', true], ['sara.k', true]]);
+    });
+
+    it('takes a leave that follows a join still being checked, so nobody is left in a room they walked out of', async () =>
+    {
+        seat('alex', 'sara.k');
+        const alex = await connect('alex');
+        const sara = await connect('sara.k');
+
+        world.hub.voice(alex.connection, TABLE, true, false);
+        await rest();
+        world.hub.voice(sara.connection, TABLE, true, false);
+        world.hub.voice(sara.connection, TABLE, false, true);
+        await rest();
+
+        expect(world.hub.voiceOf(TABLE)).toEqual(['alex']);
+        expect(lastVoice(alex.wire)?.peers.map((peer) => peer.who)).toEqual(['alex']);
+        expect(lastVoice(sara.wire)).toMatchObject({ joined: false });
+    });
+
     it('takes a closed socket out of the room and tells the others', async () =>
     {
         seat('alex', 'sara.k');

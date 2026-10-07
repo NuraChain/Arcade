@@ -607,6 +607,19 @@ names and the relay, `voice-rtc.spec.ts` the hanging up and calling again, `voic
 hanging up before a rejoin, and `voice-pass` cuts each player's socket in turn and wants a new line
 at both ends with packets both ways.
 
+**The room takes one arrival at a time.** Every `voice` frame for a table - a join, a leave, a mute -
+runs through `lib/keyed-queue.ts`, keyed by the table, in the order it arrived, and the room is read
+again after the last question rather than held across it. Letting somebody in asks the database
+twice (may they, and may they talk with each person already there), and frames that overlapped in
+that gap went wrong three ways. Two players who joined in the same moment each asked about the people
+already in the room and never about each other, so the two of them read "can't talk with you" for
+the whole call. Two who opened the call in the same moment each built the room and the second one's
+replaced the first: one player was told they were in and was not. And a leave sent while its join
+was still being checked found nobody to take out, after which the join put them in for good.
+`realtime-hub.spec.ts` has a test for each and each fails with the queue taken out. Four real
+browsers pressing Join together did not show it in six rounds without the queue: the window is one
+policy query wide, which is the kind of fault that waits for a busy database.
+
 `tools/qa/voice-pass.mjs` is two real browsers on Chromium's fake microphone: join, a live remote
 track in each, the tone lighting "speaking" in the OTHER browser, mute, leave. Run it by hand against
 the built server with every change to this path. **A live remote track is not a connection**: the

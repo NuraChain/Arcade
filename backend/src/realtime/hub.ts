@@ -1,5 +1,6 @@
 import { maySeeOnline, type Party, type Relation } from '../domains/social/policy.ts';
 import type { Principal } from '../http/auth.ts';
+import { keyedQueue } from '../lib/keyed-queue.ts';
 import type { MatchEvent, MatchView } from '../schemas.ts';
 import { game, hello, nudge, presence, signal, typing, voice, type PresenceEntry, type PresenceState, type ServerFrame, type SignalKind, type VoicePeer } from './frames.ts';
 
@@ -168,6 +169,8 @@ export function createHub(deps: HubDeps): Hub
     const rooms = new Map<string, Map<string, { socket: Held; muted: boolean; join: string }>>();
 
     let joins = deps.now();
+
+    const arrivals = keyedQueue();
 
     const talks = new Map<string, boolean>();
 
@@ -864,33 +867,33 @@ export function createHub(deps: HubDeps): Hub
         {
             const socket = held(connection);
 
-            if (!on)
-            {
-                leave(tableId, socket.id, true);
-                return;
-            }
-
-            const current = rooms.get(tableId)?.get(socket.userId);
-
-            if (current !== undefined && current.socket.id === socket.id)
-            {
-                current.muted = muted;
-                roster(tableId);
-                return;
-            }
-
-            void deps.voiceAllowed(socket.userId, tableId)
-                .then(async (allowed) =>
+            void arrivals
+                .run(tableId, async () =>
                 {
+                    if (!on)
+                    {
+                        leave(tableId, socket.id, true);
+                        return;
+                    }
+
+                    const current = rooms.get(tableId)?.get(socket.userId);
+
+                    if (current !== undefined && current.socket.id === socket.id)
+                    {
+                        current.muted = muted;
+                        roster(tableId);
+                        return;
+                    }
+
+                    const allowed = await deps.voiceAllowed(socket.userId, tableId);
+
                     if (!allowed || !socket.alive)
                     {
                         emit(socket, (n) => voice(n, tableId, false, []));
                         return;
                     }
 
-                    const room = rooms.get(tableId) ?? new Map<string, { socket: Held; muted: boolean; join: string }>();
-                    const others = [...room.values()].filter((member) => member.socket.userId !== socket.userId);
-
+                    const others = [...(rooms.get(tableId)?.values() ?? [])].filter((member) => member.socket.userId !== socket.userId);
                     const verdicts = await Promise.all(others.map((other) => deps.mayTalk(socket.userId, other.socket.userId)));
 
                     if (!socket.alive)
@@ -900,14 +903,8 @@ export function createHub(deps: HubDeps): Hub
 
                     others.forEach((other, index) => talks.set(pairOf(socket.userId, other.socket.userId), verdicts[index]));
 
+                    const room = rooms.get(tableId) ?? new Map<string, { socket: Held; muted: boolean; join: string }>();
                     const previous = room.get(socket.userId);
-
-                    if (previous !== undefined && previous.socket.id === socket.id)
-                    {
-                        previous.muted = muted;
-                        roster(tableId);
-                        return;
-                    }
 
                     if (previous !== undefined)
                     {
