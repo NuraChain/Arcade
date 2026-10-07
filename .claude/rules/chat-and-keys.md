@@ -1195,6 +1195,16 @@ later, his socket bound 130ms after that, and the two threads the block hid stay
 reload. A second tab is the same window, and a server-side replay would miss it: the account already
 has a socket, so nothing looks missed. The price is one re-read per store per page load.
 
+**"Read it all again" still asks only for what the reader may read.** The chat store's answer to a
+bare ring used to be the list and the open thread together, with the seal store asked about the open
+room before either came back. Somebody taken out of that conversation while they were away - stood
+up from a waiting table by the sweep, with the table's chat still on their screen - asked for a
+thread and a device list that were no longer theirs, and a 404 is a console error however right the
+answer is. The ring that names a conversation always read the list first and the thread only if it
+was still listed; the bare ring does the same (`nudgedAll`): the list, then nothing more if the open
+conversation was listed and has gone, otherwise the listeners and the thread. A thread the list's
+pages have not reached is read as before. `realtime-stores.spec.ts` holds all three.
+
 **A voice call HOLDS the socket.** A hidden tab lets its socket go after a minute, and the server
 empties the voice room when the socket closes - so switching away from a call hung it up for good.
 `realtime.hold()` keeps the socket through a hidden tab, and the voice store holds it from join to

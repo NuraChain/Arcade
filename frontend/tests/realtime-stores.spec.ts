@@ -184,6 +184,77 @@ describe('the chat doorbell', () =>
         stop();
     });
 
+    it('does not ask for that thread, nor for who can read it, when everything is rung at once', async () =>
+    {
+        const chat = useChat();
+        const stop = chat.start();
+        const heard: (string | undefined)[] = [];
+        const deaf = chat.onThread((id) => heard.push(id));
+
+        chat.openThread('c-reza');
+        await chat.refresh();
+        server.conversations = server.conversations.filter((row) => row.id !== 'c-reza');
+        server.calls = [];
+
+        socket.deliver({ v: 1, t: 'nudge', n: 1, scope: 'chat', at: 0 });
+        clock.advance(NUDGE_WINDOW_MS);
+        await vi.waitFor(() => expect(server.calls).toContain('chat.list'));
+        await new Promise((resolve) => setTimeout(resolve, 50));
+
+        expect(server.calls, 'a conversation the reader is no longer in was asked for').not.toContain('chat.messages');
+        expect(heard, 'the room was asked about, though the reader is out of it').toEqual([]);
+
+        deaf();
+        stop();
+    });
+
+    it('reads the open thread again, and tells whoever listens, when everything is rung and the reader is still in it', async () =>
+    {
+        const chat = useChat();
+        const stop = chat.start();
+        const heard: (string | undefined)[] = [];
+        const deaf = chat.onThread((id) => heard.push(id));
+
+        chat.openThread('c-reza');
+        await chat.refresh();
+        server.calls = [];
+
+        socket.deliver({ v: 1, t: 'nudge', n: 1, scope: 'chat', at: 0 });
+        clock.advance(NUDGE_WINDOW_MS);
+
+        await vi.waitFor(() => expect(server.calls).toContain('chat.messages'));
+        expect(server.calls).toContain('chat.list');
+        expect(heard).toEqual([undefined]);
+
+        deaf();
+        stop();
+    });
+
+    it('reads the open thread again on such a ring when the list has not reached it', async () =>
+    {
+        server.listPage = 1;
+
+        const chat = useChat();
+        const stop = chat.start();
+
+        await chat.refresh();
+
+        const beyond = server.conversations.map((row) => row.id).find((id) => !chat.conversations().some((one) => one.id === id));
+
+        expect(beyond, 'the fixtures hold more conversations than one page lists').toBeDefined();
+
+        chat.openThread(beyond!);
+        await chat.refresh();
+        server.calls = [];
+
+        socket.deliver({ v: 1, t: 'nudge', n: 1, scope: 'chat', at: 0 });
+        clock.advance(NUDGE_WINDOW_MS);
+
+        await vi.waitFor(() => expect(server.calls).toContain('chat.messages'));
+
+        stop();
+    });
+
     it('re-reads only the list when some other conversation changes', async () =>
     {
         const chat = useChat();

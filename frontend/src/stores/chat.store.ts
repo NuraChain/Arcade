@@ -195,11 +195,13 @@ export const useChat = createStore((): ChatApi =>
 
     const threaders = new Set<(id: string | undefined) => void>();
 
+    const listed = (id: string) => (list.data()?.rows ?? []).some((row) => row.conversation.id === id);
+
     const nudgedOpen = (id: string) => queue(async () =>
     {
         await list.refetch();
 
-        if (untrack(openId) === id && (list.data()?.rows ?? []).some((row) => row.conversation.id === id))
+        if (untrack(openId) === id && listed(id))
         {
             for (const listener of threaders)
             {
@@ -208,6 +210,26 @@ export const useChat = createStore((): ChatApi =>
 
             await thread.refetch();
         }
+    });
+
+    const nudgedAll = () => queue(async () =>
+    {
+        const open = untrack(openId);
+        const held = open !== '' && listed(open);
+
+        await list.refetch();
+
+        if (held && !listed(open))
+        {
+            return;
+        }
+
+        for (const listener of threaders)
+        {
+            listener(undefined);
+        }
+
+        await thread.refetch();
     });
 
     const rows = (): ConversationRow[] => list.data()?.rows ?? [];
@@ -567,15 +589,7 @@ export const useChat = createStore((): ChatApi =>
                 {
                     return;
                 }
-                if (id === undefined)
-                {
-                    for (const listener of threaders)
-                    {
-                        listener(undefined);
-                    }
-                }
-
-                void (id === undefined ? revalidate() : id === untrack(openId) ? nudgedOpen(id) : nudgedList());
+                void (id === undefined ? nudgedAll() : id === untrack(openId) ? nudgedOpen(id) : nudgedList());
             });
 
             const offTyping = live.onTyping(noteTyping);
