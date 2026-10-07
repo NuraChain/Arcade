@@ -1399,7 +1399,7 @@ export const matchView = object({
     players: array(matchPlayer),
 
     /** Whose turn it is, as a seat. The engine's own index never crosses the wire. */
-    turn: number(),
+    turn: number().optional(),
 
     /** This viewer's chair, absent for somebody who is only watching. */
     mine: number().optional(),

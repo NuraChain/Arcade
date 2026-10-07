@@ -599,6 +599,21 @@ nothing had read it since. `tests/engine-seam.spec.ts` covers the whole shared p
 `services.ts`, `watch.ts`, `record.ts`, `judge.ts` - and fails if any of them imports anything under
 `ludo/`; `judge.ts` may import `rating.ts` and nothing else, and `rating.ts` nothing at all.
 
+**A finished match names nobody on turn.** Every engine's `turnOf` answers null once its game is
+over, and `asMatch` sent that null as `turn: 0`: seat 0 on turn in every finished game - in the
+answer to the play that ended it, in every read after, in the last `game` push and on a watcher's
+board - a fact the server made up. `matchView.turn` is optional now and absent then, the way `mine`
+is absent for somebody with no chair and `yourTurn` for a table with no go to be had. Nothing on
+screen ever showed the zero, which is how it lasted: every reader asks `finishedAt` first, and the
+ludo canvas, which was handed seat 0's colour, only tints a die a finished board does not have. What
+a reader must not do is compare `mine` with `turn` before asking whether `mine` is there: somebody
+watching a finished game has neither, and the two would be equal. This is the ENVELOPE's turn - a
+board's own `turn` is the engine's field, absent in poker when nobody is to act and still on a
+finished hokm or backgammon board, which those boards read only while the match is live.
+`engine-seam.spec.ts` holds the wire and the projector, `match-view.db.spec.ts` a real finish through
+the ports - every answer, the watch and the push to each seat - and `ludo-table.spec.ts` draws the
+board from a finished match the wire's own parser let through.
+
 **The die is `randomInt` from `node:crypto`, and the product says only that the server rolls it.**
 Not `randomBytes(1) % 6`, which quietly favours the low faces. What cannot be claimed is fairness: a
 player cannot check that the server did not draw twice and keep the one it liked, because the process

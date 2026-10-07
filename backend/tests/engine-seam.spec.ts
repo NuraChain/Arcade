@@ -108,6 +108,12 @@ describe('the projector', () =>
     {
         expect(source).toContain('load.mine < 0 ? null : load.mine');
     });
+
+    it('puts no seat on turn where the engine named nobody', () =>
+    {
+        expect(source).toContain('...(turn === null ? {} : { turn })');
+        expect(source.match(/turnOf\([^)]*\)\s*\?\?[^,;\n]*/g), 'services.ts gives a turn the engine left to nobody a seat of its own').toBeNull();
+    });
 });
 
 describe('the shared envelope', () =>
@@ -154,6 +160,21 @@ describe('the shared envelope', () =>
         expect(Object.keys(parsed)).not.toContain('die');
         expect(Object.keys(parsed)).not.toContain('moves');
         expect(Object.keys(parsed)).not.toContain('tokens');
+    });
+
+    it('names the seat on turn while a game is live, and nobody once it is over', () =>
+    {
+        const game = {
+            id: 'm', tableId: 't', game: 'ludo', rev: 9, seats: 2,
+            players: [{ seat: 0, who: 'dana.w', timeouts: 0 }, { seat: 1, who: 'mina', timeouts: 0 }],
+            view: { kind: 'ludo', moves: [], seats: [] },
+            startedAt: '2026-10-07T00:00:00.000Z'
+        };
+
+        const over = matchView.parse({ ...game, winner: 1, outcome: 'won', finishedAt: '2026-10-07T00:10:00.000Z' });
+
+        expect(Object.keys(over)).not.toContain('turn');
+        expect(matchView.parse({ ...game, turn: 1 }).turn).toBe(1);
     });
 });
 

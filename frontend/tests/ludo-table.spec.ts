@@ -9,6 +9,7 @@ import { useLocale } from '../src/stores/locale.store.ts';
 import { useBoard } from '../src/stores/match.store.ts';
 import type { MatchView } from '../src/api.ts';
 import * as turns from '../../backend/src/domains/match/turns.ts';
+import { matchView } from '../../backend/src/schemas.ts';
 import { client } from './fake-api.ts';
 
 type Rendered = HTMLElement;
@@ -33,7 +34,7 @@ const ludo = (over: Partial<MatchView>, view: Partial<Ludo> = {}): MatchView => 
         { seat: 0, who: 'alex', timeouts: 0 },
         { seat: 1, who: 'sara.k', timeouts: 0 }
     ] as MatchView['players'],
-    turn: 0,
+    ...(over.finishedAt === undefined ? { turn: 0 } : {}),
     mine: 0,
     startedAt: new Date(400_000).toISOString(),
     view: { kind: 'ludo', moves: [], seats: [yard(0, 'red'), yard(1, 'yellow')], ...view },
@@ -166,5 +167,41 @@ describe('the ludo table', () =>
 
         expect(mine.querySelector('.table-plate-tag')?.textContent).toBe('No contest');
         expect(theirs.querySelector('.table-plate-tag')?.textContent).toBe(useLocale().t('card.out'));
+    });
+
+    it('marks nobody on turn once the game is over, for either player and for somebody watching', async () =>
+    {
+        const locale = useLocale();
+
+        for (const mine of [0, 1, undefined])
+        {
+            const match = matchView.parse(ludo({
+                mine,
+                winner: 1,
+                outcome: 'won',
+                finishedAt: new Date(500_000).toISOString(),
+                players: [
+                    { seat: 0, who: 'alex', timeouts: 0, result: 'lost' },
+                    { seat: 1, who: 'sara.k', timeouts: 0, result: 'won' }
+                ] as MatchView['players']
+            }));
+
+            expect(Object.keys(match)).not.toContain('turn');
+
+            const container = await show(match);
+            const plates = [...container.querySelectorAll<HTMLElement>('.table-plate')];
+
+            expect(plates.map((plate) => plate.querySelector('.table-plate-tag')?.textContent)).toEqual([locale.t('card.lost'), locale.t('card.won')]);
+            expect(plates.map((plate) => [plate.getAttribute('aria-current'), plate.dataset.turn ?? null])).toEqual([[null, null], [null, null]]);
+            expect(container.querySelector('.table-plate-clock, .table-plate-trail, .board-roll, .table-bar')).toBeNull();
+
+            for (const said of [locale.t('match.turn.yours'), locale.t('card.yourTurn'), locale.t('card.turn')])
+            {
+                expect(container.textContent, `seat ${ mine } is told "${ said }"`).not.toContain(said);
+            }
+
+            cleanup();
+            useBoard().close();
+        }
     });
 });

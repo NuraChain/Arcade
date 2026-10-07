@@ -621,6 +621,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
     const asMatch = (load: MatchLoad) =>
     {
         const state = load.state;
+        const turn = match.turnOf(load.match.game, state);
 
         /**
          * The seats come from `match_players`, not from the engine's state.
@@ -638,7 +639,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             rev: load.match.rev,
             seats: load.match.seats,
             players: match.envelope(load),
-            turn: match.turnOf(load.match.game, state) ?? 0,
+            ...(turn === null ? {} : { turn }),
 
             /**
              * Composed by the ENGINE, for this viewer, rather than assembled here for everybody.
