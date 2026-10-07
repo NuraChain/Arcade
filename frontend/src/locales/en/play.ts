@@ -92,6 +92,8 @@ export const play = {
     'create.submitInvite': 'Create & invite',
     'create.search': 'Search friends',
     'create.noFriends': 'No friends match.',
+    'create.friendless': 'You have no friends to invite yet.',
+    'create.noneLeft': 'All your friends are already at this table or invited.',
 
     'play.seatedMax': 'You’re already at fifty tables. Leave one to sit at another.',
     'play.openFailed': 'That table would not open. Try again in a moment.',

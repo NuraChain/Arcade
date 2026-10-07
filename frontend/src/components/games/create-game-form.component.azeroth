@@ -92,6 +92,10 @@ export default component CreateGameForm(props: { game: Game; onCreated: (tableId
             .sort((a, b) => rank(a) - rank(b));
     })();
 
+    derived alone = friends.length === 0;
+
+    derived nobody = locale.t(query.trim() === '' ? 'create.friendless' : 'create.noFriends');
+
     derived privacyHint = locale.t(privacy === 'friends'
         ? 'create.privacy.friendsHint'
         : (privacy === 'public' ? 'create.privacy.publicHint' : 'create.privacy.inviteHint'));
@@ -272,8 +276,8 @@ export default component CreateGameForm(props: { game: Game; onCreated: (tableId
                         </button>
                     </li>
                 </For>
-                <Show when={ friends.length === 0 }>
-                    <li class="px-3 py-4 text-center text-ui-sm text-faint">{ locale.t('create.noFriends') }</li>
+                <Show when={ alone }>
+                    <li class="px-3 py-4 text-center text-ui-sm text-faint">{ nobody }</li>
                 </Show>
             </ul>
         </fieldset>

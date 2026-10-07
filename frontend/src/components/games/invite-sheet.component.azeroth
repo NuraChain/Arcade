@@ -44,6 +44,12 @@ export default component InviteSheet(props: OverlayProps & { tableId: string })
         return found.sort((a, b) => rank(a) - rank(b));
     })();
 
+    derived listed = candidates.length > 0;
+
+    derived nobody = locale.t(query.trim() !== ''
+        ? 'create.noFriends'
+        : (social.friends().length === 0 ? 'create.friendless' : 'create.noneLeft'));
+
     <div class="flex max-h-[inherit] min-h-0 flex-col">
         <header class="flex items-center justify-between gap-3 px-5 pb-2 pt-4">
             <h2 class="title text-ui-xl text-text">{ locale.t('play.lobby.invite') }</h2>
@@ -53,8 +59,8 @@ export default component InviteSheet(props: OverlayProps & { tableId: string })
             <SearchInput value={ query } onInput={ (value) => query = value } placeholder={ locale.t('create.search') } label={ locale.t('create.search') } autofocus />
         </div>
         <Show
-            when={ candidates.length > 0 }
-            fallback={ <EmptyState icon="people" title={ locale.t('create.noFriends') } class="pb-8" /> }
+            when={ listed }
+            fallback={ <EmptyState icon="people" title={ nobody } class="pb-8" /> }
         >
             <ul class="overflow-y-auto overscroll-contain [touch-action:pan-y] min-block-0 flex flex-col gap-0.5 px-3 pb-4">
                 <For each={ candidates } key={ (person) => person.id } let={ person }>

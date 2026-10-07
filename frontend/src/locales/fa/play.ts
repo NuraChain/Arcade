@@ -95,6 +95,8 @@ export const play: Pick<Dictionary, keyof typeof reference> = {
     'create.submitInvite': 'ساخت و دعوت',
     'create.search': 'جست‌وجوی دوستان',
     'create.noFriends': 'دوستی با این نام نیست.',
+    'create.friendless': 'هنوز دوستی نداری که دعوتش کنی.',
+    'create.noneLeft': 'همهٔ دوستانت یا سر این میزند یا دعوت شده‌اند.',
 
     'play.seatedMax': 'همین حالا پشت پنجاه میز نشسته‌ای. برای نشستن پشت میز دیگر، یکی را ترک کن.',
     'play.openFailed': 'آن میز باز نشد. کمی بعد دوباره تلاش کن.',
