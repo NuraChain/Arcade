@@ -499,6 +499,16 @@ the rule here is:
   answers with the last real value - which is also what makes `shown.code` safe where `table!.code`
   was a crash waiting for the tick in which the table goes null.
 
+**Markup written straight inside a `<Show>` is a thunk child too.** The compiler makes a factory of
+it, so how the child is spelled changes nothing: a probe with the three forms side by side under one
+condition - plain markup, `{ () => ... }`, and `let=` - handed the same answer as a new object, kept
+the third and drew the other two again. For a while these notes were read as "a thunk rebuilds, plain
+markup is built once", and the day a team table got its two sides was written on that reading: the
+names over the lobby's sides and the "2 v 2" mark on a table row sat under a condition that read the
+table, and were drawn again with every re-read of it. Each reads a `derived` boolean now, as the
+create form's choice of seats does, and `lobby-panel.spec.ts` and `table-row.spec.ts` hand each
+the table again and ask for the same node.
+
 Two things ride on the rebuild without saying so, and both have to be put right in the same change:
 a `fallback` that opens with a ternary (chosen once, so it was only ever refreshed by being
 rebuilt - the visitor's "take a seat" panel was one, and is a branch of its own now), and a child
@@ -1036,6 +1046,7 @@ Each once shipped with every gate green; they are still house style:
 - a `to`/`href` naming a path `routes.ts` never declares
 - a ternary choosing between two ELEMENTS inside a control-flow branch (built once, untracked - see
   *The product shell* above)
-- a `<Show>` with a thunk child whose `when` is an expression over an object - a resource row, a
-  store getter that answers with an object or an array - rather than a `derived` boolean or `let=`
+- a `<Show>` with a thunk child, or with markup written straight inside it, whose `when` is an
+  expression over an object - a resource row, a store getter that answers with an object or an
+  array - rather than a `derived` boolean or `let=`
 - a resource's `error()` compared with `undefined`: no error is `null`

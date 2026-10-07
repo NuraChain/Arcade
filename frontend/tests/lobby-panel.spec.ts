@@ -113,8 +113,12 @@ describe('the lobby of a table two sides will play at', () =>
             onLeave: () => undefined
         }) as Rendered);
         const drawn = () => [...container.querySelectorAll<HTMLElement>('ul > li')];
+        const named = () => [...container.querySelectorAll<HTMLElement>('.lobby-side > p')];
         const lists = [...container.querySelectorAll<HTMLElement>('ul')];
+        const labels = named();
         const before = drawn();
+
+        expect(labels).toHaveLength(2);
 
         expect(sides(container)[0].seats[1]).not.toContain('reza.t');
 
@@ -131,6 +135,11 @@ describe('the lobby of a table two sides will play at', () =>
         for (const [at, chair] of drawn().entries())
         {
             expect(chair, `chair ${ at } was drawn again`).toBe(before[at]);
+        }
+
+        for (const [at, label] of named().entries())
+        {
+            expect(label, `the name of side ${ at } was drawn again`).toBe(labels[at]);
         }
     });
 

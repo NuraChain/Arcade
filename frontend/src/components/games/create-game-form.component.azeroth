@@ -64,6 +64,8 @@ export default component CreateGameForm(props: { game: Game; onCreated: (tableId
 
     derived formats = formatsOf(rules);
 
+    derived choosable = formats.length > 1;
+
     derived teams = teamsOf(rules.partners, seats, paired);
 
     derived teamsHint = teams ? TEAMS_HINT[props.game.id] ?? null : null;
@@ -130,7 +132,7 @@ export default component CreateGameForm(props: { game: Game; onCreated: (tableId
             submit();
         } }
     >
-        <Show when={ formats.length > 1 }>
+        <Show when={ choosable }>
             <fieldset class="flex flex-col gap-2">
                 <legend class="label mb-2 text-ui-sm text-muted">{ locale.t('create.seats') }</legend>
                 <ul class="flex flex-wrap gap-2">

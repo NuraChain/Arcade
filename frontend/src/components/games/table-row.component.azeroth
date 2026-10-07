@@ -25,6 +25,8 @@ export default component TableRow(props: { table: TableSummary })
 
     derived state = STATE[props.table.status === 'playing' ? 'playing' : (props.table.status === 'ready' ? 'ready' : 'open')];
 
+    derived paired = props.table.teams;
+
     <Link
         to={ `/app/play/${ props.table.id }` }
         class="group flex min-h-16 min-w-0 items-center gap-3 rounded-tile border border-line bg-field px-3 py-2.5 transition-colors duration-150 hover:border-line-strong hover:bg-raised"
@@ -36,7 +38,7 @@ export default component TableRow(props: { table: TableSummary })
             <span class="flex min-w-0 items-baseline gap-1.5 text-ui-sm">
                 <span class="truncate font-semibold text-text">{ locale.t(game.nameKey) }</span>
                 <span class="tally shrink-0 text-ui-xs text-faint">{ props.table.code }</span>
-                <Show when={ props.table.teams }>
+                <Show when={ paired }>
                     <span class="shrink-0 rounded-full border border-line px-1.5 text-ui-2xs font-semibold text-muted" data-format="teams">{ locale.t('create.format.teams') }</span>
                 </Show>
             </span>

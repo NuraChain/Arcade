@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { cleanup, renderTest } from '@azerothjs/testing';
-import { RouterProvider, createMemoryHistory, createRouter, type Route } from 'azerothjs';
+import { RouterProvider, createMemoryHistory, createRouter, createSignal, type Route } from 'azerothjs';
 
 import TableRow from '../src/components/games/table-row.component.azeroth';
 import { manualClock } from '../src/lib/clock.ts';
@@ -66,6 +66,31 @@ describe('a table in a list', () =>
 
         expect(persian).toBe(useLocale().t('create.format.teams'));
         expect(persian).not.toBe('2 v 2');
+    });
+
+    it('keeps the mark it drew when the table is read again', () =>
+    {
+        const Stub = (): HTMLElement => document.createElement('div');
+        const routes: Route[] = [{ path: '/app', component: Stub }];
+        const router = createRouter({ routes, history: createMemoryHistory('/app'), scroll: false });
+        const [held, setHeld] = createSignal(table());
+        const { container } = renderTest(() => RouterProvider({
+            router,
+            children: () => TableRow({
+                get table()
+                {
+                    return held();
+                }
+            })
+        }) as Rendered);
+        const mark = container.querySelector('[data-format="teams"]');
+
+        expect(mark).not.toBeNull();
+
+        setHeld(table({ taken: 3 }));
+
+        expect(container.textContent).toContain('3/4');
+        expect(container.querySelector('[data-format="teams"]'), 'the mark was drawn again').toBe(mark);
     });
 
     it('says nothing of the kind where every seat plays for itself', () =>
