@@ -12,7 +12,7 @@ import { quickOf, seatsByDefault } from '../src/domains/table/quick.ts';
 import type { MatchOutcome } from '../src/entities/match.entity.ts';
 import { matchHistoryEntry, matchPlayer, matchView } from '../src/schemas.ts';
 import { GAMES } from '../../frontend/src/data/games.ts';
-import { TABLE_RULES } from '../../frontend/src/data/tables.ts';
+import { TABLE_RULES, formatsOf } from '../../frontend/src/data/tables.ts';
 
 /**
  * The catalogue is split on purpose.
@@ -82,6 +82,19 @@ describe('games: the server and the landing agree', () =>
             expect(seed.stakes).toBe(rules.stakes);
             expect(seed.partners).toBe(rules.partners);
         }
+    });
+
+    it('leaves two against two at a ludo table of four to whoever opens it, in the browser as on the server', () =>
+    {
+        const seed = GAME_SEEDS.find((game) => game.id === 'ludo')!;
+        const named = (rules: Parameters<typeof formatsOf>[0]) => formatsOf(rules).map((format) => `${ format.seats }${ format.teams ? ' in pairs' : '' }`);
+
+        expect(seed.partners).toBe('optional');
+        expect(TABLE_RULES.ludo.partners).toBe('optional');
+        expect(named(seed)).toEqual(['2', '3', '4', '4 in pairs']);
+        expect(named(TABLE_RULES.ludo)).toEqual(named(seed));
+        expect(quickOf(seed, { teams: true })).toMatchObject({ ok: true, make: { seats: 4, teams: true } });
+        expect(quickOf(seed, {})).toMatchObject({ ok: true, make: { seats: 4, teams: false } });
     });
 
     it('offers a cube and blinds exactly where the create form does', () =>
@@ -231,7 +244,7 @@ describe('match outcomes: the judge, the database and the wire name the same one
         rev: 9,
         seats: 2,
         players: [{ seat: 0, who: 'dana.w', timeouts: 0 }, { seat: 1, who: 'mina', timeouts: 0 }],
-        view: { kind: 'ludo', moves: [], seats: [] },
+        view: { kind: 'ludo', moves: [], controls: 0, seats: [] },
         outcome,
         startedAt: '2026-10-07T00:00:00.000Z',
         finishedAt: '2026-10-07T00:10:00.000Z'

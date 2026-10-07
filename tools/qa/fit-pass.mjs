@@ -37,7 +37,8 @@ const GAMES = [
     { id: 'poker-6-crowd', game: 'poker', seats: 6, mode: 'live', target: 0, viewers: ['crowd'] },
     { id: 'poker-2-facing', game: 'poker', seats: 2, mode: 'live', target: 0, viewers: ['facing'] },
     { id: 'backgammon', game: 'backgammon', seats: 2, mode: 'turns', target: 3 },
-    { id: 'ludo-4', game: 'ludo', seats: 4, mode: 'turns', target: 0 }
+    { id: 'ludo-4', game: 'ludo', seats: 4, mode: 'turns', target: 0 },
+    { id: 'ludo-4-teams', game: 'ludo', seats: 4, mode: 'turns', target: 0, teams: true }
 ];
 
 const USABLE = {
@@ -205,7 +206,8 @@ const create = async (host, spec, label) =>
         mode: spec.mode,
         privacy: 'public',
         target: spec.target,
-        cube: spec.game === 'backgammon'
+        cube: spec.game === 'backgammon',
+        teams: spec.teams === true
     }));
 
     if (!made.ok)
@@ -611,6 +613,32 @@ const measure = async (page, rules) => await page.evaluate((given) =>
         }
     }
 
+    const seated = given.sides ? [...document.querySelectorAll('.table-plate')].filter(shown) : [];
+
+    if (given.sides && seated.length === 0)
+    {
+        found.push({ kind: 'sides', what: 'no plate at a table of two sides' });
+    }
+
+    for (const plate of seated)
+    {
+        const mark = plate.querySelector('.table-plate-team');
+
+        if (mark === null || !shown(mark) || outside(box(mark)))
+        {
+            found.push({ kind: 'sides', what: `plate ${ describe(plate) } at a table of two sides shows no side mark` });
+            continue;
+        }
+
+        for (const other of seated)
+        {
+            if (other !== plate && meets(box(mark), box(other)))
+            {
+                found.push({ kind: 'sides', what: `the side mark of ${ describe(plate) } ${ where(box(mark)) } sits under plate ${ describe(other) } ${ where(box(other)) }` });
+            }
+        }
+    }
+
     const sheet = document.querySelector('.table-sheet:not(.hidden), .table-card:not(.hidden)');
 
     if (given.openChat && !sideways && sheet !== null && sheet.classList.contains('table-sheet') && sheetMode !== 'half' && sheetMode !== 'over' && !sheet.className.includes('top-['))
@@ -792,7 +820,7 @@ const measure = async (page, rules) => await page.evaluate((given) =>
     return found;
 }, rules);
 
-const cell = async (label, game, page, url, size, openChat, language, waits, last = true) =>
+const cell = async (label, spec, page, url, size, openChat, language, waits, last = true) =>
 {
     const words = LANGUAGES[language];
 
@@ -817,7 +845,7 @@ const cell = async (label, game, page, url, size, openChat, language, waits, las
         await page.waitForTimeout(300);
     }
 
-    const found = await measure(page, { least: USABLE[game], openChat, half: size.half === true, waits });
+    const found = await measure(page, { least: USABLE[spec.game], openChat, half: size.half === true, waits, sides: spec.teams === true });
     const name = `${ label }-${ size.width }x${ size.height }${ openChat ? '-chat' : '' }${ language === 'en' ? '' : `-${ language }` }`;
     const ended = await page.locator('.table-result').count().catch(() => 0) > 0 || await page.locator('.table-stage').count().catch(() => 0) === 0;
 
@@ -883,7 +911,7 @@ try
                             const reader = await viewerFor(spec, viewer, table, state);
                             const seated = await viewerOf(reader, size.touch, language);
 
-                            if (await cell(label, spec.game, seated.page, `${ BASE }/app/play/${ table.tableId }`, size, openChat, language, waited.has(reader.handle), deal === DEALS))
+                            if (await cell(label, spec, seated.page, `${ BASE }/app/play/${ table.tableId }`, size, openChat, language, waited.has(reader.handle), deal === DEALS))
                             {
                                 break;
                             }
@@ -906,7 +934,7 @@ try
 
             const viewer = await viewerOf(stranger, size.touch, 'en');
 
-            await cell(`${ spec.id }-watch`, spec.game, viewer.page, `${ BASE }/app/play/${ table.tableId }`, size, false, 'en', false);
+            await cell(`${ spec.id }-watch`, spec, viewer.page, `${ BASE }/app/play/${ table.tableId }`, size, false, 'en', false);
         }
 
         if (!keep)

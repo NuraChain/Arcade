@@ -20,7 +20,8 @@ const yard = (seat: number, colour: string): Ludo['seats'][number] => ({
     colour,
     tokens: [0, 1, 2, 3].map((piece) => ({ piece, at: -1 })),
     home: 0,
-    out: false
+    out: false,
+    side: seat
 });
 
 const board = (rev: number, over: Partial<MatchView> = {}): MatchView => ({
@@ -36,7 +37,7 @@ const board = (rev: number, over: Partial<MatchView> = {}): MatchView => ({
     turn: 0,
     mine: 0,
     startedAt: new Date(400_000).toISOString(),
-    view: { kind: 'ludo', moves: [], seats: [yard(0, 'red'), yard(1, 'yellow')] },
+    view: { kind: 'ludo', moves: [], controls: 0, seats: [yard(0, 'red'), yard(1, 'yellow')] },
     ...over
 });
 

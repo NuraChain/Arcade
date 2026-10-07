@@ -20,6 +20,8 @@ export interface BoardToken
 
     colour: string;
 
+    side: number;
+
     /** Progress along this colour's own path: -1 in the yard, 56 home. Drives the walk. */
     at: number;
 
@@ -46,8 +48,7 @@ export interface BoardView
      */
     yours: boolean;
 
-    /** Set once, when somebody has won. */
-    winner: string | null;
+    winners: readonly string[];
 
     lit?: boolean;
 

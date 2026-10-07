@@ -102,18 +102,20 @@ structural half: a team table has four chairs. The other half - does this game h
 `game_rules`, which a CHECK cannot reach, so `create` asks it. `game_rules.partners` was a boolean
 that could only say "hokm"; it is `none`, `optional` or `required` now (`game_rules_partners_known`),
 because "forced at four seats" would otherwise be a game's name in `table/service.ts`, a domain that
-knows no game. Hokm is `required`, the rest are `none`, and ludo flips to `optional` in the commit
-that puts its team game at a table, the way `games.status` opened hokm: the engine plays two against
-two before that, and the catalogue says so only once a board can show it.
+knows no game. Hokm is `required`, ludo is `optional`, and the rest are `none`. Ludo was `none` until
+the commit that put its team game at a table (*Ludo two against two reached a table*, under *Playing
+a game*), the way `games.status` opened hokm: the engine played two against two before that, and the
+catalogue said so only once a board could show it.
 
 The answer is one pure function, `teamsOf(partners, seats, asked)` in `table/teams.ts`: four seats,
 and either the game forces it or the game allows it and the opener asked. It imports nothing, so the
 browser asks the same one, and it is NORMALIZED rather than refused for the reason the cube is:
-`teams` is a field on a config its callers start from `catalogue.defaults(game)`. Two of them, the
-sheet that opens a table in a chat and the group page, then change `seats`, so a hokm default turned
-into a table for two would carry a stale `true` and be refused by its own default. `asInput` in the
-lobby store resolves it from the seats the table finally has, the summary echoes what was STORED,
-and `table-teams.db.spec.ts` asks the row. The create form builds its own config, and built it with
+`teams` is a field on a config its callers start from `catalogue.defaults(game)`. A caller that then
+changes `seats` and nothing else, as the sheet that opens a table in a chat and the group page both
+did, turns a hokm default into a table for two carrying a stale `true`, and a refusal would have
+turned that table away for its own default. `asInput` in the lobby store resolves it from the seats
+the table finally has, the summary echoes what was STORED, and `table-teams.db.spec.ts` asks the
+row. The create form builds its own config, and built it with
 no `teams` at all behind an `as TableConfig`: harmless while every game is `none` or `required`,
 and an `undefined` the wire refuses the day one is `optional`. It names the field and is held by
 `satisfies` now, so the next required field fails the typecheck there, and `tables.spec.ts` submits
@@ -159,6 +161,20 @@ played with whom until the score moved.
   ones, so the two could disagree about one table. Under the chips the form says what two against
   two means at this game; above the friends list it says that the first friend picked is the
   partner, because `guestChairs` deals that chair first.
+- **So does a table opened in a conversation, and a group has no second way to open one.** The
+  sheet that opens a table in a chat offered bare seat counts and sent `teams` as the game's default
+  had it, so once a game left the choice open four friends could open it two against two from the
+  games page and never from their own chat. It offers `formatsWithin(rules, heads)` now, the same
+  formats held to the room's head count: "2", "3", "4" and "2 v 2" at ludo in a room of four or
+  more, with the sentence the form says under them. Nothing chosen is the largest count the room
+  fills, in the plain game where the game leaves it open, which is what `catalogue.defaults` opens.
+  A group's "Play together" composed a config of its own, the largest seat count and the default's
+  `teams`, a second copy of what fits in a room that had already been wrong once (*The second
+  audit*). It opens that sheet on the group's room, with the game the group plays chosen and the
+  group's own head count (`heads`, because the chat list is a page and may not hold the room).
+  `open-here.spec.ts` holds both doors, and reads the catalogue again under the open sheet to hold
+  the seat control to the node it was: its branch asks a `derived` boolean, where it asked the
+  length of an array that is new on every read.
 - **The lobby seats each side together.** `sideOf` in `match/sides.ts`, the function a start deals
   by, sorts the chairs into two groups: "Your team" for the reader's own, "Team 1" and "Team 2"
   for the other and for somebody not sitting. One under the other on a phone, side by side from a
@@ -172,12 +188,19 @@ played with whom until the score moved.
 - **The result is read by side**, the winners first: "Your team" and "Opponents", or the two
   numbers for somebody watching. A game where every seat stands alone is one list, as it was.
 - **The hero says "Partners at four" only where the game requires them.** It said it for anything
-  but `none`, which the day a game merely allows partners would claim it is played in them.
+  but `none`, which the day a game merely allows partners would claim it is played in them. Where
+  the game leaves it to whoever opens the table the hero says "2 v 2 at four", from the published
+  rules, and the game's page has a fourth card that says how such a game is won. Both sentences
+  were in the catalogue with nothing reading them on the day ludo's seed opened the door: the page
+  built its cards from a literal `[1, 2, 3]` and a cast, which no key can fail. It lists each
+  game's cards by key now (`RULE_CARDS`), so a card with no sentence fails `check`, and
+  `tables.spec.ts` holds the chip to the published rules in both languages and counts the cards.
 
 `fit-pass.mjs` wants every plate at a table of two sides to show its mark on the felt, clear of
-every other plate. `tables.spec.ts`, `lobby-panel.spec.ts`, `table-row.spec.ts`,
-`table-plate.spec.ts`, `hokm-board.spec.ts`, `match-result.spec.ts` and `play.spec.ts` hold the
-rest.
+every other plate, and at a ludo table, whose plates sit beside the board, to show it inside the
+screen (`ludo-4-teams`). `tables.spec.ts`, `lobby-panel.spec.ts`, `table-row.spec.ts`,
+`table-plate.spec.ts`, `hokm-board.spec.ts`, `match-result.spec.ts`, `play.spec.ts` and
+`open-here.spec.ts` hold the rest.
 
 **A wire field that reaches a bounded column says so in `schemas.ts`.** `crest` is `varchar(24)`,
 `hue` is `smallint`, `blinds` is one of three levels - and none of that was stated, so an over-long
@@ -1190,14 +1213,88 @@ that brings eight home moves both partners by one amount, a walkout's partner sh
 the board had them behind, and is `void` when it had them ahead - on the quitter's own tokens
 included - or when the clock took the quitter.
 
-**No table can reach that game yet, and that is deliberate.** The seed keeps ludo's `partners` at
-`none`, so `create` stores no team table for it, and `engine-contract.spec.ts` asks only that every
-format the catalogue can open is one the engine plays, not the other way round. The board is not told
-a seat's side or whose tokens the seat on turn is moving, and the browser's helpers still read every
-other seat as an opponent: `walkersOf` hands `obstacle` each seat as its own side, which is true of
-every board the wire can carry today. All three come with the table, in the commit that flips the
-seed. The wire's `ludoMove` gains `owner`, `side` and `seats` now, because the ledger writes them
-now, and loses `winner`, which nothing ever read: a board's winner is the envelope's.
+**Ludo two against two reached a table in the commit that could draw it.** The engine played it
+first, behind a seed that kept ludo's `partners` at `none`: no table could be opened for it, the
+board was not told a seat's side or whose tokens the seat on turn was moving, and the browser's
+helpers read every other seat as an opponent. The seed says `optional` now, so `create` stores a
+team table when its opener asks, and `engine-contract.spec.ts` asks its question both ways: every
+format the catalogue can open is one the engine plays, and every format an engine plays is one some
+table can be opened as. It asked only the first half while the team game waited, and an engine that
+plays a game nothing can reach fails there from here on. `table-teams.db.spec.ts` asks the row
+`create` stores for ludo at four, asked and not asked, and `match.db.spec.ts` (*starting*) starts the
+table that asked and reads partners opposite off the envelope and off the board of every reader.
+
+The board carries the two facts every reader was missing, and both are the state's own.
+`ludoBoard.seats[].side` is who plays with whom. `controls` is the seat whose tokens the seat on
+turn is moving, `state.players[controlled(state)].seat`: that seat, or its partner once its own four
+are home. Both are required on the wire and the same for every reader, and a token named in `moves`
+is always one of `controls`' four, so the browser never works a hand-over out for the seat on turn.
+On a finished board `controls` still names a seat, as a hokm or backgammon board still carries its
+`turn`; every reader asks `finishedAt` first. `engine-seam.spec.ts` plays whole games in both
+formats, reads the board as every seat and as nobody, and refuses a board that leaves either out.
+
+What reads them:
+
+- **The helpers act on `controls`.** `movedTo`, `outcomeOf` and `pieceFor` in `game/helpers/ludo.ts`
+  lost their seat argument: the board says whose tokens move. `standingOn` leaves out the mover's
+  SIDE, so a partner is never named a victim, and a token coming out counts the opponents on the
+  start square of the colour that moves. `walkersOf` hands `obstacle` every seat's own side, so the
+  coach explains a pair as the engine judged it, in the words for sides at a team table
+  (`tip.blockedTeams`). It says that landing on a partner makes a block (`tip.partner`), and once,
+  when the reader's own fourth token comes home, that their rolls move their partner's tokens from
+  now on (`tip.helping`): on the roll a six earned, or as the turn passes. `ends` asks the side, so a
+  six that brings a fourth home is still told it rolls again and the one that brings the eighth is
+  not.
+- **One rule has a second reading in the browser, and a spec holds it to the first.** Once a turn
+  has passed, `controls` is about the next seat, and explaining a pass that a block caused needs
+  whose tokens the READER moves. `handOf(board, seat)` answers from the board: its partner's, once
+  the seat's own four are home. `helpers-ludo.spec.ts` asks it of the seat on turn at every state of
+  whole team games and requires the board's `controls`.
+- **`seatsFor` lights the tokens of `controls`**, for a reader who has a seat, and `pick` takes a
+  tap only from the seat on turn and only on a token of `controls`. It asks whether the reader has a
+  seat before it compares that seat with the turn, for the reason *A finished match names nobody on
+  turn* gives. The server offers `moves` to the seat on turn alone, so nothing lights for the
+  partner whose tokens are being moved, and two assertions that said so handed the board no moves
+  and would have held under any code. `ludo-table.spec.ts` hands that partner a board that does
+  offer one, which only a server gone wrong would send, taps a token and wants no play sent: the
+  turn in `pick` is all that stands between such a board and a play the server would refuse.
+- **The plates wear their side.** `YardBadge` hands `TablePlate` the mark every table of two sides
+  wears. The tag says "Partner" on the reader's partner and "Helping" on the seat on turn while
+  `controls` is not that seat. A result or a missed turn still takes the tag, and then the mark says
+  "Partner" to a screen reader instead, so it is said once either way. Who the reader's partner is,
+  is `partnerOf(seat, format)`: it lands in `match/sides.ts` beside `sideOf`, with the board as its
+  first caller.
+- **At a ludo table the mark is the side's own two colours.** The pip every table shares is blue
+  for one side and amber for the other, and here a colour is a player: red and yellow wore the blue
+  player's colour, and green and blue one that reads as yellow, in the only mark somebody watching
+  can see for who plays with whom. The board hands each `YardBadge` the colours that play for its
+  seat's side, as the board it was sent has them, and `.yard-badge` paints the pip half and half
+  from them (`--team-a`, `--team-b`), so red's plate and yellow's wear one disc and no second copy
+  of the pairing lives in a stylesheet. Hokm keeps the shared pip.
+- **The strip says whose tokens are moving.** "Your four are home: move {name}'s tokens." stands
+  where "Your turn." stood, and the move list is headed "{name}'s tokens". Everybody else reads
+  "{name} is moving {partner}'s tokens.", and the partner reads "{name} is moving your tokens.": a
+  third sentence, because the second names a reader to themselves in the third person.
+- **The renderer draws a block by side** (`BoardToken.side`), so a pair of partners stands one pawn
+  on the other like any block and two opponents on a star stand side by side. `BoardView.winner` is
+  `winners`, the colour of every seat whose result is `won`: a side's win throws confetti in both
+  colours, and a game nobody won throws none.
+
+Two sentences a helper made false were reworded rather than doubled. The entry label said "the token
+on your start" and the tip "Your start square holds one of your own tokens"; a reader moving their
+partner's tokens has neither, so both name the start square of the token that moves.
+
+One thing it costs, stated. A quick search that names no sides matches both kinds of ludo table of
+four (*Matchmaking is one request*), so somebody pressing Quick play can be seated at a table of two
+sides. The lobby, the header and the plates say which it is, and the search still opens the plain
+game when it finds neither.
+
+`helpers-ludo.spec.ts` (*two against two*) plays whole team games and compares every prediction with
+the engine, `ludo-table.spec.ts` (*the ludo table, two against two*) holds the plates, the strip, the
+heading, the tap and the confetti, and `game.spec.ts` the pieces.
+
+The wire's `ludoMove` gained `owner`, `side` and `seats` with the engine, because the ledger wrote
+them from then, and lost `winner`, which nothing ever read: a board's winner is the envelope's.
 `engine-seam.spec.ts` parses a log to hold both, and plays whole team games through the adapter, in
 which a seat moves its partner's tokens. `v` stays 1. Nothing has shipped, so a ludo match left live
 in a development database from before this has no sides in its state and is dropped, never migrated.
@@ -1246,7 +1343,8 @@ cannot drift from it. Ludo, backgammon and poker answer with the shared one.
 
 `engine-contract.spec.ts` and `ladders.spec.ts` run over formats. The contract spec requires every
 format the catalogue can open - `teamsOf` over the seed's seats and its `partners`, asked both ways -
-to be one the engine plays, and keeps its bound on a game's length per variant. `ladders.spec.ts`
+to be one the engine plays, and every format an engine plays to be one the catalogue can open, and
+keeps its bound on a game's length per variant. `ladders.spec.ts`
 asks a counter of the GAME as a whole, and again of each team format by itself. Not of every format:
 the thirty three-handed hokm matches it plays take no kot, so that check fails on a format with
 nothing wrong in it. A team game is where an engine's events change shape, though - a hand names a
@@ -1651,6 +1749,35 @@ ready at once.
 through the routes a browser uses. It is API-level on purpose: it proves the rules, the persistence,
 the turn order, the authorisation and the wire agree end to end, over hundreds of turns, in seconds.
 What it cannot prove is that any of it is visible, which is the browser pass's job.
+
+Its fourth game is two against two, opened as a table that asked for it. It reads the sides off the
+board and off the envelope, and it plays to build pairs and keep them: a move that lands on one
+token of the mover's side comes first, a token standing in a pair moves only when nothing else can,
+and otherwise the token furthest back goes, one in the yard before any on the ring. It used to take
+the first legal token unless a move happened to land on its own side, so each seat ran one token at
+a time round the ring: in 295 of 300 games against the engine no token ever had a pair of the other
+side within its roll. And all it asked was whether a pair had been moved by the other side, which
+sees a pair sent home and never one walked past.
+
+It asks the board, not the move it chose. On every roll with a move to make, no token on offer may
+have a pair of the other side on a square the roll would cross or land on, which is `obstacle`'s
+question asked of the wire; and after every action no ring square holds three tokens of one side
+and no square without a star holds both sides, the two things `ludo-purity.spec.ts` asks of the
+engine. Neither may pass on nothing. A pair has to have stood while the other side had a roll to
+play, and somewhere in the run a token has to have been held back by nothing but a pair of two
+colours, with no pair of one colour in its way as well and room where it would land: a server
+whose partners did not block would have offered that token. Two thousand team games against the
+engine with the pass's own way of choosing a move: a pair stood in every one, at 240 rolls a game,
+74 tokens a game were held back, and 171 games had none held back by partners alone. Run against
+an engine whose `obstacle` counts a pair by colour again, the pass failed forty times in forty.
+
+At the end both partners have won and the other two lost, the finish in the log names the side and
+both seats, nothing was sent home by its own side, and every token a partner moved has its owner in
+the log. A seat whose four are home has to have moved its partner's tokens, and 104 of those two
+thousand games ended without that: the second partner comes home on their own rolls. So it plays up
+to four team games and stops once both have happened, and a run in which one of them never does is
+about one in sixteen thousand. It imports `ludo/board.ts` and `match/sides.ts` for the ring and the
+pairing rather than restating either.
 
 ## Hokm
 
@@ -2355,8 +2482,11 @@ caption's last line in both languages, opened as the seat whose turn it is and a
 Three hands put two plates in the felt's top corners under the longest sentence the caption has, and
 there the TALLER stage is the worse one: a waiting reader with no other table is drawn the upright
 table at 360x640 and 375x667, 324 to 329px tall, where the caption's crown reached both plates, while
-the other-tables row leaves those screens only the wide table, whose crest has gone. Each re-makes its
-state per cell, because a live turn lasts thirty seconds. It opens every page as the seat whose turn
+the other-tables row leaves those screens only the wide table, whose crest has gone. ludo-4-teams is
+ludo opened two against two: its plates sit beside the board and not on a felt, so the cell asks of
+every plate on the page what a felt asks of its own, a side mark that is drawn, inside the screen
+and clear of every other plate, and it carries the "Partner" tag the plain game never has. Each
+re-makes its state per cell, because a live turn lasts thirty seconds. It opens every page as the seat whose turn
 it is at 360x740, 390x844, 375x667, 360x640, 768x1024, 1024x768, 1280x720, 1280x800, 1440x900,
 1920x1080, 740x360 and 844x390, with the chat closed and open, then as a stranger watching. It fails
 on a scrolling page, a plate, the surface or any button outside the viewport, a button whose centre

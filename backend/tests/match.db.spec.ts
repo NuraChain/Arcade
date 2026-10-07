@@ -56,7 +56,7 @@ const makeUser = async () =>
     ))[0].id;
 };
 
-const seatedTable = async (seats: number, game = 'ludo'): Promise<{ tableId: string; players: string[] }> =>
+const seatedTable = async (seats: number, game = 'ludo', teams = false): Promise<{ tableId: string; players: string[] }> =>
 {
     const players: string[] = [];
 
@@ -75,7 +75,7 @@ const seatedTable = async (seats: number, game = 'ludo'): Promise<{ tableId: str
         blinds: 'low',
         chat: true,
         voice: 'off',
-        teams: false,
+        teams,
         invitees: []
     });
 
@@ -274,9 +274,9 @@ describe.skipIf(!active)('a match, against a real database', () =>
             });
             const dealer = createMatchService(db, createAchieveService(db), [noting(ludoEngine), noting(hokmEngine)]);
 
-            const startedAs = async (game: string, seats: number) =>
+            const startedAs = async (game: string, seats: number, asked = false) =>
             {
-                const { tableId, players } = await seatedTable(seats, game);
+                const { tableId, players } = await seatedTable(seats, game, asked);
                 const load = await dealer.start(players[0], tableId);
                 const stored = rowsOf<{ variant: string }>(await db.query(`select variant from matches where id = $1`, [load.match.id]))[0].variant;
 
@@ -289,7 +289,27 @@ describe.skipIf(!active)('a match, against a real database', () =>
             expect(await startedAs('hokm', 3)).toBe('standard');
             expect(await startedAs('hokm', 2)).toBe('standard');
             expect(await startedAs('ludo', 4)).toBe('standard');
-            expect(handed.map((table) => table.variant)).toEqual(['teams', 'standard', 'standard', 'standard']);
+            expect(await startedAs('ludo', 4, true)).toBe('teams');
+            expect(await startedAs('ludo', 3, true)).toBe('standard');
+            expect(handed.map((table) => table.variant)).toEqual(['teams', 'standard', 'standard', 'standard', 'teams', 'standard']);
+        });
+
+        it('deals a ludo table opened two against two as partners opposite, on the board every reader is sent and on the envelope', async () =>
+        {
+            const { tableId, players } = await seatedTable(4, 'ludo', true);
+            const { match, state } = await matches.start(players[0], tableId);
+            const sent = await matches.envelope((await matches.peek(match.id))!);
+
+            expect(match.variant).toBe('teams');
+            expect(sent.map((player) => player.side)).toEqual([0, 1, 0, 1]);
+
+            for (const reader of [0, 1, 2, 3, null])
+            {
+                const board = matches.board('ludo', state, reader);
+
+                expect(board.kind === 'ludo' ? board.seats.map((row) => row.side) : null, `as ${ reader }`).toEqual([0, 1, 0, 1]);
+                expect(board.kind === 'ludo' ? board.controls : null, `as ${ reader }`).toBe(turnSeatOf(state));
+            }
         });
 
         it('will not start a table as a format its game does not play, whoever wrote the row, and deals nothing', async () =>

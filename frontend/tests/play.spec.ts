@@ -1210,7 +1210,8 @@ describe('PlayPage', () =>
                     view: {
                         kind: 'ludo',
                         moves: [],
-                        seats: colours.map((colour, seat) => ({ seat, colour, tokens: [0, 1, 2, 3].map((piece) => ({ piece, at: -1 })), home: 0, out: false }))
+                        controls: 0,
+                        seats: colours.map((colour, seat) => ({ seat, colour, tokens: [0, 1, 2, 3].map((piece) => ({ piece, at: -1 })), home: 0, out: false, side: seat }))
                     }
                 },
                 behind: 30,
@@ -1687,7 +1688,7 @@ describe('PlayPage', () =>
                 players: [],
                 turn: 0,
                 startedAt: new Date(400_000).toISOString(),
-                view: { kind: 'ludo', moves: [], seats: [] }
+                view: { kind: 'ludo', moves: [], controls: 0, seats: [] }
             },
             behind: 30,
             delay: 30,

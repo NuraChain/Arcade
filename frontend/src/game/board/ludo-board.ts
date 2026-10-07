@@ -46,7 +46,7 @@ interface Piece
     timers: number[];
 }
 
-const EMPTY: BoardView = { tokens: [], die: null, turn: null, yours: false, winner: null };
+const EMPTY: BoardView = { tokens: [], die: null, turn: null, yours: false, winners: [] };
 
 const order = (key: string): [number, number] =>
 {
@@ -142,7 +142,7 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
                 return seatA - seatB || pieceA - pieceB;
             });
         const index = Math.max(0, together.indexOf(token.key));
-        const block = around.length === BLOCK.length && around.every((one) => one.colour === token.colour && one.at < RING_STEPS);
+        const block = around.length === BLOCK.length && around.every((one) => one.side === token.side && one.at < RING_STEPS);
         const place = block ? BLOCK[index] : stackSpot(index, together.length);
 
         return { x: base.x + place.dx * C, y: base.y + place.dy * C, scale: place.scale, front: place.front === true };
@@ -528,11 +528,11 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
         });
     };
 
-    const celebrate = (winner: string) =>
+    const celebrate = (winners: readonly string[]) =>
     {
         sound?.play('win');
 
-        const tone = TONE[winner] ?? '#FFFFFF';
+        const tones = winners.map((winner) => TONE[winner] ?? '#FFFFFF');
 
         if (!motion)
         {
@@ -545,7 +545,7 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
             const reach = 26 + (index % 7) * 3.5;
             const fleck = element('span', 'absolute inset-s-0 inset-bs-0 z-[9600] inline-[1.4cqi] block-[2.6cqi] mbs-[-1.3cqi] ms-[-0.7cqi] rounded-[1px]', root);
 
-            fleck.style.background = index % 3 === 0 ? tone : (index % 3 === 1 ? '#F6F1E6' : '#FFFFFF');
+            fleck.style.background = index % 3 === 0 ? tones[(index / 3) % tones.length] : (index % 3 === 1 ? '#F6F1E6' : '#FFFFFF');
             fleck.animate(
                 [
                     { translate: '50cqi 50cqi', rotate: `${ index * 37 }deg`, opacity: 1 },
@@ -638,11 +638,11 @@ export async function createLudoBoard(options: BoardOptions): Promise<BoardHandl
             roll(previous.die, next.die, next.turn);
         }
 
-        if (previous.winner === null && next.winner !== null)
+        if (previous.winners.length === 0 && next.winners.length > 0)
         {
-            celebrate(next.winner);
+            celebrate(next.winners);
         }
-        else if (!previous.yours && next.yours && previous.winner === null)
+        else if (!previous.yours && next.yours && previous.winners.length === 0)
         {
             sound?.play('turn', { urgent: true });
         }

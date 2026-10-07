@@ -10,6 +10,7 @@ import EmptyState from '../../components/ui/empty-state.component.azeroth';
 import IconButton from '../../components/ui/icon-button.component.azeroth';
 import SectionHeading from '../../components/ui/section-heading.component.azeroth';
 import Icon from '../../icons/icon.component.azeroth';
+import type { GameId } from '../../data/games.ts';
 import type { MessageKey } from '../../locales/en.ts';
 import { useAccount } from '../../stores/account.store.ts';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
@@ -17,6 +18,13 @@ import { useLobby } from '../../stores/lobby.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useShell } from '../../stores/shell.store.ts';
 import { openTable } from '../../lib/open-table.ts';
+
+const RULE_CARDS: Record<GameId, MessageKey[]> = {
+    hokm: ['game.rules.hokm.1', 'game.rules.hokm.2', 'game.rules.hokm.3'],
+    poker: ['game.rules.poker.1', 'game.rules.poker.2', 'game.rules.poker.3'],
+    backgammon: ['game.rules.backgammon.1', 'game.rules.backgammon.2', 'game.rules.backgammon.3'],
+    ludo: ['game.rules.ludo.1', 'game.rules.ludo.2', 'game.rules.ludo.3', 'game.rules.ludo.4']
+};
 
 export default component GamePage()
 {
@@ -43,7 +51,7 @@ export default component GamePage()
 
     derived rules = game === null ? null : catalogue.rules(game.id);
 
-    derived ruleKeys = game === null ? [] : [1, 2, 3].map((index) => `game.rules.${ game!.id }.${ index }` as MessageKey);
+    derived ruleKeys = game === null ? [] : RULE_CARDS[game.id];
 
     derived finding = game !== null && lobby.finding().includes(game.id);
 

@@ -8,11 +8,14 @@ import { useChat } from '../../stores/chat.store.ts';
 import { useLobby } from '../../stores/lobby.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import type { Game, GameId } from '../../data/games.ts';
+import { TEAMS_HINT, formatsWithin, type TableFormat } from '../../data/tables.ts';
 import type { OverlayProps } from '../../stores/overlay.store.ts';
 import SheetHeader from '../ui/sheet-header.component.azeroth';
 
 /** The widest table any game in this product plays, used only while the room's size is unknown. */
 const MOST_SEATS = 8;
+
+const keyOf = (format: TableFormat) => `${ format.seats }/${ format.teams }`;
 
 /**
  * Opens a table IN this room, joinable by the people in it and by nobody else.
@@ -31,7 +34,7 @@ const MOST_SEATS = 8;
  * server's word and a `derived` over a resource that has not landed reads an empty list - the
  * create form is gated the same way and for the same reason.
  */
-export default component OpenHereSheet(props: OverlayProps & { conversationId: string })
+export default component OpenHereSheet(props: OverlayProps & { conversationId: string; game?: GameId; heads?: number })
 {
     const catalogue = useCatalogue();
     const lobby = useLobby();
@@ -40,7 +43,7 @@ export default component OpenHereSheet(props: OverlayProps & { conversationId: s
 
     const chat = useChat();
 
-    state game = 'ludo' as GameId;
+    state game = (props.game ?? 'ludo') as GameId;
     state pending = false;
 
     /**
@@ -56,19 +59,24 @@ export default component OpenHereSheet(props: OverlayProps & { conversationId: s
      * rather than to some small number, because the fallback must not narrow the offer - a group of
      * eight would otherwise see a two-seat choice for a moment and pick it.
      */
-    derived capacity = chat.conversation(props.conversationId)?.participants.length ?? MOST_SEATS;
+    derived capacity = props.heads ?? chat.conversation(props.conversationId)?.participants.length ?? MOST_SEATS;
 
-    derived fits = (entry: Game) => catalogue.rules(entry.id).seats.filter((count) => count <= capacity);
+    const fits = (id: GameId) => formatsWithin(catalogue.rules(id), capacity);
 
     derived playable = catalogue.games
         .filter((entry) => catalogue.playable(entry.id))
-        .filter((entry) => fits(entry).length > 0);
+        .filter((entry) => fits(entry.id).length > 0);
 
-    derived allowed = fits(catalogue.byId(game));
+    derived allowed = fits(game);
 
-    state seats = 0;
+    state picked = '';
 
-    derived choices = allowed.map((count) => ({ id: String(count), label: locale.n(count) }));
+    derived choices = allowed.map((format) => ({
+        id: keyOf(format),
+        label: format.teams ? locale.t('create.format.teams') : locale.n(format.seats)
+    }));
+
+    derived choosable = choices.length > 1;
 
     /**
      * Null rather than a fallback, because there is no safe number to fall back TO.
@@ -79,7 +87,13 @@ export default component OpenHereSheet(props: OverlayProps & { conversationId: s
      * it today - a game with no fitting count is filtered out of `playable` - but a default that is
      * wrong whenever it is used is a trap set for whoever changes the filter.
      */
-    derived chosen = allowed.includes(seats) ? seats : (allowed[allowed.length - 1] ?? null);
+    derived chosen = allowed.find((format) => keyOf(format) === picked)
+        ?? allowed.find((format) => format.seats === allowed[allowed.length - 1].seats)
+        ?? null;
+
+    derived current = chosen === null ? '' : keyOf(chosen);
+
+    derived teamsHint = chosen?.teams === true ? TEAMS_HINT[game] ?? null : null;
 
     /**
      * How many people play it, as a range or as one number.
@@ -91,7 +105,7 @@ export default component OpenHereSheet(props: OverlayProps & { conversationId: s
      */
     const playersOf = (entry: Game) =>
     {
-        const counts = fits(entry);
+        const counts = fits(entry.id).map((format) => format.seats);
         const low = counts[0] ?? entry.minPlayers;
         const high = counts[counts.length - 1] ?? entry.maxPlayers;
 
@@ -107,7 +121,7 @@ export default component OpenHereSheet(props: OverlayProps & { conversationId: s
 
         pending = true;
         openTable(
-            lobby.host(game, { ...catalogue.defaults(game), seats: chosen, roomId: props.conversationId }, []),
+            lobby.host(game, { ...catalogue.defaults(game), seats: chosen.seats, teams: chosen.teams, roomId: props.conversationId }, []),
             (to) =>
             {
                 props.close(true);
@@ -142,16 +156,19 @@ export default component OpenHereSheet(props: OverlayProps & { conversationId: s
             </ul>
         </fieldset>
 
-        <Show when={ choices.length > 1 }>
+        <Show when={ choosable }>
             <fieldset class="flex flex-col gap-2">
                 <legend class="label mb-2 text-ui-sm text-muted">{ locale.t('create.seats') }</legend>
                 <Segmented
                     block
                     label={ locale.t('create.seats') }
-                    value={ String(chosen ?? '') }
+                    value={ current }
                     items={ choices }
-                    onChange={ (id) => seats = Number(id) }
+                    onChange={ (id) => picked = id }
                 />
+                <Show when={ teamsHint } let={ hint }>
+                    <p class="text-ui-xs text-faint">{ locale.t(hint) }</p>
+                </Show>
             </fieldset>
         </Show>
 

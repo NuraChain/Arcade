@@ -1249,12 +1249,15 @@ export const ludoBoard = object({
     /** THIS viewer's legal moves, empty unless it is their turn and they have rolled. */
     moves: array(number()),
 
+    controls: number({ int: true, min: 0, max: 3 }),
+
     seats: array(object({
         seat: number(),
         colour: string(),
         tokens: array(matchToken),
         home: number(),
-        out: boolean()
+        out: boolean(),
+        side: number({ int: true, min: 0, max: 3 })
     }))
 });
 

@@ -3,6 +3,7 @@ import { untrack, useHead, useNavigate, useParams } from 'azerothjs';
 import type { GroupSummary } from '../../api.ts';
 import ConfirmSheet from '../../components/app/confirm-sheet.component.azeroth';
 import Page from '../../components/app/page.component.azeroth';
+import OpenHereSheet from '../../components/games/open-here-sheet.component.azeroth';
 import FriendRow from '../../components/social/friend-row.component.azeroth';
 import GroupAdd from '../../components/social/group-add.component.azeroth';
 import GroupCrest from '../../components/social/group-crest.component.azeroth';
@@ -18,18 +19,17 @@ import SectionHeading from '../../components/ui/section-heading.component.azerot
 import Skeleton from '../../components/ui/skeleton.component.azeroth';
 import type { GameId } from '../../data/games.ts';
 import type { Person } from '../../data/person.ts';
+import { formatsWithin } from '../../data/tables.ts';
 import Icon from '../../icons/icon.component.azeroth';
 import { usePeople } from '../../stores/people.store.ts';
 import { useAccount } from '../../stores/account.store.ts';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useGroups } from '../../stores/groups.store.ts';
-import { useLobby } from '../../stores/lobby.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useOverlay } from '../../stores/overlay.store.ts';
 import { usePresence } from '../../stores/presence.store.ts';
 import { useShell } from '../../stores/shell.store.ts';
 import { useToasts } from '../../stores/toasts.store.ts';
-import { openTable } from '../../lib/open-table.ts';
 import { attempt } from '../../lib/attempt.ts';
 import { pagingFor, visible } from '../../lib/pagination.ts';
 import { narrowed, SEARCH_FROM } from '../../services/search.service.ts';
@@ -43,7 +43,6 @@ export default component GroupPage()
     const presence = usePresence();
     const catalogue = useCatalogue();
     const groups = useGroups();
-    const lobby = useLobby();
     const account = useAccount();
     const overlay = useOverlay();
     const shell = useShell();
@@ -129,18 +128,16 @@ export default component GroupPage()
         }
         const pick = game !== null && catalogue.playable(game) ? game : catalogue.featured();
 
-        const fits = catalogue.rules(pick).seats.filter((count) => count <= group.memberCount);
-        const seats = fits[fits.length - 1];
-
-        if (seats === undefined)
+        if (formatsWithin(catalogue.rules(pick), group.memberCount).length === 0)
         {
             toasts.show({ kind: 'info', text: locale.t('groups.tooFew'), dedupe: 'group-play' });
             return;
         }
 
-        openTable(
-            lobby.host(pick, { ...catalogue.defaults(pick), seats, roomId: group.conversationId }, []),
-            navigate
+        overlay.open(
+            OpenHereSheet,
+            { conversationId: group.conversationId, game: pick, heads: group.memberCount },
+            { label: locale.t('openHere.title') }
         );
     };
 

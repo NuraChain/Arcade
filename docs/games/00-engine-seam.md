@@ -91,7 +91,7 @@ for, not null, not flagged."* The match path is the one place that rule was neve
 | a move names | a token | a card | an action + amount | a sequence of point pairs |
 | private state | none | **hands** | **hole cards + deck** | none |
 | seats | 2–4 | 2, 3, 4 | **2–10** | 2 |
-| teams | no | **yes at 4** | no | no |
+| teams | at 4, when the table says so | **yes at 4** | no | no |
 | a match is | one game | **hands to 7** | **a session** | **games to N** |
 
 Three of those rows are concepts the platform does not have at all: **per-seat private state**,

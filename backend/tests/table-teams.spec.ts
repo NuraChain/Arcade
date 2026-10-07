@@ -54,13 +54,13 @@ describe('whether a table is two against two', () =>
         expect(tableRules.safeParse(rules(true)).ok).toBe(false);
     });
 
-    it('is forced for hokm and closed to every other game the catalogue seeds, in the browser as on the server', () =>
+    it('is forced for hokm, left to whoever opens a ludo table, and closed to the rest of what the catalogue seeds, in the browser as on the server', () =>
     {
         expect(Object.fromEntries(GAME_SEEDS.map((game) => [game.id, game.partners]))).toEqual({
             hokm: 'required',
             poker: 'none',
             backgammon: 'none',
-            ludo: 'none'
+            ludo: 'optional'
         });
 
         for (const seed of GAME_SEEDS)

@@ -1,5 +1,5 @@
 import DieFace from './die-face.component.azeroth';
-import TablePlate from './table-plate.component.azeroth';
+import TablePlate, { type PlateTeam } from './table-plate.component.azeroth';
 import type { PlateTone } from './plate-tag.ts';
 import { INITIAL } from './seats.ts';
 import { useLocale } from '../../stores/locale.store.ts';
@@ -15,6 +15,9 @@ export default component YardBadge(props: {
     corner: string;
     mine?: number;
     active: boolean;
+    controls: number;
+    colours: string[];
+    partner: boolean;
     die?: number;
     finished: boolean;
     bubble?: string;
@@ -40,6 +43,16 @@ export default component YardBadge(props: {
     derived warned = nextMissForfeits(missed) && !props.finished;
 
     derived routine = props.player.result === undefined && !props.seat.out && missed === 0;
+
+    derived helping = routine && turn && props.controls !== props.player.seat;
+
+    derived partnered = routine && !helping && props.partner;
+
+    derived sided = props.colours.length > 1;
+
+    derived paint = sided
+        ? `--ink: var(--ludo-${ props.seat.colour }); --team-a: var(--ludo-${ props.colours[0] }); --team-b: var(--ludo-${ props.colours[1] })`
+        : `--ink: var(--ludo-${ props.seat.colour })`;
 
     derived says = (() =>
     {
@@ -78,6 +91,44 @@ export default component YardBadge(props: {
         return mine ? locale.t('card.yourTurn') : locale.t('card.turn');
     })();
 
+    derived tag = (() =>
+    {
+        if (!routine)
+        {
+            return says;
+        }
+
+        if (helping)
+        {
+            return locale.t('card.helping');
+        }
+
+        return partnered ? locale.t('card.partner') : undefined;
+    })();
+
+    derived team = ((): PlateTeam | undefined =>
+    {
+        if (!sided)
+        {
+            return undefined;
+        }
+
+        if (mine || partnered)
+        {
+            return { side: props.seat.side };
+        }
+
+        if (props.partner)
+        {
+            return { side: props.seat.side, says: locale.t('card.partner') };
+        }
+
+        return {
+            side: props.seat.side,
+            says: props.mine === undefined ? locale.t('team.n', { n: locale.n(props.seat.side + 1) }) : locale.t('card.opponent')
+        };
+    })();
+
     derived tone = ((): PlateTone =>
     {
         if (warned)
@@ -93,7 +144,7 @@ export default component YardBadge(props: {
         return missed > 0 && !props.finished ? 'gold' : 'neutral';
     })();
 
-    <div class="yard-badge flex min-inline-0 data-[corner=top-left]:[grid-area:tl] data-[corner=top-right]:[grid-area:tr] data-[corner=bottom-left]:[grid-area:bl] data-[corner=bottom-right]:[grid-area:br] data-[corner$=left]:justify-start data-[corner$=right]:justify-end fit-wide:data-[corner^=top]:[align-self:start] fit-wide:data-[corner^=bottom]:[align-self:end]" data-corner={ props.corner } style={ `--ink: var(--ludo-${ props.seat.colour })` }>
+    <div class="yard-badge flex min-inline-0 data-[corner=top-left]:[grid-area:tl] data-[corner=top-right]:[grid-area:tr] data-[corner=bottom-left]:[grid-area:bl] data-[corner=bottom-right]:[grid-area:br] data-[corner$=left]:justify-start data-[corner$=right]:justify-end fit-wide:data-[corner^=top]:[align-self:start] fit-wide:data-[corner^=bottom]:[align-self:end]" data-corner={ props.corner } style={ paint }>
         <TablePlate
             who={ props.player.who }
             name={ name }
@@ -102,8 +153,9 @@ export default component YardBadge(props: {
             turnMs={ props.turnMs }
             ink={ `var(--ludo-${ props.seat.colour })` }
             dim={ props.seat.out }
-            tag={ routine ? undefined : says }
+            tag={ tag }
             tone={ tone }
+            team={ team }
             bubble={ props.bubble }
             below={ props.corner.startsWith('top') }
             anchor={ props.corner.endsWith('right') ? 'end' : 'start' }

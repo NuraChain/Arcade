@@ -2,8 +2,8 @@
 
 **Status:** playable. The engine, the board, the API pass (`tools/qa/ludo-pass.mjs`) and the browser
 pass (`tools/qa/play-pass.mjs`) are built, `games.status` is `available`, and the achievements are
-live. The engine also plays two against two (see *Teams*), and no table can open that game yet: the
-catalogue still says ludo has no partners.
+live. A table of four is also played two against two when whoever opens it says so (see *Teams*):
+the catalogue's `partners` for ludo is `optional`.
 
 Ruleset: **Variant B, the common Iranian rules** (the owner's decision). It is the Ludo cross with
 one die, played the way منچ is played in Iran: any yard token comes out on any six, eight squares are
@@ -244,6 +244,13 @@ names the winning side and every seat on it.
 in `SAYS`; the word is the `code` of the answer): `not-your-turn`, `already-rolled`,
 `must-roll-first`, `illegal-move`, `not-playing`, `game-over`.
 
+**The board** (`ludoBoard`, what `view` composes; the same for every reader but for `moves`): each
+seat's `colour`, `tokens`, tokens `home`, `out` and `side`; the `die` waiting to be moved; `moves`,
+the reader's own legal tokens, empty unless it is their turn and they have rolled; and `controls`,
+the seat whose tokens the seat on turn is moving. `controls` is the seat on turn, or its partner once
+its own four are home, so a token named in `moves` is always one of `controls`' four. It is the
+state's own answer (`controlled`), and the browser never works it out for the seat on turn.
+
 ---
 
 ## Turn order
@@ -265,7 +272,8 @@ follow it on the same seat are one turn with one deadline.
 
 ## Lifecycle
 
-1. **Table.** A two-, three- or four-seat table, `live` or `turns`; no target.
+1. **Table.** A two-, three- or four-seat table, `live` or `turns`; no target. A table of four is
+   every seat for itself, or two against two when its opener asked (`tables.teams`).
 2. **Start.** Every chair taken and ready; `POST /tables/:id/start` creates the match with
    `create(seats, first, sides)`, the sides from the table's variant.
 3. **Play.** `POST /matches/:id/play` (or the socket's `play` frame) carries `{ kind: 'ludo', verb:
@@ -305,16 +313,16 @@ squares, the captures and who moves whose tokens after every action.
   has every token home, or is the only side with nobody out.
 - The engine imports nothing (`ludo-purity.spec.ts`); the wire cannot carry a die
   (`ludo-dice.spec.ts`); the board matches the art (`ludo-board.spec.ts`); every prediction the
-  browser makes matches the engine over self-played games (`helpers-ludo.spec.ts`).
+  browser makes matches the engine over self-played games, every seat for itself and two against
+  two (`helpers-ludo.spec.ts`).
 
 ---
 
 ## Known limitations
 
-- **No table can open a game of two against two yet.** The engine plays it and nothing reaches it:
-  the catalogue's `partners` for ludo is still `none`, the board is not told a seat's side or whose
-  tokens the seat on turn is moving, and the browser's helpers still read every other seat as an
-  opponent. See *Teams*.
+- **A quick search that says nothing can sit somebody at a table of two against two.** Quick play
+  for ludo matches both kinds of table of four unless the search names one (`quickOf`), and opens
+  the plain game when it finds none. The lobby, the header and the plates say which kind it is.
 - **The rules are fixed.** `matches.variant` says only whether a game is a free-for-all (`standard`)
   or two against two (`teams`), and there are no per-table house rules: no capture bonus, no
   three-sixes penalty, no compulsory entry.
@@ -329,8 +337,13 @@ squares, the captures and who moves whose tokens after every action.
 
 ## Teams
 
-**Two against two, at a four-seat table.** The engine plays it (`4/teams` in `Engine.formats`) and
-no table can open it yet; see *Known limitations*. It was researched on 2026-10-04 against the
+**Two against two, at a four-seat table.** Whoever opens a table of four chooses it: the catalogue's
+`partners` for ludo is `optional`, so the create form, the sheet that opens a table in a
+conversation and a group's "Play together" each offer "4 players" and "2 v 2", and the engine plays
+the one that was chosen (`4/teams` in `Engine.formats`). The game's own page says "2 v 2 at four" in
+its hero, off the same `partners`, and has a fourth card for it.
+
+It was researched on 2026-10-04 against the
 sources above and a wider set (Schmidt's team variant *Einigkeit macht stark*, Masters of Games'
 *Pachisi* and *Uckers*, Parchís tournament rules, پنکو's منچ گروهی). The owner settled the rules (D24)
 and then T7 (D29, 2026-10-05); what a forfeit costs a partner is hokm's rule (D25), because every
@@ -386,8 +399,37 @@ Parchís tournament rules say the same of talking.
 `ludo-purity.spec.ts` plays whole games, and `judge.spec.ts` judges forfeits from what the engine
 reports.
 
-**What is not built.** The table: the catalogue's `partners` for ludo is `none`, so `create`
-stores no team table for it. The board: `view` sends neither a seat's side nor which colour the seat
-on turn is moving, so a helper's moves would be offered against the wrong tokens on screen. The
-browser's helpers (`standingOn`, `outcomeOf`, `pieceFor`, the coach) act on the reader's own seat and
-treat every other seat as an opponent, which is right in a free-for-all only.
+**At the table.** The board says who plays with whom and whose tokens are being moved (`side` and
+`controls`, under *State model*), and everything on screen reads those two.
+
+- **The plates.** Every plate wears its side's mark, a disc in the two colours that play together.
+  The reader's partner is tagged "Partner", the other two are "Opponent" to a screen reader, and
+  somebody watching reads "Team 1" and "Team 2". The seat on turn is tagged "Helping" while
+  `controls` is not that seat.
+- **The strip.** A reader whose four are home is told "Your four are home: move {name}'s tokens."
+  where it said "Your turn.", and the move list is headed "{name}'s tokens". Everybody else reads
+  "{name} is moving {partner}'s tokens.", and the partner "{name} is moving your tokens."
+- **The tokens that light up, and a tap.** The playable tokens are `controls`' (`seatsFor`), and a
+  tap is a move only for the seat on turn, on a token of `controls` (`pick`).
+- **The helpers** (`game/helpers/ludo.ts`). `movedTo`, `outcomeOf` and `pieceFor` act on
+  `controls`. Nothing of the mover's side is ever named a victim (T6), and a token coming out
+  counts the opponents on the start square of the colour that moves (T8). The coach reads the tokens
+  the reader is moving: it says once that the four are home (`tip.helping`), that landing on a
+  partner makes a block (`tip.partner`), and names a block in the words for sides
+  (`tip.blockedTeams`). A six that brings a fourth token home is still told it rolls again, and
+  only the token that brings the side's eighth home is not. After a turn has passed the board's
+  `controls` is the next seat's, so the pass a block caused is explained from the browser's own
+  reading of whose tokens the reader moves: its partner's once its own four are home.
+  `helpers-ludo.spec.ts` holds that reading to `controls` over whole games.
+- **The pieces.** A pair is drawn one pawn on the other when both are of one side
+  (`BoardToken.side`), so a pair of partners looks like the block it is, and two opponents sharing
+  a star stand side by side. A win throws confetti in the colour of every seat that won.
+- **The result** is read by side, as at any table of two sides.
+
+`helpers-ludo.spec.ts` (*two against two*), `ludo-table.spec.ts` (*the ludo table, two against
+two*) and `game.spec.ts` hold the browser's half, `engine-seam.spec.ts` the board on the wire, and
+`tools/qa/ludo-pass.mjs` plays a whole game of two against two over the api: both partners win,
+nothing is sent home by its own side, no roll is offered a move onto a pair of the other side or
+past one (T7), a pair of two colours holds a token back with nothing else in its way, no square
+holds three tokens of a side (T7b), the finish names both seats, and a seat whose four were home
+moves its partner's tokens.

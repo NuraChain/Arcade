@@ -20,6 +20,7 @@ import { chairsOf, ludoOf } from '../../data/match.ts';
 import { seatsFor } from './seats.ts';
 import { CELL, MARGIN } from '../../game/layout.ts';
 import { coachOf, movedTo, outcomeOf, pieceFor } from '../../game/helpers/ludo.ts';
+import { partnerOf, variantOf } from '../../../../backend/src/domains/match/sides.ts';
 
 const STAGE = `--cell-cq: ${ (CELL * 100).toFixed(4) }cqi; --margin-cq: ${ (MARGIN * 100).toFixed(4) }cqi`;
 
@@ -36,7 +37,7 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
 
     derived help = settings.settings();
 
-    derived ludo = ludoOf(game) ?? { kind: 'ludo' as const, die: undefined, moves: [], seats: [] };
+    derived ludo = ludoOf(game) ?? { kind: 'ludo' as const, die: undefined, moves: [], controls: 0, seats: [] };
 
     derived chairs = chairsOf(game);
 
@@ -47,6 +48,14 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
     derived turnOf = game.players.find((player) => player.seat === game.turn);
 
     derived turnSeat = ludo.seats.find((seat) => seat.seat === game.turn);
+
+    derived sided = new Set(ludo.seats.map((seat) => seat.side)).size < ludo.seats.length;
+
+    derived partner = mine === undefined ? null : partnerOf(mine, { seats: game.seats, variant: variantOf(sided) });
+
+    derived helping = !over && game.turn !== undefined && ludo.controls !== game.turn;
+
+    derived helper = helping && mine !== undefined && mine === game.turn;
 
     const nameFor = (seat: number | undefined) =>
     {
@@ -62,16 +71,30 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
 
     derived nameOf = nameFor(turnOf?.seat);
 
+    derived owner = nameFor(ludo.controls);
+
+    derived ownerSays = locale.t('match.moves.for', { name: owner });
+
     derived says = (() =>
     {
         if (mine !== undefined && mine === game.turn)
         {
-            return ludo.die === undefined
-                ? locale.t('match.turn.yours')
-                : locale.t('match.turn.rolled', { die: locale.n(ludo.die) });
+            if (ludo.die !== undefined)
+            {
+                return locale.t('match.turn.rolled', { die: locale.n(ludo.die) });
+            }
+
+            return helping ? locale.t('match.turn.helping', { name: owner }) : locale.t('match.turn.yours');
         }
 
-        return locale.t('match.turn.theirs', { name: nameOf });
+        if (!helping)
+        {
+            return locale.t('match.turn.theirs', { name: nameOf });
+        }
+
+        return mine === ludo.controls
+            ? locale.t('match.turn.helpingYours', { name: nameOf })
+            : locale.t('match.turn.helpingTheirs', { name: nameOf, partner: owner });
     })();
 
     state ahead: { rev: number; board: NonNullable<ReturnType<typeof movedTo>> } | null = null;
@@ -90,7 +113,8 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
     derived seatCards = chairs.map((chair) => ({
         player: chair.player,
         seat: chair.seat,
-        corner: CORNER[chair.seat.colour] ?? 'top-left'
+        corner: CORNER[chair.seat.colour] ?? 'top-left',
+        colours: ludo.seats.filter((one) => one.side === chair.seat.side).map((one) => one.colour)
     }));
 
     derived sideways = device.landscape() && device.height() <= SHORT_MAX;
@@ -122,12 +146,16 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
             : []);
     })();
 
+    derived winners = ludo.seats
+        .filter((seat) => game.players.some((player) => player.seat === seat.seat && player.result === 'won'))
+        .map((seat) => seat.colour);
+
     derived view = ((): BoardView => ({
         tokens,
         die: drawn.die ?? null,
         turn: turnSeat?.colour ?? null,
         yours: !over && mine !== undefined && mine === game.turn,
-        winner: ludo.seats.find((seat) => seat.seat === game.winner)?.colour ?? null,
+        winners,
         lit: help.hintMoves,
         beats
     }))();
@@ -135,7 +163,10 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
     const pick = async (key: string) =>
     {
         const [seat, piece] = key.split('-').map(Number);
-        const legal = seat === mine ? pieceFor(untrack(() => ludo), seat, piece) : null;
+        const held = untrack(() => ludo);
+        const reader = untrack(() => mine);
+        const moving = reader !== undefined && reader === untrack(() => game.turn) && seat === held.controls;
+        const legal = moving ? pieceFor(held, piece) : null;
 
         if (legal === null || !board.moves().includes(legal))
         {
@@ -150,7 +181,7 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
         const seat = untrack(() => mine);
         const current = untrack(() => ludo);
         const rev = untrack(() => game.rev);
-        const next = seat === undefined || untrack(board.busy) ? null : movedTo(current, seat, piece);
+        const next = seat === undefined || untrack(board.busy) ? null : movedTo(current, piece);
 
         if (next !== null)
         {
@@ -168,7 +199,7 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
     const moveSays = (piece: number) =>
     {
         const token = locale.n(piece + 1);
-        const outcome = mine === undefined ? null : outcomeOf(ludo, mine, piece);
+        const outcome = mine === undefined ? null : outcomeOf(ludo, piece);
 
         if (outcome?.kind === 'enter')
         {
@@ -207,6 +238,9 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
                                 corner={ entry.corner }
                                 mine={ mine }
                                 active={ entry.player.seat === game.turn }
+                                controls={ ludo.controls }
+                                colours={ entry.colours }
+                                partner={ entry.player.seat === partner }
                                 die={ entry.player.seat === game.turn ? ludo.die : undefined }
                                 finished={ over }
                                 bubble={ props.speech?.[entry.player.who] }
@@ -263,20 +297,25 @@ export default component MatchBoard(props: { match: MatchView; starting?: boolea
 
                         <Show when={ mine !== undefined && mine === game.turn && ludo.die !== undefined && board.moves().length > 0 }>
                             { () =>
-                                <ul class="grid grid-cols-2 gap-2" aria-label={ locale.t('match.moves') }>
-                                    <For each={ board.moves() } key={ (piece) => piece } let={ piece }>
-                                        <li class="min-w-0">
-                                            <Button
-                                                variant="secondary"
-                                                class="h-auto! min-h-10 w-full py-2 coarse:min-h-11"
-                                                disabled={ board.busy() }
-                                                onClick={ () => void moveNow(piece) }
-                                            >
-                                                <span class="min-w-0 text-balance leading-snug">{ moveSays(piece) }</span>
-                                            </Button>
-                                        </li>
-                                    </For>
-                                </ul>
+                                <div class="flex flex-col gap-1.5">
+                                    <Show when={ helper }>
+                                        <p class="label text-ui-2xs text-faint">{ ownerSays }</p>
+                                    </Show>
+                                    <ul class="grid grid-cols-2 gap-2" aria-label={ locale.t('match.moves') }>
+                                        <For each={ board.moves() } key={ (piece) => piece } let={ piece }>
+                                            <li class="min-w-0">
+                                                <Button
+                                                    variant="secondary"
+                                                    class="h-auto! min-h-10 w-full py-2 coarse:min-h-11"
+                                                    disabled={ board.busy() }
+                                                    onClick={ () => void moveNow(piece) }
+                                                >
+                                                    <span class="min-w-0 text-balance leading-snug">{ moveSays(piece) }</span>
+                                                </Button>
+                                            </li>
+                                        </For>
+                                    </ul>
+                                </div>
                             }
                         </Show>
                     </section>

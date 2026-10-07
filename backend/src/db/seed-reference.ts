@@ -117,7 +117,7 @@ export const GAME_SEEDS: GameSeed[] = [
         modes: ['live', 'turns'],
         targets: [],
         stakes: 'none',
-        partners: 'none',
+        partners: 'optional',
         hasCube: false,
         hasBlinds: false
     }

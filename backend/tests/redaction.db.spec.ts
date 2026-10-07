@@ -92,12 +92,14 @@ const secretEngine: Engine<SecretState, { seat: number }> = {
     view: (state: SecretState, seat: number | null): MatchBoard => ({
         kind: 'ludo',
         moves: seat === null ? [] : [state.secrets[seat]],
+        controls: state.turn,
         seats: state.secrets.map((secret, index) => ({
             seat: index,
             colour: 'red',
             tokens: [],
             home: seat === index ? secret : 0,
-            out: false
+            out: false,
+            side: index
         }))
     }),
 

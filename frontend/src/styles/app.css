@@ -611,6 +611,11 @@ html:has(.site-drawer[open])
     background: var(--gold);
 }
 
+.yard-badge .table-plate-team[data-side]
+{
+    background: linear-gradient(to right, var(--team-a) 50%, var(--team-b) 50%);
+}
+
 .table-plate-voice
 {
     position: absolute;

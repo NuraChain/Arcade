@@ -128,8 +128,9 @@ describe('what a table config may say', () =>
         expect(isValidTable({ ...defaultTable('hokm'), teams: false }, hokm)).toBe(false);
         expect(isValidTable({ ...defaultTable('hokm'), seats: 2 }, hokm)).toBe(false);
         expect(isValidTable({ ...defaultTable('hokm'), seats: 2, teams: false }, hokm)).toBe(true);
-        expect(isValidTable({ ...defaultTable('ludo'), teams: true }, ludo)).toBe(false);
-        expect(isValidTable({ ...defaultTable('ludo'), teams: true }, { ...ludo, partners: 'optional' })).toBe(true);
+        expect(isValidTable({ ...defaultTable('ludo'), teams: true }, ludo)).toBe(true);
+        expect(isValidTable({ ...defaultTable('ludo'), seats: 3, teams: true }, ludo)).toBe(false);
+        expect(isValidTable({ ...defaultTable('ludo'), teams: true }, { ...ludo, partners: 'none' })).toBe(false);
     });
 });
 
@@ -376,6 +377,101 @@ describe('a game that is played in pairs', () =>
         expect(useCatalogue().rules('ludo').partners).toBe('optional');
         expect(chips('ludo')).not.toContain('Partners at four');
     });
+
+    const publish = async (partners: 'none' | 'optional') =>
+    {
+        const ludo = GAMES.find((game) => game.id === 'ludo')!;
+
+        server.games = [{
+            id: 'ludo',
+            slug: 'ludo',
+            nameKey: ludo.nameKey,
+            blurbKey: ludo.blurbKey,
+            categoryKey: ludo.categoryKey,
+            category: 'board',
+            minPlayers: 2,
+            maxPlayers: 4,
+            status: 'available',
+            rules: { seats: [2, 3, 4], modes: ['live', 'turns'], targets: [], stakes: 'none', partners, hasCube: false, hasBlinds: false }
+        }];
+        useCatalogue().reset();
+        await settle();
+    };
+
+    const cards = async (slug: string) =>
+    {
+        const router = createRouter({
+            routes: [{ path: '/app/games/:slug', component: () => GamePage() as HTMLElement }],
+            history: createMemoryHistory(`/app/games/${ slug }`),
+            scroll: false
+        });
+        const { container } = renderTest(() => RouterProvider({ router, children: () => Routes({}) }) as HTMLElement);
+        const listed = () => [...container.querySelectorAll('[aria-labelledby="game-about"] ol > li')];
+
+        await vi.waitFor(() => expect(listed().length).toBeGreaterThan(0), { timeout: 4000 });
+
+        const read = listed().map((card) => [...card.children].map((part) => part.textContent?.trim()));
+
+        cleanup();
+
+        return read;
+    };
+
+    it('says a game that leaves two against two to whoever opens the table can be played that way at four, in both languages, and never that it is played in pairs', () =>
+    {
+        const locale = useLocale();
+
+        expect(chips('ludo')).toContain('2 v 2 at four');
+        expect(chips('ludo')).not.toContain('Partners at four');
+
+        for (const id of ['hokm', 'poker', 'backgammon'] as const)
+        {
+            expect(chips(id), id).not.toContain('2 v 2 at four');
+        }
+
+        locale.setLocale('fa');
+
+        const persian = locale.t('games.partners.optional');
+
+        expect(persian).not.toBe('2 v 2 at four');
+        expect(chips('ludo')).toContain(persian);
+        expect(chips('ludo')).not.toContain(locale.t('games.partners.required'));
+        expect(chips('hokm')).not.toContain(persian);
+    });
+
+    it('takes that from the rules the server published, not from the ones this browser was built with', async () =>
+    {
+        await publish('none');
+
+        expect(useCatalogue().rules('ludo').partners).toBe('none');
+        expect(chips('ludo')).not.toContain('2 v 2 at four');
+
+        await publish('optional');
+
+        expect(chips('ludo')).toContain('2 v 2 at four');
+    });
+
+    it('writes a fourth card about two against two on the page of the game that can be played that way, and three on every other', async () =>
+    {
+        const locale = useLocale();
+        const ludo = [1, 2, 3, 4] as const;
+
+        expect(await cards('ludo')).toEqual(ludo.map((card) => [String(card), locale.t(`game.rules.ludo.${ card }`)]));
+
+        for (const slug of ['hokm', 'poker', 'backgammon'])
+        {
+            expect(await cards(slug), slug).toHaveLength(3);
+        }
+
+        const english = locale.t('game.rules.ludo.4');
+
+        locale.setLocale('fa');
+
+        const persian = await cards('ludo');
+
+        expect(persian).toEqual(ludo.map((card) => [locale.n(card), locale.t(`game.rules.ludo.${ card }`)]));
+        expect(persian[3][1]).not.toBe(english);
+    });
 });
 
 describe('a button that finds a seat', () =>
@@ -597,12 +693,16 @@ describe('the lobby store', () =>
         await lobby.host('hokm', { ...catalogue.defaults('hokm'), seats: 2 }, []);
         await lobby.host('hokm', { ...catalogue.defaults('hokm'), seats: 4, teams: false }, []);
         await lobby.host('ludo', { ...catalogue.defaults('ludo'), teams: true }, []);
+        await lobby.host('ludo', { ...catalogue.defaults('ludo'), seats: 3, teams: true }, []);
+        await lobby.host('poker', { ...catalogue.defaults('poker'), teams: true }, []);
 
         expect(server.asked).toEqual([
             { game: 'hokm', seats: 4, teams: true },
             { game: 'hokm', seats: 2, teams: false },
             { game: 'hokm', seats: 4, teams: true },
-            { game: 'ludo', seats: 4, teams: false }
+            { game: 'ludo', seats: 4, teams: true },
+            { game: 'ludo', seats: 3, teams: false },
+            { game: 'poker', seats: 6, teams: false }
         ]);
     });
 

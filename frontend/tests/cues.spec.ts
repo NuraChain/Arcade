@@ -367,7 +367,7 @@ describe('the cues store', () =>
             turn: 1,
             mine: 0,
             startedAt: new Date(clock.now()).toISOString(),
-            view: { kind: 'ludo', moves: [], seats: [] },
+            view: { kind: 'ludo', moves: [], controls: 1, seats: [] },
             ...over
         });
 

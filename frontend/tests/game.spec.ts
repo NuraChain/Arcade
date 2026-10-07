@@ -565,15 +565,16 @@ describe('the two halves of a chair', () =>
     const match = (seats: LudoSeat[], players: number[]) => ({
         id: 'm', tableId: 't', game: 'ludo', rev: 3, seats: players.length, turn: 0,
         players: players.map((seat) => ({ seat, who: `p${ seat }`, timeouts: 0 })),
-        view: { kind: 'ludo', die: 6, moves: [1], seats },
+        view: { kind: 'ludo', die: 6, moves: [1], controls: 0, seats },
         startedAt: '2026-09-18T00:00:00.000Z'
     }) as MatchView;
 
-    const seat = (index: number, colour: string): LudoSeat => ({
+    const seat = (index: number, colour: string, side = index): LudoSeat => ({
         seat: index,
         colour,
         home: 0,
         out: false,
+        side,
         tokens: [0, 1, 2, 3].map((piece) => ({ piece, at: -1 }))
     });
 
@@ -622,12 +623,31 @@ describe('the two halves of a chair', () =>
             ...seat(0, 'red'),
             tokens: [{ piece: 0, at: -1 }, { piece: 1, at: 10, cell: { col: 6, row: 2 } }, { piece: 2, at: -1 }, { piece: 3, at: -1 }]
         };
-        const lit = (moves: number[]) => seatsFor({ kind: 'ludo', die: 6, moves, seats: [red] }, 0)
+        const lit = (moves: number[]) => seatsFor({ kind: 'ludo', die: 6, moves, controls: 0, seats: [red] }, 0)
             .filter((token) => token.playable)
             .map((token) => token.key);
 
         expect(lit([0, 1])).toEqual(['0-0', '0-1', '0-2', '0-3']);
         expect(lit([1])).toEqual(['0-1']);
+    });
+
+    it('lights the tokens the seat on turn is moving, which are its partner\'s once its own four are home', () =>
+    {
+        const home: LudoSeat = { ...seat(0, 'red', 0), home: 4, tokens: [0, 1, 2, 3].map((piece) => ({ piece, at: FINISHED })) };
+        const seats = [home, seat(1, 'green', 1), seat(2, 'yellow', 0), seat(3, 'blue', 1)];
+        const lit = (controls: number, mine?: number) => seatsFor({ kind: 'ludo', die: 6, moves: [0], controls, seats }, mine)
+            .filter((token) => token.playable)
+            .map((token) => token.key);
+
+        expect(lit(2, 0)).toEqual(['2-0', '2-1', '2-2', '2-3']);
+        expect(lit(2)).toEqual([]);
+    });
+
+    it('says which side every token plays for, so two of one side on a square can be told from two opponents', () =>
+    {
+        const seats = [seat(0, 'red', 0), seat(1, 'green', 1), seat(2, 'yellow', 0), seat(3, 'blue', 1)];
+
+        expect(seatsFor({ kind: 'ludo', moves: [], controls: 0, seats }).map((token) => token.side)).toEqual([0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1]);
     });
 });
 
@@ -914,7 +934,25 @@ describe('a roll that passes the turn is still seen', () =>
 {
     const tick = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
-    const empty = { tokens: [], die: null, turn: null, yours: false, winner: null };
+    const empty = { tokens: [], die: null, turn: null, yours: false, winners: [] };
+
+    const stood = async (tokens: { key: string; colour: string; side: number; at: number; col: number; row: number; playable: boolean }[]) =>
+    {
+        const host = document.createElement('div');
+
+        document.body.append(host);
+
+        const handle = await createLudoBoard({ host, plate: '', view: { ...empty, tokens }, reducedMotion: true, sound: false });
+
+        await tick(10);
+
+        const stacked = [...host.querySelectorAll<HTMLElement>('.lp')].filter((piece) => piece.hasAttribute('data-stacked')).map((piece) => piece.dataset.colour);
+
+        handle.dispose();
+        host.remove();
+
+        return stacked;
+    };
 
     it('shows the spent die when the view has none but the log says it was rolled and passed', async () =>
     {
@@ -935,17 +973,46 @@ describe('a roll that passes the turn is still seen', () =>
 
     it('stacks two tokens of one colour on a ring square, and keeps two colours side by side', async () =>
     {
+        const token = (key: string, colour: string, side: number, col: number) => ({ key, colour, side, at: 10, col, row: 6, playable: false });
+
+        expect(await stood([token('0-0', 'red', 0, 4), token('0-1', 'red', 0, 4), token('1-0', 'green', 1, 8), token('2-0', 'yellow', 2, 8)])).toEqual(['red']);
+    });
+
+    it('stacks a token on its partner\'s as a block of two colours, and keeps two opponents side by side', async () =>
+    {
+        const token = (key: string, colour: string, side: number, at: number, col: number) => ({ key, colour, side, at, col, row: 6, playable: false });
+
+        expect(await stood([
+            token('0-0', 'red', 0, 30, 4),
+            token('2-0', 'yellow', 0, 4, 4),
+            token('1-0', 'green', 1, 17, 8),
+            token('2-1', 'yellow', 0, 4, 8)
+        ])).toEqual(['yellow']);
+    });
+
+    it('throws confetti in every winning colour', async () =>
+    {
         const host = document.createElement('div');
+        const toneOf = (hex: string) =>
+        {
+            const probe = document.createElement('span');
+
+            probe.style.background = hex;
+
+            return probe.style.background;
+        };
+
         document.body.append(host);
-        const token = (key: string, colour: string, col: number) => ({ key, colour, at: 10, col, row: 6, playable: false });
-        const view = { ...empty, tokens: [token('0-0', 'red', 4), token('0-1', 'red', 4), token('1-0', 'red', 8), token('2-0', 'green', 8)] };
-        const handle = await createLudoBoard({ host, plate: '', view, reducedMotion: true, sound: false });
 
-        await tick(10);
+        const handle = await createLudoBoard({ host, plate: '', view: empty, reducedMotion: false, sound: false });
 
-        const stacked = [...host.querySelectorAll('.lp')].filter((piece) => piece.hasAttribute('data-stacked'));
+        handle.show({ ...empty, winners: ['red', 'yellow'] });
 
-        expect(stacked).toHaveLength(1);
+        const flecks = new Set([...host.querySelectorAll<HTMLElement>('.lb > span')].map((fleck) => fleck.style.background));
+
+        expect(flecks.has(toneOf('#FF5A4E'))).toBe(true);
+        expect(flecks.has(toneOf('#FFC72C'))).toBe(true);
+        expect(flecks.has(toneOf('#2FC262')) || flecks.has(toneOf('#3F8CFF'))).toBe(false);
 
         handle.dispose();
         host.remove();
