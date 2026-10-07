@@ -615,6 +615,18 @@ into a room - a result, an invitation, a group made or joined - is not somebody 
 and the ones that matter have a notification that says what they are. And nobody is told about a
 message they wrote themselves in another tab.
 
+**A game that starts while the reader is elsewhere says so.** Quick play seats somebody ready and the
+server starts the game when the last chair fills, which can be minutes later and on another page, and
+a live turn is thirty seconds: the sweep was playing the first turns of people who never knew they
+had a game. The cues store hears the `game` frame of a match the lobby's own list did not yet
+know was on, at a table the reader sits at, and says "Your Ludo game has started" with the way to
+the table. Once a match, whatever follows before the list has caught up; never for the table on
+screen; and never while the reader's own search for that game is still taking them to its table,
+because the press that fills the last chair starts the game before that page has opened. A frame is
+an arrival by construction, so there is nothing to arm: a table the list does not hold yet is not
+answered for, which is a silence on a cold load and never a false start. It lives in the cues chunk,
+which the shell imports after it mounts, and costs the shell nothing.
+
 **Every sub-page has a way back, and it is the top bar's.** A route's `meta.parent` names where it
 belongs, with `:param` placeholders filled from the match (`/app/games/:slug` for the create page), and
 `parentOf` resolves it. The top bar draws a back arrow for any route with a parent - on a phone it

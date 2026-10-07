@@ -141,6 +141,8 @@ export const play: Pick<Dictionary, keyof typeof reference> = {
     'tables.refused.quick-options': 'این بازی چنین میزی ندارد.',
 
     'quickMatch.busy': 'داریم برایت صندلی پیدا می‌کنیم',
+    'quickMatch.started': 'بازی‌ات در {game} شروع شد',
+    'quickMatch.go': 'رفتن سر میز',
 
     'play.notFound': 'چنین میزی نداریم.',
     'play.notFoundLead': 'این نشانی به میزی اشاره می‌کند که هیچ‌وقت باز نشده، یا از آن‌وقت بسته شده.',

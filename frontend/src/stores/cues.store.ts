@@ -1,8 +1,10 @@
 import { createEffect, createRoot, createStore, untrack } from 'azerothjs';
 
 import type { NotificationKind } from '../api.ts';
+import type { GameId } from '../data/games.ts';
 import type { SoundHandle } from '../game/sound.ts';
 import { NOTIFICATION_ICON, sayOf, targetOf } from '../lib/notifications.ts';
+import { useCatalogue } from './catalogue.store.ts';
 import { useChat } from './chat.store.ts';
 import { useLobby } from './lobby.store.ts';
 import { useLocale } from './locale.store.ts';
@@ -63,6 +65,8 @@ export const useCues = createStore((): CuesApi =>
     let noticeSeeded = false;
     let noticeSeenBusy = false;
 
+    const begun = new Set<string>();
+
     const run = (): (() => void) =>
     {
         const toasts = useToasts();
@@ -74,6 +78,7 @@ export const useCues = createStore((): CuesApi =>
         const lobby = useLobby();
         const live = useRealtime();
         const settings = useSettings();
+        const catalogue = useCatalogue();
 
         const nameOf = (handle: string) => people.byHandle(handle)?.displayName ?? handle;
 
@@ -252,6 +257,39 @@ export const useCues = createStore((): CuesApi =>
             }
         }, { name: 'cues.title' });
 
+        const offGame = live.onGame((frame) =>
+        {
+            const match = frame.match;
+
+            if (match.finishedAt !== undefined || match.mine === undefined || begun.has(match.id))
+            {
+                return;
+            }
+
+            const table = lobby.seated().find((one) => one.id === match.tableId);
+
+            if (table === undefined || table.matchId !== undefined)
+            {
+                return;
+            }
+
+            begun.add(match.id);
+
+            if (lobby.openId() === table.id || lobby.finding().includes(table.game as GameId))
+            {
+                return;
+            }
+
+            toasts.show({
+                kind: 'live',
+                icon: 'play',
+                text: locale.t('quickMatch.started', { game: locale.t(catalogue.byId(table.game as GameId).nameKey) }),
+                action: { label: locale.t('quickMatch.go'), run: () => go.current?.(`/app/play/${ table.id }`) },
+                dedupe: `cue.started.${ table.id }`
+            });
+            chime();
+        });
+
         const end = createRoot((dispose) =>
         {
             trackChat();
@@ -265,6 +303,7 @@ export const useCues = createStore((): CuesApi =>
         return () =>
         {
             end();
+            offGame();
             sound?.dispose();
 
             if (typeof document !== 'undefined')
@@ -308,6 +347,7 @@ export const useCues = createStore((): CuesApi =>
             noticeCount = 0;
             noticeSeeded = false;
             noticeSeenBusy = false;
+            begun.clear();
         },
 
         navigateTo(navigate)

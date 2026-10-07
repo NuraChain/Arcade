@@ -577,6 +577,13 @@ un-ready is waiting for nothing, and held, its hidden tab would be here for as l
 first chair freed there would then make it the fullest table with everybody here, and the next
 searcher would be seated ready beside people who are not looking.
 
+**Somebody who has left the page is told when the game starts.** The server starts a quick table the
+moment its last chair fills, and nobody sitting there has to be looking at it. Anybody seated who is
+somewhere else in the product is told "Your Ludo game has started", with the way to the table: *A
+game that starts while the reader is elsewhere says so* in `frontend/CLAUDE.md` is the whole of it,
+and `cues.spec.ts` holds it. Before it the clock played the opening turns of people who did not know
+they had a game, thirty seconds at a time.
+
 `quick.db.spec.ts` holds the server half against Postgres, and every race in it runs through
 separate instances of the service so the queue is out of the way and the database's lock is what is
 proven: ten searchers at once make tables of four, four and two with two games started, two presses
@@ -2669,7 +2676,7 @@ that one's.
 
 **Nothing told anybody it was their go.** `game_rules` offers ludo in `turns` mode, whose deadline is
 twenty-four hours, so the product's answer to "whose go is it?" was to keep opening the page. The
-`turn` notification is written only for `turns` tables - a live table gives forty-five seconds to
+`turn` notification is written only for `turns` tables - a live table gives thirty seconds to
 somebody already looking at the board, so one per turn there is noise nobody wants, and the sweep
 plays the turn of anybody who walked away. Its dedupe key is the MATCH, because `table:<id>` is what
 an invite to the same table already uses and one key shared by two kinds is two things collapsing

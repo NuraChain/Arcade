@@ -138,6 +138,8 @@ export const play = {
     'tables.refused.quick-options': 'That is not a table this game makes.',
 
     'quickMatch.busy': 'Finding you a seat',
+    'quickMatch.started': 'Your {game} game has started',
+    'quickMatch.go': 'Go to the table',
 
     'play.notFound': 'No such table.',
     'play.notFoundLead': 'That link points at a table that was never opened, or one that has closed since.',

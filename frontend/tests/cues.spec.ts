@@ -1,16 +1,19 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { cleanup } from '@azerothjs/testing';
 
+import { defaultTable } from '../src/data/tables.ts';
 import { manualClock, type ManualClock } from '../src/lib/clock.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import { useChat } from '../src/stores/chat.store.ts';
 import { useCues } from '../src/stores/cues.store.ts';
+import { useLobby } from '../src/stores/lobby.store.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
 import { useNotifications } from '../src/stores/notifications.store.ts';
 import { useRealtime } from '../src/stores/realtime.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
 import { useSocial } from '../src/stores/social.store.ts';
 import { useToasts } from '../src/stores/toasts.store.ts';
+import type { MatchView } from '../src/api.ts';
 import { server } from './fake-api.ts';
 import { socket } from './fake-realtime.ts';
 import '../src/locales/app-catalogue.ts';
@@ -76,6 +79,7 @@ beforeEach(async () =>
     useChat().reset();
     useNotifications().reset();
     useToasts().reset();
+    useLobby().reset();
     useCues().reset();
     await settle();
 
@@ -87,6 +91,7 @@ beforeEach(async () =>
 afterEach(async () =>
 {
     useCues().reset();
+    useLobby().reset();
     useToasts().reset();
     useNotifications().reset();
     useChat().reset();
@@ -335,6 +340,178 @@ describe('the cues store', () =>
         await settle();
 
         expect(useToasts().items().filter((toast) => toast.dedupe === 'cue.notice')).toHaveLength(1);
+    });
+
+    describe('a game that starts while the reader is somewhere else', () =>
+    {
+        const seatedAt = async (mode: 'live' | 'turns' = 'live') =>
+        {
+            const id = await useLobby().host('ludo', { ...defaultTable('ludo'), seats: 2, mode, privacy: 'public' }, []);
+
+            await settle();
+
+            return id;
+        };
+
+        const dealt = (tableId: string, over: Partial<MatchView> = {}): MatchView => ({
+            id: `match-${ tableId }`,
+            tableId,
+            game: 'ludo',
+            rev: 1,
+            seats: 2,
+            players: [
+                { seat: 0, who: 'alex', timeouts: 0 },
+                { seat: 1, who: 'sara.k', timeouts: 0 }
+            ] as MatchView['players'],
+            turn: 1,
+            mine: 0,
+            startedAt: new Date(clock.now()).toISOString(),
+            view: { kind: 'ludo', moves: [], seats: [] },
+            ...over
+        });
+
+        const push = async (match: MatchView, n = 9) =>
+        {
+            socket.deliver({ v: 1, t: 'game', n, at: clock.now(), match, events: [] });
+            await settle();
+        };
+
+        const said = (tableId: string) => useToasts().items().filter((toast) => toast.dedupe === `cue.started.${ tableId }`);
+
+        it('says so, names the game, and offers the way to the table', async () =>
+        {
+            const went: string[] = [];
+
+            useCues().navigateTo((to) => went.push(to));
+            useCues().start();
+
+            const tableId = await seatedAt();
+
+            expect(said(tableId)).toHaveLength(0);
+
+            await push(dealt(tableId));
+
+            expect(said(tableId)).toHaveLength(1);
+            expect(said(tableId)[0].text).toBe('Your Ludo game has started');
+            expect(said(tableId)[0].action?.label).toBe('Go to the table');
+
+            said(tableId)[0].action?.run();
+
+            expect(went).toEqual([`/app/play/${ tableId }`]);
+        });
+
+        it('says it for a game played a move a day as well', async () =>
+        {
+            useCues().start();
+
+            const tableId = await seatedAt('turns');
+
+            await push(dealt(tableId));
+
+            expect(said(tableId)).toHaveLength(1);
+        });
+
+        it('says nothing to somebody who is looking at that table', async () =>
+        {
+            useCues().start();
+
+            const tableId = await seatedAt();
+
+            useLobby().open(tableId);
+            await settle();
+            await push(dealt(tableId));
+
+            expect(said(tableId)).toHaveLength(0);
+        });
+
+        it('says it once, however many moves follow before the list of tables has caught up', async () =>
+        {
+            useCues().start();
+
+            const tableId = await seatedAt();
+
+            await push(dealt(tableId));
+            useToasts().reset();
+            await push(dealt(tableId, { rev: 2 }), 10);
+            await push(dealt(tableId, { rev: 3 }), 11);
+
+            expect(said(tableId)).toHaveLength(0);
+        });
+
+        it('says nothing about a move in a game the reader already knew was on', async () =>
+        {
+            useCues().start();
+
+            const tableId = await seatedAt();
+
+            server.tables.find((one) => one.id === tableId)!.matchId = `match-${ tableId }`;
+            await useLobby().refresh();
+            await settle();
+            await push(dealt(tableId, { rev: 7 }));
+
+            expect(said(tableId)).toHaveLength(0);
+        });
+
+        it('says nothing about a game that is over, or one at a table the reader does not sit at', async () =>
+        {
+            useCues().start();
+
+            const tableId = await seatedAt();
+
+            await push(dealt(tableId, { finishedAt: new Date(clock.now()).toISOString() }));
+            await push(dealt('somebody-elses-table'), 10);
+
+            expect(useToasts().items().filter((toast) => toast.dedupe?.startsWith('cue.started.'))).toHaveLength(0);
+        });
+
+        it('says nothing while the reader\'s own search is still taking them to that table', async () =>
+        {
+            useCues().start();
+
+            const tableId = await useLobby().quick('ludo');
+
+            await settle();
+
+            expect(useLobby().finding()).toEqual(['ludo']);
+
+            await push(dealt(tableId));
+
+            expect(said(tableId)).toHaveLength(0);
+
+            useLobby().open(tableId);
+            await settle();
+            useLobby().close();
+            await push(dealt(tableId, { rev: 2 }), 10);
+
+            expect(said(tableId)).toHaveLength(0);
+        });
+
+        it('says it in Persian, with the game\'s Persian name', async () =>
+        {
+            useLocale().setLocale('fa');
+            useCues().start();
+
+            const tableId = await seatedAt();
+
+            await push(dealt(tableId));
+
+            const locale = useLocale();
+
+            expect(said(tableId)[0].text).toBe(locale.t('quickMatch.started', { game: locale.t('games.ludo.name') }));
+            expect(said(tableId)[0].text).not.toContain('Ludo');
+            expect(said(tableId)[0].action?.label).not.toBe('Go to the table');
+        });
+
+        it('stops saying it once the store is stopped', async () =>
+        {
+            const stop = useCues().start();
+            const tableId = await seatedAt();
+
+            stop();
+            await push(dealt(tableId));
+
+            expect(said(tableId)).toHaveLength(0);
+        });
     });
 
     it('writes the unread total into the title, and clears it', async () =>
