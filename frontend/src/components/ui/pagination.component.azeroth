@@ -22,6 +22,10 @@ export default component Pagination(props: {
 
     derived remaining = Math.max(0, props.total - shown);
 
+    derived paged = view.pages > 1;
+
+    derived growing = props.mode === 'more';
+
     let nav: HTMLElement | null = null;
 
     const go = (page: number) =>
@@ -35,9 +39,9 @@ export default component Pagination(props: {
         }
     };
 
-    <Show when={ view.pages > 1 }>
+    <Show when={ paged }>
         <Show
-            when={ props.mode === 'more' }
+            when={ growing }
             fallback={
                 <nav ref={ (element) => nav = element } class={ [ '@container flex flex-wrap items-center justify-between gap-3 pt-3', props.class ?? '' ].filter(Boolean).join(' ') } aria-label={ props.label }>
                     <p class="text-ui-xs text-faint">
@@ -65,7 +69,7 @@ export default component Pagination(props: {
                                     fallback={
                                         <button
                                             type="button"
-                                            class={ [
+                                            class={ () => [
                                                 'tally flex h-9 min-w-9 cursor-pointer items-center justify-center rounded-control px-2 text-ui-sm font-semibold transition-colors coarse:h-11 coarse:min-w-11',
                                                 item === view.page ? 'bg-accent-fill text-accent-ink' : 'text-muted hover:bg-raised hover:text-text'
                                             ].join(' ') }

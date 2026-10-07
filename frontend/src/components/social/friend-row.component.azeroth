@@ -32,6 +32,10 @@ export default component FriendRow(props: {
 
     derived state = presence.of(props.person.id);
 
+    derived minor = props.person.isMinor;
+
+    derived acting = props.actions !== undefined;
+
     derived status = props.subtitle ?? (!state.known
         ? `@${ props.person.handle }`
         : (state.state === 'away' ? locale.t('common.away') : locale.t('common.online')));
@@ -49,17 +53,17 @@ export default component FriendRow(props: {
             <span class="flex min-w-0 flex-1 flex-col">
                 <span class="flex items-center gap-1.5">
                     <span class="truncate text-ui-md font-semibold text-text group-hover:text-accent" dir="auto">{ props.person.displayName }</span>
-                    <Show when={ props.person.isMinor }>
+                    <Show when={ minor }>
                         { () => <Icon name="shield" size={ 13 } class="shrink-0 text-live" /> }
                     </Show>
                 </span>
                 <span class="truncate text-ui-sm text-muted" dir="auto">{ status }</span>
             </span>
-            <Show when={ props.actions === undefined }>
+            <Show when={ !acting }>
                 <Icon name="chevron-right" size={ 16 } class="icon-flip shrink-0 text-faint transition-colors group-hover:text-muted" />
             </Show>
         </Link>
-        <Show when={ props.actions !== undefined }>
+        <Show when={ acting }>
             <span class="flex shrink-0 items-center gap-1.5">{ props.actions }</span>
         </Show>
     </div>

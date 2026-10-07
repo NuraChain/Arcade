@@ -98,6 +98,8 @@ export default component SettingsPage()
 
     derived blocked = visible(allBlocked, SAFETY_PAGE, blockedPage, paging);
 
+    derived blocking = allBlocked.length > 0;
+
     derived allMuted = social.mutes()
         .filter((entry) => entry.kind === 'person')
         .map((entry) => people.byHandle(entry.id))
@@ -106,6 +108,8 @@ export default component SettingsPage()
     derived privacy = social.privacy();
 
     derived muted = visible(allMuted, SAFETY_PAGE, mutedPage, paging);
+
+    derived muting = allMuted.length > 0;
 
     mount
     {
@@ -172,6 +176,8 @@ export default component SettingsPage()
     derived allReports = [...social.reports()].sort((a, b) => b.at - a.at);
 
     derived reports = visible(allReports, SAFETY_PAGE, reportsPage, paging);
+
+    derived reported = allReports.length > 0;
 
     state leaving = false;
 
@@ -361,7 +367,7 @@ export default component SettingsPage()
                                     <p class="label text-ui-sm text-text">{ locale.t('settings.safety.blocked') }</p>
                                     <p class="mt-1 text-ui-xs text-muted">{ locale.t('settings.safety.blockedLead') }</p>
                                     <Show
-                                        when={ allBlocked.length > 0 }
+                                        when={ blocking }
                                         fallback={ <p class="mt-2 text-ui-sm text-faint">{ locale.t('settings.safety.blockedEmpty') }</p> }
                                     >
                                         { () =>
@@ -396,7 +402,7 @@ export default component SettingsPage()
                                     <p class="label text-ui-sm text-text">{ locale.t('settings.safety.muted') }</p>
                                     <p class="mt-1 text-ui-xs text-muted">{ locale.t('settings.safety.mutedLead') }</p>
                                     <Show
-                                        when={ allMuted.length > 0 }
+                                        when={ muting }
                                         fallback={ <p class="mt-2 text-ui-sm text-faint">{ locale.t('settings.safety.mutedEmpty') }</p> }
                                     >
                                         { () =>
@@ -431,7 +437,7 @@ export default component SettingsPage()
                                     <p class="label text-ui-sm text-text">{ locale.t('settings.safety.reports') }</p>
                                     <p class="mt-1 text-ui-xs text-muted">{ locale.t('settings.safety.reportsLead') }</p>
                                     <Show
-                                        when={ allReports.length > 0 }
+                                        when={ reported }
                                         fallback={ <p class="mt-2 text-ui-sm text-faint">{ locale.t('report.empty') }</p> }
                                     >
                                         { () =>

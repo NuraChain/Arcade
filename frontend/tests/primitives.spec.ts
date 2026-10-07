@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { cleanup, fire, renderTest } from '@azerothjs/testing';
+import { createSignal } from 'azerothjs';
 
 import Avatar from '../src/components/ui/avatar.component.azeroth';
 import Badge from '../src/components/ui/badge.component.azeroth';
@@ -390,6 +391,38 @@ describe('Pagination', () =>
         expect(range?.classList.contains('tally')).toBe(false);
         expect(range?.textContent).toContain('از');
         useLocale().setLocale('en');
+    });
+
+    it('keeps its buttons, and whoever is on one, when the page is turned, and moves the mark', async () =>
+    {
+        const [page, setPage] = createSignal(1);
+        const { container } = renderTest(() => Pagination({
+            total: 40,
+            size: 10,
+            get page()
+            {
+                return page();
+            },
+            label: 'Pages',
+            onPage: setPage
+        }) as Rendered);
+        await settle();
+
+        const nav = container.querySelector('nav');
+        const next = container.querySelector('button[aria-label="Next page"]') as HTMLButtonElement;
+        const marked = () => [...container.querySelectorAll('nav button')].filter((one) => one.className.includes('bg-accent-fill')).map((one) => one.textContent?.trim());
+
+        expect(marked()).toEqual(['1']);
+
+        next.focus();
+        fire(next, 'click');
+        await settle();
+
+        expect(container.querySelector('nav'), 'the pager was drawn again by a turn of the page').toBe(nav);
+        expect(document.activeElement).toBe(next);
+        expect(container.querySelector('[aria-current="page"]')?.textContent?.trim()).toBe('2');
+        expect(marked()).toEqual(['2']);
+        expect((container.querySelector('button[aria-label="Previous page"]') as HTMLButtonElement).disabled).toBe(false);
     });
 });
 

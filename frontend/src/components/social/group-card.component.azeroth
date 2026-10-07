@@ -24,6 +24,8 @@ export default component GroupCard(props: { group: GroupSummary; class?: string 
 
     derived online = props.group.members.filter((id) => presence.isOnline(id)).length;
 
+    derived lively = online > 0;
+
     <Link
         to={ `/app/groups/${ props.group.id }` }
         class={ [ `flex min-w-0 items-center gap-2.5 rounded-panel p-2.5 transition duration-200 ${ PANEL_TONE.field } ${ PANEL_HOVER.field }`, props.class ?? '' ].filter(Boolean).join(' ') }
@@ -34,11 +36,11 @@ export default component GroupCard(props: { group: GroupSummary; class?: string 
             <span class="truncate text-ui-md font-semibold text-text" dir="auto">{ props.group.name }</span>
             <span class="truncate text-ui-xs text-muted">
                 { locale.plural('chat.members', props.group.memberCount) }
-                <Show when={ online > 0 }>
+                <Show when={ lively }>
                     <span class="text-live"> · { locale.plural('chat.online', online) }</span>
                 </Show>
-                <Show when={ props.group.game !== undefined }>
-                    <span> · { locale.t(catalogue.byId(props.group.game! as GameId).nameKey) }</span>
+                <Show when={ props.group.game } let={ game }>
+                    <span> · { locale.t(catalogue.byId(game as GameId).nameKey) }</span>
                 </Show>
             </span>
         </span>

@@ -17,6 +17,10 @@ export default component UserCard(props: { person: Person; onAdd: (id: string) =
 
     derived relation = social.relation(props.person.id);
 
+    derived minor = props.person.isMinor;
+
+    derived stranger = relation === 'none';
+
     derived reason = (() =>
     {
         const why = social.reasonFor(props.person.id);
@@ -32,14 +36,14 @@ export default component UserCard(props: { person: Person; onAdd: (id: string) =
             <Avatar person={ props.person } size="xl" presence={ presence.dot(props.person.id) } />
             <span class="flex items-center gap-1.5">
                 <span class="max-w-[10rem] truncate text-ui-md font-semibold text-text" dir="auto">{ props.person.displayName }</span>
-                <Show when={ props.person.isMinor }>
+                <Show when={ minor }>
                     { () => <Icon name="shield" size={ 13 } class="shrink-0 text-live" /> }
                 </Show>
             </span>
         </Link>
         <p class="line-clamp-2 text-ui-xs text-muted">{ reason }</p>
         <Show
-            when={ relation === 'none' }
+            when={ stranger }
             fallback={
                 <Button variant="secondary" size="sm" block disabled leading={ relation === 'friend' ? 'friend-check' : 'clock' } class="mt-auto">
                     { locale.t(relation === 'friend' ? 'person.friends' : 'person.added') }

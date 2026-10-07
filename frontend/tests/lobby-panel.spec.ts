@@ -143,6 +143,37 @@ describe('the lobby of a table two sides will play at', () =>
         }
     });
 
+    it('keeps what a chair holds when the table is read again, and turns its tag where it is', () =>
+    {
+        const chairs = (ready: boolean): TableSummary['chairs'] =>
+            WHO.map((who, seat) => ({ seat, who, ready: ready && seat === 0, ...(seat === 0 ? { host: true } : {}) })) as TableSummary['chairs'];
+        const [held, setHeld] = createSignal(table({ chairs: chairs(false) }));
+        const { container } = renderTest(() => LobbyPanel({
+            get table()
+            {
+                return held();
+            },
+            onInvite: () => undefined,
+            onCopyLink: () => undefined,
+            onLeave: () => undefined
+        }) as Rendered);
+        const chair = container.querySelector<HTMLElement>('ul > li')!;
+        const inside = [...chair.querySelectorAll<HTMLElement>('*')];
+        const tag = inside.find((one) => one.childElementCount === 0 && one.textContent?.trim() === useLocale().t('play.lobby.notReady'));
+
+        expect(tag, 'the chair says its player is not ready').toBeDefined();
+        expect(chair.textContent).toContain(useLocale().t('play.lobby.host'));
+
+        setHeld(table({ chairs: chairs(false) }));
+
+        expect(inside.filter((one) => !chair.contains(one)).map((one) => `<${ one.tagName.toLowerCase() }> ${ one.textContent?.trim() ?? '' }`), 'drawn again for the answer it already had').toEqual([]);
+
+        setHeld(table({ chairs: chairs(true) }));
+
+        expect(chair.contains(tag!), 'the tag was drawn again to change what it says').toBe(true);
+        expect(tag!.textContent?.trim()).toBe(useLocale().t('play.lobby.readyTag'));
+    });
+
     it('draws one row of chairs, as before, at a table where every seat plays for itself', () =>
     {
         const found = sides(shown(table({ game: 'ludo', teams: false })));

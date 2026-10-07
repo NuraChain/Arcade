@@ -29,6 +29,10 @@ export default component SeatCard(props: {
 
     derived mine = props.seat.who !== undefined && props.seat.who === props.me;
 
+    derived hosting = props.seat.host;
+
+    derived inviting = props.canInvite;
+
     derived person = mine
         ? account.user()
         : (handle === null ? null : (people.byHandle(handle) ?? null));
@@ -65,7 +69,7 @@ export default component SeatCard(props: {
         when={ filled || pending }
         fallback={
             <Show
-                when={ props.canInvite }
+                when={ inviting }
                 fallback={
                     <div class={ shell } aria-label={ locale.t('play.lobby.open') }>
                         <span class="flex h-14 w-14 items-center justify-center rounded-full border border-dashed border-line text-faint">
@@ -89,7 +93,7 @@ export default component SeatCard(props: {
     >
         { () =>
             <div class={ shell }>
-                <Show when={ props.seat.host }>
+                <Show when={ hosting }>
                     <Badge dot text={ locale.t('play.lobby.host') } tone="accent" class="absolute start-2 top-2" />
                 </Show>
                 <span class={ () => [ 'flex rounded-full transition-shadow duration-150', props.seat.who !== undefined && voice.speaking(props.seat.who) ? 'ring-3 ring-live ring-offset-2 ring-offset-field' : '' ].filter(Boolean).join(' ') }>
@@ -101,12 +105,10 @@ export default component SeatCard(props: {
                     />
                 </span>
                 <span class={ () => [ 'w-full truncate text-ui-base font-semibold', pending ? 'text-muted' : 'text-text' ].join(' ') } dir="auto">{ name }</span>
-                <Show when={ tag !== null }>
-                    { () =>
-                        <span class={ () => [ 'rounded-full px-2 py-0.5 text-ui-2xs font-semibold', tag!.tone, pending ? 'animate-pulse motion-reduce:animate-none' : '' ].filter(Boolean).join(' ') }>
-                            { tag!.text }
-                        </span>
-                    }
+                <Show when={ tag } let={ mark }>
+                    <span class={ () => [ 'rounded-full px-2 py-0.5 text-ui-2xs font-semibold', mark.tone, pending ? 'animate-pulse motion-reduce:animate-none' : '' ].filter(Boolean).join(' ') }>
+                        { mark.text }
+                    </span>
                 </Show>
             </div>
         }

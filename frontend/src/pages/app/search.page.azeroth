@@ -93,6 +93,22 @@ export default component SearchPage()
 
     derived recents = search.recents();
 
+    derived asking = query.trim() !== '';
+
+    derived remembered = recents.length > 0;
+
+    derived found = results.total > 0;
+
+    derived foundPeople = results.people.length > 0;
+
+    derived foundGames = results.games.length > 0;
+
+    derived foundGroups = results.groups.length > 0;
+
+    derived foundMessages = results.messages.length > 0;
+
+    derived hidden = results.locked > 0;
+
     const run = (term: string) =>
     {
         search.setQuery(term);
@@ -121,10 +137,10 @@ export default component SearchPage()
         />
 
         <Show
-            when={ query.trim() !== '' }
+            when={ asking }
             fallback={
                 <div class="flex flex-col gap-6">
-                    <Show when={ recents.length > 0 }>
+                    <Show when={ remembered }>
                         <section>
                             <SectionHeading title={ locale.t('search.recent') } />
                             <ul class="flex flex-col divide-y divide-line rounded-panel border border-line bg-field px-2" aria-label={ locale.t('search.recent') }>
@@ -155,14 +171,14 @@ export default component SearchPage()
         >
             { () =>
                 <Show
-                    when={ results.total > 0 }
+                    when={ found }
                     fallback={ <EmptyState icon="search" title={ locale.t('search.empty', { query }) } lead={ locale.t('search.emptyLead') } class="py-10" /> }
                 >
                     { () =>
                         <div class="flex flex-col gap-7">
                             <p class="text-ui-sm text-faint">{ locale.plural('search.results', results.total) }</p>
 
-                            <Show when={ results.people.length > 0 }>
+                            <Show when={ foundPeople }>
                                 <section>
                                     <SectionHeading title={ locale.t('search.scope.people') } />
                                     <ul class="flex flex-col divide-y divide-line rounded-panel border border-line bg-field px-2" aria-label={ locale.t('search.scope.people') }>
@@ -183,7 +199,7 @@ export default component SearchPage()
                                 </section>
                             </Show>
 
-                            <Show when={ results.games.length > 0 }>
+                            <Show when={ foundGames }>
                                 <section>
                                     <SectionHeading title={ locale.t('search.scope.games') } />
                                     <ul class="flex flex-col gap-2" aria-label={ locale.t('search.scope.games') }>
@@ -205,7 +221,7 @@ export default component SearchPage()
                                 </section>
                             </Show>
 
-                            <Show when={ results.groups.length > 0 }>
+                            <Show when={ foundGroups }>
                                 <section>
                                     <SectionHeading title={ locale.t('search.scope.groups') } />
                                     <ul class="grid gap-2 @2xl:grid-cols-2 @6xl:grid-cols-3" aria-label={ locale.t('search.scope.groups') }>
@@ -218,7 +234,7 @@ export default component SearchPage()
                                 </section>
                             </Show>
 
-                            <Show when={ results.locked > 0 }>
+                            <Show when={ hidden }>
                                 { () =>
                                     <p class="flex items-start gap-2 rounded-tile border border-line bg-field px-3 py-2 text-ui-sm text-muted">
                                         <Icon name="lock" size={ 15 } class="mt-0.5 shrink-0" />
@@ -227,7 +243,7 @@ export default component SearchPage()
                                 }
                             </Show>
 
-                            <Show when={ results.messages.length > 0 }>
+                            <Show when={ foundMessages }>
                                 <section>
                                     <SectionHeading title={ locale.t('search.scope.chats') } />
                                     <ul class="flex flex-col divide-y divide-line rounded-panel border border-line bg-field px-2" aria-label={ locale.t('search.scope.chats') }>

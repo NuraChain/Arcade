@@ -10,6 +10,7 @@ import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import '../src/locales/app-catalogue.ts';
 import { useAccount } from '../src/stores/account.store.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
+import { useSocial } from '../src/stores/social.store.ts';
 import { server } from './fake-api.ts';
 
 vi.mock('../src/api.ts', async () => await import('./fake-api.ts'));
@@ -202,5 +203,34 @@ describe('the notification switches', () =>
         expect(server.mutes).toContainEqual({ kind: 'notice', id: 'messages' });
         expect(switchFor('Messages').getAttribute('aria-checked')).toBe('false');
         expect(switchFor('Messages').querySelector('[aria-hidden]')?.className).toContain('bg-line');
+    });
+});
+
+describe('the safety lists', () =>
+{
+    it('keep the lines that say nobody is blocked, muted or reported when they are read again', async () =>
+    {
+        await useAccount().signIn('Alex');
+
+        const container = await show(SettingsPage as unknown as () => HTMLElement, '/app/me/settings');
+        const lineOf = (text: string) => [...container.querySelectorAll('p')].find((one) => one.textContent?.trim() === text) ?? null;
+        const lines = () => [
+            lineOf(useLocale().t('settings.safety.blockedEmpty')),
+            lineOf(useLocale().t('settings.safety.mutedEmpty')),
+            lineOf(useLocale().t('report.empty'))
+        ];
+
+        await vi.waitFor(() => expect(lines().every((one) => one !== null)).toBe(true), { timeout: 4000 });
+
+        const drawn = lines();
+        const reads = server.calls.filter((one) => one === 'social.graph').length;
+
+        await useSocial().refresh();
+        await settle();
+
+        expect(server.calls.filter((one) => one === 'social.graph').length, 'the lists were not read again').toBeGreaterThan(reads);
+        expect(lines()[0], 'the line about blocks was drawn again').toBe(drawn[0]);
+        expect(lines()[1], 'the line about mutes was drawn again').toBe(drawn[1]);
+        expect(lines()[2], 'the line about reports was drawn again').toBe(drawn[2]);
     });
 });

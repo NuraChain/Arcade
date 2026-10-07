@@ -1037,7 +1037,7 @@ export const client =
         async mine()
         {
             server.calls.push('groups.mine');
-            return { groups: server.groups.filter((group) => group.members.includes(server.me)) };
+            return { groups: structuredClone(server.groups.filter((group) => group.members.includes(server.me))) };
         },
 
         async discover()
@@ -1048,8 +1048,8 @@ export const client =
             // about. The real server filters it out of this list, so this one has to as well, or a
             // spec would pass against a server this product does not have.
             return {
-                groups: server.groups.filter((group) =>
-                    group.privacy === 'public' && !group.members.includes(server.me))
+                groups: structuredClone(server.groups.filter((group) =>
+                    group.privacy === 'public' && !group.members.includes(server.me)))
             };
         },
 
@@ -1192,7 +1192,7 @@ export const client =
         {
             server.calls.push('devices.list');
             return {
-                devices: server.devices,
+                devices: server.devices.map((device) => ({ ...device })),
                 ...(server.currentDevice === null ? {} : { current: server.currentDevice })
             };
         },

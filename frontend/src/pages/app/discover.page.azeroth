@@ -41,6 +41,8 @@ export default component DiscoverPage()
 
     derived groups = groups_.elsewhere().slice(0, 12);
 
+    derived joinable = groups.length > 0;
+
     derived trending = [...catalogue.games].sort((a, b) => catalogue.stats(b.id).playersOnline - catalogue.stats(a.id).playersOnline).slice(0, 3);
 
     const quickPlay = (game: GameId) =>
@@ -78,7 +80,7 @@ export default component DiscoverPage()
             <section>
                 <SectionHeading title={ locale.t('discover.rooms') } />
                 <Show
-                    when={ groups.length > 0 }
+                    when={ joinable }
                     fallback={ <EmptyState icon="people" title={ locale.t('discover.roomsEmpty') } lead={ locale.t('discover.roomsEmptyLead') } class="rounded-panel border border-dashed border-line py-8" /> }
                 >
                     { () =>

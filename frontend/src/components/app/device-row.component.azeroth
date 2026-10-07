@@ -51,6 +51,12 @@ export default component DeviceRow(props: {
 
     derived named = props.device.label === '' ? locale.t('devices.unnamed') : props.device.label;
 
+    derived own = props.current;
+
+    derived readable = props.state !== 'tampered';
+
+    derived revocable = props.state !== 'locked';
+
     <div class="flex flex-col gap-3 rounded-tile border border-line bg-field p-3 sm:flex-row sm:items-start sm:justify-between">
         <div class="flex min-w-0 items-start gap-3">
             <Icon name={ ICON[props.state] } size={ 18 } class={ `mt-0.5 shrink-0 ${ TONE[props.state] }` } />
@@ -59,11 +65,11 @@ export default component DeviceRow(props: {
                 <p class="flex flex-wrap items-center gap-2">
                     <span class="text-ui-base font-semibold text-text">{ named }</span>
 
-                    <Show when={ props.current }>
+                    <Show when={ own }>
                         { () => <span class="text-ui-xs font-semibold text-accent">{ locale.t('devices.thisOne') }</span> }
                     </Show>
 
-                    <Show when={ props.state !== 'tampered' }>
+                    <Show when={ readable }>
                         { () => <TrustBadge attested={ props.device.attested } /> }
                     </Show>
                 </p>
@@ -76,7 +82,7 @@ export default component DeviceRow(props: {
         </div>
 
         <div class="flex shrink-0 flex-wrap gap-2">
-            <Show when={ props.state !== 'locked' }>
+            <Show when={ revocable }>
                 { () =>
                     <Button
                         variant="ghost"

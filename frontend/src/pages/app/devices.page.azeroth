@@ -43,6 +43,14 @@ export default component DevicesPage()
 
     derived retired = rows.filter((one) => one.revoked);
 
+    derived listed = live.length > 0;
+
+    derived shelved = retired.length > 0;
+
+    derived keyless = devices.readiness() === 'absent';
+
+    derived faulted = devices.failure() !== null;
+
     derived mine = devices.readiness() === 'ready' ? devices.mine() ?? undefined : undefined;
 
     derived suggestion = locale.t(device.posture() === 'phone' ? 'devices.namePhone' : 'devices.nameDesktop');
@@ -58,7 +66,7 @@ export default component DevicesPage()
 
         <div class="flex flex-col gap-6">
             <KeyNotice state={ devices.readiness() }>
-                <Show when={ devices.readiness() === 'absent' }>
+                <Show when={ keyless }>
                     { () =>
                         <Button
                             variant="primary"
@@ -73,7 +81,7 @@ export default component DevicesPage()
                 </Show>
             </KeyNotice>
 
-            <Show when={ devices.failure() !== null }>
+            <Show when={ faulted }>
                 { () =>
                     <p class="text-ui-sm text-danger" role="alert">
                         { locale.t(devices.failure() === 'refused' ? 'devices.refused' : 'devices.unavailable') }
@@ -90,7 +98,7 @@ export default component DevicesPage()
                 <SectionHeading id="devices-live" title={ locale.t('devices.live') } />
 
                 <Show
-                    when={ live.length > 0 }
+                    when={ listed }
                     fallback={
                         <EmptyState
                             icon="key"
@@ -118,7 +126,7 @@ export default component DevicesPage()
                 </Show>
             </section>
 
-            <Show when={ retired.length > 0 }>
+            <Show when={ shelved }>
                 <section aria-labelledby="devices-retired">
                     <SectionHeading id="devices-retired" title={ locale.t('devices.retired') } />
                     <p class="pb-2 text-ui-sm text-muted">{ locale.t('devices.retiredLead') }</p>
