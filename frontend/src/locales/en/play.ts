@@ -126,6 +126,11 @@ export const play = {
     'play.close.confirm': 'Close the table',
     'play.close.refused': 'A game is still being played here. Finish it or resign first.',
 
+    'tables.refused.table-closed': 'That table has closed.',
+    'tables.refused.chairs-empty': 'Every chair has to be taken first.',
+    'tables.refused.not-ready': 'Everybody has to be ready first.',
+    'tables.refused.no-invitee': 'No one by that name can be invited.',
+
     'play.notFound': 'No such table.',
     'play.notFoundLead': 'That link points at a table that was never opened, or one that has closed since.',
     'play.closed': 'This table has closed.',

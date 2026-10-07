@@ -1,5 +1,5 @@
 import { ApiError } from '../../api.ts';
-import { seatedMax } from '../../lib/open-table.ts';
+import { whyRefused } from '../../lib/open-table.ts';
 import type { Game } from '../../data/games.ts';
 import type { Person } from '../../data/person.ts';
 import { cubeLive } from '../../../../backend/src/domains/match/backgammon/cube.ts';
@@ -95,7 +95,7 @@ export default component CreateGameForm(props: { game: Game; onCreated: (tableId
             {
                 pending = false;
                 const refused = error instanceof ApiError && error.status >= 400 && error.status < 500;
-                toasts.show({ kind: 'warning', text: locale.t(seatedMax(error) ? 'play.seatedMax' : refused ? 'create.refused' : 'state.errorLead') });
+                toasts.show({ kind: 'warning', text: locale.t(whyRefused(error, refused ? 'create.refused' : 'state.errorLead')) });
             });
     };
 

@@ -1,6 +1,8 @@
 import { ApiError, type MatchView } from '../api.ts';
+import type { MessageKey } from '../locales/en.ts';
 import { useLocale } from '../stores/locale.store.ts';
 import { useToasts } from '../stores/toasts.store.ts';
+import { isTableRefusal } from '../../../backend/src/domains/table/refusals.ts';
 
 /**
  * Goes to a table, once there is a table to go to.
@@ -28,9 +30,22 @@ import { useToasts } from '../stores/toasts.store.ts';
  * once here beats nine copies of the same catch, five of which would have had to import a toast
  * store to write it.
  */
-export const seatedMax = (error: unknown) => error instanceof ApiError && error.code === 'seated-max';
+export function whyRefused(error: unknown, otherwise: MessageKey, playing: MessageKey = otherwise): MessageKey
+{
+    const word = error instanceof ApiError && isTableRefusal(error.code) ? error.code : null;
 
-export const tablePlaying = (error: unknown) => error instanceof ApiError && error.code === 'playing';
+    if (word === null)
+    {
+        return otherwise;
+    }
+
+    if (word === 'seated-max')
+    {
+        return 'play.seatedMax';
+    }
+
+    return word === 'playing' ? playing : `tables.refused.${ word }`;
+}
 
 export function leaveLead(live: Pick<MatchView, 'finishedAt' | 'mine' | 'players'> | null, taken: number)
 {
@@ -44,15 +59,19 @@ export function leaveLead(live: Pick<MatchView, 'finishedAt' | 'mine' | 'players
     return taken <= 1 ? 'play.leave.last' : 'play.leave.lead';
 }
 
+const ABOUT_THE_READER: readonly MessageKey[] = ['play.seatedMax', 'tables.refused.no-invitee'];
+
 export function openTable(made: Promise<string>, go: (to: string) => void, settled?: () => void)
 {
     void made
         .then((id) => go(`/app/play/${ id }`))
         .catch((error: unknown) =>
         {
+            const why = whyRefused(error, 'play.openFailed');
+
             useToasts().show({
                 kind: 'warning',
-                text: useLocale().t(seatedMax(error) ? 'play.seatedMax' : 'play.openFailed'),
+                text: useLocale().t(ABOUT_THE_READER.includes(why) ? why : 'play.openFailed'),
                 dedupe: 'open-table'
             });
         })

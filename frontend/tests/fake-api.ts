@@ -3,6 +3,7 @@ import { ApiError, applyFieldErrors } from '@azerothjs/http/api/shared';
 import { threadSize } from '../../backend/src/domains/chat/pages.ts';
 import { NOTICE_OF } from '../../backend/src/domains/notify/notices.ts';
 import { candidatesFor, handleFromAddress, handleFromName } from '../../backend/src/domains/identity/handle.ts';
+import { TABLE_REFUSALS, type TableRefusal } from '../../backend/src/domains/table/refusals.ts';
 import type {
     Account,
     ChainProfile,
@@ -134,6 +135,10 @@ function mustTable(id: string)
     }
     return table;
 }
+
+const tableRefusal = (word: TableRefusal, message: string) => new ApiError(TABLE_REFUSALS[word], word, message, undefined);
+
+const noInvitee = () => tableRefusal('no-invitee', 'No one by that name can be invited.');
 
 function mustGroup(slug: string)
 {
@@ -1393,6 +1398,12 @@ export const client =
         } })
         {
             server.calls.push('tables.create');
+
+            if (input.invitees.some((handle) => !reachable(handle)))
+            {
+                throw noInvitee();
+            }
+
             server.tableSeq += 1;
 
             const made: TableWire = {
@@ -1429,7 +1440,7 @@ export const client =
             const table = mustTable(params.id);
             if (table.status === 'closed')
             {
-                throw new ApiError(409, 'conflict', 'That table has closed.', undefined);
+                throw tableRefusal('table-closed', 'That table has closed.');
             }
 
             const held = table.chairs.find((chair) => chair.who === server.me);
@@ -1440,7 +1451,7 @@ export const client =
 
             if (table.matchId !== undefined)
             {
-                throw new ApiError(409, 'playing', 'A game is being played at that table.', undefined);
+                throw tableRefusal('playing', 'A game is being played at that table.');
             }
 
             const free = table.chairs.find((chair) =>
@@ -1491,6 +1502,12 @@ export const client =
         {
             server.calls.push('tables.invite');
             const table = mustTable(params.id);
+
+            if (!reachable(input.id) || !PEOPLE_FIXTURES.some((one) => one.handle === input.id))
+            {
+                throw noInvitee();
+            }
+
             const free = table.chairs.find((chair) => chair.who === undefined && chair.invited === undefined);
             if (free !== undefined)
             {
@@ -1505,11 +1522,11 @@ export const client =
             const table = mustTable(params.id);
             if (table.chairs.some((chair) => chair.who === undefined))
             {
-                throw new ApiError(409, 'conflict', 'Every chair has to be taken first.', undefined);
+                throw tableRefusal('chairs-empty', 'Every chair has to be taken first.');
             }
             if (table.chairs.some((chair) => !chair.ready))
             {
-                throw new ApiError(409, 'conflict', 'Everybody has to be ready first.', undefined);
+                throw tableRefusal('not-ready', 'Everybody has to be ready first.');
             }
             return {};
         },
@@ -1518,6 +1535,12 @@ export const client =
         {
             server.calls.push('tables.close');
             const table = mustTable(params.id);
+
+            if (table.matchId !== undefined)
+            {
+                throw tableRefusal('playing', 'Finish or resign the game first.');
+            }
+
             table.status = 'closed';
             return { ok: true };
         },
@@ -1526,6 +1549,12 @@ export const client =
         {
             server.calls.push('tables.voice');
             const table = mustTable(params.id);
+
+            if (table.status === 'closed')
+            {
+                throw tableRefusal('table-closed', 'That table has closed.');
+            }
+
             table.voice = input.on;
             return table;
         }

@@ -590,7 +590,9 @@ inviting somebody to a table and the group verbs all used to show their success 
 that fired the request, so a refusal read as success followed by the generic unhandled-error toast. They
 go through `lib/attempt.ts` now: it awaits, THEN shows the success sentence, and on a refusal shows one
 localized "that did not go through" and resolves `false` rather than rejecting - server messages are
-English-only, so they are never shown on a page that may be Persian. The social store holds each
+English-only, so they are never shown on a page that may be Persian. A caller that can name the refusal
+hands `attempt` a reader as its third argument and the reader's key is said instead: an invitation says
+"No one by that name can be invited." through `whyRefused`. The social store holds each
 relationship request in flight by its key (`social.working`) and a second press answers with the SAME
 promise, so Accept pressed twice is one request, and the buttons show their pending state from it.
 Copying is `lib/clipboard.ts`: success only when the browser really wrote it, and a refusal hands the

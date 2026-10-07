@@ -21,7 +21,7 @@ import { createAchieveService } from './domains/achieve/service.ts';
 import { endingOf } from './domains/match/declare.ts';
 import { createMatchService, type MatchLoad } from './domains/match/service.ts';
 import { WATCH_DELAY_MS, createWatchService } from './domains/match/watch.ts';
-import { createTableService, type TableRow } from './domains/table/service.ts';
+import { createTableService, noInvitee, type TableRow } from './domains/table/service.ts';
 import { createChainProfiles, recordValue } from './chain/profile.ts';
 import { createNftReader } from './chain/nfts.ts';
 import { createIdentityService } from './domains/identity/service.ts';
@@ -1963,7 +1963,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 const other = await social.personByHandle(handle);
                 if (other === null)
                 {
-                    throw new NotFoundError('No account with that name.');
+                    throw noInvitee();
                 }
 
                 await table.invite(me, tableId, other.id);

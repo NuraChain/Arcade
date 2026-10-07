@@ -129,6 +129,11 @@ export const play: Pick<Dictionary, keyof typeof reference> = {
     'play.close.confirm': 'بستن میز',
     'play.close.refused': 'هنوز اینجا بازی در جریان است. اول تمامش کن یا کنار بکش.',
 
+    'tables.refused.table-closed': 'آن میز بسته شده.',
+    'tables.refused.chairs-empty': 'اول باید همهٔ صندلی‌ها پر شود.',
+    'tables.refused.not-ready': 'اول باید همه آماده باشند.',
+    'tables.refused.no-invitee': 'کسی با این نام را نمی‌شود دعوت کرد.',
+
     'play.notFound': 'چنین میزی نداریم.',
     'play.notFoundLead': 'این نشانی به میزی اشاره می‌کند که هیچ‌وقت باز نشده، یا از آن‌وقت بسته شده.',
     'play.closed': 'این میز بسته شده.',

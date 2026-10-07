@@ -22,11 +22,13 @@ import { defaultTable } from '../src/data/tables.ts';
 import { manualClock, type ManualClock } from '../src/lib/clock.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import '../src/locales/app-catalogue.ts';
+import type { MessageKey } from '../src/locales/en.ts';
 import { useCatalogue } from '../src/stores/catalogue.store.ts';
 import { useChat } from '../src/stores/chat.store.ts';
 import { useDevice } from '../src/stores/device.store.ts';
 import { useLobby } from '../src/stores/lobby.store.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
+import { useOverlay } from '../src/stores/overlay.store.ts';
 import { usePeople } from '../src/stores/people.store.ts';
 import { usePresence } from '../src/stores/presence.store.ts';
 import { useRealtime } from '../src/stores/realtime.store.ts';
@@ -35,7 +37,7 @@ import { useSession } from '../src/stores/session.store.ts';
 import { useSettings } from '../src/stores/settings.store.ts';
 import { useToasts } from '../src/stores/toasts.store.ts';
 import { leaveLead } from '../src/lib/open-table.ts';
-import { client, server } from './fake-api.ts';
+import { ApiError, client, server } from './fake-api.ts';
 import { socket } from './fake-realtime.ts';
 
 type Rendered = HTMLElement;
@@ -537,6 +539,198 @@ describe('PlayPage', () =>
 
             await vi.waitFor(() => expect(useToasts().items().map((one) => one.text)).toContain(useLocale().t('play.table.playing')), { timeout: 4000 });
             expect(held.chairs.some((chair) => chair.who === 'alex')).toBe(false);
+        });
+    });
+
+    describe('a start, a chair or a close the server refuses', () =>
+    {
+        const pressable = (container: HTMLElement, key: MessageKey) =>
+            [...container.querySelectorAll('button')].find((one) => one.textContent?.trim() === useLocale().t(key));
+
+        const said = () => useToasts().items().map((one) => [one.kind, one.text]);
+
+        const opened = (id: string) =>
+        {
+            const table: Route[] = [{ path: '/app/play/:id', component: (): HTMLElement => PlayPage() as HTMLElement }];
+            const router = createRouter({ routes: table, history: createMemoryHistory(`/app/play/${ id }`), scroll: false });
+
+            return renderTest(() => RouterProvider({ router, children: () => Routes({}) }) as Rendered).container;
+        };
+
+        const hosting = async (ready: boolean) =>
+        {
+            const id = await useLobby().host('backgammon', defaultTable('backgammon'), []);
+            const held = server.tables.find((one) => one.id === id)!;
+
+            held.chairs[0].ready = ready;
+            held.chairs[1].who = 'sara.k';
+            held.chairs[1].ready = ready;
+            useToasts().reset();
+
+            const container = opened(id);
+
+            await vi.waitFor(() => expect(pressable(container, ready ? 'match.start' : 'play.close.confirm')).toBeDefined(), { timeout: 4000 });
+
+            return { container, held };
+        };
+
+        const swapped = async (verb: string, stand: () => Promise<unknown>, run: () => Promise<void>) =>
+        {
+            const tables = client.tables as unknown as Record<string, unknown>;
+            const real = tables[verb];
+
+            tables[verb] = stand;
+
+            try
+            {
+                await run();
+            }
+            finally
+            {
+                tables[verb] = real;
+            }
+        };
+
+        const closing = async (container: HTMLElement) =>
+        {
+            fire(pressable(container, 'play.close.confirm')!, 'click');
+
+            await vi.waitFor(() => expect(useOverlay().top()).not.toBeNull(), { timeout: 4000 });
+
+            useOverlay().close(useOverlay().top()!.id, true);
+        };
+
+        afterEach(() =>
+        {
+            useOverlay().reset();
+            useLocale().setLocale('en');
+
+            for (const one of server.tables)
+            {
+                delete one.matchId;
+            }
+        });
+
+        it.each(['en', 'fa'] as const)('says everybody has to be ready when somebody stopped being ready before the start arrived, in %s', async (language) =>
+        {
+            useLocale().setLocale(language);
+
+            const { container, held } = await hosting(true);
+
+            held.chairs[1].ready = false;
+            fire(pressable(container, 'match.start')!, 'click');
+
+            await vi.waitFor(() => expect(said()).toEqual([['warning', useLocale().t('tables.refused.not-ready')]]), { timeout: 4000 });
+
+            expect(server.calls).toContain('tables.start');
+            expect(said()[0][1]).not.toBe(useLocale().t('state.errorLead'));
+        });
+
+        it('says a chair is empty when somebody stood up before the start arrived', async () =>
+        {
+            const { container, held } = await hosting(true);
+
+            delete held.chairs[1].who;
+            held.chairs[1].ready = false;
+            fire(pressable(container, 'match.start')!, 'click');
+
+            await vi.waitFor(() => expect(said()).toEqual([['warning', useLocale().t('tables.refused.chairs-empty')]]), { timeout: 4000 });
+        });
+
+        it('still says to check the connection when the start never arrived', async () =>
+        {
+            const { container } = await hosting(true);
+
+            await swapped('start', async () =>
+            {
+                throw new TypeError('Failed to fetch');
+            }, async () =>
+            {
+                fire(pressable(container, 'match.start')!, 'click');
+
+                await vi.waitFor(() => expect(said()).toEqual([['warning', useLocale().t('state.errorLead')]]), { timeout: 4000 });
+            });
+        });
+
+        it('says the table has closed to somebody who reaches for a chair too late', async () =>
+        {
+            const id = await useLobby().host('ludo', defaultTable('ludo'), []);
+            const held = server.tables.find((one) => one.id === id)!;
+
+            delete held.chairs[0].who;
+            held.chairs[1].who = 'sara.k';
+            useToasts().reset();
+
+            const container = opened(id);
+
+            await vi.waitFor(() => expect(pressable(container, 'play.table.sitDown')).toBeDefined(), { timeout: 4000 });
+
+            held.status = 'closed';
+            fire(pressable(container, 'play.table.sitDown')!, 'click');
+
+            await vi.waitFor(() => expect(said()).toEqual([['warning', useLocale().t('tables.refused.table-closed')]]), { timeout: 4000 });
+        });
+
+        it('says the table has closed to a host who switches voice too late, and otherwise only that voice could not be changed', async () =>
+        {
+            const { container, held } = await hosting(false);
+            const voice = () => container.querySelector<HTMLButtonElement>(`button[aria-label="${ useLocale().t('voice.hostOn') }"]`)!;
+
+            held.status = 'closed';
+            fire(voice(), 'click');
+
+            await vi.waitFor(() => expect(said()).toEqual([['warning', useLocale().t('tables.refused.table-closed')]]), { timeout: 4000 });
+
+            useToasts().reset();
+
+            await swapped('voice', async () =>
+            {
+                throw new TypeError('Failed to fetch');
+            }, async () =>
+            {
+                fire(voice(), 'click');
+
+                await vi.waitFor(() => expect(said()).toEqual([['warning', useLocale().t('voice.switchFailed')]]), { timeout: 4000 });
+            });
+
+            expect(held.voice).toBe(false);
+        });
+
+        it('says a game is still being played only when that is why the table would not close', async () =>
+        {
+            const { container, held } = await hosting(false);
+
+            held.matchId = 'live-close';
+            await closing(container);
+
+            await vi.waitFor(() => expect(said()).toEqual([['warning', useLocale().t('play.close.refused')]]), { timeout: 4000 });
+
+            expect(held.status).not.toBe('closed');
+        });
+
+        it('says only that it did not go through when a close fails for any other reason, and stays at the table', async () =>
+        {
+            const { container, held } = await hosting(false);
+
+            for (const failure of [new ApiError(500, 'internal', 'Something went wrong.', undefined), new TypeError('Failed to fetch')])
+            {
+                useToasts().reset();
+
+                await swapped('close', async () =>
+                {
+                    throw failure;
+                }, async () =>
+                {
+                    await closing(container);
+
+                    await vi.waitFor(() => expect(said()).toEqual([['warning', useLocale().t('common.actionFailed')]]), { timeout: 4000 });
+                });
+
+                useOverlay().reset();
+            }
+
+            expect(useLobby().openId()).toBe(held.id);
+            expect(pressable(container, 'play.close.confirm')).toBeDefined();
         });
     });
 

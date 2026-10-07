@@ -34,7 +34,7 @@ import type { MatchView } from '../../api.ts';
 import { plainOf } from '../../lib/markdown.ts';
 import { holdScreen } from '../../lib/wake-lock.ts';
 import { watchEdge, watchFold, watchSheet, type SheetSize } from '../../lib/sheet-room.ts';
-import { leaveLead, seatedMax, tablePlaying } from '../../lib/open-table.ts';
+import { leaveLead, whyRefused } from '../../lib/open-table.ts';
 import { copyText } from '../../lib/clipboard.ts';
 import { BOARDS, drawable, rematchOf, type BoardComponent, type Rematch } from '../../components/games/boards.ts';
 import { turnMs } from '../../../../backend/src/domains/match/turns.ts';
@@ -213,7 +213,7 @@ export default component PlayPage()
 
         void lobby.setVoice(current.id, on)
             .then(() => toasts.show({ kind: 'success', text: locale.t(on ? 'voice.turnedOn' : 'voice.turnedOff'), dedupe: 'table-voice' }))
-            .catch(() => toasts.show({ kind: 'warning', text: locale.t('voice.switchFailed'), dedupe: 'table-voice' }));
+            .catch((error: unknown) => toasts.show({ kind: 'warning', text: locale.t(whyRefused(error, 'voice.switchFailed')), dedupe: 'table-voice' }));
     };
 
     derived showing = board.match() !== null && board.match()!.tableId === table?.id;
@@ -535,9 +535,9 @@ export default component PlayPage()
         {
             await step(table.id);
         }
-        catch
+        catch (error)
         {
-            toasts.show({ kind: 'warning', text: locale.t('state.errorLead') });
+            toasts.show({ kind: 'warning', text: locale.t(whyRefused(error, 'state.errorLead')) });
         }
         finally
         {
@@ -574,9 +574,7 @@ export default component PlayPage()
         }
         catch (error)
         {
-            const why = seatedMax(error) ? 'play.seatedMax' : tablePlaying(error) ? 'play.table.playing' : 'common.actionFailed';
-
-            toasts.show({ kind: 'warning', text: locale.t(why), dedupe: 'sit-down' });
+            toasts.show({ kind: 'warning', text: locale.t(whyRefused(error, 'common.actionFailed', 'play.table.playing')), dedupe: 'sit-down' });
         }
     };
 
@@ -629,9 +627,9 @@ export default component PlayPage()
                 await lobby.end(table.id);
                 navigate('/app/games');
             }
-            catch
+            catch (error)
             {
-                toasts.show({ kind: 'warning', text: locale.t('play.close.refused') });
+                toasts.show({ kind: 'warning', text: locale.t(whyRefused(error, 'common.actionFailed', 'play.close.refused')) });
             }
         }
     };

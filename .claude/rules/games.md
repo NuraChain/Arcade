@@ -112,6 +112,63 @@ the caller never holds the id, so the broken form cannot be written - and owns t
 eight `void`-less calls had nowhere to put. Nothing enforces that now - see *The rules no test holds
 any more* in `frontend/CLAUDE.md`.
 
+**A table refusal is a word, and it has one spelling.** `table/refusals.ts` imports nothing and lists
+each with its status - `seated-max`, `playing`, `table-closed`, `chairs-empty` and `not-ready` at 409,
+`no-invitee` at 404 - and `tableRefusal(word, sentence)` in `table/service.ts` is the only way the
+table service, the start and the invite port throw one: the word is checked where it is thrown and the
+status is read off the list. `seated-max` and `playing` used to be three free literals each - the
+server's, the browser's predicate and the fake server's - with nothing binding them, so a rename on
+either side compiled and fell back to the generic sentence without a word. The browser reads the list
+too. `whyRefused(error, otherwise, playing)` in `lib/open-table.ts` is what a table that would not
+open, a chair, a start, an invitation, a close and a voice switch each ask when they fail, and a listed
+word gives `tables.refused.<word>`, a template literal over the list with no cast, so a word with no
+English or Persian sentence fails `check`. Two words keep the keys they had, because they are said in
+the words of where they happened: `seated-max` is `play.seatedMax`, and `playing` is whatever its
+caller says - `play.table.playing` for a chair, `play.close.refused` for a close, the caller's own
+fallback anywhere else. A framework code, a match word and a request that never arrived are the
+fallback as well. A table that would not open keeps fewer of those answers than anybody: `openTable`
+says the two sentences that are about the reader - too many chairs, nobody to invite - and "That table
+would not open" for every other word, because the rest reach it from a table Quick play tried and the
+reader never chose. A candidate that closed between the list and the claim and one whose game began
+first are one race, and somebody who picked no table is not told that "that table" has closed.
+`table-refusals.spec.ts` on each side holds it: on the server every word's status and code, no word
+shared with a refused play or with a code the framework answers on its own, no code spelled by hand in
+the three files that throw, and somebody throwing every word; in the browser a sentence for every
+word, none for a word the table does not have, a fake server that answers with the list's own words
+and statuses, and Quick play losing a table either way.
+
+**A refused start says why, and so does a closed table.** `POST /tables/:id/start` answered each of its
+refusals as a bare 409 and the play page said "If this keeps happening, check your connection." for
+all of them, so a table where somebody had just stopped being ready read as a broken network. It
+answers `table-closed`, `chairs-empty` or `not-ready` now - the race its insert loses is `not-ready`
+too - and the page says that sentence; a start that never arrived still says to check the connection.
+The words reach only somebody in a chair: being seated is still asked first, and a no is the 404 a
+table that is not there gets, whatever stands in the way. A chair or a voice switch at a closed table
+is `table-closed` as well. Closing under a live game is `playing`, and the page says "A game is still
+being played here" for that alone: it used to say it for every failed close, a dropped connection
+included.
+
+`table-refusals.db.spec.ts` loses the start's race on purpose. Every other `not-ready` it asserts stops
+at the check before the transaction, so the insert's own refusal thrown as a bare 409 again passed
+every gate. The test holds a SHARE lock on `matches`, which lets the start's reads through and stops
+its insert; once a backend is waiting, the other chair says it is not ready and the lock lets go. A
+statement takes its snapshot only once it holds its table locks, so the insert sees that chair, writes
+nothing, and the start answers `not-ready` with no match behind it.
+
+**An invitation is refused in one sentence, whoever it could not reach.** `create`'s invitees and
+`invite` answered a block with "You cannot reach that account." and a closed door or a minor with
+"They are not taking invitations from people they have not added.", both 403: a refusal that said
+which, about somebody else's settings. Both answer 404 `no-invitee`, "No one by that name can be
+invited.", now, and the bytes are the same for the inviter's own name, a block in either direction,
+strangers turned off and a minor on either side - and, from `invite`, for a name nobody holds and a
+suspended account, which `create` still drops as it always did. `table-refusals.db.spec.ts` compares
+the bodies the route would send, and that no chair is held, no table opened and no notice written. The
+invite sheet and the create form say `tables.refused.no-invitee`; the sheet still goes through
+`attempt`, which takes the reader of the refusal as its third argument. What the 404 cannot hide is
+what the profile already says: `GET /social/people/:handle` answers 404 for a missing handle and
+carries `refusal` for one that exists, on purpose, so a closed compose box can say why. This route
+discloses nothing more than that, and claims nothing more.
+
 **Every control on the table page is a `Button` with words on it.** Three of them were not, and each
 failed differently. "Take a seat" - the whole point of the watching panel - was an `IconButton`,
 which is icon-only with a tooltip, so the primary action of that screen was a bare chair glyph.

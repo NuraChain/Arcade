@@ -6,6 +6,7 @@ import { MatchPlayer, type MatchResult } from '../../entities/match-player.entit
 import { Match } from '../../entities/match.entity.ts';
 import { Table } from '../../entities/table.entity.ts';
 import { TableSeat } from '../../entities/table-seat.entity.ts';
+import { tableRefusal } from '../table/service.ts';
 import { pickBelow } from '../../lib/crypto.ts';
 import type { AchieveService } from '../achieve/service.ts';
 import { firstRow } from '../../lib/rows.ts';
@@ -479,7 +480,7 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
 
             if (table.status === 'closed')
             {
-                throw new ConflictError('That table has closed.');
+                throw tableRefusal('table-closed', 'That table has closed.');
             }
 
             /**
@@ -497,12 +498,12 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
 
             if (chairs.some((chair) => chair.userId === null))
             {
-                throw new ConflictError('Every chair has to be taken first.');
+                throw tableRefusal('chairs-empty', 'Every chair has to be taken first.');
             }
 
             if (chairs.some((chair) => !chair.ready))
             {
-                throw new ConflictError('Everybody has to be ready first.');
+                throw tableRefusal('not-ready', 'Everybody has to be ready first.');
             }
 
             const engine = engineFor(table.game);
@@ -576,7 +577,7 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
 
                 if (raced === null)
                 {
-                    throw new ConflictError('That table is not ready to start.');
+                    throw tableRefusal('not-ready', 'That table is not ready to start.');
                 }
 
                 return dealtIn(me, raced.id);

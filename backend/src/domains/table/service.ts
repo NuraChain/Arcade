@@ -1,4 +1,4 @@
-import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@azerothjs/http';
+import { ConflictError, ForbiddenError, HttpError, NotFoundError, ValidationError } from '@azerothjs/http';
 import { IsNull, Not, type DataSource, type EntityManager } from 'typeorm';
 
 import { Conversation } from '../../entities/conversation.entity.ts';
@@ -13,6 +13,7 @@ import { ConversationMember } from '../../entities/conversation-member.entity.ts
 import { TableSeat } from '../../entities/table-seat.entity.ts';
 import type { SocialService } from '../social/service.ts';
 import { cubeLive } from '../match/backgammon/cube.ts';
+import { TABLE_REFUSALS, type TableRefusal } from './refusals.ts';
 
 /**
  * What the catalogue says a table of this game may be.
@@ -225,6 +226,11 @@ const visibleTo = (viewer: string) => `(
 
 export const SEATED_MAX = 50;
 
+export const tableRefusal = (word: TableRefusal, message: string) =>
+    new HttpError(TABLE_REFUSALS[word], message, { code: word });
+
+export const noInvitee = () => tableRefusal('no-invitee', 'No one by that name can be invited.');
+
 export function createTableService(db: DataSource, social: SocialService)
 {
     const mustHaveRoom = async (me: string) =>
@@ -237,8 +243,28 @@ export function createTableService(db: DataSource, social: SocialService)
 
         if (seated >= SEATED_MAX)
         {
-            throw new ConflictError(`You are already sitting at ${ SEATED_MAX } tables. Leave one first.`, { code: 'seated-max' });
+            throw tableRefusal('seated-max', `You are already sitting at ${ SEATED_MAX } tables. Leave one first.`);
         }
+    };
+
+    const mustInvite = async (me: string, otherId: string) =>
+    {
+        try
+        {
+            if (await social.mayMessage(me, otherId) === null)
+            {
+                return;
+            }
+        }
+        catch (error)
+        {
+            if (!(error instanceof NotFoundError))
+            {
+                throw error;
+            }
+        }
+
+        throw noInvitee();
     };
 
     const one = async (me: string, tableId: string): Promise<TableRow | null> =>
@@ -582,14 +608,7 @@ export function createTableService(db: DataSource, social: SocialService)
 
             for (const guest of new Set(input.invitees))
             {
-                const refusal = await social.mayMessage(me, guest);
-
-                if (refusal !== null)
-                {
-                    throw new ForbiddenError(refusal === 'blocked'
-                        ? 'You cannot reach that account.'
-                        : 'They are not taking invitations from people they have not added.');
-                }
+                await mustInvite(me, guest);
 
                 if (friends !== null && !friends.has(guest))
                 {
@@ -684,7 +703,7 @@ export function createTableService(db: DataSource, social: SocialService)
             const table = await mustSee(me, tableId);
             if (table.status === 'closed')
             {
-                throw new ConflictError('That table has closed.');
+                throw tableRefusal('table-closed', 'That table has closed.');
             }
 
             // Already sitting here: hand back the chair they have. A second request from a
@@ -696,7 +715,7 @@ export function createTableService(db: DataSource, social: SocialService)
 
             if (table.status === 'playing')
             {
-                throw new ConflictError('A game is being played at that table.', { code: 'playing' });
+                throw tableRefusal('playing', 'A game is being played at that table.');
             }
 
             await mustHaveRoom(me);
@@ -877,13 +896,7 @@ export function createTableService(db: DataSource, social: SocialService)
                 throw new ForbiddenError('You are not at that table.');
             }
 
-            const refusal = await social.mayMessage(me, otherId);
-            if (refusal !== null)
-            {
-                throw new ForbiddenError(refusal === 'blocked'
-                    ? 'You cannot reach that account.'
-                    : 'They are not taking invitations from people they have not added.');
-            }
+            await mustInvite(me, otherId);
 
             if (table.privacy !== 'invite' && !await canSee(otherId, tableId))
             {
@@ -930,7 +943,7 @@ export function createTableService(db: DataSource, social: SocialService)
 
             if (closed.affected === 0 && await db.getRepository(Match).existsBy({ tableId, finishedAt: IsNull() }))
             {
-                throw new ConflictError('Finish or resign the game first.');
+                throw tableRefusal('playing', 'Finish or resign the game first.');
             }
         },
 
@@ -946,7 +959,7 @@ export function createTableService(db: DataSource, social: SocialService)
 
             if (changed.affected === 0)
             {
-                throw new ConflictError('That table has closed.');
+                throw tableRefusal('table-closed', 'That table has closed.');
             }
         },
 
