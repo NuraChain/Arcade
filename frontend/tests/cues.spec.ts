@@ -120,6 +120,56 @@ describe('the cues store', () =>
         expect(shown[0].text).toContain('Maya Chen');
     });
 
+    it('takes whoever presses the request’s button to where a request is answered', async () =>
+    {
+        const went: string[] = [];
+
+        useCues().navigateTo((to) => went.push(to));
+        useCues().start();
+        await useSocial().refresh();
+        await settle();
+
+        server.incoming = [...server.incoming, { id: 'req-new', from: 'maya.c', to: 'alex', at: new Date(clock.now()).toISOString() }];
+        await useSocial().refresh();
+        await settle();
+
+        const [shown] = useToasts().items().filter((toast) => toast.dedupe === 'cue.request');
+
+        expect(shown.action?.label).toBe('Requests');
+        shown.action?.run();
+
+        expect(went, 'the button named Requests led somewhere the request is not').toEqual(['/app/friends?tab=requests']);
+    });
+
+    it('takes whoever presses a notice’s button to the thing it is about, and says where that is', async () =>
+    {
+        const went: string[] = [];
+        const pressed = async (notice: Parameters<typeof server.notify>[0]) =>
+        {
+            useToasts().reset();
+            server.notify(notice);
+            await useNotifications().refresh();
+            await settle();
+
+            const [shown] = useToasts().items().filter((toast) => toast.dedupe === 'cue.notice');
+
+            went.length = 0;
+            shown?.action?.run();
+
+            return { label: shown?.action?.label ?? null, to: went[0] ?? null };
+        };
+
+        useCues().navigateTo((to) => went.push(to));
+        useCues().start();
+        await useNotifications().refresh();
+        await settle();
+
+        expect(await pressed({ kind: 'table-invite', actor: 'sara.k', ref: { tableId: 'table-9' }, dedupeKey: 'invite:table-9' })).toEqual({ label: 'Go to the table', to: '/app/play/table-9' });
+        expect(await pressed({ kind: 'turn', ref: { tableId: 'table-4' }, dedupeKey: 'turn:table-4' })).toEqual({ label: 'Go to the table', to: '/app/play/table-4' });
+        expect(await pressed({ kind: 'group-added', actor: 'sara.k', ref: { groupId: 'friday-night' }, dedupeKey: 'group:friday-night' })).toEqual({ label: 'View', to: '/app/groups/friday-night' });
+        expect(await pressed({ kind: 'friend-accepted', actor: 'sara.k', dedupeKey: 'accepted:sara.k' })).toEqual({ label: 'View', to: '/app/people/sara.k' });
+    });
+
     it('raises a toast for a message that lands in a room the reader is not in', async () =>
     {
         useCues().start();

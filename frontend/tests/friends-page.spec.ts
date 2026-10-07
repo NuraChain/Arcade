@@ -58,6 +58,64 @@ afterEach(() =>
     useRealtime().reset();
 });
 
+describe('the friends page, by its address', () =>
+{
+    const at = async (address: string) =>
+    {
+        const routes: Route[] = [{ path: '/app/friends', component: (): HTMLElement => FriendsPage() as HTMLElement }];
+        const router = createRouter({ routes, history: createMemoryHistory(address), scroll: false });
+        const { container } = renderTest(() => RouterProvider({ router, children: () => Routes({}) }) as HTMLElement);
+
+        await vi.waitFor(() => expect(container.querySelector('[role="tablist"]')).not.toBeNull(), { timeout: 4000 });
+        await settle();
+
+        return { container, router };
+    };
+
+    const chosen = (container: HTMLElement) => container.querySelector('[role="tab"][aria-selected="true"]')?.textContent ?? '';
+
+    it('opens on the tab its address names, and on the first when it names none or nonsense', async () =>
+    {
+        server.incoming = [{ id: 'req-one', from: 'maya.c', to: 'alex', at: new Date(0).toISOString() }];
+        await useSocial().refresh();
+
+        const asked = await at('/app/friends?tab=requests');
+
+        expect(chosen(asked.container)).toContain('Requests');
+        expect(asked.container.textContent, 'the request is not on the tab the address opened').toContain('Maya Chen');
+        cleanup();
+
+        expect(chosen((await at('/app/friends')).container)).toContain('All');
+        cleanup();
+
+        expect(chosen((await at('/app/friends?tab=everything')).container)).toContain('All');
+    });
+
+    it('writes a tab that is pressed into the address, and follows a link to another without being built again', async () =>
+    {
+        const { container, router } = await at('/app/friends');
+        const page = container.querySelector('[role="tablist"]');
+        const press = async (label: string) =>
+        {
+            [...container.querySelectorAll<HTMLElement>('[role="tab"]')].find((one) => one.textContent?.includes(label))!.click();
+            await settle();
+        };
+
+        await press('Online');
+        expect(chosen(container)).toContain('Online');
+        expect(router.location().query.tab).toBe('online');
+
+        router.navigate('/app/friends?tab=requests');
+        await settle();
+
+        expect(chosen(container), 'a link to the requests left the page on the tab it had').toContain('Requests');
+        expect(container.querySelector('[role="tablist"]'), 'the page was built again to change its tab').toBe(page);
+
+        await press('All');
+        expect(router.location().query.tab).toBeUndefined();
+    });
+});
+
 describe('the friends page', () =>
 {
     const mounted = async () =>

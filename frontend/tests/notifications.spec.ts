@@ -3,6 +3,7 @@ import { cleanup, renderTest } from '@azerothjs/testing';
 
 import type { Notification } from '../src/api.ts';
 import NotificationRow from '../src/components/social/notification-row.component.azeroth';
+import { targetOf } from '../src/lib/notifications.ts';
 import { manualClock } from '../src/lib/clock.ts';
 import { decodeKey } from '../src/lib/push.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
@@ -55,6 +56,33 @@ afterEach(() =>
     cleanup();
     useNotifications().reset();
     useRealtime().reset();
+});
+
+describe('where a notice leads', () =>
+{
+    const notice = (kind: Notification['kind'], extra: Partial<Notification> = {}): Notification => ({
+        id: 'one',
+        kind,
+        ref: {},
+        count: 1,
+        read: false,
+        at: new Date(0).toISOString(),
+        ...extra
+    });
+
+    it('sends a friend request to the tab it is answered on, not to the sender’s profile', () =>
+    {
+        expect(targetOf(notice('friend-request', { actor: 'maya.c' }))).toBe('/app/friends?tab=requests');
+    });
+
+    it('sends every other kind to the thing it names', () =>
+    {
+        expect(targetOf(notice('friend-accepted', { actor: 'maya.c' }))).toBe('/app/people/maya.c');
+        expect(targetOf(notice('table-invite', { actor: 'maya.c', ref: { tableId: 't-1' } }))).toBe('/app/play/t-1');
+        expect(targetOf(notice('turn', { ref: { tableId: 't-2' } }))).toBe('/app/play/t-2');
+        expect(targetOf(notice('group-added', { actor: 'maya.c', ref: { groupId: 'g-1' } }))).toBe('/app/groups/g-1');
+        expect(targetOf(notice('message', { actor: 'maya.c', ref: { conversationId: 'c-1' } }))).toBe('/app/chats/c-1');
+    });
 });
 
 describe('the notifications store', () =>

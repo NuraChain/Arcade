@@ -197,7 +197,7 @@ export const useCues = createStore((): CuesApi =>
                     kind: 'live',
                     icon: 'friend-add',
                     text: locale.t('cue.requestBody', { who: nameOf(requests[requests.length - 1].from) }),
-                    action: { label: locale.t('cue.requests'), run: () => go.current?.('/app/friends') },
+                    action: { label: locale.t('cue.requests'), run: () => go.current?.('/app/friends?tab=requests') },
                     dedupe: 'cue.request'
                 });
                 chime();
@@ -238,7 +238,7 @@ export const useCues = createStore((): CuesApi =>
                         kind: 'live',
                         icon: NOTIFICATION_ICON[item.kind],
                         text: sayOf(item, nameOf(item.actor ?? ''), locale),
-                        action: { label: locale.t('cue.view'), run: () => go.current?.(targetOf(item) ?? '/app/notifications') },
+                        action: { label: locale.t(item.ref.tableId === undefined ? 'cue.view' : 'quickMatch.go'), run: () => go.current?.(targetOf(item) ?? '/app/notifications') },
                         dedupe: 'cue.notice'
                     });
                     chime();

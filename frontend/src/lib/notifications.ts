@@ -30,6 +30,10 @@ export function sayOf(item: Notification, who: string, locale: Pick<LocaleApi, '
 
 export function targetOf(item: Notification): string | null
 {
+    if (item.kind === 'friend-request')
+    {
+        return '/app/friends?tab=requests';
+    }
     if (item.ref.tableId !== undefined)
     {
         return `/app/play/${ item.ref.tableId }`;
