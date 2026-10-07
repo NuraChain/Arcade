@@ -86,6 +86,30 @@ describe('the group page', () =>
 
         expect(container.textContent).not.toContain(useLocale().t('state.errorTitle'));
     });
+
+    it('keeps what it has drawn when the group is read again, and still shows what changed', async () =>
+    {
+        const container = opened('friday-night-crew');
+
+        await vi.waitFor(() => expect(container.querySelector('#group-name')).not.toBeNull(), { timeout: 4000 });
+        await settle();
+
+        const heading = container.querySelector('#group-name');
+        const members = container.querySelector(`ul[aria-label="${ useLocale().t('groups.members') }"]`);
+        const held = server.groups.find((one) => one.slug === 'friday-night-crew')!;
+        const views = server.calls.filter((one) => one === 'groups.view').length;
+
+        expect(members).not.toBeNull();
+
+        held.name = 'Saturday Morning Crew';
+        await useGroups().refresh();
+        await settle();
+
+        expect(server.calls.filter((one) => one === 'groups.view').length).toBeGreaterThan(views);
+        expect(container.querySelector('#group-name')).toBe(heading);
+        expect(container.querySelector(`ul[aria-label="${ useLocale().t('groups.members') }"]`)).toBe(members);
+        expect(heading?.textContent).toBe('Saturday Morning Crew');
+    });
 });
 
 describe('the crest set', () =>

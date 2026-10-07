@@ -1006,7 +1006,7 @@ export const client =
             {
                 throw new ApiError(404, 'not-found', 'No group there.', undefined);
             }
-            return group;
+            return structuredClone(group);
         },
 
         async create({ input }: { input: { name: string; blurb: string; crest: string; hue: number; game: string; privacy: 'private' | 'public' } })

@@ -506,6 +506,12 @@ that copies a prop into a local. A screenshot cannot see any of this: the rebuil
 frame. Mark the nodes and ask `document.contains` afterwards, which is what `play.spec.ts` does
 (*a table that is read again*) and what the browser pass did across a whole game.
 
+The group page's root was the same branch over a fresh row and went the same way, so somebody
+joining no longer takes the member search out from under whoever is typing in it. One thing kept
+its spec from seeing anything: the specs' server handed back the SAME group object on every read,
+and a signal set to the object it already holds tells nobody. It answers with a copy now, as a real
+server answers with new JSON; a fake that keeps identity can show neither a rebuild nor an update.
+
 **An error that reaches a person has already failed; throwing it away makes it fail twice.** The
 boundary in `App.azeroth` named its first argument `_error` and dropped it, so a crash anywhere
 under `<Routes>` produced that screen and nothing else - no console line, no stack, no clue which

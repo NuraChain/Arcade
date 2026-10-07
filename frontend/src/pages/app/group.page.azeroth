@@ -103,6 +103,24 @@ export default component GroupPage()
 
     derived game = (group?.game ?? null) as GameId | null;
 
+    derived missing = !loading && !failed && group === null;
+
+    derived blurbed = (group?.blurb ?? '') !== '';
+
+    derived anyOnline = online.length > 0;
+
+    derived closedDoors = group?.privacy === 'private';
+
+    derived roomed = group?.conversationId !== undefined;
+
+    derived playable = game !== null && catalogue.playable(game);
+
+    derived searchable = members.length > SEARCH_FROM;
+
+    derived nobodyFound = found.length === 0 && members.length > 0;
+
+    derived me = account.user()?.id;
+
     const playTogether = () =>
     {
         if (group === null || group.conversationId === undefined)
@@ -228,164 +246,162 @@ export default component GroupPage()
             { () => <ErrorState title={ locale.t('state.errorTitle') } lead={ locale.t('state.errorLead') } onRetry={ () => void groups.refresh() } class="py-12" /> }
         </Show>
 
-        <Show when={ !loading && !failed && group === null }>
+        <Show when={ missing }>
             { () => <EmptyState icon="people" title={ locale.t('groups.notFound') } action={ locale.t('app.nav.friends') } to="/app/friends" class="py-12" /> }
         </Show>
 
-        <Show when={ group !== null }>
-            { () =>
-                <div class="flex flex-col gap-6">
-                    <section class="hero-surface relative overflow-hidden rounded-hero p-5 @xl:p-7" aria-labelledby="group-name">
-                        <div class="relative grid gap-6 @2xl:grid-cols-[minmax(0,1fr)_auto] @2xl:items-center">
-                            <div class="flex min-w-0 items-center gap-4">
-                                <GroupCrest crest={ group!.crest } hue={ group!.hue } size="lg" />
-                                <div class="flex min-w-0 flex-col gap-1.5">
-                                    <h1 id="group-name" class="title truncate text-ui-2xl @xl:text-ui-3xl" dir="auto">{ group!.name }</h1>
-                                    <Show when={ (group?.blurb ?? '') !== '' }>
-                                        { () => <p class="max-w-[52ch] text-ui-md text-muted" dir="auto">{ group!.blurb }</p> }
-                                    </Show>
-                                    <p class="flex flex-wrap items-center gap-x-2 gap-y-1 text-ui-sm text-muted">
-                                        <span><span class="tally">{ locale.n(group!.memberCount) }</span> { locale.plural('groups.membersLabel', group!.memberCount) }</span>
-                                        <Show when={ online.length > 0 }>
-                                            { () => <span class="flex items-center gap-2"><span class="h-1 w-1 rounded-full bg-current opacity-50" aria-hidden="true"></span><span class="text-live"><span class="tally">{ locale.n(online.length) }</span> { locale.plural('groups.onlineLabel', online.length) }</span></span> }
-                                        </Show>
-                                        <Show when={ group?.privacy === 'private' }>
-                                            { () => <span class="flex items-center gap-2"><span class="h-1 w-1 rounded-full bg-current opacity-50" aria-hidden="true"></span><span class="flex items-center gap-1"><Icon name="lock" size={ 13 } />{ locale.t('groups.private') }</span></span> }
-                                        </Show>
-                                        <Show when={ game !== null }>
-                                            { () => <span class="flex items-center gap-2"><span class="h-1 w-1 rounded-full bg-current opacity-50" aria-hidden="true"></span><span>{ locale.t(catalogue.byId(game!).nameKey) }</span></span> }
-                                        </Show>
-                                    </p>
-                                </div>
-                            </div>
-
-                            <div class="grid grid-cols-2 gap-2 @2xl:flex @2xl:w-56 @2xl:flex-col">
-                                <Show
-                                    when={ joined }
-                                    fallback={ <Button variant="primary" leading="friend-add" block class="col-span-2" onClick={ () => void join(group!) }>{ locale.t('groups.join') }</Button> }
-                                >
-                                    { () =>
-                                        <>
-                                            <Show when={ group?.conversationId !== undefined }>
-                                                { () => <Button variant="primary" leading="play" block class="col-span-2" onClick={ playTogether }>{ locale.t('groups.playTogether') }</Button> }
-                                            </Show>
-                                            <Show when={ group?.conversationId !== undefined }>
-                                                { () => <Button variant="secondary" leading="chats" block to={ `/app/chats/${ group!.conversationId! }` }>{ locale.t('groups.chat') }</Button> }
-                                            </Show>
-                                            <Show when={ game !== null && catalogue.playable(game) }>
-                                                { () => <Button variant="outline" leading="add" block to={ `/app/games/${ game ?? '' }/create` }>{ locale.t('groups.createGame') }</Button> }
-                                            </Show>
-                                        </>
-                                    }
+        <Show when={ group } let={ crew }>
+            <div class="flex flex-col gap-6">
+                <section class="hero-surface relative overflow-hidden rounded-hero p-5 @xl:p-7" aria-labelledby="group-name">
+                    <div class="relative grid gap-6 @2xl:grid-cols-[minmax(0,1fr)_auto] @2xl:items-center">
+                        <div class="flex min-w-0 items-center gap-4">
+                            <GroupCrest crest={ crew.crest } hue={ crew.hue } size="lg" />
+                            <div class="flex min-w-0 flex-col gap-1.5">
+                                <h1 id="group-name" class="title truncate text-ui-2xl @xl:text-ui-3xl" dir="auto">{ crew.name }</h1>
+                                <Show when={ blurbed }>
+                                    { () => <p class="max-w-[52ch] text-ui-md text-muted" dir="auto">{ crew.blurb }</p> }
                                 </Show>
+                                <p class="flex flex-wrap items-center gap-x-2 gap-y-1 text-ui-sm text-muted">
+                                    <span><span class="tally">{ locale.n(crew.memberCount) }</span> { locale.plural('groups.membersLabel', crew.memberCount) }</span>
+                                    <Show when={ anyOnline }>
+                                        { () => <span class="flex items-center gap-2"><span class="h-1 w-1 rounded-full bg-current opacity-50" aria-hidden="true"></span><span class="text-live"><span class="tally">{ locale.n(online.length) }</span> { locale.plural('groups.onlineLabel', online.length) }</span></span> }
+                                    </Show>
+                                    <Show when={ closedDoors }>
+                                        { () => <span class="flex items-center gap-2"><span class="h-1 w-1 rounded-full bg-current opacity-50" aria-hidden="true"></span><span class="flex items-center gap-1"><Icon name="lock" size={ 13 } />{ locale.t('groups.private') }</span></span> }
+                                    </Show>
+                                    <Show when={ game } let={ played }>
+                                        <span class="flex items-center gap-2"><span class="h-1 w-1 rounded-full bg-current opacity-50" aria-hidden="true"></span><span>{ locale.t(catalogue.byId(played).nameKey) }</span></span>
+                                    </Show>
+                                </p>
                             </div>
                         </div>
-                    </section>
 
-                    <section>
-                        <SectionHeading
-                            title={ locale.t('groups.members') }
-                            actions={
-                                <Show when={ owns }>
-                                    { () =>
-                                        <>
-                                            <IconButton icon="edit" label={ locale.t('groups.edit') } variant="ghost" size="sm" onClick={ edit } />
-                                            <IconButton icon="friend-add" label={ locale.t('groups.add') } variant="ghost" size="sm" onClick={ addSomebody } />
-                                        </>
-                                    }
-                                </Show>
-                            }
-                        />
-
-                        <Show when={ members.length > SEARCH_FROM }>
-                            { () =>
-                                <SearchInput
-                                    value={ query }
-                                    onInput={ (value) =>
-                                    {
-                                        query = value;
-                                        memberPage = 1;
-                                    } }
-                                    placeholder={ locale.t('groups.searchMembers') }
-                                    label={ locale.t('groups.searchMembers') }
-                                    class="mb-3"
-                                />
-                            }
-                        </Show>
-
-                        <Show when={ found.length === 0 && members.length > 0 }>
-                            { () => <EmptyState icon="search" title={ locale.t('search.empty', { query: query.trim() }) } class="py-8" /> }
-                        </Show>
-
-                        <ul class="flex flex-col divide-y divide-line rounded-panel border border-line bg-field px-2 empty:hidden" aria-label={ locale.t('groups.members') }>
-                            <For each={ shown } key={ (person) => person.id } let={ person }>
-                                <li>
-                                    <FriendRow
-                                        person={ person }
-                                        subtitle={ person.id === group!.owner ? locale.t('groups.owner') : undefined }
-                                        actions={
-                                            <span class="flex items-center gap-1">
-                                                <Show when={ owns && person.id !== account.user()?.id }>
-                                                    { () =>
-                                                        <>
-                                                            <IconButton
-                                                                icon="crest-crown"
-                                                                label={ locale.t('groups.transfer') }
-                                                                variant="ghost"
-                                                                size="sm"
-                                                                onClick={ () => void handOver(group!, person) }
-                                                            />
-                                                            <IconButton
-                                                                icon="close"
-                                                                label={ locale.t('groups.remove') }
-                                                                variant="ghost"
-                                                                size="sm"
-                                                                tone="danger"
-                                                                onClick={ () => void removeMember(group!, person) }
-                                                            />
-                                                        </>
-                                                    }
-                                                </Show>
-                                                <IconButton
-                                                    icon="more"
-                                                    label={ locale.t('actions.title') }
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    onClick={ () => overlay.open(PersonActions, { personId: person.id }, { label: locale.t('actions.title') }) }
-                                                />
-                                            </span>
-                                        }
-                                    />
-                                </li>
-                            </For>
-                        </ul>
-                        <Pagination
-                            total={ found.length }
-                            size={ MEMBER_PAGE }
-                            page={ memberPage }
-                            mode={ paging }
-                            label={ locale.t('groups.members') }
-                            onPage={ (page) => memberPage = page }
-                        />
-                    </section>
-
-                    <div class="flex flex-col items-center gap-4">
-                        <p class="flex flex-wrap items-center justify-center gap-2 text-ui-xs text-faint">
-                            <Icon name="history" size={ 13 } />
-                            { locale.t('groups.since', { date: locale.date(Date.parse(group!.createdAt), { year: 'numeric', month: 'long' }) }) }
-                            <span class="h-1 w-1 rounded-full bg-current opacity-50" aria-hidden="true"></span>
-                            <span>{ locale.t('groups.owner') }: <span dir="ltr">@{ group!.owner }</span></span>
-                        </p>
-                        <Show when={ joined }>
-                            { () =>
-                                <Button variant="destructive" size="sm" leading="sign-out" onClick={ () => void leave(group!) }>
-                                    { locale.t('groups.leave') }
-                                </Button>
-                            }
-                        </Show>
+                        <div class="grid grid-cols-2 gap-2 @2xl:flex @2xl:w-56 @2xl:flex-col">
+                            <Show
+                                when={ joined }
+                                fallback={ <Button variant="primary" leading="friend-add" block class="col-span-2" onClick={ () => void join(crew) }>{ locale.t('groups.join') }</Button> }
+                            >
+                                { () =>
+                                    <>
+                                        <Show when={ roomed }>
+                                            { () => <Button variant="primary" leading="play" block class="col-span-2" onClick={ playTogether }>{ locale.t('groups.playTogether') }</Button> }
+                                        </Show>
+                                        <Show when={ roomed }>
+                                            { () => <Button variant="secondary" leading="chats" block to={ `/app/chats/${ crew.conversationId ?? '' }` }>{ locale.t('groups.chat') }</Button> }
+                                        </Show>
+                                        <Show when={ playable }>
+                                            { () => <Button variant="outline" leading="add" block to={ `/app/games/${ game ?? '' }/create` }>{ locale.t('groups.createGame') }</Button> }
+                                        </Show>
+                                    </>
+                                }
+                            </Show>
+                        </div>
                     </div>
+                </section>
+
+                <section>
+                    <SectionHeading
+                        title={ locale.t('groups.members') }
+                        actions={
+                            <Show when={ owns }>
+                                { () =>
+                                    <>
+                                        <IconButton icon="edit" label={ locale.t('groups.edit') } variant="ghost" size="sm" onClick={ edit } />
+                                        <IconButton icon="friend-add" label={ locale.t('groups.add') } variant="ghost" size="sm" onClick={ addSomebody } />
+                                    </>
+                                }
+                            </Show>
+                        }
+                    />
+
+                    <Show when={ searchable }>
+                        { () =>
+                            <SearchInput
+                                value={ query }
+                                onInput={ (value) =>
+                                {
+                                    query = value;
+                                    memberPage = 1;
+                                } }
+                                placeholder={ locale.t('groups.searchMembers') }
+                                label={ locale.t('groups.searchMembers') }
+                                class="mb-3"
+                            />
+                        }
+                    </Show>
+
+                    <Show when={ nobodyFound }>
+                        { () => <EmptyState icon="search" title={ locale.t('search.empty', { query: query.trim() }) } class="py-8" /> }
+                    </Show>
+
+                    <ul class="flex flex-col divide-y divide-line rounded-panel border border-line bg-field px-2 empty:hidden" aria-label={ locale.t('groups.members') }>
+                        <For each={ shown } key={ (person) => person.id } let={ person }>
+                            <li>
+                                <FriendRow
+                                    person={ person }
+                                    subtitle={ person.id === crew.owner ? locale.t('groups.owner') : undefined }
+                                    actions={
+                                        <span class="flex items-center gap-1">
+                                            <Show when={ owns && person.id !== me }>
+                                                { () =>
+                                                    <>
+                                                        <IconButton
+                                                            icon="crest-crown"
+                                                            label={ locale.t('groups.transfer') }
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            onClick={ () => void handOver(crew, person) }
+                                                        />
+                                                        <IconButton
+                                                            icon="close"
+                                                            label={ locale.t('groups.remove') }
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            tone="danger"
+                                                            onClick={ () => void removeMember(crew, person) }
+                                                        />
+                                                    </>
+                                                }
+                                            </Show>
+                                            <IconButton
+                                                icon="more"
+                                                label={ locale.t('actions.title') }
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={ () => overlay.open(PersonActions, { personId: person.id }, { label: locale.t('actions.title') }) }
+                                            />
+                                        </span>
+                                    }
+                                />
+                            </li>
+                        </For>
+                    </ul>
+                    <Pagination
+                        total={ found.length }
+                        size={ MEMBER_PAGE }
+                        page={ memberPage }
+                        mode={ paging }
+                        label={ locale.t('groups.members') }
+                        onPage={ (page) => memberPage = page }
+                    />
+                </section>
+
+                <div class="flex flex-col items-center gap-4">
+                    <p class="flex flex-wrap items-center justify-center gap-2 text-ui-xs text-faint">
+                        <Icon name="history" size={ 13 } />
+                        { locale.t('groups.since', { date: locale.date(Date.parse(crew.createdAt), { year: 'numeric', month: 'long' }) }) }
+                        <span class="h-1 w-1 rounded-full bg-current opacity-50" aria-hidden="true"></span>
+                        <span>{ locale.t('groups.owner') }: <span dir="ltr">@{ crew.owner }</span></span>
+                    </p>
+                    <Show when={ joined }>
+                        { () =>
+                            <Button variant="destructive" size="sm" leading="sign-out" onClick={ () => void leave(crew) }>
+                                { locale.t('groups.leave') }
+                            </Button>
+                        }
+                    </Show>
                 </div>
-            }
+            </div>
         </Show>
     </Page>
 }
