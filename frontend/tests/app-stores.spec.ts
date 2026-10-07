@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { manualClock, type ManualClock } from '../src/lib/clock.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import { requireAdmin, requireAnonymous, requireSession, safeNext } from '../src/lib/guards.ts';
-import { RESTORED_MS, useConnection } from '../src/stores/connection.store.ts';
+import { LIFELINE_MS, RESTORED_MS, UNREACHED_MS, useConnection } from '../src/stores/connection.store.ts';
 import { bareFor, postureFor, useDevice } from '../src/stores/device.store.ts';
 import { OVERLAY_SETTLE, useOverlay } from '../src/stores/overlay.store.ts';
 import { useAccount } from '../src/stores/account.store.ts';
@@ -412,7 +412,7 @@ describe('overlay stack', () =>
 
 describe('connection', () =>
 {
-    it('says nothing at all until a socket has actually stood up', () =>
+    it('says nothing while a first connection is still being made', () =>
     {
         const connection = useConnection();
         const stop = connection.start();
@@ -421,11 +421,86 @@ describe('connection', () =>
         live.start();
         expect(connection.state()).toBe('online');
 
-        // Never connected, so there is nothing to have been interrupted. The app is exactly what
-        // it was before the socket existed - a working pull-model app - and it stays quiet.
         socket.drop();
         expect(connection.state()).toBe('online');
 
+        clock.advance(UNREACHED_MS - 1000);
+        expect(connection.state()).toBe('online');
+
+        stop();
+    });
+
+    it('says the live connection has not come when a socket never stood up, and goes quiet when one does', () =>
+    {
+        const connection = useConnection();
+        const stop = connection.start();
+        const live = useRealtime();
+
+        live.start();
+        socket.drop();
+        clock.advance(UNREACHED_MS);
+
+        expect(connection.state(), 'a socket that never connected was passed over in silence').toBe('unreached');
+
+        clock.advance(20_000);
+        expect(connection.state()).toBe('unreached');
+
+        socket.accept();
+        expect(connection.state()).toBe('online');
+
+        stop();
+    });
+
+    it('reads everything again on a slow beat while there is no socket, and stops when there is one', () =>
+    {
+        const connection = useConnection();
+        const stop = connection.start();
+        const live = useRealtime();
+        const rung: string[] = [];
+        const deaf = live.onNudge((scope, id) => rung.push(id === undefined ? scope : `${ scope }:${ id }`));
+
+        live.start();
+        socket.drop();
+
+        clock.advance(LIFELINE_MS + 500);
+        expect([...rung].sort(), 'nothing was read again though no socket could ring').toEqual(['chat', 'game', 'me', 'social', 'table']);
+
+        rung.length = 0;
+        clock.advance(LIFELINE_MS);
+        expect([...rung].sort()).toEqual(['chat', 'game', 'me', 'social', 'table']);
+
+        socket.accept();
+        clock.advance(500);
+        rung.length = 0;
+
+        clock.advance(LIFELINE_MS * 3);
+        expect(rung, 'a page with a socket went on asking by itself').toEqual([]);
+
+        socket.drop();
+        clock.advance(LIFELINE_MS + 500);
+        expect([...rung].sort(), 'a socket that dropped left the page with nothing to read by').toEqual(['chat', 'game', 'me', 'social', 'table']);
+
+        deaf();
+        stop();
+    });
+
+    it('does not ask a network that is not there', () =>
+    {
+        const connection = useConnection();
+        const stop = connection.start();
+        const live = useRealtime();
+        const rung: string[] = [];
+        const deaf = live.onNudge((scope) => rung.push(scope));
+
+        live.start();
+        socket.drop();
+        window.dispatchEvent(new Event('offline'));
+
+        clock.advance(LIFELINE_MS * 2);
+        expect(rung).toEqual([]);
+
+        window.dispatchEvent(new Event('online'));
+        deaf();
         stop();
     });
 

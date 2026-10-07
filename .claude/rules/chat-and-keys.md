@@ -1125,6 +1125,19 @@ NOT follow every flap — between drop and retry the socket is `down`, during th
 `connecting`, and at the first backoff rung that alternates once a second — so `offline` means
 something that will not fix itself and everything in between is one steady `reconnecting`.
 
+It says one more thing, and does one. A socket that NEVER connected used to be passed over in
+silence: the strip spoke only after a first connection, on the reasoning that the app was then "a
+working pull-model app" - and it pulled nothing. Behind a proxy that does not pass the upgrade, or
+on an origin the handshake refuses, somebody pressed Ready and nobody else saw it until they
+reloaded, and the owner reported exactly that. After `UNREACHED_MS` (six seconds) without a first
+connection the state is `unreached` and the strip says live updates are not getting through. And
+while the socket is apart - never up, or dropped - every `LIFELINE_MS` (eight seconds) rings every
+scope locally through `realtime.ring()`, the call a new connection makes, so every store reads
+itself again: a chair, a Ready, a game that started arrive late, not never. Not while the browser
+says offline, not in a hidden tab, and not once the socket is up. A play already went by HTTP when
+there was no socket. `app-stores.spec.ts` holds the grace, the beat, the silence once connected
+and the offline case.
+
 **The socket starts FIRST in the app shell's `stops` array**, which means it stops LAST, because
 the teardown runs in reverse and every store under it holds an unsubscribe against it. Each stop is
 wrapped in its own try/catch: one that throws must not strand the sockets, timers and listeners of

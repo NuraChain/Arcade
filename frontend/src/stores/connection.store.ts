@@ -3,10 +3,14 @@ import { createStore, createSignal, type Getter } from 'azerothjs';
 import { runtime } from '../lib/runtime.ts';
 import { useRealtime } from './realtime.store.ts';
 
-export type ConnectionState = 'online' | 'reconnecting' | 'offline' | 'restored';
+export type ConnectionState = 'online' | 'reconnecting' | 'unreached' | 'offline' | 'restored';
 
 /** How long "Back online" stays up. Long enough to read, short enough not to become furniture. */
 export const RESTORED_MS = 2500;
+
+export const UNREACHED_MS = 6000;
+
+export const LIFELINE_MS = 8000;
 
 export interface ConnectionApi
 {
@@ -36,10 +40,12 @@ export const useConnection = createStore((): ConnectionApi =>
 
     const [restored, setRestored] = createSignal(false);
     const [offline, setOffline] = createSignal(false);
+    const [late, setLate] = createSignal(false);
 
     let clearRestored: (() => void) | null = null;
     let unwatch: (() => void) | null = null;
     let stopListeners: (() => void) | null = null;
+    let stopBeat: (() => void) | null = null;
 
     const forget = () =>
     {
@@ -48,13 +54,10 @@ export const useConnection = createStore((): ConnectionApi =>
         setRestored(false);
     };
 
-    const troubled = () =>
+    const apart = () =>
     {
-        if (!live.everConnected())
-        {
-            return false;
-        }
         const status = live.status();
+
         return status === 'down' || status === 'connecting';
     };
 
@@ -64,11 +67,22 @@ export const useConnection = createStore((): ConnectionApi =>
         {
             return 'offline';
         }
-        if (troubled())
+        if (apart() && live.everConnected())
         {
             return 'reconnecting';
         }
+        if (apart() && late())
+        {
+            return 'unreached';
+        }
         return restored() ? 'restored' : 'online';
+    };
+
+    const still = () =>
+    {
+        stopBeat?.();
+        stopBeat = null;
+        setLate(false);
     };
 
     return {
@@ -122,12 +136,31 @@ export const useConnection = createStore((): ConnectionApi =>
                 };
             }
 
+            if (stopBeat === null)
+            {
+                const grace = runtime().clock.after(UNREACHED_MS, () => setLate(true));
+                const beat = runtime().clock.every(LIFELINE_MS, () =>
+                {
+                    if (apart() && !offline() && document.visibilityState !== 'hidden')
+                    {
+                        live.ring();
+                    }
+                });
+
+                stopBeat = () =>
+                {
+                    grace();
+                    beat();
+                };
+            }
+
             return () =>
             {
                 unwatch?.();
                 unwatch = null;
                 stopListeners?.();
                 forget();
+                still();
             };
         },
 
@@ -137,6 +170,7 @@ export const useConnection = createStore((): ConnectionApi =>
             unwatch = null;
             stopListeners?.();
             forget();
+            still();
         },
 
         reset()
@@ -145,6 +179,7 @@ export const useConnection = createStore((): ConnectionApi =>
             unwatch = null;
             stopListeners?.();
             forget();
+            still();
             setOffline(false);
         }
     };

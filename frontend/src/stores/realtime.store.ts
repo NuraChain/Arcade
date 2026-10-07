@@ -95,6 +95,8 @@ export interface RealtimeApi
 
     onNudge(listener: (scope: NudgeScope, id: string | undefined) => void): () => void;
 
+    ring(): void;
+
     /**
      * Somebody is typing, right now, in one conversation.
      *
@@ -229,6 +231,14 @@ export const useRealtime = createStore((): RealtimeApi =>
         if (coalesce === null)
         {
             coalesce = runtime().clock.after(NUDGE_WINDOW_MS, flush);
+        }
+    };
+
+    const ring = () =>
+    {
+        for (const scope of SCOPES)
+        {
+            nudge(scope, undefined);
         }
     };
 
@@ -449,10 +459,7 @@ export const useRealtime = createStore((): RealtimeApi =>
                     armProbe();
                 }
 
-                for (const scope of SCOPES)
-                {
-                    nudge(scope, undefined);
-                }
+                ring();
             },
 
             onFrame: receive,
@@ -603,6 +610,8 @@ export const useRealtime = createStore((): RealtimeApi =>
             listeners.add(listener);
             return () => listeners.delete(listener);
         },
+
+        ring,
 
         onVoice(listener)
         {

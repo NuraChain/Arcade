@@ -81,6 +81,7 @@ export const app = {
 
     'connection.offline': 'You’re offline. Live tables keep playing without you.',
     'connection.reconnecting': 'Connection interrupted. Reconnecting…',
+    'connection.unreached': 'Live updates are not getting through. This page checks for changes every few seconds.',
     'connection.restored': 'Back online.',
 
     'keys.banner.absent': 'This browser can’t read your messages yet.',

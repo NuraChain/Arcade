@@ -84,6 +84,7 @@ export const app: Pick<Dictionary, keyof typeof reference> = {
 
     'connection.offline': 'آفلاین هستی. میزهای زنده بدون تو ادامه می‌دهند.',
     'connection.reconnecting': 'اتصال قطع شد. در حال اتصال دوباره…',
+    'connection.unreached': 'ارتباط زنده برقرار نشد. این صفحه هر چند ثانیه خودش سر می‌زند.',
     'connection.restored': 'دوباره آنلاین شدی.',
 
     'keys.banner.absent': 'این مرورگر هنوز نمی‌تواند پیام‌هایت را بخواند.',
