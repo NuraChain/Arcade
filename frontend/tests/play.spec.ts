@@ -287,6 +287,21 @@ describe('PlayHeader', () =>
         expect(mount(table('one', 'hokm', { voice: 'table' }), []).textContent).toContain(said);
     });
 
+    it('says two against two in place of a head count where partners sit', () =>
+    {
+        const format = useLocale().t('create.format.teams');
+        const count = useLocale().plural('common.players', 4);
+        const sided = mount(table('one', 'hokm', { teams: true }), []).querySelector('h1 + p')?.textContent ?? '';
+
+        expect(sided).toContain(format);
+        expect(sided).not.toContain(count);
+
+        const apart = mount(table('one', 'ludo'), []).querySelector('h1 + p')?.textContent ?? '';
+
+        expect(apart).toContain(count);
+        expect(apart).not.toContain(format);
+    });
+
     it('offers every other table as a switch, and marks the ones waiting on the reader', () =>
     {
         const container = mount(table('one', 'hokm'), [table('two', 'ludo', { yourTurn: true }), table('three', 'hokm', { yourTurn: false })]);

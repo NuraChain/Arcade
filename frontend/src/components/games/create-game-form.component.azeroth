@@ -1,10 +1,11 @@
 import { ApiError } from '../../api.ts';
 import { whyRefused } from '../../lib/open-table.ts';
-import type { Game } from '../../data/games.ts';
+import type { Game, GameId } from '../../data/games.ts';
 import type { Person } from '../../data/person.ts';
+import type { MessageKey } from '../../locales/en.ts';
 import { cubeLive } from '../../../../backend/src/domains/match/backgammon/cube.ts';
 import { teamsOf } from '../../../../backend/src/domains/table/teams.ts';
-import { isValidTable, type Blinds, type TableConfig, type TableMode, type TablePrivacy } from '../../data/tables.ts';
+import { formatsOf, isValidTable, type Blinds, type TableConfig, type TableFormat, type TableMode, type TablePrivacy } from '../../data/tables.ts';
 import Icon from '../../icons/icon.component.azeroth';
 import { useSocial } from '../../stores/social.store.ts';
 import { usePeople } from '../../stores/people.store.ts';
@@ -22,6 +23,10 @@ import Segmented from '../ui/segmented.component.azeroth';
 import Toggle from '../ui/switch.component.azeroth';
 import { PANEL_TONE } from '../ui/variants.ts';
 
+const TEAMS_HINT: Partial<Record<GameId, MessageKey>> = {
+    hokm: 'create.teamsHint.hokm'
+};
+
 export default component CreateGameForm(props: { game: Game; onCreated: (tableId: string) => void })
 {
     const locale = useLocale();
@@ -37,6 +42,7 @@ export default component CreateGameForm(props: { game: Game; onCreated: (tableId
     derived defaults = catalogue.defaults(props.game.id);
 
     state seats = defaults.seats;
+    state paired = defaults.teams;
     state mode = defaults.mode as TableMode;
     state privacy = defaults.privacy as TablePrivacy;
     state target = defaults.target;
@@ -56,11 +62,17 @@ export default component CreateGameForm(props: { game: Game; onCreated: (tableId
 
     derived cubed = cubeLive(target, cube);
 
-    derived config = { game: props.game.id, seats, mode, privacy, target, cube: cubed, blinds, chat, voice, teams: teamsOf(rules.partners, seats, false) } satisfies TableConfig;
+    derived formats = formatsOf(rules);
+
+    derived teams = teamsOf(rules.partners, seats, paired);
+
+    derived teamsHint = teams ? TEAMS_HINT[props.game.id] ?? null : null;
+
+    derived config = { game: props.game.id, seats, mode, privacy, target, cube: cubed, blinds, chat, voice, teams } satisfies TableConfig;
 
     derived tooMany = invitees.length > seats - 1;
 
-    derived valid = isValidTable(config) && !tooMany;
+    derived valid = isValidTable(config, rules) && !tooMany;
 
     derived friends = ((): Person[] =>
     {
@@ -81,6 +93,12 @@ export default component CreateGameForm(props: { game: Game; onCreated: (tableId
     derived privacyHint = locale.t(privacy === 'friends'
         ? 'create.privacy.friendsHint'
         : (privacy === 'public' ? 'create.privacy.publicHint' : 'create.privacy.inviteHint'));
+
+    const choose = (format: TableFormat) =>
+    {
+        seats = format.seats;
+        paired = format.teams;
+    };
 
     const toggleInvite = (id: string) =>
     {
@@ -112,18 +130,21 @@ export default component CreateGameForm(props: { game: Game; onCreated: (tableId
             submit();
         } }
     >
-        <Show when={ rules.seats.length > 1 }>
+        <Show when={ formats.length > 1 }>
             <fieldset class="flex flex-col gap-2">
                 <legend class="label mb-2 text-ui-sm text-muted">{ locale.t('create.seats') }</legend>
                 <ul class="flex flex-wrap gap-2">
-                    <For each={ [...rules.seats] } key={ (count) => count } let={ count }>
+                    <For each={ formats } key={ (format) => `${ format.seats }/${ format.teams }` } let={ format }>
                         <li>
-                            <Chip icon="people" selected={ seats === count } onClick={ () => seats = count }>
-                                <span>{ locale.plural('common.players', count) }</span>
+                            <Chip icon={ format.teams ? 'versus' : 'people' } selected={ seats === format.seats && teams === format.teams } onClick={ () => choose(format) }>
+                                <span>{ format.teams ? locale.t('create.format.teams') : locale.plural('common.players', format.seats) }</span>
                             </Chip>
                         </li>
                     </For>
                 </ul>
+                <Show when={ teamsHint } let={ hint }>
+                    <p class="text-ui-xs text-faint">{ locale.t(hint) }</p>
+                </Show>
             </fieldset>
         </Show>
 
@@ -213,6 +234,9 @@ export default component CreateGameForm(props: { game: Game; onCreated: (tableId
                 <span class={ [ 'tally text-ui-xs font-semibold', tooMany ? 'text-danger' : 'text-accent' ].join(' ') }>{ locale.plural('create.invited', invitees.length) }</span>
             </legend>
             <p class="text-ui-xs text-faint">{ locale.t('create.inviteHint') }</p>
+            <Show when={ teams }>
+                <p class="text-ui-xs text-faint">{ locale.t('create.partnerHint') }</p>
+            </Show>
             <SearchInput value={ query } onInput={ (value) => query = value } placeholder={ locale.t('create.search') } label={ locale.t('create.search') } />
             <Show when={ tooMany }>
                 <p class="flex items-center gap-1.5 text-ui-sm font-semibold text-danger" role="alert">

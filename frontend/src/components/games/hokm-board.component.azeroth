@@ -212,6 +212,30 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
         };
     });
 
+    derived teamed = view !== null && new Set(view.seats.map((row) => row.side)).size < view.seats.length;
+
+    derived home = view?.seats.find((row) => row.seat === mine)?.side;
+
+    const teamOf = (row: { seat: number; side: number }) =>
+    {
+        if (!teamed)
+        {
+            return undefined;
+        }
+
+        if (row.seat === mine)
+        {
+            return { side: row.side };
+        }
+
+        return {
+            side: row.side,
+            says: home === undefined
+                ? locale.t('team.n', { n: locale.n(row.side + 1) })
+                : locale.t(row.side === home ? 'card.partner' : 'card.opponent')
+        };
+    };
+
     derived felt = shown ?? (view === null ? EMPTY : feltOf(view.trick, view.lead, game.seats));
 
     derived laid = {
@@ -1075,6 +1099,7 @@ export default component HokmBoard(props: { match: MatchView; starting?: boolean
                                         remainingMs={ game.remainingMs }
                                         turnMs={ props.turnMs }
                                         dim={ plate.row.out }
+                                        team={ teamOf(plate.row) }
                                         tag={ tagOf(plate.row.seat)?.text }
                                         tone={ tagOf(plate.row.seat)?.tone }
                                         bubble={ props.speech?.[whoAt(plate.row.seat)] }

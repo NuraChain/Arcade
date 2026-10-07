@@ -82,10 +82,22 @@ export function defaultTable(game: GameId): TableConfig
     };
 }
 
-export function isValidTable(config: TableConfig)
+export function formatsOf(rules: Pick<TableRules, 'seats' | 'partners'>)
 {
-    const rules = TABLE_RULES[config.game];
-    return rules.seats.includes(config.seats)
+    return rules.seats.flatMap((seats) =>
+    {
+        const plain = teamsOf(rules.partners, seats, false);
+        const paired = teamsOf(rules.partners, seats, true);
+
+        return plain === paired ? [{ seats, teams: plain }] : [{ seats, teams: plain }, { seats, teams: paired }];
+    });
+}
+
+export type TableFormat = ReturnType<typeof formatsOf>[number];
+
+export function isValidTable(config: TableConfig, rules: TableRules)
+{
+    return formatsOf(rules).some((format) => format.seats === config.seats && format.teams === config.teams)
         && rules.modes.includes(config.mode)
         && (rules.targets.length === 0 || rules.targets.includes(config.target));
 }

@@ -1,3 +1,4 @@
+import { sideOf } from '../../../../backend/src/domains/match/sides.ts';
 import type { GameId } from '../../data/games.ts';
 import type { TableSummary } from '../../api.ts';
 import Icon from '../../icons/icon.component.azeroth';
@@ -69,6 +70,19 @@ export default component LobbyPanel(props: {
 
     derived gameName = locale.t(catalogue.byId(props.table.game as GameId).nameKey);
 
+    const sideAt = (seat: number) => sideOf(seat, { seats: props.table.seats, variant: 'teams' });
+
+    derived home = props.table.mine === undefined ? null : sideAt(props.table.mine);
+
+    derived groups = props.table.teams
+        ? [0, 1].map((side) => ({
+            key: `side-${ side }`,
+            says: side === home ? locale.t('team.yours') : locale.t('team.n', { n: locale.n(side + 1) }),
+            sided: true,
+            chairs: props.table.chairs.filter((chair) => sideAt(chair.seat) === side)
+        }))
+        : [{ key: 'all', says: locale.t('create.seats'), sided: false, chairs: props.table.chairs }];
+
     <section class="flex flex-col gap-5" aria-label={ locale.t('play.title.lobby') }>
         <div class="flex flex-wrap items-end justify-between gap-3">
             <div>
@@ -83,13 +97,24 @@ export default component LobbyPanel(props: {
             </p>
         </div>
 
-        <ul class="grid grid-cols-2 gap-3 sm:grid-cols-4" aria-label={ locale.t('create.seats') }>
-            <For each={ props.table.chairs } key={ (chair) => chair.seat } let={ chair }>
-                <li class="flex min-w-0">
-                    <SeatCard seat={ chair } me={ me } canInvite={ amHost } onInvite={ () => props.onInvite() } />
-                </li>
-            </For>
-        </ul>
+        <div class="@container">
+            <div class="flex flex-col gap-4 @xl:flex-row @xl:gap-4">
+                <For each={ groups } key={ (group) => group.key } let={ group }>
+                    <div class={ () => group.sided ? 'lobby-side flex min-w-0 flex-1 flex-col gap-2' : 'flex min-w-0 flex-1 flex-col' }>
+                        <Show when={ group.sided }>
+                            <p class="label text-ui-xs text-faint" aria-hidden="true">{ group.says }</p>
+                        </Show>
+                        <ul class={ () => group.sided ? 'grid grid-cols-2 gap-3' : 'grid grid-cols-2 gap-3 sm:grid-cols-4' } aria-label={ group.says }>
+                            <For each={ group.chairs } key={ (chair) => chair.seat } let={ chair }>
+                                <li class="flex min-w-0">
+                                    <SeatCard seat={ chair } me={ me } canInvite={ amHost } onInvite={ () => props.onInvite() } />
+                                </li>
+                            </For>
+                        </ul>
+                    </div>
+                </For>
+            </div>
+        </div>
 
         <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
             <Button

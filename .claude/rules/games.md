@@ -136,13 +136,47 @@ whoever is opposite.
 
 **A truthy string is not a yes.** `game-hero` drew its "Partners at four" chip with
 `<Show when={ rules.partners }>`. `Show` takes any value, so the day that field became a word every
-game's page said it, `none` included, with `check` green. It reads `!== 'none'`, and `tables.spec.ts`
-renders the hero for all four games. The same trap is waiting in every `when` over a boolean that
-becomes a word.
+game's page said it, `none` included, with `check` green. It asks for the word it means,
+`=== 'required'`, and `tables.spec.ts` renders the hero for all four games and for one that only
+allows partners. The same trap is waiting in every `when` over a boolean that becomes a word.
 
 A sync cannot add a NOT NULL column with no default to a table that holds rows, and that goes for
 the disposable test database as much as the dev one: after this commit both were dropped and built
 from nothing, as the house rule says.
+
+**A table of two sides shows them wherever it is drawn.** A team table was a boolean on a row and
+nothing on a screen. The form offered "4 players" for a game that only plays four in pairs, the
+lobby drew four chairs in a row with the partners two apart, and the board gave no sign of who
+played with whom until the score moved.
+
+- **The form offers formats, not seat counts.** `formatsOf(rules)` in `data/tables.ts` asks `teamsOf`
+  both ways for each seat count and keeps what comes back: one chip a count, and two at four where
+  the game leaves the choice open. Hokm reads "2 players", "3 players", "2 v 2"; a game whose
+  partners are `optional` reads "4 players" and "2 v 2" side by side, and opens the one that was
+  chosen. `isValidTable(config, rules)` holds a config to those formats, and takes the rules it is
+  held to: it read the browser's own copy of them while the form drew its chips from the published
+  ones, so the two could disagree about one table. Under the chips the form says what two against
+  two means at this game; above the friends list it says that the first friend picked is the
+  partner, because `guestChairs` deals that chair first.
+- **The lobby seats each side together.** `sideOf` in `match/sides.ts`, the function a start deals
+  by, sorts the chairs into two groups: "Your team" for the reader's own, "Team 1" and "Team 2"
+  for the other and for somebody not sitting. One under the other on a phone, side by side from a
+  36rem container. The groups are a keyed list of keyed lists, so a chair that fills is the same
+  card with somebody in it, and `lobby-panel.spec.ts` reads the table again to hold that.
+- **A row in a list and the play header say "2 v 2"** where they said a head count.
+- **A plate wears its side.** `TablePlate` takes `team`: a pip on the avatar in the side's colour
+  and, for a screen reader, "Partner", "Opponent", or "Team 2" for somebody watching. The reader's
+  own plate has the pip and no word. The hokm board takes each seat's side from the board it was
+  sent and marks nobody at two and three, where every seat is a side.
+- **The result is read by side**, the winners first: "Your team" and "Opponents", or the two
+  numbers for somebody watching. A game where every seat stands alone is one list, as it was.
+- **The hero says "Partners at four" only where the game requires them.** It said it for anything
+  but `none`, which the day a game merely allows partners would claim it is played in them.
+
+`fit-pass.mjs` wants every plate at a table of two sides to show its mark on the felt, clear of
+every other plate. `tables.spec.ts`, `lobby-panel.spec.ts`, `table-row.spec.ts`,
+`table-plate.spec.ts`, `hokm-board.spec.ts`, `match-result.spec.ts` and `play.spec.ts` hold the
+rest.
 
 **A wire field that reaches a bounded column says so in `schemas.ts`.** `crest` is `varchar(24)`,
 `hue` is `smallint`, `blinds` is one of three levels - and none of that was stated, so an over-long

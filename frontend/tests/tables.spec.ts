@@ -7,7 +7,7 @@ import GameGrid from '../src/components/games/game-grid.component.azeroth';
 import GameHero from '../src/components/games/game-hero.component.azeroth';
 import TableRow from '../src/components/games/table-row.component.azeroth';
 import GamePage from '../src/pages/app/game.page.azeroth';
-import { defaultTable, TABLE_RULES } from '../src/data/tables.ts';
+import { defaultTable, formatsOf, isValidTable, TABLE_RULES } from '../src/data/tables.ts';
 import { GAMES } from '../src/data/games.ts';
 import { manualClock } from '../src/lib/clock.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
@@ -107,6 +107,30 @@ describe('what a table config may say', () =>
             expect(Object.keys(TABLE_RULES[game.id]), game.id).not.toContain('fairness');
         }
     });
+
+    it('offers each seat count once, and four twice where the game leaves two against two to whoever opens the table', () =>
+    {
+        const said = (partners: 'none' | 'optional' | 'required') =>
+            formatsOf({ seats: [2, 3, 4], partners }).map((format) => `${ format.seats }${ format.teams ? ' in pairs' : '' }`);
+
+        expect(said('none')).toEqual(['2', '3', '4']);
+        expect(said('optional')).toEqual(['2', '3', '4', '4 in pairs']);
+        expect(said('required')).toEqual(['2', '3', '4 in pairs']);
+        expect(formatsOf({ seats: [2, 6, 9], partners: 'required' }).some((format) => format.teams)).toBe(false);
+    });
+
+    it('calls a table valid only in a format the rules it is held to offer', () =>
+    {
+        const hokm = TABLE_RULES.hokm;
+        const ludo = TABLE_RULES.ludo;
+
+        expect(isValidTable(defaultTable('hokm'), hokm)).toBe(true);
+        expect(isValidTable({ ...defaultTable('hokm'), teams: false }, hokm)).toBe(false);
+        expect(isValidTable({ ...defaultTable('hokm'), seats: 2 }, hokm)).toBe(false);
+        expect(isValidTable({ ...defaultTable('hokm'), seats: 2, teams: false }, hokm)).toBe(true);
+        expect(isValidTable({ ...defaultTable('ludo'), teams: true }, ludo)).toBe(false);
+        expect(isValidTable({ ...defaultTable('ludo'), teams: true }, { ...ludo, partners: 'optional' })).toBe(true);
+    });
 });
 
 describe('the create form', () =>
@@ -116,6 +140,66 @@ describe('the create form', () =>
 
     const chip = (container: HTMLElement, label: string) =>
         [...container.querySelectorAll<HTMLButtonElement>('button')].find((one) => one.textContent?.trim() === label)!;
+
+    const formats = (container: HTMLElement) =>
+        [...container.querySelector('fieldset')!.querySelectorAll<HTMLButtonElement>('button')];
+
+    const offered = (container: HTMLElement) => formats(container).map((one) => one.textContent?.trim());
+
+    const chosen = (container: HTMLElement) =>
+        formats(container).filter((one) => one.getAttribute('aria-pressed') === 'true').map((one) => one.textContent?.trim());
+
+    it('names four at hokm as two against two, and says what that means and whose partner the first guest is', () =>
+    {
+        const hokm = GAMES.find((game) => game.id === 'hokm')!;
+        const locale = useLocale();
+        const { container } = renderTest(() => CreateGameForm({ game: hokm, onCreated: () => undefined }) as HTMLElement);
+
+        expect(offered(container)).toEqual(['2 players', '3 players', '2 v 2']);
+        expect(chosen(container)).toEqual(['2 v 2']);
+        expect(container.textContent).toContain(locale.t('create.teamsHint.hokm'));
+        expect(container.textContent).toContain(locale.t('create.partnerHint'));
+
+        fire(chip(container, '3 players'), 'click');
+
+        expect(chosen(container)).toEqual(['3 players']);
+        expect(container.textContent).not.toContain(locale.t('create.teamsHint.hokm'));
+        expect(container.textContent).not.toContain(locale.t('create.partnerHint'));
+
+        fire(chip(container, '2 v 2'), 'click');
+
+        expect(chosen(container)).toEqual(['2 v 2']);
+        expect(container.textContent).toContain(locale.t('create.partnerHint'));
+    });
+
+    it('says the same in Persian, in Persian', () =>
+    {
+        const hokm = GAMES.find((game) => game.id === 'hokm')!;
+        const locale = useLocale();
+        const english = [locale.t('create.format.teams'), locale.t('create.teamsHint.hokm'), locale.t('create.partnerHint')];
+
+        locale.setLocale('fa');
+
+        const { container } = renderTest(() => CreateGameForm({ game: hokm, onCreated: () => undefined }) as HTMLElement);
+        const persian = [locale.t('create.format.teams'), locale.t('create.teamsHint.hokm'), locale.t('create.partnerHint')];
+
+        expect(chosen(container)).toEqual([persian[0]]);
+
+        for (const [at, sentence] of persian.entries())
+        {
+            expect(container.textContent).toContain(sentence);
+            expect(sentence).not.toBe(english[at]);
+        }
+    });
+
+    it('offers no choice of seats where the game plays one way', () =>
+    {
+        const backgammon = GAMES.find((game) => game.id === 'backgammon')!;
+        const { container } = renderTest(() => CreateGameForm({ game: backgammon, onCreated: () => undefined }) as HTMLElement);
+
+        expect(container.textContent).not.toContain(useLocale().t('create.seats'));
+        expect(container.textContent).not.toContain(useLocale().t('create.partnerHint'));
+    });
 
     it('offers no cube in a one-point match and says why, then offers it again at three points', () =>
     {
@@ -210,6 +294,44 @@ describe('the create form', () =>
         expect(server.asked).toEqual([{ game: 'ludo', seats: 4, teams: false }]);
         expect(server.asked[0].teams).toBe(false);
     });
+
+    it('offers both games of four where the published rules leave the choice open, and opens the one that was chosen', async () =>
+    {
+        const ludo = GAMES.find((game) => game.id === 'ludo')!;
+
+        server.games = [{
+            id: 'ludo',
+            slug: 'ludo',
+            nameKey: ludo.nameKey,
+            blurbKey: ludo.blurbKey,
+            categoryKey: ludo.categoryKey,
+            category: 'board',
+            minPlayers: 2,
+            maxPlayers: 4,
+            status: 'available',
+            rules: { seats: [2, 3, 4], modes: ['live', 'turns'], targets: [], stakes: 'none', partners: 'optional', hasCube: false, hasBlinds: false }
+        }];
+        useCatalogue().reset();
+        await settle();
+
+        const { container } = renderTest(() => CreateGameForm({ game: ludo, onCreated: () => undefined }) as HTMLElement);
+
+        await settle();
+
+        expect(offered(container)).toEqual(['2 players', '3 players', '4 players', '2 v 2']);
+        expect(chosen(container)).toEqual(['4 players']);
+        expect(container.textContent).not.toContain(useLocale().t('create.partnerHint'));
+
+        fire(chip(container, '2 v 2'), 'click');
+
+        expect(chosen(container)).toEqual(['2 v 2']);
+        expect(container.textContent).toContain(useLocale().t('create.partnerHint'));
+
+        fire(container.querySelector<HTMLFormElement>('form')!, 'submit');
+        await settle();
+
+        expect(server.asked).toEqual([{ game: 'ludo', seats: 4, teams: true }]);
+    });
 });
 
 describe('a game that is played in pairs', () =>
@@ -230,6 +352,29 @@ describe('a game that is played in pairs', () =>
         {
             expect(chips(id), id).not.toContain('Partners at four');
         }
+    });
+
+    it('does not say a game that only allows partners is played in them', async () =>
+    {
+        const ludo = GAMES.find((game) => game.id === 'ludo')!;
+
+        server.games = [{
+            id: 'ludo',
+            slug: 'ludo',
+            nameKey: ludo.nameKey,
+            blurbKey: ludo.blurbKey,
+            categoryKey: ludo.categoryKey,
+            category: 'board',
+            minPlayers: 2,
+            maxPlayers: 4,
+            status: 'available',
+            rules: { seats: [2, 3, 4], modes: ['live', 'turns'], targets: [], stakes: 'none', partners: 'optional', hasCube: false, hasBlinds: false }
+        }];
+        useCatalogue().reset();
+        await settle();
+
+        expect(useCatalogue().rules('ludo').partners).toBe('optional');
+        expect(chips('ludo')).not.toContain('Partners at four');
     });
 });
 

@@ -66,6 +66,44 @@ afterEach(() =>
 
 describe('HokmBoard', () =>
 {
+    const teams = (container: HTMLElement) => [0, 1, 2, 3].map((seat) =>
+    {
+        const mark = container.querySelector<HTMLElement>(`.hokm-seat[data-seat="${ seat }"] .table-plate-team`);
+
+        return mark === null ? null : `${ mark.dataset.side }:${ mark.querySelector('.sr-only')?.textContent ?? '' }`;
+    });
+
+    it('marks each plate with its side at a table two sides play at, and says who is with the reader', () =>
+    {
+        const { container } = renderTest(() => HokmBoard({ match: match({ hand: [0, 14, 30] }, 0) }) as Rendered);
+
+        expect(teams(container)).toEqual(['0:', '1:Opponent', '0:Partner', '1:Opponent']);
+    });
+
+    it('numbers the sides for somebody watching, and says it in Persian too', () =>
+    {
+        const { mine: _mine, ...watched } = match({});
+        const english = renderTest(() => HokmBoard({ match: watched as MatchView }) as Rendered);
+
+        expect(teams(english.container)).toEqual(['0:Team 1', '1:Team 2', '0:Team 1', '1:Team 2']);
+        english.unmount();
+
+        useLocale().setLocale('fa');
+
+        const persian = renderTest(() => HokmBoard({ match: match({}, 1) }) as Rendered);
+
+        expect(teams(persian.container)).toEqual([`0:${ useLocale().t('card.opponent') }`, '1:', `0:${ useLocale().t('card.opponent') }`, `1:${ useLocale().t('card.partner') }`]);
+        expect(useLocale().t('card.partner')).not.toBe('Partner');
+    });
+
+    it('marks no sides where every seat plays for itself', () =>
+    {
+        const three = match({ seats: [0, 1, 2].map((seat) => ({ seat, side: seat, held: 0, tricks: 0, out: false })), points: [0, 0, 0] });
+        const { container } = renderTest(() => HokmBoard({ match: { ...three, seats: 3, players: three.players.slice(0, 3) } }) as Rendered);
+
+        expect(container.querySelector('.table-plate-team')).toBeNull();
+    });
+
     it('draws no hand at all while the reader is waiting for trump with nothing dealt to them', () =>
     {
         const { container } = renderTest(() => HokmBoard({ match: match({}) }) as Rendered);

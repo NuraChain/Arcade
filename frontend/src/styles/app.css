@@ -585,6 +585,32 @@ html:has(.site-drawer[open])
     display: flex;
 }
 
+@container (min-width: 36rem)
+{
+    .lobby-side + .lobby-side
+    {
+        padding-inline-start: 1rem;
+        border-inline-start: 4px solid var(--line);
+    }
+}
+
+.table-plate-team
+{
+    position: absolute;
+    inset-block-end: -0.15rem;
+    inset-inline-start: -0.2rem;
+    inline-size: 0.625rem;
+    block-size: 0.625rem;
+    border-radius: 9999px;
+    background: var(--accent);
+    box-shadow: 0 0 0 2px var(--void);
+}
+
+.table-plate-team[data-side='1']
+{
+    background: var(--gold);
+}
+
 .table-plate-voice
 {
     position: absolute;

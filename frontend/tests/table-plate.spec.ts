@@ -51,6 +51,34 @@ describe('the seat plate every table draws', () =>
         expect(clock.getAttribute('style')).not.toContain('--ms');
     });
 
+    it('marks the side a seat plays for, and says it to somebody who cannot see the colour', () =>
+    {
+        const { container } = renderTest(() => TablePlate({ who: 'sara.k', name: 'Sara', team: { side: 1, says: 'Opponent' } }) as Rendered);
+        const plate = container.querySelector<HTMLElement>('.table-plate')!;
+        const mark = plate.querySelector<HTMLElement>('.table-plate-team')!;
+
+        expect(plate.dataset.team).toBe('1');
+        expect(mark.dataset.side).toBe('1');
+        expect(mark.querySelector('.sr-only')!.textContent).toBe('Opponent');
+    });
+
+    it('marks the reader\'s own side with nothing said, because the plate already says who it is', () =>
+    {
+        const { container } = renderTest(() => TablePlate({ who: 'dana.w', name: 'You', team: { side: 0 } }) as Rendered);
+        const mark = container.querySelector<HTMLElement>('.table-plate-team')!;
+
+        expect(mark.dataset.side).toBe('0');
+        expect(mark.querySelector('.sr-only')).toBeNull();
+    });
+
+    it('draws no side mark at a table where every seat plays for itself', () =>
+    {
+        const { container } = renderTest(() => TablePlate({ who: 'sara.k', name: 'Sara' }) as Rendered);
+
+        expect(container.querySelector('.table-plate-team')).toBeNull();
+        expect(container.querySelector<HTMLElement>('.table-plate')!.dataset.team).toBeUndefined();
+    });
+
     it('draws no clock for a watcher, who is sent no deadline', () =>
     {
         const { container } = renderTest(() => TablePlate({ who: 'omid.k', name: 'Omid', turn: true, turnMs: 30000 }) as Rendered);

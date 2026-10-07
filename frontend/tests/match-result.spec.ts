@@ -267,6 +267,50 @@ describe('who the headline says won', () =>
         expect(headline(persian)).toBe(useLocale().plural('match.won.them', 2, { names: useLocale().list(['alex', 'sara.k']) }));
         expect(useLocale().plural('match.won.them', 2, { names: 'x' })).not.toBe(useLocale().plural('match.won.them', 1, { names: 'x' }));
     });
+
+    const sides = (container: HTMLElement) => [...container.querySelectorAll<HTMLElement>('ul')].map((list) => ({
+        says: list.getAttribute('aria-label'),
+        seats: [...list.querySelectorAll('li')].length
+    }));
+
+    it('lists a game two sides played as two sides, the winners first, and calls the reader\'s own theirs', () =>
+    {
+        const won = renderTest(() => MatchResult({ match: partners, mine: 2 }) as Rendered).container;
+
+        expect(sides(won)).toEqual([{ says: 'Your team', seats: 2 }, { says: 'Opponents', seats: 2 }]);
+        expect(won.querySelector('ul')!.textContent).toContain('You');
+        expect(won.querySelector('ul')!.textContent).toContain('alex');
+
+        cleanup();
+
+        const lost = renderTest(() => MatchResult({ match: partners, mine: 1 }) as Rendered).container;
+
+        expect(sides(lost)).toEqual([{ says: 'Opponents', seats: 2 }, { says: 'Your team', seats: 2 }]);
+    });
+
+    it('numbers the sides for somebody watching, who has none', () =>
+    {
+        const container = renderTest(() => MatchResult({ match: partners }) as Rendered).container;
+
+        expect(sides(container)).toEqual([{ says: 'Team 1', seats: 2 }, { says: 'Team 2', seats: 2 }]);
+    });
+
+    it('names the sides in Persian', () =>
+    {
+        useLocale().setLocale('fa');
+
+        const container = renderTest(() => MatchResult({ match: partners, mine: 0 }) as Rendered).container;
+
+        expect(sides(container).map((one) => one.says)).toEqual([useLocale().t('team.yours'), useLocale().t('team.theirs')]);
+        expect(useLocale().t('team.yours')).not.toBe('Your team');
+    });
+
+    it('keeps one list with nothing over it when every seat played for itself', () =>
+    {
+        const container = renderTest(() => MatchResult({ match: finished, mine: 0 }) as Rendered).container;
+
+        expect(sides(container)).toEqual([{ says: null, seats: 2 }]);
+    });
 });
 
 describe('a Sit & Go, read by place', () =>

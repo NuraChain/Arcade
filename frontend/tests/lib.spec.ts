@@ -236,7 +236,7 @@ describe('table rules', () =>
     {
         for (const game of GAMES)
         {
-            expect(isValidTable(defaultTable(game.id)), game.id).toBe(true);
+            expect(isValidTable(defaultTable(game.id), TABLE_RULES[game.id]), game.id).toBe(true);
         }
     });
 
@@ -267,8 +267,8 @@ describe('table rules', () =>
 
     it('rejects a seat count the game does not offer', () =>
     {
-        expect(isValidTable({ ...defaultTable('hokm'), seats: 5 })).toBe(false);
-        expect(isValidTable({ ...defaultTable('backgammon'), seats: 4 })).toBe(false);
+        expect(isValidTable({ ...defaultTable('hokm'), seats: 5 }, TABLE_RULES.hokm)).toBe(false);
+        expect(isValidTable({ ...defaultTable('backgammon'), seats: 4 }, TABLE_RULES.backgammon)).toBe(false);
     });
 });
 

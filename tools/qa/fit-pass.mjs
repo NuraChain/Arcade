@@ -570,6 +570,27 @@ const measure = async (page, rules) => await page.evaluate((given) =>
             }
         }
 
+        const sided = plates.some((plate) => plate.dataset.team !== undefined);
+
+        for (const plate of sided ? plates : [])
+        {
+            const mark = plate.querySelector('.table-plate-team');
+
+            if (mark === null || !shown(mark) || beyond(box(mark), box(surface)))
+            {
+                found.push({ kind: 'felt', what: `plate ${ describe(plate) } at a table of two sides shows no side mark on the felt` });
+                continue;
+            }
+
+            for (const other of plates)
+            {
+                if (other !== plate && meets(box(mark), box(other)))
+                {
+                    found.push({ kind: 'felt', what: `the side mark of ${ describe(plate) } ${ where(box(mark)) } sits under plate ${ describe(other) } ${ where(box(other)) }` });
+                }
+            }
+        }
+
         for (const line of surface.querySelectorAll('.hokm-centre > *'))
         {
             for (const solid of surface.querySelectorAll('.table-plate, .hokm-pile, .hokm-stock'))

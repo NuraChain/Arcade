@@ -7,6 +7,12 @@ import { usePeople } from '../../stores/people.store.ts';
 import { useVoice } from '../../stores/voice.store.ts';
 import type { PlateTone } from './plate-tag.ts';
 
+export interface PlateTeam
+{
+    side: number;
+    says?: string;
+}
+
 export default component TablePlate(props: {
     who: string;
     name: string;
@@ -23,6 +29,7 @@ export default component TablePlate(props: {
     anchor?: 'start' | 'end' | 'centre';
     ink?: string;
     trail?: Child;
+    team?: PlateTeam;
 })
 {
     const people = usePeople();
@@ -68,6 +75,7 @@ export default component TablePlate(props: {
         data-dim={ props.dim === true ? 'true' : undefined }
         data-bubble={ props.below === true ? 'below' : undefined }
         data-anchor={ props.anchor }
+        data-team={ props.team?.side }
         style={ props.ink === undefined ? undefined : `--ink: ${ props.ink }` }
         aria-current={ props.turn === true ? 'true' : undefined }
     >
@@ -80,6 +88,13 @@ export default component TablePlate(props: {
             </For>
             <Show when={ props.marker !== undefined }>
                 { () => <span class="table-plate-marker">{ props.marker }</span> }
+            </Show>
+            <Show when={ props.team } let={ team }>
+                <span class="table-plate-team" data-side={ team.side }>
+                    <Show when={ team.says } let={ said }>
+                        <span class="sr-only">{ said }</span>
+                    </Show>
+                </span>
             </Show>
             <Show when={ voice.mark(props.who) } let={ mark }>
                 <span class="table-plate-voice" data-mark={ mark } aria-hidden="true">

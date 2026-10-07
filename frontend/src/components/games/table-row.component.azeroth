@@ -36,6 +36,9 @@ export default component TableRow(props: { table: TableSummary })
             <span class="flex min-w-0 items-baseline gap-1.5 text-ui-sm">
                 <span class="truncate font-semibold text-text">{ locale.t(game.nameKey) }</span>
                 <span class="tally shrink-0 text-ui-xs text-faint">{ props.table.code }</span>
+                <Show when={ props.table.teams }>
+                    <span class="shrink-0 rounded-full border border-line px-1.5 text-ui-2xs font-semibold text-muted" data-format="teams">{ locale.t('create.format.teams') }</span>
+                </Show>
             </span>
             <span class="flex min-w-0 items-center gap-1.5 text-ui-xs text-muted">
                 <span class="shrink-0"><span class="tally">{ `${ locale.n(props.table.taken) }/${ locale.n(props.table.seats) }` }</span> { locale.t('home.table.seated') }</span>

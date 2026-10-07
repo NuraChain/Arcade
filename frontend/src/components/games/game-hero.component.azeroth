@@ -34,7 +34,7 @@ export default component GameHero(props: { game: Game; onQuickPlay: () => void }
                 <div class="flex flex-wrap items-center gap-2">
                     <Chip icon={ props.game.category === 'cards' ? 'cards' : 'dice' }>{ locale.t(props.game.categoryKey) }</Chip>
                     <Chip icon="people"><SeatCount game={ props.game } /></Chip>
-                    <Show when={ rules.partners !== 'none' }>{ () => <Chip icon="versus">{ locale.t('games.partners') }</Chip> }</Show>
+                    <Show when={ rules.partners === 'required' }>{ () => <Chip icon="versus">{ locale.t('games.partners.required') }</Chip> }</Show>
                     <Show when={ rules.stakes === 'play-money' }>{ () => <Chip icon="coins" tone="accent">{ locale.t('games.stakes.playMoney') }</Chip> }</Show>
                 </div>
                 <div>

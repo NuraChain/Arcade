@@ -21,6 +21,23 @@ export default component MatchResult(props: { match: MatchView; mine?: number; b
             || (a.player.side ?? a.player.seat) - (b.player.side ?? b.player.seat)
             || a.player.seat - b.player.seat);
 
+    derived sided = new Set(chairs.map((chair) => chair.player.side ?? chair.player.seat)).size < chairs.length;
+
+    derived home = props.match.players.find((player) => player.seat === props.mine)?.side;
+
+    const titleOf = (side: number) =>
+        home === undefined
+            ? locale.t('team.n', { n: locale.n(side + 1) })
+            : locale.t(side === home ? 'team.yours' : 'team.theirs');
+
+    derived groups = sided
+        ? [...new Set(chairs.map((chair) => chair.player.side ?? chair.player.seat))].map((side) => ({
+            key: `side-${ side }`,
+            says: titleOf(side) as string | undefined,
+            chairs: chairs.filter((chair) => (chair.player.side ?? chair.player.seat) === side)
+        }))
+        : [{ key: 'all', says: undefined as string | undefined, chairs }];
+
     derived ranked = props.match.view.kind === 'poker';
 
     derived voided = props.match.outcome !== 'won';
@@ -89,56 +106,63 @@ export default component MatchResult(props: { match: MatchView; mine?: number; b
             <p class="min-w-0 flex-1 text-ui-lg font-semibold text-text" aria-live="polite">{ headline }</p>
         </div>
 
-        <ul class="flex flex-col gap-1.5">
-            <For each={ chairs } key={ (chair) => chair.player.seat } let={ chair }>
-                <li class="flex items-center gap-2 rounded-tile bg-raised/50 px-2.5 py-2">
-                    <Show
-                        when={ ranked && chair.player.place !== undefined }
-                        fallback={
-                            <span
-                                class="tally flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent-fill text-ui-2xs font-bold text-accent-ink"
-                                aria-hidden="true"
+        <For each={ groups } key={ (group) => group.key } let={ group }>
+            <div class="flex flex-col gap-1.5">
+                <Show when={ group.says } let={ said }>
+                    <p class="label text-ui-2xs text-faint" aria-hidden="true">{ said }</p>
+                </Show>
+                <ul class="flex flex-col gap-1.5" aria-label={ group.says }>
+                    <For each={ group.chairs } key={ (chair) => chair.player.seat } let={ chair }>
+                        <li class="flex items-center gap-2 rounded-tile bg-raised/50 px-2.5 py-2">
+                            <Show
+                                when={ ranked && chair.player.place !== undefined }
+                                fallback={
+                                    <span
+                                        class="tally flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent-fill text-ui-2xs font-bold text-accent-ink"
+                                        aria-hidden="true"
+                                    >
+                                        { locale.n(chair.score) }
+                                    </span>
+                                }
                             >
-                                { locale.n(chair.score) }
+                                { () =>
+                                    <span
+                                        class="flex h-6 min-w-6 shrink-0 items-center justify-center rounded-full bg-accent-fill px-1.5 text-ui-2xs font-bold text-accent-ink"
+                                        data-place={ chair.player.place }
+                                    >
+                                        { locale.ordinal('match.place', chair.player.place ?? 0) }
+                                    </span>
+                                }
+                            </Show>
+                            <span class="min-w-0 flex-1 truncate text-ui-sm text-text" dir="auto">
+                                { chair.player.seat === props.mine ? locale.t('match.you') : nameOf(chair.player.who) }
                             </span>
-                        }
-                    >
-                        { () =>
-                            <span
-                                class="flex h-6 min-w-6 shrink-0 items-center justify-center rounded-full bg-accent-fill px-1.5 text-ui-2xs font-bold text-accent-ink"
-                                data-place={ chair.player.place }
-                            >
-                                { locale.ordinal('match.place', chair.player.place ?? 0) }
-                            </span>
-                        }
-                    </Show>
-                    <span class="min-w-0 flex-1 truncate text-ui-sm text-text" dir="auto">
-                        { chair.player.seat === props.mine ? locale.t('match.you') : nameOf(chair.player.who) }
-                    </span>
-                    <Show when={ chair.player.result !== undefined }>
-                        { () =>
-                            <span class="shrink-0 text-ui-2xs text-muted">
-                                { locale.t(`history.result.${ chair.player.result! }`) }
-                            </span>
-                        }
-                    </Show>
-                    <Show when={ moved(chair.player) !== null }>
-                        { () =>
-                            <span
-                                class={ () => [
-                                    'tally inline-flex shrink-0 items-center gap-1.5 text-ui-xs font-semibold',
-                                    moved(chair.player)! >= 0 ? 'text-win' : 'text-muted'
-                                ].join(' ') }
-                            >
-                                <span>{ signed(moved(chair.player)!) }</span>
-                                <span class="h-1 w-1 rounded-full bg-current opacity-60" aria-hidden="true"></span>
-                                <span>{ locale.n(chair.player.ratingAfter!) }</span>
-                            </span>
-                        }
-                    </Show>
-                </li>
-            </For>
-        </ul>
+                            <Show when={ chair.player.result !== undefined }>
+                                { () =>
+                                    <span class="shrink-0 text-ui-2xs text-muted">
+                                        { locale.t(`history.result.${ chair.player.result! }`) }
+                                    </span>
+                                }
+                            </Show>
+                            <Show when={ moved(chair.player) !== null }>
+                                { () =>
+                                    <span
+                                        class={ () => [
+                                            'tally inline-flex shrink-0 items-center gap-1.5 text-ui-xs font-semibold',
+                                            moved(chair.player)! >= 0 ? 'text-win' : 'text-muted'
+                                        ].join(' ') }
+                                    >
+                                        <span>{ signed(moved(chair.player)!) }</span>
+                                        <span class="h-1 w-1 rounded-full bg-current opacity-60" aria-hidden="true"></span>
+                                        <span>{ locale.n(chair.player.ratingAfter!) }</span>
+                                    </span>
+                                }
+                            </Show>
+                        </li>
+                    </For>
+                </ul>
+            </div>
+        </For>
 
         <Show when={ voided }>
             { () => <p class="text-ui-xs text-muted">{ locale.t('match.over.voidLead') }</p> }
