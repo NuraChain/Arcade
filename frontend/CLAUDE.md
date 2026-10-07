@@ -590,6 +590,20 @@ stopping the store disposes the root; `cues.spec.ts` arms it outside a component
 warning. Nothing leaked before (the store called every disposer), but four warnings on every page were
 the one console line the hand-run passes failed on against the development server.
 
+**An arrival is said once.** A friend request and a message each reach the browser twice, as
+themselves and as the notification the server files for them, and each has a tracker of its own in
+`cues.store`. So the notification tracker keeps quiet about those two kinds (`SAID_ELSEWHERE`) and
+speaks for what only a notification carries: an invitation, an acceptance, a group, a turn. Before
+that every request and every message raised two toasts, and the second one spoke even about the
+room the reader had open. Being the only voice a message has, the chat tracker also has to say the
+one thing the notification used to cover for it: the first message of a conversation that was not
+in the list when it armed. It tells that from an old conversation a later page read in by the
+SERVER'S clock - the message is later than anything the tracker had seen (`newest`) - never by the
+browser's. It speaks for a person's own words only (`kind === 'text'`): a line the server writes
+into a room - a result, an invitation, a group made or joined - is not somebody sending a message,
+and the ones that matter have a notification that says what they are. And nobody is told about a
+message they wrote themselves in another tab.
+
 **Every sub-page has a way back, and it is the top bar's.** A route's `meta.parent` names where it
 belongs, with `:param` placeholders filled from the match (`/app/games/:slug` for the create page), and
 `parentOf` resolves it. The top bar draws a back arrow for any route with a parent - on a phone it

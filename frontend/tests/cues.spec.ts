@@ -39,11 +39,25 @@ const establish = () =>
     });
 };
 
-const laterMessageIn = (id: string) =>
+const laterMessageIn = (id: string, from?: string) =>
 {
     const row = server.conversations.find((one) => one.id === id)!;
     const after = Date.parse(row.last!.clientAt ?? row.last!.at) + 60_000;
-    row.last = { ...row.last!, at: new Date(after).toISOString(), clientAt: new Date(after).toISOString() };
+    row.last = { ...row.last!, ...(from === undefined ? {} : { from }), at: new Date(after).toISOString(), clientAt: new Date(after).toISOString() };
+};
+
+const newestMessage = () =>
+    Math.max(...server.conversations.map((row) => (row.last === undefined ? 0 : Date.parse(row.last.clientAt ?? row.last.at))));
+
+const startedBy = (id: string, from: string, at: number) =>
+{
+    const model = server.conversations.find((one) => one.id === 'c-reza')!;
+    const when = new Date(at).toISOString();
+
+    server.conversations = [
+        { ...model, id, members: ['alex', from], unread: 1, last: { ...model.last!, id: `${ id }-first`, conversationId: id, from, at: when, clientAt: when } },
+        ...server.conversations
+    ];
 };
 
 beforeEach(async () =>
@@ -189,6 +203,138 @@ describe('the cues store', () =>
 
         const shown = useToasts().items().filter((toast) => toast.dedupe === 'cue.notice');
         expect(shown).toHaveLength(1);
+    });
+
+    it('says a friend request once, though it arrives as a request and as a notification', async () =>
+    {
+        useCues().start();
+        await useSocial().refresh();
+        await useNotifications().refresh();
+        await settle();
+
+        expect(useToasts().items()).toHaveLength(0);
+
+        server.incoming = [...server.incoming, { id: 'req-new', from: 'maya.c', to: 'alex', at: new Date(clock.now()).toISOString() }];
+        server.notify({ kind: 'friend-request', actor: 'maya.c', dedupeKey: 'friend:maya.c' });
+        await useNotifications().refresh();
+        await useSocial().refresh();
+        await settle();
+
+        expect(useToasts().items().map((toast) => toast.dedupe)).toEqual(['cue.request']);
+    });
+
+    it('says a message once, though it arrives in the list and as a notification', async () =>
+    {
+        useCues().start();
+        await useChat().refresh();
+        await useNotifications().refresh();
+        await settle();
+
+        expect(useToasts().items()).toHaveLength(0);
+
+        laterMessageIn('c-reza');
+        server.notify({ kind: 'message', actor: 'reza.t', ref: { conversationId: 'c-reza' }, dedupeKey: 'chat:c-reza' });
+        await useNotifications().refresh();
+        await useChat().refresh();
+        await settle();
+
+        expect(useToasts().items().map((toast) => toast.dedupe)).toEqual(['cue.chat.c-reza']);
+    });
+
+    it('keeps the open room quiet when its message arrives as a notification as well', async () =>
+    {
+        const chat = useChat();
+        useCues().start();
+        await chat.refresh();
+        await useNotifications().refresh();
+        await settle();
+
+        chat.openThread('c-reza');
+        laterMessageIn('c-reza');
+        server.notify({ kind: 'message', actor: 'reza.t', ref: { conversationId: 'c-reza' }, dedupeKey: 'chat:c-reza' });
+        await useNotifications().refresh();
+        await chat.refresh();
+        await settle();
+
+        expect(useToasts().items()).toHaveLength(0);
+    });
+
+    it('announces the first message of a conversation that was not there when it armed', async () =>
+    {
+        useCues().start();
+        await useChat().refresh();
+        await settle();
+
+        startedBy('c-maya', 'maya.c', newestMessage() + 60_000);
+        await useChat().refresh();
+        await settle();
+
+        const shown = useToasts().items();
+
+        expect(shown.map((toast) => toast.dedupe)).toEqual(['cue.chat.c-maya']);
+        expect(shown[0].text).toContain('Maya Chen');
+    });
+
+    it('says nothing about an older conversation that is only read in later', async () =>
+    {
+        useCues().start();
+        await useChat().refresh();
+        await settle();
+
+        startedBy('c-old', 'maya.c', newestMessage() - 86_400_000);
+        await useChat().refresh();
+        await settle();
+
+        expect(useToasts().items()).toHaveLength(0);
+    });
+
+    it('says nothing about a line the server wrote into a room, which is not somebody sending a message', async () =>
+    {
+        useCues().start();
+        await useChat().refresh();
+        await settle();
+
+        const row = server.conversations.find((one) => one.id === 'c-reza')!;
+        const after = new Date(Date.parse(row.last!.clientAt ?? row.last!.at) + 60_000).toISOString();
+
+        row.last = { ...row.last!, kind: 'result', at: after, clientAt: after };
+        await useChat().refresh();
+        await settle();
+
+        expect(useToasts().items()).toHaveLength(0);
+    });
+
+    it('says nothing about what the reader wrote somewhere else', async () =>
+    {
+        useCues().start();
+        await useChat().refresh();
+        await settle();
+
+        laterMessageIn('c-reza', 'alex');
+        startedBy('c-mine', 'alex', newestMessage() + 120_000);
+        await useChat().refresh();
+        await settle();
+
+        expect(useToasts().items()).toHaveLength(0);
+    });
+
+    it('still announces an invitation that arrives after a message nobody has read', async () =>
+    {
+        useCues().start();
+        await useNotifications().refresh();
+        await settle();
+
+        server.notify({ kind: 'message', actor: 'reza.t', ref: { conversationId: 'c-reza' }, dedupeKey: 'chat:c-reza' });
+        await useNotifications().refresh();
+        await settle();
+
+        expect(useToasts().items().filter((toast) => toast.dedupe === 'cue.notice')).toHaveLength(0);
+
+        server.notify({ kind: 'table-invite', actor: 'sara.k', ref: { tableId: 't-1' }, dedupeKey: 'table:t-1' });
+        await useNotifications().refresh();
+        await settle();
+
+        expect(useToasts().items().filter((toast) => toast.dedupe === 'cue.notice')).toHaveLength(1);
     });
 
     it('writes the unread total into the title, and clears it', async () =>

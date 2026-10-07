@@ -1,5 +1,6 @@
 import { createEffect, createRoot, createStore, untrack } from 'azerothjs';
 
+import type { NotificationKind } from '../api.ts';
 import type { SoundHandle } from '../game/sound.ts';
 import { NOTIFICATION_ICON, sayOf, targetOf } from '../lib/notifications.ts';
 import { useChat } from './chat.store.ts';
@@ -28,6 +29,8 @@ export interface CuesApi
     navigateTo(go: (to: string) => void): void;
 }
 
+const SAID_ELSEWHERE: ReadonlySet<NotificationKind> = new Set(['friend-request', 'message']);
+
 /**
  * What arrival looks like when nobody is looking at the page it changes.
  *
@@ -48,6 +51,7 @@ export const useCues = createStore((): CuesApi =>
     let stop: (() => void) | null = null;
 
     const lastAt = new Map<string, number>();
+    let newest = 0;
     let chatSeeded = false;
     let chatSeenBusy = false;
 
@@ -127,7 +131,10 @@ export const useCues = createStore((): CuesApi =>
 
                 for (const conversation of rows)
                 {
-                    lastAt.set(conversation.id, chat.lastOf(conversation.id)?.at ?? 0);
+                    const at = chat.lastOf(conversation.id)?.at ?? 0;
+
+                    lastAt.set(conversation.id, at);
+                    newest = Math.max(newest, at);
                 }
                 chatSeeded = true;
                 return;
@@ -135,19 +142,25 @@ export const useCues = createStore((): CuesApi =>
 
             const liveNow = live.status() === 'connected';
             const open = chat.openId();
+            const me = lobby.me();
+            let latest = newest;
 
             for (const conversation of rows)
             {
-                const at = chat.lastOf(conversation.id)?.at ?? 0;
-                const before = lastAt.get(conversation.id);
+                const last = chat.lastOf(conversation.id);
+                const at = last?.at ?? 0;
+                const arrived = at > (lastAt.get(conversation.id) ?? newest);
 
-                if (before !== undefined && at > before && conversation.id !== open && liveNow)
+                if (arrived && last?.kind === 'text' && last.from !== me && conversation.id !== open && liveNow)
                 {
-                    announceChat(conversation.id, chat.lastOf(conversation.id)?.from ?? '');
+                    announceChat(conversation.id, last.from);
                 }
 
                 lastAt.set(conversation.id, at);
+                latest = Math.max(latest, at);
             }
+
+            newest = latest;
         }, { name: 'cues.chat' });
 
         const trackRequests = () => createEffect(() =>
@@ -214,7 +227,7 @@ export const useCues = createStore((): CuesApi =>
             {
                 const item = notifications.items().find((row) => !row.read);
 
-                if (item !== undefined)
+                if (item !== undefined && !SAID_ELSEWHERE.has(item.kind))
                 {
                     toasts.show({
                         kind: 'live',
@@ -286,6 +299,7 @@ export const useCues = createStore((): CuesApi =>
             stop?.();
             stop = null;
             lastAt.clear();
+            newest = 0;
             chatSeeded = false;
             chatSeenBusy = false;
             requestCount = 0;
