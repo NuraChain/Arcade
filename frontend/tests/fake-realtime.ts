@@ -36,6 +36,13 @@ export const socket =
     /** The live connection's handlers, or null between connections. */
     live: null as RealtimeHandlers | null,
 
+    /**
+     * Whether the handshake has completed. The real source refuses a frame until it has, and says
+     * so by answering false; a fake that took frames from a socket still connecting hid a join
+     * that was announced into one and never sent again.
+     */
+    open: false,
+
     reset()
     {
         socket.opens = 0;
@@ -44,11 +51,13 @@ export const socket =
         socket.pings = 0;
         socket.deaf = false;
         socket.live = null;
+        socket.open = false;
     },
 
     /** The handshake completes. */
     accept()
     {
+        socket.open = socket.live !== null;
         socket.live?.onOpen();
     },
 
@@ -65,6 +74,7 @@ export const socket =
     {
         const handlers = socket.live;
         socket.live = null;
+        socket.open = false;
         handlers?.onClose(code);
     }
 };
@@ -81,6 +91,7 @@ export function createFakeSource(): RealtimeSource
         {
             socket.opens += 1;
             socket.live = handlers;
+            socket.open = false;
 
             return () =>
             {
@@ -90,6 +101,7 @@ export function createFakeSource(): RealtimeSource
                 if (socket.live === handlers)
                 {
                     socket.live = null;
+                    socket.open = false;
                 }
                 socket.closed.push(1000);
             };
@@ -97,7 +109,7 @@ export function createFakeSource(): RealtimeSource
 
         send(frame)
         {
-            if (socket.live === null)
+            if (socket.live === null || !socket.open)
             {
                 return false;
             }

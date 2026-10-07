@@ -146,26 +146,6 @@ export interface RealtimeApi
 
 let active: RealtimeSource = createSocketSource();
 
-export function onBack(live: Pick<RealtimeApi, 'onStatus'>, listener: () => void)
-{
-    let dropped = false;
-
-    return live.onStatus((status) =>
-    {
-        if (status === 'down' || status === 'idle')
-        {
-            dropped = true;
-            return;
-        }
-
-        if (status === 'connected' && dropped)
-        {
-            dropped = false;
-            listener();
-        }
-    });
-}
-
 export function setRealtimeSource(next: RealtimeSource | null)
 {
     active = next ?? createSocketSource();

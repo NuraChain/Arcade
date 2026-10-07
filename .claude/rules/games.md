@@ -524,7 +524,13 @@ for each word and `tables.spec.ts` the row.
 joins, leaves and reports a mute; `signal` relays one offer, answer or ICE candidate to one person.
 It is not a delivery path for content - an SDP says how to reach a browser, not what anybody said -
 and nothing about it is stored. The rooms live in the hub's memory and empty themselves when a
-socket closes; a restart drops every call and the client rejoins through `onBack`.
+socket closes; a restart drops every call and the browser asks to be let back in when its socket
+next connects. It asks on EVERY connection while it holds a call, the first one included: a Join
+pressed while the socket was still connecting - a reload with "join voice automatically" on, most
+often - sent its frame into a socket that could not take it, and the helper that re-announced only
+after a DROP never fired, so the page showed Leave voice and an open microphone in a room the server
+had never let it into. The specs' socket took frames before its handshake and so could not see it;
+it refuses them now, as the real one does.
 
 **Who can hear whom is the messaging policy, per PAIR.** Joining asks `social.mayMessage` both ways
 between the newcomer and everybody already in the room, and the hub relays a signal only between
@@ -2097,8 +2103,8 @@ strip already say, and beside four home dots they truncated to "Your...". They a
 out, lost, missed turns and last chance are still written out, because those are what somebody needs
 to read at a glance.
 
-**A page that failed while the server was away heals itself.** `onBack` in `realtime.store.ts` fires
-when the socket connects after being down, and the lobby and the match re-read then. A deploy, a
+**A page that failed while the server was away heals itself.** Every connection rings every scope
+once, the first one included, and the lobby and the match re-read then. A deploy, a
 restart or a dropped train connection used to leave "Couldn't load this" on screen until somebody
 pressed Try again - found by restarting the built server with a game open. The play page also stopped
 drawing its skeleton and its error at the same time: the error waits until nothing is loading.

@@ -3,7 +3,7 @@ import { createSignal, createStore, untrack, type Getter } from 'azerothjs';
 import { client } from '../api.ts';
 import { createVoiceCall, type PeerLink, type VoiceCall, type VoiceCallDeps } from '../services/voice.rtc.ts';
 import { useAccount } from './account.store.ts';
-import { onBack, useRealtime, type SignalFrame, type VoiceFrame } from './realtime.store.ts';
+import { useRealtime, type SignalFrame, type VoiceFrame } from './realtime.store.ts';
 import { useSettings } from './settings.store.ts';
 
 export type MicState = 'off' | 'live' | 'denied' | 'absent';
@@ -583,11 +583,11 @@ export const useVoice = createStore((): VoiceApi =>
             const stops = [
                 realtime.onVoice(onVoice),
                 realtime.onSignal(signalled),
-                onBack(realtime, () =>
+                realtime.onStatus((status) =>
                 {
                     const current = untrack(table);
 
-                    if (current !== null && !untrack(joining))
+                    if (status === 'connected' && current !== null && !untrack(joining))
                     {
                         call?.sync('', []);
                         realtime.voice(current, true, untrack(muted));

@@ -7,7 +7,7 @@ import { RESTORED_MS, useConnection } from '../src/stores/connection.store.ts';
 import { bareFor, postureFor, useDevice } from '../src/stores/device.store.ts';
 import { OVERLAY_SETTLE, useOverlay } from '../src/stores/overlay.store.ts';
 import { useAccount } from '../src/stores/account.store.ts';
-import { onBack, useRealtime } from '../src/stores/realtime.store.ts';
+import { useRealtime } from '../src/stores/realtime.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
 import { defaultSettings, useSettings } from '../src/stores/settings.store.ts';
 import { useShell } from '../src/stores/shell.store.ts';
@@ -506,49 +506,6 @@ describe('connection', () =>
     });
 });
 
-describe('coming back after a drop', () =>
-{
-    it('asks again once the socket is back after being down, and not on the first connect', () =>
-    {
-        const live = useRealtime();
-        const asked = vi.fn();
-        const off = onBack(live, asked);
-
-        live.start();
-        socket.accept();
-        expect(asked).not.toHaveBeenCalled();
-
-        socket.drop();
-        expect(asked).not.toHaveBeenCalled();
-
-        clock.advance(1100);
-        socket.accept();
-        expect(asked).toHaveBeenCalledTimes(1);
-
-        socket.drop();
-        clock.advance(2200);
-        socket.accept();
-        expect(asked).toHaveBeenCalledTimes(2);
-
-        off();
-    });
-
-    it('heals a page that loaded while the server was away', () =>
-    {
-        const live = useRealtime();
-        const asked = vi.fn();
-        const off = onBack(live, asked);
-
-        live.start();
-        socket.drop();
-        clock.advance(1100);
-        socket.accept();
-
-        expect(asked).toHaveBeenCalledTimes(1);
-
-        off();
-    });
-});
 
 describe('shell', () =>
 {

@@ -250,6 +250,25 @@ describe('voice at a table', () =>
         expect(calls[0].closed).toBe(false);
     });
 
+    it('announces a join that was pressed before the socket had opened, once it has', async () =>
+    {
+        useVoice().reset();
+        useRealtime().reset();
+        socket.reset();
+        useRealtime().start();
+        useVoice().start();
+
+        await useVoice().join(TABLE);
+
+        expect(useVoice().table()).toBe(TABLE);
+        expect(voiceFrames()).toEqual([]);
+
+        socket.accept();
+        await settle();
+
+        expect(voiceFrames()).toEqual([{ t: 'voice', table: TABLE, on: true, muted: true }]);
+    });
+
     const room = async () =>
     {
         socket.deliver({ v: 1, t: 'voice', n: 3, table: TABLE, joined: true, mine: 'j1', peers: [
