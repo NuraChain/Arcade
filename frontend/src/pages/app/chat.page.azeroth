@@ -36,7 +36,6 @@ import { useGroups } from '../../stores/groups.store.ts';
 import { useAccount } from '../../stores/account.store.ts';
 import { useDevice } from '../../stores/device.store.ts';
 import { useDevices } from '../../stores/devices.store.ts';
-import { useEnrolment } from '../../stores/enrolment.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useOverlay } from '../../stores/overlay.store.ts';
 import { usePresence } from '../../stores/presence.store.ts';
@@ -94,7 +93,6 @@ export default component ChatPage()
 
     const seal = useSeal();
     const devices = useDevices();
-    const enrolment = useEnrolment();
     const account = useAccount();
 
     derived all = chat.messages();
@@ -108,6 +106,8 @@ export default component ChatPage()
         isWallet: account.isWallet(),
         pending: seal.loading()
     });
+
+    derived noticed = !quiet && !seal.loading() && stop !== null;
 
     derived loading = chat.threadLoading() && messages.length === 0;
 
@@ -580,22 +580,11 @@ export default component ChatPage()
                                 }
                             </Show>
 
-                            <Show when={ !quiet && !seal.loading() && stop !== null }>
+                            <Show when={ noticed }>
                                 { () =>
                                     <div class="border-t border-line bg-void px-3 pt-2">
                                         <div class="mx-auto w-full max-w-[48rem]">
-                                            <SealNotice
-                                                stop={ stop }
-                                                action={ stop?.reason !== 'browser' || stop.readiness === 'unsupported'
-                                                    ? undefined
-                                                    : (stop.readiness === 'absent'
-                                                        ? <Button variant="primary" size="sm" leading="key" loading={ devices.busy() } onClick={ () => void enrolment.give() }>
-                                                            { locale.t('devices.enrol') }
-                                                        </Button>
-                                                        : <Button variant="outline" size="sm" leading="key" to="/app/me/devices">
-                                                            { locale.t('devices.title') }
-                                                        </Button>) }
-                                            />
+                                            <SealNotice stop={ stop } />
                                         </div>
                                     </div>
                                 }

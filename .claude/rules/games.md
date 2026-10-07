@@ -883,6 +883,19 @@ voice roster, which changes on every speaking level, and the keyboard lost the s
 key. It is a value-bound `<Show when let>` now, which swaps only when the value's truthiness does -
 the voice pass is what found it, as "turning them back up" failing after "turning one down" passed.
 
+The two controls beside that slider had the same fault and kept it for longer: the mark that says
+somebody is in the call, and the button that silences them for the reader. Both sat under a condition
+that read the roster, so somebody who had tabbed to "Mute Sara for you" was put back on the page body
+every time anybody at the table spoke. Both take their person through `let` now. The notice above
+the composer that says a chat cannot be sealed was drawn again whenever the room was asked about
+again, which every chat doorbell does, and its "Give this browser keys" button with it: the notice
+owns that button now (its two callers each built the same one and handed it over, a ternary between
+two elements that was only right while the branch around it was rebuilt), and it is offered only when
+keys are what is missing, under a `derived` boolean: written as plain markup under a condition that
+read the block, it was still drawn again each time (*Markup written straight inside a `<Show>`* in
+`frontend/CLAUDE.md`). `table-chat.spec.ts` holds the players' two controls through a roster that
+changes and the notice through a room that is read again, and `seal-state.spec.ts` the button.
+
 ## Playing a game
 
 `backend/src/domains/match/` is the first real game engine in this product, and it is what the table

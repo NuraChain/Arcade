@@ -1,12 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { cleanup, renderTest } from '@azerothjs/testing';
+import { createSignal } from 'azerothjs';
 import { privateKeyToAccount } from 'viem/accounts';
 
 import type { ConversationDevices, PeerDevice } from '../src/api.ts';
 import SealNotice from '../src/components/chat/seal-notice.component.azeroth';
 import { deviceLine } from '../src/lib/attestation.ts';
 import { deviceIdFrom, toBase64Url } from '../src/lib/device-id.ts';
-import { sealabilityOf, sendBlockOf, type BlockedMember, type Sealability } from '../src/lib/seal-state.ts';
+import { sealabilityOf, sendBlockOf, type BlockedMember, type Sealability, type SendBlock } from '../src/lib/seal-state.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
 import '../src/locales/app-catalogue.ts';
 
@@ -328,20 +329,45 @@ describe('what the thread says about it', () =>
         expect(said('unsupported')).toContain('nowhere secure');
     });
 
-    it('puts an action beside the sentence rather than inside it', () =>
+    it('offers this browser its keys beside the sentence, not inside it, and only when keys are what is missing', () =>
     {
-        const { container } = renderTest(() => SealNotice({
-            stop: { reason: 'browser', readiness: 'absent' },
-            action: (() =>
-            {
-                const button = document.createElement('button');
-                button.textContent = 'Give this browser keys';
-                return button;
-            })()
-        }) as unknown as HTMLElement);
+        const drawn = (stop: SendBlock) =>
+        {
+            cleanup();
+            return renderTest(() => SealNotice({ stop }) as unknown as HTMLElement).container;
+        };
 
-        expect(container.querySelector('button')).not.toBeNull();
-        expect(container.querySelector('p button')).toBeNull();
+        const keyless = drawn({ reason: 'browser', readiness: 'absent' });
+
+        expect(keyless.querySelector('button')?.textContent).toContain(useLocale().t('devices.enrol'));
+        expect(keyless.querySelector('p button')).toBeNull();
+
+        expect(drawn({ reason: 'browser', readiness: 'unsupported' }).querySelector('button')).toBeNull();
+        expect(drawn({ reason: 'member', member: seal('no-wallet', true) }).querySelector('button')).toBeNull();
+        expect(drawn({ reason: 'member', member: seal('no-device') }).querySelector('button')).toBeNull();
+    });
+
+    it('keeps that button when it is told the same thing again, and puts it away when keys stop being the answer', () =>
+    {
+        const [stop, setStop] = createSignal<SendBlock>({ reason: 'browser', readiness: 'absent' });
+        const { container } = renderTest(() => SealNotice({
+            get stop()
+            {
+                return stop();
+            }
+        }) as unknown as HTMLElement);
+        const offered = container.querySelector('button');
+
+        expect(offered).not.toBeNull();
+
+        setStop({ reason: 'browser', readiness: 'absent' });
+
+        expect(container.querySelector('button'), 'the button was drawn again').toBe(offered);
+
+        setStop({ reason: 'browser', readiness: 'unsupported' });
+
+        expect(container.querySelector('button')).toBeNull();
+        expect(container.textContent).toContain('nowhere secure');
     });
 
     it('is never an alarm for anything about this browser', () =>

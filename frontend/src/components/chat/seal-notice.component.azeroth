@@ -1,15 +1,14 @@
-import type { Child } from 'azerothjs';
-
 import Icon from '../../icons/icon.component.azeroth';
 import type { IconName } from '../../icons/registry.ts';
 import type { Readiness } from '../../lib/device-state.ts';
 import type { MemberSealState, SendBlock } from '../../lib/seal-state.ts';
 import type { MessageKey } from '../../locales/en.ts';
+import { useDevices } from '../../stores/devices.store.ts';
+import { useEnrolment } from '../../stores/enrolment.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
+import Button from '../ui/button.component.azeroth';
 
 type Blocked = Exclude<MemberSealState, 'ready'>;
-
-type Shown = Exclude<SendBlock, { reason: 'pending' }>;
 
 const ICON: Record<Blocked, IconName> = {
     'no-wallet': 'info',
@@ -42,12 +41,20 @@ const SAYS_MINE: Record<Blocked, MessageKey> = {
     tampered: 'seal.tamperedMine'
 };
 
-export default component SealNotice(props: { stop: SendBlock | null; action?: Child })
+export default component SealNotice(props: { stop: SendBlock | null })
 {
     const locale = useLocale();
+    const devices = useDevices();
+    const enrolment = useEnrolment();
+
+    derived clear = props.stop === null;
+
+    derived shown = props.stop !== null && props.stop.reason !== 'pending' ? props.stop : null;
+
+    derived keyless = shown !== null && shown.reason === 'browser' && shown.readiness === 'absent';
 
     <>
-        <Show when={ () => props.stop === null }>
+        <Show when={ clear }>
             { () =>
                 <p class="flex items-start gap-2 px-3 py-1.5 text-ui-xs text-faint">
                     <Icon name="lock" size={ 14 } class="mt-0.5 shrink-0" />
@@ -56,9 +63,9 @@ export default component SealNotice(props: { stop: SendBlock | null; action?: Ch
             }
         </Show>
 
-        <Show when={ (): Shown | null => (props.stop !== null && props.stop.reason !== 'pending' ? props.stop : null) } let={ sealed }>
+        <Show when={ shown } let={ sealed }>
             <div
-                class={ [
+                class={ () => [
                     'flex flex-wrap items-start gap-2 rounded-tile border px-3 py-2 text-ui-sm',
                     sealed.reason === 'member' && sealed.member.state === 'tampered'
                         ? 'border-danger/40 bg-danger/10 text-danger'
@@ -78,8 +85,12 @@ export default component SealNotice(props: { stop: SendBlock | null; action?: Ch
                             ? locale.t(SAYS_MINE[sealed.member.state])
                             : locale.t(SAYS[sealed.member.state], { who: sealed.member.handle })) }
                 </span>
-                <Show when={ props.action !== undefined }>
-                    { () => <span class="shrink-0">{ props.action }</span> }
+                <Show when={ keyless }>
+                    <span class="shrink-0">
+                        <Button variant="primary" size="sm" leading="key" loading={ devices.busy() } onClick={ () => void enrolment.give() }>
+                            { locale.t('devices.enrol') }
+                        </Button>
+                    </span>
                 </Show>
             </div>
         </Show>

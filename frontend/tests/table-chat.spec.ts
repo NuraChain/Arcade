@@ -1,0 +1,238 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { cleanup, fire, renderTest } from '@azerothjs/testing';
+import { RouterProvider, createMemoryHistory, createRouter } from 'azerothjs';
+
+import TableChat from '../src/components/games/table-chat.component.azeroth';
+import { defaultTable } from '../src/data/tables.ts';
+import { manualClock } from '../src/lib/clock.ts';
+import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
+import '../src/locales/app-catalogue.ts';
+import { useChat } from '../src/stores/chat.store.ts';
+import { useLobby } from '../src/stores/lobby.store.ts';
+import { useLocale } from '../src/stores/locale.store.ts';
+import { usePeople } from '../src/stores/people.store.ts';
+import { useRealtime } from '../src/stores/realtime.store.ts';
+import { useSeal } from '../src/stores/seal.store.ts';
+import { useSession } from '../src/stores/session.store.ts';
+import { useSettings } from '../src/stores/settings.store.ts';
+import { setVoiceCall, setVoiceMedia, useVoice } from '../src/stores/voice.store.ts';
+import { server } from './fake-api.ts';
+import { socket } from './fake-realtime.ts';
+
+type Rendered = HTMLElement;
+
+const settle = async () =>
+{
+    for (let turn = 0; turn < 12; turn += 1)
+    {
+        await Promise.resolve();
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 30));
+};
+
+const microphone = { stop: () => undefined } as unknown as MediaStreamTrack;
+
+const granted = { getTracks: () => [microphone], getAudioTracks: () => [microphone] } as unknown as MediaStream;
+
+let frames = 20;
+
+let stopVoice: () => void = () => undefined;
+
+const shown = (conversationId: string) =>
+{
+    const router = createRouter({ routes: [{ path: '/', component: () => document.createElement('div') }], history: createMemoryHistory('/'), scroll: false });
+
+    return renderTest(() => RouterProvider({ router, children: () => TableChat({ conversationId }) }) as Rendered).container;
+};
+
+const pressable = (container: HTMLElement, name: string) =>
+    [...container.querySelectorAll<HTMLButtonElement>('button')].find((one) => one.textContent?.trim() === name)!;
+
+beforeEach(() =>
+{
+    cleanup();
+    resetRuntime();
+    setRuntime({ clock: manualClock(400_000), seed: 12 });
+    server.reset();
+    useLocale().setLocale('en');
+    useSession().reset();
+    useSession().establish({ id: 'alex', handle: 'alex', displayName: 'Alex Morgan', bio: '', hue: 210, kind: 'guest', isMinor: false });
+    useRealtime().reset();
+    socket.reset();
+    useRealtime().start();
+    socket.accept();
+    useSettings().reset();
+    useLobby().reset();
+    useChat().reset();
+    setVoiceMedia(() => ({ getUserMedia: async () => granted }) as unknown as MediaDevices);
+    setVoiceCall(() => ({
+        setMic: async () => undefined,
+        setMuted: () => undefined,
+        sync: () => undefined,
+        receive: async () => undefined,
+        setVolume: () => undefined,
+        setSink: () => undefined,
+        close: () => undefined
+    }));
+    useVoice().reset();
+    stopVoice = useVoice().start();
+});
+
+afterEach(() =>
+{
+    stopVoice();
+    useVoice().reset();
+    setVoiceCall(null);
+    setVoiceMedia(null);
+    useChat().closeThread();
+    useLobby().reset();
+    useRealtime().reset();
+    cleanup();
+});
+
+describe('the players beside a table’s chat, while a call is on', () =>
+{
+    const inTheCall = (tableId: string, sara: { muted?: boolean } = {}) =>
+    {
+        frames += 1;
+        socket.deliver({
+            v: 1,
+            t: 'voice',
+            n: frames,
+            table: tableId,
+            joined: true,
+            mine: 'join-alex',
+            peers: [
+                { who: 'alex', muted: true, talk: true, join: 'join-alex' },
+                { who: 'sara.k', muted: sara.muted ?? false, talk: true, join: 'join-sara' }
+            ]
+        });
+    };
+
+    const atTheTable = async () =>
+    {
+        const lobby = useLobby();
+        const tableId = await lobby.host('ludo', { ...defaultTable('ludo'), seats: 2, voice: 'table' }, []);
+        const held = server.tables.find((one) => one.id === tableId)!;
+
+        held.chairs[1] = { seat: 1, who: 'sara.k', ready: false, host: false };
+        held.taken = 2;
+        lobby.open(tableId);
+        await lobby.refresh();
+        await settle();
+
+        await useVoice().join(tableId);
+        inTheCall(tableId);
+        await settle();
+
+        const container = shown('conv-a');
+
+        await settle();
+        fire(pressable(container, useLocale().t('play.tab.players')), 'click');
+        await settle();
+
+        const hers = () => [...container.querySelectorAll<HTMLElement>(`ul[aria-label="${ useLocale().t('play.tab.players') }"] > li`)][1];
+
+        return { tableId, container, hers };
+    };
+
+    it('keeps the button that silences somebody, and the reader on it, while the call around them changes', async () =>
+    {
+        const { tableId, hers } = await atTheTable();
+        const silence = hers().querySelector<HTMLButtonElement>('button[aria-pressed]')!;
+
+        expect(silence, 'the button that silences her').not.toBeNull();
+
+        silence.focus();
+
+        expect(document.activeElement).toBe(silence);
+
+        inTheCall(tableId, { muted: true });
+        await settle();
+        inTheCall(tableId, { muted: false });
+        await settle();
+
+        expect(hers().querySelector('button[aria-pressed]'), 'the button was drawn again').toBe(silence);
+        expect(document.activeElement).toBe(silence);
+    });
+
+    it('says on that same button that she has been silenced, and then that she has not', async () =>
+    {
+        const { hers } = await atTheTable();
+        const silence = hers().querySelector<HTMLButtonElement>('button[aria-pressed]')!;
+        const named = (key: 'voice.silence' | 'voice.unsilence') => useLocale().t(key, { name: usePeople().byHandle('sara.k')!.displayName });
+
+        expect(silence.getAttribute('aria-pressed')).toBe('false');
+        expect(silence.getAttribute('aria-label')).toBe(named('voice.silence'));
+
+        fire(silence, 'click');
+        await settle();
+
+        expect(hers().querySelector('button[aria-pressed]'), 'the button was drawn again').toBe(silence);
+        expect(silence.getAttribute('aria-pressed')).toBe('true');
+        expect(silence.getAttribute('aria-label')).toBe(named('voice.unsilence'));
+
+        fire(silence, 'click');
+        await settle();
+
+        expect(hers().querySelector('button[aria-pressed]')).toBe(silence);
+        expect(silence.getAttribute('aria-pressed')).toBe('false');
+    });
+
+    it('keeps the mark that says she is in the call, and changes what it draws when she mutes', async () =>
+    {
+        const { tableId, hers } = await atTheTable();
+        const mark = hers().querySelector<HTMLElement>('[title]')!;
+
+        expect(mark, 'her voice mark').not.toBeNull();
+
+        const open = mark.innerHTML;
+
+        inTheCall(tableId, { muted: true });
+        await settle();
+
+        expect(hers().querySelector('[title]'), 'the mark was drawn again').toBe(mark);
+        expect(mark.innerHTML, 'a muted microphone is drawn the same as an open one').not.toBe(open);
+    });
+
+    it('takes both away when the call ends, and brings them back with it', async () =>
+    {
+        const { tableId, hers } = await atTheTable();
+
+        expect(hers().querySelector('button[aria-pressed]')).not.toBeNull();
+
+        frames += 1;
+        socket.deliver({ v: 1, t: 'voice', n: frames, table: tableId, joined: false, mine: '', peers: [] });
+        await settle();
+
+        expect(hers().querySelector('button[aria-pressed]')).toBeNull();
+        expect(hers().querySelector('[title]')).toBeNull();
+    });
+});
+
+describe('the notice above a table chat that cannot be sealed', () =>
+{
+    it('stays where it is when the room is asked about again', async () =>
+    {
+        server.conversationDevices['conv-seal'] = { members: [{ accountId: 'u-alex', handle: 'alex', kind: 'guest', devices: [] }] } as never;
+
+        const container = shown('conv-seal');
+        const said = useLocale().t('seal.noWalletMine');
+
+        await vi.waitFor(() => expect(container.textContent).toContain(said), { timeout: 4000 });
+
+        const notice = [...container.querySelectorAll<HTMLElement>('div')].find((one) => one.dataset.yield !== undefined)!;
+
+        expect(notice, 'the notice').not.toBeUndefined();
+
+        const before = useSeal().sealability();
+
+        await useSeal().refresh();
+        await settle();
+
+        expect(useSeal().sealability(), 'the room was not asked about again').not.toBe(before);
+        expect(container.textContent).toContain(said);
+        expect([...container.querySelectorAll<HTMLElement>('div')].find((one) => one.dataset.yield !== undefined), 'the notice was drawn again').toBe(notice);
+    });
+});
