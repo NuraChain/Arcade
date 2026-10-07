@@ -120,6 +120,7 @@ export const play = {
     'play.leave.forfeit': 'The game is still on, so leaving forfeits it as a loss. Your chair stays empty until the game ends.',
     'play.leave.locked': 'The game goes on without you. Your chair stays empty until it ends.',
     'play.leave.last': 'You are the last one here, so the table closes behind you.',
+    'play.leave.started': 'Your game has just started.',
 
     'play.close.title': 'Close this table?',
     'play.close.lead': 'Everyone loses their chair, and the table chat goes with it.',

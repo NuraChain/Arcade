@@ -125,7 +125,7 @@ try
         const mine = await player.api('GET', '/tables/mine');
         for (const one of mine.body?.tables ?? [])
         {
-            await player.api('POST', `/tables/${ one.id }/leave`);
+            await player.api('POST', `/tables/${ one.id }/leave`, { forfeit: true });
         }
     }
 
@@ -265,7 +265,7 @@ try
 
     for (const player of players)
     {
-        await player.api('POST', `/tables/${ table }/leave`);
+        await player.api('POST', `/tables/${ table }/leave`, { forfeit: true });
     }
 
     mkdirSync(OUT, { recursive: true });

@@ -167,7 +167,7 @@ try
 
         for (const one of mineNow)
         {
-            await dana.request.post(`${ BASE }/api/tables/${ one.id }/leave`).catch(() => null);
+            await dana.request.post(`${ BASE }/api/tables/${ one.id }/leave`, { data: { forfeit: true } }).catch(() => null);
         }
 
         const made = await dana.request.post(`${ BASE }/api/tables/`, {

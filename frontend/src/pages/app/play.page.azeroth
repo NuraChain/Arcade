@@ -578,13 +578,14 @@ export default component PlayPage()
         }
     };
 
-    const leave = async () =>
+    const leave = async (live: MatchView | null) =>
     {
         if (table === null)
         {
             return;
         }
-        const lead = leaveLead(seated ? board.match() ?? null : null, table.taken);
+        const id = table.id;
+        const lead = leaveLead(live, table.taken);
         const yes = await overlay.open(
             ConfirmSheet,
             {
@@ -598,8 +599,16 @@ export default component PlayPage()
 
         if (yes === true)
         {
-            await lobby.leave(table.id);
-            navigate('/app/games');
+            try
+            {
+                await lobby.leave(id, lead === 'play.leave.forfeit');
+                navigate('/app/games');
+            }
+            catch (error)
+            {
+                toasts.show({ kind: 'warning', text: locale.t(whyRefused(error, 'common.actionFailed', 'play.leave.started')), dedupe: 'leave-table' });
+                void lobby.refresh();
+            }
         }
     };
 
@@ -701,7 +710,7 @@ export default component PlayPage()
                                         upright={ playing === 'ludo' }
                                         onChat={ floating ? undefined : openChat }
                                         onResign={ resigning ? () => void resign() : undefined }
-                                        onLeave={ seated && showing ? () => void leave() : undefined }
+                                        onLeave={ seated && showing ? () => void leave(board.match()) : undefined }
                                         voice={ talkable ? table!.id : undefined }
                                         hostVoice={ amHost && table!.status !== 'closed' ? table!.voice : undefined }
                                         onHostVoice={ switchVoice }
@@ -819,7 +828,7 @@ export default component PlayPage()
                                     table={ table! }
                                     onInvite={ () => overlay.open(InviteSheet, { tableId: table!.id }, { label: locale.t('play.lobby.invite') }) }
                                     onCopyLink={ () => void copyLink() }
-                                    onLeave={ () => void leave() }
+                                    onLeave={ () => void leave(null) }
                                 />
                             }
                         </Show>

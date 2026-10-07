@@ -1920,12 +1920,12 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 return { table: asTable(after), seat };
             },
 
-            async leave(me, tableId)
+            async leave(me, tableId, forfeit)
             {
                 const before = await mustTable(me, tableId);
                 const people = await table.peopleAt(before.id);
 
-                const { walked } = await table.leave(me, before.id, (tx) => match.walkOut(tx, me, before.id));
+                const { walked } = await table.leave(me, before.id, (tx) => match.walkOut(tx, me, before.id, forfeit));
 
                 if (walked !== null)
                 {

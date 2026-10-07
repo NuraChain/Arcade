@@ -3,6 +3,7 @@ import type { DataSource } from 'typeorm';
 
 import { buildApp } from '../src/app.ts';
 import type { ServerConfig } from '../src/env.ts';
+import type { Ports } from '../src/ports.ts';
 
 /**
  * Every server test drives the App through `app.handle(new Request(...))`.
@@ -129,5 +130,67 @@ describe('api surface', () =>
     {
         const app = buildApp({ db: fakeDb({ initialized: true }), config, log: silent });
         expect((await call(app, '/api/nothing-here')).status).toBe(404);
+    });
+});
+
+describe('leaving a table', () =>
+{
+    const seatedAs = (told: unknown[][]) => buildApp({
+        db: fakeDb({ initialized: true }),
+        config,
+        log: silent,
+        ports: {
+            identity: {
+                principal: () => Promise.resolve({ userId: 'somebody', handle: 'somebody', kind: 'guest', isMinor: false, sessionId: 'a-session' })
+            },
+            table: {
+                leave: (...said: unknown[]) =>
+                {
+                    told.push(said);
+
+                    return Promise.resolve();
+                }
+            }
+        } as unknown as Ports
+    });
+
+    const leave = (app: ReturnType<typeof buildApp>, body: string | undefined) =>
+        app.handle(new Request('http://local/api/tables/a-table/leave', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body
+        }));
+
+    it('has to say whether it may forfeit, and is not passed on until it does', async () =>
+    {
+        const told: unknown[][] = [];
+        const app = seatedAs(told);
+
+        for (const body of ['{}', '{"forfeit":"yes"}', '{"forfeit":1}', '{"forfeit":null}'])
+        {
+            const response = await leave(app, body);
+
+            expect(response.status, body).toBe(422);
+            expect(await response.json(), body).toMatchObject({ error: { code: 'validation-failed' } });
+        }
+
+        expect((await leave(app, undefined)).status).toBe(400);
+        expect(told).toEqual([]);
+    });
+
+    it('tells the table what the request said, either way', async () =>
+    {
+        const told: unknown[][] = [];
+        const app = seatedAs(told);
+
+        for (const forfeit of [false, true])
+        {
+            const response = await leave(app, JSON.stringify({ forfeit }));
+
+            expect(response.status).toBe(200);
+            expect(await response.json()).toEqual({ ok: true });
+        }
+
+        expect(told).toEqual([['somebody', 'a-table', false], ['somebody', 'a-table', true]]);
     });
 });

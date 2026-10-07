@@ -757,6 +757,257 @@ describe('PlayPage', () =>
         });
     });
 
+    describe('a leave, and whether it may forfeit', () =>
+    {
+        const control = (container: HTMLElement, key: MessageKey) =>
+            [...container.querySelectorAll('button')].find((one) =>
+                one.getAttribute('aria-label') === useLocale().t(key) || one.textContent?.trim() === useLocale().t(key));
+
+        const said = () => useToasts().items().map((one) => [one.kind, one.text]);
+
+        const left = () => server.calls.filter((call) => call.startsWith('tables.leave'));
+
+        const game = (tableId: string) => ({
+            id: `live-${ tableId }`,
+            tableId,
+            game: 'backgammon',
+            rev: 4,
+            seats: 2,
+            players: [
+                { seat: 0, who: 'alex', timeouts: 0 },
+                { seat: 1, who: 'sara.k', timeouts: 0 }
+            ],
+            turn: 1,
+            mine: 0,
+            startedAt: new Date(400_000).toISOString(),
+            view: {
+                kind: 'backgammon',
+                phase: 'roll',
+                turn: 1,
+                dice: [],
+                seats: [0, 1].map((seat) => ({ seat, checkers: Array.from({ length: 26 }, () => 0), pips: 0, score: 0 })),
+                cubed: false,
+                cube: 1,
+                doubling: false,
+                crawford: false,
+                target: 1,
+                round: 1
+            }
+        } as MatchView);
+
+        const gaveUp = (tableId: string) => ({
+            id: `live-${ tableId }`,
+            tableId,
+            game: 'poker',
+            rev: 9,
+            seats: SEATED.length,
+            players: SEATED.map((who, seat) => ({ seat, who, timeouts: 0, ...(seat === 0 ? { result: 'abandoned' } : {}) })),
+            turn: 1,
+            mine: 0,
+            startedAt: new Date(400_000).toISOString(),
+            view: {
+                kind: 'poker',
+                street: 'preflop',
+                hand: 2,
+                button: 5,
+                turn: 1,
+                board: [],
+                pot: 30,
+                pots: [{ amount: 30, eligible: [1, 2, 3, 4, 5] }],
+                seats: SEATED.map((_, seat) => ({ seat, stack: seat === 0 ? 0 : 1500, bet: 0, folded: seat === 0, allIn: false, out: seat === 0 })),
+                blinds: { small: 10, big: 20, level: 1, next: 9 },
+                hole: []
+            }
+        } as MatchView);
+
+        const begins = (held: { id: string; matchId?: string }, live = game) =>
+        {
+            held.matchId = `live-${ held.id }`;
+            (client.matches as unknown as Record<string, unknown>).view = async () => live(held.id);
+        };
+
+        const opened = async (held: (typeof server.tables)[number], playing: boolean) =>
+        {
+            useToasts().reset();
+
+            const routes: Route[] = [
+                { path: '/app/play/:id', component: (): HTMLElement => PlayPage() as HTMLElement },
+                { path: '/app/games', component: (): HTMLElement => document.createElement('main') }
+            ];
+            const router = createRouter({ routes, history: createMemoryHistory(`/app/play/${ held.id }`), scroll: false });
+            const { container } = renderTest(() => RouterProvider({ router, children: () => Routes({}) }) as Rendered);
+
+            await vi.waitFor(() => expect(container.querySelector('.table-stage') !== null).toBe(playing), { timeout: 4000 });
+            await vi.waitFor(() => expect(control(container, 'play.lobby.leave')).toBeDefined(), { timeout: 4000 });
+
+            server.calls = [];
+
+            return { container, held, router };
+        };
+
+        const seatedAt = async (playing: boolean) =>
+        {
+            const id = await useLobby().host('backgammon', defaultTable('backgammon'), []);
+            const held = server.tables.find((one) => one.id === id)!;
+
+            held.chairs[1].who = 'sara.k';
+
+            if (playing)
+            {
+                begins(held);
+            }
+
+            return await opened(held, playing);
+        };
+
+        const resignedAt = async () =>
+        {
+            const id = await useLobby().host('poker', { ...defaultTable('poker'), seats: SEATED.length }, []);
+            const held = server.tables.find((one) => one.id === id)!;
+
+            for (const chair of held.chairs)
+            {
+                chair.who = SEATED[chair.seat];
+            }
+
+            begins(held, gaveUp);
+            server.outOfGame[`live-${ id }`] = ['alex'];
+
+            return await opened(held, true);
+        };
+
+        const asked = async (container: HTMLElement) =>
+        {
+            fire(control(container, 'play.lobby.leave')!, 'click');
+
+            await vi.waitFor(() => expect(useOverlay().top()).not.toBeNull(), { timeout: 4000 });
+
+            return useOverlay().top()!;
+        };
+
+        afterEach(() =>
+        {
+            useOverlay().reset();
+            useLocale().setLocale('en');
+            delete (client.matches as unknown as Record<string, unknown>).view;
+            server.outOfGame = {};
+
+            for (const one of server.tables)
+            {
+                delete one.matchId;
+            }
+        });
+
+        it('says the chair goes back to somebody waiting in the lobby, and leaves without agreeing to forfeit', async () =>
+        {
+            const { container, held, router } = await seatedAt(false);
+            const sheet = await asked(container);
+
+            expect(sheet.props.lead).toBe(useLocale().t('play.leave.lead'));
+
+            useOverlay().close(sheet.id, true);
+
+            await vi.waitFor(() => expect(router.location().pathname).toBe('/app/games'), { timeout: 4000 });
+
+            expect(left()).toEqual(['tables.leave']);
+            expect(held.chairs[0].who).toBeUndefined();
+            expect(said()).toEqual([]);
+        });
+
+        it('says leaving forfeits to somebody with a game on the board, and agrees to it only then', async () =>
+        {
+            const { container, held, router } = await seatedAt(true);
+            const sheet = await asked(container);
+
+            expect(sheet.props.lead).toBe(useLocale().t('play.leave.forfeit'));
+
+            useOverlay().close(sheet.id, true);
+
+            await vi.waitFor(() => expect(router.location().pathname).toBe('/app/games'), { timeout: 4000 });
+
+            expect(left()).toEqual(['tables.leave:forfeit']);
+            expect(held.chairs[0].who).toBeUndefined();
+        });
+
+        it('says the game goes on without somebody who already gave it up, and lets them go without agreeing to forfeit', async () =>
+        {
+            const { container, held, router } = await resignedAt();
+            const sheet = await asked(container);
+
+            expect(sheet.props.lead).toBe(useLocale().t('play.leave.locked'));
+
+            useOverlay().close(sheet.id, true);
+
+            await vi.waitFor(() => expect(router.location().pathname).toBe('/app/games'), { timeout: 4000 });
+
+            expect(left()).toEqual(['tables.leave']);
+            expect(held.chairs[0].who).toBeUndefined();
+            expect(said()).toEqual([]);
+        });
+
+        it('sends nothing when the sheet is turned down', async () =>
+        {
+            const { container, held, router } = await seatedAt(true);
+            const sheet = await asked(container);
+
+            useOverlay().close(sheet.id, false);
+            await settle();
+
+            expect(left()).toEqual([]);
+            expect(held.chairs[0].who).toBe('alex');
+            expect(router.location().pathname).toBe(`/app/play/${ held.id }`);
+        });
+
+        it.each(['en', 'fa'] as const)('says the game has just started, keeps the chair and shows the board, when it began while the sheet was open, in %s', async (language) =>
+        {
+            useLocale().setLocale(language);
+
+            const { container, held, router } = await seatedAt(false);
+            const sheet = await asked(container);
+
+            expect(sheet.props.lead).toBe(useLocale().t('play.leave.lead'));
+
+            begins(held);
+            useOverlay().close(sheet.id, true);
+
+            await vi.waitFor(() => expect(said()).toEqual([['warning', useLocale().t('play.leave.started')]]), { timeout: 4000 });
+            await vi.waitFor(() => expect(container.querySelector('.table-stage')).not.toBeNull(), { timeout: 4000 });
+
+            expect(left()).toEqual(['tables.leave']);
+            expect(held.chairs[0].who).toBe('alex');
+            expect(router.location().pathname).toBe(`/app/play/${ held.id }`);
+            expect(useLobby().openId()).toBe(held.id);
+            expect((await asked(container)).props.lead).toBe(useLocale().t('play.leave.forfeit'));
+        });
+
+        it('says only that it did not go through when the leave never arrived, and stays at the table', async () =>
+        {
+            const { container, held, router } = await seatedAt(false);
+            const tables = client.tables as unknown as Record<string, unknown>;
+            const real = tables.leave;
+
+            tables.leave = async () =>
+            {
+                throw new TypeError('Failed to fetch');
+            };
+
+            try
+            {
+                useOverlay().close((await asked(container)).id, true);
+
+                await vi.waitFor(() => expect(said()).toEqual([['warning', useLocale().t('common.actionFailed')]]), { timeout: 4000 });
+            }
+            finally
+            {
+                tables.leave = real;
+            }
+
+            expect(held.chairs[0].who).toBe('alex');
+            expect(router.location().pathname).toBe(`/app/play/${ held.id }`);
+            expect(control(container, 'play.lobby.leave')).toBeDefined();
+        });
+    });
+
     describe('playing again once a game is over', () =>
     {
         const over = (tableId: string) => ({

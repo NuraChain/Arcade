@@ -343,6 +343,8 @@ export const server =
     /** Tables, in memory. Empty until a test opens one - nobody is sitting anywhere on boot. */
     tables: [] as TableWire[],
 
+    outOfGame: {} as Record<string, string[]>,
+
     watching: [] as { id: string; code: string; game: string; seats: number; players: string[]; startedAt: string }[],
 
     /** The graph, from the same fixtures the development server seeds. */
@@ -378,6 +380,7 @@ export const server =
         }));
         server.refuseGroup = null;
         server.tables = [];
+        server.outOfGame = {};
         server.tableSeq = 0;
         server.notifications = [];
         server.notifySeq = 0;
@@ -1466,10 +1469,19 @@ export const client =
             return { table: restate(table), seat: free.seat };
         },
 
-        async leave({ params }: { params: { id: string } })
+        async leave({ params, input }: { params: { id: string }; input: { forfeit: boolean } })
         {
-            server.calls.push('tables.leave');
+            server.calls.push(input.forfeit ? 'tables.leave:forfeit' : 'tables.leave');
             const table = mustTable(params.id);
+            const inTheGame = table.matchId !== undefined
+                && table.chairs.some((chair) => chair.who === server.me)
+                && !(server.outOfGame[table.matchId] ?? []).includes(server.me);
+
+            if (!input.forfeit && inTheGame)
+            {
+                throw tableRefusal('playing', 'A game has started at that table, and leaving it now is a forfeit.');
+            }
+
             for (const chair of table.chairs)
             {
                 if (chair.who === server.me)

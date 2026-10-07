@@ -40,7 +40,7 @@ export interface LobbyApi
     /** Takes a chair. Null means the table filled up first - an answer, not a failure. */
     claim(tableId: string): Promise<number | null>;
 
-    leave(tableId: string): Promise<void>;
+    leave(tableId: string, forfeit: boolean): Promise<void>;
     ready(tableId: string, ready: boolean): Promise<void>;
     invite(tableId: string, handle: string): Promise<void>;
     end(tableId: string): Promise<void>;
@@ -243,9 +243,9 @@ export const useLobby = createStore((): LobbyApi =>
             return claimed.seat ?? null;
         },
 
-        async leave(tableId)
+        async leave(tableId, forfeit)
         {
-            await client.tables.leave({ params: { id: tableId } });
+            await client.tables.leave({ params: { id: tableId }, input: { forfeit } });
             if (untrack(openId) === tableId)
             {
                 setOpenId('');

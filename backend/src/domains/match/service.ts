@@ -673,7 +673,7 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
             return { load: (await read(me, matchId)) as MatchLoad, applied, before };
         },
 
-        walkOut: async (tx: EntityManager, me: string, tableId: string) =>
+        walkOut: async (tx: EntityManager, me: string, tableId: string, mayForfeit: boolean) =>
         {
             const match = await tx.getRepository(Match).findOne({
                 where: { tableId, finishedAt: IsNull() },
@@ -694,6 +694,11 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
             if (seat === null || seat.result !== null || engine === null)
             {
                 return null;
+            }
+
+            if (!mayForfeit)
+            {
+                throw tableRefusal('playing', 'A game has started at that table, and leaving it now is a forfeit.');
             }
 
             const outcome = engine.apply(stateOf(match), engine.forfeit(seat.seat, 'left'), draws);

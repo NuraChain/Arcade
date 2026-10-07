@@ -895,7 +895,7 @@ try
         {
             for (const player of table.players)
             {
-                await player.api('POST', `/tables/${ table.tableId }/leave`).catch(() => null);
+                await player.api('POST', `/tables/${ table.tableId }/leave`, { forfeit: true }).catch(() => null);
             }
         }
 
@@ -922,7 +922,7 @@ finally
         {
             for (const player of one.players)
             {
-                await player.api('POST', `/tables/${ one.tableId }/leave`).catch(() => null);
+                await player.api('POST', `/tables/${ one.tableId }/leave`, { forfeit: true }).catch(() => null);
             }
         }
     }

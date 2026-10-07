@@ -3,7 +3,7 @@ import 'reflect-metadata';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DataSource, IsNull } from 'typeorm';
 
-import { Conversation, Match, MatchPlayer, Table, TableSeat, User, entities } from '../src/entities/index.ts';
+import { Conversation, Match, MatchAction, MatchPlayer, Table, TableSeat, User, entities } from '../src/entities/index.ts';
 import { syncSchema } from '../src/db/schema.ts';
 import { seedReference } from '../src/db/seed-reference.ts';
 import { createAchieveService } from '../src/domains/achieve/service.ts';
@@ -88,8 +88,30 @@ const seated = async (seats: number) =>
     return { tableId: table.id, players };
 };
 
-const walkOut = (from: Hands, who: string, tableId: string) =>
-    from.tables.leave(who, tableId, (tx) => from.matches.walkOut(tx, who, tableId));
+const leave = (from: Hands, who: string, tableId: string, mayForfeit: boolean) =>
+    from.tables.leave(who, tableId, (tx) => from.matches.walkOut(tx, who, tableId, mayForfeit));
+
+const walkOut = (from: Hands, who: string, tableId: string) => leave(from, who, tableId, true);
+
+const standUp = (from: Hands, who: string, tableId: string) => leave(from, who, tableId, false);
+
+const walkoutsAt = async (tableId: string) =>
+    await db.getRepository(MatchAction)
+        .createQueryBuilder('a')
+        .innerJoin(Match, 'm', 'm.id = a.match_id')
+        .where('m.table_id = :tableId', { tableId })
+        .andWhere(`a.kind = 'forfeit' and a.payload ->> 'verb' = 'left'`)
+        .getCount();
+
+const unagreed = async (tableId: string) =>
+{
+    const walkouts = await walkoutsAt(tableId);
+
+    return walkouts > 0 ? [`${ walkouts } walked out of a game without agreeing to`] : [];
+};
+
+const inAChair = async (who: string, tableId: string) =>
+    await db.getRepository(TableSeat).existsBy({ tableId, userId: who });
 
 const stillPlayingWithNoChair = async (tableId: string) =>
     await db.getRepository(MatchPlayer)
@@ -374,4 +396,89 @@ describe.skipIf(!active)('a start racing whatever moves its chairs, against a re
         expect(left).toMatchObject({ status: 'fulfilled', value: { left: true, walked: null } });
         expect(started).toMatchObject({ status: 'rejected', reason: NO_TABLE });
     }, 30_000);
+
+    describe('a leave that did not agree to forfeit', () =>
+    {
+        it('keeps its chair and its game, or is gone with no game dealt, by whichever reached the table first', async () =>
+        {
+            const broken = await everyRound(async (round) =>
+            {
+                const { tableId, players } = await seated(3);
+                const starting = () => here.matches.start(players[0], tableId);
+                const leaving = () => standUp(there, players[1], tableId);
+                const startFirst = round % 2 === 0;
+
+                const answers = await backedUp('exclusive', startFirst ? [starting, leaving] : [leaving, starting]);
+                const stayed = await inAChair(players[1], tableId);
+
+                return [
+                    ...await faultsAt(tableId),
+                    ...await unagreed(tableId),
+                    ...toldOtherThan(answers, startFirst ? ['playing'] : ['chairs-empty']),
+                    ...(stayed === startFirst ? [] : [stayed ? 'still in a chair it left before the start' : 'out of a chair whose game had started'])
+                ];
+            });
+
+            expect(broken).toBe('');
+        }, 120_000);
+
+        it('is never swapped out of a game it was dealt into', async () =>
+        {
+            const broken = await everyRound(async () =>
+            {
+                const { tableId, players: [host, leaver] } = await seated(2);
+                const newcomer = await makeUser();
+
+                const answers = await backedUp('share', [
+                    () => here.matches.start(host, tableId),
+                    async () =>
+                    {
+                        await standUp(there, leaver, tableId);
+                        await there.tables.claimSeat(newcomer, tableId);
+                        await there.tables.setReady(newcomer, tableId, true);
+                    }
+                ]);
+
+                return [
+                    ...await faultsAt(tableId),
+                    ...await unagreed(tableId),
+                    ...toldOtherThan(answers, ['playing']),
+                    ...(await inAChair(leaver, tableId) ? [] : ['out of a chair whose game had started']),
+                    ...(await inAChair(newcomer, tableId) ? ['somebody else in its chair'] : [])
+                ];
+            });
+
+            expect(broken).toBe('');
+        }, 120_000);
+
+        it('never deadlocks with a finish and a start that arrive together', async () =>
+        {
+            const { tableId, players: [stays, leaves] } = await seated(2);
+
+            const broken = await everyRound(async (round) =>
+            {
+                await here.tables.claimSeat(leaves, tableId);
+                await here.tables.setReady(stays, tableId, true);
+                await here.tables.setReady(leaves, tableId, true);
+
+                const { match } = await here.matches.start(stays, tableId);
+
+                const arriving = [
+                    () => standUp(there, leaves, tableId),
+                    () => here.matches.act(stays, match.id, { play: null, key: `gives-up-${ round }` }),
+                    () => there.matches.start(stays, tableId)
+                ];
+
+                const answers = await backedUp('exclusive', [...arriving.slice(round % 3), ...arriving.slice(0, round % 3)]);
+
+                return [
+                    ...await faultsAt(tableId),
+                    ...await unagreed(tableId),
+                    ...strangeIn(answers, ['playing', 'chairs-empty', 'not-ready'])
+                ];
+            });
+
+            expect(broken).toBe('');
+        }, 120_000);
+    });
 });

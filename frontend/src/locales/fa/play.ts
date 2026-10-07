@@ -123,6 +123,7 @@ export const play: Pick<Dictionary, keyof typeof reference> = {
     'play.leave.forfeit': 'بازی هنوز ادامه دارد، پس رفتنت یعنی واگذاری و باخت. صندلی‌ات تا پایان بازی خالی می‌ماند.',
     'play.leave.locked': 'بازی بدون تو ادامه پیدا می‌کند. صندلی‌ات تا پایان آن خالی می‌ماند.',
     'play.leave.last': 'آخرین نفری، پس میز پشت سرت بسته می‌شود.',
+    'play.leave.started': 'بازی همین حالا شروع شد.',
 
     'play.close.title': 'این میز بسته شود؟',
     'play.close.lead': 'همه صندلی‌شان را از دست می‌دهند و گفت‌وگوی میز هم می‌رود.',

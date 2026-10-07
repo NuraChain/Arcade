@@ -133,7 +133,7 @@ describe('the lobby store', () =>
 
         expect(lobby.seated().map((table) => table.id)).toEqual([id]);
 
-        await lobby.leave(id);
+        await lobby.leave(id, false);
         expect(lobby.seated()).toEqual([]);
     });
 
@@ -270,11 +270,47 @@ describe('the lobby store', () =>
         lobby.open(id);
         await settle();
 
-        await lobby.leave(id);
+        await lobby.leave(id, false);
         await settle();
 
         expect(server.tables.find((table) => table.id === id)?.status).toBe('closed');
         expect(lobby.openId()).toBe('');
+    });
+
+    it('says whether a leave may forfeit, exactly as its caller did', async () =>
+    {
+        const lobby = useLobby();
+        const waiting = await lobby.host('poker', defaultTable('poker'), []);
+        const playing = await lobby.host('backgammon', defaultTable('backgammon'), []);
+
+        server.tables.find((table) => table.id === playing)!.matchId = 'live-1';
+        server.calls = [];
+
+        await lobby.leave(waiting, false);
+        await lobby.leave(playing, true);
+
+        expect(server.calls.filter((call) => call.startsWith('tables.leave'))).toEqual(['tables.leave', 'tables.leave:forfeit']);
+        expect(lobby.seated()).toEqual([]);
+    });
+
+    it('is still at a table whose game began before a leave that may not forfeit it', async () =>
+    {
+        const lobby = useLobby();
+        const id = await lobby.host('backgammon', defaultTable('backgammon'), []);
+        const held = server.tables.find((table) => table.id === id)!;
+
+        lobby.open(id);
+        await settle();
+
+        held.chairs[1].who = 'sara.k';
+        held.matchId = 'live-1';
+
+        await expect(lobby.leave(id, false)).rejects.toMatchObject({ status: 409, code: 'playing' });
+        await settle();
+
+        expect(held.chairs.map((chair) => chair.who)).toEqual(['alex', 'sara.k']);
+        expect(lobby.openId()).toBe(id);
+        expect(lobby.seated().map((table) => table.id)).toEqual([id]);
     });
 
     it('calls a table nobody opened an answer, not a failure', async () =>

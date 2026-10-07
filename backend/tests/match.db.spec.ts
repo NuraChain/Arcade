@@ -5,7 +5,7 @@ import 'reflect-metadata';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { DataSource } from 'typeorm';
 
-import { Table, entities } from '../src/entities/index.ts';
+import { Conversation, ConversationMember, Table, entities } from '../src/entities/index.ts';
 import { TableSeat } from '../src/entities/table-seat.entity.ts';
 import { FOLD_MAX, createMatchService } from '../src/domains/match/service.ts';
 import { createSocialService } from '../src/domains/social/service.ts';
@@ -91,8 +91,10 @@ const seatedTable = async (seats: number, game = 'ludo'): Promise<{ tableId: str
     return { tableId: table.id, players };
 };
 
-const walkOut = async (who: string, tableId: string) =>
-    await tables.leave(who, tableId, (tx) => matches.walkOut(tx, who, tableId));
+const leave = async (who: string, tableId: string, mayForfeit: boolean) =>
+    await tables.leave(who, tableId, (tx) => matches.walkOut(tx, who, tableId, mayForfeit));
+
+const walkOut = async (who: string, tableId: string) => await leave(who, tableId, true);
 
 const liveAt = async (viewer: string, tableId: string) =>
     (await tables.byId(viewer, tableId))!.match_id;
@@ -906,6 +908,15 @@ describe.skipIf(!active)('a match, against a real database', () =>
                 [matchId]
             ));
 
+        const heldBy = async (who: string, tableId: string) => ({
+            chair: await db.getRepository(TableSeat).existsBy({ tableId, userId: who }),
+            thread: await db.getRepository(ConversationMember)
+                .createQueryBuilder('cm')
+                .innerJoin(Conversation, 'c', 'c.id = cm.conversation_id')
+                .where('c.table_id = :tableId and cm.user_id = :who', { tableId, who })
+                .getExists()
+        });
+
         it('is a walkout: a rated loss paid nothing, and no contest for a survivor who never played', async () =>
         {
             const { tableId, players } = await seatedTable(2);
@@ -955,6 +966,55 @@ describe.skipIf(!active)('a match, against a real database', () =>
             expect(await walkOut(players[1], tableId)).toMatchObject({ left: true, walked: null });
             expect(await forfeitsOf(load.match.id)).toEqual([{ user_id: players[1], verb: 'resign' }]);
             expect(await liveAt(players[0], tableId)).toBe(load.match.id);
+        });
+
+        it('keeps somebody who did not agree to forfeit in their chair, their thread and their game, and writes nothing', async () =>
+        {
+            const { tableId, players } = await seatedTable(2);
+            const load = await matches.start(players[0], tableId);
+
+            await expect(leave(players[1], tableId, false)).rejects.toMatchObject({ status: 409, code: 'playing' });
+
+            expect(await forfeitsOf(load.match.id)).toEqual([]);
+            expect(await heldBy(players[1], tableId)).toEqual({ chair: true, thread: true });
+            expect(await liveAt(players[1], tableId)).toBe(load.match.id);
+            expect((await matches.view(players[1], load.match.id))!.match.rev).toBe(load.match.rev);
+        });
+
+        it('lets go of somebody with nothing to forfeit there, whatever they agreed to: resigned, never dealt in, or in no chair', async () =>
+        {
+            const { tableId, players } = await seatedTable(3);
+            const load = await matches.start(players[0], tableId);
+            const newcomer = await makeUser();
+            const stranger = await makeUser();
+
+            await matches.act(players[1], load.match.id, { play: null, key: 'resigns' });
+
+            expect(await leave(players[1], tableId, false)).toEqual({ left: true, closed: false, walked: null });
+            expect(await heldBy(players[1], tableId)).toEqual({ chair: false, thread: false });
+
+            await db.getRepository(TableSeat).update({ tableId, seat: 1 }, { userId: newcomer, joinedAt: new Date() });
+
+            expect(await leave(newcomer, tableId, false)).toEqual({ left: true, closed: false, walked: null });
+            expect(await leave(stranger, tableId, false)).toEqual({ left: false, closed: false, walked: null });
+            expect(await forfeitsOf(load.match.id)).toEqual([{ user_id: players[1], verb: 'resign' }]);
+            expect(await liveAt(players[0], tableId)).toBe(load.match.id);
+        });
+
+        it('gives the chair back with no game on, before one and after one, whatever was agreed', async () =>
+        {
+            const waiting = await seatedTable(2);
+
+            expect(await leave(waiting.players[1], waiting.tableId, false)).toEqual({ left: true, closed: false, walked: null });
+
+            const over = await seatedTable(2);
+            const load = await matches.start(over.players[0], over.tableId);
+
+            await matches.act(over.players[0], load.match.id, { play: null, key: 'gives-up' });
+
+            expect(await leave(over.players[0], over.tableId, false)).toEqual({ left: true, closed: false, walked: null });
+            expect(await leave(over.players[1], over.tableId, false)).toEqual({ left: true, closed: true, walked: null });
+            expect(await forfeitsOf(load.match.id)).toEqual([{ user_id: over.players[0], verb: 'resign' }]);
         });
     });
 

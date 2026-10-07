@@ -181,7 +181,7 @@ export async function clearTables(...players)
 
         for (const one of seated.body?.tables ?? [])
         {
-            await player.api('POST', `/tables/${ one.id }/leave`);
+            await player.api('POST', `/tables/${ one.id }/leave`, { forfeit: true });
         }
     }
 }

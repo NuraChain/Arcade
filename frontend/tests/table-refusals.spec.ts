@@ -122,6 +122,7 @@ describe('the words for a refused table', () =>
     {
         expect(whyRefused(refused('seated-max'), OTHERWISE)).toBe('play.seatedMax');
         expect(whyRefused(refused('playing'), OTHERWISE, 'play.close.refused')).toBe('play.close.refused');
+        expect(whyRefused(refused('playing'), OTHERWISE, 'play.leave.started')).toBe('play.leave.started');
         expect(whyRefused(refused('playing'), OTHERWISE, PLAYING)).toBe(PLAYING);
         expect(whyRefused(refused('playing'), 'play.openFailed')).toBe('play.openFailed');
 
@@ -187,6 +188,8 @@ describe('the server a spec talks to', () =>
         held.matchId = 'live-1';
 
         expect(await answered(() => client.tables.close({ params }))).toEqual(word('playing'));
+        expect(await answered(() => client.tables.leave({ params, input: { forfeit: false } }))).toEqual(word('playing'));
+        expect(held.chairs[0].who).toBe('alex');
 
         delete held.chairs[0].who;
 
@@ -195,6 +198,27 @@ describe('the server a spec talks to', () =>
         held.status = 'closed';
 
         expect(await answered(() => client.tables.claim({ params }))).toEqual(word('table-closed'));
+    });
+
+    it('lets a seat that is already out of the game leave without agreeing to forfeit, and nobody else', async () =>
+    {
+        const id = await useLobby().host('ludo', defaultTable('ludo'), []);
+        const held = server.tables.find((one) => one.id === id)!;
+        const leaving = () => client.tables.leave({ params: { id }, input: { forfeit: false } });
+
+        held.chairs[1].who = 'sara.k';
+        held.chairs[2].who = 'reza.t';
+        held.matchId = 'live-2';
+        server.outOfGame['live-1'] = ['alex'];
+        server.outOfGame['live-2'] = ['sara.k'];
+
+        expect(await answered(leaving)).toEqual(word('playing'));
+        expect(held.chairs[0].who).toBe('alex');
+
+        server.outOfGame['live-2'] = ['sara.k', 'alex'];
+
+        expect(await answered(leaving)).toBeNull();
+        expect(held.chairs.map((chair) => chair.who)).toEqual([undefined, 'sara.k', 'reza.t', undefined]);
     });
 });
 

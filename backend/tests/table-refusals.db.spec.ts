@@ -346,5 +346,52 @@ describe.skipIf(!active)('what a table refuses, against a real database', () =>
             await expect(ports.table.close(players[0].id, tableId)).rejects.toMatchObject({ status: 409, code: 'playing' });
             await expect(ports.table.claim(late.id, tableId)).rejects.toMatchObject({ status: 409, code: 'playing' });
         });
+
+        it('says a game is being played to somebody leaving who did not agree to forfeit it, and frees and rings nothing', async () =>
+        {
+            const { players, tableId } = await seated([true, true]);
+            const rung = [vi.spyOn(listener, 'tableChanged'), vi.spyOn(listener, 'chatChanged'), vi.spyOn(listener, 'gamePushed')];
+            const stillIn = async () => ({
+                chair: await db.getRepository(TableSeat).existsBy({ tableId, userId: players[1].id }),
+                game: await db.getRepository(Match).existsBy({ tableId, finishedAt: IsNull() })
+            });
+
+            try
+            {
+                await ports.match.start(players[0].id, tableId);
+
+                for (const ring of rung)
+                {
+                    ring.mockClear();
+                }
+
+                await expect(ports.table.leave(players[1].id, tableId, false)).rejects.toMatchObject({ status: 409, code: 'playing' });
+
+                expect(rung.map((ring) => ring.mock.calls.length)).toEqual([0, 0, 0]);
+                expect(await stillIn()).toEqual({ chair: true, game: true });
+
+                await ports.table.leave(players[1].id, tableId, true);
+
+                expect(rung.map((ring) => ring.mock.calls.length > 0)).toEqual([true, true, true]);
+                expect(await stillIn()).toEqual({ chair: false, game: false });
+            }
+            finally
+            {
+                for (const ring of rung)
+                {
+                    ring.mockRestore();
+                }
+            }
+        });
+
+        it('lets somebody leave a table with no game on without agreeing to forfeit one', async () =>
+        {
+            const { players, tableId } = await seated([true, true]);
+
+            await ports.table.leave(players[1].id, tableId, false);
+
+            expect(await db.getRepository(TableSeat).existsBy({ tableId, userId: players[1].id })).toBe(false);
+            await expect(ports.match.start(players[0].id, tableId)).rejects.toMatchObject({ status: 409, code: 'chairs-empty' });
+        });
     });
 });

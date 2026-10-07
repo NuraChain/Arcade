@@ -191,7 +191,7 @@ try
 
             for (const one of (seated.ok() ? (await seated.json()).tables : []))
             {
-                await who.request.post(`${ BASE }/api/tables/${ one.id }/leave`).catch(() => null);
+                await who.request.post(`${ BASE }/api/tables/${ one.id }/leave`, { data: { forfeit: true } }).catch(() => null);
             }
         }
 

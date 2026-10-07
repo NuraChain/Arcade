@@ -236,6 +236,41 @@ export const lockTable = async (tx: EntityManager, tableId: string) =>
     await tx.query('select pg_advisory_xact_lock(hashtext($1::uuid::text))', [tableId]);
 };
 
+const standUp = async (tx: EntityManager, tableId: string, userId: string) =>
+{
+    const freed = await tx.getRepository(TableSeat)
+        .update({ tableId, userId }, { userId: null, joinedAt: null, ready: false });
+
+    if ((freed.affected ?? 0) === 0)
+    {
+        return { left: false, closed: false };
+    }
+
+    await tx.createQueryBuilder()
+        .delete()
+        .from(ConversationMember)
+        .where('user_id = :userId', { userId })
+        .andWhere(
+            `conversation_id in (select c.id from conversations c
+                                  where c.table_id = :tableId and c.kind = 'game')`,
+            { tableId }
+        )
+        .execute();
+
+    const remaining = await tx.getRepository(TableSeat).countBy({ tableId, userId: Not(IsNull()) });
+
+    if (remaining === 0)
+    {
+        await tx.getRepository(Table).update(
+            { id: tableId, status: Not('closed') },
+            { status: 'closed', closedAt: () => 'now()' }
+        );
+        return { left: true, closed: true };
+    }
+
+    return { left: true, closed: false };
+};
+
 export function createTableService(db: DataSource, social: SocialService)
 {
     const mustHaveRoom = async (me: string) =>
@@ -840,37 +875,7 @@ export function createTableService(db: DataSource, social: SocialService)
 
                 const walked = await forfeit(tx);
 
-                const freed = await tx.getRepository(TableSeat)
-                    .update({ tableId, userId: me }, { userId: null, joinedAt: null, ready: false });
-
-                if ((freed.affected ?? 0) === 0)
-                {
-                    return { left: false, closed: false, walked };
-                }
-
-                await tx.createQueryBuilder()
-                    .delete()
-                    .from(ConversationMember)
-                    .where('user_id = :me', { me })
-                    .andWhere(
-                        `conversation_id in (select c.id from conversations c
-                                              where c.table_id = :tableId and c.kind = 'game')`,
-                        { tableId }
-                    )
-                    .execute();
-
-                const remaining = await tx.getRepository(TableSeat).countBy({ tableId, userId: Not(IsNull()) });
-
-                if (remaining === 0)
-                {
-                    await tx.getRepository(Table).update(
-                        { id: tableId, status: Not('closed') },
-                        { status: 'closed', closedAt: () => 'now()' }
-                    );
-                    return { left: true, closed: true, walked };
-                }
-
-                return { left: true, closed: false, walked };
+                return { ...await standUp(tx, tableId, me), walked };
             });
         },
 

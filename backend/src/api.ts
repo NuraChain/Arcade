@@ -80,6 +80,7 @@ import {
     reportResult,
     requestResult,
     openQuery,
+    leaveInput,
     readyInput,
     seatResult,
     sendInput,
@@ -621,9 +622,9 @@ export function buildApi(ports: Ports)
                     : { table: claimed.table, seat: claimed.seat };
             }),
 
-            leave: routes.post('/:id/leave', { output: ack }, async (context) =>
+            leave: routes.post('/:id/leave', { input: leaveInput, output: ack }, async (context) =>
             {
-                await ports.table.leave(context.principal.userId, context.params.id);
+                await ports.table.leave(context.principal.userId, context.params.id, context.input.forfeit);
                 return { ok: true };
             }),
 

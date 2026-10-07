@@ -115,18 +115,18 @@ any more* in `frontend/CLAUDE.md`.
 **A table refusal is a word, and it has one spelling.** `table/refusals.ts` imports nothing and lists
 each with its status - `seated-max`, `playing`, `table-closed`, `chairs-empty` and `not-ready` at 409,
 `no-invitee` at 404 - and `tableRefusal(word, sentence)` in `table/service.ts` is the only way the
-table service, the start and the invite port throw one: the word is checked where it is thrown and the
-status is read off the list. `seated-max` and `playing` used to be three free literals each - the
-server's, the browser's predicate and the fake server's - with nothing binding them, so a rename on
-either side compiled and fell back to the generic sentence without a word. The browser reads the list
-too. `whyRefused(error, otherwise, playing)` in `lib/open-table.ts` is what a table that would not
-open, a chair, a start, an invitation, a close and a voice switch each ask when they fail, and a listed
-word gives `tables.refused.<word>`, a template literal over the list with no cast, so a word with no
-English or Persian sentence fails `check`. Two words keep the keys they had, because they are said in
-the words of where they happened: `seated-max` is `play.seatedMax`, and `playing` is whatever its
-caller says - `play.table.playing` for a chair, `play.close.refused` for a close, the caller's own
-fallback anywhere else. A framework code, a match word and a request that never arrived are the
-fallback as well. A table that would not open keeps fewer of those answers than anybody: `openTable`
+table service, the start, the walkout and the invite port throw one: the word is checked where it is
+thrown and the status is read off the list. `seated-max` and `playing` used to be three free literals
+each - the server's, the browser's predicate and the fake server's - with nothing binding them, so a
+rename on either side compiled and fell back to the generic sentence without a word. The browser reads
+the list too. `whyRefused(error, otherwise, playing)` in `lib/open-table.ts` is what a table that would not
+open, a chair, a start, an invitation, a leave, a close and a voice switch each ask when they fail, and
+a listed word gives `tables.refused.<word>`, a template literal over the list with no cast, so a word
+with no English or Persian sentence fails `check`. Two words keep the keys they had, because they are
+said in the words of where they happened: `seated-max` is `play.seatedMax`, and `playing` is whatever
+its caller says - `play.table.playing` for a chair, `play.leave.started` for a leave,
+`play.close.refused` for a close, the caller's own fallback anywhere else. A framework code, a match
+word and a request that never arrived are the fallback as well. A table that would not open keeps fewer of those answers than anybody: `openTable`
 says the two sentences that are about the reader - too many chairs, nobody to invite - and "That table
 would not open" for every other word, because the rest reach it from a table Quick play tried and the
 reader never chose. A candidate that closed between the list and the claim and one whose game began
@@ -200,6 +200,47 @@ leave's the first two, with the close's the third. The last cannot fail that way
 deadlock - and fails when the order is broken instead: a finish that takes the table's lock, or a
 leave that frees its chair before it walks out. Three single tests hold the rest: an id in capitals,
 somebody with no chair answered while the table is held, and somebody whose own leave got there first.
+
+**A leave says whether it may forfeit.** `POST /tables/:id/leave` took no body, so what leaving cost
+was whatever the server found when the request arrived. Somebody waiting at a table read "Your chair
+goes back", pressed Leave as the last chair filled, and walked out of the game that began in between:
+a rated loss nobody agreed to. The request carries `forfeit` now, a boolean the route refuses to go
+without, and it is the sentence the reader was shown: the sheet sends `true` only when it said
+`play.leave.forfeit`. The lobby's Leave hands the sheet no game at all, so it cannot say that sentence
+and never sends `true`; the dock's hands it the game on the board.
+
+The answer is the walkout's, because only the match knows what leaving would cost. `match.walkOut`
+takes the flag and asks it once it holds the live match and has found the leaver's seat: a seat still
+in the game, from somebody who did not agree, is 409 `playing`, thrown inside the leave's transaction,
+so nothing is written - no forfeit row, the chair, the thread and the table as they were, and nothing
+rung. It is asked of the SEAT, not of the table. Somebody with nothing to forfeit leaves whatever they
+said: no game, a finished one, a seat that already has a result, a chair the game never dealt. The
+sheet tells a player who resigned from a game still going "The game goes on without you", which is not
+the forfeit sentence, so they send `false`; refusing every leave under a live game would have held them
+at the table until it ended, under a toast saying their game had just started. Nor is it an oracle: the
+word reaches only somebody playing in that game, and anybody else is answered as they always were.
+`standUp(tx, tableId, userId)` in `table/service.ts` is the one place a chair goes back: it frees the
+chair, takes the person out of the table's thread and closes the table behind the last one out.
+
+The play page says "Your game has just started" (`play.leave.started`, through `whyRefused`), stays
+where it is and reads the table again at once: the table's own ring is still on its way through two
+coalescing windows when the refusal lands, and without the read the page says it over a lobby. A leave
+that never arrived says `common.actionFailed`, and used to be an unhandled rejection.
+
+`start-race.db.spec.ts` holds three more on the same gate (*a leave that did not agree to forfeit*):
+against a start, whichever reaches the table first - the start first keeps the leaver in the chair and
+the game and answers `playing`, the leave first frees the chair and the start is `chairs-empty` - the
+swap, where the newcomer never sits, and beside a finish and a start in three orders of arrival; none
+may leave a `left` row behind. `match.db.spec.ts` holds the refusal with nothing written and the three
+who leave anyway, `table-refusals.db.spec.ts` holds it through the port with nothing rung, and
+`app.spec.ts` holds the route to a flag it will not go without and hands on as it came. `play.spec.ts`
+presses Leave in the lobby, on the board and as a seat that gave up a six-handed game still going, and
+reads the sentence and what was sent each time. The browser specs' server asks the seat as the real one
+does: `server.outOfGame` names who already has a result in a game, and `table-refusals.spec.ts` holds
+the fake to letting that seat go and nobody else. Refusing every leave under a live game there would
+have held a resigned player at the table in every browser spec while production let them go. The passes
+that clear their accounts' tables before they begin (`clearTables`, fit, latency, play, hokm-play) send
+`true`, which is what they always meant.
 
 **An invitation is refused in one sentence, whoever it could not reach.** `create`'s invitees and
 `invite` answered a block with "You cannot reach that account." and a closed door or a minor with

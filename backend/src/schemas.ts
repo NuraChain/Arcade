@@ -1148,6 +1148,8 @@ export const tableCreateInput = object({
 
 export const readyInput = object({ ready: boolean() });
 
+export const leaveInput = object({ forfeit: boolean() });
+
 export const openQuery = object({ game: string().optional(), mode: tableMode.optional() });
 
 /** What a seat claim answers: the chair, or nothing when there was none to be had. */
