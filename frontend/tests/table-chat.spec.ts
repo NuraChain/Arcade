@@ -250,3 +250,51 @@ describe('the notice above a table chat that cannot be sealed', () =>
         expect(container.textContent).not.toContain(useLocale().t('play.table.chatLead'));
     });
 });
+
+describe('a table’s chat that is read again', () =>
+{
+    it('keeps the line that says nothing has been said', async () =>
+    {
+        const room = server.conversations[0];
+
+        server.messages = server.messages.filter((one) => one.conversationId !== room.id);
+        delete room.last;
+
+        const container = shown(room.id);
+        const empty = () => container.querySelector('ul[aria-live] > li');
+
+        await vi.waitFor(() => expect(empty()?.querySelector('p') ?? null).not.toBeNull(), { timeout: 4000 });
+        await settle();
+
+        const line = empty();
+        const reads = server.calls.filter((one) => one === 'chat.messages').length;
+
+        await useChat().refresh();
+        await settle();
+
+        expect(server.calls.filter((one) => one === 'chat.messages').length, 'the thread was not read again').toBeGreaterThan(reads);
+        expect(empty(), 'the empty line was drawn again').toBe(line);
+    });
+
+    it('keeps the day over its lines', async () =>
+    {
+        const room = server.conversations.find((row) => server.messages.filter((one) => one.conversationId === row.id && one.kind === 'text').length > 1)!;
+        const container = shown(room.id);
+        const days = () => [...container.querySelectorAll('[role="separator"]')];
+
+        await vi.waitFor(() => expect(days().length).toBeGreaterThan(0), { timeout: 4000 });
+        await settle();
+
+        const drawn = days();
+
+        await useChat().refresh();
+        await settle();
+
+        expect(days()).toHaveLength(drawn.length);
+
+        for (const [at, day] of days().entries())
+        {
+            expect(day, `day ${ at + 1 } was drawn again`).toBe(drawn[at]);
+        }
+    });
+});

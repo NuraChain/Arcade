@@ -399,6 +399,8 @@ export default component ChatPage()
 
     derived crowd = group !== null || others.length > 1 || conversation?.kind === 'game';
 
+    derived other = others.length === 1 ? others[0] : null;
+
     <Page padded={ false } fill label={ title } class="flex">
         <div class="flex h-full min-h-0 w-full">
             <Show when={ split }>
@@ -437,22 +439,19 @@ export default component ChatPage()
                                     { () => <IconButton icon="back" label={ locale.t('app.nav.back') } flip onClick={ goBack } /> }
                                 </Show>
                                 <Show
-                                    when={ group !== null }
+                                    when={ group }
+                                    let={ crew }
                                     fallback={
-                                        <Show when={ others.length === 1 } fallback={ <AvatarGroup people={ others } size="sm" max={ 2 } class="w-9 shrink-0" /> }>
-                                            { () =>
-                                                <Link to={ `/app/people/${ others[0].handle }` } class="flex h-11 w-10 shrink-0 items-center justify-center">
-                                                    <Avatar person={ others[0] } size="sm" presence={ presence.dot(others[0].id) } />
-                                                </Link>
-                                            }
+                                        <Show when={ other } let={ peer } fallback={ <AvatarGroup people={ others } size="sm" max={ 2 } class="w-9 shrink-0" /> }>
+                                            <Link to={ () => `/app/people/${ peer.handle }` } class="flex h-11 w-10 shrink-0 items-center justify-center">
+                                                <Avatar person={ peer } size="sm" presence={ presence.dot(peer.id) } />
+                                            </Link>
                                         </Show>
                                     }
                                 >
-                                    { () =>
-                                        <Link to={ `/app/groups/${ group!.id }` } class="flex h-11 w-10 shrink-0 items-center justify-center" aria-label={ locale.t('chat.openGroup') }>
-                                            <GroupCrest crest={ group!.crest } hue={ group!.hue } size="sm" />
-                                        </Link>
-                                    }
+                                    <Link to={ `/app/groups/${ crew.id }` } class="flex h-11 w-10 shrink-0 items-center justify-center" aria-label={ locale.t('chat.openGroup') }>
+                                        <GroupCrest crest={ crew.crest } hue={ crew.hue } size="sm" />
+                                    </Link>
                                 </Show>
                                 <span class="flex min-w-0 flex-1 flex-col">
                                     <h1 class="truncate text-ui-md font-semibold text-text" dir="auto">{ title }</h1>
@@ -466,15 +465,13 @@ export default component ChatPage()
                                     pressed={ muted }
                                     onClick={ () => void attempt(social.toggleMute('conversation', id), { kind: 'info', text: locale.t(muted ? 'chat.unmutedDone' : 'chat.mutedDone') }) }
                                 />
-                                <Show when={ others.length === 1 }>
-                                    { () =>
-                                        <IconButton
-                                            icon="more"
-                                            label={ locale.t('actions.title') }
-                                            variant="ghost"
-                                            onClick={ () => overlay.open(PersonActions, { personId: others[0].id }, { label: locale.t('actions.title') }) }
-                                        />
-                                    }
+                                <Show when={ other } let={ peer }>
+                                    <IconButton
+                                        icon="more"
+                                        label={ locale.t('actions.title') }
+                                        variant="ghost"
+                                        onClick={ () => overlay.open(PersonActions, { personId: peer.id }, { label: locale.t('actions.title') }) }
+                                    />
                                 </Show>
                             </header>
 
@@ -496,8 +493,8 @@ export default component ChatPage()
                                         fallback={
                                             <For each={ rows } key={ (row) => row.message.id } let={ row }>
                                                 <div class={ () => row.first ? 'pt-3' : 'pt-0.5' }>
-                                                    <Show when={ row.day }>
-                                                        { () => <DayDivider at={ row.message.at } /> }
+                                                    <Show when={ row.day ? row.message.at : null } let={ at }>
+                                                        <DayDivider at={ at } />
                                                     </Show>
                                                     <MessageBubble
                                                         message={ row.message }
@@ -539,14 +536,15 @@ export default component ChatPage()
                                         <Match when={ silent }>
                                             <div class="flex flex-col items-center gap-3 py-16 text-center">
                                                 <Show
-                                                    when={ group !== null }
+                                                    when={ group }
+                                                    let={ crew }
                                                     fallback={
-                                                        <Show when={ others.length === 1 } fallback={ <AvatarGroup people={ others } size="md" max={ 3 } /> }>
-                                                            { () => <Avatar person={ others[0] } size="xl" /> }
+                                                        <Show when={ other } let={ peer } fallback={ <AvatarGroup people={ others } size="md" max={ 3 } /> }>
+                                                            <Avatar person={ peer } size="xl" />
                                                         </Show>
                                                     }
                                                 >
-                                                    { () => <GroupCrest crest={ group!.crest } hue={ group!.hue } size="lg" /> }
+                                                    <GroupCrest crest={ crew.crest } hue={ crew.hue } size="lg" />
                                                 </Show>
                                                 <p class="text-ui-lg font-semibold text-text" dir="auto">{ title }</p>
                                                 <p class="max-w-xs text-ui-sm text-muted">{ locale.t(quiet ? 'chat.emptyQuiet' : (stop === null ? 'chat.empty' : 'chat.emptyShut')) }</p>

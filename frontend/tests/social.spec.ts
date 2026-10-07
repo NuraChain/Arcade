@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { createEffect, createRoot } from 'azerothjs';
 
 import { manualClock, type ManualClock } from '../src/lib/clock.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
@@ -443,6 +444,39 @@ describe('chat store', () =>
         await settled(() => chat.threadLoading());
         expect(chat.messages().length).toBeGreaterThan(0);
         expect(chat.threadLoading()).toBe(false);
+    });
+
+    it('says a thread is loading only until it has answered once', async () =>
+    {
+        const chat = useChat();
+
+        chat.openThread('c-reza');
+
+        for (let turn = 0; turn < 40 && chat.messages().length === 0; turn += 1)
+        {
+            await new Promise((resolve) => setTimeout(resolve, 0));
+        }
+
+        expect(chat.messages().length).toBeGreaterThan(0);
+
+        const heard: boolean[] = [];
+        const stop = createRoot((dispose) =>
+        {
+            createEffect(() =>
+            {
+                heard.push(chat.threadLoading());
+            });
+
+            return dispose;
+        });
+        const reads = server.calls.filter((one) => one === 'chat.messages').length;
+
+        await chat.refresh();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        stop();
+
+        expect(server.calls.filter((one) => one === 'chat.messages').length, 'the thread was not read again').toBeGreaterThan(reads);
+        expect(heard, 'a thread that had answered said it was loading while it was read again').toEqual([false]);
     });
 
     it('serves one thread at a time, and nothing at all until one is opened', async () =>

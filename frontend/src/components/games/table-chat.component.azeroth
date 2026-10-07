@@ -294,6 +294,8 @@ export default component TableChat(props: {
 
     derived inviting = !shut;
 
+    derived hushed = messages.length === 0 && !chat.threadLoading();
+
     derived match = board.match();
 
     derived live = match !== null && match.tableId === table?.id ? match : null;
@@ -364,7 +366,7 @@ export default component TableChat(props: {
             { () =>
                 <div class="flex min-h-0 flex-1 flex-col">
                     <ul ref={ (element) => watch(element) } class={ [ CHAT_WELL, '@container/thread flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden px-3 py-3 [&>li:first-child]:mt-auto' ].join(' ') } aria-live="polite">
-                        <Show when={ messages.length === 0 && !chat.threadLoading() }>
+                        <Show when={ hushed }>
                             { () =>
                                 <li class="m-auto flex max-w-[16rem] flex-col items-center gap-2 px-2 py-8 text-center">
                                     <span class="flex h-11 w-11 items-center justify-center rounded-full bg-accent/12 text-accent">
@@ -379,8 +381,8 @@ export default component TableChat(props: {
                         </Show>
                         <For each={ rows } key={ (row) => row.message.id } let={ row }>
                             <li class={ () => row.first ? 'pt-3 first:pt-0' : 'pt-0.5' }>
-                                <Show when={ row.day }>
-                                    { () => <DayDivider at={ row.message.at } /> }
+                                <Show when={ row.day ? row.message.at : null } let={ at }>
+                                    <DayDivider at={ at } />
                                 </Show>
                                 <MessageBubble
                                     message={ row.message }

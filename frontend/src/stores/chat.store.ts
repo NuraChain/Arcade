@@ -152,7 +152,7 @@ export const useChat = createStore((): ChatApi =>
 
     const thread = createResource(
         () => (openId() === '' ? null : { id: openId(), scope: scope(), depth: depth() }),
-        (current, signal) => active.thread(current.id, current.scope, signal, current.depth),
+        async (current, signal) => ({ ...await active.thread(current.id, current.scope, signal, current.depth), id: current.id }),
         { name: 'chat.thread' }
     );
 
@@ -219,6 +219,8 @@ export const useChat = createStore((): ChatApi =>
     const messages = (): Message[] => thread.data()?.messages ?? [];
 
     const hasEarlier = () => thread.data()?.earlier === true;
+
+    const threadLoading = createMemo(() => thread.loading() && thread.data()?.id !== openId());
 
     const lastOf = (id: string) => rowOf(id)?.last ?? undefined;
 
@@ -359,7 +361,7 @@ export const useChat = createStore((): ChatApi =>
 
         openId,
         messages,
-        threadLoading: () => thread.loading(),
+        threadLoading,
         threadError: () => thread.error(),
         hasEarlier,
         earlierLoading: () => thread.loading() && messages().length > 0 && depth() > messages().length,

@@ -78,6 +78,8 @@ export default component ChatList(props: { active?: string; pane?: boolean; clas
 
     derived failed = chat.listError() !== null;
 
+    derived lost = failed && all.length === 0;
+
     derived mine = chat.me();
 
     derived filtered = (() =>
@@ -106,6 +108,10 @@ export default component ChatList(props: { active?: string; pane?: boolean; clas
             return (chat.lastOf(b.id)?.at ?? 0) - (chat.lastOf(a.id)?.at ?? 0);
         });
     })();
+
+    derived none = filtered.length === 0;
+
+    derived older = chat.hasMoreConversations() && query === '';
 
     effect
     {
@@ -159,7 +165,7 @@ export default component ChatList(props: { active?: string; pane?: boolean; clas
                                 </li>
                             </For>
                         </ul>
-                        <Show when={ chat.hasMoreConversations() && query === '' }>
+                        <Show when={ older }>
                             { () => <LoadMore label={ locale.t('chats.older') } loading={ chat.listLoading() } class="pt-3" onMore={ () => chat.moreConversations() } /> }
                         </Show>
                     </>
@@ -178,7 +184,7 @@ export default component ChatList(props: { active?: string; pane?: boolean; clas
                         </For>
                     </ul>
                 </Match>
-                <Match when={ failed && all.length === 0 }>
+                <Match when={ lost }>
                     <EmptyState
                         icon="refresh"
                         title={ locale.t('chats.loadFailed') }
@@ -188,7 +194,7 @@ export default component ChatList(props: { active?: string; pane?: boolean; clas
                         class="py-10"
                     />
                 </Match>
-                <Match when={ filtered.length === 0 }>
+                <Match when={ none }>
                     <EmptyState
                         icon="chats"
                         title={ locale.t(all.length === 0 ? 'chats.empty' : 'chats.emptyFiltered') }

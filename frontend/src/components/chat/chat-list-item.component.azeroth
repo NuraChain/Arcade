@@ -55,6 +55,10 @@ export default component ChatListItem(props: { conversation: Conversation; me: s
 
     derived last = chat.lastOf(props.conversation.id);
 
+    derived starred = chat.pinned(props.conversation.id);
+
+    derived tabled = props.conversation.kind === 'game';
+
     derived unread = chat.unread(props.conversation.id);
 
     derived typing = chat.typing(props.conversation.id);
@@ -97,22 +101,34 @@ export default component ChatListItem(props: { conversation: Conversation; me: s
             ].filter(Boolean).join(' ') }
             prefetch="viewport"
         >
-            { group !== undefined
-                ? <GroupCrest crest={ group.crest } hue={ group.hue } size="sm" />
-                : (others.length === 1
-                    ? <Avatar person={ others[0] } size="md" presence={ presence.dot(others[0].id) } />
-                    : (props.conversation.kind === 'game'
-                        ? <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-control border border-line bg-raised text-muted" aria-hidden="true">
-                            <Icon name="seat" size={ 18 } />
-                        </span>
-                        : <AvatarGroup people={ others } size="sm" max={ 2 } class="w-10 shrink-0" />)) }
+            <Show
+                when={ group }
+                let={ crew }
+                fallback={
+                    <Show
+                        when={ others.length === 1 ? others[0] : null }
+                        let={ peer }
+                        fallback={
+                            <Show when={ tabled } fallback={ <AvatarGroup people={ others } size="sm" max={ 2 } class="w-10 shrink-0" /> }>
+                                <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-control border border-line bg-raised text-muted" aria-hidden="true">
+                                    <Icon name="seat" size={ 18 } />
+                                </span>
+                            </Show>
+                        }
+                    >
+                        <Avatar person={ peer } size="md" presence={ presence.dot(peer.id) } />
+                    </Show>
+                }
+            >
+                <GroupCrest crest={ crew.crest } hue={ crew.hue } size="sm" />
+            </Show>
 
             <span class="flex min-w-0 flex-1 flex-col gap-0.5">
                 <span class="flex items-center gap-1.5">
                     <span class={ [ 'truncate text-ui-md', unread > 0 ? 'font-bold text-text' : 'font-semibold text-text' ].join(' ') } dir="auto">
                         { locale.text(titleOf(props.conversation, props.me, people.byHandle, { group: groupNameOf(props.conversation, groups.byId), game: gameNameOf(props.conversation, gameName) })) }
                     </span>
-                    <Show when={ chat.pinned(props.conversation.id) }>
+                    <Show when={ starred }>
                         { () => <Icon name="star" size={ 12 } class="shrink-0 text-accent" /> }
                     </Show>
                     <Show when={ muted }>
@@ -125,8 +141,8 @@ export default component ChatListItem(props: { conversation: Conversation; me: s
             </span>
 
             <span class="flex shrink-0 flex-col items-end gap-1">
-                <Show when={ last !== undefined }>
-                    { () => <span class="text-ui-2xs text-faint">{ locale.relative(last!.at) }</span> }
+                <Show when={ last } let={ spoken }>
+                    <span class="text-ui-2xs text-faint">{ locale.relative(spoken.at) }</span>
                 </Show>
                 <Show when={ unread > 0 }>
                     { () =>

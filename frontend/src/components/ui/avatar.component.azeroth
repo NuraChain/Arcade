@@ -53,6 +53,8 @@ export default component Avatar(props: {
 
     derived ringClass = props.ringOn === 'void' ? 'ring-void' : 'ring-field';
 
+    derived dotted = props.presence !== undefined && props.presence !== null;
+
     <span
         class={ [
             'relative inline-flex shrink-0 select-none items-center justify-center overflow-visible rounded-full align-middle font-semibold text-text',
@@ -81,10 +83,10 @@ export default component Avatar(props: {
                 }
             </Show>
         </span>
-        <Show when={ props.presence !== undefined && props.presence !== null }>
+        <Show when={ dotted }>
             { () =>
                 <span
-                    class={ [
+                    class={ () => [
                         'absolute -bottom-0.5 -end-0.5 rounded-full',
                         ringClass,
                         AVATAR_DOT[size],
