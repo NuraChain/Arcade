@@ -128,7 +128,7 @@ describe('the vault', () =>
 
         const other = await deriveRecovery(mintPhrase(), salt);
         expect(await openArchiveKey(other, wrapped)).toBeNull();
-    });
+    }, DERIVES);
 
     it('is bound to its own salt', async () =>
     {
@@ -141,7 +141,7 @@ describe('the vault', () =>
         // key, so two accounts using one phrase do not share a wrapping key.
         const elsewhere = await deriveRecovery(phrase, mintSalt());
         expect(await openArchiveKey(elsewhere, wrapped)).toBeNull();
-    });
+    }, DERIVES);
 
     it('tells a wrong phrase apart from a corrupt archive', async () =>
     {
@@ -153,7 +153,7 @@ describe('the vault', () =>
 
         const wrong = await deriveRecovery(mintPhrase(), salt);
         expect(await phraseMatches(wrong, check)).toBe(false);
-    });
+    }, DERIVES);
 
     it('restores every epoch key from one archive key', async () =>
     {
@@ -228,7 +228,7 @@ describe('proving the phrase to the server', () =>
 
         expect(await holds(keys.signer.publicKey, signature, recoveryChallenge('u-1', 'device-1', 'nonce-1')))
             .toBe(true);
-    });
+    }, DERIVES);
 
     it('does not restore to a device it was not made for', async () =>
     {
@@ -240,7 +240,7 @@ describe('proving the phrase to the server', () =>
         // door: a signature captured while restoring one browser must not restore another.
         expect(await holds(keys.signer.publicKey, signature, recoveryChallenge('u-1', 'device-2', 'nonce-1')))
             .toBe(false);
-    });
+    }, DERIVES);
 
     it('does not carry to another account or another nonce', async () =>
     {
@@ -252,7 +252,7 @@ describe('proving the phrase to the server', () =>
             .toBe(false);
         expect(await holds(keys.signer.publicKey, signature, recoveryChallenge('u-1', 'device-1', 'nonce-2')))
             .toBe(false);
-    });
+    }, DERIVES);
 
     it('a different phrase produces a different public key', async () =>
     {
@@ -260,7 +260,7 @@ describe('proving the phrase to the server', () =>
 
         const other = await deriveRecovery(mintPhrase(), salt);
         expect(other.signer.publicKey).not.toBe(keys.signer.publicKey);
-    });
+    }, DERIVES);
 
     it('the same phrase and salt always produce the same keys', async () =>
     {
@@ -270,5 +270,5 @@ describe('proving the phrase to the server', () =>
 
         expect(again.signer.publicKey).toBe(keys.signer.publicKey);
         expect(await phraseMatches(again, await checkValueOf(keys))).toBe(true);
-    });
+    }, DERIVES);
 });
