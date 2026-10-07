@@ -1416,8 +1416,8 @@ export const client =
         {
             server.calls.push('tables.mine');
             return {
-                tables: server.tables.filter((table) =>
-                    table.status !== 'closed' && table.chairs.some((chair) => chair.who === server.me))
+                tables: structuredClone(server.tables.filter((table) =>
+                    table.status !== 'closed' && table.chairs.some((chair) => chair.who === server.me)))
             };
         },
 

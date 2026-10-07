@@ -62,7 +62,11 @@ export default component HomePage()
 
     derived seated = lobby.seated();
 
+    derived sitting = seated.length > 0;
+
     derived recent = record.history().slice(0, 4);
+
+    derived played = recent.length > 0;
 
     derived friends = presence.online(social.friends())
         .map((id) => people.byHandle(id))
@@ -164,7 +168,7 @@ export default component HomePage()
             </section>
 
             <div class="grid gap-8 @3xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] @3xl:gap-6">
-                <Show when={ seated.length > 0 }>
+                <Show when={ sitting }>
                     <section aria-labelledby="home-continue">
                         <SectionHeading id="home-continue" title={ locale.t('home.continue.heading') } />
                         <ul class="grid gap-2.5 @2xl:grid-cols-2 @3xl:grid-cols-1 @5xl:grid-cols-2">
@@ -175,10 +179,10 @@ export default component HomePage()
                     </section>
                 </Show>
 
-                <section class={ () => seated.length > 0 ? '' : '@3xl:col-span-2' } aria-labelledby="home-recent">
+                <section class={ () => sitting ? '' : '@3xl:col-span-2' } aria-labelledby="home-recent">
                     <SectionHeading id="home-recent" title={ locale.t('home.recent.title') } more={ locale.t('common.seeAll') } to="/app/me" />
                     <Show
-                        when={ recent.length > 0 }
+                        when={ played }
                         fallback={
                             <div class="flex items-center gap-3 rounded-panel border border-dashed border-line px-4 py-5">
                                 <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent/12 text-accent">

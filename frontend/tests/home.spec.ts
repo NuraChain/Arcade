@@ -3,6 +3,7 @@ import { cleanup, fire, renderTest } from '@azerothjs/testing';
 import { RouterProvider, createMemoryHistory, createRouter, type Route } from 'azerothjs';
 
 import HomePage from '../src/pages/app/home.page.azeroth';
+import { defaultTable } from '../src/data/tables.ts';
 import { manualClock } from '../src/lib/clock.ts';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import '../src/locales/app-catalogue.ts';
@@ -91,6 +92,32 @@ describe('the home page', () =>
         const container = await show();
 
         expect(container.textContent).not.toContain('Continue playing');
+    });
+
+    it('keeps the tables the reader sits at, and shows what changed at one, when the list is read again', async () =>
+    {
+        const lobby = useLobby();
+        const id = await lobby.host('ludo', { ...defaultTable('ludo'), seats: 4 }, []);
+        const container = await show();
+        const rows = () => [...container.querySelectorAll('section[aria-labelledby="home-continue"] li')];
+
+        await vi.waitFor(() => expect(rows()).toHaveLength(1), { timeout: 4000 });
+
+        const row = rows()[0];
+        const first = lobby.seated()[0];
+        const reads = server.calls.filter((one) => one === 'tables.mine').length;
+
+        const held = server.tables.find((one) => one.id === id)!;
+
+        held.chairs[1].who = 'sara.k';
+        held.taken = 2;
+        await lobby.refresh();
+        await settle();
+
+        expect(server.calls.filter((one) => one === 'tables.mine').length, 'the list was not read again').toBeGreaterThan(reads);
+        expect(lobby.seated()[0], 'the list came back as the same object').not.toBe(first);
+        expect(rows()[0], 'the row was drawn again').toBe(row);
+        expect(row.textContent, 'a chair that filled is not on the row that was kept').toContain('2/4');
     });
 
     it('says where finished games will appear instead of drawing an empty box', async () =>
