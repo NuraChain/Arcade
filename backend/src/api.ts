@@ -65,6 +65,7 @@ import {
     muteInput,
     notificationPage,
     namesQuery,
+    peopleQuery,
     personList,
     pinInput,
     personRef,
@@ -104,7 +105,7 @@ import {
     historyQuery,
     sinceQuery
 } from './schemas.ts';
-import { NAMES_MAX } from './domains/social/names.ts';
+import { NAMES_MAX, PEOPLE_FOUND_MAX } from './domains/social/names.ts';
 
 /**
  * The whole API, declared once.
@@ -362,6 +363,10 @@ export function buildApi(ports: Ports)
 
             people: routes.get('/people', { output: personList }, async (context) => ({
                 people: await ports.social.directory(context.principal.userId, 60)
+            })),
+
+            search: routes.get('/search', { output: personList, query: peopleQuery }, async (context) => ({
+                people: await ports.social.search(context.principal.userId, context.query.q, PEOPLE_FOUND_MAX)
             })),
 
             /**

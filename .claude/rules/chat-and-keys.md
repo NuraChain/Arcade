@@ -169,7 +169,11 @@ looked like the fix was unreachable in the normal path.
 
 **Search says what it covers, because a person who finds nothing concludes it is not there.**
 `search.thisDevice` states the scope where somebody starts a search, and `search.locked` counts the
-messages this browser holds but could not open. "It is not there" and "it is not here" are very
+messages this browser holds but could not open. The one thing the box ever sends to the server is
+a PERSON's name, and only once the reader has chosen People or begun with @: a search of everything
+stays in this browser, because what is typed there may be the words of a message.
+`search.peopleElsewhere` says so on the page at that moment, and a search of everything offers
+"look among everybody" rather than doing it. "It is not there" and "it is not here" are very
 different answers when the thing being looked for is something somebody remembers reading. A locked
 message is also excluded from the results outright: its `text` is empty but its `from` is not, so it
 would otherwise match on the sender's handle and render an empty row that reads as a bug.

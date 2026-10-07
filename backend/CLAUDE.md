@@ -271,6 +271,22 @@ between them ever show - so a page calls `social.want('people' | 'suggestions' |
 its `mount`. The responsive matrix is what found this: nine API calls per page over six hundred
 pages took the rate limiter out, and the limiter was right.
 
+**Somebody past the directory is found by asking, and only a person is ever asked for.** The
+directory answers sixty accounts in handle order and the search page ranked those, so on any
+deployment with more, most people could not be found by name. `GET /social/search?q=` looks at
+handles and display names: `search()` in the social service, a query builder with the directory's
+own exclusions (the searcher, a block in either direction, a suspended account). `%` and `_` are
+read as letters; the Arabic letterforms somebody types are read as the Persian ones that were
+stored, and the other way round, through one `translate`; an exact handle comes first, then handles
+that begin with what was asked, then names; fewer than two letters answer nobody; at most
+`PEOPLE_FOUND_MAX` come back. `social/names.ts` holds the folding with no imports, so the specs'
+server folds the same way. **The browser asks only when the reader is plainly looking for a
+person** - the People filter, or a query that begins with @ - because the same box searches the
+messages this browser has opened, and what somebody types there must not reach the server
+(*Search says what it covers* in `chat-and-keys.md`). It is a scan. At a size where that shows,
+the answer is a trigram index on the two folded expressions, built by hand in `syncSchema` beside
+the others.
+
 ## Groups
 
 `backend/src/domains/group/` owns them, and three of its rules are INDEXES rather than application

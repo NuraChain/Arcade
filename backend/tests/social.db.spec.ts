@@ -173,6 +173,108 @@ describe.skipIf(!active)('the social graph, against a real database', () =>
         expect((await social.directory(b, 50)).map((row) => row.id)).not.toContain(a);
     });
 
+    describe('finding somebody by name', () =>
+    {
+        const named = async (handle: string, name: string, suspended = false) =>
+        {
+            const rows = await db.query(
+                `insert into users (handle, display_name, hue, kind, is_minor, allow_stranger_messages, show_online, last_seen_at, is_suspended)
+                 values ($1, $2, 10, 'guest', false, true, true, now(), $3)
+                 returning id`,
+                [handle, name, suspended]
+            );
+
+            return rowsOf<{ id: string }>(rows)[0].id;
+        };
+
+        const found = async (me: string, needle: string, limit = 20) => (await social.search(me, needle, limit)).map((row) => row.handle);
+
+        it('finds an account the directory never reaches, by handle or by name, whatever the case', async () =>
+        {
+            const me = await makeUser();
+
+            for (let other = 0; other < 62; other += 1)
+            {
+                await makeUser();
+            }
+
+            await named('zz.omid', 'Omid Karimi');
+
+            expect((await social.directory(me, 60)).map((row) => row.handle), 'the test needs somebody past the directory').not.toContain('zz.omid');
+            expect(await found(me, 'omid')).toEqual(['zz.omid']);
+            expect(await found(me, 'KARIM')).toEqual(['zz.omid']);
+            expect(await found(me, 'zz.OM')).toEqual(['zz.omid']);
+            expect(await found(me, '  omid   karimi ')).toEqual(['zz.omid']);
+        });
+
+        it('reads the Persian letters somebody types as the ones that were stored, and the other way round', async () =>
+        {
+            const me = await makeUser();
+
+            await named('sara.one', 'سارا كريمي');
+            await named('sara.two', 'سارا کریمی');
+
+            expect(await found(me, 'کریمی')).toEqual(['sara.one', 'sara.two']);
+            expect(await found(me, 'كريمي')).toEqual(['sara.one', 'sara.two']);
+        });
+
+        it('puts the handle that is exactly it first, then handles that begin with it, then names that do, then the rest', async () =>
+        {
+            const me = await makeUser();
+
+            await named('xali', 'Mid Word');
+            await named('aaron', 'Ali Baba');
+            await named('alireza', 'Zed');
+            await named('ali', 'Somebody');
+            await named('abel', 'Khalid');
+
+            expect(await found(me, 'ali'), 'the answer came in handle order, with the handle that was asked for third').toEqual(['ali', 'alireza', 'aaron', 'abel', 'xali']);
+        });
+
+        it('leaves out the searcher, anybody on either side of a block, and a suspended account', async () =>
+        {
+            const me = await makeUser();
+            const blockedByMe = await named('nima.one', 'Nima One');
+            const blockedMe = await named('nima.two', 'Nima Two');
+
+            await named('nima.three', 'Nima Three');
+            await named('nima.four', 'Nima Four', true);
+            await db.query(`update users set handle = 'nima.me', display_name = 'Nima Me' where id = $1`, [me]);
+            await social.block(me, blockedByMe);
+            await social.block(blockedMe, me);
+
+            expect(await found(me, 'nima')).toEqual(['nima.three']);
+        });
+
+        it('answers nobody for less than two letters, and reads a percent sign and an underscore as letters', async () =>
+        {
+            const me = await makeUser();
+
+            await named('under_score', 'Plain');
+            await named('underxscore', 'Plain Too');
+            await named('lucky', '100% Luck');
+            await named('unlucky', '1000 Luck');
+
+            expect(await found(me, 'u')).toEqual([]);
+            expect(await found(me, ' ')).toEqual([]);
+            expect(await found(me, '%%')).toEqual([]);
+            expect(await found(me, 'r_s')).toEqual(['under_score']);
+            expect(await found(me, '100%')).toEqual(['lucky']);
+        });
+
+        it('stops at the number it was asked for', async () =>
+        {
+            const me = await makeUser();
+
+            for (const letter of ['a', 'b', 'c', 'd', 'e'])
+            {
+                await named(`many.${ letter }`, 'Many');
+            }
+
+            expect(await found(me, 'many', 3)).toEqual(['many.a', 'many.b', 'many.c']);
+        });
+    });
+
     it('refuses to store a minor who allows stranger messages', async () =>
     {
         const child = await makeUser({ minor: true });

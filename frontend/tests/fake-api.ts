@@ -2,6 +2,7 @@ import { ApiError, applyFieldErrors } from '@azerothjs/http/api/shared';
 
 import { threadSize } from '../../backend/src/domains/chat/pages.ts';
 import { NOTICE_OF } from '../../backend/src/domains/notify/notices.ts';
+import { PEOPLE_FOUND_MAX, SEARCH_FROM, searchNeedle } from '../../backend/src/domains/social/names.ts';
 import { candidatesFor, handleFromAddress, handleFromName } from '../../backend/src/domains/identity/handle.ts';
 import { chairFor, quickOf, type QuickAsk } from '../../backend/src/domains/table/quick.ts';
 import { TABLE_REFUSALS, type TableRefusal } from '../../backend/src/domains/table/refusals.ts';
@@ -405,6 +406,9 @@ export const server =
     asked: [] as { game: string; seats: number; teams: boolean }[],
     sought: [] as (QuickAsk & { game: string; voice: VoiceScope })[],
 
+    searched: [] as string[],
+    directoryMax: Infinity,
+
     watching: [] as { id: string; code: string; game: string; seats: number; players: string[]; startedAt: string }[],
 
     watches: {} as Record<string, unknown>,
@@ -446,6 +450,8 @@ export const server =
         server.outOfGame = {};
         server.asked = [];
         server.sought = [];
+        server.searched = [];
+        server.directoryMax = Infinity;
         server.tableSeq = 0;
         server.notifications = [];
         server.notifySeq = 0;
@@ -1756,7 +1762,27 @@ export const client =
         async people()
         {
             server.calls.push('social.people');
-            return { people: PEOPLE_FIXTURES.map((one) => one.handle).filter(reachable).map(personWire) };
+            return { people: PEOPLE_FIXTURES.map((one) => one.handle).filter(reachable).slice(0, server.directoryMax).map(personWire) };
+        },
+
+        async search({ query }: { query: { q: string } })
+        {
+            server.calls.push('social.search');
+            server.searched.push(query.q);
+
+            const needle = searchNeedle(query.q);
+
+            if ([...needle].length < SEARCH_FROM)
+            {
+                return { people: [] };
+            }
+
+            return {
+                people: PEOPLE_FIXTURES
+                    .filter((one) => reachable(one.handle) && (searchNeedle(one.handle).includes(needle) || searchNeedle(one.displayName).includes(needle)))
+                    .slice(0, PEOPLE_FOUND_MAX)
+                    .map((one) => personWire(one.handle))
+            };
         },
 
         async suggestions()

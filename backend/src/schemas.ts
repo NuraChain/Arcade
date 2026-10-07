@@ -854,6 +854,8 @@ export const personList = object({ people: array(personSummary) });
 
 export const namesQuery = object({ handles: string({ max: 2400 }) });
 
+export const peopleQuery = object({ q: string({ max: 64 }) });
+
 /**
  * A profile as seen by somebody in particular: the person, our relationship, and whether the
  * viewer may write to them. The last one is a SERVER answer, so the compose box can be honest

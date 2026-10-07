@@ -1459,6 +1459,18 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 return people.map((row) => seenBy(viewer, row, friends.has(row.id) ? 'friend' : 'none'));
             },
 
+            async search(me, asked, limit)
+            {
+                const viewer = await social.person(me);
+                if (viewer === null)
+                {
+                    return [];
+                }
+                const people = await social.search(me, asked, limit);
+                const friends = new Set((await social.friends(me)).map((row) => row.id));
+                return people.map((row) => seenBy(viewer, row, friends.has(row.id) ? 'friend' : 'none'));
+            },
+
             async suggestions(me, limit)
             {
                 const viewer = await social.person(me);

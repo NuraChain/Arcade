@@ -633,9 +633,32 @@ try
         await go(page, '/app/search');
         const box = page.locator('main input[type="search"]');
 
-        await box.fill('Omid');
-        record('search finds a fixture by name', await soon(async () => (await page.getByRole('list', { name: 'People', exact: true }).innerText()).includes('Omid Karimi'), 8000));
+        const asked = [];
+        const heard = (request) =>
+        {
+            const { pathname, search } = new URL(request.url());
 
+            if (pathname === '/api/social/search')
+            {
+                asked.push(search);
+            }
+        };
+
+        page.on('request', heard);
+        await box.fill('Omid');
+
+        const everybody = page.locator('main').getByRole('button', { name: 'Look for “Omid” among everybody', exact: true });
+
+        record('a search of everything offers to look among everybody', await soon(async () => await everybody.isVisible(), 5000));
+        await pause(900);
+        record('and has asked the server nothing about what was typed', asked.length === 0, asked.join(' '));
+        await everybody.click();
+        record('looking among everybody finds somebody by name, however many accounts there are',
+            await soon(async () => (await page.getByRole('list', { name: 'People', exact: true }).innerText()).includes('Omid Karimi'), 8000));
+        record('and that was one question', asked.length === 1 && asked[0].toLowerCase().includes('q=omid'), asked.join(' '));
+        page.off('request', heard);
+
+        await page.locator('main').getByRole('button', { name: 'All', exact: true }).click();
         await box.fill('Balcony');
         record('search finds a group by name', await soon(async () => (await page.getByRole('list', { name: 'Groups', exact: true }).innerText()).includes('Balcony Backgammon'), 8000));
     });

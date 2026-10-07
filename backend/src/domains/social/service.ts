@@ -8,6 +8,7 @@ import { FriendRequest } from '../../entities/friend-request.entity.ts';
 import { Friendship } from '../../entities/friendship.entity.ts';
 import { Mute, type MuteSubject } from '../../entities/mute.entity.ts';
 import { isNotice } from '../notify/notices.ts';
+import { LETTERS_READ, LETTERS_TYPED, SEARCH_FROM, searchNeedle } from './names.ts';
 import { Report, type ReportCategory } from '../../entities/report.entity.ts';
 import { clampPrivacy, mayDiscover, mayMessage, maySeeOnline, maySendRequest, type Party, type Relation } from './policy.ts';
 
@@ -42,6 +43,10 @@ const partyOf = (row: PersonRow): Party => ({
 });
 
 const PERSON_COLUMNS = 'u.id, u.handle, u.display_name, u.bio, u.avatar, u.hue, u.is_minor, u.allow_stranger_messages, u.show_online, u.last_seen_at, u.created_at';
+
+const read = (column: string) => `translate(lower(${ column }), '${ LETTERS_TYPED }', '${ LETTERS_READ }')`;
+
+const literal = (needle: string) => needle.replace(/[\\%_]/g, (mark) => `\\${ mark }`);
 
 /** Whether a path parameter could be an id at all. A malformed one is 22P02, which is a 500. */
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -227,6 +232,36 @@ export function createSocialService(db: DataSource)
                 [me, limit]
             );
             return rowsOf<PersonRow>(rows);
+        },
+
+        async search(me: string, asked: string, limit: number): Promise<PersonRow[]>
+        {
+            const needle = searchNeedle(asked);
+
+            if ([...needle].length < SEARCH_FROM)
+            {
+                return [];
+            }
+
+            const handle = read('u.handle::text');
+            const name = read('u.display_name');
+
+            return await db.getRepository(User)
+                .createQueryBuilder('u')
+                .select(PERSON_COLUMNS)
+                .where('u.is_suspended = false')
+                .andWhere('u.id <> :me', { me })
+                .andWhere(
+                    `not exists (select 1 from blocks b
+                                  where (b.user_id = :me and b.blocked_id = u.id)
+                                     or (b.user_id = u.id and b.blocked_id = :me))`
+                )
+                .andWhere(`(${ handle } like :within or ${ name } like :within)`)
+                .orderBy(`case when ${ handle } = :exact then 0 when ${ handle } like :begins then 1 when ${ name } like :begins then 2 else 3 end`, 'ASC')
+                .addOrderBy('u.handle', 'ASC')
+                .setParameters({ exact: needle, begins: `${ literal(needle) }%`, within: `%${ literal(needle) }%` })
+                .limit(limit)
+                .getRawMany<PersonRow>();
         },
 
         /**

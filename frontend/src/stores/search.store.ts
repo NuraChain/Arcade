@@ -1,22 +1,29 @@
-import { createStore, createSignal, type Getter } from 'azerothjs';
+import { createResource, createStore, createSignal, untrack, type Getter } from 'azerothjs';
 
 import { GAMES, type Game } from '../data/games.ts';
 import type { GroupSummary } from '../api.ts';
 import type { Person } from '../data/person.ts';
 import type { Message } from '../data/chat.ts';
+import { client } from '../api.ts';
+import { runtime } from '../lib/runtime.ts';
 import { RECENTS_MAX, recallSearchTerms, rememberSearchTerms } from '../lib/search-terms.ts';
 import { pickText } from '../lib/text.ts';
 import { fold, ranked } from '../services/search.service.ts';
+import { useAccount } from './account.store.ts';
 import { useChat } from './chat.store.ts';
 import { useGroups } from './groups.store.ts';
 import { useLocale } from './locale.store.ts';
+import { usePeople } from './people.store.ts';
 import { useSocial } from './social.store.ts';
+import { SEARCH_FROM } from '../../../backend/src/domains/social/names.ts';
 
 export type SearchScope = 'all' | 'people' | 'games' | 'groups' | 'chats';
 
 export const SEARCH_SCOPES: SearchScope[] = ['all', 'people', 'games', 'groups', 'chats'];
 
 export { RECENTS_KEY, RECENTS_MAX } from '../lib/search-terms.ts';
+
+export const SEARCH_PAUSE_MS = 300;
 
 export interface SearchResults
 {
@@ -45,6 +52,10 @@ export interface SearchApi
     scope: Getter<SearchScope>;
     setScope(scope: SearchScope): void;
     results: Getter<SearchResults>;
+    everybody: Getter<boolean>;
+    searching: Getter<boolean>;
+    failed: Getter<boolean>;
+    retry(): void;
     recents: Getter<string[]>;
     remember(term: string): void;
     forget(term: string): void;
@@ -59,9 +70,74 @@ export const useSearch = createStore((): SearchApi =>
     const chat = useChat();
     const groups = useGroups();
 
+    const account = useAccount();
+    const known = usePeople();
+
     const [query, setQuery] = createSignal('');
     const [scope, setScope] = createSignal<SearchScope>('all');
     const [recents, setRecents] = createSignal<string[]>(recallSearchTerms());
+    const [asked, setAsked] = createSignal('');
+    const [waiting, setWaiting] = createSignal(false);
+    const [told, setTold] = createSignal<readonly string[]>([]);
+
+    let pause: (() => void) | null = null;
+
+    const named = (value: string) => fold(value.replace(/^\s*@/, ''));
+
+    const everybody = () => scope() === 'people' || query().trimStart().startsWith('@');
+
+    const found = createResource(
+        () =>
+        {
+            const needle = asked();
+            const me = account.user()?.id ?? null;
+
+            return needle === '' || me === null ? null : { needle, me };
+        },
+        async (key) =>
+        {
+            const answer = await client.social.search({ query: { q: key.needle } });
+
+            known.remember(answer.people);
+            setTold((held) => [...new Set([...held, ...answer.people.map((person) => person.handle)])]);
+
+            return key.needle;
+        },
+        { name: 'social.search' }
+    );
+
+    const still = () =>
+    {
+        pause?.();
+        pause = null;
+        setWaiting(false);
+    };
+
+    const ask = () =>
+    {
+        still();
+
+        const needle = untrack(everybody) ? named(untrack(query)) : '';
+
+        if ([...needle].length < SEARCH_FROM)
+        {
+            setAsked('');
+            return;
+        }
+
+        if (needle === untrack(asked))
+        {
+            return;
+        }
+
+        setWaiting(true);
+        pause = runtime().clock.after(SEARCH_PAUSE_MS, () =>
+        {
+            pause = null;
+            setWaiting(false);
+            setAsked(needle);
+        });
+    };
 
     const keep = (terms: string[]) =>
     {
@@ -94,8 +170,13 @@ export const useSearch = createStore((): SearchApi =>
         const tag = locale.locale();
         const want = (kind: SearchScope) => scope() === 'all' || scope() === kind;
 
+        const held = social.people();
+        const others = told()
+            .map((handle) => known.byHandle(handle))
+            .filter((person): person is Person => person !== null && !held.some((one) => one.id === person.id));
+
         const people = want('people')
-            ? ranked(social.people(), needle, (person) => [person.handle, pickText(person.displayName, tag), pickText(person.bio, tag)])
+            ? ranked([...held, ...others], named(query()), (person) => [person.handle, pickText(person.displayName, tag), pickText(person.bio, tag)])
             : [];
         const games = want('games')
             ? ranked(GAMES, needle, (game) => [game.slug, locale.t(game.nameKey), locale.t(game.blurbKey)])
@@ -128,10 +209,30 @@ export const useSearch = createStore((): SearchApi =>
 
     return {
         query,
-        setQuery,
+
+        setQuery(value)
+        {
+            setQuery(value);
+            ask();
+        },
+
         scope,
-        setScope,
+
+        setScope(next)
+        {
+            setScope(next);
+            ask();
+        },
+
         results,
+        everybody,
+
+        searching: () => waiting() || (asked() !== '' && found.loading()),
+
+        failed: () => asked() !== '' && !found.loading() && found.error() != null,
+
+        retry: () => void found.refetch(),
+
         recents,
 
         remember(term)
@@ -156,6 +257,9 @@ export const useSearch = createStore((): SearchApi =>
 
         reset()
         {
+            still();
+            setAsked('');
+            setTold([]);
             setQuery('');
             setScope('all');
             setRecents([]);

@@ -139,6 +139,7 @@ export interface SocialPort
     graph(me: string): Promise<SocialGraph>;
 
     directory(me: string, limit: number): Promise<PersonSummary[]>;
+    search(me: string, asked: string, limit: number): Promise<PersonSummary[]>;
     names(handles: readonly string[]): Promise<PersonSummary[]>;
     suggestions(me: string, limit: number): Promise<{ person: PersonSummary; mutual: number }[]>;
 
