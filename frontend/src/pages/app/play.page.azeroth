@@ -150,7 +150,7 @@ export default component PlayPage()
 
     derived loading = lobby.loading() && table === null;
 
-    derived failed = lobby.failed() !== undefined && table === null && !lobby.loading();
+    derived failed = lobby.failed() !== null && table === null && !lobby.loading();
 
     derived seated = table?.mine !== undefined;
 

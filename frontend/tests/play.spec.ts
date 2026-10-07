@@ -416,6 +416,20 @@ describe('PlayPage', () =>
         expect(container.textContent).not.toContain('No such table');
     });
 
+    it('says there is no such table when there is none, and offers the games rather than a retry', async () =>
+    {
+        const routes: Route[] = [{ path: '/app/play/:id', component: (): HTMLElement => PlayPage() as HTMLElement }];
+        const router = createRouter({ routes, history: createMemoryHistory('/app/play/nobody-opened-this'), scroll: false });
+        const { container } = renderTest(() => RouterProvider({ router, children: () => Routes({}) }) as Rendered);
+
+        await vi.waitFor(() => expect(server.calls).toContain('tables.view'), { timeout: 4000 });
+        await settle();
+
+        expect(container.textContent).toContain(useLocale().t('play.notFound'));
+        expect(container.textContent).not.toContain(useLocale().t('state.errorTitle'));
+        expect(container.querySelector('a[href="/app/games"]')).not.toBeNull();
+    });
+
     it('says the board could not load, and offers to try again, when its chunk will not come', async () =>
     {
         const lobby = useLobby();

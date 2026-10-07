@@ -1,10 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { cleanup, fire, renderTest } from '@azerothjs/testing';
+import { RouterProvider, Routes, createMemoryHistory, createRouter, type Route } from 'azerothjs';
 
 import GroupForm from '../src/components/social/group-form.component.azeroth';
 import { CRESTS, crestOf } from '../src/data/crests.ts';
 import { manualClock } from '../src/lib/clock.ts';
 import { isLineKey, LINE_KEYS } from '../src/lib/lines.ts';
+import GroupPage from '../src/pages/app/group.page.azeroth';
 import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import { useGroups } from '../src/stores/groups.store.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
@@ -55,6 +57,35 @@ afterEach(() =>
     cleanup();
     useGroups().reset();
     useRealtime().reset();
+});
+
+describe('the group page', () =>
+{
+    const opened = (slug: string) =>
+    {
+        const routes: Route[] = [{ path: '/app/groups/:id', component: (): HTMLElement => GroupPage() as HTMLElement }];
+        const router = createRouter({ routes, history: createMemoryHistory(`/app/groups/${ slug }`), scroll: false });
+
+        return renderTest(() => RouterProvider({ router, children: () => Routes({}) }) as HTMLElement).container;
+    };
+
+    it('says there is no such group for a slug nobody claimed, and does not offer to try again', async () =>
+    {
+        const container = opened('nobody-claimed-this');
+
+        await vi.waitFor(() => expect(server.calls).toContain('groups.view'), { timeout: 4000 });
+        await settle();
+
+        expect(container.textContent).toContain(useLocale().t('groups.notFound'));
+        expect(container.textContent).not.toContain(useLocale().t('state.errorTitle'));
+    });
+
+    it('does not say it could not load a group it is still loading', () =>
+    {
+        const container = opened('nobody-claimed-this');
+
+        expect(container.textContent).not.toContain(useLocale().t('state.errorTitle'));
+    });
 });
 
 describe('the crest set', () =>

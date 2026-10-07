@@ -74,7 +74,7 @@ export default component GroupPage()
 
     derived loading = groups.viewLoading() && group === null;
 
-    derived failed = groups.viewFailed() !== undefined && group === null;
+    derived failed = groups.viewFailed() !== null && group === null;
 
     derived name = group === null ? locale.t('groups.notFound') : group.name;
 

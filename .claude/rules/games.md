@@ -2117,6 +2117,14 @@ restart or a dropped train connection used to leave "Couldn't load this" on scre
 pressed Try again - found by restarting the built server with a game open. The play page also stopped
 drawing its skeleton and its error at the same time: the error waits until nothing is loading.
 
+**No error is `null`, not `undefined`.** A resource's `error()` is null until a fetch fails. The play
+page and the group page both asked `!== undefined`, which is true of null, so a table or a group
+that is simply not there - the answer both stores go out of their way to give as `null` - was drawn
+as "Couldn't load this" with a Try again that could only fail the same way, and the group page drew
+that sentence over its own skeleton on every visit until the group arrived. Each store's spec held
+its half ("an answer, not a failure") and no spec mounted either page in that state;
+`play.spec.ts` and `groups.spec.ts` do now.
+
 ## Helpers at the table
 
 `docs/superpowers/specs/2026-09-24-game-helpers-design.md` is the design. Three helpers, each a device
