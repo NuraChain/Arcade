@@ -6,8 +6,6 @@ import { useLocale } from './locale.store.ts';
 
 export type ToastKind = 'info' | 'success' | 'warning' | 'error' | 'live' | 'pending';
 
-export type ToastPlacement = 'bottom' | 'top';
-
 export interface ToastAction
 {
     label: string;
@@ -74,8 +72,6 @@ export interface ToastsApi
 {
     items: Getter<Toast[]>;
     queued: Getter<number>;
-    placement: Getter<ToastPlacement>;
-    setPlacement(placement: ToastPlacement): void;
     show(input: ToastInput): string;
     update(id: string, patch: ToastPatch): void;
     promise<T>(work: Promise<T>, copy: { pending: string; done: (value: T) => string; failed?: string }): Promise<T>;
@@ -124,7 +120,6 @@ export const useToasts = createStore(() =>
 {
     const [items, setItems] = createSignal<Toast[]>([]);
     const [queue, setQueue] = createSignal<Toast[]>([]);
-    const [placement, setPlacement] = createSignal<ToastPlacement>('bottom');
 
     const timers = new Map<string, () => void>();
     let counter = 0;
@@ -174,8 +169,6 @@ export const useToasts = createStore(() =>
     const api: ToastsApi = {
         items,
         queued: () => queue().length,
-        placement,
-        setPlacement,
 
         show(input)
         {
@@ -383,7 +376,6 @@ export const useToasts = createStore(() =>
             counter = 0;
             setItems([]);
             setQueue([]);
-            setPlacement('bottom');
         }
     };
 

@@ -717,6 +717,17 @@ its button took two bites out of one countdown. Resuming is idempotent too, whic
 `pointercancel` say it unconditionally — a cancelled touch never reaches `pointerup`, and the toast
 used to sit there for good waiting for a resume that was never coming.
 
+**A toast gets out of a sheet's way.** Toasts sit above everything, at the foot of a phone, which is
+where a sheet is: the offer to join a table's voice lay over "Turn voice off for this table" in the
+table's menu and took the tap meant for it, and "Invited Sara" lay over the next friend in the invite
+sheet. While a sheet is open the toast host draws its region at the top of the screen
+(`data-placement`, derived there from the overlay store and the posture; the region's node and every
+toast in it are kept). A sheet that is closing no longer counts, so what a row of the sheet did is
+said at the foot as the sheet leaves. A dialog on a wider screen is centred and the toasts keep
+their corner. The store used to carry a `placement` and a `setPlacement` that nothing ever called,
+with the CSS for a top placement written and never drawn: both are gone, the host reads what it needs.
+`shell.spec.ts` (*beside a sheet*) holds the three cases.
+
 **The wallet address has to be readable and copyable, because the whole peer story rests on it.**
 *Whose device is that?* asks a person to compare an address out of band "the way a safety number
 is" — and it was rendered `truncate`d, in full, with nothing to copy it with. A comparison nobody can

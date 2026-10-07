@@ -7,6 +7,7 @@ import { createDrag } from '../../lib/swipe.ts';
 import { usePeople } from '../../stores/people.store.ts';
 import { useDevice } from '../../stores/device.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
+import { useOverlay, type OverlayEntry } from '../../stores/overlay.store.ts';
 import { useToasts, type Toast, type ToastKind } from '../../stores/toasts.store.ts';
 import Avatar from '../ui/avatar.component.azeroth';
 import Spinner from '../ui/spinner.component.azeroth';
@@ -38,6 +39,9 @@ const BAR: Record<ToastKind, string> = {
     pending: 'bg-accent'
 };
 
+const sheeted = (entries: OverlayEntry[], phone: boolean) =>
+    entries.some((entry) => entry.phase !== 'closing' && (entry.kind === 'sheet' || (entry.kind === 'auto' && phone)));
+
 /**
  * Why a toast pauses, and every way it has to start again.
  *
@@ -58,7 +62,9 @@ export default component ToastHost()
     const locale = useLocale();
     const device = useDevice();
     const people = usePeople();
+    const overlay = useOverlay();
 
+    derived placement = sheeted(overlay.items(), device.posture() === 'phone') ? 'top' : 'bottom';
 
     /**
      * One drag recogniser per toast on screen - and only per toast on screen.
@@ -108,7 +114,7 @@ export default component ToastHost()
     <Portal>
         <div
             class="fixed inset-x-0 z-(--z-toast) flex flex-col items-center gap-2 px-3 pointer-events-none data-[placement=bottom]:inset-be-[calc(var(--nav-room)+0.75rem)] data-[placement=top]:inset-bs-[calc(env(safe-area-inset-top,0px)+0.75rem)] data-[placement=top]:flex-col-reverse rail:data-[placement=bottom]:inset-be-4 rail:data-[placement=bottom]:items-end rail:data-[placement=bottom]:px-4 sidebar:data-[placement=bottom]:inset-be-4 sidebar:data-[placement=bottom]:items-end sidebar:data-[placement=bottom]:px-4"
-            data-placement={ toasts.placement() }
+            data-placement={ placement }
             data-posture={ device.posture() }
             role="region"
             aria-label={ locale.t('toast.region') }

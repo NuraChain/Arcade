@@ -266,6 +266,84 @@ describe('ToastHost', () =>
         expect(remaining.length).toBe(1);
         expect(remaining[0].textContent).toContain('Four');
     });
+
+    describe('beside a sheet', () =>
+    {
+        const Rows = (): HTMLElement =>
+        {
+            const list = document.createElement('div');
+            const row = document.createElement('button');
+
+            row.type = 'button';
+            row.textContent = 'Turn voice off for this table';
+            list.appendChild(row);
+
+            return list;
+        };
+
+        const region = () => document.body.querySelector<HTMLElement>('[role="region"]')!;
+
+        afterEach(() =>
+        {
+            useDevice().override(null);
+        });
+
+        it('goes to the top of a phone while a sheet is open, and comes back as it closes', async () =>
+        {
+            const overlay = useOverlay();
+
+            useDevice().override('phone');
+            renderTest(() => OverlayHost({}) as Rendered);
+            renderTest(() => ToastHost({}) as Rendered);
+            useToasts().show({ text: 'This table has voice' });
+            await settle();
+
+            const toast = region().querySelector('[role="status"]');
+
+            expect(region().dataset.placement).toBe('bottom');
+
+            const sheet = overlay.open(Rows, {}, { label: 'This table' });
+            await settle();
+
+            expect(document.body.querySelector('[data-overlay-layer]')?.getAttribute('data-kind')).toBe('sheet');
+            expect(region().dataset.placement, 'the toast lay over the rows of the sheet').toBe('top');
+            expect(region().querySelector('[role="status"]'), 'the toast was drawn again to be moved').toBe(toast);
+
+            sheet.close();
+            await settle();
+
+            expect(overlay.items()[0]?.phase).toBe('closing');
+            expect(region().dataset.placement, 'a sheet on its way out still held the toasts away').toBe('bottom');
+        });
+
+        it('says at the top what a row of the sheet did, when the sheet stays open', async () =>
+        {
+            useDevice().override('phone');
+            renderTest(() => OverlayHost({}) as Rendered);
+            renderTest(() => ToastHost({}) as Rendered);
+            useOverlay().open(Rows, {}, { label: 'Invite a friend' });
+            await settle();
+
+            useToasts().show({ kind: 'success', text: 'Invited Sara' });
+            await settle();
+
+            expect(region().dataset.placement).toBe('top');
+            expect(region().querySelector('[role="status"]')?.textContent).toContain('Invited Sara');
+        });
+
+        it('stays in its corner beside a dialog on a wide screen', async () =>
+        {
+            useDevice().override('sidebar');
+            renderTest(() => OverlayHost({}) as Rendered);
+            renderTest(() => ToastHost({}) as Rendered);
+            useToasts().show({ text: 'This table has voice' });
+            useOverlay().open(Rows, {}, { label: 'This table' });
+            await settle();
+
+            expect(document.body.querySelector('[data-overlay-layer]')?.getAttribute('data-kind')).toBe('modal');
+            expect(region().dataset.placement).toBe('bottom');
+        });
+    });
 });
 
 describe('BottomNav', () =>
