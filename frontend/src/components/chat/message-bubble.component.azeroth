@@ -73,13 +73,31 @@ export default component MessageBubble(props: {
 
     derived time = locale.date(props.message.at, { hour: 'numeric', minute: '2-digit' });
 
-    let bubble: HTMLElement | null = null;
+    derived typed = props.message.kind === 'text';
+
+    derived noted = props.message.kind === 'system';
+
+    derived scored = props.message.kind === 'result';
+
+    derived invited = props.message.kind === 'invite';
+
+    derived answering = props.message.reply !== undefined;
 
     let row: HTMLElement | null = null;
 
     let cue: HTMLElement | null = null;
 
     let toolbar: HTMLElement | null = null;
+
+    let unhold: (() => void) | null = null;
+
+    let unswipe: (() => void) | null = null;
+
+    const holds = (element: HTMLElement) =>
+    {
+        unhold?.();
+        unhold = props.onActions === undefined ? null : attachHold(element, () => props.onActions?.(props.message));
+    };
 
     const device = useDevice();
 
@@ -102,24 +120,15 @@ export default component MessageBubble(props: {
 
     mount
     {
-        const releases: (() => void)[] = [];
-
-        if (bubble !== null && props.onActions !== undefined)
-        {
-            releases.push(attachHold(bubble, () => props.onActions?.(props.message)));
-        }
-
         if (row !== null && props.onReply !== undefined)
         {
-            releases.push(attachSwipeReply(row, cue, () => locale.dir() === 'rtl', () => props.onReply?.(props.message)));
+            unswipe = attachSwipeReply(row, cue, () => locale.dir() === 'rtl', () => props.onReply?.(props.message));
         }
 
         return () =>
         {
-            for (const release of releases)
-            {
-                release();
-            }
+            unhold?.();
+            unswipe?.();
         };
     }
 
@@ -150,6 +159,8 @@ export default component MessageBubble(props: {
 
     derived locked = props.message.locked ?? null;
 
+    derived relayed = props.message.forwarded === true && locked === null;
+
     derived quoted = props.message.reply === undefined ? undefined : props.quoteOf?.(props.message.reply);
 
     derived quoteName = ((): string =>
@@ -179,6 +190,8 @@ export default component MessageBubble(props: {
 
     derived reactions = props.message.reactions ?? [];
 
+    derived reacted = reactions.length > 0 && props.onReact !== undefined;
+
     derived jumbo = props.message.reply === undefined && props.message.forwarded !== true && jumboOf(said);
 
     derived alarming = locked !== null && ALARMING.includes(locked);
@@ -201,26 +214,26 @@ export default component MessageBubble(props: {
     };
 
     <Show
-        when={ props.message.kind === 'text' }
+        when={ typed }
         fallback={
             <Show
-                when={ props.message.kind === 'system' }
+                when={ noted }
                 fallback={
                     <div class={ () => [
                         'flex w-full max-w-[22rem] flex-col gap-3 rounded-panel border p-3',
-                        props.message.kind === 'result' ? 'border-win/40 bg-win/5' : 'border-accent/40 bg-accent/5',
+                        scored ? 'border-win/40 bg-win/5' : 'border-accent/40 bg-accent/5',
                         mine ? 'ms-auto' : ''
                     ].filter(Boolean).join(' ') }>
                         <div class="flex items-center gap-2.5">
                             <span class={ () => [
                                 'flex h-9 w-9 shrink-0 items-center justify-center rounded-full',
-                                props.message.kind === 'result' ? 'bg-win/20 text-win' : 'bg-accent/20 text-accent'
+                                scored ? 'bg-win/20 text-win' : 'bg-accent/20 text-accent'
                             ].join(' ') }>
-                                <Icon name={ props.message.kind === 'result' ? 'trophy' : 'seat' } size={ 18 } />
+                                <Icon name={ scored ? 'trophy' : 'seat' } size={ 18 } />
                             </span>
                             <span class="flex min-w-0 flex-1 flex-col">
                                 <span class="truncate text-ui-base font-semibold text-text">
-                                    { props.message.kind === 'result'
+                                    { scored
                                         ? locale.plural('chat.result.title', winners.length, {
                                             winners: locale.list(winners),
                                             game: game === null ? '' : locale.t(game.nameKey)
@@ -230,7 +243,7 @@ export default component MessageBubble(props: {
                                 <span class="truncate text-ui-xs text-muted">{ said }</span>
                             </span>
                         </div>
-                        <Show when={ props.message.kind === 'invite' }>
+                        <Show when={ invited }>
                             { () => <Button variant="primary" size="sm" block leading="seat" onClick={ sitDown }>{ locale.t('chat.invite.join') }</Button> }
                         </Show>
                     </div>
@@ -272,7 +285,7 @@ export default component MessageBubble(props: {
                             <span class="mb-1 px-3 text-ui-2xs font-semibold" style={ `color: hsl(${ person?.hue ?? 210 } 72% 72%)` } dir="auto">{ firstName }</span>
                         }
                     </Show>
-                    <Show when={ props.message.forwarded === true && locked === null }>
+                    <Show when={ relayed }>
                         { () =>
                             <span class="mb-0.5 flex items-center gap-1 px-3 text-ui-2xs font-medium text-muted">
                                 <Icon name="forward" size={ 12 } class="icon-flip" />
@@ -297,7 +310,7 @@ export default component MessageBubble(props: {
                     >
                         { () =>
                             <span
-                                ref={ (element) => bubble = element }
+                                ref={ holds }
                                 dir="auto"
                                 class={ () => [
                                     'bubble relative flex max-w-full flex-col rounded-[1.125rem] px-3 pb-1.5 pt-1.5 text-ui-base leading-snug transition-shadow duration-150',
@@ -307,7 +320,7 @@ export default component MessageBubble(props: {
                                     corners
                                 ].filter(Boolean).join(' ') }
                             >
-                                <Show when={ props.message.reply !== undefined }>
+                                <Show when={ answering }>
                                     { () =>
                                         <button
                                             type="button"
@@ -372,7 +385,7 @@ export default component MessageBubble(props: {
                             </div>
                         }
                     </Show>
-                    <Show when={ reactions.length > 0 && props.onReact !== undefined }>
+                    <Show when={ reacted }>
                         { () =>
                             <ReactionRow
                                 reactions={ reactions }

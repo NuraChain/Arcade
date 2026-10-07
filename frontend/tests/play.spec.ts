@@ -1792,6 +1792,38 @@ describe('the messenger', () =>
 
         expect(container.querySelector('aside[aria-label="Chats"]')).toBeNull();
     });
+
+    it('keeps every line it has drawn when the thread is read again', async () =>
+    {
+        const thread = server.conversations.find((row) => server.messages.filter((one) => one.conversationId === row.id && one.kind === 'text').length > 1);
+
+        expect(thread, 'the fixtures hold a thread of two lines or more').toBeDefined();
+        useDevice().override('phone');
+
+        const table: Route[] = [{ path: '/app/chats/:id', component: (): HTMLElement => ChatPage() as HTMLElement }];
+        const here = createRouter({ routes: table, history: createMemoryHistory(`/app/chats/${ thread!.id }`), scroll: false });
+        const { container } = renderTest(() => RouterProvider({ router: here, children: () => Routes({}) }) as Rendered);
+        const lines = () => [...container.querySelectorAll('[data-message]')];
+
+        await vi.waitFor(() => expect(lines().length).toBeGreaterThan(1), { timeout: 4000 });
+
+        const drawn = lines();
+        const reads = server.calls.filter((one) => one === 'chat.messages').length;
+
+        await useChat().refresh();
+        await settle();
+
+        expect(server.calls.filter((one) => one === 'chat.messages').length, 'the thread was not read again').toBeGreaterThan(reads);
+
+        const after = lines();
+
+        expect(after).toHaveLength(drawn.length);
+
+        for (const [at, line] of after.entries())
+        {
+            expect(line, `line ${ at + 1 } was drawn again`).toBe(drawn[at]);
+        }
+    });
 });
 
 describe('the table’s chat and its controls', () =>

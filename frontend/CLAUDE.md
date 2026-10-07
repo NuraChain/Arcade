@@ -280,6 +280,32 @@ page. The joined corners are physical and chosen from the page direction and who
 the time carries `dir={ locale.dir() }` because it is interface text, not the message ("PM 1:58"
 under a Persian line on an English page otherwise). The tooltip's rule, met again.
 
+**A bubble is built once and stays, and what a finger does to it is attached where it is built.** A
+thread that is read again hands every line a new object - the chat source opens each wire row
+afresh - and the bubble's outermost branch asked `props.message.kind === 'text'`, so every doorbell
+about the open conversation drew every bubble again. Nothing looked different, which is how it
+lasted. What it cost: a spoiler the reader had opened closed itself, a selection made to copy a line
+was dropped, somebody on a reaction with the keyboard was put back on the page body - and on a phone
+the long press and the swipe to reply stopped working on every line already on screen, because both
+were attached in `mount` to the first nodes and the nodes on screen were the second. A line that was
+locked when it was first drawn and opened later, keys arriving after a recovery, never had a long
+press at all: its bubble did not exist at mount. The branches read `derived` booleans now (`typed`,
+`noted`, `invited`, `relayed`, `answering`, `reacted`), the long press is attached by the bubble's
+own `ref` and let go when a new bubble takes its place, and the swipe stays in `mount` on a row that
+no longer changes. `bubble.spec.ts` (*a message the thread reads again*) holds each of them, and it
+waits for `mount` before it reads the message again: `mount` runs in a microtask, so without the
+wait the hooks run AFTER the re-read, attach to the new nodes, and the touch tests pass against the
+fault they exist for.
+
+The chat page had the same fault one level up, and fixing the bubble alone left every line being
+drawn again. Its `<Switch>` asked `messages.length === 0` in two of its matches, the array is new on
+every read, and a `<Switch>` whose match is asked again builds its fallback again - the whole list.
+It reads `silent` and `lost` now, and `play.spec.ts` (*the messenger*) reads a thread again and
+wants every line to be the node it was. The table's panel lists its lines with no branch above
+them and needed only the bubble. `tools/qa/chat-pass.mjs` holds it in two real browsers: a second
+message arrives, an observer counts the lines that left the document, and the first line has to
+open its actions under a held finger and start a reply under a swipe.
+
 ## What was deleted because nothing produced it
 
 A person used to carry a level, a skill band, a reliability score, a favourite game, a region, a

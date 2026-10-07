@@ -21,6 +21,13 @@
  * composer present on every single tick - there was no blink to catch - while the observer counted
  * the textarea being destroyed and a new one put in its place. A screenshot either side is
  * identical. What a person sees is the keyboard closing and the caret gone mid-sentence.
+ *
+ * The lines of the thread are watched the same way, for the same reason and a worse one. A thread
+ * that is read again hands every line a new object, and for a long time every line was drawn again
+ * with it: nothing moved, and the long press and the swipe to reply, attached once to the first
+ * nodes, were gone from every line on screen the moment anybody wrote. So the watcher's first line is
+ * marked, a second one arrives, and the marked line has to be the node it was, still open its
+ * actions under a held finger and still answer a swipe.
  */
 import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -234,6 +241,91 @@ async function watchFor(page)
     });
 }
 
+/**
+ * Marks every line on screen and counts the ones that leave the document from then on.
+ *
+ * A line that is rebuilt is one that left: the observer cannot be fooled by a new node that looks
+ * the same, which is the only thing a screenshot or a text search could ever see.
+ */
+async function watchLines(page)
+{
+    return await page.evaluate(() =>
+    {
+        const state = { gone: 0 };
+        const main = document.querySelector('main');
+        const lines = [...document.querySelectorAll('main [data-message]')];
+
+        window.__lines = state;
+
+        for (const line of lines)
+        {
+            line.dataset.kept = 'yes';
+        }
+
+        if (main !== null)
+        {
+            new MutationObserver((records) =>
+            {
+                for (const record of records)
+                {
+                    for (const gone of record.removedNodes)
+                    {
+                        if (gone instanceof HTMLElement && (gone.matches('[data-message]') || gone.querySelector('[data-message]') !== null))
+                        {
+                            state.gone += 1;
+                        }
+                    }
+                }
+            }).observe(main, { childList: true, subtree: true });
+        }
+
+        return lines.length;
+    });
+}
+
+/** A finger on the first marked line: down and held, or down, across and up. */
+async function touch(page, gesture)
+{
+    return await page.evaluate(async (how) =>
+    {
+        const row = document.querySelector('main [data-message][data-kept]');
+        const bubble = row?.querySelector('.bubble') ?? null;
+
+        if (row === null || bubble === null)
+        {
+            return false;
+        }
+
+        const box = bubble.getBoundingClientRect();
+        const x = box.left + box.width / 2;
+        const y = box.top + box.height / 2;
+        const fire = (target, type, at) => target.dispatchEvent(new PointerEvent(type, {
+            bubbles: true, cancelable: true, pointerType: 'touch', isPrimary: true, pointerId: 7, clientX: at, clientY: y
+        }));
+
+        if (how === 'hold')
+        {
+            fire(bubble, 'pointerdown', x);
+            await new Promise((resolve) => setTimeout(resolve, 700));
+            fire(bubble, 'pointerup', x);
+
+            return true;
+        }
+
+        const toward = document.documentElement.dir === 'rtl' ? 1 : -1;
+
+        fire(bubble, 'pointerdown', x);
+        await new Promise((resolve) => setTimeout(resolve, 30));
+        fire(bubble, 'pointermove', x + toward * 45);
+        await new Promise((resolve) => setTimeout(resolve, 30));
+        fire(bubble, 'pointermove', x + toward * 90);
+        await new Promise((resolve) => setTimeout(resolve, 30));
+        fire(bubble, 'pointerup', x + toward * 90);
+
+        return true;
+    }, gesture);
+}
+
 const pressable = async (page, name) =>
 {
     const button = page.getByRole('button', { name }).first();
@@ -350,8 +442,55 @@ try
     record('and a focused textarea keeps its focus', seen.blurred === 0, `${ seen.blurred } blurs`);
     record('the thread does not jump under the reader', seen.scrollJumps === 0, `${ seen.scrollJumps } jumps`);
 
-    // ---------------------------------------------------------------- 3. the console
-    console.log('\n[3] the console, in both browsers');
+    // ---------------------------------------------------------------- 3. the lines already there
+    console.log('\n[3] a second message arrives, and the first line is the line it was');
+
+    const marked = await watchLines(watcher.page);
+
+    record('the watcher has a line on screen to keep', marked > 0, `${ marked } lines`);
+
+    if (await composer.isVisible().catch(() => false))
+    {
+        await composer.fill('chat pass, a second line');
+        await composer.press('Enter');
+    }
+
+    await watcher.page.waitForTimeout(SETTLE_MS * 2);
+
+    const lines = await watcher.page.evaluate(() => ({
+        gone: window.__lines.gone,
+        second: document.querySelector('main')?.textContent?.includes('a second line') === true,
+        kept: [...document.querySelectorAll('main [data-message][data-kept]')].length,
+        firstSays: document.querySelector('main [data-message][data-kept]')?.textContent?.includes('holding still') === true
+    }));
+
+    record('the second message reaches the other browser', lines.second);
+    record('no line on screen is torn out and rebuilt for it', lines.gone === 0, `${ lines.gone } rebuilt`);
+    record('the first line is still the node it was', lines.kept === marked && lines.firstSays, `${ lines.kept } of ${ marked } kept`);
+
+    await watcher.page.evaluate(() => (document.activeElement instanceof HTMLElement ? document.activeElement.blur() : undefined));
+
+    const held = await touch(watcher.page, 'hold');
+
+    await watcher.page.waitForTimeout(600);
+
+    const sheets = await watcher.page.evaluate(() => document.querySelectorAll('[role="dialog"]').length);
+
+    record('a finger held on that line still opens its actions', held && sheets === 1, `${ sheets } dialogs`);
+
+    await watcher.page.keyboard.press('Escape');
+    await watcher.page.waitForTimeout(900);
+
+    const swiped = await touch(watcher.page, 'swipe');
+
+    await watcher.page.waitForTimeout(600);
+
+    const replying = await watcher.page.evaluate(() => document.querySelector('main')?.textContent?.includes('Replying to') === true);
+
+    record('and a swipe across it still starts a reply', swiped && replying);
+
+    // ---------------------------------------------------------------- 4. the console
+    console.log('\n[4] the console, in both browsers');
     record('nothing was logged', sender.errors.length === 0 && watcher.errors.length === 0,
         [...sender.errors, ...watcher.errors].slice(0, 2).join(' | '));
 }

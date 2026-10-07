@@ -113,6 +113,10 @@ export default component ChatPage()
 
     derived failed = chat.threadError() !== null;
 
+    derived silent = messages.length === 0;
+
+    derived lost = failed && silent;
+
     derived rows = threadRows(messages);
 
     derived typing = chat.typing(id);
@@ -524,7 +528,7 @@ export default component ChatPage()
                                                 </div>
                                             </div>
                                         </Match>
-                                        <Match when={ failed && messages.length === 0 }>
+                                        <Match when={ lost }>
                                             <div class="flex flex-col items-center gap-3 py-16 text-center">
                                                 <p class="text-ui-base text-muted">{ locale.t('chat.loadFailed') }</p>
                                                 <Button variant="outline" size="sm" leading="refresh" onClick={ () => void chat.refresh() }>
@@ -532,7 +536,7 @@ export default component ChatPage()
                                                 </Button>
                                             </div>
                                         </Match>
-                                        <Match when={ messages.length === 0 }>
+                                        <Match when={ silent }>
                                             <div class="flex flex-col items-center gap-3 py-16 text-center">
                                                 <Show
                                                     when={ group !== null }
