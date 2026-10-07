@@ -526,6 +526,17 @@ again. An array is as fresh as a row: a condition that counts one is a derived b
 the rows are the keyed list's to keep. `friends-page.spec.ts` holds the field, the reader in it and
 the rows through a re-read and through typing.
 
+The notifications page shows what a rebuild costs when the reader is not at the top. Its list and
+its filter were branches over the notifications array, so opening, dismissing or receiving one built
+every row again: dismissing the last of a long list left the reader a third of a screen above where
+they were, because the page is empty for the moment between the two lists and the scroll is clamped
+to it. The filter is a `Rail`, which holds a scroll position of its own, so choosing the last kind
+on a phone put the rail back at its start with the chosen chip out of sight. A row that stays has to
+be told what changed instead: `<For>` hands a kept row its new item, and a row reads `props.item`
+where it draws. `notifications-page.spec.ts` holds the rows through a read, a dismissal and an
+arrival - and could only once the specs' server stopped handing back the same row objects, which is
+the group page's lesson again: a row set to the object it already holds is told nothing.
+
 **A page that loads one thing has four states, and says in each only what it knows.** The profile
 page said "No such person." for three of them: while it was still asking, when it could not ask at
 all, and when there was nobody. A placeholder while it asks; the failure, with a way to try again,

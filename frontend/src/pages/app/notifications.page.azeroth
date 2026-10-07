@@ -53,6 +53,18 @@ export default component NotificationsPage()
 
     derived earlier = items.filter((item) => Date.parse(item.at) < dayStart);
 
+    derived listed = items.length > 0;
+
+    derived filterable = listed || kind !== null;
+
+    derived unfiltered = kind === null;
+
+    derived anyToday = today.length > 0;
+
+    derived anyEarlier = earlier.length > 0;
+
+    derived further = notifications.hasMore();
+
     const open = (item: Notification) =>
     {
         void notifications.markRead(item.id);
@@ -72,21 +84,21 @@ export default component NotificationsPage()
                 : undefined }
         />
 
-        <Show when={ items.length > 0 || kind !== null }>
+        <Show when={ filterable }>
             { () => <FilterBar items={ kinds } value={ kind ?? 'all' } label={ locale.t('notifications.filter') } class="mb-4" onChange={ (id) => notifications.only(id === 'all' ? null : id as Notice) } /> }
         </Show>
 
         <Show
-            when={ items.length > 0 }
+            when={ listed }
             fallback={
-                <Show when={ kind === null } fallback={ <EmptyState icon="bell" title={ locale.t('notifications.emptyKind') } class="py-10" /> }>
+                <Show when={ unfiltered } fallback={ <EmptyState icon="bell" title={ locale.t('notifications.emptyKind') } class="py-10" /> }>
                     { () => <EmptyState icon="bell" title={ locale.t('notifications.empty') } lead={ locale.t('notifications.emptyLead') } class="py-10" /> }
                 </Show>
             }
         >
             { () =>
                 <div class="flex flex-col gap-6">
-                    <Show when={ today.length > 0 }>
+                    <Show when={ anyToday }>
                         <section>
                             <SectionHeading title={ locale.t('notifications.today') } />
                             <ul class="flex flex-col divide-y divide-line overflow-hidden rounded-panel border border-line bg-field" aria-label={ locale.t('notifications.today') }>
@@ -99,7 +111,7 @@ export default component NotificationsPage()
                         </section>
                     </Show>
 
-                    <Show when={ earlier.length > 0 }>
+                    <Show when={ anyEarlier }>
                         <section>
                             <SectionHeading title={ locale.t('notifications.earlier') } />
                             <ul class="flex flex-col divide-y divide-line overflow-hidden rounded-panel border border-line bg-field" aria-label={ locale.t('notifications.earlier') }>
@@ -112,7 +124,7 @@ export default component NotificationsPage()
                         </section>
                     </Show>
 
-                    <Show when={ notifications.hasMore() }>
+                    <Show when={ further }>
                         { () => <LoadMore label={ locale.t('common.more') } loading={ loadingMore } onMore={ more } /> }
                     </Show>
                 </div>

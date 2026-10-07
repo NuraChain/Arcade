@@ -1342,7 +1342,7 @@ export const client =
             const hasMore = from + NOTIFY_PAGE < kept.length;
 
             return {
-                items: slice,
+                items: slice.map((one) => ({ ...one, ref: { ...one.ref } })),
                 hasMore,
                 unread: server.notifications.filter((one) => !one.read).length,
                 ...(hasMore && slice.length > 0 ? { cursor: slice[slice.length - 1].id } : {})
