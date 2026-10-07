@@ -73,12 +73,12 @@ export default component Button(props: {
                         } }
                     >
                         <span class={ contentClass }>
-                            <Show when={ props.leading !== undefined }>
-                                { () => <Icon name={ props.leading! } size={ 16 } /> }
+                            <Show when={ props.leading } let={ name }>
+                                <Icon name={ name } size={ 16 } />
                             </Show>
                             { props.children }
-                            <Show when={ props.icon !== undefined }>
-                                { () => <Icon name={ props.icon! } size={ 16 } class="icon-flip" /> }
+                            <Show when={ props.icon } let={ name }>
+                                <Icon name={ name } size={ 16 } class="icon-flip" />
                             </Show>
                         </span>
                         <Show when={ props.loading === true }>
@@ -91,12 +91,12 @@ export default component Button(props: {
             >
                 { () =>
                     <a href={ props.href } download={ props.download } class={ shell } aria-label={ props.label }>
-                        <Show when={ props.leading !== undefined }>
-                            { () => <Icon name={ props.leading! } size={ 16 } /> }
+                        <Show when={ props.leading } let={ name }>
+                            <Icon name={ name } size={ 16 } />
                         </Show>
                         { props.children }
-                        <Show when={ props.icon !== undefined }>
-                            { () => <Icon name={ props.icon! } size={ 16 } class="icon-flip" /> }
+                        <Show when={ props.icon } let={ name }>
+                            <Icon name={ name } size={ 16 } class="icon-flip" />
                         </Show>
                     </a>
                 }
@@ -105,12 +105,12 @@ export default component Button(props: {
     >
         { () =>
             <Link to={ props.to! } class={ shell } aria-label={ props.label } onClick={ () => props.onClick?.() }>
-                <Show when={ props.leading !== undefined }>
-                    { () => <Icon name={ props.leading! } size={ 16 } /> }
+                <Show when={ props.leading } let={ name }>
+                    <Icon name={ name } size={ 16 } />
                 </Show>
                 { props.children }
-                <Show when={ props.icon !== undefined }>
-                    { () => <Icon name={ props.icon! } size={ 16 } class="icon-flip" /> }
+                <Show when={ props.icon } let={ name }>
+                    <Icon name={ name } size={ 16 } class="icon-flip" />
                 </Show>
             </Link>
         }

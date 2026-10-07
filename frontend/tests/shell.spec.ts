@@ -144,6 +144,40 @@ describe('Button', () =>
         form.remove();
     });
 
+    it('keeps its icon when whoever owns it is read again, and changes it where it stands', async () =>
+    {
+        const [seat, setSeat] = createSignal({ ready: false });
+        const { container } = renderTest(() => Button({
+            children: 'I am ready',
+            get leading()
+            {
+                return seat().ready ? 'close' as const : 'play' as const;
+            }
+        }) as Rendered);
+        const drawn = () => [...container.querySelectorAll('svg g')].map((shape) => shape.innerHTML).join('|');
+        const icon = container.querySelector('svg');
+        const parts = [...container.querySelectorAll('svg *')];
+
+        expect(icon).not.toBeNull();
+
+        const before = drawn();
+
+        expect(before, 'the icon has shapes').not.toBe('');
+
+        setSeat({ ready: false });
+        await settle();
+
+        expect(container.querySelector('svg'), 'the icon was drawn again for the answer it already had').toBe(icon);
+        expect([...container.querySelectorAll('svg *')]).toEqual(parts);
+
+        setSeat({ ready: true });
+        await settle();
+
+        expect(container.querySelector('svg'), 'the icon was drawn again to change').toBe(icon);
+        expect(drawn(), 'the icon is still the one it was').not.toBe(before);
+        expect(drawn()).not.toBe('');
+    });
+
     it('is really disabled when that is what it was told', () =>
     {
         const onClick = vi.fn();
