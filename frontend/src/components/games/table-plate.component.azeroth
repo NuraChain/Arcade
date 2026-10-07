@@ -52,6 +52,8 @@ export default component TablePlate(props: {
         return runtime().clock.every(60_000, () => minute = runtime().clock.now());
     }
 
+    derived speaking = voice.speaking(props.who);
+
     derived clock = ((): { key: string; style: string; still: boolean }[] =>
     {
         if (props.turn !== true || props.remainingMs === undefined || props.turnMs === undefined || props.turnMs <= 0)
@@ -76,10 +78,11 @@ export default component TablePlate(props: {
         data-bubble={ props.below === true ? 'below' : undefined }
         data-anchor={ props.anchor }
         data-team={ props.team?.side }
+        data-speaking={ speaking ? 'true' : undefined }
         style={ props.ink === undefined ? undefined : `--ink: ${ props.ink }` }
         aria-current={ props.turn === true ? 'true' : undefined }
     >
-        <span class="table-plate-avatar" data-speaking={ voice.speaking(props.who) ? 'true' : undefined }>
+        <span class="table-plate-avatar" data-speaking={ speaking ? 'true' : undefined }>
             <Avatar person={ people.byHandle(props.who) } size="sm" ringOn="void" />
             <For each={ clock } key={ (one) => one.key } let={ one }>
                 <svg class="table-plate-clock" viewBox="0 0 40 40" style={ one.style } data-still={ one.still ? 'true' : undefined } aria-hidden="true">

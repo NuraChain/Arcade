@@ -23,7 +23,7 @@
  */
 import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { chromium } from 'playwright';
+import { chromium, firefox } from 'playwright';
 import { privateKeyToAccount } from 'viem/accounts';
 
 import { WALLET_FIXTURES } from '../../backend/src/db/wallet-fixtures.ts';
@@ -49,11 +49,22 @@ function cachedChromium()
 
 const BASE = process.env.QA_BASE ?? 'http://localhost:5300';
 
+const ENGINE = process.env.QA_BROWSER === 'firefox' ? 'firefox' : 'chromium';
+
 const executablePath = cachedChromium();
-const browser = await chromium.launch({
-    ...(executablePath === undefined ? {} : { executablePath }),
-    args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', '--autoplay-policy=no-user-gesture-required']
-});
+const browser = ENGINE === 'firefox'
+    ? await firefox.launch({
+        firefoxUserPrefs: {
+            'media.navigator.streams.fake': true,
+            'media.navigator.permission.disabled': true,
+            'media.autoplay.default': 0,
+            'media.autoplay.blocking_policy': 0
+        }
+    })
+    : await chromium.launch({
+        ...(executablePath === undefined ? {} : { executablePath }),
+        args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream']
+    });
 
 const results = [];
 const record = (name, ok, detail) =>
@@ -66,7 +77,7 @@ async function seat(handle)
 {
     const fixture = WALLET_FIXTURES.find((one) => one.handle === handle);
     const wallet = privateKeyToAccount(fixture.privateKey);
-    const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, locale: 'en-US', permissions: ['microphone'] });
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, locale: 'en-US', ...(ENGINE === 'firefox' ? {} : { permissions: ['microphone'] }) });
 
     await context.addCookies([{ name: 'locale', value: 'en', url: BASE }]);
     await context.addInitScript(() =>
@@ -122,6 +133,11 @@ async function seat(handle)
         if (event.type() === 'error' && !event.text().includes('favicon'))
         {
             errors.push(`${ handle }: ${ event.text().slice(0, 160) }`);
+
+            if (process.env.QA_LOUD === '1')
+            {
+                console.log(`        (${ handle } logged: ${ event.text().slice(0, 120) })`);
+            }
         }
     });
 
@@ -381,6 +397,34 @@ await dana.page.getByRole('button', { name: 'Turn voice on for this table' }).fi
 record('turning it back on offers the call to the other player without a reload', await until(async () =>
     (await mina.page.getByRole('button', { name: 'Join voice' }).count()) > 0
     && (await mina.page.getByText('This table has voice. Join to talk while you play.').count()) > 0));
+
+await dana.page.getByRole('button', { name: 'Join voice' }).first().click();
+await until(async () => (await dana.page.getByRole('button', { name: 'Leave voice' }).count()) > 0);
+await mina.page.evaluate(() =>
+{
+    const stored = JSON.parse(localStorage.getItem('nura-games.settings') ?? '{}');
+    localStorage.setItem('nura-games.settings', JSON.stringify({ ...stored, voiceAutoJoin: true }));
+});
+await mina.page.reload();
+await mina.page.waitForLoadState('networkidle');
+record('a page set to join by itself is in the call after a reload, with nothing pressed', await until(async () =>
+    (await mina.page.getByRole('button', { name: 'Leave voice' }).count()) > 0, 15_000));
+
+if (await dana.page.getByRole('button', { name: 'Unmute your microphone' }).count() > 0)
+{
+    await dana.page.getByRole('button', { name: 'Unmute your microphone' }).click();
+}
+
+const ringed = (page) => page.locator('.table-plate-avatar[data-speaking], span.ring-live').count();
+
+record('and that page shows who is speaking, though nobody has pressed it', await until(async () => (await ringed(mina.page)) > 0, 12_000), `${ await ringed(mina.page) } ringed`);
+record('the speaker wears the ring on their own page too', await until(async () => (await ringed(dana.page)) > 0, 6000), `${ await ringed(dana.page) } ringed`);
+await mina.page.screenshot({ path: 'tools/qa/out/voice-speaking.png' });
+await mina.page.evaluate(() =>
+{
+    const stored = JSON.parse(localStorage.getItem('nura-games.settings') ?? '{}');
+    localStorage.setItem('nura-games.settings', JSON.stringify({ ...stored, voiceAutoJoin: false }));
+});
 
 const errors = [...dana.errors, ...mina.errors];
 record('no console errors', errors.length === 0, errors.slice(0, 4).join(' | '));

@@ -6,6 +6,10 @@ import { plateTag } from '../src/components/games/plate-tag.ts';
 import * as turns from '../../backend/src/domains/match/turns.ts';
 import '../src/locales/app-catalogue.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
+import { useRealtime } from '../src/stores/realtime.store.ts';
+import { useSession } from '../src/stores/session.store.ts';
+import { setVoiceCall, setVoiceMedia, useVoice } from '../src/stores/voice.store.ts';
+import { socket } from './fake-realtime.ts';
 import type { MatchPlayer } from '../src/data/match.ts';
 
 type Rendered = HTMLElement;
@@ -77,6 +81,73 @@ describe('the seat plate every table draws', () =>
 
         expect(container.querySelector('.table-plate-team')).toBeNull();
         expect(container.querySelector<HTMLElement>('.table-plate')!.dataset.team).toBeUndefined();
+    });
+
+    it('wears a ring on the whole plate while its player is heard, where the turn clock cannot cover it', async () =>
+    {
+        useRealtime().reset();
+        socket.reset();
+        useSession().reset();
+        useSession().establish({ id: 'alex', handle: 'alex', displayName: 'Alex', bio: '', hue: 210, kind: 'guest', isMinor: false });
+        useVoice().reset();
+        setVoiceMedia(() => ({ getUserMedia: async () => ({ getTracks: () => [], getAudioTracks: () => [] }) }) as unknown as MediaDevices);
+
+        const stopVoice = useVoice().start();
+
+        let heard: ((who: string, level: number) => void) | null = null;
+
+        setVoiceCall((deps) =>
+        {
+            heard = deps.onLevel;
+
+            return {
+                setMic: async () => undefined,
+                setMuted: () => undefined,
+                sync: () => undefined,
+                receive: async () => undefined,
+                setVolume: () => undefined,
+                setSink: () => undefined,
+                close: () => undefined
+            };
+        });
+
+        try
+        {
+            useRealtime().start();
+            socket.accept();
+            await useVoice().join('table-ring');
+            socket.deliver({
+                v: 1,
+                t: 'voice',
+                n: 41,
+                table: 'table-ring',
+                joined: true,
+                mine: 'join-alex',
+                peers: [
+                    { who: 'alex', muted: true, talk: true, join: 'join-alex' },
+                    { who: 'sara.k', muted: false, talk: true, join: 'join-sara' }
+                ]
+            });
+
+            const { container } = renderTest(() => TablePlate({ who: 'sara.k', name: 'Sara', turn: true, remainingMs: 20_000, turnMs: 30_000 }) as HTMLElement);
+            const plate = container.querySelector<HTMLElement>('.table-plate')!;
+
+            expect(plate.dataset.speaking).toBeUndefined();
+
+            heard!('sara.k', 0.6);
+            await Promise.resolve();
+
+            expect(plate.dataset.speaking, 'the plate of somebody speaking says nothing of it').toBe('true');
+            expect(container.querySelector('.table-plate'), 'the plate was drawn again to say so').toBe(plate);
+        }
+        finally
+        {
+            useVoice().reset();
+            stopVoice();
+            setVoiceCall(null);
+            setVoiceMedia(null);
+            useRealtime().reset();
+        }
     });
 
     it('draws no clock for a watcher, who is sent no deadline', () =>

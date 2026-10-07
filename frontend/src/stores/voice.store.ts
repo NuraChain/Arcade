@@ -1,6 +1,7 @@
 import { createSignal, createStore, untrack, type Getter } from 'azerothjs';
 
 import { client } from '../api.ts';
+import { runtime } from '../lib/runtime.ts';
 import { createVoiceCall, type PeerLink, type VoiceCall, type VoiceCallDeps } from '../services/voice.rtc.ts';
 import { useAccount } from './account.store.ts';
 import { useRealtime, type SignalFrame, type VoiceFrame } from './realtime.store.ts';
@@ -61,6 +62,8 @@ export interface VoiceApi
 
 const SPEAKING = 0.08;
 
+export const SPEAKING_HOLD_MS = 400;
+
 const QUIET = 0.04;
 
 export const TALK_KEY = 'KeyV';
@@ -109,6 +112,7 @@ export const useVoice = createStore((): VoiceApi =>
     let call: VoiceCall | null = null;
     let stream: MediaStream | null = null;
     let context: AudioContext | null = null;
+    let unstir: (() => void) | null = null;
     let mutedBeforeDeaf = true;
     let unhold: (() => void) | null = null;
 
@@ -129,24 +133,31 @@ export const useVoice = createStore((): VoiceApi =>
         call?.setMuted(untrack(muted) || untrack(deaf) || (pushToTalk() && !untrack(talking)));
     };
 
+    const fading = new Map<string, () => void>();
+
+    const hush = (who: string) =>
+    {
+        fading.get(who)?.();
+        fading.delete(who);
+    };
+
     const level = (who: string, value: number) =>
     {
-        setLoud((current) =>
+        if (value >= SPEAKING)
         {
-            const on = current.has(who);
+            hush(who);
+            setLoud((current) => current.has(who) ? current : new Set([...current, who]));
+            return;
+        }
 
-            if (!on && value >= SPEAKING)
+        if (value < QUIET && untrack(loud).has(who) && !fading.has(who))
+        {
+            fading.set(who, runtime().clock.after(SPEAKING_HOLD_MS, () =>
             {
-                return new Set([...current, who]);
-            }
-
-            if (on && value < QUIET)
-            {
-                return new Set([...current].filter((one) => one !== who));
-            }
-
-            return current;
-        });
+                fading.delete(who);
+                setLoud((current) => new Set([...current].filter((one) => one !== who)));
+            }));
+        }
     };
 
     const stopTracks = (held: MediaStream | null) =>
@@ -165,11 +176,21 @@ export const useVoice = createStore((): VoiceApi =>
 
     let joins = 0;
 
+    const stir = () =>
+    {
+        if (context !== null && context.state === 'suspended')
+        {
+            void context.resume().catch(() => undefined);
+        }
+    };
+
     const teardown = () =>
     {
         joins += 1;
         unhold?.();
         unhold = null;
+        unstir?.();
+        unstir = null;
         call?.close();
         call = null;
         stopStream();
@@ -182,6 +203,12 @@ export const useVoice = createStore((): VoiceApi =>
         setRoster([]);
         setMine('');
         setLinks({});
+
+        for (const who of [...fading.keys()])
+        {
+            hush(who);
+        }
+
         setLoud(new Set<string>());
         setMic('off');
         setMuted(true);
@@ -395,6 +422,17 @@ export const useVoice = createStore((): VoiceApi =>
             const Context = typeof AudioContext === 'undefined' ? null : AudioContext;
             context = Context === null ? null : new Context();
 
+            if (typeof window !== 'undefined')
+            {
+                window.addEventListener('pointerdown', stir);
+                window.addEventListener('keydown', stir);
+                unstir = () =>
+                {
+                    window.removeEventListener('pointerdown', stir);
+                    window.removeEventListener('keydown', stir);
+                };
+            }
+
             call = makeCall({
                 me,
                 iceServers: ice.servers.map((server) => ({
@@ -436,6 +474,7 @@ export const useVoice = createStore((): VoiceApi =>
             }
 
             stream = got;
+            stir();
 
             const quiet = stream === null || (!pushToTalk() && untrack(settings.settings).voiceStartMuted);
 

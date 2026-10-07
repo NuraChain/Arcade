@@ -523,6 +523,12 @@ html:has(.site-drawer[open])
     opacity: 0.55;
 }
 
+.table-plate[data-speaking]
+{
+    outline: 2px solid var(--live);
+    outline-offset: 2px;
+}
+
 .table-plate-avatar
 {
     position: relative;

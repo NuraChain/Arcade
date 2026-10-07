@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 import type { ClientFrame } from '../../backend/src/realtime/frames.ts';
 import { manualClock } from '../src/lib/clock.ts';
@@ -8,7 +8,7 @@ import { keyName } from '../src/lib/talk-key.ts';
 import { IDLE_MS, useRealtime } from '../src/stores/realtime.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
 import { useSettings } from '../src/stores/settings.store.ts';
-import { setVoiceCall, setVoiceMedia, useVoice } from '../src/stores/voice.store.ts';
+import { SPEAKING_HOLD_MS, setVoiceCall, setVoiceMedia, useVoice } from '../src/stores/voice.store.ts';
 import { socket } from './fake-realtime.ts';
 import '../src/locales/app-catalogue.ts';
 
@@ -419,6 +419,118 @@ describe('voice at a table', () =>
 
         expect(calls[0].sinks).toEqual(['desk', 'headset']);
         expect(useSettings().settings().voiceSpeaker).toBe('headset');
+    });
+
+    it('keeps somebody marked as speaking through the gap between two words, and lets go once they have stopped', async () =>
+    {
+        const clock = manualClock(900_000);
+        setRuntime({ clock, seed: 9 });
+
+        await useVoice().join(TABLE);
+        socket.deliver({
+            v: 1,
+            t: 'voice',
+            n: 31,
+            table: TABLE,
+            joined: true,
+            mine: 'join-alex',
+            peers: [
+                { who: 'alex', muted: true, talk: true, join: 'join-alex' },
+                { who: 'sara.k', muted: false, talk: true, join: 'join-sara' }
+            ]
+        });
+        await settle();
+
+        calls[0].deps.onLevel('sara.k', 0.5);
+        expect(useVoice().speaking('sara.k')).toBe(true);
+
+        calls[0].deps.onLevel('sara.k', 0);
+        clock.advance(SPEAKING_HOLD_MS - 50);
+        expect(useVoice().speaking('sara.k'), 'the ring went out in the breath between two words').toBe(true);
+
+        calls[0].deps.onLevel('sara.k', 0.5);
+        clock.advance(SPEAKING_HOLD_MS);
+        expect(useVoice().speaking('sara.k'), 'a silence that ended was still counted against her').toBe(true);
+
+        calls[0].deps.onLevel('sara.k', 0);
+        clock.advance(SPEAKING_HOLD_MS);
+        expect(useVoice().speaking('sara.k')).toBe(false);
+    });
+
+    it('wakes the audio it measures voices by once the microphone is given, and at the next press while it still sleeps', async () =>
+    {
+        const asked: string[] = [];
+
+        class Asleep
+        {
+            state = 'suspended';
+
+            async resume()
+            {
+                asked.push('resume');
+            }
+
+            async close()
+            {
+                asked.push('close');
+            }
+        }
+
+        vi.stubGlobal('AudioContext', Asleep);
+
+        try
+        {
+            await useVoice().join(TABLE);
+            expect(asked, 'the meters were left on a context nobody woke: nobody is ever seen to speak').toEqual(['resume']);
+
+            window.dispatchEvent(new Event('pointerdown'));
+            expect(asked).toEqual(['resume', 'resume']);
+
+            window.dispatchEvent(new Event('keydown'));
+            expect(asked).toEqual(['resume', 'resume', 'resume']);
+
+            useVoice().leave();
+            window.dispatchEvent(new Event('pointerdown'));
+            expect(asked, 'a call that is over went on listening for presses').toEqual(['resume', 'resume', 'resume', 'close']);
+        }
+        finally
+        {
+            vi.unstubAllGlobals();
+        }
+    });
+
+    it('leaves a context that is awake alone', async () =>
+    {
+        const asked: string[] = [];
+
+        class Awake
+        {
+            state = 'running';
+
+            async resume()
+            {
+                asked.push('resume');
+            }
+
+            async close()
+            {
+                asked.push('close');
+            }
+        }
+
+        vi.stubGlobal('AudioContext', Awake);
+
+        try
+        {
+            await useVoice().join(TABLE);
+            window.dispatchEvent(new Event('pointerdown'));
+
+            expect(asked).toEqual([]);
+        }
+        finally
+        {
+            vi.unstubAllGlobals();
+        }
     });
 
     it('keeps the call on while the tab is hidden, and lets the socket sleep once it is over', async () =>

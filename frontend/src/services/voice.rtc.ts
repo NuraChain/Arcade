@@ -104,6 +104,23 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
 
     const connect = deps.connect ?? ((config: RTCConfiguration) => new RTCPeerConnection(config));
 
+    const wake = () =>
+    {
+        for (const peer of peers.values())
+        {
+            if (peer.audio !== null && peer.audio.paused)
+            {
+                void peer.audio.play().catch(() => undefined);
+            }
+        }
+    };
+
+    if (typeof window !== 'undefined')
+    {
+        window.addEventListener('pointerdown', wake);
+        window.addEventListener('keydown', wake);
+    }
+
     const mark = (peer: Peer, link: PeerLink) =>
     {
         if (peers.get(peer.join) === peer)
@@ -435,6 +452,13 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
         close()
         {
             closed = true;
+
+            if (typeof window !== 'undefined')
+            {
+                window.removeEventListener('pointerdown', wake);
+                window.removeEventListener('keydown', wake);
+            }
+
             localMeter?.();
             localMeter = null;
             for (const join of [...peers.keys()])

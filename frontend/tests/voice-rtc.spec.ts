@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 
 import { createVoiceCall, type PeerLink, type VoiceJoin, type VoiceSignal } from '../src/services/voice.rtc.ts';
 
@@ -437,6 +437,41 @@ describe('a call between two players', () =>
 
         expect(asks.connections.map((one) => one.closed)).toEqual([true, false]);
         expect(asks.links).toEqual([['mina', 'connecting'], ['mina', null], ['mina', 'connecting']]);
+    });
+
+    it('starts a voice the browser would not play by itself at the next press, and stops trying once the call is over', async () =>
+    {
+        const played = vi.spyOn(HTMLMediaElement.prototype, 'play').mockImplementation(async () =>
+        {
+            throw Object.assign(new Error('not allowed'), { name: 'NotAllowedError' });
+        });
+        const carried = vi.spyOn(HTMLMediaElement.prototype, 'srcObject', 'set').mockImplementation(() => undefined);
+
+        try
+        {
+            const asks = asking();
+
+            asks.sees(MINA);
+            (asks.connection.ontrack as unknown as (event: { track: unknown; streams: unknown[] }) => void)({ track: {}, streams: [{}] });
+            await Promise.resolve();
+
+            expect(played).toHaveBeenCalledTimes(1);
+
+            window.dispatchEvent(new Event('pointerdown'));
+            expect(played, 'a voice the browser held back was left silent after a press').toHaveBeenCalledTimes(2);
+
+            window.dispatchEvent(new Event('keydown'));
+            expect(played).toHaveBeenCalledTimes(3);
+
+            asks.call.close();
+            window.dispatchEvent(new Event('pointerdown'));
+            expect(played, 'a call that is over went on listening for presses').toHaveBeenCalledTimes(3);
+        }
+        finally
+        {
+            played.mockRestore();
+            carried.mockRestore();
+        }
     });
 
     it('lets a signal from a joining it has hung up on fall', async () =>
