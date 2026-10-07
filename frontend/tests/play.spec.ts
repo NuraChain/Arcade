@@ -463,6 +463,7 @@ describe('PlayPage', () =>
             startedAt: new Date(400_000).toISOString(),
             view: { kind: 'ludo' }
         });
+        const asked = chunk.asked;
 
         try
         {
@@ -470,20 +471,20 @@ describe('PlayPage', () =>
             const router = createRouter({ routes: table, history: createMemoryHistory(`/app/play/${ id }`), scroll: false });
             const { container } = renderTest(() => RouterProvider({ router, children: () => Routes({}) }) as Rendered);
 
-            await vi.waitFor(() => expect(chunk.asked).toBe(1), { timeout: 4000 });
+            await vi.waitFor(() => expect(chunk.asked).toBe(asked + 1), { timeout: 4000 });
             await vi.waitFor(() => expect(container.querySelector('[role="alert"]')).not.toBeNull(), { timeout: 4000 });
 
             expect(container.querySelector('[aria-busy="true"]')).toBeNull();
             const alert = container.querySelector('[role="alert"]');
             expect(alert?.textContent).toContain(useLocale().t('state.errorTitle'));
-            expect(chunk.asked).toBe(1);
+            expect(chunk.asked).toBe(asked + 1);
 
             fire(alert!.querySelector('button')!, 'click');
 
-            await vi.waitFor(() => expect(chunk.asked).toBe(2), { timeout: 4000 });
+            await vi.waitFor(() => expect(chunk.asked).toBe(asked + 2), { timeout: 4000 });
             await vi.waitFor(() => expect(container.querySelector('[role="alert"]')).not.toBeNull(), { timeout: 4000 });
 
-            expect(chunk.asked).toBe(2);
+            expect(chunk.asked).toBe(asked + 2);
             expect(container.querySelector('[role="alert"]')).not.toBeNull();
         }
         finally
