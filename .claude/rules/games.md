@@ -2970,6 +2970,15 @@ game comes back as a zero rather than as a missing row. `waitSeconds` went with 
 back as a zero either: nothing measures how long somebody waits for a chair, because matchmaking is
 a query over open tables rather than a queue with a length.
 
+**"Tables open" is tables somebody could sit down at.** It counted every public table that had not
+closed: a full one, one with a game on, one whose last chair was kept for an invitee. A reader told
+"3 tables open" who pressed through found none of them would have them. A table is open when it is
+public, has no game on, and has a chair that is neither taken nor kept (`count(distinct t.id) filter
+(where m.id is null and s.user_id is null and s.invited_id is null)` over a LEFT JOIN of the live
+match and the chairs). "Playing now" is still everybody seated at a public table, waiting or in a
+game: people at the tables is what it says on Home. `catalogue.db.spec.ts` holds both, and was the
+first test of the counts at all.
+
 **A finished match stays on screen, and the test for that is which TABLE it belongs to.**
 `tables.match_id` is the LIVE one, so it clears the instant somebody wins - and closing the board on
 that dropped the winner straight back to a lobby with a Start button at the exact moment the game had

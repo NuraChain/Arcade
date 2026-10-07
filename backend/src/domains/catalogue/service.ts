@@ -1,6 +1,6 @@
 import type { DataSource } from 'typeorm';
 
-import { Game, Table, TableSeat } from '../../entities/index.ts';
+import { Game, Match, Table, TableSeat } from '../../entities/index.ts';
 
 import type { CataloguePort } from '../../ports.ts';
 import type { GameList, LiveCounts } from '../../schemas.ts';
@@ -47,19 +47,6 @@ const GAMES_SQL = `
     order by g.sort_order
 `;
 
-/**
- * How busy each game is, counted.
- *
- * `catalogue.store.ts` drifted these two numbers on a seeded RNG, with the rule written beside them
- * that they go the moment the server answers with real counts. Two rules make the answer honest
- * rather than flattering: only tables a stranger could actually join are counted - open, public,
- * not closed - and `playing` counts SEATED PEOPLE rather than chairs, so an empty table nobody has
- * joined contributes a table and no players.
- *
- * A LEFT JOIN, because a game nobody is playing has to come back as a zero rather than be missing:
- * an absent row and a quiet game are the same thing on the wire, and a client cannot tell them
- * apart.
- */
 interface LiveRow
 {
     game: string;
@@ -102,9 +89,10 @@ export function createCatalogueService(db: DataSource): CataloguePort
             const rows = await db.getRepository(Game)
                 .createQueryBuilder('g')
                 .leftJoin(Table, 't', `t.game = g.id and t.status = 'open' and t.privacy = 'public'`)
-                .leftJoin(TableSeat, 's', 's.table_id = t.id and s.user_id is not null')
+                .leftJoin(Match, 'm', 'm.table_id = t.id and m.finished_at is null')
+                .leftJoin(TableSeat, 's', 's.table_id = t.id')
                 .select('g.id', 'game')
-                .addSelect('count(distinct t.id)::int', 'tables')
+                .addSelect('count(distinct t.id) filter (where m.id is null and s.user_id is null and s.invited_id is null)::int', 'tables')
                 .addSelect('count(s.user_id)::int', 'playing')
                 .groupBy('g.id')
                 .addGroupBy('g.sort_order')

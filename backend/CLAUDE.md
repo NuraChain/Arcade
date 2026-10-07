@@ -178,11 +178,9 @@ geometry and the landing route is `render: 'static'`: it must paint with no Java
 server. The two merge by id, the server wins where both hold a field, and
 `backend/tests/reference-parity.spec.ts` fails if they ever drift.
 
-**The live counts on the home page are SIMULATED, and deliberately not zero.** No table has ever
-been opened — tables arrive with the play domain — so `BASE` and `seededStats` in
-`catalogue.store.ts` drift on a seeded RNG. Both are deleted outright the moment the server
-answers with real counts. Zeroing them instead would be a different lie: "0 people at the tables"
-reads as a broken product rather than an unbuilt feature.
+**The live counts are counted**, by `catalogue.live()`, and what each number means is in
+`.claude/rules/games.md` (*The live counts are counted*). This paragraph said they were simulated
+for a long time after they stopped being.
 
 **A store that reads the server must be read reactively.** `catalogue.rules()` used to be a
 synchronous array and is now backed by a resource, so `const rules = catalogue.rules(id)` captures
