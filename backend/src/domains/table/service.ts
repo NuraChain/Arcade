@@ -231,6 +231,11 @@ export const tableRefusal = (word: TableRefusal, message: string) =>
 
 export const noInvitee = () => tableRefusal('no-invitee', 'No one by that name can be invited.');
 
+export const lockTable = async (tx: EntityManager, tableId: string) =>
+{
+    await tx.query('select pg_advisory_xact_lock(hashtext($1::uuid::text))', [tableId]);
+};
+
 export function createTableService(db: DataSource, social: SocialService)
 {
     const mustHaveRoom = async (me: string) =>
@@ -831,6 +836,8 @@ export function createTableService(db: DataSource, social: SocialService)
 
             return db.transaction(async (tx) =>
             {
+                await lockTable(tx, tableId);
+
                 const walked = await forfeit(tx);
 
                 const freed = await tx.getRepository(TableSeat)
@@ -933,18 +940,23 @@ export function createTableService(db: DataSource, social: SocialService)
                 throw new ForbiddenError('Only the host can close a table.');
             }
 
-            const closed = await db.getRepository(Table)
-                .createQueryBuilder()
-                .update(Table)
-                .set({ status: 'closed', closedAt: () => 'now()' })
-                .where('id = :tableId and status <> \'closed\' and host_id = :me', { tableId, me })
-                .andWhere('not exists (select 1 from matches m where m.table_id = :tableId and m.finished_at is null)')
-                .execute();
-
-            if (closed.affected === 0 && await db.getRepository(Match).existsBy({ tableId, finishedAt: IsNull() }))
+            await db.transaction(async (tx) =>
             {
-                throw tableRefusal('playing', 'Finish or resign the game first.');
-            }
+                await lockTable(tx, tableId);
+
+                const closed = await tx.getRepository(Table)
+                    .createQueryBuilder()
+                    .update(Table)
+                    .set({ status: 'closed', closedAt: () => 'now()' })
+                    .where('id = :tableId and status <> \'closed\' and host_id = :me', { tableId, me })
+                    .andWhere('not exists (select 1 from matches m where m.table_id = :tableId and m.finished_at is null)')
+                    .execute();
+
+                if (closed.affected === 0 && await tx.getRepository(Match).existsBy({ tableId, finishedAt: IsNull() }))
+                {
+                    throw tableRefusal('playing', 'Finish or resign the game first.');
+                }
+            });
         },
 
         async setVoice(me: string, tableId: string, on: boolean)

@@ -85,8 +85,8 @@ and `tests/rows.spec.ts` pins all three shapes.
 `getRepository(X).find/findOne/insert/update/delete` - the plain ones, where the SQL was a `where`
 and a column list and nothing else - and roughly a hundred and thirty did not. The ones that stay
 are not leftovers, and each is doing something a repository cannot say: `FOR UPDATE SKIP LOCKED`
-inside a scalar sub-query (the seat claim), `pg_advisory_xact_lock` (the double-tap, the
-first-device test), `UNION ALL`, `ON CONFLICT (target) WHERE predicate` against a partial index,
+inside a scalar sub-query (the seat claim), `pg_advisory_xact_lock` (the seat claim's double-tap, and
+the table's lock a start, a leave and a close take), `UNION ALL`, `ON CONFLICT (target) WHERE predicate` against a partial index,
 `ON CONFLICT DO UPDATE SET count = notifications.count + 1`, `LEFT JOIN LATERAL` with `array_agg`,
 keyset pagination by row-value comparison, the `CASE WHEN` that derives a table's `status`, and the
 FROM-less select of four correlated sub-queries that exists precisely so four truths arrive as one

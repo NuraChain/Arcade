@@ -149,11 +149,57 @@ being played here" for that alone: it used to say it for every failed close, a d
 included.
 
 `table-refusals.db.spec.ts` loses the start's race on purpose. Every other `not-ready` it asserts stops
-at the check before the transaction, so the insert's own refusal thrown as a bare 409 again passed
+at the start's own read of the chairs, so the insert's own refusal thrown as a bare 409 again passed
 every gate. The test holds a SHARE lock on `matches`, which lets the start's reads through and stops
 its insert; once a backend is waiting, the other chair says it is not ready and the lock lets go. A
 statement takes its snapshot only once it holds its table locks, so the insert sees that chair, writes
-nothing, and the start answers `not-ready` with no match behind it.
+nothing, and the start answers `not-ready` with no match behind it. The start waits there holding the
+table's lock, and `setReady` takes none, so neither can be waiting on the other.
+
+**A start reads its chairs under the table's lock, and so does whatever empties one.** `start` read
+its table and its chairs before its transaction and dealt `match_players` from that read, while the
+insert's guard only COUNTED occupied chairs, in a snapshot that cannot see a chair nobody has committed
+yet. So a leave that was still in flight was dealt in: its walkout had found no game to forfeit, and
+its chair went back a moment later. A leave and a claim that sat down ready, both between the read and
+the insert, swapped who sat there without moving the count, so the game dealt in somebody who had
+left - whose turns the sweep then plays into a rated loss - beside somebody in a chair with no seat in
+it. A close had the same window from the other side and left a game running on a closed table.
+
+`lockTable(tx, tableId)` in `table/service.ts` is `pg_advisory_xact_lock(hashtext($1::uuid::text))` -
+raw, because no repository can say it - and it is the first statement of the transaction in `start`,
+in `leave` before the walkout, and in `close`. It is the one-key form, a lock space of its own, so the
+claim's two-key lock on a table and a person never meets it. Under it the start reads the table and
+the chairs again and asks every question of THAT read - still in a chair, a game already on, closed,
+an engine, every chair taken, everybody ready - and deals the players from it. The key is the id as
+Postgres spells it: hashing the text a caller sent would give `/tables/<ID IN CAPITALS>/start` a lock
+of its own, and the route hands the start the id as it arrived.
+
+Being seated is still asked BEFORE the transaction, so somebody with no chair is answered 404 without
+holding the table or waiting for it; and it is asked again under the lock, so somebody whose own leave
+got there first is answered that 404 rather than `chairs-empty`, a word meant for people in chairs. A
+claim and an invitation only FILL an empty chair, which cannot hurt a start that has read every chair
+taken, so they take no table lock. Nor does `setReady`, which is why the insert keeps its WHERE clause:
+somebody can still stop being ready between the read and the deal, and that is the race the paragraph
+above loses. The count and `matches_one_live` stay as belts. Two starts no longer both reach the
+insert - the second finds the first one's game in its own read - and a 23505 there is still read as
+"somebody else started it".
+
+**The order is the table's lock, then the match row, then chair rows, and a finish never takes the
+table's lock.** A leave holds the table and waits for the match row; a finish holds the match row and
+then clears every chair's readiness. A finish that reached for the table's lock would wait on that
+leave while the leave waited on it. It is also why row locks could not have fixed the start: a leave
+would have to lock its chair before the match, and a finish locks the match before the chairs.
+
+`start-race.db.spec.ts` holds all of it, with two instances of each service and a gate: a lock on
+`matches` that parks every arrival at the statement where its race is - the start at its insert, a
+leave at the walkout's `for update` - and lets go once `pg_stat_activity` shows everybody has gone as
+far as they can. Twenty rounds each: a leave against a start, whichever reaches the table first; the
+swap; a close; and a leave, a finish and a start together in three orders of arrival, where no answer
+may be a 40P01. With the start's lock line deleted the first three fail in every round, with the
+leave's the first two, with the close's the third. The last cannot fail that way - no lock, no
+deadlock - and fails when the order is broken instead: a finish that takes the table's lock, or a
+leave that frees its chair before it walks out. Three single tests hold the rest: an id in capitals,
+somebody with no chair answered while the table is held, and somebody whose own leave got there first.
 
 **An invitation is refused in one sentence, whoever it could not reach.** `create`'s invitees and
 `invite` answered a block with "You cannot reach that account." and a closed door or a minor with
@@ -722,11 +768,15 @@ without it a stale "move token 2" is still legal at the new revision, for a diff
 different board. Neither is an error: `applied` is `now`, `already` or `stale`, because a retried tap
 and a tap that crossed a realtime frame are both ordinary. Two values could not say which happened.
 
-**Starting is a table verb and its preconditions live in the WHERE clause.** `POST /tables/:id/start`
-inserts with `not exists`, a seat count and a readiness check all inside one statement, so there is
-no window between reading a ready table and writing a match against it. That is still not enough on
-its own - `not exists` cannot see another transaction's uncommitted row - so `matches_one_live`
-arbitrates and a 23505 is read as "somebody else started it", which answers with their match. Any
+**Starting is a table verb, and it reads the table under the table's lock.** `POST /tables/:id/start`
+takes the lock a leave and a close take, reads the table and its chairs under it and deals from that
+read - *A start reads its chairs under the table's lock*, under *Tables*, is the whole of it. Its
+insert still carries `not exists`, a seat count and a readiness check in one statement. That used to
+be the whole defence, on the claim that it left no window between reading a ready table and writing a
+match against it, and the claim was wrong: the players were dealt from a read made before the
+transaction, and a WHERE clause cannot see a chair somebody has not committed. The readiness check is
+still what refuses a start somebody stops being ready under; the other two are belts, and a 23505 from
+`matches_one_live` is still read as "somebody else started it", which answers with their match. Any
 seated player may press it: the precondition is unanimous, so host-only would be ceremony that
 strands a table whose host closed the tab.
 
@@ -748,9 +798,9 @@ still closes it, since everybody has gone and each of them has already forfeited
 **Leaving a live match is a forfeit with reason `left`.** It used to free the chair and nothing else,
 so the leaver stayed in the match while the sweep played their turns and forfeited them three misses
 later as a TIMEOUT - which the judge pays when the seat had played its share, so walking out of a lost
-game banked the finish. `table.leave` now takes a forfeit callback and calls it FIRST inside its
-transaction; `services.ts` passes `match.walkOut`, which locks the live match, and only then is the
-chair freed, so the locks are taken match first and seats second, the order a finish takes them in.
+game banked the finish. `table.leave` now takes a forfeit callback and calls it straight after the
+table's lock; `services.ts` passes `match.walkOut`, which locks the live match, and only then is the
+chair freed: the table, the match, then the seats, the last two in the order a finish takes them.
 The forfeit row names the leaver (`user_id`, `payload.verb = 'left'`), so the judge reads a walkout: a
 rated loss, no XP, and the survivors `void` unless they and the leaver were both engaged. Somebody whose
 seat already has a result - they resigned, or the clock took them - leaves without a second forfeit.

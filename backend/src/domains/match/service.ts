@@ -6,7 +6,7 @@ import { MatchPlayer, type MatchResult } from '../../entities/match-player.entit
 import { Match } from '../../entities/match.entity.ts';
 import { Table } from '../../entities/table.entity.ts';
 import { TableSeat } from '../../entities/table-seat.entity.ts';
-import { tableRefusal } from '../table/service.ts';
+import { lockTable, tableRefusal } from '../table/service.ts';
 import { pickBelow } from '../../lib/crypto.ts';
 import type { AchieveService } from '../achieve/service.ts';
 import { firstRow } from '../../lib/rows.ts';
@@ -38,30 +38,6 @@ interface HistoryRow
     rating_after: number | null;
     players: string[] | null;
 }
-
-/**
- * The database half of a played game.
- *
- * Reads and writes go through repositories. Two things stay raw and each says why where it stands:
- * the start, whose every precondition lives in one WHERE clause so there is no window between
- * reading a ready table and writing a match against it, and `now()` in the deadline predicate,
- * because a sweep run against the Node clock would disagree with the interval the action beside it
- * wrote a moment earlier.
- *
- * Every mutating path is one transaction that opens by locking the match row `for update`. That is
- * deliberately NOT the `skip locked` the seat claim uses: skipping is right when a held chair is
- * one the claimer should look past, and wrong here, where exactly one of four people acting at once
- * must win and the rest must queue rather than be told nothing happened.
- *
- * Two guards make a retry safe, and neither subsumes the other. The idempotency key answers a
- * repeated request with the state as it now stands - without it two identical rolls both apply,
- * because after a six the turn has not passed and the second is perfectly legal. The revision
- * precondition answers a request composed against a board that has since moved - without it a stale
- * "move token 2" is still legal at the new revision, for a different reason, on a different board.
- *
- * Neither is an error. Losing a race is ordinary, so the answer carries `applied` rather than a
- * status: `now`, `already`, or `stale`.
- */
 
 const UNIQUE_VIOLATION = '23505';
 
@@ -460,70 +436,66 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
                 throw new NotFoundError('No table there.');
             }
 
-            const table = await db.getRepository(Table).findOne({ where: { id: tableId } });
-            const chairs = await db.getRepository(TableSeat).find({ where: { tableId }, order: { seat: 'ASC' } });
-
-            if (table === null || !chairs.some((chair) => chair.userId === me))
+            if (!await db.getRepository(TableSeat).existsBy({ tableId, userId: me }))
             {
                 throw new NotFoundError('No table there.');
             }
 
-            const live = await db.getRepository(Match).findOne({
-                select: { id: true },
-                where: { tableId, finishedAt: IsNull() }
-            });
-
-            if (live !== null)
-            {
-                return dealtIn(me, live.id);
-            }
-
-            if (table.status === 'closed')
-            {
-                throw tableRefusal('table-closed', 'That table has closed.');
-            }
-
-            /**
-             * Whether anything here knows how to play it, rather than whether it is called ludo.
-             *
-             * `games.status` says `coming-soon` for a game with no engine and `table.create` refuses
-             * to open a table for one, so this is the second lock on the same door - and it is the
-             * one that holds if a status is ever wrong, because it asks the thing that would have to
-             * do the work.
-             */
-            if (engineFor(table.game) === null)
-            {
-                throw new ValidationError({ game: 'No engine yet.' }, 'That game cannot be played here yet.');
-            }
-
-            if (chairs.some((chair) => chair.userId === null))
-            {
-                throw tableRefusal('chairs-empty', 'Every chair has to be taken first.');
-            }
-
-            if (chairs.some((chair) => !chair.ready))
-            {
-                throw tableRefusal('not-ready', 'Everybody has to be ready first.');
-            }
-
-            const engine = engineFor(table.game);
-
-            if (engine === null)
-            {
-                throw new ValidationError({ game: 'No engine yet.' }, 'That game cannot be played here yet.');
-            }
-
-            const seats = chairs.map((chair) => chair.seat);
-            const { state, events } = engine.create(seats, draws, { target: table.target, cube: table.cube, blinds: table.blinds as TableConfig['blinds'] });
-
             const matchId = await db.transaction(async (tx) =>
             {
+                await lockTable(tx, tableId);
+
+                const table = await tx.getRepository(Table).findOne({ where: { id: tableId } });
+                const chairs = await tx.getRepository(TableSeat).find({ where: { tableId }, order: { seat: 'ASC' } });
+
+                if (table === null || !chairs.some((chair) => chair.userId === me))
+                {
+                    throw new NotFoundError('No table there.');
+                }
+
+                const live = await tx.getRepository(Match).findOne({
+                    select: { id: true },
+                    where: { tableId, finishedAt: IsNull() }
+                });
+
+                if (live !== null)
+                {
+                    return live.id;
+                }
+
+                if (table.status === 'closed')
+                {
+                    throw tableRefusal('table-closed', 'That table has closed.');
+                }
+
                 /**
-                 * The `not exists` cannot see another transaction's uncommitted row, so two people
-                 * pressing Start in the same instant both reach the insert and `matches_one_live`
-                 * arbitrates. A 23505 here means somebody else started it, which is an answer
-                 * rather than a failure - the same shape the seat claim gives a double tap.
+                 * Whether anything here knows how to play it, rather than whether it is called ludo.
+                 *
+                 * `games.status` says `coming-soon` for a game with no engine and `table.create` refuses
+                 * to open a table for one, so this is the second lock on the same door - and it is the
+                 * one that holds if a status is ever wrong, because it asks the thing that would have to
+                 * do the work.
                  */
+                const engine = engineFor(table.game);
+
+                if (engine === null)
+                {
+                    throw new ValidationError({ game: 'No engine yet.' }, 'That game cannot be played here yet.');
+                }
+
+                if (chairs.some((chair) => chair.userId === null))
+                {
+                    throw tableRefusal('chairs-empty', 'Every chair has to be taken first.');
+                }
+
+                if (chairs.some((chair) => !chair.ready))
+                {
+                    throw tableRefusal('not-ready', 'Everybody has to be ready first.');
+                }
+
+                const seats = chairs.map((chair) => chair.seat);
+                const { state, events } = engine.create(seats, draws, { target: table.target, cube: table.cube, blinds: table.blinds as TableConfig['blinds'] });
+
                 const inserted = firstRow<{ id: string }>(await tx.query(
                     `insert into matches (table_id, game, variant, seats, state, opening, rev, deadline_at)
                      select $1, $2, 'standard', $3::smallint, $4::jsonb, $4::jsonb, $7::int, now() + ($5 || ' milliseconds')::interval
