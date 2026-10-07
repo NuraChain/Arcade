@@ -12,8 +12,8 @@ import { useCatalogue } from '../src/stores/catalogue.store.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
 import { useOverlay } from '../src/stores/overlay.store.ts';
 import { useRecord } from '../src/stores/record.store.ts';
-import type { AchievementFamily } from '../src/api.ts';
-import { server } from './fake-api.ts';
+import type { AchievementFamily, MatchHistoryEntry } from '../src/api.ts';
+import { client, server } from './fake-api.ts';
 
 vi.mock('../src/api.ts', async () => await import('./fake-api.ts'));
 
@@ -158,6 +158,121 @@ describe('achievements on a record', () =>
         }
 
         expect(useOverlay().items().map((one) => one.label)).toEqual(['Family won']);
+    });
+});
+
+describe('the games somebody has finished', () =>
+{
+    const played = (id: string, result: MatchHistoryEntry['result']): MatchHistoryEntry =>
+        ({ id, game: 'ludo', finishedAt: '2026-10-01T10:00:00.000Z', result, players: ['alex', 'sara.k'] });
+
+    const listed = async () =>
+    {
+        const Stub = (): HTMLElement => document.createElement('div');
+        const routes: Route[] = [{ path: '/app', component: Stub }];
+        const router = createRouter({ routes, history: createMemoryHistory('/app'), scroll: false });
+        const { container } = renderTest(() => RouterProvider({ router, children: () => PersonRecord({ handle: 'alex', history: true, mine: true, show: ['history'] }) }) as Rendered);
+
+        await settle();
+
+        return container;
+    };
+
+    const rowsOf = (container: HTMLElement) => [...container.querySelectorAll<HTMLElement>('ul > li')];
+
+    const moreOf = (container: HTMLElement) =>
+        [...container.querySelectorAll<HTMLElement>('button')].find((one) => one.textContent?.includes(useLocale().t('history.more'))) ?? null;
+
+    it('keeps the games already listed, and the button that asked, when more are read', async () =>
+    {
+        const pages = [
+            { matches: [played('m-1', 'won'), played('m-2', 'lost')], cursor: 'm-2' },
+            { matches: [played('m-3', 'won')], cursor: 'm-3' },
+            { matches: [played('m-4', 'abandoned')] }
+        ];
+        const asked = vi.spyOn(client.matches, 'history').mockImplementation(async () => pages.shift() ?? { matches: [] });
+
+        try
+        {
+            const container = await listed();
+            const list = container.querySelector('ul');
+            const [first, second] = rowsOf(container);
+            const more = moreOf(container);
+
+            expect(rowsOf(container)).toHaveLength(2);
+            expect(more).not.toBeNull();
+
+            more!.click();
+            await vi.waitFor(() => expect(rowsOf(container)).toHaveLength(3), { timeout: 4000 });
+            await settle();
+
+            expect(container.querySelector('ul')).toBe(list);
+            expect(rowsOf(container).slice(0, 2)).toEqual([first, second]);
+            expect(moreOf(container)).toBe(more);
+
+            more!.click();
+            await vi.waitFor(() => expect(rowsOf(container)).toHaveLength(4), { timeout: 4000 });
+            await settle();
+
+            expect(rowsOf(container).slice(0, 2)).toEqual([first, second]);
+            expect(moreOf(container)).toBeNull();
+        }
+        finally
+        {
+            asked.mockRestore();
+        }
+    });
+
+    it('says a page could not be read under the games it has, and reads it on the next press', async () =>
+    {
+        let calls = 0;
+        const asked = vi.spyOn(client.matches, 'history').mockImplementation(async () =>
+        {
+            calls += 1;
+
+            if (calls === 1)
+            {
+                return { matches: [played('m-1', 'won')], cursor: 'm-1' };
+            }
+
+            if (calls === 2)
+            {
+                throw new TypeError('Failed to fetch');
+            }
+
+            return { matches: [played('m-2', 'lost')] };
+        });
+
+        try
+        {
+            const container = await listed();
+            const [first] = rowsOf(container);
+
+            moreOf(container)!.click();
+            await vi.waitFor(() => expect(container.textContent).toContain(useLocale().t('record.moreFailed')), { timeout: 4000 });
+
+            expect(rowsOf(container)).toEqual([first]);
+
+            moreOf(container)!.click();
+            await vi.waitFor(() => expect(rowsOf(container)).toHaveLength(2), { timeout: 4000 });
+            await settle();
+
+            expect(rowsOf(container)[0]).toBe(first);
+            expect(container.textContent).not.toContain(useLocale().t('record.moreFailed'));
+        }
+        finally
+        {
+            asked.mockRestore();
+        }
+    });
+
+    it('says nothing is finished yet to somebody who has played nothing', async () =>
+    {
+        const container = await listed();
+
+        expect(container.textContent).toContain(useLocale().t('history.empty'));
+        expect(rowsOf(container)).toHaveLength(0);
+        expect(moreOf(container)).toBeNull();
     });
 });
 

@@ -88,8 +88,30 @@ export default component PersonRecord(props: { handle: string; history?: boolean
     const beside = (players: readonly string[]) =>
         players.filter((one) => one !== props.handle).map(nameOf).join(locale.t('list.separator'));
 
+    derived levelled = progress !== null && parts.includes('level');
+
+    derived pending = record.loading() && held === null;
+
+    derived unplayed = !record.loading() && games.length === 0;
+
+    derived played = games.length > 0;
+
+    derived achieved = summary !== null && parts.includes('achievements');
+
+    derived lately = recent.length > 0;
+
+    derived listed = record.history().length > 0;
+
+    derived refused = !listed && !record.historyLoading() && record.historyFailed();
+
+    derived blank = !listed && !record.historyLoading() && !record.historyFailed();
+
+    derived stalled = listed && record.historyFailed();
+
+    derived further = listed && record.hasMore();
+
     <>
-        <Show when={ progress !== null && parts.includes('level') }>
+        <Show when={ levelled }>
             { () => <LevelBar progress={ progress! } mine={ props.mine === true } /> }
         </Show>
 
@@ -97,11 +119,11 @@ export default component PersonRecord(props: { handle: string; history?: boolean
             <section class="@container">
                 <SectionHeading title={ locale.t('record.title') } />
 
-                <Show when={ record.loading() && held === null }>
+                <Show when={ pending }>
                 { () => <Skeleton class="h-28 w-full rounded-panel" /> }
                 </Show>
 
-                <Show when={ !record.loading() && games.length === 0 }>
+                <Show when={ unplayed }>
                 { () =>
                     <Panel>
                         <EmptyState icon="dice" title={ locale.t('record.empty') } lead={ locale.t('record.emptyLead') } class="py-6" />
@@ -109,7 +131,7 @@ export default component PersonRecord(props: { handle: string; history?: boolean
                 }
                 </Show>
 
-                <Show when={ games.length > 0 }>
+                <Show when={ played }>
                 { () =>
                     <ul class="grid gap-3 @2xl:grid-cols-2">
                         <For each={ games } key={ (row) => row.game } let={ row }>
@@ -121,7 +143,7 @@ export default component PersonRecord(props: { handle: string; history?: boolean
             </section>
         </Show>
 
-        <Show when={ summary !== null && parts.includes('achievements') }>
+        <Show when={ achieved }>
             { () =>
                 <section class="@container">
                     <SectionHeading
@@ -129,7 +151,7 @@ export default component PersonRecord(props: { handle: string; history?: boolean
                         actions={ <span class="text-ui-xs text-muted"><span class="tally font-semibold text-text">{ locale.n(earned) }</span> { locale.t('achievements.of', { total: locale.n(total) }) }</span> }
                     />
                     <div class="flex flex-col gap-4">
-                        <Show when={ recent.length > 0 }>
+                        <Show when={ lately }>
                             { () =>
                                 <div class="flex flex-col gap-2">
                                     <p class="text-ui-xs font-semibold text-muted">{ locale.t('achievements.recent') }</p>
@@ -159,7 +181,7 @@ export default component PersonRecord(props: { handle: string; history?: boolean
                 <section>
                     <SectionHeading title={ locale.t('history.title') } />
 
-                    <Show when={ record.history().length === 0 && !record.historyLoading() && record.historyFailed() }>
+                    <Show when={ refused }>
                         { () =>
                             <Panel class="flex flex-col items-start gap-2 text-ui-sm text-muted">
                                 { locale.t('record.moreFailed') }
@@ -170,11 +192,11 @@ export default component PersonRecord(props: { handle: string; history?: boolean
                         }
                     </Show>
 
-                    <Show when={ record.history().length === 0 && !record.historyLoading() && !record.historyFailed() }>
+                    <Show when={ blank }>
                         { () => <Panel class="text-ui-sm text-muted">{ locale.t('history.empty') }</Panel> }
                     </Show>
 
-                    <Show when={ record.history().length > 0 }>
+                    <Show when={ listed }>
                         { () =>
                             <ul class="flex flex-col gap-2">
                                 <For each={ record.history() } key={ (row) => row.id } let={ row }>
@@ -214,11 +236,11 @@ export default component PersonRecord(props: { handle: string; history?: boolean
                         }
                     </Show>
 
-                    <Show when={ record.historyFailed() && record.history().length > 0 }>
+                    <Show when={ stalled }>
                         { () => <p class="mt-3 text-center text-ui-xs text-danger">{ locale.t('record.moreFailed') }</p> }
                     </Show>
 
-                    <Show when={ record.hasMore() && record.history().length > 0 }>
+                    <Show when={ further }>
                         { () =>
                             <LoadMore label={ locale.t('history.more') } loading={ record.historyLoading() } onMore={ () => void record.more() } />
                         }
