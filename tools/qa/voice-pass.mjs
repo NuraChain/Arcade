@@ -20,6 +20,12 @@
  * the server at once, so the other end hangs up for a different reason: the roster that leaves the
  * player out. The one roster in which a joining changes IN PLACE is another tab of the same player
  * taking the call, and the pass does that too.
+ *
+ * It ends with four players at one table, because two players are one connection and four are six:
+ * every page connected to the other three with packets both ways, through one of them leaving and
+ * coming back, one's socket being cut, and one reloading.
+ *
+ *   QA_BROWSER=firefox runs it all on Firefox.
  */
 import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -426,7 +432,107 @@ await mina.page.evaluate(() =>
     localStorage.setItem('nura-games.settings', JSON.stringify({ ...stored, voiceAutoJoin: false }));
 });
 
-const errors = [...dana.errors, ...mina.errors];
+for (const one of [dana, mina])
+{
+    await one.context.request.post(`${ BASE }/api/tables/${ table.id }/leave`, { data: { forfeit: true } }).catch(() => undefined);
+}
+
+const omid = await seat('omid.k');
+const sara = await seat('sara.k');
+const four = [dana, mina, omid, sara];
+
+const mesh = (page) => page.evaluate(async () =>
+{
+    const out = [];
+
+    for (const one of (window.__calls ?? []).filter((call) => call.connectionState !== 'closed'))
+    {
+        let sent = 0;
+        let got = 0;
+
+        for (const report of (await one.getStats()).values())
+        {
+            sent += report.type === 'outbound-rtp' ? report.packetsSent ?? 0 : 0;
+            got += report.type === 'inbound-rtp' ? report.packetsReceived ?? 0 : 0;
+        }
+
+        out.push({ state: one.connectionState, lines: one.getTransceivers().length, sent, got });
+    }
+
+    return out;
+});
+
+const meshed = (seen, peers) => seen.length === peers && seen.every((one) => one.state === 'connected' && one.lines === 1 && one.sent > 0 && one.got > 0);
+
+const together = (people, ms = 30_000) => until(async () =>
+    (await Promise.all(people.map((one) => mesh(one.page)))).every((seen) => meshed(seen, people.length - 1)), ms);
+
+const toldOf = async (people) => (await Promise.all(people.map(async (one) =>
+    `${ one.handle }: ${ (await mesh(one.page)).map((call) => `${ call.state } ${ call.got }/${ call.sent }`).join(', ') || 'no call' }`))).join(' | ');
+
+const crowded = await dana.context.request.post(`${ BASE }/api/tables`, {
+    data: tableBody({ game: 'ludo', seats: 4, mode: 'live', privacy: 'public', voice: 'table' })
+});
+const round = await crowded.json();
+
+for (const one of four.slice(1))
+{
+    await one.context.request.post(`${ BASE }/api/tables/${ round.id }/seat`);
+}
+
+for (const one of four)
+{
+    await one.page.goto(`${ BASE }/app/play/${ round.id }`);
+    await one.page.waitForLoadState('networkidle');
+}
+
+for (const one of four)
+{
+    await one.page.getByRole('button', { name: 'Join voice' }).first().click();
+}
+
+record('four players in one call each connect to the other three, with packets both ways on every line', crowded.ok() && await together(four), await toldOf(four));
+
+await players(dana.page);
+
+const lines = {};
+
+for (const name of ['Mina', 'Omid', 'Sara'])
+{
+    lines[name] = await pillOf(dana.page, name);
+}
+
+record('the players list says each of the other three is in the call, and none is left connecting',
+    Object.values(lines).every((texts) => texts.some((text) => text === 'Speaking' || text === 'In voice' || text === 'Muted')
+        && !texts.some((text) => text === 'Connecting' || text === 'Could not connect' || text === 'Can\'t talk with you')),
+    JSON.stringify(lines));
+await dana.page.screenshot({ path: 'tools/qa/out/voice-four.png' });
+
+await sara.page.getByRole('button', { name: 'Leave voice' }).first().click();
+record('one of the four leaving leaves the other three connected to each other and to nobody else',
+    await together([dana, mina, omid]) && (await mesh(sara.page)).length === 0, await toldOf(four));
+
+await sara.page.getByRole('button', { name: 'Join voice' }).first().click();
+record('and coming back connects them to all three again', await together(four), await toldOf(four));
+
+const omidBuilt = await built(omid.page);
+
+await cut(omid.page);
+record('a fourth whose socket drops is called again by all three', await until(async () => (await built(omid.page)) >= omidBuilt + 3, 30_000) && await together(four), await toldOf(four));
+
+await mina.page.reload();
+await mina.page.waitForLoadState('networkidle');
+record('somebody who reloads is out of the call, and the others are three', await together([dana, omid, sara]), await toldOf(four));
+
+await mina.page.getByRole('button', { name: 'Join voice' }).first().click();
+record('and is back in it with all three once they join again', await together(four), await toldOf(four));
+
+for (const one of four)
+{
+    await one.context.request.post(`${ BASE }/api/tables/${ round.id }/leave`, { data: { forfeit: false } }).catch(() => undefined);
+}
+
+const errors = [...dana.errors, ...mina.errors, ...omid.errors, ...sara.errors];
 record('no console errors', errors.length === 0, errors.slice(0, 4).join(' | '));
 
 await dana.context.request.post(`${ BASE }/api/tables/${ table.id }/close`).catch(() => undefined);

@@ -1147,6 +1147,20 @@ page's own `RTCPeerConnection` now - connected, one line, packets counted out an
 players leave and join together three more times, because a fault that shows two times in five passes
 a single try more often than not.
 
+**And then four, because two is one connection and a table seats four.** Four players in a call
+are six connections, each placed by whichever of its two handles sorts first, and nothing had ever
+had more than one. The pass seats four wallet fixtures and wants every page connected to the other
+three, one line each, packets counted both ways on all of them; then one leaves (the other three
+connected to each other and to nobody else) and comes back, one player's socket is cut from the
+page (all three call it again), and one reloads (out, and back with all three once it joins). It
+runs on Firefox as well (`QA_BROWSER=firefox`): thirty-seven checks on each. **The "ICE failed"
+the owner's Firefox logged was looked for and not found again**: twenty runs of a tracing
+diagnostic with two Firefox processes and no STUN connected every time, as did four whole passes.
+What that line means on two networks is what it says - with `VOICE_STUN_URLS` and
+`VOICE_TURN_URLS` empty there is no path between two machines that are not on one network, and
+the server now says so at boot and the page says who it could not reach (*A call that cannot
+reach somebody says so*).
+
 ### Voice while the game plays
 
 **The host switches voice, and the switch is a table ring.** `POST /tables/:id/voice` is host-only and
