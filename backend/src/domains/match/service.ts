@@ -410,16 +410,6 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
             };
         },
 
-        playersOf: async (matchId: string): Promise<string[]> =>
-            (await db.getRepository(MatchPlayer).find({ select: { userId: true }, where: { matchId } }))
-                .map((player) => player.userId),
-
-        liveFor: async (tableId: string) =>
-            (await db.getRepository(Match).findOne({
-                select: { id: true },
-                where: { tableId, finishedAt: IsNull() }
-            }))?.id ?? null,
-
         feed: async (matchId: string, rev: number): Promise<{ load: MatchLoad; events: (seat: number | null) => ActionLog[] } | null> =>
         {
             const found = await db.getRepository(Match).findOne({ where: { id: matchId } });

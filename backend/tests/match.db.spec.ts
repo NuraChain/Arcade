@@ -92,6 +92,9 @@ const seatedTable = async (seats: number, game = 'ludo'): Promise<{ tableId: str
 const walkOut = async (who: string, tableId: string) =>
     await tables.leave(who, tableId, (tx) => matches.walkOut(tx, who, tableId));
 
+const liveAt = async (viewer: string, tableId: string) =>
+    (await tables.byId(viewer, tableId))!.match_id;
+
 const countActions = async (matchId: string) =>
     Number(rowsOf<{ n: string }>(await db.query(
         `select count(*) as n from match_actions where match_id = $1 and kind <> 'open'`,
@@ -800,14 +803,14 @@ describe.skipIf(!active)('a match, against a real database', () =>
             const { tableId, players } = await seatedTable(2);
             const load = await matches.start(players[0], tableId);
 
-            expect(await matches.liveFor(tableId)).toBe(load.match.id);
+            expect(await liveAt(players[0], tableId)).toBe(load.match.id);
 
             await db.query(
                 `update matches set finished_at = now(), outcome = 'closed', deadline_at = null where id = $1`,
                 [load.match.id]
             );
 
-            expect(await matches.liveFor(tableId)).toBeNull();
+            expect(await liveAt(players[0], tableId)).toBeNull();
         });
 
         it('is offered to quick play fullest first, and never with a game already running', async () =>
@@ -902,7 +905,7 @@ describe.skipIf(!active)('a match, against a real database', () =>
             expect(seats.get(players[1])).toMatchObject({ result: 'abandoned', xp: 0 });
             expect(seats.get(players[1])!.rating_after).toBeLessThan(1200);
             expect(seats.get(players[0])).toMatchObject({ result: 'void', xp: 0, rating_after: null });
-            expect(await matches.liveFor(tableId)).toBeNull();
+            expect(await liveAt(players[0], tableId)).toBeNull();
         });
 
         it('keeps the chair it left out of anybody else’s reach until the game is over', async () =>
@@ -918,7 +921,7 @@ describe.skipIf(!active)('a match, against a real database', () =>
 
             await matches.act(players[2], load.match.id, { play: null, key: 'gives-up' });
 
-            expect(await matches.liveFor(tableId)).toBeNull();
+            expect(await liveAt(newcomer, tableId)).toBeNull();
             expect((await tables.open(newcomer, { game: 'ludo', mode: null }, 20)).map((row) => row.id)).toContain(tableId);
             expect(await tables.claimSeat(newcomer, tableId)).toBe(1);
         });
@@ -932,7 +935,7 @@ describe.skipIf(!active)('a match, against a real database', () =>
 
             expect(await walkOut(players[1], tableId)).toMatchObject({ left: true, walked: null });
             expect(await forfeitsOf(load.match.id)).toEqual([{ user_id: players[1], verb: 'resign' }]);
-            expect(await matches.liveFor(tableId)).toBe(load.match.id);
+            expect(await liveAt(players[0], tableId)).toBe(load.match.id);
         });
     });
 
@@ -990,7 +993,7 @@ describe.skipIf(!active)('a match, against a real database', () =>
             await tables.setReady(players[0], tableId, true);
 
             await expect(matches.start(players[0], tableId)).rejects.toMatchObject({ status: 409, message: 'Everybody has to be ready first.' });
-            expect(await matches.liveFor(tableId)).toBeNull();
+            expect(await liveAt(players[0], tableId)).toBeNull();
 
             await tables.setReady(players[1], tableId, true);
             const next = await matches.start(players[1], tableId);
