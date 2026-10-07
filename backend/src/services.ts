@@ -46,6 +46,7 @@ import type {
     PersonSummary,
     MatchPlay,
     MatchView,
+    Pulse,
     TableSummary
 } from './schemas.ts';
 import { matchView } from './schemas.ts';
@@ -108,6 +109,8 @@ export interface Services extends Ports
         sweepTables(): Promise<TableSweep>;
         tidy(): Promise<Record<string, number>>;
     };
+
+    pulse(): Promise<Pulse>;
 }
 
 const TURN_TTL_SECONDS = 3600;
@@ -133,6 +136,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
     const group = createGroupService(db, social);
     const achieve = createAchieveService(db);
     const table = createTableService(db, social);
+    const catalogue = createCatalogueService(db);
     const notify = createNotifyService(db, social);
 
     /**
@@ -1198,11 +1202,18 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
     return {
         jobs: { sweepTurns, sweepTables, tidy },
 
+        async pulse()
+        {
+            const [counts, watching] = await Promise.all([catalogue.live(), table.watchingMark()]);
+
+            return { games: counts.games, watching };
+        },
+
         meta: {
             info: () => ({ wire: 'nura-e2ee/v1', env: config.env })
         },
 
-        catalogue: createCatalogueService(db),
+        catalogue,
 
         identity: {
             secureCookies,

@@ -1041,10 +1041,31 @@ delivery path carrying message bodies would be a second place to get all three w
 have to be rewritten again the moment a body becomes ciphertext.
 
 `backend/src/realtime/frames.ts` is the whole wire. Server frames: `hello`, `presence`, `nudge`,
-`typing`, `voice`, `signal`, `game`, `ack`, `refused`, `pong`. Client frames: `sync`, `presence`,
-`typing`, `voice`, `signal`, `play`, `ping`. And
+`typing`, `voice`, `signal`, `game`, `ack`, `refused`, `pulse`, `pong`. Client frames: `sync`,
+`presence`, `typing`, `voice`, `signal`, `play`, `ping`. And
 `parseClientFrame` is total and strict — **unknown keys are refused**, because a frame carrying a
 field this version does not know is a frame from something that is not this client.
+
+**`pulse` is a delivery, and it may be because nothing on it belongs to anybody.** It carries how
+busy each game is - the numbers `GET /catalogue/live` answers to anyone - and `watching`, an opaque
+mark of which games are on at public tables. There is no membership, block or watermark for a second
+path to get wrong, and the alternative was worse: a doorbell rung for everybody makes everybody
+ask, one aggregate query per connected browser every couple of seconds on a busy evening, where
+the frame is one query for all of them. The hub asks (`HubDeps.pulse`, which is
+`services.pulse()`: the counts and `table.watchingMark()`) when a table changed, when somebody
+connects and at each sweep; never more than once in `PULSE_MS` (two seconds), never twice at
+once, and a change that arrives while it is asking is asked about again. It tells EVERYBODY, and
+only when the answer differs from the last one it told; a socket that connects is handed what
+the hub already knows, after its greeting and its snapshot. A table that changed and moved no
+number - a private one, a Ready - costs a query and no frame. `realtime-hub.spec.ts` (*how busy
+the games are*) holds each of those, `realtime.socket.spec.ts` that it reaches a real socket.
+
+The mark is `md5` over the ids of the live matches at tables that are public and not closed, in
+id order: the same set `table.watchable()` lists, by the same `ON_SHOW` clause, so it changes
+exactly when that list could. It is a hash and not a count on purpose. The list a reader is shown
+leaves out a host on either side of a block, and a count beside it would say "one more game is on
+than you can see". `catalogue.db.spec.ts` holds that it moves for a start and an end, for one
+ending as another starts, and not for a game at a table that is not public.
 
 **`n` is a per-connection sequence number and is NOT the e2ee `seq`.** It stamps the order frames
 left this server for one socket, nothing more. The envelope's `seq` in `nura-e2ee/v1` is bound

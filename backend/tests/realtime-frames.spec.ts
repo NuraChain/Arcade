@@ -3,7 +3,7 @@ import type { IncomingMessage } from 'node:http';
 
 import { admit, isSameOrigin } from '../src/realtime/admit.ts';
 import { addressKey, createHandshakeLimit } from '../src/realtime/handshake-limit.ts';
-import { hello, nudge, parseClientFrame, presence, REALTIME_WIRE, typing } from '../src/realtime/frames.ts';
+import { hello, nudge, parseClientFrame, presence, pulse, REALTIME_WIRE, typing } from '../src/realtime/frames.ts';
 
 /**
  * The realtime layer's pure half: what a frame may say, and who gets to open a socket at all.
@@ -222,13 +222,22 @@ describe('server frames', () =>
         expect(nudge(3, 'chat', 5, 'c-1')).toEqual({ v: 1, t: 'nudge', n: 3, scope: 'chat', id: 'c-1', at: 5 });
     });
 
+    it('says how busy the games are in numbers, and names nobody and no table', () =>
+    {
+        const games = [{ game: 'ludo', playing: 3, tables: 1 }];
+        const frame = pulse(5, { games, watching: 'a-mark' });
+
+        expect(frame).toEqual({ v: 1, t: 'pulse', n: 5, games, watching: 'a-mark' });
+    });
+
     it('never says anything about a message, which is the whole design', () =>
     {
         const frames = [
             hello(1, 'alex', 0),
             presence(2, true, [{ who: 'sara.k', state: 'online', since: 0 }]),
             nudge(3, 'chat', 0, 'c-1'),
-            typing(4, 'sara.k', 'c-1')
+            typing(4, 'sara.k', 'c-1'),
+            pulse(5, { games: [{ game: 'ludo', playing: 3, tables: 1 }], watching: 'a-mark' })
         ];
 
         // `n` is a per-connection delivery ordinal for gap detection. It is NOT the e2ee `seq`,

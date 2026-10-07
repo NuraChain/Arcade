@@ -15,6 +15,8 @@ export type GameFrame = Extract<ServerFrame, { t: 'game' }>;
 
 export type ReplyFrame = Extract<ServerFrame, { t: 'ack' | 'refused' }>;
 
+export type PulseFrame = Extract<ServerFrame, { t: 'pulse' }>;
+
 const SCOPES: readonly NudgeScope[] = ['chat', 'social', 'game', 'table', 'me'];
 
 export type RealtimeStatus = 'idle' | 'connecting' | 'connected' | 'down';
@@ -114,6 +116,8 @@ export interface RealtimeApi
 
     onReply(listener: (frame: ReplyFrame) => void): () => void;
 
+    onPulse(listener: (frame: PulseFrame) => void): () => void;
+
     play(match: string, key: string, rev: number | undefined, play: unknown): boolean;
 
     rtt: Getter<number | null>;
@@ -175,6 +179,7 @@ export const useRealtime = createStore((): RealtimeApi =>
     const signals = new Set<(frame: SignalFrame) => void>();
     const games = new Set<(frame: GameFrame) => void>();
     const replies = new Set<(frame: ReplyFrame) => void>();
+    const pulses = new Set<(frame: PulseFrame) => void>();
     const samples: { rtt: number; offset: number }[] = [];
     const [rtt, setRtt] = createSignal<number | null>(null);
     let offset = 0;
@@ -334,6 +339,15 @@ export const useRealtime = createStore((): RealtimeApi =>
         if (frame.t === 'pong')
         {
             sample(frame.at);
+            return;
+        }
+
+        if (frame.t === 'pulse')
+        {
+            for (const listener of pulses)
+            {
+                listener(frame);
+            }
             return;
         }
 
@@ -638,6 +652,12 @@ export const useRealtime = createStore((): RealtimeApi =>
             return () => replies.delete(listener);
         },
 
+        onPulse(listener)
+        {
+            pulses.add(listener);
+            return () => pulses.delete(listener);
+        },
+
         play: (match, key, rev, play) => sent(rev === undefined ? { t: 'play', match, key, play } : { t: 'play', match, key, rev, play }),
 
         rtt,
@@ -737,6 +757,7 @@ export const useRealtime = createStore((): RealtimeApi =>
             signals.clear();
             games.clear();
             replies.clear();
+            pulses.clear();
             samples.length = 0;
             offset = 0;
             pingedAt = 0;

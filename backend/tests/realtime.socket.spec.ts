@@ -88,7 +88,8 @@ beforeAll(async () =>
         touchSeen: () => undefined,
         report: () => undefined,
         voiceAllowed: async () => false,
-        mayTalk: async () => false
+        mayTalk: async () => false,
+        pulse: async () => ({ games: [{ game: 'ludo', playing: 2, tables: 1 }], watching: 'one-game-on' })
     });
 
     const hub = {
@@ -335,6 +336,18 @@ describe('a bound socket', () =>
         // said - which is exactly what it did while OPCODE.TEXT was undefined and this suite
         // parsed no frames at all.
         expect((await talker.closed).code).toBe(4400);
+    });
+
+    it('is told how busy the games are without asking', async () =>
+    {
+        const talker = talk('/ws', { Origin: 'http://localhost:3100', Cookie: COOKIE });
+        expect(await talker.status).toBe(101);
+        await settle(600);
+
+        expect(talker.frames.filter((frame) => frame.t === 'pulse')).toMatchObject([
+            { games: [{ game: 'ludo', playing: 2, tables: 1 }], watching: 'one-game-on' }
+        ]);
+        talker.end();
     });
 
     it('answers a ping with the server clock', async () =>

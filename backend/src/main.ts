@@ -128,7 +128,9 @@ const hub = createHub({
     {
         const [there, back] = await Promise.all([social.mayMessage(a, b), social.mayMessage(b, a)]);
         return there === null && back === null;
-    }
+    },
+
+    pulse: () => ports.pulse()
 });
 
 let goingDown = false;

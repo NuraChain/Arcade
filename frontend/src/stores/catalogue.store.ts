@@ -1,12 +1,13 @@
-import { createStore, createResource, type Getter } from 'azerothjs';
+import { createStore, createResource, createSignal, type Getter } from 'azerothjs';
 
-import { client } from '../api.ts';
+import { client, type LiveCounts } from '../api.ts';
 import { drawable } from '../components/games/boards.ts';
 import { GAMES, gameBySlug, type Game, type GameId } from '../data/games.ts';
 import { TABLE_RULES, defaultTable, type TableConfig, type TableRules } from '../data/tables.ts';
 import { runtime } from '../lib/runtime.ts';
 import { seatsByDefault } from '../../../backend/src/domains/table/quick.ts';
 import { teamsOf } from '../../../backend/src/domains/table/teams.ts';
+import { useRealtime } from './realtime.store.ts';
 import { useSettings } from './settings.store.ts';
 
 /**
@@ -34,16 +35,6 @@ export interface LiveStats
     playersOnline: number;
 }
 
-/**
- * How often the counts are re-read while somebody is looking at them.
- *
- * Slower than the six seconds the simulation used, because this is a real request rather than a
- * local RNG and "how busy is it" does not change meaningfully in six seconds. It is a poll rather
- * than a realtime frame on purpose: `social` already fans presence to every socket on the server
- * and adding a table count to it would make every seat claim anywhere a broadcast to everybody.
- */
-export const LIVE_REFRESH_MS = 30_000;
-
 export type GameStatus = 'available' | 'coming-soon' | 'disabled';
 
 export interface CatalogueApi
@@ -55,6 +46,7 @@ export interface CatalogueApi
     defaults(id: GameId): TableConfig;
     stats(id: GameId): LiveStats;
     totals: Getter<{ tablesOpen: number; playersOnline: number }>;
+    watching: Getter<string | null>;
     featured: Getter<GameId>;
 
     status(id: GameId): GameStatus;
@@ -73,6 +65,9 @@ const QUIET: LiveStats = { tablesOpen: 0, playersOnline: 0 };
 export const useCatalogue = createStore((): CatalogueApi =>
 {
     let stop: (() => void) | null = null;
+    let asked = 0;
+
+    const [told, setTold] = createSignal<{ after: number; games: LiveCounts['games']; watching: string } | null>(null);
 
     const catalogue = createResource(
         () => client.catalogue.games(),
@@ -80,9 +75,22 @@ export const useCatalogue = createStore((): CatalogueApi =>
     );
 
     const live = createResource(
-        () => client.catalogue.live(),
+        async () =>
+        {
+            const turn = asked += 1;
+
+            return { turn, games: (await client.catalogue.live()).games };
+        },
         { name: 'catalogue.live' }
     );
+
+    const rows = () =>
+    {
+        const pushed = told();
+        const pulled = live.data();
+
+        return pushed !== null && (pulled == null || pulled.turn <= pushed.after) ? pushed.games : pulled?.games ?? [];
+    };
 
     const published = (): Map<string, { status: GameStatus; rules: TableRules }> =>
     {
@@ -99,7 +107,7 @@ export const useCatalogue = createStore((): CatalogueApi =>
     const rulesFor = (id: GameId) => published().get(id)?.rules ?? TABLE_RULES[id];
 
     const counts = (): Map<string, LiveStats> => new Map(
-        (live.data()?.games ?? []).map((row) => [row.game, { tablesOpen: row.tables, playersOnline: row.playing }])
+        rows().map((row) => [row.game, { tablesOpen: row.tables, playersOnline: row.playing }])
     );
 
     return {
@@ -143,6 +151,8 @@ export const useCatalogue = createStore((): CatalogueApi =>
             return { tablesOpen, playersOnline };
         },
 
+        watching: () => told()?.watching ?? null,
+
         /**
          * The game of the day, and only ever one somebody can actually play.
          *
@@ -169,18 +179,20 @@ export const useCatalogue = createStore((): CatalogueApi =>
         {
             if (stop === null)
             {
-                const cancel = runtime().clock.every(LIVE_REFRESH_MS, () =>
+                const realtime = useRealtime();
+                const unhear = realtime.onPulse((frame) => setTold({ after: asked, games: frame.games, watching: frame.watching }));
+                const unring = realtime.onNudge((scope) =>
                 {
-                    const away = typeof document !== 'undefined' && (document.visibilityState === 'hidden' || navigator.onLine === false);
-
-                    if (!away)
+                    if (scope === 'table' && realtime.status() !== 'connected')
                     {
                         void live.refetch();
                     }
                 });
+
                 stop = () =>
                 {
-                    cancel();
+                    unhear();
+                    unring();
                     stop = null;
                 };
             }
@@ -195,6 +207,7 @@ export const useCatalogue = createStore((): CatalogueApi =>
         reset()
         {
             stop?.();
+            setTold(null);
             void catalogue.refetch();
             void live.refetch();
         }

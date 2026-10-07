@@ -1,9 +1,10 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createHub, EDGES_TTL_MS, LINGER_MS, type Connection, type Edges, type Hub, type Wire } from '../src/realtime/hub.ts';
+import { createHub, EDGES_TTL_MS, LINGER_MS, PULSE_MS, TICK_MS, type Connection, type Edges, type Hub, type Wire } from '../src/realtime/hub.ts';
 import type { Party } from '../src/domains/social/policy.ts';
 import type { Principal } from '../src/http/auth.ts';
 import type { ServerFrame } from '../src/realtime/frames.ts';
+import type { Pulse } from '../src/schemas.ts';
 
 /**
  * The hub, against a structural fake.
@@ -74,6 +75,10 @@ interface World
     seq: number;
     seated: Set<string>;
     apart: Set<string>;
+    pulse: Pulse;
+    asked: number;
+    held: Promise<Pulse> | null;
+    failing: boolean;
 }
 
 let world: World;
@@ -90,7 +95,11 @@ function build()
         errors: [],
         seq: 0,
         seated: new Set(),
-        apart: new Set()
+        apart: new Set(),
+        pulse: { games: [], watching: '' },
+        asked: 0,
+        held: null,
+        failing: false
     };
 
     state.hub = createHub({
@@ -112,7 +121,18 @@ function build()
         touchSeen: (ids) => state.touched.push(...ids),
         report: (_error, where) => state.errors.push(where),
         voiceAllowed: async (userId, tableId) => state.seated.has(`${ userId }@${ tableId }`),
-        mayTalk: async (a, b) => !state.apart.has([a, b].sort().join('|'))
+        mayTalk: async (a, b) => !state.apart.has([a, b].sort().join('|')),
+        pulse: async () =>
+        {
+            state.asked += 1;
+
+            if (state.failing)
+            {
+                throw new Error('the database is away');
+            }
+
+            return await (state.held ?? state.pulse);
+        }
     });
 
     return state;
@@ -1222,5 +1242,247 @@ describe('voice at a table', () =>
 
         expect(lastVoice(first.wire)).toMatchObject({ joined: false });
         expect(lastVoice(second.wire)).toMatchObject({ joined: true });
+    });
+});
+
+describe('how busy the games are', () =>
+{
+    const quiet = [{ game: 'ludo', playing: 0, tables: 0 }];
+    const busier = [{ game: 'ludo', playing: 2, tables: 1 }];
+    const NOTHING_ON = 'nothing-on';
+
+    const pulsesOf = (wire: FakeWire) =>
+        wire.framesOf('pulse').map((frame) => (frame.t === 'pulse' ? { games: frame.games, watching: frame.watching } : null));
+
+    const STEP_MS = 50;
+
+    const pass = async (ms: number) =>
+    {
+        for (let gone = 0; gone < ms; gone += STEP_MS)
+        {
+            const step = Math.min(STEP_MS, ms - gone);
+
+            world.at += step;
+            await vi.advanceTimersByTimeAsync(step);
+        }
+
+        await vi.advanceTimersByTimeAsync(0);
+    };
+
+    beforeEach(() =>
+    {
+        vi.useFakeTimers();
+        world.pulse = { games: quiet, watching: NOTHING_ON };
+    });
+
+    afterEach(() =>
+    {
+        vi.useRealTimers();
+    });
+
+    it('is worked out for the first socket there is, and told to it', async () =>
+    {
+        const alex = await connect('alex');
+
+        expect(pulsesOf(alex.wire)).toEqual([]);
+
+        await pass(TICK_MS);
+
+        expect(world.asked).toBe(1);
+        expect(pulsesOf(alex.wire)).toEqual([{ games: quiet, watching: NOTHING_ON }]);
+    });
+
+    it('is told to a socket that connects later at once, after its greeting and its snapshot', async () =>
+    {
+        await connect('alex');
+        await pass(PULSE_MS);
+
+        const asked = world.asked;
+        const sara = await connect('sara.k');
+
+        expect(sara.wire.sent.map((frame) => frame.t)).toEqual(['hello', 'presence', 'pulse']);
+        expect(sara.wire.sent.map((frame) => frame.n)).toEqual([1, 2, 3]);
+        expect(pulsesOf(sara.wire)).toEqual([{ games: quiet, watching: NOTHING_ON }]);
+        expect(world.asked, 'what it already knew was enough to greet with').toBe(asked);
+    });
+
+    it('is asked about again when somebody connects, so a newcomer is not left with old numbers', async () =>
+    {
+        await connect('alex');
+        await pass(PULSE_MS);
+
+        world.pulse = { games: busier, watching: NOTHING_ON };
+
+        const sara = await connect('sara.k');
+
+        await pass(PULSE_MS);
+
+        expect(pulsesOf(sara.wire)).toEqual([{ games: quiet, watching: NOTHING_ON }, { games: busier, watching: NOTHING_ON }]);
+    });
+
+    it('is told to everybody when a table changing has moved a number', async () =>
+    {
+        const alex = await connect('alex');
+        const sara = await connect('sara.k');
+
+        await pass(PULSE_MS);
+        world.pulse = { games: busier, watching: NOTHING_ON };
+        world.hub.tableChanged('t-1', ['alex']);
+        await pass(PULSE_MS);
+
+        expect(pulsesOf(alex.wire)).toEqual([{ games: quiet, watching: NOTHING_ON }, { games: busier, watching: NOTHING_ON }]);
+        expect(pulsesOf(sara.wire)).toEqual([{ games: quiet, watching: NOTHING_ON }, { games: busier, watching: NOTHING_ON }]);
+    });
+
+    it('says nothing when a table changed and no number did', async () =>
+    {
+        const alex = await connect('alex');
+
+        await pass(PULSE_MS);
+
+        const asked = world.asked;
+
+        world.hub.tableChanged('somebody-s-private-table', ['alex']);
+        await pass(PULSE_MS);
+
+        expect(world.asked).toBe(asked + 1);
+        expect(pulsesOf(alex.wire)).toHaveLength(1);
+    });
+
+    it('says so when what there is to watch has changed and no number has', async () =>
+    {
+        const alex = await connect('alex');
+
+        await pass(PULSE_MS);
+        world.pulse = { games: quiet, watching: 'one-game-on' };
+        world.hub.tableChanged('t-1', []);
+        await pass(PULSE_MS);
+
+        expect(pulsesOf(alex.wire)).toEqual([{ games: quiet, watching: NOTHING_ON }, { games: quiet, watching: 'one-game-on' }]);
+    });
+
+    it('asks once in a while however many tables change, and the last change is in what it tells', async () =>
+    {
+        const alex = await connect('alex');
+
+        await pass(PULSE_MS);
+
+        const asked = world.asked;
+        const CHANGES = 40;
+        const EVERY_MS = 100;
+
+        for (let change = 1; change <= CHANGES; change += 1)
+        {
+            world.pulse = { games: [{ game: 'ludo', playing: change, tables: 1 }], watching: NOTHING_ON };
+            world.hub.tableChanged(`t-${ change }`, []);
+            await pass(EVERY_MS);
+        }
+
+        await pass(PULSE_MS);
+
+        expect(world.asked - asked).toBeGreaterThanOrEqual(2);
+        expect(world.asked - asked).toBeLessThanOrEqual(Math.ceil((CHANGES * EVERY_MS + PULSE_MS) / PULSE_MS) + 1);
+        expect(pulsesOf(alex.wire).at(-1)).toEqual({ games: [{ game: 'ludo', playing: CHANGES, tables: 1 }], watching: NOTHING_ON });
+    });
+
+    it('asks again about a change that arrived while it was asking', async () =>
+    {
+        const alex = await connect('alex');
+
+        await pass(PULSE_MS);
+
+        let answer: (value: Pulse) => void = () => undefined;
+
+        world.held = new Promise<Pulse>((resolve) =>
+        {
+            answer = resolve;
+        });
+        world.hub.tableChanged('t-1', []);
+        await pass(TICK_MS);
+
+        expect(world.asked).toBe(2);
+
+        world.pulse = { games: busier, watching: NOTHING_ON };
+        world.hub.tableChanged('t-2', []);
+        world.held = null;
+        answer({ games: quiet, watching: NOTHING_ON });
+        await pass(PULSE_MS);
+
+        expect(world.asked).toBe(3);
+        expect(pulsesOf(alex.wire)).toEqual([{ games: quiet, watching: NOTHING_ON }, { games: busier, watching: NOTHING_ON }]);
+    });
+
+    it('never has two questions out at once, however slow the answer', async () =>
+    {
+        await connect('alex');
+        await pass(PULSE_MS);
+
+        world.held = new Promise<Pulse>(() => undefined);
+        world.hub.tableChanged('t-1', []);
+        await pass(TICK_MS);
+
+        const asked = world.asked;
+
+        for (let change = 0; change < 10; change += 1)
+        {
+            world.hub.tableChanged('t-1', []);
+            await pass(PULSE_MS);
+        }
+
+        expect(world.asked).toBe(asked);
+    });
+
+    it('reports an answer that fails, and asks again at the next change', async () =>
+    {
+        const alex = await connect('alex');
+
+        await pass(PULSE_MS);
+        world.failing = true;
+        world.hub.tableChanged('t-1', []);
+        await pass(PULSE_MS);
+
+        expect(world.errors).toEqual(['realtime.pulse']);
+        expect(pulsesOf(alex.wire)).toHaveLength(1);
+
+        world.failing = false;
+        world.pulse = { games: busier, watching: NOTHING_ON };
+        world.hub.tableChanged('t-1', []);
+        await pass(PULSE_MS);
+
+        expect(pulsesOf(alex.wire).at(-1)).toEqual({ games: busier, watching: NOTHING_ON });
+    });
+
+    it('is asked about again by the sweep, for a change nothing rang for', async () =>
+    {
+        const alex = await connect('alex');
+
+        await pass(PULSE_MS);
+        world.pulse = { games: busier, watching: NOTHING_ON };
+        await pass(60_000);
+
+        expect(pulsesOf(alex.wire)).toHaveLength(1);
+
+        await world.hub.sweep();
+        await pass(PULSE_MS);
+
+        expect(pulsesOf(alex.wire).at(-1)).toEqual({ games: busier, watching: NOTHING_ON });
+    });
+
+    it('is not asked about by the sweep while nobody is connected', async () =>
+    {
+        await world.hub.sweep();
+        await pass(PULSE_MS);
+
+        expect(world.asked).toBe(0);
+    });
+
+    it('is not asked about once the hub has said goodbye', async () =>
+    {
+        await connect('alex');
+        world.hub.tableChanged('t-1', []);
+        world.hub.closeAll(1001, 'Server restarting');
+        await pass(60_000);
+
+        expect(world.asked).toBe(0);
     });
 });

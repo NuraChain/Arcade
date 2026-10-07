@@ -3104,6 +3104,22 @@ match and the chairs). "Playing now" is still everybody seated at a public table
 game: people at the tables is what it says on Home. `catalogue.db.spec.ts` holds both, and was the
 first test of the counts at all.
 
+**The counts and the Watch list keep themselves up to date.** They were polls: the counts every
+thirty seconds from every signed-in browser, whatever page it was on, and the Watch list every
+fifteen. Both ride the realtime `pulse` frame now (`chat-and-keys.md`, *Realtime*). The catalogue
+store takes the numbers from the frame and asks over HTTP only when it starts, on a pull to
+refresh, and when everything is rung while there is no socket (the lifeline's beat), which is
+also the only time the Watch page reads on a ring. Two answers can cross, so each read is
+numbered: a frame wins over a read that was asked for before the frame arrived, and a read asked
+for after it wins until the next frame (`pulse.spec.ts`). The Watch page reads its list again when
+the frame's `watching` mark changes and at no other time, because that list is per reader (a
+block hides a host) and the mark is not; "started 5 minutes ago" is kept true by a minute's tick
+of its own, where it used to be a side effect of the poll. The time it is measured from is the
+later of that tick and the newest start on the page, because the first live check read "started
+in 2 seconds" for a game that began after the page was opened - and a browser whose clock is
+behind the server's had always been able to read that. `realtime-pass` watches the Games page
+and the Watch page in one browser while two others open, fill, start, end and close a table.
+
 **A finished match stays on screen, and the test for that is which TABLE it belongs to.**
 `tables.match_id` is the LIVE one, so it clears the instant somebody wins - and closing the board on
 that dropped the winner straight back to a lobby with a Start button at the exact moment the game had

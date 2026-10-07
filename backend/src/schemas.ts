@@ -247,6 +247,12 @@ export const liveCounts = object({ games: array(gameLive) });
 
 export type LiveCounts = Infer<typeof liveCounts>;
 
+export interface Pulse
+{
+    games: LiveCounts['games'];
+    watching: string;
+}
+
 /* -------------------------------------------------------------------------- identity */
 
 export const accountKind = enumOf(['wallet', 'guest']);

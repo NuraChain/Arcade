@@ -3,8 +3,8 @@ import { randomBytes } from 'node:crypto';
 import { maySeeOnline, type Party, type Relation } from '../domains/social/policy.ts';
 import type { Principal } from '../http/auth.ts';
 import { keyedQueue } from '../lib/keyed-queue.ts';
-import type { MatchEvent, MatchView } from '../schemas.ts';
-import { game, hello, nudge, presence, signal, typing, voice, type PresenceEntry, type PresenceState, type ServerFrame, type SignalKind, type VoicePeer } from './frames.ts';
+import type { MatchEvent, MatchView, Pulse } from '../schemas.ts';
+import { game, hello, nudge, presence, pulse, signal, typing, voice, type PresenceEntry, type PresenceState, type ServerFrame, type SignalKind, type VoicePeer } from './frames.ts';
 
 /**
  * What the hub needs from a socket.
@@ -52,6 +52,8 @@ export interface HubDeps
 
     mayTalk(a: string, b: string): Promise<boolean>;
 
+    pulse(): Promise<Pulse>;
+
     /** Sockets one account may hold at once. */
     accountMax: number;
 }
@@ -94,6 +96,8 @@ export const EDGES_TTL_MS = 60_000;
 
 /** Deltas inside one window collapse into one frame. */
 export const TICK_MS = 150;
+
+export const PULSE_MS = 2000;
 
 export const VIEWED_MAX = 4;
 
@@ -557,6 +561,65 @@ export function createHub(deps: HubDeps): Hub
 
     const later = new Set<ReturnType<typeof setTimeout>>();
 
+    let told: { text: string; pulse: Pulse } | null = null;
+    let pulseDue = false;
+    let pulseAsking = false;
+    let pulseAskedAt = 0;
+    let pulseTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const armPulse = () =>
+    {
+        if (pulseTimer !== null || pulseAsking)
+        {
+            return;
+        }
+
+        pulseTimer = setTimeout(() =>
+        {
+            pulseTimer = null;
+            void takePulse();
+        }, Math.max(TICK_MS, pulseAskedAt + PULSE_MS - deps.now()));
+        pulseTimer.unref?.();
+    };
+
+    const feel = () =>
+    {
+        pulseDue = true;
+        armPulse();
+    };
+
+    async function takePulse()
+    {
+        pulseAsking = true;
+        pulseDue = false;
+        pulseAskedAt = deps.now();
+
+        try
+        {
+            const next = await deps.pulse();
+            const text = JSON.stringify([next.games, next.watching]);
+
+            if (told?.text !== text)
+            {
+                told = { text, pulse: next };
+                publish([...byUser.keys()], (n) => pulse(n, next));
+            }
+        }
+        catch (error)
+        {
+            deps.report(error, 'realtime.pulse');
+        }
+        finally
+        {
+            pulseAsking = false;
+
+            if (pulseDue)
+            {
+                armPulse();
+            }
+        }
+    }
+
     function flush()
     {
         flushing = flushing.then(drain, drain);
@@ -685,6 +748,15 @@ export function createHub(deps: HubDeps): Hub
             emit(socket, (n) => hello(n, principal.handle, deps.now()));
             sendSnapshot(socket);
 
+            if (told !== null)
+            {
+                const known = told.pulse;
+
+                emit(socket, (n) => pulse(n, known));
+            }
+
+            feel();
+
             if (first)
             {
                 // Everybody but the socket that just got the full snapshot, which would
@@ -747,6 +819,7 @@ export function createHub(deps: HubDeps): Hub
             const current = pendingTable.get(tableId);
             pendingTable.set(tableId, { at: deps.now(), people: new Set([...(current?.people ?? []), ...people]) });
             schedule();
+            feel();
         },
 
         tableViewed(userId, tableId)
@@ -967,6 +1040,12 @@ export function createHub(deps: HubDeps): Hub
         async sweep()
         {
             const at = deps.now();
+
+            if (byUser.size > 0)
+            {
+                feel();
+            }
+
             for (const [userId, record] of [...online])
             {
                 if (record.leftAt !== null && at - record.leftAt >= LINGER_MS)
@@ -1055,6 +1134,15 @@ export function createHub(deps: HubDeps): Hub
                 clearTimeout(ring);
             }
             later.clear();
+
+            if (pulseTimer !== null)
+            {
+                clearTimeout(pulseTimer);
+                pulseTimer = null;
+            }
+
+            pulseDue = false;
+            told = null;
 
             let sent = 0;
             for (const sockets of [...byUser.values()])

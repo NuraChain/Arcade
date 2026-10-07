@@ -1036,7 +1036,9 @@ The client half of the same audits, each a thing that outlived what it belonged 
   largest paint starts with the HTML rather than after the stylesheet, and each screen still fetches
   exactly one of the three. `tools/prerender-locales.mjs` writes the two links into the prerendered
   files only, because the other pages share `index.html`.
-- **Hidden and offline tabs stop polling** the live counts and the watch list.
+- **Nothing polls the live counts or the watch list.** Both follow the realtime `pulse` frame, and a
+  page with no socket reads them on the lifeline's ring (`.claude/rules/games.md`, *The counts and
+  the Watch list keep themselves up to date*).
 - **Hokm's gather reads every card's box before it moves any**, instead of a read and a write per card.
 - **A scroll waits on no script unless it could become a gesture.** The pull-to-refresh and back-swipe
   listener has to be non-passive to cancel the scroll, so it is attached only for a touch that starts

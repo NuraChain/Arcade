@@ -255,6 +255,8 @@ const visibleTo = (viewer: string) => `(
                                          where cm.conversation_id = t.room_id and cm.user_id = ${ viewer }))
 )`;
 
+const ON_SHOW = `t.status <> 'closed' and t.privacy = 'public'`;
+
 export const SEATED_MAX = 50;
 
 export const tableRefusal = (word: TableRefusal, message: string) =>
@@ -674,7 +676,7 @@ export function createTableService(db: DataSource, social: SocialService)
                        where p.match_id = m.id)`,
                     'players'
                 )
-                .where(`t.status <> 'closed' and t.privacy = 'public'`)
+                .where(ON_SHOW)
                 .andWhere('(cast(:game as varchar) is null or t.game = :game)', { game })
                 .andWhere(
                     `not exists (select 1 from blocks b
@@ -692,6 +694,18 @@ export function createTableService(db: DataSource, social: SocialService)
                     players: string[];
                     started_at: Date;
                 }>();
+        },
+
+        async watchingMark()
+        {
+            const found = await db.getRepository(Table)
+                .createQueryBuilder('t')
+                .innerJoin(Match, 'm', 'm.table_id = t.id and m.finished_at is null')
+                .select(`md5(coalesce(string_agg(m.id::text, ',' order by m.id), ''))`, 'mark')
+                .where(ON_SHOW)
+                .getRawOne<{ mark: string }>();
+
+            return found?.mark ?? '';
         },
 
         /**

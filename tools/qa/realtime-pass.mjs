@@ -269,6 +269,56 @@ try
     record('neither browser was reloaded for the removal or the way back', unmoved.every(Boolean), unmoved.join(', '));
     await clearTables(dana, mina);
 
+    const lens = await omid.context.newPage();
+    const tally = async () =>
+    {
+        const card = omid.page.locator('main article').filter({ has: omid.page.getByRole('link', { name: 'Ludo', exact: true }) }).first();
+        const found = (await card.locator('p').last().innerText().catch(() => '')).match(/\d+/g) ?? [];
+
+        return { playing: Number(found[0] ?? -1), tables: Number(found[1] ?? -1) };
+    };
+    const moved = async (from, playing, tables) =>
+    {
+        const now = await tally();
+
+        return now.playing === from.playing + playing && now.tables === from.tables + tables;
+    };
+
+    await omid.page.goto(`${ BASE }/app/games`);
+    await omid.page.waitForSelector('main article');
+    await lens.goto(`${ BASE }/app/watch`);
+    await lens.waitForSelector('main');
+    await omid.page.evaluate(() => { window.__sameLoad = true; });
+    await lens.evaluate(() => { window.__sameLoad = true; });
+    await new Promise((resolve) => setTimeout(resolve, 2500));
+
+    const quiet = await tally();
+    const shown = await dana.api('POST', '/tables/', tableBody({ game: 'ludo', seats: 2, mode: 'live', privacy: 'public' }));
+    const shownId = shown.body?.id;
+    const onShow = () => lens.locator(`a[href="/app/play/${ shownId }"]`).count();
+
+    record('the Games page counts somebody else\'s new table as open, and its host as playing, without a reload', await soon(async () => await moved(quiet, 1, 1), 10_000), JSON.stringify(await tally()));
+
+    await mina.api('POST', `/tables/${ shownId }/seat`);
+    record('a table whose last chair is taken stops being open on the Games page, without a reload', await soon(async () => await moved(quiet, 2, 0), 10_000), JSON.stringify(await tally()));
+    record('a table nobody is playing at yet is not on the Watch page', await onShow() === 0);
+
+    await dana.api('POST', `/tables/${ shownId }/ready`, { ready: true });
+    await mina.api('POST', `/tables/${ shownId }/ready`, { ready: true });
+
+    const shownGame = await dana.api('POST', `/tables/${ shownId }/start`);
+
+    record('a game that starts is on the Watch page without a reload', await soon(async () => await onShow() > 0, 10_000));
+
+    await mina.api('POST', `/matches/${ shownGame.body?.id }/resign`, { key: randomUUID() });
+    record('a game that ends leaves the Watch page without a reload', await soon(async () => await onShow() === 0, 10_000));
+
+    await dana.api('POST', `/tables/${ shownId }/close`);
+    record('a table that closes takes its people off the Games page, without a reload', await soon(async () => await moved(quiet, 0, 0), 10_000), JSON.stringify(await tally()));
+    record('neither of those pages was reloaded', await omid.page.evaluate(() => window.__sameLoad === true) && await lens.evaluate(() => window.__sameLoad === true));
+    await lens.close();
+    await clearTables(dana, mina);
+
     const second = await mina.context.newPage();
     await omid.page.goto(`${ BASE }/app/chats`);
     await omid.page.waitForSelector('main');

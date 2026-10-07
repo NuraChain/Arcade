@@ -1,4 +1,4 @@
-import type { MatchEvent, MatchView } from '../schemas.ts';
+import type { MatchEvent, MatchView, Pulse } from '../schemas.ts';
 
 export type PresenceState = 'online' | 'away';
 
@@ -37,6 +37,7 @@ export type ServerFrame =
     | { v: 1; t: 'game'; n: number; at: number; match: MatchView; events: MatchEvent[] }
     | { v: 1; t: 'ack'; n: number; key: string; match: MatchView; applied: Applied; events: MatchEvent[] }
     | { v: 1; t: 'refused'; n: number; key: string; match: string; status: number; code: string; message: string }
+    | { v: 1; t: 'pulse'; n: number; games: Pulse['games']; watching: string }
     | { v: 1; t: 'pong'; n: number; at: number };
 
 export type Applied = 'now' | 'already' | 'stale';
@@ -104,6 +105,9 @@ export const ack = (n: number, key: string, match: MatchView, applied: Applied, 
 
 export const refused = (n: number, key: string, match: string, why: { status: number; code: string; message: string }): ServerFrame =>
     ({ v: 1, t: 'refused', n, key, match, status: why.status, code: why.code, message: why.message });
+
+export const pulse = (n: number, told: Pulse): ServerFrame =>
+    ({ v: 1, t: 'pulse', n, games: told.games, watching: told.watching });
 
 export const pong = (n: number, at: number): ServerFrame => ({ v: 1, t: 'pong', n, at });
 
