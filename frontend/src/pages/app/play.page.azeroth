@@ -101,6 +101,17 @@ export default component PlayPage()
 
     let hush: (() => void)[] = [];
 
+    let offer = '';
+
+    const withdraw = () =>
+    {
+        if (offer !== '')
+        {
+            toasts.dismiss(offer);
+            offer = '';
+        }
+    };
+
     state drawn = '';
 
     const route = useRoute();
@@ -129,6 +140,7 @@ export default component PlayPage()
         return () =>
         {
             release();
+            withdraw();
 
             if (untrack(voice.table) === mine)
             {
@@ -193,18 +205,24 @@ export default component PlayPage()
 
     effect
     {
-        if (!talkable)
+        const id = talkable ? table!.id : null;
+        const calling = voice.table() !== null;
+
+        if (id === null || calling)
+        {
+            withdraw();
+        }
+
+        if (id === null)
         {
             offered = '';
             return;
         }
 
-        const id = table!.id;
-
-        if (voice.table() === null && !untrack(settings.settings).voiceAutoJoin && id !== offered)
+        if (!calling && !untrack(settings.settings).voiceAutoJoin && id !== offered)
         {
             offered = id;
-            toasts.show({
+            offer = toasts.show({
                 kind: 'info',
                 icon: 'voice',
                 text: locale.t('voice.offered'),

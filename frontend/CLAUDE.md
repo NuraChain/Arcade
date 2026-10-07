@@ -728,6 +728,17 @@ their corner. The store used to carry a `placement` and a `setPlacement` that no
 with the CSS for a top placement written and never drawn: both are gone, the host reads what it needs.
 `shell.spec.ts` (*beside a sheet*) holds the three cases.
 
+**An offer in a toast is taken back when it stops being true.** A table with voice offers the call
+in a toast with a Join button, and a toast outlives whatever raised it. The host switched voice off
+and "This table has voice" stayed beside "Voice is off at this table". A reader who joined from the
+dock was still offered the call they were in. A reader who left the page took the toast with them,
+and its button then put them in the call of a table whose page they were no longer on - the only
+place that call can be left or muted from. The play page keeps the id `toasts.show` answers with and
+dismisses it when the table stops offering a call, when the reader is in one, and in its teardown;
+the offer is still made again after a host switches voice off and on. `play.spec.ts` (*the offer to
+join the call*) holds the three. Any toast whose action does something only one page can undo owes
+the same.
+
 **The wallet address has to be readable and copyable, because the whole peer story rests on it.**
 *Whose device is that?* asks a person to compare an address out of band "the way a safety number
 is" — and it was rendered `truncate`d, in full, with nothing to copy it with. A comparison nobody can

@@ -1453,6 +1453,91 @@ describe('PlayPage', () =>
         });
     });
 
+    describe('the offer to join the call', () =>
+    {
+        const microphone = { stop: () => undefined } as unknown as MediaStreamTrack;
+        const granted = { getTracks: () => [microphone], getAudioTracks: () => [microphone] } as unknown as MediaStream;
+        let stop: () => void = () => undefined;
+
+        const offers = () => useToasts().items().filter((toast) => toast.dedupe?.startsWith('voice-offer-') === true);
+
+        const seated = async () =>
+        {
+            const lobby = useLobby();
+            const id = await lobby.host('ludo', { ...defaultTable('ludo'), voice: 'table' }, []);
+            const routes: Route[] = [{ path: '/app/play/:id', component: (): HTMLElement => PlayPage() as HTMLElement }];
+            const router = createRouter({ routes, history: createMemoryHistory(`/app/play/${ id }`), scroll: false });
+            const drawn = renderTest(() => RouterProvider({ router, children: () => Routes({}) }) as Rendered);
+
+            await vi.waitFor(() => expect(offers()).toHaveLength(1), { timeout: 4000 });
+            await settle();
+
+            return { id, drawn };
+        };
+
+        beforeEach(() =>
+        {
+            useSettings().reset();
+            useToasts().reset();
+            setVoiceMedia(() => ({ getUserMedia: async () => granted }) as unknown as MediaDevices);
+            setVoiceCall(() => ({
+                setMic: async () => undefined,
+                setMuted: () => undefined,
+                sync: () => undefined,
+                receive: async () => undefined,
+                setVolume: () => undefined,
+                setSink: () => undefined,
+                close: () => undefined
+            }));
+            useVoice().reset();
+            stop = useVoice().start();
+        });
+
+        afterEach(() =>
+        {
+            stop();
+            useVoice().reset();
+            setVoiceCall(null);
+            setVoiceMedia(null);
+            useSettings().reset();
+            useToasts().reset();
+        });
+
+        it('is taken back when the host turns voice off, and made again when it comes back on', async () =>
+        {
+            const { id } = await seated();
+
+            await useLobby().setVoice(id, 'off');
+            await settle();
+
+            expect(offers(), 'the page still offered a call the table no longer has').toHaveLength(0);
+
+            await useLobby().setVoice(id, 'table');
+            await vi.waitFor(() => expect(offers()).toHaveLength(1), { timeout: 4000 });
+        });
+
+        it('is taken back once the reader is in the call', async () =>
+        {
+            const { id } = await seated();
+
+            await useVoice().join(id);
+            await vi.waitFor(() => expect(useVoice().table()).toBe(id), { timeout: 4000 });
+            await settle();
+
+            expect(offers(), 'the page still offered a call the reader is in').toHaveLength(0);
+        });
+
+        it('does not follow the reader off the page', async () =>
+        {
+            const { drawn } = await seated();
+
+            drawn.unmount();
+            await settle();
+
+            expect(offers(), 'a Join button for the call of a table the reader has left').toHaveLength(0);
+        });
+    });
+
     describe('playing again once a game is over', () =>
     {
         const over = (tableId: string) => ({
