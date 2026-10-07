@@ -29,6 +29,7 @@
  */
 
 import type { MatchBoard, MatchLog, MatchPlay } from '../../schemas.ts';
+import type { Format, Variant } from './sides.ts';
 
 /**
  * Why a seat stopped playing, and the closed set is the platform's rather than a game's.
@@ -90,6 +91,7 @@ export interface TableConfig
     target: number;
     cube: boolean;
     blinds: 'low' | 'mid' | 'high';
+    variant: Variant;
 }
 
 export interface Opened<S>
@@ -103,7 +105,7 @@ export interface Engine<S = unknown, A = unknown>
     /** The `games.id` this engine plays. One engine, one game. */
     readonly id: string;
 
-    readonly seats: readonly number[];
+    readonly formats: readonly Format[];
 
     create(seats: readonly number[], draws: Draws, table: TableConfig): Opened<S>;
 
@@ -154,9 +156,9 @@ export interface Engine<S = unknown, A = unknown>
 
     standings(state: S): Placement[];
 
-    sideOf(seat: number, seats: number): number;
+    sideOf(seat: number, format: Format): number;
 
-    engagement(seats: number): Engagement;
+    engagement(format: Format): Engagement;
 
     turnKey(state: S): string;
 

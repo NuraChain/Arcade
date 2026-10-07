@@ -19,7 +19,7 @@ other game.
 
 | | |
 |---|---|
-| seats | 2, 6 or 9 (`game_rules.seats`, `Engine.seats`) |
+| seats | 2, 6 or 9 (`game_rules.seats`; `Engine.formats`, each of them `standard`) |
 | stack | 1,500 each, no antes, no rebuys |
 | blinds | rise every 10 hands: 10/20, 15/30, 25/50, 50/100, 75/150, 100/200, 150/300, 200/400, 300/600, 400/800, 600/1200, 800/1600, 1000/2000, then doubling (capped at 1,000,000 so every number stays inside the wire's bounds) |
 | opening level | `tables.blinds`: `low` 10/20, `mid` 25/50, `high` 50/100 |

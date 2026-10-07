@@ -1,9 +1,9 @@
 import 'reflect-metadata';
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { DataSource } from 'typeorm';
+import { DataSource, type EntityManager } from 'typeorm';
 
-import { entities } from '../src/entities/index.ts';
+import { Match, entities } from '../src/entities/index.ts';
 import { seedReference } from '../src/db/seed-reference.ts';
 import { syncSchema } from '../src/db/schema.ts';
 import { rowsOf } from '../src/lib/rows.ts';
@@ -14,6 +14,7 @@ import { pokerEngine } from '../src/domains/match/engines/poker.ts';
 import { FINISHED, YARD } from '../src/domains/match/ludo/board.ts';
 import type { LudoState } from '../src/domains/match/ludo/state.ts';
 import type { PokerState } from '../src/domains/match/poker/state.ts';
+import type { Variant } from '../src/domains/match/sides.ts';
 
 const url = process.env.TEST_DATABASE_URL;
 
@@ -25,7 +26,7 @@ let seq = 0;
 
 const HOME = [FINISHED, FINISHED, FINISHED, FINISHED];
 
-const ENGAGED = ludoEngine.engagement(2).after;
+const ENGAGED = ludoEngine.engagement({ seats: 2, variant: 'standard' }).after;
 
 const makeUser = async () =>
 {
@@ -59,6 +60,8 @@ const WON = () => board([HOME, [12, YARD, YARD, YARD]], 0);
 
 const EMPTIED = () => board([[3, YARD, YARD, YARD], [YARD, YARD, YARD, YARD]], 0, [false, true]);
 
+const FOUR = () => board([HOME, [12, YARD, YARD, YARD], [30, 5, YARD, YARD], [8, YARD, YARD, YARD]], 0);
+
 interface Ledger
 {
     own?: number[];
@@ -66,6 +69,7 @@ interface Ledger
     quits?: { seat: number; walked: boolean }[];
     later?: number[];
     players?: string[];
+    variant?: Variant;
 }
 
 const seatsOf = (state: LudoState | PokerState) => (state.game === 'ludo' ? state.players.length : state.seats);
@@ -74,6 +78,7 @@ const played = async (state: LudoState | PokerState, ledger: Ledger = {}): Promi
 {
     const players = [...(ledger.players ?? [])];
     const verb = state.game === 'ludo' ? 'roll' : 'call';
+    const variant = ledger.variant ?? 'standard';
 
     while (players.length < seatsOf(state))
     {
@@ -82,16 +87,16 @@ const played = async (state: LudoState | PokerState, ledger: Ledger = {}): Promi
 
     const tableId = rowsOf<{ id: string }>(await db.query(
         `insert into tables (game, code, host_id, seats, mode, privacy, target, cube, blinds, chat, voice, teams)
-         values ($4, $3, $1, $2, 'live', 'public', 0, false, 'low', true, 'off', false)
+         values ($4, $3, $1, $2, 'live', 'public', 0, false, 'low', true, 'off', $5)
          returning id`,
-        [players[0], seatsOf(state), `t${ seq }${ Math.floor(Math.random() * 1000000) }`, state.game]
+        [players[0], seatsOf(state), `t${ seq }${ Math.floor(Math.random() * 1000000) }`, state.game, variant === 'teams']
     ))[0].id;
 
     const matchId = rowsOf<{ id: string }>(await db.query(
         `insert into matches (table_id, game, variant, seats, state, rev, deadline_at)
-         values ($1, $5, 'standard', $2, $3::jsonb, $4, now() + interval '1 hour')
+         values ($1, $5, $6, $2, $3::jsonb, $4, now() + interval '1 hour')
          returning id`,
-        [tableId, seatsOf(state), JSON.stringify(state), state.rev, state.game]
+        [tableId, seatsOf(state), JSON.stringify(state), state.rev, state.game, variant]
     ))[0].id;
 
     const quits = ledger.quits ?? [];
@@ -244,9 +249,11 @@ describe.skipIf(!active)('a record, against a real database', () =>
 
     const recorder = () => createRecorder(createAchieveService(db));
 
+    const rowOf = (tx: EntityManager, matchId: string) => tx.getRepository(Match).findOneByOrFail({ id: matchId });
+
     const finish = async (matchId: string, state: LudoState) =>
     {
-        await db.transaction((tx) => recorder().finish(tx, matchId, ludoEngine, state, ludoEngine.finish(state)!));
+        await db.transaction(async (tx) => recorder().finish(tx, await rowOf(tx, matchId), ludoEngine, state, ludoEngine.finish(state)!));
     };
 
     describe('a game somebody won', () =>
@@ -388,6 +395,38 @@ describe.skipIf(!active)('a record, against a real database', () =>
         });
     });
 
+    describe('a game played two against two', () =>
+    {
+        const ratedAt = async (matchId: string) =>
+            rowsOf<{ result: string; rating_after: number }>(await db.query(
+                `select result, rating_after from match_players where match_id = $1 order by seat`,
+                [matchId]
+            ));
+
+        it('is rated side against side when the match row says teams, and seat against seat when it does not', async () =>
+        {
+            const state = FOUR();
+            const paired = await played(state, { variant: 'teams' });
+            const alone = await played(state);
+
+            await finish(paired.matchId, state);
+            await finish(alone.matchId, state);
+
+            expect(await ratedAt(paired.matchId)).toEqual([
+                { result: 'won', rating_after: 1216 },
+                { result: 'lost', rating_after: 1184 },
+                { result: 'won', rating_after: 1216 },
+                { result: 'lost', rating_after: 1184 }
+            ]);
+            expect(await ratedAt(alone.matchId)).toEqual([
+                { result: 'won', rating_after: 1216 },
+                { result: 'lost', rating_after: 1195 },
+                { result: 'lost', rating_after: 1205 },
+                { result: 'lost', rating_after: 1184 }
+            ]);
+        });
+    });
+
     describe('a room that emptied before anybody played', () =>
     {
         it('rates the quitter down and writes nothing at all for the seat left behind', async () =>
@@ -488,14 +527,14 @@ describe.skipIf(!active)('a record, against a real database', () =>
         it('pays a poker win played out after somebody quit in full', async () =>
         {
             const state: PokerState = {
-                ...pokerEngine.create([0, 1, 2], { die: () => 1 }, { target: 0, cube: false, blinds: 'low' }).state,
+                ...pokerEngine.create([0, 1, 2], { die: () => 1 }, { target: 0, cube: false, blinds: 'low', variant: 'standard' }).state,
                 out: [false, true, true],
                 places: [1, 3, 2],
                 winner: 0
             };
             const { matchId, players } = await played(state, { own: [3, 3, 3], quits: [{ seat: 1, walked: true }], later: [2, 0, 2] });
 
-            await db.transaction((tx) => recorder().finish(tx, matchId, pokerEngine, state, pokerEngine.finish(state)!));
+            await db.transaction(async (tx) => recorder().finish(tx, await rowOf(tx, matchId), pokerEngine, state, pokerEngine.finish(state)!));
 
             expect(await seatOf(matchId, 0)).toMatchObject({ result: 'won', xp: 35 });
             expect(await statsOf(players[0], 'poker')).toMatchObject({ played: 1, won: 1, streak: 1, xp: 35 });

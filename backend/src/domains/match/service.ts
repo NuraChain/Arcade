@@ -17,6 +17,7 @@ import { hokmEngine } from './engines/hokm.ts';
 import { ludoEngine } from './engines/ludo.ts';
 import { pokerEngine } from './engines/poker.ts';
 import { REFUSALS, isRefusal, type RefusalWord } from './refusals.ts';
+import { variantOf } from './sides.ts';
 import { nextMissForfeits, turnMs } from './turns.ts';
 import type { MatchLog } from '../../schemas.ts';
 import type { MatchHistory } from '../../schemas.ts';
@@ -296,7 +297,7 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
 
         if (ending !== null)
         {
-            await recorder.finish(tx, match.id, engine, next, ending);
+            await recorder.finish(tx, match, engine, next, ending);
             await tx.getRepository(TableSeat).update({ tableId: match.tableId, ready: true }, { ready: false });
         }
     };
@@ -478,6 +479,13 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
                     throw new ValidationError({ game: 'No engine yet.' }, 'That game cannot be played here yet.');
                 }
 
+                const variant = variantOf(table.teams);
+
+                if (!engine.formats.some((format) => format.seats === table.seats && format.variant === variant))
+                {
+                    throw new ValidationError({ format: 'Not a format this game plays.' }, 'That game cannot be played here yet.');
+                }
+
                 if (chairs.some((chair) => chair.userId === null))
                 {
                     throw tableRefusal('chairs-empty', 'Every chair has to be taken first.');
@@ -489,16 +497,16 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
                 }
 
                 const seats = chairs.map((chair) => chair.seat);
-                const { state, events } = engine.create(seats, draws, { target: table.target, cube: table.cube, blinds: table.blinds as TableConfig['blinds'] });
+                const { state, events } = engine.create(seats, draws, { target: table.target, cube: table.cube, blinds: table.blinds as TableConfig['blinds'], variant });
 
                 const inserted = firstRow<{ id: string }>(await tx.query(
                     `insert into matches (table_id, game, variant, seats, state, rev, deadline_at)
-                     select $1, $2, 'standard', $3::smallint, $4::jsonb, $7::int, now() + ($5 || ' milliseconds')::interval
+                     select $1, $2, $8, $3::smallint, $4::jsonb, $7::int, now() + ($5 || ' milliseconds')::interval
                       where not exists (select 1 from matches where table_id = $1 and finished_at is null)
                         and (select count(*) from table_seats s where s.table_id = $1 and s.user_id is not null) = $6::bigint
                         and not exists (select 1 from table_seats s where s.table_id = $1 and s.ready = false)
                      returning id`,
-                    [tableId, table.game, table.seats, JSON.stringify(state), turnMs(table.mode), table.seats, revOf(state)]
+                    [tableId, table.game, table.seats, JSON.stringify(state), turnMs(table.mode), table.seats, revOf(state), variant]
                 ));
 
                 if (inserted === null)
@@ -764,7 +772,13 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
         },
 
         envelope: (load: MatchLoad) =>
-            envelopeOf(engineFor(load.match.game), load.state, load.players, load.match.finishedAt !== null),
+            envelopeOf(
+                engineFor(load.match.game),
+                load.state,
+                load.players,
+                load.match.finishedAt !== null,
+                { seats: load.match.seats, variant: load.match.variant }
+            ),
 
         /**
          * The board with nobody looking at it.

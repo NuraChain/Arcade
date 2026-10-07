@@ -1,10 +1,9 @@
 import { Check, Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
 import { Game } from './game.entity.ts';
 import { Table } from './table.entity.ts';
+import type { Variant } from '../domains/match/sides.ts';
 
 export type MatchOutcome = 'won' | 'abandoned';
-
-export type MatchVariant = 'standard' | 'teams';
 
 /**
  * One game somebody actually played.
@@ -43,7 +42,7 @@ export class Match
     game!: string;
 
     @Column({ type: 'varchar', length: 24 })
-    variant!: MatchVariant;
+    variant!: Variant;
 
     @Column({ type: 'smallint' })
     seats!: number;

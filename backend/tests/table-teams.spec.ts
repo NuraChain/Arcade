@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest';
 
 import '../src/entities/index.ts';
 import { GAME_SEEDS } from '../src/db/seed-reference.ts';
+import { variantOf, type Variant } from '../src/domains/match/sides.ts';
 import { PARTNERS, teamsOf } from '../src/domains/table/teams.ts';
 import { tableCreateInput, tableRules } from '../src/schemas.ts';
 import { TABLE_RULES, defaultTable } from '../../frontend/src/data/tables.ts';
@@ -76,9 +77,12 @@ describe('whether a table is two against two', () =>
         expect(tableCreateInput.safeParse({ ...body, teams: 'yes' }).ok).toBe(false);
     });
 
-    it('is a variant a match can be played under, beside the standard one', () =>
+    it('is a variant a match can be played under, beside the standard one, and a table is started as one of the two', () =>
     {
-        expect(wordsIn('matches_variant_known').sort()).toEqual(['standard', 'teams']);
+        const played: Record<Variant, true> = { standard: true, teams: true };
+
+        expect(wordsIn('matches_variant_known').sort()).toEqual(Object.keys(played).sort());
+        expect([variantOf(false), variantOf(true)]).toEqual(['standard', 'teams']);
     });
 
     it('opens a default table as what the game makes of it at that many seats', () =>

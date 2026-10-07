@@ -63,7 +63,7 @@ const stateFor = (): SecretState => ({ rev: 1, turn: 0, secrets: [...SECRETS] })
 const secretEngine: Engine<SecretState, { seat: number }> = {
     id: 'ludo',
 
-    seats: [2, 3, 4],
+    formats: [{ seats: 2, variant: 'standard' }],
 
     create: () => ({ state: stateFor(), events: [] }),
 

@@ -5,7 +5,7 @@ import 'reflect-metadata';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { DataSource } from 'typeorm';
 
-import { Conversation, ConversationMember, Table, entities } from '../src/entities/index.ts';
+import { Conversation, ConversationMember, Match, Table, entities } from '../src/entities/index.ts';
 import { TableSeat } from '../src/entities/table-seat.entity.ts';
 import { FOLD_MAX, createMatchService } from '../src/domains/match/service.ts';
 import { createSocialService } from '../src/domains/social/service.ts';
@@ -19,7 +19,7 @@ import { legalMoves } from '../src/domains/match/ludo/engine.ts';
 import { ludoEngine } from '../src/domains/match/engines/ludo.ts';
 import { hokmEngine } from '../src/domains/match/engines/hokm.ts';
 import type { HokmState } from '../src/domains/match/hokm/state.ts';
-import type { Draws, Engine } from '../src/domains/match/engine.ts';
+import type { Draws, Engine, TableConfig } from '../src/domains/match/engine.ts';
 import type { EngineAction, LudoState } from '../src/domains/match/ludo/state.ts';
 
 /**
@@ -258,6 +258,71 @@ describe.skipIf(!active)('a match, against a real database', () =>
                 expect((load.state as LudoState).players, `${ seats } players`).toHaveLength(seats);
                 expect(load.match.seats).toBe(seats);
             }
+        });
+
+        it('starts a team table as two against two and any other as the standard game, on the match row and in what the engine is handed', async () =>
+        {
+            const handed: TableConfig[] = [];
+            const noting = (engine: Engine) => ({
+                ...engine,
+                create: (seats: readonly number[], draws: Draws, table: TableConfig) =>
+                {
+                    handed.push(table);
+
+                    return engine.create(seats, draws, table);
+                }
+            });
+            const dealer = createMatchService(db, createAchieveService(db), [noting(ludoEngine), noting(hokmEngine)]);
+
+            const startedAs = async (game: string, seats: number) =>
+            {
+                const { tableId, players } = await seatedTable(seats, game);
+                const load = await dealer.start(players[0], tableId);
+                const stored = rowsOf<{ variant: string }>(await db.query(`select variant from matches where id = $1`, [load.match.id]))[0].variant;
+
+                expect(load.match.variant, `${ game } at ${ seats }`).toBe(stored);
+
+                return stored;
+            };
+
+            expect(await startedAs('hokm', 4)).toBe('teams');
+            expect(await startedAs('hokm', 3)).toBe('standard');
+            expect(await startedAs('hokm', 2)).toBe('standard');
+            expect(await startedAs('ludo', 4)).toBe('standard');
+            expect(handed.map((table) => table.variant)).toEqual(['teams', 'standard', 'standard', 'standard']);
+        });
+
+        it('will not start a table as a format its game does not play, whoever wrote the row, and deals nothing', async () =>
+        {
+            const freeForAll = { ...ludoEngine, formats: ludoEngine.formats.filter((format) => format.variant === 'standard') } as Engine;
+            const dealer = createMatchService(db, createAchieveService(db), [freeForAll, hokmEngine]);
+            const paired = await seatedTable(4);
+            const unpaired = await seatedTable(4, 'hokm');
+
+            await db.query(`update tables set teams = true where id = $1`, [paired.tableId]);
+            await db.query(`update tables set teams = false where id = $1`, [unpaired.tableId]);
+
+            for (const { tableId, players } of [paired, unpaired])
+            {
+                await expect(dealer.start(players[0], tableId)).rejects.toMatchObject({ status: 422, message: 'That game cannot be played here yet.' });
+            }
+
+            expect(rowsOf<{ dealt: number }>(await db.query(`select count(*)::int as dealt from matches`))[0].dealt).toBe(0);
+        });
+
+        it('sends the side of every seat by the variant on the match row, and no place while the game is on', async () =>
+        {
+            const { tableId, players } = await seatedTable(4);
+            const { match } = await matches.start(players[0], tableId);
+            const sent = async () => matches.envelope((await matches.peek(match.id))!);
+            const dealt = await sent();
+
+            expect(dealt.map((player) => player.side)).toEqual([0, 1, 2, 3]);
+            expect(dealt.some((player) => Object.keys(player).includes('place'))).toBe(false);
+
+            await db.getRepository(Match).update({ id: match.id }, { variant: 'teams' });
+
+            expect((await sent()).map((player) => player.side)).toEqual([0, 1, 0, 1]);
         });
 
         it('will not start a table with an empty chair', async () =>

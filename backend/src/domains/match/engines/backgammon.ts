@@ -2,6 +2,7 @@ import { OFF, pips } from '../backgammon/board.ts';
 import { mayDouble } from '../backgammon/cube.ts';
 import { SEATS, apply, autoplay, create, legalMoves, type Die } from '../backgammon/engine.ts';
 import type { BackgammonAction, BackgammonEvent, BackgammonState } from '../backgammon/state.ts';
+import { sideOf } from '../sides.ts';
 import type { Draws, Ending, Engine, ForfeitReason, Placement, TableConfig, Tally } from '../engine.ts';
 import type { MatchBoard, MatchLog, MatchPlay } from '../../../schemas.ts';
 
@@ -16,7 +17,7 @@ const roller = (draws: Draws): Die => (sides) => draws.die(sides);
 export const backgammonEngine: Engine<BackgammonState, BackgammonAction> = {
     id: 'backgammon',
 
-    seats: SEATS,
+    formats: SEATS.map((seats) => ({ seats, variant: 'standard' })),
 
     create: (_seats: readonly number[], draws: Draws, table: TableConfig) =>
         create(table.target > 0 ? table.target : 1, table.cube, roller(draws)),
@@ -78,7 +79,7 @@ export const backgammonEngine: Engine<BackgammonState, BackgammonAction> = {
                 : (seat === state.winner ? 1 : 2)
         })),
 
-    sideOf: (seat: number) => seat,
+    sideOf,
 
     engagement: () => ({ verbs: ['move', 'double', 'take', 'drop'], after: 4 }),
 

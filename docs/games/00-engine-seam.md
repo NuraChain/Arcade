@@ -11,7 +11,7 @@
 | 5. Engine-owned outcome, standings, tallies | **done** — `player_stats.tallies` is jsonb |
 | 6. One action vocabulary | **done** — one `/play` route, the engine parses it |
 | 7. Client scene registry | **done** — `game/scenes.ts`, and the build gate reads it |
-| 8. Teams | with Hokm, which is the game that has them |
+| 8. Teams | **done** — a format an engine plays, not a column on a seat; see *Teams, and where they went* |
 
 Nothing in the three game plans can begin until this exists. It is the only work shared by all
 three, and it is the only work that can break Ludo.
@@ -102,6 +102,7 @@ Three of those rows are concepts the platform does not have at all: **per-seat p
 ```
 Engine<State, Action>
     id
+    formats                        -> { seats, variant }[]   // what it plays; a start asks before it deals
     create(seats, config, draws)   -> { state, events }   // the opening, and what happened in it
     apply(state, action, draws)    -> { ok: true, next } | { ok: false, reason }
     legal(state, seat)             -> Action[]
@@ -110,8 +111,8 @@ Engine<State, Action>
     autoplay(state, seat)          -> Action | null  // what the timeout sweep plays
     finish(state)                  -> { winners, unsettled, trailing: number[] } | null   // facts only
     standings(state)               -> Placement[]    // competition-ranked; feeds the judge
-    sideOf(seat, seats)            -> number         // who plays together; teams only in 4P hokm
-    engagement(seats)              -> { verbs, after }  // which own decisions count, and how many
+    sideOf(seat, format)           -> number         // who plays together; partners opposite in a team format
+    engagement(format)             -> { verbs, after }  // which own decisions count, and how many
     turnKey(state)                 -> string         // with turnOf, says whether a turn is the same one
     tally(events)                  -> per-seat counters   // feeds stats and XP
 ```
@@ -124,7 +125,7 @@ and which of those seats' sides trailed a side still in play when it stopped (`t
 and the one pure `domains/match/judge.ts` decides every game's results from those facts plus the
 ledger: a quitter always takes a rated loss (and is never rated against a seat that quit before it),
 a survivor is rated against a quitter only if both
-played `engagement(seats).after` decisions of their own and the survivor's side was not trailing, and
+played `engagement(format).after` decisions of their own and the survivor's side was not trailing, and
 a seat with no counted pair is `void`. A match whose last ledger row is a forfeit pays its winner the
 rating and the finish alone.
 `record.ts` is the database adapter around it. The rule and its cases are in `.claude/rules/games.md`
@@ -396,6 +397,22 @@ vocabulary blocked every second engine - so the vocabulary went first and teams 
 is the game that has them. A team rating designed without the game it is for is the abstraction this
 document opens by warning about, and `match_players.team` is one column to add on the day something
 writes it.
+
+**They arrived as a format, and that column was never added.** Hokm paired its four seats by counting
+to four, which worked while four chairs meant one thing. A second game with a team variant beside a
+free-for-all at the same four chairs makes the seat count the wrong question, so an engine now says
+which FORMATS it plays: a format is `{ seats, variant }`, `Engine.formats` replaced `Engine.seats`,
+and `sideOf` and `engagement` are asked with the format rather than a bare number. The table stores
+whether it is two against two (`tables.teams`), a start turns that into `matches.variant`, refuses a
+format the engine does not list, and hands the same variant to `create`; the recorder and the
+envelope read the format back off the match row. `match/sides.ts` holds the two types, `variantOf`
+and the shared `sideOf`, and imports nothing.
+
+Nothing is stored per seat. A side is the seat's parity in a team format and the seat itself in any
+other, so `match_players.team` would have been a copy of what `matches.variant` already says.
+`standings(state)` is not handed the variant either: a team engine has to keep its sides in its own
+state to apply a move, and a second copy passed in is one that can disagree. The rule and the specs
+that hold it are in `.claude/rules/games.md` under *An engine plays formats*.
 
 ---
 

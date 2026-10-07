@@ -3,6 +3,7 @@ import { legalCards } from '../hokm/cards.ts';
 import { apply, autoplay, create, dealerSeat, discardDue, legalMoves, SEATS } from '../hokm/engine.ts';
 import { TRIPLE_SWEEP, trickCount, winningTricks } from '../hokm/scoring.ts';
 import { seatsOfSide, sideCount, sideOf, type HokmAction, type HokmEvent, type HokmState } from '../hokm/state.ts';
+import { variantOf, type Format } from '../sides.ts';
 import type { Draws, Ending, Engine, ForfeitReason, Placement, TableConfig, Tally } from '../engine.ts';
 import type { MatchBoard, MatchLog, MatchPlay } from '../../../schemas.ts';
 
@@ -27,7 +28,7 @@ const gone = (state: HokmState, side: number) => seatsOfSide(side, state.seats).
 export const hokmEngine: Engine<HokmState, HokmAction> = {
     id: 'hokm',
 
-    seats: SEATS,
+    formats: SEATS.map((seats) => ({ seats, variant: variantOf(sideCount(seats) < seats) })),
 
     create: (seats: readonly number[], draws: Draws, table: TableConfig) =>
         create(seats.length, table.target > 0 ? table.target : 7, (sides) => draws.die(sides)),
@@ -125,9 +126,9 @@ export const hokmEngine: Engine<HokmState, HokmAction> = {
         });
     },
 
-    sideOf: (seat: number, seats: number) => sideOf(seat, seats),
+    sideOf: (seat: number, format: Format) => sideOf(seat, format.seats),
 
-    engagement: (seats: number) => ({ verbs: ['card'], after: seats === 3 ? TRIPLE_SWEEP : winningTricks(seats) }),
+    engagement: (format: Format) => ({ verbs: ['card'], after: format.seats === 3 ? TRIPLE_SWEEP : winningTricks(format.seats) }),
 
     turnKey: (state: HokmState) =>
     {

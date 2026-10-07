@@ -43,17 +43,19 @@ const eventsOf = async (tx: EntityManager, matchId: string): Promise<unknown[]> 
 
 export interface Recorder
 {
-    finish(tx: EntityManager, matchId: string, engine: Engine, state: unknown, ending: Ending): Promise<void>;
+    finish(tx: EntityManager, match: Match, engine: Engine, state: unknown, ending: Ending): Promise<void>;
 }
 
 export function createRecorder(achieve: AchieveService): Recorder
 {
     return {
-        async finish(tx, matchId, engine, state, ending)
+        async finish(tx, match, engine, state, ending)
         {
             const game = engine.id;
+            const matchId = match.id;
+            const format = { seats: match.seats, variant: match.variant };
             const players = await tx.getRepository(MatchPlayer).find({ where: { matchId }, order: { userId: 'ASC' } });
-            const engagement = engine.engagement(players.length);
+            const engagement = engine.engagement(format);
             const ledger = await ledgerOf(tx, matchId, engagement.verbs);
             const places = engine.standings(state);
             const last = Math.max(0, ...ledger.map((row) => row.last));
@@ -65,7 +67,7 @@ export function createRecorder(achieve: AchieveService): Recorder
 
                     return {
                         seat: player.seat,
-                        side: engine.sideOf(player.seat, players.length),
+                        side: engine.sideOf(player.seat, format),
                         place: places.find((one) => one.seat === player.seat)?.place ?? players.length,
                         quitter: row === undefined || row.exit === null ? null : { walked: row.walked, rev: row.exit },
                         own: row?.own ?? 0,

@@ -2,6 +2,7 @@ import { FINISHED, cellAt } from '../ludo/board.ts';
 import { apply, create, indexOfSeat, legalMoves } from '../ludo/engine.ts';
 import { placementsOf } from '../ludo/standings.ts';
 import type { EngineAction, GameEvent, LudoState } from '../ludo/state.ts';
+import { sideOf } from '../sides.ts';
 import type { Draws, Ending, Engine, ForfeitReason, Placement, Tally } from '../engine.ts';
 import type { MatchBoard, MatchLog, MatchPlay } from '../../../schemas.ts';
 
@@ -20,7 +21,11 @@ import type { MatchBoard, MatchLog, MatchPlay } from '../../../schemas.ts';
 export const ludoEngine: Engine<LudoState, EngineAction> = {
     id: 'ludo',
 
-    seats: [2, 3, 4],
+    formats: [
+        { seats: 2, variant: 'standard' },
+        { seats: 3, variant: 'standard' },
+        { seats: 4, variant: 'standard' }
+    ],
 
     create: (seats: readonly number[], draws: Draws) =>
         ({ state: create(seats, draws.die(seats.length) - 1), events: [] }),
@@ -112,7 +117,7 @@ export const ludoEngine: Engine<LudoState, EngineAction> = {
 
     standings: (state: LudoState): Placement[] => placementsOf(state),
 
-    sideOf: (seat: number) => seat,
+    sideOf,
 
     engagement: () => ({ verbs: ['roll'], after: 6 }),
 

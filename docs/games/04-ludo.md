@@ -321,8 +321,10 @@ source with both blocks and partners, lets a partner join a wall and keeps every
 | T15 | Partners may talk; nothing is hidden. | cited: Parchís tournament rules |
 
 **Choices before building:** T6 (partner capture), T5a (helping starts at once) and T14 (forfeits).
-**What the engine needs:** `Engine.sideOf(seat, seats)` cannot tell a four-seat free-for-all from a
-2v2 without a variant; `legalMoves`, `move` and `captureAt` act on the controlled player and skip the
-mover's side; `winner` becomes a side and `finish` names both seats; the events name the token's
+**What the engine needs:** the seam can tell a four-seat free-for-all from a 2v2 now -
+`Engine.sideOf(seat, format)` is asked with the variant, and a start hands it to `create` - so the
+adapter lists `4/teams` in `Engine.formats` and the state takes its sides from it; `legalMoves`,
+`move` and `captureAt` act on the controlled player and skip the mover's side; `winner` becomes a
+side and `finish` names both seats; the events name the token's
 owner as well as the actor; the browser's helpers (`outcomeOf`, `standingOn`, `pieceFor`) learn
 about sides.

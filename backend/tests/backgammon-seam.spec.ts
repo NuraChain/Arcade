@@ -22,14 +22,14 @@ function seeded(seed: number): { draws: Draws; next: () => number }
 }
 
 const opened = (seed: number, target: number, cube: boolean) =>
-    backgammonEngine.create([0, 1], seeded(seed).draws, { target, cube, blinds: 'low' }).state;
+    backgammonEngine.create([0, 1], seeded(seed).draws, { target, cube, blinds: 'low', variant: 'standard' }).state;
 
 describe('whose turn the board says it is', () =>
 {
     it('names the seat that must act, the same seat the engine does, even while a double waits for an answer', () =>
     {
         const { draws, next } = seeded(77);
-        let state = backgammonEngine.create([0, 1], draws, { target: 5, cube: true, blinds: 'low' }).state;
+        let state = backgammonEngine.create([0, 1], draws, { target: 5, cube: true, blinds: 'low', variant: 'standard' }).state;
         let doubles = 0;
 
         while (backgammonEngine.finish(state) === null)
@@ -66,7 +66,7 @@ describe('what one seat may see of the other', () =>
     it('shows every reader the same board and the same log, all match long', () =>
     {
         const { draws, next } = seeded(41);
-        let state = backgammonEngine.create([0, 1], draws, { target: 5, cube: true, blinds: 'low' }).state;
+        let state = backgammonEngine.create([0, 1], draws, { target: 5, cube: true, blinds: 'low', variant: 'standard' }).state;
         const events: unknown[] = [];
         let compared = 0;
 

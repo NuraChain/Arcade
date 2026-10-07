@@ -18,7 +18,7 @@ const url = process.env.TEST_DATABASE_URL;
 
 const active = url !== undefined && url !== '';
 
-const ENGAGED = backgammonEngine.engagement(2).after;
+const ENGAGED = backgammonEngine.engagement({ seats: 2, variant: 'standard' }).after;
 
 let db: DataSource;
 let matches: ReturnType<typeof createMatchService>;

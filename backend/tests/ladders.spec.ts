@@ -7,7 +7,7 @@ import { dense, linear, measure, reached, rungId, tierAt, type GlobalFacts, type
 import type { Draws, Engine } from '../src/domains/match/engine.ts';
 import { ENGINES } from '../src/domains/match/service.ts';
 
-const GAMES_PER_COUNT = 30;
+const GAMES_PER_FORMAT = 30;
 
 const TIERS = ['bronze', 'silver', 'gold', 'platinum', 'diamond'];
 
@@ -43,17 +43,17 @@ const facts = (over: Partial<LadderFacts> = {}): LadderFacts => ({
     ...over
 });
 
-function talliesOf(engine: Engine)
+function talliesOf(engine: Engine, formats = engine.formats)
 {
     const names = new Set<string>();
 
-    for (const count of engine.seats)
+    for (const format of formats)
     {
-        for (let game = 0; game < GAMES_PER_COUNT; game += 1)
+        for (let game = 0; game < GAMES_PER_FORMAT; game += 1)
         {
-            const { draws, next } = seeded(game * 131 + count);
-            const seats = Array.from({ length: count }, (_, seat) => seat);
-            let state = engine.create(seats, draws, { target: 0, cube: true, blinds: 'low' }).state;
+            const { draws, next } = seeded(game * 131 + format.seats);
+            const seats = Array.from({ length: format.seats }, (_, seat) => seat);
+            let state = engine.create(seats, draws, { target: 0, cube: true, blinds: 'low', variant: format.variant }).state;
             const events: unknown[] = [];
 
             while (engine.finish(state) === null)
@@ -163,15 +163,23 @@ describe('the ladders', () =>
 
 describe.each(ENGINES.map((engine) => [engine.id, engine] as const))('the %s ladders', (id, engine: Engine) =>
 {
-    it('count only what the engine really tallies', () =>
+    it('count only what the engine really tallies, in the game as a whole and in each team format by itself', () =>
     {
+        const named = GAME_FAMILIES[id].flatMap((family) => (family.metric.of === 'tally' ? [family.metric.name] : []));
         const kept = talliesOf(engine);
 
-        for (const family of GAME_FAMILIES[id])
+        for (const name of named)
         {
-            if (family.metric.of === 'tally')
+            expect(kept, name).toContain(name);
+        }
+
+        for (const format of engine.formats.filter((one) => one.variant === 'teams'))
+        {
+            const alone = talliesOf(engine, [format]);
+
+            for (const name of named)
             {
-                expect(kept, family.metric.name).toContain(family.metric.name);
+                expect(alone, `${ name } at ${ format.seats }/${ format.variant }`).toContain(name);
             }
         }
     }, 120_000);

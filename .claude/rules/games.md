@@ -120,10 +120,9 @@ the form for a game whose published rules leave the choice open.
 `matches.variant` is the RULES a game is played under, never the game's name - it once read
 `variant in ('ludo')`, a game id in a column that exists to say which ruleset of that game is on.
 It allows `teams` beside `standard` (`matches_variant_known`), only at four seats
-(`matches_teams_four`), and has no default any more: every insert says which. Nothing writes
-`teams` there yet - a start still writes the literal - and no engine is asked whether the pair makes
-sense for its game until the commit after this one teaches them the word, so for one commit the
-database would take a four-seat poker match called `teams` from anybody writing rows by hand.
+(`matches_teams_four`), and has no default any more: every insert says which. A start says it from
+the table, `variantOf(table.teams)`, and asks the engine whether it plays that at this many seats:
+*An engine plays formats*, under *Playing a game*, is the whole of it.
 
 **At a team table the first chair dealt is the opener's partner's.** The create-time deal walked
 the chairs in order, so the first friend picked sat beside the host. `guestChairs(seats, teams)`
@@ -826,6 +825,43 @@ is one nothing can fold), every state carries a top-level `rev` (`matches_rev_ma
 `(state ->> 'rev')::int`), and randomness arrives as a VALUE - there is no randomness inside an
 engine to subvert, which is what makes "the client cannot choose a die" structural.
 
+**An engine plays formats, and a seat count alone is not one.** `Engine.seats` was a list of
+numbers, and `sideOf(seat, seats)` and `engagement(seats)` were asked with a number, so four chairs
+could only ever be one game: hokm made them two teams by counting to four, and ludo could not have a
+team game beside its free-for-all at the same four chairs. A `Format` is `{ seats, variant }`, and
+`match/sides.ts` holds it with `Variant`, `variantOf(teams)` and the shared `sideOf(seat, format)`:
+partners opposite in a team game, a side each anywhere else. It imports nothing, like `turns.ts`, so
+the browser can ask the same one. `Engine.formats` replaces `Engine.seats`, `sideOf` and `engagement`
+take the format, and `TableConfig` carries the variant into `create`. `standings(state)` is handed
+nothing new: an engine that plays teams must hold its sides in its state to apply a move at all, and
+a second copy passed in beside the state is one that can disagree with it.
+
+One fact goes down one path. `tables.teams` becomes `matches.variant` at the start, the same word is
+handed to the engine's `create`, and after that the recorder and the envelope take the format off the
+MATCH row, never off how many `match_players` rows they happened to read. `start` asks the engine
+before it deals: a table whose seat count and variant are not one of `engine.formats` is answered
+422, "That game cannot be played here yet.", straight after the check that an engine exists and for
+the same reason. `create` normalizes `teams`, so only a row somebody wrote by hand gets that far, and
+the thing that would have to play it is the thing to ask. Hokm plays `2/standard`, `3/standard` and
+`4/teams`, and no free-for-all at four. It still pairs its seats by counting, inside `hokm/`, where
+the purity spec allows no import of `sides.ts`; the adapter derives its formats from that count, and
+the contract spec holds every engine's `sideOf` to the shared one at every format, so hokm's copy
+cannot drift from it. Ludo, backgammon and poker answer with the shared one.
+
+`engine-contract.spec.ts` and `ladders.spec.ts` run over formats. The contract spec requires every
+format the catalogue can open - `teamsOf` over the seed's seats and its `partners`, asked both ways -
+to be one the engine plays, and keeps its bound on a game's length per variant. `ladders.spec.ts`
+asks a counter of the GAME as a whole, and again of each team format by itself. Not of every format:
+the thirty three-handed hokm matches it plays take no kot, so that check fails on a format with
+nothing wrong in it. A team game is where an engine's events change shape, though - a hand names a
+side's seats - and a counter it alone stopped producing would hide behind the free-for-all formats
+beside it, with every partner's ladder at zero.
+`match.db.spec.ts` starts hokm at four as `teams` and every other table as `standard`, reading the
+row and what the engine was handed, and is refused a four-seat hokm table whose row says it is not
+teams and a team table for an engine that plays none, with no match written. `record.db.spec.ts`
+finishes one ledger under both variants: the partners move together under `teams`, and each seat
+stands alone under `standard`.
+
 **The wire is an envelope and a board, and the split is the whole redaction story.** `matchPlayer`
 is who is in a chair - seat, handle, timeouts, result, rating - and carries nothing about what they
 hold. `matchView.view` is a discriminated union the ENGINE composes, and `Engine.view(state, seat |
@@ -840,6 +876,18 @@ leaked a hokm hand the day a second engine landed. `tests/engine-seam.spec.ts` r
 as text and fails if it imports anything under `ludo/` or names a part of a board, and asserts by
 PARSING that the envelope drops a colour - the wire being what the parser lets through rather than
 what the declaration says.
+
+**A seat's side is on the envelope from the opening; its place is there only at the end.**
+`matchPlayer.side` and `place` arrived in one commit and were both sent for a finished match alone.
+Who plays with whom is seating - public, the same for every reader, and what a plate has to draw
+while the game is on. Where somebody came is a result. `envelopeOf` sends `side` whenever an engine
+is known, to a watcher as well, and `place` only once the match has finished; `envelope.spec.ts`
+holds both halves, and that the side comes from the format it was handed. Which format the service
+hands it is `match.db.spec.ts`'s to hold (*starting*): a four-seat ludo match reads a side each, the
+row's variant is written to `teams` by hand, and the same call reads partners opposite. A constant
+in that caller passed every other suite, and no engine could show it: hokm's adapter answers from
+the seat count alone and the rest list only `standard`, so it would have waited for ludo's team game
+and sent every reader four sides.
 
 **The browser mirrors the split rather than flattening it back.** `data/match.ts` is the one place
 the union is narrowed (`ludoOf`) and the halves are joined (`chairsOf`), so a screen asks the
@@ -883,7 +931,7 @@ the engine's own tests with no Postgres near it.
 enters`, hokm's `hands tricks kots trumps`, backgammon's `games gammons backgammons hits borneOff`,
 poker's `hands pots showdowns knockouts` - and renaming one on either side leaves a whole ladder at
 zero for everybody with nothing throwing. `ladders.spec.ts` plays every engine to the end thirty
-times per seat count with random legal moves and fails if a family names a counter the engine never
+times per format with random legal moves and fails if a family names a counter the engine never
 produced; a fixture of literal counters would agree with the families whatever the engine calls
 them. The rating never reads a tally, and XP reads one only through the engine's own `points`.
 
@@ -2196,7 +2244,7 @@ stop and be timed out to dodge a loss, and four-handed partners were rated again
   dropped connection, while sitting down and letting the sweep play three turns is not playing - and
   its tally would have been the moves the SWEEP made for it.
 - **Everybody else is rated against a quitter only if they and the quitter are both ENGAGED** - own
-  decisions at least `engagement(seats).after`: ludo 6 rolls, backgammon 4 moves or cube actions,
+  decisions at least `engagement(format).after`: ludo 6 rolls, backgammon 4 moves or cube actions,
   hokm seven cards played at every player count, poker 3 betting actions with the blinds
   excluded - and only if the survivor was not `trailing`. Against a side with no quitter a seat is
   always rated, unless both are unsettled; then it is rated only when it is `trailing` and a member of
@@ -2466,14 +2514,14 @@ row was written, and the person was told their move failed. Everything that runs
 landed - the result line, the invite line, the turn notice - goes through `courtesy()`, which is the
 rule `wake` already followed for push.
 
-**A contract member is not one of these.** `Engine.legal` and `Engine.seats` have no caller in the
-product either - a board is handed its plays by `view`, and a table's `create` checks a seat count
-against `game_rules` - and both stay. They are how the specs drive every engine through one seam:
-`legal` is the move generator under the self-play in `engine-contract.spec.ts`, the thirty games a
-seat count in `ladders.spec.ts` and the seam and poker specs, and `seats` is what those loops run over
-and what the contract spec holds to the catalogue's seed. The things above were runtime features wired
-to nothing; these two are the contract, and without them every generic spec would carry a move
-generator of its own.
+**A contract member is not one of these.** `Engine.legal` has no caller in the product either - a
+board is handed its plays by `view` - and it stays. It is how the specs drive every engine through
+one seam: the move generator under the self-play in `engine-contract.spec.ts`, the thirty games a
+format in `ladders.spec.ts` and the seam and poker specs. `Engine.formats` is what those loops run
+over and what the contract spec holds to the catalogue's seed; it was `Engine.seats` and had no
+caller in the product either, and it has one now, because a start asks it whether a table can be
+played. The things above were runtime features wired to nothing; `legal` is the contract, and without
+it every generic spec would carry a move generator of its own.
 
 ## The second audit, and the rules it produced
 

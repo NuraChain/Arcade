@@ -5,6 +5,7 @@ import { planOf } from '../src/domains/match/judge.ts';
 import { rateField, type Standing } from '../src/domains/match/rating.ts';
 import { FINISHED, YARD } from '../src/domains/match/ludo/board.ts';
 import type { LudoState } from '../src/domains/match/ludo/state.ts';
+import type { Format } from '../src/domains/match/sides.ts';
 import { ludoEngine } from '../src/domains/match/engines/ludo.ts';
 
 /**
@@ -193,19 +194,20 @@ describe('what a ludo game reports', () =>
     it('names the last seat left in the room too, and the judge makes that no contest', () =>
     {
         const emptied = board([[3, YARD, YARD, YARD], [YARD, YARD, YARD, YARD]], 0, [false, true]);
+        const duel: Format = { seats: 2, variant: 'standard' };
         const ending = ludoEngine.finish(emptied)!;
         const places = ludoEngine.standings(emptied);
         const plan = planOf({
             seats: places.map((one) => ({
                 seat: one.seat,
-                side: ludoEngine.sideOf(one.seat, 2),
+                side: ludoEngine.sideOf(one.seat, duel),
                 place: one.place,
                 quitter: one.seat === 1 ? { walked: true, rev: 2 } : null,
                 own: 1,
                 unsettled: ending.unsettled.includes(one.seat),
                 trailing: ending.trailing.includes(one.seat)
             })),
-            after: ludoEngine.engagement(2).after,
+            after: ludoEngine.engagement(duel).after,
             winners: ending.winners,
             forfeited: true
         });

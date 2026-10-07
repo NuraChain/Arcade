@@ -49,8 +49,10 @@ function forged(hand: readonly number[]): number[]
     return hand.map((card) => (card + 26) % 52);
 }
 
+const variantAt = (seats: number) => hokmEngine.formats.find((format) => format.seats === seats)!.variant;
+
 const opened = (seats: number, seed: number) =>
-    hokmEngine.create(Array.from({ length: seats }, (_, seat) => seat), seeded(seed), { target: 7, cube: false, blinds: 'low' }).state as HokmState;
+    hokmEngine.create(Array.from({ length: seats }, (_, seat) => seat), seeded(seed), { target: 7, cube: false, blinds: 'low', variant: variantAt(seats) }).state as HokmState;
 
 function step(state: HokmState, action: HokmAction, dice = draws)
 {

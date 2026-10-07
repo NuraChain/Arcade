@@ -3,19 +3,32 @@ import { describe, expect, it } from 'vitest';
 
 import type { Draws, Engine, ForfeitReason } from '../src/domains/match/engine.ts';
 import { ENGINES, FOLD_MAX, sameTurn } from '../src/domains/match/service.ts';
+import { sideOf, variantOf, type Format, type Variant } from '../src/domains/match/sides.ts';
 import type { RefusalWord } from '../src/domains/match/refusals.ts';
 import type { BackgammonRefusal } from '../src/domains/match/backgammon/state.ts';
 import type { HokmRefusal } from '../src/domains/match/hokm/state.ts';
 import type { PokerRefusal } from '../src/domains/match/poker/state.ts';
 import type { RefusalReason } from '../src/domains/match/ludo/state.ts';
 import { GAME_SEEDS } from '../src/db/seed-reference.ts';
+import { teamsOf } from '../src/domains/table/teams.ts';
 import { matchBoard, matchLog, matchPlay } from '../src/schemas.ts';
 
-const GAMES_PER_COUNT = 12;
+const GAMES_PER_FORMAT = 12;
 
 const CLOCK_GAMES = 4;
 
-const BOUND: Readonly<Record<string, number>> = { ludo: 6000, hokm: 4000, backgammon: 3000, poker: 20_000 };
+const UNBOUND = 10_000;
+
+const BOUND: Readonly<Record<string, Readonly<Partial<Record<Variant, number>>>>> = {
+    ludo: { standard: 6000 },
+    hokm: { standard: 4000, teams: 4000 },
+    backgammon: { standard: 3000 },
+    poker: { standard: 20_000 }
+};
+
+const boundOf = (engine: Engine, format: Format) => BOUND[engine.id]?.[format.variant] ?? UNBOUND;
+
+const nameOf = (format: Format) => `${ format.seats }-seat ${ format.variant }`;
 
 const REASONS: readonly ForfeitReason[] = ['timeout', 'resign', 'left'];
 
@@ -44,11 +57,11 @@ function seeded(seed: number): { draws: Draws; next: () => number }
 
 const revOf = (state: unknown) => (state as { rev: number }).rev;
 
-function eachState(engine: Engine, count: number, game: number, visit: (state: unknown, actions: number) => void)
+function eachState(engine: Engine, format: Format, game: number, visit: (state: unknown, actions: number) => void)
 {
-    const { draws, next } = seeded(game * 53 + count * 7 + 1);
-    const seats = Array.from({ length: count }, (_, seat) => seat);
-    let state = engine.create(seats, draws, { target: 0, cube: true, blinds: 'low' }).state;
+    const { draws, next } = seeded(game * 53 + format.seats * 7 + 1);
+    const seats = Array.from({ length: format.seats }, (_, seat) => seat);
+    let state = engine.create(seats, draws, { target: 0, cube: true, blinds: 'low', variant: format.variant }).state;
     let actions = 0;
 
     while (engine.finish(state) === null)
@@ -68,7 +81,7 @@ function eachState(engine: Engine, count: number, game: number, visit: (state: u
         state = applied.state;
         actions += 1;
 
-        expect(actions).toBeLessThan(BOUND[engine.id] ?? 10_000);
+        expect(actions).toBeLessThan(boundOf(engine, format));
     }
 }
 
@@ -118,9 +131,24 @@ describe('the refusals', () =>
     });
 });
 
+describe('the sides of a format', () =>
+{
+    it('are two pairs sitting opposite in a team game, and a seat each in any other', () =>
+    {
+        expect([0, 1, 2, 3].map((seat) => sideOf(seat, { seats: 4, variant: 'teams' }))).toEqual([0, 1, 0, 1]);
+
+        for (const seats of [2, 3, 4, 6, 9])
+        {
+            const all = Array.from({ length: seats }, (_, seat) => seat);
+
+            expect(all.map((seat) => sideOf(seat, { seats, variant: 'standard' })), `${ seats } seats`).toEqual(all);
+        }
+    });
+});
+
 describe.each(ENGINES.map((engine) => [engine.id, engine] as const))('the %s engine keeps the contract', (_id, engine: Engine) =>
 {
-    it('offers every seat count the catalogue seeds', () =>
+    it('offers every format the catalogue seeds', () =>
     {
         const seeded = GAME_SEEDS.find((game) => game.id === engine.id);
 
@@ -128,33 +156,34 @@ describe.each(ENGINES.map((engine) => [engine.id, engine] as const))('the %s eng
 
         for (const seats of seeded!.seats)
         {
-            expect(engine.seats).toContain(seats);
+            for (const asked of [false, true])
+            {
+                const format: Format = { seats, variant: variantOf(teamsOf(seeded!.partners, seats, asked)) };
+
+                expect(engine.formats, `${ engine.id } does not play ${ nameOf(format) }`).toContainEqual(format);
+            }
         }
     });
 
-    it('splits every seat count it plays into at least two sides, every seat on exactly one', () =>
+    it('splits every format it plays into at least two sides, every seat on the side the shared sides give it', () =>
     {
-        for (const count of engine.seats)
+        for (const format of engine.formats)
         {
-            const sides = Array.from({ length: count }, (_, seat) => engine.sideOf(seat, count));
+            const sides = Array.from({ length: format.seats }, (_, seat) => engine.sideOf(seat, format));
 
-            for (const side of sides)
-            {
-                expect(Number.isInteger(side) && side >= 0, `${ count } seats: side ${ side }`).toBe(true);
-            }
-
-            expect(new Set(sides).size, `${ count } seats`).toBeGreaterThanOrEqual(2);
+            expect(sides, nameOf(format)).toEqual(sides.map((_, seat) => sideOf(seat, format)));
+            expect(new Set(sides).size, nameOf(format)).toBeGreaterThanOrEqual(2);
         }
     });
 
     it('counts engagement only in verbs a player can send it, and after at least one', () =>
     {
-        for (const count of engine.seats)
+        for (const format of engine.formats)
         {
-            const { verbs, after } = engine.engagement(count);
+            const { verbs, after } = engine.engagement(format);
 
             expect(verbs.length).toBeGreaterThan(0);
-            expect(Number.isInteger(after) && after >= 1, `${ count } seats: after ${ after }`).toBe(true);
+            expect(Number.isInteger(after) && after >= 1, `${ nameOf(format) }: after ${ after }`).toBe(true);
 
             for (const verb of verbs)
             {
@@ -163,30 +192,30 @@ describe.each(ENGINES.map((engine) => [engine.id, engine] as const))('the %s eng
         }
     });
 
-    for (const count of engine.seats)
+    for (const format of engine.formats)
     {
-        it(`ends every ${ count }-seat turn the sweep plays out within FOLD_MAX steps of autoplay`, () =>
+        it(`ends every ${ nameOf(format) } turn the sweep plays out within FOLD_MAX steps of autoplay`, () =>
         {
             for (let game = 0; game < CLOCK_GAMES; game += 1)
             {
-                const fold = seeded(game * 131 + count).draws;
+                const fold = seeded(game * 131 + format.seats).draws;
 
-                eachState(engine, count, game, (state, actions) =>
+                eachState(engine, format, game, (state, actions) =>
                 {
                     expect(foldFrom(engine, state, fold), `the turn at action ${ actions }`).toBeLessThanOrEqual(FOLD_MAX);
                 });
             }
         }, 60_000);
 
-        it(`leaves the turn alone at ${ count } seats when a seat not on turn forfeits and nothing else moves`, () =>
+        it(`leaves the ${ nameOf(format) } turn alone when a seat not on turn forfeits and nothing else moves`, () =>
         {
             for (let game = 0; game < CLOCK_GAMES; game += 1)
             {
-                eachState(engine, count, game, (state, actions) =>
+                eachState(engine, format, game, (state, actions) =>
                 {
                     const turn = engine.turnOf(state)!;
 
-                    for (let seat = 0; seat < count; seat += 1)
+                    for (let seat = 0; seat < format.seats; seat += 1)
                     {
                         const applied = seat === turn ? null : engine.apply(state, engine.forfeit(seat, 'resign'), PROBE);
 
@@ -203,15 +232,15 @@ describe.each(ENGINES.map((engine) => [engine.id, engine] as const))('the %s eng
         }, 60_000);
     }
 
-    for (const count of engine.seats)
+    for (const format of engine.formats)
     {
-        it(`plays random ${ count }-seat games to a finish without once breaking a rule of the seam`, () =>
+        it(`plays random ${ nameOf(format) } games to a finish without once breaking a rule of the seam`, () =>
         {
-            for (let game = 0; game < GAMES_PER_COUNT; game += 1)
+            for (let game = 0; game < GAMES_PER_FORMAT; game += 1)
             {
-                const { draws, next } = seeded(game * 97 + count);
-                const seats = Array.from({ length: count }, (_, seat) => seat);
-                let state = engine.create(seats, draws, { target: 0, cube: true, blinds: 'low' }).state;
+                const { draws, next } = seeded(game * 97 + format.seats);
+                const seats = Array.from({ length: format.seats }, (_, seat) => seat);
+                let state = engine.create(seats, draws, { target: 0, cube: true, blinds: 'low', variant: format.variant }).state;
                 const events: unknown[] = [];
                 const forfeits: Forfeit[] = [];
                 let actions = 0;
@@ -267,7 +296,7 @@ describe.each(ENGINES.map((engine) => [engine.id, engine] as const))('the %s eng
 
                     actions += 1;
 
-                    expect(actions).toBeLessThan(BOUND[engine.id] ?? 10_000);
+                    expect(actions).toBeLessThan(boundOf(engine, format));
                 }
 
                 for (const reader of [...seats, null])
@@ -282,9 +311,15 @@ describe.each(ENGINES.map((engine) => [engine.id, engine] as const))('the %s eng
                 const quitters = new Set(forfeits.map((one) => one.seat));
                 const places = new Map(engine.standings(state).map((one) => [one.seat, one.place]));
                 const placeOf = (seat: number) => places.get(seat)!;
-                const sideOf = (seat: number) => engine.sideOf(seat, count);
+                const sideAt = (seat: number) => engine.sideOf(seat, format);
 
                 expect(ending.winners.length, 'a finish named no winner').toBeGreaterThan(0);
+
+                if (format.variant === 'teams')
+                {
+                    expect(seats.map(sideAt), 'partners do not sit opposite each other').toEqual([0, 1, 0, 1]);
+                    expect([placeOf(2), placeOf(3)], 'partners were placed apart').toEqual([placeOf(0), placeOf(1)]);
+                }
 
                 for (const seat of [...ending.winners, ...ending.unsettled])
                 {
@@ -299,11 +334,11 @@ describe.each(ENGINES.map((engine) => [engine.id, engine] as const))('the %s eng
 
                 for (const seat of seats)
                 {
-                    const better = new Set(seats.filter((other) => placeOf(other) < placeOf(seat)).map(sideOf));
+                    const better = new Set(seats.filter((other) => placeOf(other) < placeOf(seat)).map(sideAt));
 
                     expect(placeOf(seat), `seat ${ seat } is not competition-ranked`).toBe(1 + better.size);
 
-                    for (const partner of seats.filter((other) => sideOf(other) === sideOf(seat)))
+                    for (const partner of seats.filter((other) => sideAt(other) === sideAt(seat)))
                     {
                         expect(placeOf(partner), `partners ${ seat } and ${ partner } were placed apart`).toBe(placeOf(seat));
                     }
@@ -313,7 +348,7 @@ describe.each(ENGINES.map((engine) => [engine.id, engine] as const))('the %s eng
                 {
                     const later = new Set(forfeits.slice(index + 1).map((one) => one.seat));
 
-                    for (const stayed of quit.staying.filter((seat) => sideOf(seat) !== sideOf(quit.seat)))
+                    for (const stayed of quit.staying.filter((seat) => sideAt(seat) !== sideAt(quit.seat)))
                     {
                         if (later.has(stayed))
                         {

@@ -87,7 +87,7 @@ describe('the opening roll', () =>
 
     it('puts the opening roll in the stream, where the ledger keeps it', () =>
     {
-        const { state, events } = backgammonEngine.create([0, 1], { die: scripted([5, 2]) }, { target: 3, cube: true, blinds: 'low' });
+        const { state, events } = backgammonEngine.create([0, 1], { die: scripted([5, 2]) }, { target: 3, cube: true, blinds: 'low', variant: 'standard' });
 
         expect(events[0]).toEqual({ e: 'opening', seat: 0, dice: [5, 2] });
         expect(state.turn).toBe(0);
@@ -141,7 +141,7 @@ describe('the opening roll', () =>
 
     it('turns a table with no target into a one-point match with a dead cube', () =>
     {
-        const state = backgammonEngine.create([0, 1], { die: scripted([6, 1]) }, { target: 0, cube: true, blinds: 'low' }).state;
+        const state = backgammonEngine.create([0, 1], { die: scripted([6, 1]) }, { target: 0, cube: true, blinds: 'low', variant: 'standard' }).state;
 
         expect(state.target).toBe(1);
         expect(state.cubed).toBe(false);
@@ -344,7 +344,7 @@ describe('walking out', () =>
 
     it('counts moves and cube actions as engagement, and four of them', () =>
     {
-        expect(backgammonEngine.engagement(2)).toEqual({ verbs: ['move', 'double', 'take', 'drop'], after: 4 });
+        expect(backgammonEngine.engagement({ seats: 2, variant: 'standard' })).toEqual({ verbs: ['move', 'double', 'take', 'drop'], after: 4 });
     });
 
     it('names the winner of a match played to its target', () =>

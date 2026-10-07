@@ -9,6 +9,7 @@ import { backgammonEngine } from '../src/domains/match/engines/backgammon.ts';
 import { hokmEngine } from '../src/domains/match/engines/hokm.ts';
 import { ludoEngine } from '../src/domains/match/engines/ludo.ts';
 import { pokerEngine } from '../src/domains/match/engines/poker.ts';
+import type { Format } from '../src/domains/match/sides.ts';
 import { matchLog, matchPlayer, matchView } from '../src/schemas.ts';
 import { seeded } from './poker-table.ts';
 
@@ -52,6 +53,15 @@ describe('the judge', () =>
     {
         expect(importsOf('domains/match/judge.ts')).toEqual(['./rating.ts']);
         expect(importsOf('domains/match/rating.ts')).toEqual([]);
+    });
+});
+
+describe('the sides', () =>
+{
+    it('are worked out by a module that imports nothing, so the browser can ask the same one', () =>
+    {
+        expect(importsOf('domains/match/sides.ts')).toEqual([]);
+        expect(read('domains/match/sides.ts')).not.toMatch(/^\s*import\s/m);
     });
 });
 
@@ -198,7 +208,12 @@ describe('what a player asked for', () =>
 
 describe('the opening', () =>
 {
-    const OPENINGS: readonly [Engine, number][] = [[ludoEngine, 4], [hokmEngine, 4], [backgammonEngine, 2], [pokerEngine, 6]];
+    const OPENINGS: readonly [Engine, Format][] = [
+        [ludoEngine, { seats: 4, variant: 'standard' }],
+        [hokmEngine, { seats: 4, variant: 'teams' }],
+        [backgammonEngine, { seats: 2, variant: 'standard' }],
+        [pokerEngine, { seats: 6, variant: 'standard' }]
+    ];
 
     const forged = (events: readonly unknown[], reader: number | null) => events.map((event) =>
     {
@@ -207,11 +222,12 @@ describe('the opening', () =>
         return Array.isArray(one.cards) && one.seat !== reader ? { ...one, cards: one.cards.map((card) => (card + 26) % 52) } : event;
     });
 
-    it.each(OPENINGS.map(([engine, count]) => [engine.id, engine, count] as const))('%s hands back what happened at the opening beside the state, and no log of it shows a reader the cards of another seat', (_id, engine, count) =>
+    it.each(OPENINGS.map(([engine, format]) => [engine.id, engine, format] as const))('%s hands back what happened at the opening beside the state, and no log of it shows a reader the cards of another seat', (_id, engine, format) =>
     {
-        const seats = Array.from({ length: count }, (_, seat) => seat);
-        const opened = engine.create(seats, { die: seeded(5) }, { target: 0, cube: true, blinds: 'low' });
+        const seats = Array.from({ length: format.seats }, (_, seat) => seat);
+        const opened = engine.create(seats, { die: seeded(5) }, { target: 0, cube: true, blinds: 'low', variant: format.variant });
 
+        expect(engine.formats).toContainEqual(format);
         expect(Array.isArray(opened.events)).toBe(true);
         expect(engine.turnOf(opened.state)).not.toBeNull();
 
@@ -226,13 +242,13 @@ describe('the opening', () =>
 
     it('carries the opening of every game that has one: the deal, the blinds, the Hakem and the roll', () =>
     {
-        const kinds = (engine: Engine, count: number) => engine
-            .create(Array.from({ length: count }, (_, seat) => seat), { die: seeded(9) }, { target: 0, cube: true, blinds: 'low' })
+        const kinds = (engine: Engine, format: Format) => engine
+            .create(Array.from({ length: format.seats }, (_, seat) => seat), { die: seeded(9) }, { target: 0, cube: true, blinds: 'low', variant: format.variant })
             .events.map((event) => (event as { e: string }).e);
 
-        expect(kinds(ludoEngine, 4)).toEqual([]);
-        expect(kinds(hokmEngine, 4)).toEqual(['deal']);
-        expect(kinds(backgammonEngine, 2)[0]).toBe('opening');
-        expect(kinds(pokerEngine, 6)).toEqual(['deal', 'blind', 'blind', 'hole', 'hole', 'hole', 'hole', 'hole', 'hole']);
+        expect(kinds(ludoEngine, { seats: 4, variant: 'standard' })).toEqual([]);
+        expect(kinds(hokmEngine, { seats: 4, variant: 'teams' })).toEqual(['deal']);
+        expect(kinds(backgammonEngine, { seats: 2, variant: 'standard' })[0]).toBe('opening');
+        expect(kinds(pokerEngine, { seats: 6, variant: 'standard' })).toEqual(['deal', 'blind', 'blind', 'hole', 'hole', 'hole', 'hole', 'hole', 'hole']);
     });
 });

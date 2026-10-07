@@ -2,6 +2,7 @@ import { allInTo, inHand, mayRaise, minRaiseTo, toCall } from '../poker/betting.
 import { apply, autoplay, create, handsToNextLevel, legalMoves, levelOf, standings, type Die } from '../poker/engine.ts';
 import { standing } from '../poker/pots.ts';
 import { SEATS, blindsAt, type PokerAction, type PokerEvent, type PokerState } from '../poker/state.ts';
+import { sideOf } from '../sides.ts';
 import type { Draws, Ending, Engine, ForfeitReason, Placement, TableConfig, Tally } from '../engine.ts';
 import type { MatchBoard, MatchLog, MatchPlay } from '../../../schemas.ts';
 
@@ -21,7 +22,7 @@ function readerOf(state: PokerState, seat: number | null)
 export const pokerEngine: Engine<PokerState, PokerAction> = {
     id: 'poker',
 
-    seats: SEATS,
+    formats: SEATS.map((seats) => ({ seats, variant: 'standard' })),
 
     create: (seats: readonly number[], draws: Draws, table: TableConfig) =>
         create(seats.length, table.blinds, dieOf(draws)),
@@ -63,7 +64,7 @@ export const pokerEngine: Engine<PokerState, PokerAction> = {
 
     standings: (state: PokerState): Placement[] => standings(state),
 
-    sideOf: (seat: number) => seat,
+    sideOf,
 
     engagement: () => ({ verbs: ['fold', 'check', 'call', 'raise', 'allin'], after: 3 }),
 

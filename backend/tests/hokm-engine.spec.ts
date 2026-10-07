@@ -1088,8 +1088,17 @@ describe('walking away', () =>
         expect(sideCount(3)).toBe(3);
         expect(sideCount(2)).toBe(2);
         expect([0, 1, 2, 3].map((seat) => sideOf(seat, 4))).toEqual([0, 1, 0, 1]);
-        expect([0, 1, 2, 3].map((seat) => hokmEngine.sideOf(seat, 4))).toEqual([0, 1, 0, 1]);
-        expect([0, 1, 2].map((seat) => hokmEngine.sideOf(seat, 3))).toEqual([0, 1, 2]);
+        expect([0, 1, 2, 3].map((seat) => hokmEngine.sideOf(seat, { seats: 4, variant: 'teams' }))).toEqual([0, 1, 0, 1]);
+        expect([0, 1, 2].map((seat) => hokmEngine.sideOf(seat, { seats: 3, variant: 'standard' }))).toEqual([0, 1, 2]);
+    });
+
+    it('plays four as two against two and never as a free-for-all, and two and three as the standard game', () =>
+    {
+        expect(hokmEngine.formats).toEqual([
+            { seats: 2, variant: 'standard' },
+            { seats: 3, variant: 'standard' },
+            { seats: 4, variant: 'teams' }
+        ]);
     });
 });
 
@@ -1157,9 +1166,12 @@ describe('what a finished match reports', () =>
 
     it('counts seven cards played as engagement, at every player count', () =>
     {
-        expect(hokmEngine.engagement(4)).toEqual({ verbs: ['card'], after: 7 });
-        expect(hokmEngine.engagement(3)).toEqual({ verbs: ['card'], after: 7 });
-        expect(hokmEngine.engagement(2)).toEqual({ verbs: ['card'], after: 7 });
+        for (const seats of SEATS)
+        {
+            const format = hokmEngine.formats.find((one) => one.seats === seats)!;
+
+            expect(hokmEngine.engagement(format), `${ seats } players`).toEqual({ verbs: ['card'], after: 7 });
+        }
     });
 });
 

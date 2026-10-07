@@ -31,7 +31,7 @@ describe('the catalogue and the engine agree', () =>
     {
         const seed = GAME_SEEDS.find((game) => game.id === 'poker');
 
-        expect(pokerEngine.seats).toEqual([2, 6, 9]);
+        expect(pokerEngine.formats).toEqual([2, 6, 9].map((seats) => ({ seats, variant: 'standard' })));
         expect(seed?.seats).toEqual([2, 6, 9]);
         expect(seed?.maxPlayers).toBe(9);
         expect(seed?.modes).toEqual(['live']);
@@ -41,7 +41,7 @@ describe('the catalogue and the engine agree', () =>
 
     it('gives everybody fifteen hundred chips', () =>
     {
-        const state = pokerEngine.create([0, 1, 2, 3, 4, 5], draws(4), { target: 0, cube: false, blinds: 'low' }).state;
+        const state = pokerEngine.create([0, 1, 2, 3, 4, 5], draws(4), { target: 0, cube: false, blinds: 'low', variant: 'standard' }).state;
 
         expect(chipsInPlay(state)).toBe(9000);
         expect(state.start).toEqual([1500, 1500, 1500, 1500, 1500, 1500]);
@@ -201,7 +201,7 @@ describe('a walkout', () =>
 {
     it('busts only the seat that left, and the table plays on', () =>
     {
-        const state = pokerEngine.create([0, 1, 2, 3, 4, 5], draws(9), { target: 0, cube: false, blinds: 'low' }).state;
+        const state = pokerEngine.create([0, 1, 2, 3, 4, 5], draws(9), { target: 0, cube: false, blinds: 'low', variant: 'standard' }).state;
         const leaver = (state.turn + 2) % 6;
         const step = applied(state, forfeit(leaver));
 
@@ -217,7 +217,7 @@ describe('a walkout', () =>
 
     it('passes the turn on when the seat on turn walks out', () =>
     {
-        const state = pokerEngine.create([0, 1, 2, 3, 4, 5], draws(9), { target: 0, cube: false, blinds: 'low' }).state;
+        const state = pokerEngine.create([0, 1, 2, 3, 4, 5], draws(9), { target: 0, cube: false, blinds: 'low', variant: 'standard' }).state;
         const step = applied(state, forfeit(state.turn, 'timeout'));
 
         expect(pokerEngine.turnOf(step.state)).toBe((state.turn + 1) % 6);
@@ -239,7 +239,7 @@ describe('a walkout', () =>
 
 describe('how a game ended', () =>
 {
-    const table = { target: 0, cube: false, blinds: 'low' as const };
+    const table = { target: 0, cube: false, blinds: 'low' as const, variant: 'standard' as const };
 
     const placesOf = (state: PokerState) => pokerEngine.standings(state).sort((x, y) => x.seat - y.seat).map((one) => one.place);
 
@@ -299,7 +299,7 @@ describe('how a game ended', () =>
 
     it('counts betting decisions as engagement, three of them, and never a blind', () =>
     {
-        expect(pokerEngine.engagement(6)).toEqual({ verbs: ['fold', 'check', 'call', 'raise', 'allin'], after: 3 });
+        expect(pokerEngine.engagement({ seats: 6, variant: 'standard' })).toEqual({ verbs: ['fold', 'check', 'call', 'raise', 'allin'], after: 3 });
     });
 });
 
@@ -307,7 +307,7 @@ describe('one turn on the clock', () =>
 {
     it('gives a fresh key to the seat that folded one hand and opens the next', () =>
     {
-        const state = pokerEngine.create([0, 1], draws(5), { target: 0, cube: false, blinds: 'low' }).state;
+        const state = pokerEngine.create([0, 1], draws(5), { target: 0, cube: false, blinds: 'low', variant: 'standard' }).state;
         const opener = state.turn;
         const raise = pokerEngine.legal(state, opener).find((one) => one.kind === 'raise')!;
         const raised = applied(state, raise).state;
@@ -321,7 +321,7 @@ describe('one turn on the clock', () =>
 
     it('keeps the key while a seat that is not on turn walks out', () =>
     {
-        const state = pokerEngine.create([0, 1, 2, 3, 4, 5], draws(6), { target: 0, cube: false, blinds: 'low' }).state;
+        const state = pokerEngine.create([0, 1, 2, 3, 4, 5], draws(6), { target: 0, cube: false, blinds: 'low', variant: 'standard' }).state;
         const away = (state.turn + 3) % 6;
         const after = applied(state, forfeit(away)).state;
 
@@ -366,7 +366,7 @@ describe('the opening deal', () =>
 {
     it('reaches the ledger: the first deal, both blinds and every hole, with the holes kept out of every log', () =>
     {
-        const opened = pokerEngine.create([0, 1, 2, 3, 4, 5], draws(4), { target: 0, cube: false, blinds: 'low' });
+        const opened = pokerEngine.create([0, 1, 2, 3, 4, 5], draws(4), { target: 0, cube: false, blinds: 'low', variant: 'standard' });
         const state = opened.state;
         const events = opened.events as PokerEvent[];
 
