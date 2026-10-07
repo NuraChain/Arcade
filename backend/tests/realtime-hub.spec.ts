@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createHub, EDGES_TTL_MS, LINGER_MS, PULSE_MS, TICK_MS, type Connection, type Edges, type Hub, type Wire } from '../src/realtime/hub.ts';
+import { createHub, EDGES_TTL_MS, LINGER_MS, PULSE_MS, SEEN_MS, TICK_MS, type Connection, type Edges, type Hub, type Wire } from '../src/realtime/hub.ts';
 import type { Party } from '../src/domains/social/policy.ts';
 import type { Principal } from '../src/http/auth.ts';
 import type { ServerFrame } from '../src/realtime/frames.ts';
@@ -727,6 +727,71 @@ describe('who is here', () =>
         await settle();
 
         expect(alex.wire.sent.length).toBe(before);
+    });
+
+    it('counts somebody whose page has just asked the server for something, though no socket of theirs ever opened', async () =>
+    {
+        world.hub.seen('reza.t');
+
+        expect([...world.hub.present(['reza.t', 'mina'])]).toEqual(['reza.t']);
+
+        world.at += SEEN_MS - 1;
+
+        expect(world.hub.present(['reza.t']).has('reza.t')).toBe(true);
+    });
+
+    it('stops counting them once they have asked for nothing for a while', async () =>
+    {
+        world.hub.seen('reza.t');
+        world.at += SEEN_MS;
+
+        expect(world.hub.present(['reza.t']).has('reza.t')).toBe(false);
+    });
+
+    it('goes on counting them for as long as they go on asking', async () =>
+    {
+        for (let beat = 0; beat < 5; beat += 1)
+        {
+            world.hub.seen('reza.t');
+            world.at += SEEN_MS - 1;
+        }
+
+        expect(world.hub.present(['reza.t']).has('reza.t')).toBe(true);
+    });
+
+    it('goes on counting them through a sweep, and lets go of them at the sweep after they stopped', async () =>
+    {
+        world.hub.seen('reza.t');
+        world.at += SEEN_MS - 1;
+        await world.hub.sweep();
+
+        expect(world.hub.present(['reza.t']).has('reza.t')).toBe(true);
+
+        world.at += 1;
+        await world.hub.sweep();
+        world.at -= SEEN_MS;
+
+        expect(world.hub.present(['reza.t']).has('reza.t'), 'the sweep dropped them, so an earlier clock finds nothing kept').toBe(false);
+    });
+
+    it('shows nobody a dot for it: having asked for a page is not being online', async () =>
+    {
+        const sara = await connect('sara.k');
+        const before = sara.wire.sent.length;
+
+        world.hub.seen('alex');
+        await settle();
+
+        expect(world.hub.presenceOf('sara.k').map((entry) => entry.who)).not.toContain('alex');
+        expect(sara.wire.sent.length).toBe(before);
+    });
+
+    it('forgets everybody it has seen when it says goodbye', async () =>
+    {
+        world.hub.seen('reza.t');
+        world.hub.closeAll(1001, 'Server restarting');
+
+        expect(world.hub.present(['reza.t']).has('reza.t')).toBe(false);
     });
 });
 

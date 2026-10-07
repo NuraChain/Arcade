@@ -75,6 +75,7 @@ export interface WriteListener
     tableChanged(tableId: string, people: readonly string[]): void;
     tableViewed(userId: string, tableId: string): void;
     sessionsRevoked(sessionIds: readonly string[]): void;
+    seen(userId: string): void;
 }
 
 export interface PresenceReader
@@ -1221,7 +1222,14 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             async principal(request)
             {
                 const token = readSessionToken(request, secureCookies);
-                return token === null ? null : identity.principalFor(token);
+                const who = token === null ? null : await identity.principalFor(token);
+
+                if (who !== null)
+                {
+                    live?.seen(who.userId);
+                }
+
+                return who;
             },
 
             async me(userId)

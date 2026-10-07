@@ -99,6 +99,8 @@ export const TICK_MS = 150;
 
 export const PULSE_MS = 2000;
 
+export const SEEN_MS = 20_000;
+
 export const VIEWED_MAX = 4;
 
 export type SelfTopic = 'notifications' | 'devices' | 'profile';
@@ -119,6 +121,7 @@ export interface Hub
     tableChanged(tableId: string, people: readonly string[]): void;
     tableViewed(userId: string, tableId: string): void;
     sessionsRevoked(sessionIds: readonly string[]): void;
+    seen(userId: string): void;
 
     typingIn(connection: Connection, conversationId: string): void;
     voice(connection: Connection, tableId: string, on: boolean, muted: boolean): void;
@@ -167,6 +170,7 @@ export function createHub(deps: HubDeps): Hub
     const pendingTable = new Map<string, { at: number; people: Set<string> }>();
     const viewed = new Map<string, string[]>();
     const watchers = new Map<string, Set<string>>();
+    const sighted = new Map<string, number>();
 
     const pendingSocial = new Set<string>();
     let timer: ReturnType<typeof setTimeout> | null = null;
@@ -889,6 +893,11 @@ export function createHub(deps: HubDeps): Hub
             schedule();
         },
 
+        seen(userId)
+        {
+            sighted.set(userId, deps.now());
+        },
+
         sessionsRevoked(sessionIds)
         {
             const dead = new Set(sessionIds);
@@ -1046,6 +1055,14 @@ export function createHub(deps: HubDeps): Hub
                 feel();
             }
 
+            for (const [userId, last] of [...sighted])
+            {
+                if (last <= at - SEEN_MS)
+                {
+                    sighted.delete(userId);
+                }
+            }
+
             for (const [userId, record] of [...online])
             {
                 if (record.leftAt !== null && at - record.leftAt >= LINGER_MS)
@@ -1109,7 +1126,12 @@ export function createHub(deps: HubDeps): Hub
 
         presenceOf: (userId) => entriesFor(userId),
 
-        present: (userIds) => new Set(userIds.filter((userId) => online.has(userId))),
+        present(userIds)
+        {
+            const since = deps.now() - SEEN_MS;
+
+            return new Set(userIds.filter((userId) => online.has(userId) || (sighted.get(userId) ?? Number.NEGATIVE_INFINITY) > since));
+        },
 
         size()
         {
@@ -1161,6 +1183,7 @@ export function createHub(deps: HubDeps): Hub
             talks.clear();
             viewed.clear();
             watchers.clear();
+            sighted.clear();
             return sent;
         }
     };

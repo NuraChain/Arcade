@@ -691,11 +691,12 @@ Under the lock, in order:
   over the thirty-two because presence is memory in one process, the limit the hub already states.
   The SEARCHER is never asked about: the request is proof enough that their browser is alive, and a
   socket that binds a moment after a cold page load would otherwise open a table of its own beside
-  the one it should have filled. So an account with no socket at all - a browser behind a proxy
-  that refuses WebSockets, a script that only posts - is seated like anybody else, and from then on
-  that table is passed over by every later search, for the people already waiting there as much as
-  for the newcomer, until it leaves or the sweep stands it up (*A waiting chair belongs to somebody
-  who is there*).
+  the one it should have filled. So an account with no socket at all is seated like anybody else.
+  A browser behind a proxy that refuses WebSockets goes on counting as here, because its page goes
+  on asking (*Here is a socket, or a page that goes on asking*, below); a script that posts once
+  and falls silent does not, and from twenty seconds later that table is passed over by every
+  search, for the people already waiting there as much as for the newcomer, until it leaves or the
+  sweep stands it up (*A waiting chair belongs to somebody who is there*).
 - **A chair.** The search takes the table's lock first - `lockTable`, the one a start, a leave and
   a close take - and the UPDATE that takes the chair asks that the table is still open. A join only
   fills a chair, which cannot hurt a start; what it could hurt is a table being emptied. The last
@@ -832,6 +833,23 @@ both BEFORE `hub.closeAll`, and the reader `main.ts` hands `buildPorts` stops as
 that moment and counts everybody as here. A sweep still out stands nobody else up, and a quick
 search answered in those last milliseconds is seated beside the people who were there until the
 server itself let them go.
+
+**Here is a socket, or a page that goes on asking.** `hub.present` counted sockets and nothing
+else, so somebody whose socket could not connect - a proxy that does not pass the upgrade, an
+origin the handshake refuses - was away to both sweeps and to every search while they sat at the
+table pressing buttons, and was stood up inside two minutes. Their page is not silent: with no
+socket the lifeline rings every scope every eight seconds and every store reads itself again
+(`chat-and-keys.md`, *Realtime*). Every one of those requests is answered as somebody, so
+`identity.principal` tells the hub who it was (`WriteListener.seen`), and anybody seen in the
+last `SEEN_MS` - twenty seconds, two beats and room for a slow one - is here. It lights no dot:
+`presenceOf` and the frames are still the socket's, and being seen is said to nobody. The hub's
+own sweep forgets whoever has stopped asking. A hidden tab with no socket stops ringing and is
+away like any other closed tab, which is the same answer a hidden tab with a socket gets unless
+it is holding a seat; that one difference is left, because a browser throttles a hidden page's
+timers to a beat a minute and nothing here can keep a promise on that. `realtime-hub.spec.ts`
+(*who is here*) holds the window, the sweep and the dot that is not drawn;
+`table-sweep.db.spec.ts` puts a real hub behind the services, has a session ask before each of
+four sweeps and keeps the chair, then stops asking and gives it up at the second.
 
 **`vacate` takes the table's lock first and reads again under it.** `jobs.sweepTables()` reads
 `table.waitingSeats(500)` - a QueryBuilder over the chairs in scope, longest sat first, so that two

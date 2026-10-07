@@ -38,7 +38,8 @@ const listener: WriteListener = {
     gameWatched: () => undefined,
     tableChanged: () => undefined,
     tableViewed: () => undefined,
-    sessionsRevoked: () => undefined
+    sessionsRevoked: () => undefined,
+    seen: () => undefined
 };
 
 const door = () => buildPorts(db, {

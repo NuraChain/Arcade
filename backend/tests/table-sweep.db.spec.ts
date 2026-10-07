@@ -10,7 +10,9 @@ import { createAchieveService } from '../src/domains/achieve/service.ts';
 import { createMatchService } from '../src/domains/match/service.ts';
 import { createSocialService } from '../src/domains/social/service.ts';
 import { createTableService, lockTable } from '../src/domains/table/service.ts';
+import { hashToken, mintToken } from '../src/lib/crypto.ts';
 import { rowsOf } from '../src/lib/rows.ts';
+import { createHub, SEEN_MS } from '../src/realtime/hub.ts';
 import { buildPorts, type PresenceReader, type WriteListener } from '../src/services.ts';
 
 const url = process.env.TEST_DATABASE_URL;
@@ -55,7 +57,8 @@ const listener: WriteListener = {
     gameWatched: () => undefined,
     tableChanged: () => undefined,
     tableViewed: () => undefined,
-    sessionsRevoked: () => undefined
+    sessionsRevoked: () => undefined,
+    seen: () => undefined
 };
 
 const hands = (): Hands => ({
@@ -63,14 +66,46 @@ const hands = (): Hands => ({
     matches: createMatchService(db, createAchieveService(db))
 });
 
-const door = (presence?: PresenceReader, from: DataSource = db) => buildPorts(from, {
+const door = (presence?: PresenceReader, from: DataSource = db, live: WriteListener = listener) => buildPorts(from, {
     secret: 'a-test-secret-that-is-long-enough-to-use',
     origin: 'http://localhost:1',
     env: 'test',
     vapidPublicKey: '',
     vapidPrivateKey: '',
     vapidSubject: ''
-} as Parameters<typeof buildPorts>[1], listener, presence);
+} as Parameters<typeof buildPorts>[1], live, presence);
+
+const hubAt = (clock: { at: number }) => createHub({
+    now: () => clock.at,
+    accountMax: 3,
+    edgesFor: async (userId) => ({
+        party: { id: userId, isMinor: false, allowStrangerMessages: true, showOnline: true },
+        handle: userId,
+        friends: new Set<string>(),
+        blocks: new Set<string>(),
+        loadedAt: clock.at
+    }),
+    recipientsOf: async () => [],
+    aliveSessions: async (ids) => new Set(ids),
+    touchSeen: () => undefined,
+    report: () => undefined,
+    voiceAllowed: async () => false,
+    mayTalk: async () => false,
+    pulse: async () => ({ games: [], watching: '' })
+});
+
+const asking = async (userId: string) =>
+{
+    const token = mintToken();
+
+    await db.query(
+        `insert into sessions (user_id, token_hash, expires_at)
+         values ($1, $2, now() + interval '30 days')`,
+        [userId, hashToken(token)]
+    );
+
+    return new Request('http://localhost:1/api/tables/mine', { headers: { cookie: `nura.session=${ token }` } });
+};
 
 const makeUser = async () =>
 {
@@ -288,6 +323,38 @@ describe.skipIf(!active)('a waiting chair whose occupant is not here, against a 
             expect(await row(tableId)).toMatchObject({ status: 'open', closedAt: null });
 
             expect(await jobs.sweepTables()).toEqual(NOTHING_DONE);
+        });
+
+        it('leaves the chair of somebody whose page goes on asking the server, though no socket of theirs ever opened', async () =>
+        {
+            const [host, guest] = await crowd(2);
+            const tableId = await opened(host);
+            const clock = { at: Date.now() };
+            const hub = hubAt(clock);
+            const { jobs, identity } = door({ present: (userIds) => hub.present(userIds) }, db, hub);
+            const request = await asking(guest);
+            const hosting = await asking(host);
+
+            await sat(guest, tableId);
+
+            for (let sweep = 0; sweep < 4; sweep += 1)
+            {
+                expect((await identity.principal(request))?.userId).toBe(guest);
+                expect((await identity.principal(hosting))?.userId).toBe(host);
+                clock.at += SEEN_MS - 1;
+
+                expect(await jobs.sweepTables(), `sweep ${ sweep }`).toEqual(NOTHING_DONE);
+            }
+
+            expect(await sitting(tableId)).toEqual([host, guest]);
+
+            expect((await identity.principal(hosting))?.userId).toBe(host);
+            clock.at += SEEN_MS - 1;
+            expect(await jobs.sweepTables()).toEqual(NOTHING_DONE);
+            expect((await identity.principal(hosting))?.userId).toBe(host);
+            clock.at += SEEN_MS - 1;
+            expect(await jobs.sweepTables(), 'the guest stopped asking two sweeps ago').toEqual({ stoodUp: 1, closed: 0, failed: [] });
+            expect(await sitting(tableId)).toEqual([host]);
         });
 
         it('lets somebody who is back by the second sweep keep the chair, and starts from nothing if they go again', async () =>
