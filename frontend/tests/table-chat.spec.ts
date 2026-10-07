@@ -235,4 +235,18 @@ describe('the notice above a table chat that cannot be sealed', () =>
         expect(container.textContent).toContain(said);
         expect([...container.querySelectorAll<HTMLElement>('div')].find((one) => one.dataset.yield !== undefined), 'the notice was drawn again').toBe(notice);
     });
+
+    it('does not ask somebody to say something where nothing can be sent', async () =>
+    {
+        server.conversationDevices['conv-seal'] = { members: [{ accountId: 'u-alex', handle: 'alex', kind: 'guest', devices: [] }] } as never;
+
+        const container = shown('conv-seal');
+
+        await vi.waitFor(() => expect(container.textContent).toContain(useLocale().t('seal.noWalletMine')), { timeout: 4000 });
+
+        expect(container.querySelector('textarea')?.disabled).toBe(true);
+        expect(container.textContent).toContain('No messages yet.');
+        expect(container.textContent, 'an invitation to talk above a composer that sends nothing').not.toContain('Say something.');
+        expect(container.textContent).not.toContain(useLocale().t('play.table.chatLead'));
+    });
 });

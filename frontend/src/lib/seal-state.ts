@@ -152,6 +152,7 @@ export async function sealabilityOf(answer: ConversationDevices, me: string): Pr
     const stuck = members.filter((member): member is BlockedMember => member.state !== 'ready');
 
     const blocked = stuck.find((member) => member.state === 'tampered')
+        ?? stuck.find((member) => member.isMe && member.state === 'no-wallet')
         ?? stuck.find((member) => !member.isMe)
         ?? stuck[0]
         ?? null;

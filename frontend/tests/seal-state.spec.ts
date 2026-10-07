@@ -105,6 +105,18 @@ describe('whether a conversation can be sealed', () =>
         expect(answer.blocked?.state).toBe('no-wallet');
     });
 
+    it('names the reader first when the wallet missing is their own, whoever else has none', async () =>
+    {
+        const answer = await sealabilityOf(conversation(
+            { accountId: 'account-sara.k', handle: 'sara.k', kind: 'guest', devices: [] },
+            { accountId: 'account-alex', handle: 'alex', kind: 'guest', devices: [] }
+        ), 'alex');
+
+        expect(answer.blocked?.handle, 'a guest was told it is somebody else who is in the way').toBe('alex');
+        expect(answer.blocked?.isMe).toBe(true);
+        expect(answer.blocked?.state).toBe('no-wallet');
+    });
+
     it('tells a wallet account with no device apart from a guest', async () =>
     {
         const answer = await sealabilityOf(conversation(
@@ -261,8 +273,41 @@ describe('what the thread says about it', () =>
         const said = render(seal('no-wallet'));
 
         expect(said).toContain('sara.k');
-        expect(said).toContain('not sealed');
+        expect(said).toContain('Nobody can write here yet');
         expect(said).toContain('wallet on both sides');
+    });
+
+    it('never calls what nobody can send unsealed, in either language', () =>
+    {
+        const states: BlockedMember['state'][] = ['no-wallet', 'no-device', 'needs-chain'];
+
+        for (const language of ['en', 'fa'] as const)
+        {
+            useLocale().setLocale(language);
+
+            for (const state of states)
+            {
+                for (const isMe of [false, true])
+                {
+                    const said = render(seal(state, isMe));
+
+                    cleanup();
+
+                    expect(said, `${ language } ${ state } ${ isMe ? 'mine' : 'theirs' }`).not.toMatch(/not sealed|مهروموم نشده/);
+                    expect(said.length, `${ language } ${ state } ${ isMe ? 'mine' : 'theirs' } says nothing`).toBeGreaterThan(20);
+                }
+            }
+        }
+
+        useLocale().setLocale('en');
+    });
+
+    it('tells the reader it is they who cannot write when the wallet missing is theirs', () =>
+    {
+        const said = render(seal('no-wallet', true));
+
+        expect(said).toContain('You cannot write here');
+        expect(said).not.toContain('sara.k');
     });
 
     it('says something different for somebody who simply has not enrolled', () =>
@@ -313,7 +358,7 @@ describe('what the thread says about it', () =>
     it('follows a language switch, like every other composed sentence', () =>
     {
         useLocale().setLocale('fa');
-        expect(render(seal('no-wallet'))).toContain('مهروموم نشده‌اند');
+        expect(render(seal('no-wallet'))).toContain('هنوز کسی نمی‌تواند اینجا بنویسد');
     });
 
     it('tells a keyless browser which of the two it is, and offers only what would help', () =>

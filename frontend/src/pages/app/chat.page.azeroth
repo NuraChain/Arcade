@@ -549,7 +549,7 @@ export default component ChatPage()
                                                     { () => <GroupCrest crest={ group!.crest } hue={ group!.hue } size="lg" /> }
                                                 </Show>
                                                 <p class="text-ui-lg font-semibold text-text" dir="auto">{ title }</p>
-                                                <p class="max-w-xs text-ui-sm text-muted">{ locale.t(quiet ? 'chat.emptyQuiet' : 'chat.empty') }</p>
+                                                <p class="max-w-xs text-ui-sm text-muted">{ locale.t(quiet ? 'chat.emptyQuiet' : (stop === null ? 'chat.empty' : 'chat.emptyShut')) }</p>
                                                 <Show when={ stop === null && !seal.loading() }>
                                                     { () =>
                                                         <div class="mt-1 max-w-md rounded-tile border border-line bg-field/80 text-start">

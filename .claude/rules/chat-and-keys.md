@@ -424,8 +424,21 @@ member and renders `tampered` — an alarm with `role="alert"`, not a shrug. Qui
 ones is exactly how a fabricated device ends up wrapped in beside the real ones.
 
 **Sealing needs a wallet on both sides.** A guest has no wallet, so a guest has no provable device,
-so a conversation with one is not sealed and says so. That is a product decision with a real cost —
-guests are the main onboarding path — and it is stated rather than hidden behind a padlock. A
+so nothing can be sealed to them - and a message is only ever sent sealed, so in a conversation with a
+guest NOBODY can write, a table's chat included. That is a product decision with a real cost —
+guests are the main onboarding path — and it is stated rather than hidden behind a padlock. The
+notice used to state it as "These messages are not sealed", which was true when the sentence was
+written and stopped being true the day an unsealed message became a 422: it read as a warning about
+messages somebody could still send, above a composer that would send nothing. Every sentence of the
+notice says who cannot write and why now ("Nobody can write here yet. sara.k is signed in without a
+wallet...", "You cannot write here..." when the wallet missing is the reader's), and
+`seal-state.spec.ts` refuses the old words in both languages. A reader with no wallet is told about
+their own first: `sealabilityOf` named somebody else whenever anybody else was stuck too, so at a
+table of two guests each read that the OTHER one had no wallet, as if that were all that stood in
+the way. And an empty thread nobody can write in says "No messages yet." (`chat.emptyShut`), on the
+chat page and in a table's panel: both said "No messages yet. Say something." above the notice that
+said nobody could, and the panel added that everyone at the table could read it.
+`table-chat.spec.ts` holds the panel. A
 contract wallet is refused too, for now: ERC-1271 has no signature to recover and the answer needs
 an `eth_call` this browser does not make. Unverifiable is not verified, and the copy says which.
 

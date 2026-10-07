@@ -132,6 +132,7 @@ export const social = {
     'chat.openGroup': 'Open group',
     'chat.viewProfile': 'View profile',
     'chat.empty': 'No messages yet. Say something.',
+    'chat.emptyShut': 'No messages yet.',
     'chat.emptyQuiet': 'No messages yet.',
     'chat.reply': 'Reply',
     'chat.react': 'Add a reaction',
@@ -303,10 +304,10 @@ export const social = {
     'notify.push.on': 'On for this device',
     'notify.push.denied': 'This browser is blocking notifications. Allow them in its site settings first.',
 
-    'seal.noWallet': 'These messages are not sealed. {who} is signed in without a wallet, and sealing needs a wallet on both sides.',
-    'seal.noWalletMine': 'These messages are not sealed. You are signed in without a wallet, and sealing needs a wallet on both sides.',
-    'seal.noDevice': 'These messages are not sealed. {who} has not given any of their browsers keys yet.',
-    'seal.noDeviceMine': 'These messages are not sealed. None of your browsers has been given keys yet, so there is nothing to seal them to.',
+    'seal.noWallet': 'Nobody can write here yet. {who} is signed in without a wallet, and a message is only ever sent sealed, to a wallet on both sides.',
+    'seal.noWalletMine': 'You cannot write here. You are signed in without a wallet, and a message is only ever sent sealed, to a wallet on both sides.',
+    'seal.noDevice': 'Nobody can write here yet. {who} has not given any of their browsers keys, so there is nothing to seal a message to.',
+    'seal.noDeviceMine': 'You cannot write here yet. None of your browsers has been given keys, so there is nothing to seal a message to.',
 
     /*
      * Not the same sentence as noDeviceMine, and the difference is the whole point. That one is
@@ -315,9 +316,9 @@ export const social = {
      * time somebody opens the product on a second browser.
      */
     'seal.noKeysHere': 'This browser has no keys of its own, so it cannot send here yet. Your other browsers are unaffected.',
-    'seal.deviceUnsupported': 'These messages are not sealed. This browser has nowhere secure to keep keys, so nothing can be sealed from it.',
-    'seal.needsChain': 'These messages are not sealed. {who} uses a contract wallet, and this browser cannot check one without reaching the network.',
-    'seal.needsChainMine': 'These messages are not sealed. Yours is a contract wallet, and this browser cannot check one without reaching the network.',
+    'seal.deviceUnsupported': 'You cannot write from this browser. It has nowhere secure to keep keys, so nothing can be sealed from it.',
+    'seal.needsChain': 'Nobody can write here yet. {who} uses a contract wallet, and this browser cannot check one without reaching the network.',
+    'seal.needsChainMine': 'You cannot write here yet. Yours is a contract wallet, and this browser cannot check one without reaching the network.',
     'seal.tampered': 'Something is wrong with {who}\u2019s devices. One did not match the proof published beside it, so there is no telling whose it is. Nothing here is sealed to any of them.',
     'seal.tamperedMine': 'Something is wrong with your devices. One did not match the proof published beside it. Open your devices and sign out anything you do not recognise.',
 

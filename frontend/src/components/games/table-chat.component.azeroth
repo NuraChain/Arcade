@@ -290,6 +290,10 @@ export default component TableChat(props: {
 
     derived noticed = !quiet && !seal.loading() && stop !== null;
 
+    derived shut = !quiet && stop !== null;
+
+    derived inviting = !shut;
+
     derived match = board.match();
 
     derived live = match !== null && match.tableId === table?.id ? match : null;
@@ -366,8 +370,10 @@ export default component TableChat(props: {
                                     <span class="flex h-11 w-11 items-center justify-center rounded-full bg-accent/12 text-accent">
                                         <Icon name={ quiet ? 'chat-off' : 'chats' } size={ 20 } />
                                     </span>
-                                    <p class="text-ui-sm font-semibold text-text">{ locale.t(quiet ? 'play.table.quiet' : 'chat.empty') }</p>
-                                    <p class="text-ui-xs text-muted">{ locale.t(quiet ? 'play.table.quietLead' : 'play.table.chatLead') }</p>
+                                    <p class="text-ui-sm font-semibold text-text">{ locale.t(quiet ? 'play.table.quiet' : (shut ? 'chat.emptyShut' : 'chat.empty')) }</p>
+                                    <Show when={ inviting }>
+                                        <p class="text-ui-xs text-muted">{ locale.t(quiet ? 'play.table.quietLead' : 'play.table.chatLead') }</p>
+                                    </Show>
                                 </li>
                             }
                         </Show>

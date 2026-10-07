@@ -274,7 +274,7 @@ for (const size of SIZES)
         console.log('  devices panel :', deviceState.split('\n').filter(Boolean).slice(0, 4).join(' / ').slice(0, 160));
         console.log('  phrase        :', phrase, phrase === '(none)' ? '' : `(${ phrase.replace(/-/g, '').length } symbols)`);
         console.log('  recovered     :', recovered);
-        console.log('  seal line     :', (threadText.match(/.*(Only the devices|فقط دستگاه|not sealed|مهروموم نشده).*/i)?.[0] ?? '(none)').slice(0, 150));
+        console.log('  seal line     :', (threadText.match(/.*(Only the devices|فقط دستگاه|can write here|cannot write|نمی‌تواند اینجا بنویسد|نمی‌توانی).*/i)?.[0] ?? '(none)').slice(0, 150));
         console.log('  sent + read   :', sent);
         console.log('  h-overflow    :', overflow);
         console.log('  console errors:', console_.length, console_.slice(0, 3).join(' | ').slice(0, 200));
