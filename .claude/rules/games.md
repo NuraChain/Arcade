@@ -2043,6 +2043,16 @@ import once it knows which game the match is, and renders it through `<Dynamic>`
 so match updates flow into the loaded board the way direct markup props would. The route chunk fell
 from 17.8 KB to 9.1 KB, and a Hokm player never downloads the Ludo UI.
 
+**And the page carries only what everybody at a table needs.** The sheet that invites a friend is
+fetched when a host presses an empty chair, and the watcher's board when somebody is watching. Both
+sat in the route chunk, which every player downloads to see a lobby or a board, and that chunk stood
+at 14.9 of its 15 KB with a team game, a party and a second kind of call still to draw on the same
+page. A sheet that could not be fetched says "That did not go through"; a board that could not is
+the failure a watch already draws, and its Try again fetches the board before it asks the server
+again. `play.spec.ts` opens the page as somebody watching, which no spec did - the specs' server had
+no answer for a watch at all, so that page had only ever been drawn failing - and presses an empty
+chair as the host.
+
 **`table-seats.ts` puts the reader at the bottom**, whichever chair the server gave them, and it is
 shared because poker and backgammon want the same table. Play passes to the RIGHT - counter-clockwise
 at a real table, clockwise on a screen looking down at one - so the next seat is drawn to the reader's

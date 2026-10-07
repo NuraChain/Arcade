@@ -2,10 +2,8 @@ import { Dynamic, type MountNode, onCleanup, untrack, useHead, useNavigate, useP
 
 import ConfirmSheet from '../../components/app/confirm-sheet.component.azeroth';
 import Page from '../../components/app/page.component.azeroth';
-import InviteSheet from '../../components/games/invite-sheet.component.azeroth';
 import LobbyPanel from '../../components/games/lobby-panel.component.azeroth';
 import PlayHeader from '../../components/games/play-header.component.azeroth';
-import WatchBoard from '../../components/games/watch-board.component.azeroth';
 import TableDock from '../../components/games/table-dock.component.azeroth';
 import Button from '../../components/ui/button.component.azeroth';
 import EmptyState from '../../components/ui/empty-state.component.azeroth';
@@ -30,7 +28,7 @@ import { useOverlay } from '../../stores/overlay.store.ts';
 import { useShell } from '../../stores/shell.store.ts';
 import { useToasts } from '../../stores/toasts.store.ts';
 import Panel from '../../components/ui/panel.component.azeroth';
-import type { MatchView } from '../../api.ts';
+import type { MatchView, MatchWatch } from '../../api.ts';
 import { plainOf } from '../../lib/markdown.ts';
 import { holdScreen } from '../../lib/wake-lock.ts';
 import { watchEdge, watchFold, watchSheet, type SheetSize } from '../../lib/sheet-room.ts';
@@ -74,6 +72,14 @@ export default component PlayPage()
     let Chat: ((props: { conversationId: string; class?: string; closeIcon?: 'panel-close' | 'close'; wide?: boolean; onResize?: () => void; onClose?: () => void }) => MountNode) | null = null;
 
     state chatReady = false;
+
+    let Watched: ((props: { watch: MatchWatch }) => MountNode) | null = null;
+
+    let watchAsked = false;
+
+    state watchReady = false;
+
+    state watchLost = false;
 
     let talk: Record<string, string> = {};
 
@@ -544,6 +550,34 @@ export default component PlayPage()
         }
     }
 
+    const drawWatch = () =>
+    {
+        watchAsked = true;
+        watchLost = false;
+
+        void import('../../components/games/watch-board.component.azeroth').then((module) =>
+        {
+            Watched = module.default;
+            watchReady = true;
+        }).catch(() =>
+        {
+            watchAsked = false;
+            watchLost = true;
+        });
+    };
+
+    const rewatch = () =>
+    {
+        if (Watched === null)
+        {
+            drawWatch();
+        }
+        else
+        {
+            watch.retry();
+        }
+    };
+
     effect
     {
         const id = table?.matchId;
@@ -551,12 +585,24 @@ export default component PlayPage()
         if (id !== undefined && !seated)
         {
             watch.open(id);
+
+            if (!watchAsked)
+            {
+                drawWatch();
+            }
         }
         else
         {
             watch.close();
         }
     }
+
+    const invite = (tableId: string) =>
+    {
+        void import('../../components/games/invite-sheet.component.azeroth')
+            .then((module) => overlay.open(module.default, { tableId }, { label: locale.t('play.lobby.invite') }))
+            .catch(() => toasts.show({ kind: 'warning', text: locale.t('common.actionFailed'), dedupe: 'invite-sheet' }));
+    };
 
     const starter = (step: (tableId: string) => Promise<void>) => async () =>
     {
@@ -821,8 +867,8 @@ export default component PlayPage()
                     <Show when={ watching }>
                         { () =>
                             <div class="flex min-h-0 flex-1 flex-col gap-3">
-                                <Show when={ watch.view() !== null }>
-                                    { () => <WatchBoard watch={ watch.view()! } /> }
+                                <Show when={ watchReady && watch.view() !== null }>
+                                    { () => <Dynamic component={ Watched! } props={ () => ({ watch: watch.view()! }) } /> }
                                 </Show>
                                 <Show when={ watch.view() === null && !watch.loading() && !watch.failed() }>
                                     { () =>
@@ -831,8 +877,8 @@ export default component PlayPage()
                                         </Panel>
                                     }
                                 </Show>
-                                <Show when={ watch.failed() }>
-                                    { () => <ErrorState title={ locale.t('state.errorTitle') } lead={ locale.t('state.errorLead') } onRetry={ () => watch.retry() } class="py-12" /> }
+                                <Show when={ watch.failed() || watchLost }>
+                                    { () => <ErrorState title={ locale.t('state.errorTitle') } lead={ locale.t('state.errorLead') } onRetry={ rewatch } class="py-12" /> }
                                 </Show>
                             </div>
                         }
@@ -842,7 +888,7 @@ export default component PlayPage()
                         { () =>
                             <LobbyPanel
                                 table={ shown }
-                                onInvite={ () => overlay.open(InviteSheet, { tableId: shown.id }, { label: locale.t('play.lobby.invite') }) }
+                                onInvite={ () => invite(shown.id) }
                                 onCopyLink={ () => void copyLink() }
                                 onLeave={ () => void leave(null) }
                             />

@@ -407,6 +407,8 @@ export const server =
 
     watching: [] as { id: string; code: string; game: string; seats: number; players: string[]; startedAt: string }[],
 
+    watches: {} as Record<string, unknown>,
+
     /** The graph, from the same fixtures the development server seeds. */
     friends: [] as string[],
     incoming: [] as { id: string; from: string; to: string; at: string }[],
@@ -417,6 +419,7 @@ export const server =
     reset()
     {
         server.watching = [];
+        server.watches = {};
         server.games = [];
         server.achievements = { scopes: [], families: [], recent: [] };
         server.progress = { xp: 0, level: 1, into: 0, span: 100 };
@@ -1665,6 +1668,20 @@ export const client =
         {
             server.calls.push('matches.history');
             return { matches: server.history.map((row) => ({ ...row })) };
+        },
+
+        async watch({ params }: { params: { id: string } })
+        {
+            server.calls.push('matches.watch');
+
+            const held = server.watches[params.id];
+
+            if (held === undefined)
+            {
+                throw new ApiError(404, 'not-found', 'Nothing to watch there.', undefined);
+            }
+
+            return structuredClone(held);
         }
     },
 

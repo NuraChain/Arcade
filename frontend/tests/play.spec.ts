@@ -1160,6 +1160,77 @@ describe('PlayPage', () =>
             expect(container.querySelector('h1')).toBe(heading);
         });
 
+        it('draws the board somebody is watching, a while behind, once the page has fetched it', async () =>
+        {
+            const { container, lobby, held } = await opened('omid.k');
+
+            const seated = ['alex', 'sara.k', 'reza.t', 'mina'];
+            const colours = ['red', 'green', 'yellow', 'blue'];
+
+            server.watches['match-9'] = {
+                match: {
+                    id: 'match-9',
+                    tableId: held.id,
+                    game: 'ludo',
+                    rev: 3,
+                    seats: 4,
+                    players: seated.map((who, seat) => ({ seat, who, side: seat })),
+                    turn: 0,
+                    startedAt: new Date(400_000).toISOString(),
+                    view: {
+                        kind: 'ludo',
+                        moves: [],
+                        seats: colours.map((colour, seat) => ({ seat, colour, tokens: [0, 1, 2, 3].map((piece) => ({ piece, at: -1 })), home: 0, out: false }))
+                    }
+                },
+                behind: 30,
+                delay: 30,
+                live: true
+            };
+            held.matchId = 'match-9';
+            await lobby.refresh();
+
+            await vi.waitFor(() => expect(container.textContent).toContain(useLocale().t('watch.title')), { timeout: 4000 });
+
+            expect(server.calls).toContain('matches.watch');
+            expect(container.textContent).not.toContain(useLocale().t('play.table.sitDown'));
+        });
+
+        it('draws no board for a game the server will not show, and keeps the page', async () =>
+        {
+            const { container, lobby, held } = await opened('omid.k');
+            const heading = container.querySelector('h1');
+
+            held.matchId = 'match-nobody-kept';
+            await lobby.refresh();
+
+            await vi.waitFor(() => expect(server.calls).toContain('matches.watch'), { timeout: 4000 });
+            await settle();
+
+            expect(container.textContent).not.toContain(useLocale().t('watch.title'));
+            expect(container.querySelector('h1')).toBe(heading);
+        });
+
+        it('opens the sheet that invites a friend when the host presses an empty chair', async () =>
+        {
+            const { container } = await opened();
+
+            await vi.waitFor(() => expect(lobbyOf(container)).not.toBeNull(), { timeout: 4000 });
+
+            const chair = [...lobbyOf(container)!.querySelectorAll<HTMLButtonElement>('button')]
+                .find((one) => one.textContent?.includes(useLocale().t('play.lobby.open')))!;
+
+            expect(useOverlay().top()).toBeNull();
+
+            fire(chair, 'click');
+
+            await vi.waitFor(() => expect(useOverlay().top()).not.toBeNull(), { timeout: 4000 });
+
+            expect(useOverlay().top()!.label).toBe(useLocale().t('play.lobby.invite'));
+
+            useOverlay().close(useOverlay().top()!.id, true);
+        });
+
         it('says the table has closed when it does, and draws nothing of it', async () =>
         {
             const { container, lobby, held } = await opened();
@@ -1849,7 +1920,7 @@ describe('the table’s chat and its controls', () =>
 
         const edge = headerEndsAt(62);
 
-        fire(button(container, 'Make the chat bigger')!, 'click');
+        fire(await found(container, 'Make the chat bigger'), 'click');
         await settle();
 
         expect(container.querySelector('.table-sheet')!.className).toContain('top-[calc(var(--head,0.5rem)+0.25rem)]');
@@ -1857,7 +1928,7 @@ describe('the table’s chat and its controls', () =>
         await vi.waitFor(() => expect(container.querySelector<HTMLElement>('.table-sheet')!.parentElement!.style.getPropertyValue('--head')).toBe('62px'), { timeout: 2000 });
         edge.mockRestore();
 
-        fire(button(container, 'Hide chat')!, 'click');
+        fire(await found(container, 'Hide chat'), 'click');
         await settle();
 
         expect(container.querySelector('.table-sheet:not(.hidden)')).toBeNull();
@@ -1890,7 +1961,7 @@ describe('the table’s chat and its controls', () =>
         expect(links()[0].textContent).toContain('Your go');
         expect(others()!.querySelector('p')!.textContent).toContain('waiting on you');
 
-        fire(button(container, 'Hide chat')!, 'click');
+        fire(await found(container, 'Hide chat'), 'click');
         await settle();
 
         expect(container.querySelector('[data-sheet]')).toBeNull();
