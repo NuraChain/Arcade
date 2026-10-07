@@ -1,4 +1,4 @@
-import { useHead, useNavigate, useParams } from 'azerothjs';
+import { useHead, useParams } from 'azerothjs';
 
 import Page from '../../components/app/page.component.azeroth';
 import GameHero from '../../components/games/game-hero.component.azeroth';
@@ -17,7 +17,7 @@ import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useLobby } from '../../stores/lobby.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useShell } from '../../stores/shell.store.ts';
-import { openTable } from '../../lib/open-table.ts';
+import { findGame } from '../../lib/find-game.ts';
 
 const RULE_CARDS: Record<GameId, MessageKey[]> = {
     hokm: ['game.rules.hokm.1', 'game.rules.hokm.2', 'game.rules.hokm.3'],
@@ -34,7 +34,6 @@ export default component GamePage()
     const lobby = useLobby();
     const shell = useShell();
     const params = useParams();
-    const { navigate } = useNavigate();
 
     derived game = catalogue.bySlug(params().slug ?? '') ?? null;
 
@@ -59,7 +58,7 @@ export default component GamePage()
     {
         if (game !== null)
         {
-            openTable(lobby.quick(game.id), navigate);
+            findGame(game.id);
         }
     };
 

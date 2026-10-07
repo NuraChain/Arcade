@@ -1,0 +1,219 @@
+import { useNavigate } from 'azerothjs';
+
+import Button from '../ui/button.component.azeroth';
+import Chip from '../ui/chip.component.azeroth';
+import Segmented from '../ui/segmented.component.azeroth';
+import SheetHeader from '../ui/sheet-header.component.azeroth';
+import type { GameId } from '../../data/games.ts';
+import { formatsOf, type TableMode } from '../../data/tables.ts';
+import { openTable } from '../../lib/open-table.ts';
+import { cubeAsked, fitted, recallAsk, rememberAsk } from '../../lib/quick-asks.ts';
+import { useCatalogue } from '../../stores/catalogue.store.ts';
+import { useLobby } from '../../stores/lobby.store.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import type { OverlayProps } from '../../stores/overlay.store.ts';
+
+const BLINDS = ['low', 'mid', 'high'] as const;
+
+export default component QuickFinder(props: OverlayProps & { game: GameId })
+{
+    const catalogue = useCatalogue();
+    const lobby = useLobby();
+    const locale = useLocale();
+    const { navigate } = useNavigate();
+
+    state game = props.game;
+    state ask = recallAsk(props.game, catalogue.rules(props.game));
+    state pending = false;
+
+    derived rules = catalogue.rules(game);
+
+    derived playable = catalogue.games.filter((entry) => catalogue.playable(entry.id));
+
+    derived formats = formatsOf(rules);
+
+    derived several = playable.length > 1;
+
+    derived sized = formats.length > 1;
+
+    derived paced = rules.modes.length > 1;
+
+    derived aimed = rules.targets.length > 1;
+
+    derived cubed = cubeAsked(ask, rules);
+
+    derived staked = rules.hasBlinds;
+
+    derived mode = ask.mode ?? 'live';
+
+    derived handed = game === 'hokm';
+
+    derived busy = pending || lobby.finding().includes(game);
+
+    const choose = (next: Record<string, unknown>) =>
+    {
+        if (!busy)
+        {
+            ask = fitted(next, rules);
+        }
+    };
+
+    const pick = (next: GameId) =>
+    {
+        if (!busy)
+        {
+            game = next;
+            ask = recallAsk(next, catalogue.rules(next));
+        }
+    };
+
+    const find = () =>
+    {
+        if (busy)
+        {
+            return;
+        }
+
+        pending = true;
+        rememberAsk(game, ask);
+        openTable(
+            lobby.quick(game, ask),
+            (to) =>
+            {
+                props.close(true);
+                navigate(to);
+            },
+            () => pending = false
+        );
+    };
+
+    <div class="flex flex-col gap-5 p-5">
+        <SheetHeader title={ locale.t('quickMatch.title') } lead={ locale.t('quickMatch.lead') } onClose={ () => props.close(false) } />
+
+        <div class={ () => (busy ? 'flex flex-col gap-5 opacity-60' : 'flex flex-col gap-5') } inert={ busy ? '' : undefined }>
+        <Show when={ several }>
+            <fieldset class="flex flex-col gap-2">
+                <legend class="label mb-2 text-ui-sm text-muted">{ locale.t('quickMatch.game') }</legend>
+                <ul class="flex flex-wrap gap-2">
+                    <For each={ playable } key={ (entry) => entry.id } let={ entry }>
+                        <li>
+                            <Chip selected={ entry.id === game } onClick={ () => pick(entry.id) }>
+                                <span>{ locale.t(entry.nameKey) }</span>
+                            </Chip>
+                        </li>
+                    </For>
+                </ul>
+            </fieldset>
+        </Show>
+
+        <Show when={ sized }>
+            <fieldset class="flex flex-col gap-2">
+                <legend class="label mb-2 text-ui-sm text-muted">{ locale.t('create.seats') }</legend>
+                <ul class="flex flex-wrap gap-2">
+                    <li>
+                        <Chip selected={ ask.seats === undefined } onClick={ () => choose({ ...ask, seats: undefined, teams: undefined }) }>
+                            <span>{ locale.t('quickMatch.any') }</span>
+                        </Chip>
+                    </li>
+                    <For each={ formats } key={ (format) => `${ format.seats }/${ format.teams }` } let={ format }>
+                        <li>
+                            <Chip
+                                icon={ format.teams ? 'versus' : 'people' }
+                                selected={ ask.seats === format.seats && ask.teams === format.teams }
+                                onClick={ () => choose({ ...ask, seats: format.seats, teams: format.teams }) }
+                            >
+                                <span>{ format.teams ? locale.t('create.format.teams') : locale.plural('common.players', format.seats) }</span>
+                            </Chip>
+                        </li>
+                    </For>
+                </ul>
+            </fieldset>
+        </Show>
+
+        <Show when={ paced }>
+            <fieldset class="flex flex-col gap-2">
+                <legend class="label mb-2 text-ui-sm text-muted">{ locale.t('create.pace') }</legend>
+                <Segmented
+                    block
+                    label={ locale.t('create.pace') }
+                    value={ mode }
+                    items={ [
+                        { id: 'live', label: locale.t('games.mode.live'), icon: 'zap' },
+                        { id: 'turns', label: locale.t('games.mode.turns'), icon: 'clock' }
+                    ] }
+                    onChange={ (id) => choose({ ...ask, mode: id as TableMode }) }
+                />
+                <p class="text-ui-xs text-faint">{ locale.t(mode === 'live' ? 'games.mode.liveHint' : 'games.mode.turnsHint') }</p>
+            </fieldset>
+        </Show>
+
+        <Show when={ aimed }>
+            <fieldset class="flex flex-col gap-2">
+                <legend class="label mb-2 text-ui-sm text-muted">{ locale.t('create.target') }</legend>
+                <ul class="flex flex-wrap gap-2">
+                    <li>
+                        <Chip selected={ ask.target === undefined } onClick={ () => choose({ ...ask, target: undefined }) }>
+                            <span>{ locale.t('quickMatch.any') }</span>
+                        </Chip>
+                    </li>
+                    <For each={ [...rules.targets] } key={ (value) => value } let={ value }>
+                        <li>
+                            <Chip icon="target" selected={ ask.target === value } onClick={ () => choose({ ...ask, target: value }) }>
+                                <span>{ locale.plural(handed ? 'create.target.hands' : 'create.target.points', value) }</span>
+                            </Chip>
+                        </li>
+                    </For>
+                </ul>
+            </fieldset>
+        </Show>
+
+        <Show when={ cubed }>
+            <fieldset class="flex flex-col gap-2">
+                <legend class="label mb-2 text-ui-sm text-muted">{ locale.t('create.cube') }</legend>
+                <ul class="flex flex-wrap gap-2">
+                    <li>
+                        <Chip selected={ ask.cube === undefined } onClick={ () => choose({ ...ask, cube: undefined }) }>
+                            <span>{ locale.t('quickMatch.any') }</span>
+                        </Chip>
+                    </li>
+                    <li>
+                        <Chip selected={ ask.cube === true } onClick={ () => choose({ ...ask, cube: true }) }>
+                            <span>{ locale.t('quickMatch.cube.on') }</span>
+                        </Chip>
+                    </li>
+                    <li>
+                        <Chip selected={ ask.cube === false } onClick={ () => choose({ ...ask, cube: false }) }>
+                            <span>{ locale.t('quickMatch.cube.off') }</span>
+                        </Chip>
+                    </li>
+                </ul>
+            </fieldset>
+        </Show>
+
+        <Show when={ staked }>
+            <fieldset class="flex flex-col gap-2">
+                <legend class="label mb-2 text-ui-sm text-muted">{ locale.t('create.blinds') }</legend>
+                <ul class="flex flex-wrap gap-2">
+                    <li>
+                        <Chip selected={ ask.blinds === undefined } onClick={ () => choose({ ...ask, blinds: undefined }) }>
+                            <span>{ locale.t('quickMatch.any') }</span>
+                        </Chip>
+                    </li>
+                    <For each={ [...BLINDS] } key={ (level) => level } let={ level }>
+                        <li>
+                            <Chip selected={ ask.blinds === level } onClick={ () => choose({ ...ask, blinds: level }) }>
+                                <span>{ locale.t(`create.blinds.${ level }`) }</span>
+                            </Chip>
+                        </li>
+                    </For>
+                </ul>
+            </fieldset>
+        </Show>
+        </div>
+
+        <Button variant="primary" size="lg" block leading="play" loading={ busy } onClick={ find }>
+            { locale.t('quickMatch.find') }
+        </Button>
+        <span class="sr-only" role="status">{ pending ? locale.t('quickMatch.busy') : '' }</span>
+    </div>
+}

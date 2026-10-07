@@ -14,6 +14,7 @@ import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import { useCatalogue } from '../src/stores/catalogue.store.ts';
 import { ARRIVAL_MS, useLobby } from '../src/stores/lobby.store.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
+import { useOverlay } from '../src/stores/overlay.store.ts';
 import { NUDGE_WINDOW_MS, useRealtime } from '../src/stores/realtime.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
 import { useSettings } from '../src/stores/settings.store.ts';
@@ -578,7 +579,7 @@ describe('a button that finds a seat', () =>
         });
     });
 
-    it('spins in both places the game page offers it, the bar a phone keeps at the foot included, and then goes to the table', async () =>
+    const gamePage = async () =>
     {
         const router = createRouter({
             routes: [{ path: '/app/games/:slug', component: () => GamePage() as HTMLElement }, { path: '/app/play/:id', component: stub }],
@@ -589,23 +590,52 @@ describe('a button that finds a seat', () =>
 
         await vi.waitFor(() => expect(named(container, useLocale().t('app.nav.quickPlay'))).toHaveLength(2), { timeout: 4000 });
 
-        const buttons = named(container, useLocale().t('app.nav.quickPlay'));
+        return named(container, useLocale().t('app.nav.quickPlay'));
+    };
+
+    it('asks what to look for from both places the game page offers it, the bar a phone keeps at the foot included, and looks for nothing by itself', async () =>
+    {
+        useOverlay().reset();
+
+        const buttons = await gamePage();
+
+        server.calls = [];
+
+        for (const button of buttons)
+        {
+            fire(button, 'click');
+            fire(button, 'click');
+
+            await vi.waitFor(() => expect(useOverlay().top()).not.toBeNull(), { timeout: 4000 });
+
+            expect(useOverlay().items(), 'two presses opened two sheets').toHaveLength(1);
+            expect(useOverlay().top()!.props.game).toBe('ludo');
+            expect(useOverlay().top()!.label).toBe(useLocale().t('quickMatch.title'));
+
+            useOverlay().reset();
+        }
+
+        expect(written(), 'pressing Quick play looked for a table before anybody said what to look for').toEqual([]);
+    });
+
+    it('spins in both of them while a search for that game is out', async () =>
+    {
+        const lobby = useLobby();
+        const buttons = await gamePage();
 
         await parked(async (answers) =>
         {
-            fire(buttons[1], 'click');
-            fire(buttons[0], 'click');
+            void lobby.quick('ludo', { seats: 2 });
             await settle();
 
             expect(buttons.map(busy)).toEqual([true, true]);
-            expect(answers).toHaveLength(1);
 
             answers[0]();
+            lobby.open(await lobby.quick('ludo'));
+            await settle();
 
-            await vi.waitFor(() => expect(router.location().pathname).toBe(`/app/play/${ server.tables[0]?.id }`), { timeout: 4000 });
+            expect(buttons.map(busy)).toEqual([false, false]);
         });
-
-        expect(server.calls.filter((call) => call === 'tables.quick')).toHaveLength(1);
     });
 });
 
@@ -744,6 +774,27 @@ describe('the lobby store', () =>
 
         expect(server.sought).toEqual([{ game: 'ludo', voice: 'off' }, { game: 'backgammon', voice: 'table' }]);
         expect(server.tables.map((table) => [table.game, table.voice, table.mode])).toEqual([['ludo', 'off', 'live'], ['backgammon', 'table', 'live']]);
+    });
+
+    it('says what the reader is looking for, and nothing about a choice that was left open', async () =>
+    {
+        const lobby = useLobby();
+
+        await lobby.quick('backgammon', { target: 3, cube: false });
+        await lobby.quick('hokm', { seats: 4, teams: true, mode: 'turns' });
+        await lobby.quick('poker', { blinds: 'mid' });
+        await lobby.quick('ludo', {});
+
+        expect(server.sought).toEqual([
+            { game: 'backgammon', target: 3, cube: false, voice: 'off' },
+            { game: 'hokm', seats: 4, teams: true, mode: 'turns', voice: 'off' },
+            { game: 'poker', blinds: 'mid', voice: 'off' },
+            { game: 'ludo', voice: 'off' }
+        ]);
+        expect(server.tables.map((table) => [table.game, table.seats, table.mode])).toEqual([['backgammon', 2, 'live'], ['hokm', 4, 'turns'], ['poker', 6, 'live'], ['ludo', 4, 'live']]);
+        expect(server.tables[0]).toMatchObject({ target: 3, cube: false });
+        expect(server.tables[1]).toMatchObject({ teams: true });
+        expect(server.tables[2]).toMatchObject({ blinds: 'mid' });
     });
 
     it('is seated ready, and is handed a game the server started when it took the last chair', async () =>
@@ -899,6 +950,28 @@ describe('the lobby store', () =>
                 expect(await second).toBe(await first);
                 expect(server.tables).toHaveLength(1);
                 expect(server.calls.filter((call) => call === 'tables.quick')).toHaveLength(1);
+            });
+        });
+
+        it('is one search for a game whatever the second press asks for, so nobody is seated twice by a slip', async () =>
+        {
+            const lobby = useLobby();
+
+            await parked(async (answers) =>
+            {
+                const first = lobby.quick('ludo', { seats: 2 });
+                const second = lobby.quick('ludo', { seats: 4 });
+
+                await settle();
+
+                expect(second).toBe(first);
+                expect(answers).toHaveLength(1);
+
+                answers[0]();
+                await first;
+
+                expect(server.sought).toEqual([{ game: 'ludo', seats: 2, voice: 'off' }]);
+                expect(server.tables).toHaveLength(1);
             });
         });
 

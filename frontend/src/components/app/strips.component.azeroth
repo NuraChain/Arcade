@@ -1,10 +1,12 @@
 import ConnectionBanner from './connection-banner.component.azeroth';
 import KeysBanner from './keys-banner.component.azeroth';
+import LookingStrip from './looking-strip.component.azeroth';
 
 export default component Strips()
 {
     <div class="contents">
         <ConnectionBanner />
         <KeysBanner />
+        <LookingStrip />
     </div>
 }

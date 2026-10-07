@@ -1,0 +1,61 @@
+import type { TableSummary } from '../../api.ts';
+import type { GameId } from '../../data/games.ts';
+import { looking } from '../../lib/looking.ts';
+import { whyRefused } from '../../lib/open-table.ts';
+import { useCatalogue } from '../../stores/catalogue.store.ts';
+import { useLobby } from '../../stores/lobby.store.ts';
+import { useLocale } from '../../stores/locale.store.ts';
+import { useToasts } from '../../stores/toasts.store.ts';
+import Button from '../ui/button.component.azeroth';
+import Spinner from '../ui/spinner.component.azeroth';
+
+export default component LookingStrip()
+{
+    const catalogue = useCatalogue();
+    const lobby = useLobby();
+    const locale = useLocale();
+    const toasts = useToasts();
+
+    state stopping = '';
+
+    derived searches = lobby.seated().filter((table) => looking(table) && !lobby.finding().includes(table.game as GameId));
+
+    const said = (table: TableSummary) => locale.t(table.teams ? 'quickMatch.lookingTeams' : 'quickMatch.looking', {
+        game: locale.t(catalogue.byId(table.game as GameId).nameKey),
+        here: locale.n(table.taken),
+        seats: locale.n(table.seats)
+    });
+
+    const stop = (tableId: string) =>
+    {
+        stopping = tableId;
+
+        void lobby.leave(tableId, false)
+            .catch((error: unknown) =>
+            {
+                toasts.show({ kind: 'warning', text: locale.t(whyRefused(error, 'common.actionFailed', 'play.leave.started')), dedupe: 'leave-table' });
+                void lobby.refresh();
+            })
+            .finally(() => stopping = '');
+    };
+
+    <div class="contents">
+        <For each={ searches } key={ (table) => table.id } let={ table }>
+            <div
+                class="z-banner flex flex-wrap items-center justify-center gap-x-3 gap-y-2 bg-accent/15 px-4 py-2 text-ui-sm text-accent"
+                role="status"
+                data-looking={ table.id }
+            >
+                <span class="flex min-w-0 items-center gap-2 font-semibold">
+                    <Spinner size={ 14 } />
+                    <span class="min-w-0">{ said(table) }</span>
+                </span>
+
+                <span class="flex shrink-0 items-center gap-1">
+                    <Button variant="primary" size="sm" to={ `/app/play/${ table.id }` }>{ locale.t('quickMatch.go') }</Button>
+                    <Button variant="ghost" size="sm" loading={ stopping === table.id } onClick={ () => stop(table.id) }>{ locale.t('quickMatch.stop') }</Button>
+                </span>
+            </div>
+        </For>
+    </div>
+}

@@ -3,6 +3,7 @@ import { createStore, createResource, createSignal, untrack, type Getter } from 
 import { ApiError, client, type TableSummary } from '../api.ts';
 import type { GameId } from '../data/games.ts';
 import type { TableConfig } from '../data/tables.ts';
+import type { QuickAsk } from '../lib/quick-asks.ts';
 import { runtime } from '../lib/runtime.ts';
 import { useAccount } from './account.store.ts';
 import { useCatalogue } from './catalogue.store.ts';
@@ -37,7 +38,7 @@ export interface LobbyApi
      * Answers with the table's id either way, so the caller navigates to the same place whether
      * somebody was already waiting or nobody was.
      */
-    quick(game: GameId): Promise<string>;
+    quick(game: GameId, ask?: QuickAsk): Promise<string>;
 
     finding: Getter<readonly GameId[]>;
 
@@ -259,7 +260,7 @@ export const useLobby = createStore((): LobbyApi =>
             return made.id;
         },
 
-        quick(game)
+        quick(game, ask = {})
         {
             const out = searches.get(game);
 
@@ -268,7 +269,7 @@ export const useLobby = createStore((): LobbyApi =>
                 return out;
             }
 
-            const search = client.tables.quick({ input: { game, voice: catalogue.defaults(game).voice } })
+            const search = client.tables.quick({ input: { game, ...ask, voice: catalogue.defaults(game).voice } })
                 .then(async (table) =>
                 {
                     await revalidate();

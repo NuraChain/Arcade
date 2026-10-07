@@ -447,8 +447,9 @@ button when this browser is what is in the way, and `enrol` NEVER rejects - it r
 `failure()` - so every outcome is read back and spoken. A browser is live the moment it enrols, so
 there is no second step to point anybody at.
 
-**The two status strips are a chunk of their own.** `strips.component` draws the connection strip
-and the key strip and starts the connection store; the shell fetches it one promise after itself
+**The status strips are a chunk of their own.** `strips.component` draws the connection strip, the
+key strip and the strip that says a search for players is on (`looking-strip`, *A waiting table IS
+the search* in `games.md`), and starts the connection store; the shell fetches it one promise after itself
 through `strips-loader.ts`, the cues loader's shape. The shell stood at 12,225 of its 12,288 bytes,
 neither strip is drawn unless something is wrong, and a direct `import()` in the shell would have
 put the chunk table back into it, which is what a loader module is for.

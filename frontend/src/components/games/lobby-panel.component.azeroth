@@ -2,6 +2,7 @@ import { sideOf } from '../../../../backend/src/domains/match/sides.ts';
 import type { GameId } from '../../data/games.ts';
 import type { TableSummary } from '../../api.ts';
 import Icon from '../../icons/icon.component.azeroth';
+import { looking } from '../../lib/looking.ts';
 import { usePeople } from '../../stores/people.store.ts';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useLobby } from '../../stores/lobby.store.ts';
@@ -60,13 +61,17 @@ export default component LobbyPanel(props: {
      */
     derived meNotReady = mine !== null && mine.who !== undefined && !mine.ready;
 
-    derived status = empty > 0
-        ? locale.plural('play.lobby.emptySeats', empty)
-        : (meNotReady
-            ? locale.t('play.lobby.youNotReady')
-            : (waitingOn.length > 0
-                ? locale.t('play.lobby.waiting', { names: locale.list(waitingOn) })
-                : locale.t('play.lobby.allReady')));
+    derived searching = looking(props.table);
+
+    derived status = searching
+        ? locale.t('play.lobby.looking', { here: locale.n(props.table.taken), seats: locale.n(props.table.seats) })
+        : (empty > 0
+            ? locale.plural('play.lobby.emptySeats', empty)
+            : (meNotReady
+                ? locale.t('play.lobby.youNotReady')
+                : (waitingOn.length > 0
+                    ? locale.t('play.lobby.waiting', { names: locale.list(waitingOn) })
+                    : locale.t('play.lobby.allReady'))));
 
     derived gameName = locale.t(catalogue.byId(props.table.game as GameId).nameKey);
 

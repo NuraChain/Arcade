@@ -93,8 +93,9 @@ config object, not claims about the game.
 
 It caught a live bug the moment it existed: `lobby.quick()`'s fallback config was a literal four
 seats, so quick-matching backgammon - which plays two - had always asked for a four-seat table.
-Quick play sends no seat count at all now: the server opens what `seatsByDefault` makes of the
-game's rules, and `catalogue.defaults` asks the same function (*Matchmaking is one request*).
+Quick play sends a seat count only when somebody chose one (*Quick play asks what to look for*):
+left at "Any", the server opens what `seatsByDefault` makes of the game's rules, and
+`catalogue.defaults` asks the same function (*Matchmaking is one request*).
 
 **Whether a table is two against two is a third thing `create` normalizes, and the game's row is
 what says it may be.** `tables.teams` is a boolean with no default, and `tables_teams_four` is its
@@ -497,6 +498,35 @@ copy of a game's rules is a `QuickRules` now: `TableRules` carries `hasCube` and
 `reference-parity.spec.ts` holds both to the seed and asks `quickOf` the same question of both
 copies, and the create form asks them where it asked for a game by name.
 
+**Quick play asks what to look for, and then looks for exactly that.** Every Quick play button used
+to send the game and nothing else, so "any" was all anybody could ask for: nobody could look for
+Ludo for two, or a backgammon match to five, though the server had taken both since the day the
+search moved to it. The button opens a sheet now - `quick-finder`, a chunk of its own, opened by
+`lib/find-game.ts` under one overlay id, so two presses are one sheet. It offers the game, then the
+tables `formatsOf` says that game makes, then only the options its rules have: the pace where there
+are two, a length where there is more than one, the cube where the length leaves one to turn
+(`cubeAsked`: a game to one point has none, and the server refuses the pair), blinds at poker. Each
+is "Any" until chosen - the pace alone opens on Live, because the search has no "either" for it -
+and what is sent is exactly what was chosen: `lobby.quick(game, ask)`. While a search for that game
+is out the sheet's choices are inert and its button is busy, so what it shows is what was sent. The
+last choice is kept for each game with the device's settings and read back through `fitted`, which
+drops whatever the game's rules no longer allow, so a rule that changes never sends an ask the
+server would refuse. **One search is out for a game at a time in the browser**, whatever a second
+press asks for: the guard is the game, not the format, until the table's page has opened it. After
+that a new search is a new request and the server decides - the same table when it fits what is
+asked, another chair when it does not.
+
+**A waiting table IS the search, and it says so wherever the reader is.** `lib/looking.ts` is the
+one definition, and it is the server's own (`compatible()`): a table quick play fills - public, or
+a friend's opened for friends - with no game on, a chair nobody is being kept a seat at, and the
+reader sitting READY at it. Its lobby says "Looking for players: 2 of 4 here" where it counted empty
+chairs, and a strip in the lazy strips chunk says the same on every page that draws the strips (a
+table's own page and an open thread do not), with the way to the table and a way to stop - which is
+leaving the chair, sent as a leave that forfeits nothing, and answered with "Your game has just
+started" when it came too late. The strip waits until the table's page has opened the search, like
+the toast that says a game started, or it would flash on the page the reader is leaving. Nobody is in a queue the product cannot show: a search that is
+not a chair somebody can see does not exist here.
+
 **Every search for one game takes one lock, because the row it would lock does not exist yet.** Two
 searchers who both find nothing both insert a table; that is a phantom, and no row lock stops it.
 Skipping locked tables would make it worse: concurrent searchers would pass over each other's
@@ -576,8 +606,8 @@ nobody. At a `turns` table the start is followed by the `turn` notice for whoeve
 that is the searcher: nobody else there has to be here, so nothing else would tell them. The Start
 button still writes none.
 
-**The browser sends one request and shows that it is out.** `lobby.quick(game)` posts the game and
-the device's voice preference and answers with the table's id. A second press while the first is
+**The browser sends one request and shows that it is out.** `lobby.quick(game, ask)` posts the game,
+whatever was chosen in the sheet and the device's voice preference, and answers with the table's id. A second press while the first is
 out is handed the SAME promise, so a double tap is one request, and `lobby.finding()` names the
 games being searched for: the card, the game's hero, the bar a phone keeps at the foot of the game
 page and the home hero spin on it, and a `role="status"` line says "Finding you a seat" to a screen

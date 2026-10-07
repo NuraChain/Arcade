@@ -60,6 +60,41 @@ afterEach(() =>
     cleanup();
 });
 
+describe('the lobby of a table that is still looking for players', () =>
+{
+    const chairs = (ready: boolean) =>
+        [{ seat: 0, who: 'alex', ready, host: true }, { seat: 1, who: 'sara.k', ready: true }, { seat: 2 }, { seat: 3 }] as TableSummary['chairs'];
+
+    const status = (container: HTMLElement) => container.querySelector('[aria-live="polite"]')?.textContent?.trim();
+
+    it('says it is looking for players, and how many are here, to somebody sitting ready at a public table', () =>
+    {
+        const container = shown(table({ game: 'ludo', teams: false, chairs: chairs(true), taken: 2 }));
+
+        expect(status(container)).toBe(useLocale().t('play.lobby.looking', { here: '2', seats: '4' }));
+    });
+
+    it('counts the empty chairs as it did where nobody is being looked for: by invitation, or before the reader is ready', () =>
+    {
+        expect(status(shown(table({ game: 'ludo', teams: false, privacy: 'invite', chairs: chairs(true), taken: 2 })))).toBe('2 empty seats');
+
+        cleanup();
+
+        expect(status(shown(table({ game: 'ludo', teams: false, chairs: chairs(false), taken: 2 })))).toBe('2 empty seats');
+    });
+
+    it('says it in Persian, in its own digits', () =>
+    {
+        useLocale().setLocale('fa');
+
+        const said = status(shown(table({ game: 'ludo', teams: false, chairs: chairs(true), taken: 2 })));
+
+        expect(said).toBe(useLocale().t('play.lobby.looking', { here: useLocale().n(2), seats: useLocale().n(4) }));
+        expect(said).toContain('۴');
+        expect(said).not.toContain('Looking');
+    });
+});
+
 describe('the lobby of a table two sides will play at', () =>
 {
     it('seats partners together under their side, and calls the reader\'s own theirs', () =>

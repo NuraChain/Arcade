@@ -1486,7 +1486,7 @@ export const client =
             const fits = (table: TableWire) =>
                 table.status !== 'closed'
                 && table.matchId === undefined
-                && table.privacy === 'public'
+                && (table.privacy === 'public' || (table.privacy === 'friends' && table.host !== undefined && server.friends.includes(table.host)))
                 && table.game === input.game
                 && table.mode === filter.mode
                 && (['seats', 'target', 'blinds', 'cube', 'teams'] as const).every((option) => filter[option] === null || filter[option] === table[option]);

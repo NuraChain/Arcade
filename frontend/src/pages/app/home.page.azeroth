@@ -1,4 +1,4 @@
-import { Link, useHead, useNavigate } from 'azerothjs';
+import { Link, useHead } from 'azerothjs';
 
 import type { MatchHistoryEntry } from '../../api.ts';
 import Page from '../../components/app/page.component.azeroth';
@@ -15,7 +15,7 @@ import type { Game, GameId } from '../../data/games.ts';
 import type { Person } from '../../data/person.ts';
 import Icon from '../../icons/icon.component.azeroth';
 import type { IconName } from '../../icons/registry.ts';
-import { openTable } from '../../lib/open-table.ts';
+import { findGame } from '../../lib/find-game.ts';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useDevice } from '../../stores/device.store.ts';
 import { useLobby } from '../../stores/lobby.store.ts';
@@ -51,7 +51,6 @@ export default component HomePage()
     const record = useRecord();
     const device = useDevice();
     const notifications = useNotifications();
-    const { navigate } = useNavigate();
 
     useHead({ title: () => locale.t('app.nav.home') });
 
@@ -75,11 +74,6 @@ export default component HomePage()
     derived panelShown = device.posture() === 'sidebar' && device.social();
 
     derived finding = lobby.finding().includes(catalogue.featured());
-
-    const quickPlay = (game: GameId) =>
-    {
-        openTable(lobby.quick(game), navigate);
-    };
 
     const said = (row: MatchHistoryEntry) =>
         locale.t(`home.recent.${ row.result }`, { game: locale.t(catalogue.byId(row.game as GameId).nameKey) });
@@ -130,7 +124,7 @@ export default component HomePage()
                         <p class="mt-3 max-w-[30rem] text-ui-md text-muted">{ locale.t('home.hero.body') }</p>
                         <div class="mt-5 flex flex-col gap-3 @md:flex-row @md:items-center @md:gap-5">
                             <span class="glow-cta flex shrink-0 rounded-control @md:inline-flex">
-                                <Button variant="primary" size="lg" leading="play" icon="forward" block class="whitespace-nowrap" loading={ finding } onClick={ () => quickPlay(catalogue.featured()) }>
+                                <Button variant="primary" size="lg" leading="play" icon="forward" block class="whitespace-nowrap" loading={ finding } onClick={ () => findGame(catalogue.featured()) }>
                                     { locale.t('app.nav.quickPlay') }
                                 </Button>
                             </span>

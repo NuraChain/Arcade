@@ -290,11 +290,69 @@ const goneFromTheChair = async () =>
     console.log('');
 };
 
+const eachTheirOwn = async () =>
+{
+    console.log('[each looks for a table of their own choosing]');
+
+    const asks = [{ seats: 2 }, { seats: 3 }, { seats: 2 }, { seats: 3 }, { seats: 3 }];
+    const five = [];
+
+    for (let index = 0; index < asks.length; index += 1)
+    {
+        five.push(await arrive(`Format ${ 'abcde'[index] }${ tag() }`));
+    }
+
+    try
+    {
+        const answers = [];
+
+        for (const [index, who] of five.entries())
+        {
+            answers.push(await who.post('/tables/quick', { game: 'ludo', voice: 'off', ...asks[index] }));
+        }
+
+        ok('every search is answered with a table', answers.every((answer) => answer.status === 200 && typeof answer.body?.id === 'string'),
+            answers.map((answer) => answer.status).join(' '));
+
+        const at = answers.map((answer) => answer.body?.id);
+        const twos = [at[0], at[2]];
+        const threes = [at[1], at[3], at[4]];
+
+        ok('the two who asked for two are at one table, and the three who asked for three at another',
+            new Set(twos).size === 1 && new Set(threes).size === 1 && twos[0] !== threes[0], at.join(' '));
+
+        for (const [id, seats, who] of [[twos[0], 2, five[0]], [threes[0], 3, five[1]]])
+        {
+            const table = (await who.get(`/tables/${ id }`)).body;
+
+            ok(`a table of ${ seats }, as asked, full and started with nobody pressing start`,
+                table?.seats === seats && sittingAt(table).length === seats && table?.status === 'playing' && table?.matchId !== undefined,
+                `${ table?.seats } seats, ${ sittingAt(table).length } sitting, ${ table?.status }`);
+        }
+
+        const refused = await five[0].post('/tables/quick', { game: 'backgammon', voice: 'off', target: 1, cube: true });
+
+        ok('a cube in a game to one point is refused as a table this game does not make',
+            refused.status >= 400 && refused.status < 500 && refused.body?.error?.code === 'quick-options', `${ refused.status } ${ refused.body?.error?.code }`);
+
+        const never = await five[0].post('/tables/quick', { game: 'ludo', voice: 'off', seats: 5 });
+
+        ok('and so is a table of a size the game does not play', never.status >= 400 && never.status < 500 && never.body?.error?.code === 'quick-options', `${ never.status } ${ never.body?.error?.code }`);
+    }
+    finally
+    {
+        await goHome(five);
+    }
+
+    console.log('');
+};
+
 const run = async () =>
 {
     console.log(`\nquick pass against ${ BASE }\n`);
 
     await eightAtOnce();
+    await eachTheirOwn();
     await goneFromTheChair();
 
     console.log('------------------------------------------');

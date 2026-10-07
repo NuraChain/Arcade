@@ -21,6 +21,7 @@ export interface Settings
     hintMoves: boolean;
     hintOutcome: boolean;
     hintRules: boolean;
+    quickAsks: Record<string, unknown>;
 }
 
 const STORAGE_KEY = 'nura-games.settings';
@@ -44,7 +45,8 @@ export function defaultSettings(): Settings
         voiceSpeaker: '',
         hintMoves: true,
         hintOutcome: true,
-        hintRules: true
+        hintRules: true,
+        quickAsks: {}
     };
 }
 

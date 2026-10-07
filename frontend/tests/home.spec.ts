@@ -11,6 +11,7 @@ import { useAccount } from '../src/stores/account.store.ts';
 import { useCatalogue } from '../src/stores/catalogue.store.ts';
 import { useLobby } from '../src/stores/lobby.store.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
+import { useOverlay } from '../src/stores/overlay.store.ts';
 import { useRecord } from '../src/stores/record.store.ts';
 import type { MatchHistoryEntry } from '../src/api.ts';
 import { client, server } from './fake-api.ts';
@@ -163,7 +164,35 @@ describe('the home page', () =>
         expect(container.querySelector('h1 .text-accent')?.textContent).toBe('به‌یادماندنی');
     });
 
-    it('spins on its quick play button while a seat is being found, says so, and sends one request for two presses', async () =>
+    it('asks what to look for when Quick play is pressed, starting from the game it features, and looks for nothing by itself', async () =>
+    {
+        useLobby().reset();
+        useOverlay().reset();
+
+        const container = await show();
+        const hero = container.querySelector<HTMLElement>('section[aria-labelledby="home-hero"]')!;
+        const button = [...hero.querySelectorAll<HTMLButtonElement>('button')].find((one) => one.textContent?.trim() === 'Quick play')!;
+
+        server.calls = [];
+        fire(button, 'click');
+        fire(button, 'click');
+
+        try
+        {
+            await vi.waitFor(() => expect(useOverlay().top()).not.toBeNull(), { timeout: 4000 });
+
+            expect(useOverlay().items(), 'two presses opened two sheets').toHaveLength(1);
+            expect(useOverlay().top()!.props.game).toBe(useCatalogue().featured());
+            expect(useOverlay().top()!.label).toBe(useLocale().t('quickMatch.title'));
+            expect(server.calls, 'a table was looked for before anybody said what to look for').not.toContain('tables.quick');
+        }
+        finally
+        {
+            useOverlay().reset();
+        }
+    });
+
+    it('spins on its quick play button while a seat at the game it features is being found, and says so', async () =>
     {
         useLobby().reset();
 
@@ -188,8 +217,7 @@ describe('the home page', () =>
         {
             expect(button.getAttribute('aria-busy')).not.toBe('true');
 
-            fire(button, 'click');
-            fire(button, 'click');
+            void useLobby().quick(useCatalogue().featured());
             await settle();
 
             expect(button.getAttribute('aria-busy')).toBe('true');

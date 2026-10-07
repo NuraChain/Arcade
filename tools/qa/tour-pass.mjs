@@ -487,13 +487,22 @@ try
         record('the Ludo page offers Quick play', await soon(async () => await quick.isVisible(), 5000));
         page.on('request', heard);
         await quick.click();
+
+        const find = page.getByRole('button', { name: 'Find a game', exact: true });
+
+        record('Quick play asks what to look for', await soon(async () => await find.isVisible(), 5000));
+        record('and has looked for nothing yet', asked.filter((one) => !one.startsWith('GET ')).length === 0, asked.filter((one) => !one.startsWith('GET ')).join(', '));
+        await page.getByRole('button', { name: '2 players', exact: true }).click();
+        await find.click();
         await page.waitForURL(/\/app\/play\/[0-9a-f-]{36}/, { timeout: 15000 }).catch(() => undefined);
-        record('Quick play lands on a play page', /^\/app\/play\/[0-9a-f-]{36}$/.test(path(page)), path(page));
+        record('finding a game lands on a play page', /^\/app\/play\/[0-9a-f-]{36}$/.test(path(page)), path(page));
 
         const seated = await visitor.api('GET', '/tables/mine');
         const mine = (seated.body?.tables ?? []).find((one) => path(page).endsWith(one.id));
         record('the guest is sitting at that table', mine !== undefined);
+        record('which is a table for two, as asked', mine?.seats === 2, `${ mine?.seats } seats`);
         record('and is ready there without pressing anything', mine?.chairs?.find((chair) => chair.seat === mine.mine)?.ready === true);
+        record('the lobby says it is looking for players', await soon(async () => (await page.locator('main').innerText()).includes('Looking for players: 1 of 2 here'), 5000));
 
         await settledOn(page);
         page.off('request', heard);
@@ -507,6 +516,21 @@ try
         await go(page, '/app/games');
 
         record('leaving a table over the api while its page is open does not send the page asking for that table and its chat', tableChat404.length === 0, `${ tableChat404.length } 404s: ${ [...new Set(tableChat404.map((one) => one.replace(/[0-9a-f-]{36}/, ':id')))].join(', ') }`);
+
+        await go(page, '/app/games/ludo');
+        await quick.click();
+        record('the finder opens on what was asked for last time', await soon(async () => await page.getByRole('button', { name: '2 players', exact: true }).getAttribute('aria-pressed') === 'true', 5000));
+        await find.click();
+        await page.waitForURL(/\/app\/play\/[0-9a-f-]{36}/, { timeout: 15000 }).catch(() => undefined);
+        await settledOn(page);
+        await go(page, '/app/games');
+
+        const strip = page.locator('[data-looking]');
+
+        record('a strip says the search is on, on another page', await soon(async () => await strip.count() === 1 && (await strip.innerText()).includes('1 of 2 here'), 5000));
+        await strip.getByRole('button', { name: 'Stop looking', exact: true }).click();
+        record('Stop looking takes the strip away', await soon(async () => await strip.count() === 0, 5000));
+        record('and gives the chair back', ((await visitor.api('GET', '/tables/mine')).body?.tables ?? []).length === 0);
     }, [/status of 404.*\/api\/(chat|tables)\//]);
 
     await part('6 watch', async () =>
