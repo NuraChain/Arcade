@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { cleanup, fire, renderTest } from '@azerothjs/testing';
 import { createSignal } from 'azerothjs';
 
+import { dealerOf } from '../../backend/src/domains/match/hokm/scoring.ts';
 import HokmBoard from '../src/components/games/hokm-board.component.azeroth';
 import { TIMING } from '../src/game/motion.ts';
 import { manualClock, type ManualClock } from '../src/lib/clock.ts';
@@ -614,5 +615,222 @@ describe('the two-handed draw', () =>
 
         expect(container.textContent).toContain('went face down');
         expect(container.querySelector('[class*="discard"], [class*="burn"]')).toBeNull();
+    });
+});
+
+describe('who dealt the hand, and what takes it', () =>
+{
+    const seated = (seats: number, view: Partial<Hokm>, mine?: number): MatchView => ({
+        ...match({}, 0),
+        seats,
+        players: Array.from({ length: seats }, (_, seat) => ({ seat, who: `dana${ seat }`, timeouts: 0 })) as MatchView['players'],
+        mine,
+        view: {
+            kind: 'hokm',
+            phase: 'tricks',
+            hakem: 0,
+            dealer: dealerOf(0, seats),
+            trump: 'spades',
+            turn: 0,
+            lead: 0,
+            hand: [],
+            plays: [],
+            trick: [],
+            seats: Array.from({ length: seats }, (_, seat) => ({ seat, side: seats === 4 ? seat % 2 : seat, held: seats === 3 ? 17 : 13, tricks: 0, out: false })),
+            points: Array.from({ length: seats === 4 ? 2 : seats }, () => 0),
+            target: 7,
+            round: 1,
+            full: seats === 3 ? 17 : 13,
+            ...(seats === 3 ? {} : { needed: 7 }),
+            ...view
+        }
+    });
+
+    const marks = (container: HTMLElement) => [...container.querySelectorAll<HTMLElement>('.hokm-seat')]
+        .map((seat) => ({
+            seat: Number(seat.dataset.seat),
+            crown: seat.querySelector('.table-plate-marker svg.text-gold') !== null,
+            dealer: seat.querySelector('.table-plate-marker .hokm-dealer') !== null
+        }))
+        .sort((one, other) => one.seat - other.seat);
+
+    const marked = (seats: number, hakem: number, dealer: number) =>
+        Array.from({ length: seats }, (_, seat) => ({ seat, crown: seat === hakem, dealer: seat !== hakem && seat === dealer }));
+
+    it('puts the crown on the Hâkem and the hand on the dealer, at two, three and four, whoever the Hâkem is', () =>
+    {
+        for (const seats of [2, 3, 4])
+        {
+            for (let hakem = 0; hakem < seats; hakem += 1)
+            {
+                const dealer = dealerOf(hakem, seats);
+                const { container, unmount } = renderTest(() => HokmBoard({ match: seated(seats, { hakem, dealer }, 0) }) as Rendered);
+
+                expect(marks(container), `${ seats } players, Hâkem ${ hakem }`).toEqual(marked(seats, hakem, dealer));
+                unmount();
+            }
+        }
+    });
+
+    it('reads the dealer off the board it was sent, and never draws both marks on one plate', () =>
+    {
+        const moved = renderTest(() => HokmBoard({ match: seated(4, { hakem: 0, dealer: 2 }, 0) }) as Rendered);
+
+        expect(marks(moved.container)).toEqual(marked(4, 0, 2));
+        moved.unmount();
+
+        const same = renderTest(() => HokmBoard({ match: seated(4, { hakem: 1, dealer: 1 }, 0) }) as Rendered);
+
+        expect(marks(same.container)).toEqual(marked(4, 1, 1));
+        expect(same.container.querySelectorAll('.hokm-dealer').length).toBe(0);
+    });
+
+    it('moves both marks when the next hand has another Hâkem', () =>
+    {
+        const [current, setCurrent] = createSignal(seated(4, { hakem: 0, dealer: 3 }, 0));
+        const { container } = renderTest(() => HokmBoard({ get match()
+        {
+            return current();
+        } }) as Rendered);
+
+        expect(marks(container)).toEqual(marked(4, 0, 3));
+
+        setCurrent(seated(4, { hakem: 1, dealer: 0, round: 2 }, 0));
+
+        expect(marks(container)).toEqual(marked(4, 1, 0));
+
+        setCurrent(seated(4, { hakem: 2, dealer: 1, round: 3 }, 0));
+
+        expect(marks(container)).toEqual(marked(4, 2, 1));
+    });
+
+    it('keeps the hand on the seat that draws second through every phase of the two-handed game', () =>
+    {
+        for (const phase of ['trump', 'discard', 'draw', 'tricks'] as const)
+        {
+            const board = seated(2, {
+                phase,
+                hakem: 1,
+                dealer: 0,
+                turn: 1,
+                ...(phase === 'trump' ? { trump: undefined } : {}),
+                ...(phase === 'tricks' ? {} : { stock: 30 })
+            }, 0);
+            const { container, unmount } = renderTest(() => HokmBoard({ match: board }) as Rendered);
+
+            expect(marks(container), phase).toEqual(marked(2, 1, 0));
+            unmount();
+        }
+    });
+
+    it('names the dealer mark for a pointer and for a screen reader, in the reader\'s language', () =>
+    {
+        const english = renderTest(() => HokmBoard({ match: seated(4, { hakem: 0, dealer: 3 }, 0) }) as Rendered);
+        const facts = (container: HTMLElement, seat: number) =>
+            container.querySelector(`.hokm-seat[data-seat="${ seat }"] .table-plate-facts`)?.textContent ?? '';
+
+        expect(english.container.querySelector('.hokm-seat[data-seat="3"] .hokm-dealer')?.getAttribute('title')).toBe('Dealer');
+        expect(facts(english.container, 3)).toContain('Dealer');
+        expect([0, 1, 2].some((seat) => facts(english.container, seat).includes('Dealer'))).toBe(false);
+        english.unmount();
+
+        useLocale().setLocale('fa');
+
+        const persian = renderTest(() => HokmBoard({ match: seated(4, { hakem: 0, dealer: 3 }, 0) }) as Rendered);
+
+        expect(persian.container.querySelector('.hokm-seat[data-seat="3"] .hokm-dealer')?.getAttribute('title')).toBe('دیلر');
+        expect(facts(persian.container, 3)).toContain('دیلر');
+    });
+
+    it('says in the middle of the table that seven tricks take the hand, at two players and at four', () =>
+    {
+        for (const seats of [2, 4])
+        {
+            const { container, unmount } = renderTest(() => HokmBoard({ match: seated(seats, {}, 0) }) as Rendered);
+            const line = container.querySelector('.hokm-centre .hokm-needed');
+
+            expect(line?.querySelector('.tally')?.textContent, `${ seats } players`).toBe('7');
+            expect(line?.textContent, `${ seats } players`).toBe('7 tricks take the hand');
+            unmount();
+        }
+    });
+
+    it('says at three players that a lead nobody can catch takes the hand, and puts no number on it', () =>
+    {
+        const { container } = renderTest(() => HokmBoard({ match: seated(3, {}, 0) }) as Rendered);
+        const line = container.querySelector('.hokm-centre .hokm-needed');
+
+        expect(line?.textContent).toBe('A lead nobody can catch takes the hand');
+        expect(line?.querySelector('.tally')).toBeNull();
+        expect(container.querySelector('.hokm-side')?.textContent).not.toContain('tricks take');
+    });
+
+    it('counts the tricks in the reader\'s own digits', () =>
+    {
+        useLocale().setLocale('fa');
+
+        const { container } = renderTest(() => HokmBoard({ match: seated(4, {}, 0) }) as Rendered);
+        const line = container.querySelector('.hokm-centre .hokm-needed');
+
+        expect(line?.querySelector('.tally')?.textContent).toBe('۷');
+        expect(line?.textContent).toContain('دور را');
+        expect(line?.textContent).not.toContain('tricks');
+    });
+
+    it('keeps the line and the crest children of the caption itself, so a short table can drop the crest and a short stage all but the line', () =>
+    {
+        for (const seats of [2, 3, 4])
+        {
+            const { container, unmount } = renderTest(() => HokmBoard({ match: seated(seats, {}, 0) }) as Rendered);
+            const caption = container.querySelector('.hokm-centre');
+
+            expect(caption?.querySelectorAll(':scope > .hokm-needed').length, `${ seats } players`).toBe(1);
+            expect(caption?.querySelectorAll(':scope > .hokm-crest').length, `${ seats } players`).toBe(2);
+            expect(caption?.children.length, `${ seats } players`).toBeGreaterThan(4);
+            unmount();
+        }
+    });
+
+    it('seats two plates in the top corners at three players and at no other count, each over its own pile, so an upright table can tell when the crest and those piles have to go', () =>
+    {
+        for (const seats of [2, 3, 4])
+        {
+            for (const mine of [0, undefined])
+            {
+                const { container, unmount } = renderTest(() => HokmBoard({ match: seated(seats, {}, mine) }) as Rendered);
+                const corners = [...container.querySelectorAll<HTMLElement>('.hokm-table > .hokm-seat[data-side^="top-"]')];
+                const told = `${ seats } players read by ${ mine }`;
+
+                expect(corners.map((seat) => seat.dataset.side).sort(), told).toEqual(seats === 3 ? ['top-left', 'top-right'] : []);
+                expect(corners.filter((seat) => seat.querySelector(':scope > .hokm-pile') === null), told).toEqual([]);
+                expect(container.querySelectorAll('.hokm-table .hokm-centre > .hokm-crest').length, told).toBe(2);
+                unmount();
+            }
+        }
+    });
+
+    it('gives a screen reader the same sentence in the summary, with a card on the table or without, playing or watching', () =>
+    {
+        const cases = [
+            [2, '7 tricks take the hand'],
+            [3, 'A lead nobody can catch takes the hand'],
+            [4, '7 tricks take the hand']
+        ] as const;
+
+        for (const [seats, says] of cases)
+        {
+            for (const mine of [0, undefined])
+            {
+                for (const trick of [[], [12]])
+                {
+                    const { container, unmount } = renderTest(() => HokmBoard({ match: seated(seats, { trick }, mine) }) as Rendered);
+                    const told = `${ seats } players read by ${ mine } with ${ trick.length } on the table`;
+
+                    expect(container.querySelector('.hokm-centre') === null, told).toBe(trick.length > 0);
+                    expect(container.querySelector('.hokm-side')?.textContent, told).toContain(says);
+                    unmount();
+                }
+            }
+        }
     });
 });

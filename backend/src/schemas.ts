@@ -1300,10 +1300,9 @@ export const hokmBoard = object({
 
     points: array(number()),
 
-    /** Points that win the match, and tricks that win a hand - both from the deck and the table. */
     target: number(),
     round: number(),
-    needed: number(),
+    needed: number({ int: true, min: 7, max: 7 }).optional(),
     full: number({ int: true, min: 13, max: 17 }),
     offer: number({ int: true, min: 0, max: 51 }).optional(),
     glimpse: number({ int: true, min: 0, max: 51 }).optional(),

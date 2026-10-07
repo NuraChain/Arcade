@@ -1003,6 +1003,27 @@ html:has(.site-drawer[open])
     {
         line-height: 1.05;
     }
+
+    .hokm-centre > .hokm-crest
+    {
+        display: none;
+    }
+}
+
+@container (max-height: 21.5rem) and (max-aspect-ratio: 1 / 1)
+{
+    .hokm-table:has(> .hokm-seat[data-side^='top-']) .hokm-centre > .hokm-crest
+    {
+        display: none;
+    }
+}
+
+@container (max-height: 19rem) and (max-aspect-ratio: 1 / 1)
+{
+    .hokm-seat[data-side^='top-'] .hokm-pile
+    {
+        display: none;
+    }
 }
 
 .hokm-centre
@@ -1010,8 +1031,9 @@ html:has(.site-drawer[open])
     position: absolute;
     inset: 0;
     margin: auto;
-    inline-size: 40cqmin;
-    block-size: 40cqmin;
+    inline-size: fit-content;
+    block-size: fit-content;
+    max-inline-size: min(93cqw - 2 * var(--side-w) - 1rem, max(40cqmin, 9rem));
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -1102,7 +1124,7 @@ html:has(.site-drawer[open])
 @container stage (max-height: 24rem)
 {
     .hokm-felt-info,
-    .hokm-centre,
+    .hokm-centre > :not(.hokm-needed),
     .hokm-last-tile,
     .hokm-draw .hokm-choose-title,
     .hokm-draw-card
@@ -1116,7 +1138,7 @@ html:has(.site-drawer[open])
     }
 }
 
-[data-sheet] :is(.hokm-felt-info, .hokm-centre, .hokm-last-tile, .hokm-draw .hokm-choose-title, .hokm-draw-card)
+[data-sheet] :is(.hokm-felt-info, .hokm-centre > :not(.hokm-needed), .hokm-last-tile, .hokm-draw .hokm-choose-title, .hokm-draw-card)
 {
     display: none;
 }

@@ -1,3 +1,4 @@
+import { dealerOf } from '../../../backend/src/domains/match/hokm/scoring.ts';
 import { TIMING } from './motion.ts';
 
 export interface HokmMove
@@ -63,8 +64,6 @@ export const gatherLength = (count: number) => TIMING.GATHER + TIMING.GATHER_GAP
 
 export const overflows = (actions: number, moves: readonly HokmMove[]) =>
     actions > CATCH_UP_ACTIONS || moves.filter((move) => move.e === 'hand').length > 1;
-
-const dealerOf = (hakem: number, seats: number) => (hakem - 1 + seats) % seats;
 
 function dealing(from: number, to: readonly number[], at: number, shuffle: boolean): { beat: Beat; ends: number }
 {

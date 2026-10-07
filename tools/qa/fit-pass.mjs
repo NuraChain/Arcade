@@ -26,6 +26,7 @@ const GAMES = [
     { id: 'hokm-2', game: 'hokm', seats: 2, mode: 'turns', target: 7 },
     { id: 'hokm-2-draw', game: 'hokm', seats: 2, mode: 'turns', target: 7, stop: 'draw' },
     { id: 'hokm-2-follow', game: 'hokm', seats: 2, mode: 'turns', target: 7, tricks: 1 },
+    { id: 'hokm-3', game: 'hokm', seats: 3, mode: 'turns', target: 7, guests: ['Alexander Reeves', 'امیرحسین محمدزاده', 'Maximilian Stone'], viewers: ['turn', 'waiting'] },
     { id: 'hokm-4', game: 'hokm', seats: 4, mode: 'turns', target: 7 },
     { id: 'hokm-4-trick', game: 'hokm', seats: 4, mode: 'turns', target: 7, tricks: 3, viewers: ['turn', 'lead'] },
     { id: 'poker-2', game: 'poker', seats: 2, mode: 'live', target: 0 },
@@ -152,7 +153,7 @@ const advance = async (spec, table) =>
 {
     for (let step = 0; step < 40; step += 1)
     {
-        const state = await matchOf(dana, table.matchId);
+        const state = await matchOf(table.players[0], table.matchId);
         const actor = table.bySeat.get(state.turn);
         const key = `fit-${ step }-${ table.matchId }`;
 
@@ -275,23 +276,27 @@ const ensureWaiting = async (players) =>
 const openTable = async (spec) =>
 {
     const suffix = Math.floor(Math.random() * 100000);
-    const guests = [];
+    const players = spec.guests === undefined ? [dana] : [];
 
-    for (let index = 1; index < spec.seats; index += 1)
+    for (let index = players.length; index < spec.seats; index += 1)
     {
-        guests.push(await guestSeat(browser, `Fit ${ 'abcdefghi'[index] }${ suffix }`));
+        players.push(await guestSeat(browser, spec.guests?.[index] ?? `Fit ${ 'abcdefghi'[index] }${ suffix }`));
     }
 
-    const tableId = await create(dana, spec, spec.id);
+    const [host, ...guests] = players;
+    const tableId = await create(host, spec, spec.id);
 
     for (const guest of guests)
     {
         await guest.api('POST', `/tables/${ tableId }/seat`);
     }
 
-    await ensureWaiting([dana, ...guests]);
+    if (spec.guests === undefined)
+    {
+        await ensureWaiting(players);
+    }
 
-    const table = { tableId, matchId: '', players: [dana, ...guests], bySeat: new Map() };
+    const table = { tableId, matchId: '', players, bySeat: new Map() };
 
     await deal(spec, table);
 
@@ -305,7 +310,7 @@ const deal = async (spec, table) =>
         await player.api('POST', `/tables/${ table.tableId }/ready`, { ready: true });
     }
 
-    const started = await dana.api('POST', `/tables/${ table.tableId }/start`);
+    const started = await table.players[0].api('POST', `/tables/${ table.tableId }/start`);
 
     if (!started.ok)
     {
@@ -325,14 +330,14 @@ const deal = async (spec, table) =>
 
 const refresh = async (spec, table) =>
 {
-    const state = await matchOf(dana, table.matchId);
+    const state = await matchOf(table.players[0], table.matchId);
 
     if (state.finishedAt !== undefined)
     {
         await deal(spec, table);
     }
 
-    return await matchOf(dana, table.matchId);
+    return await matchOf(table.players[0], table.matchId);
 };
 
 const redeal = async (spec, table) =>
@@ -342,7 +347,7 @@ const redeal = async (spec, table) =>
         await player.api('POST', `/matches/${ table.matchId }/resign`, { key: `fit-resign-${ player.handle }-${ table.matchId }` });
     }
 
-    await waitFor(async () => (await matchOf(dana, table.matchId)).finishedAt !== undefined, 8000);
+    await waitFor(async () => (await matchOf(table.players[0], table.matchId)).finishedAt !== undefined, 8000);
     await deal(spec, table);
 };
 
@@ -350,7 +355,7 @@ const foldedSeat = async (table) =>
 {
     for (let step = 0; step < 6; step += 1)
     {
-        const state = await matchOf(dana, table.matchId);
+        const state = await matchOf(table.players[0], table.matchId);
         const folded = state.view.seats.find((row) => row.folded && !row.out);
 
         if (folded !== undefined)
@@ -368,7 +373,7 @@ const shovedSeat = async (table, want) =>
 {
     for (let step = 0; step < 6; step += 1)
     {
-        const state = await matchOf(dana, table.matchId);
+        const state = await matchOf(table.players[0], table.matchId);
         const shoved = state.view.seats.find((row) => row.allIn && !row.out && row.bet > 0);
 
         if (shoved !== undefined && want === 'allin')
@@ -391,7 +396,7 @@ const crowdedSeat = async (spec, table) =>
 {
     for (let attempt = 0; attempt < 3; attempt += 1)
     {
-        let state = await matchOf(dana, table.matchId);
+        let state = await matchOf(table.players[0], table.matchId);
         const shoved = state.view.seats.filter((row) => row.allIn && !row.out && row.bet > 0).length;
 
         if (shoved >= 3 && state.view.turn !== undefined && (state.remainingMs ?? 0) > 12000)
@@ -402,12 +407,12 @@ const crowdedSeat = async (spec, table) =>
         if (state.finishedAt !== undefined || state.view.seats.some((row) => row.out) || shoved > 0 || state.view.street !== 'preflop')
         {
             await redeal(spec, table);
-            state = await matchOf(dana, table.matchId);
+            state = await matchOf(table.players[0], table.matchId);
         }
 
         for (const verb of ['call', 'allin', 'allin', 'allin'])
         {
-            const now = await matchOf(dana, table.matchId);
+            const now = await matchOf(table.players[0], table.matchId);
 
             await play(table.bySeat.get(now.turn), table.matchId, now.rev, { kind: 'poker', verb }, `fit-crowd-${ now.rev }-${ table.matchId }`);
         }
@@ -418,9 +423,9 @@ const crowdedSeat = async (spec, table) =>
 
 const leaderOf = async (table) =>
 {
-    const state = await matchOf(dana, table.matchId);
+    const state = await matchOf(table.players[0], table.matchId);
 
-    return table.bySeat.get(state.view.lead) ?? dana;
+    return table.bySeat.get(state.view.lead) ?? table.players[0];
 };
 
 const viewerFor = async (spec, viewer, table, state) =>
@@ -445,7 +450,12 @@ const viewerFor = async (spec, viewer, table, state) =>
         return await leaderOf(table);
     }
 
-    return table.bySeat.get(state.turn) ?? dana;
+    if (viewer === 'waiting')
+    {
+        return table.players.find((player) => player !== table.bySeat.get(state.turn)) ?? table.players[0];
+    }
+
+    return table.bySeat.get(state.turn) ?? table.players[0];
 };
 
 const measure = async (page, rules) => await page.evaluate((given) =>
@@ -561,6 +571,25 @@ const measure = async (page, rules) => await page.evaluate((given) =>
                     found.push({ kind: 'felt', what: `felt chip ${ describe(chip) } ${ where(box(chip)) } sits on plate ${ describe(plate) } ${ where(box(plate)) }` });
                 }
             }
+        }
+
+        for (const line of surface.querySelectorAll('.hokm-centre > *'))
+        {
+            for (const solid of surface.querySelectorAll('.table-plate, .hokm-pile, .hokm-stock'))
+            {
+                if (shown(line) && shown(solid) && meets(box(line), box(solid)))
+                {
+                    found.push({ kind: 'felt', what: `caption line ${ describe(line) } ${ where(box(line)) } sits on ${ describe(solid) } ${ where(box(solid)) }` });
+                }
+            }
+        }
+
+        const caption = surface.querySelector('.hokm-centre');
+        const takes = caption?.querySelector(':scope > .hokm-needed') ?? null;
+
+        if (caption !== null && (takes === null || !shown(takes) || beyond(box(takes), box(surface))))
+        {
+            found.push({ kind: 'felt', what: 'an empty hokm felt that does not say what takes the hand' });
         }
     }
 
@@ -833,9 +862,10 @@ try
                         for (let deal = 1; deal <= DEALS; deal += 1)
                         {
                             const state = await refresh(spec, table);
-                            const seated = await viewerOf(await viewerFor(spec, viewer, table, state), size.touch, language);
+                            const reader = await viewerFor(spec, viewer, table, state);
+                            const seated = await viewerOf(reader, size.touch, language);
 
-                            if (await cell(label, spec.game, seated.page, `${ BASE }/app/play/${ table.tableId }`, size, openChat, language, true, deal === DEALS))
+                            if (await cell(label, spec.game, seated.page, `${ BASE }/app/play/${ table.tableId }`, size, openChat, language, waited.has(reader.handle), deal === DEALS))
                             {
                                 break;
                             }
@@ -869,7 +899,7 @@ try
             }
         }
 
-        await release([...table.players.slice(1), stranger]);
+        await release([...table.players.filter((player) => player !== dana), stranger]);
     }
 
     for (const [key, view] of views)

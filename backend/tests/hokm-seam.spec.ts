@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import { hokmEngine } from '../src/domains/match/engines/hokm.ts';
-import type { HokmAction, HokmState } from '../src/domains/match/hokm/state.ts';
+import { dealerOf } from '../src/domains/match/hokm/scoring.ts';
+import type { HokmAction, HokmEvent, HokmState } from '../src/domains/match/hokm/state.ts';
 import { hokmBoard, hokmPlay, matchBoard, matchLog, matchPlay } from '../src/schemas.ts';
 
 /**
@@ -579,5 +580,189 @@ describe('the hokm wire', () =>
         expect(hokmEngine.parse({ kind: 'hokm', verb: 'trump' }, 0)).toBeNull();
         expect(hokmEngine.parse({ kind: 'hokm', verb: 'card' }, 0)).toBeNull();
         expect(hokmEngine.parse({ kind: 'ludo', verb: 'roll' }, 0)).toBeNull();
+    });
+});
+
+describe('the tricks that take a hand, and the seat that dealt it', () =>
+{
+    const sideTricks = (state: HokmState) =>
+    {
+        const board = boardOf(state, null);
+
+        return board.points.map((_, side) => board.seats.filter((row) => row.side === side).reduce((total, row) => total + row.tricks, 0));
+    };
+
+    it('names seven tricks at two and four players, and carries no count at three where none decides a hand', () =>
+    {
+        for (const seats of [2, 3, 4])
+        {
+            for (const reader of [null, 0])
+            {
+                const board = boardOf(opened(seats, 11), reader);
+
+                expect('needed' in board, `${ seats } players read by ${ reader }`).toBe(seats !== 3);
+                expect(board.needed, `${ seats } players read by ${ reader }`).toBe(seats === 3 ? undefined : 7);
+                expect(matchBoard.parse(board), `${ seats } players read by ${ reader }`).toEqual(board);
+            }
+        }
+    });
+
+    it('lets the wire carry seven or nothing, never the seventeen a three-handed board used to send', () =>
+    {
+        const board = boardOf(opened(3, 11), null);
+
+        expect(hokmBoard.safeParse(board).ok).toBe(true);
+        expect(hokmBoard.safeParse({ ...board, needed: 7 }).ok).toBe(true);
+        expect(hokmBoard.safeParse({ ...board, needed: 17 }).ok).toBe(false);
+    });
+
+    it('ends a two-sided hand on the trick that brings a side to the count it named, and never later', () =>
+    {
+        const faults: string[] = [];
+
+        for (const seats of [2, 4])
+        {
+            const dice = seeded(seats * 7);
+            let state = opened(seats, seats * 13);
+            let hands = 0;
+
+            for (let action = 0; action < 6000 && hokmEngine.finish(state) === null; action += 1)
+            {
+                const needed = boardOf(state, null).needed;
+                const before = sideTricks(state);
+
+                if (needed === undefined || before.some((count) => count >= needed))
+                {
+                    faults.push(`${ seats }p action ${ action }: playing on at ${ before.join('-') } with ${ needed } named`);
+                    break;
+                }
+
+                const outcome = hokmEngine.apply(state, hokmEngine.autoplay(state, hokmEngine.turnOf(state)!, dice)!, dice);
+
+                if (!outcome.ok)
+                {
+                    faults.push(`${ seats }p action ${ action }: ${ outcome.reason }`);
+                    break;
+                }
+
+                const won = (outcome.events as HokmEvent[]).find((event) => event.e === 'hand');
+
+                if (won !== undefined && won.e === 'hand')
+                {
+                    hands += 1;
+
+                    if (before[won.side] + 1 !== needed)
+                    {
+                        faults.push(`${ seats }p action ${ action }: side ${ won.side } took the hand on trick ${ before[won.side] + 1 } with ${ needed } named`);
+                    }
+                }
+
+                state = outcome.state as HokmState;
+            }
+
+            if (hands < 4)
+            {
+                faults.push(`${ seats }p: only ${ hands } hands, so this checked almost nothing`);
+            }
+        }
+
+        expect(faults.slice(0, 5)).toEqual([]);
+    });
+
+    it('names the dealer the rules name at every player count, and never the Hâkem', () =>
+    {
+        for (const seats of [2, 3, 4])
+        {
+            const hakems = new Set<number>();
+
+            for (let seed = 1; seed <= 40; seed += 1)
+            {
+                const state = opened(seats, seed);
+
+                hakems.add(state.hakem);
+
+                for (const reader of [null, state.hakem, dealerOf(state.hakem, seats)])
+                {
+                    const board = boardOf(state, reader);
+
+                    expect(board.dealer, `${ seats } players, Hâkem ${ state.hakem }, read by ${ reader }`).toBe(dealerOf(state.hakem, seats));
+                    expect(board.dealer, `${ seats } players, Hâkem ${ state.hakem }`).not.toBe(board.hakem);
+                }
+            }
+
+            expect(hakems.size, `${ seats } players`).toBe(seats);
+        }
+    });
+
+    it('keeps the dealer on the seat that puts two down and draws second, through the whole two-handed draw', () =>
+    {
+        const start = opened(2, 19);
+        const hakem = start.hakem;
+        const dealer = dealerOf(hakem, 2);
+        const drawers: number[] = [];
+        const phases = new Set<string>();
+
+        const holds = (state: HokmState) =>
+        {
+            phases.add(state.phase);
+
+            for (const reader of [null, hakem, dealer])
+            {
+                const board = boardOf(state, reader);
+
+                expect([board.hakem, board.dealer, board.needed], `${ state.phase } read by ${ reader }`).toEqual([hakem, dealer, 7]);
+            }
+        };
+
+        holds(start);
+
+        const called = step(start, { kind: 'trump', seat: hakem, suit: 'hearts' });
+
+        holds(called);
+        expect(boardOf(called, hakem).discard).toBe(3);
+
+        const put = step(called, hokmEngine.legal(called, hakem)[0]);
+
+        holds(put);
+        expect(put.turn).toBe(dealer);
+        expect(boardOf(put, dealer).discard).toBe(2);
+
+        let state = step(put, hokmEngine.legal(put, dealer)[0]);
+
+        while (state.phase === 'draw')
+        {
+            holds(state);
+            drawers.push(state.turn);
+            state = step(state, { kind: drawers.length % 3 === 0 ? 'reject' : 'keep', seat: state.turn });
+        }
+
+        holds(state);
+        expect(drawers).toHaveLength(21);
+        expect(drawers.slice(0, 4)).toEqual([hakem, dealer, hakem, dealer]);
+        expect(drawers.filter((seat) => seat === dealer)).toHaveLength(10);
+        expect([...phases].sort()).toEqual(['discard', 'draw', 'tricks', 'trump']);
+        expect(state.turn).toBe(hakem);
+    });
+
+    it('moves the dealer with the Hâkem from one hand to the next, at every player count', () =>
+    {
+        for (const seats of [2, 3, 4])
+        {
+            const dice = seeded(seats * 5);
+            const seen = new Set<number>();
+            let state = opened(seats, seats * 17);
+
+            for (let action = 0; action < 8000 && hokmEngine.finish(state) === null; action += 1)
+            {
+                const board = boardOf(state, null);
+
+                seen.add(board.hakem);
+                expect(board.dealer, `${ seats } players, hand ${ state.round }`).toBe(dealerOf(state.hakem, seats));
+
+                state = step(state, hokmEngine.autoplay(state, hokmEngine.turnOf(state)!, dice)!, dice);
+            }
+
+            expect(seen.size, `${ seats } players`).toBeGreaterThan(1);
+        }
     });
 });

@@ -893,6 +893,26 @@ engine had just built - this layer deciding a number the engine owns - and
 else. It writes `revOf(state)` now, which is 1 for every engine: the opening is the first thing that
 happened, and it has a ledger row like everything after it.
 
+**A board names the tricks that take a hand only where a count decides one (HOKM-12).** `needed` is
+`winningTricks` - seven - at two and four players, and at three it is ABSENT, because no count takes
+a three-handed hand: a sweep of the first seven does, or a lead nobody can equal, or the odd player
+out after seventeen. It used to send `trickCount(3)`, seventeen, under a docblock calling it the
+tricks that win a hand, and no reader existed at any player count to notice. The wire takes seven or
+nothing now; `hokm-seam.spec.ts` refuses the seventeen and plays whole matches at two and four,
+requiring every hand to end on the trick that brings a side to the number its board named. The reader
+is the caption in the middle of the felt, which shows while nothing lies on it: "7 tricks take the
+hand" as a `tally` and a count-free plural, or at three "A lead nobody can catch takes the hand" with
+no number in it, and the `.hokm-side` summary says the same to a screen reader.
+
+**The dealer has a mark, and the browser keeps no copy of who deals.** `dealer` was on every board
+and nothing read it, while `hokm-beats.ts` carried a `dealerOf` of its own to throw the deal from the
+right seat. The beats import the server's from `hokm/scoring.ts` now - they cannot read
+`view.dealer`, because a batch can span a hand change and each `deal` event names its own Hâkem - and
+the plate reads the view: the crown on the Hâkem, a hand in a disc on the dealer, never both on one
+plate, and the word "Dealer" in the facts a screen reader gets. At two players that is the seat that
+puts two cards down and draws second, and the mark stays there through the trump call, both discards
+and all twenty-one draws.
+
 **`tools/qa/hokm-pass.mjs` plays whole matches at two, three and four over the real api**, and it
 checks one thing ludo's pass structurally cannot: every seat reads `GET /matches/:id` for ITSELF
 after every turn, and no answer ever carries a card that reader is not holding. At two players it also
@@ -1443,7 +1463,13 @@ bet in front of the reader), and poker-2-facing as the seat facing a shove (a ta
 the big bet), and poker-6-crowd as the seat to act after a limp and three all-ins over the blinds - six
 chips round a pot of three shoves, the most a table carries. Two hokm cells have a trick on the felt:
 hokm-2-follow opens as the dealer facing the Hâkem's lead, the card the reader has to follow, and
-hokm-4-trick as the seat to play to three cards and as the leader watching them. Each re-makes its
+hokm-4-trick as the seat to play to three cards and as the leader watching them. hokm-3 is the one
+table with no dana and nobody parked: three guests, named long enough to fill a plate and to wrap the
+caption's last line in both languages, opened as the seat whose turn it is and as one waiting on it.
+Three hands put two plates in the felt's top corners under the longest sentence the caption has, and
+there the TALLER stage is the worse one: a waiting reader with no other table is drawn the upright
+table at 360x640 and 375x667, 324 to 329px tall, where the caption's crown reached both plates, while
+the other-tables row leaves those screens only the wide table, whose crest has gone. Each re-makes its
 state per cell, because a live turn lasts thirty seconds. It opens every page as the seat whose turn
 it is at 360x740, 390x844, 375x667, 360x640, 768x1024, 1024x768, 1280x720, 1280x800, 1440x900,
 1920x1080, 740x360 and 844x390, with the chat closed and open, then as a stranger watching. It fails
@@ -1453,7 +1479,9 @@ plate on the table that reaches past its edge, a felt chip on a plate, a bet chi
 anything but itself, a bet chip that meets a plate, another chip, the cards, the pot or the felt's own
 chips and their tap areas, a trick card that meets a plate, a pile of backs or another trick card or
 whose centre or either index corner hits anything but the card, and an open bottom sheet whose top
-edge is above the bottom of the board's fit cell. Three exceptions are deliberate: a button in a
+edge is above the bottom of the board's fit cell. On a hokm felt with nothing on it, it also fails on
+a line of the caption that meets a plate, a pile of backs or the stock, and on a caption that does
+not say what takes the hand. Three exceptions are deliberate: a button in a
 horizontally scrolling rail is judged by its rail; the open chat may overlay the bar on a phone held
 sideways, and on an upright phone too short for the board and the chat together (`data-sheet="over"`),
 because there the chat has nowhere else to be and closing it brings the controls back - never
@@ -1533,6 +1561,21 @@ chips in the felt's top corners at every size, and the last trick is a tile in i
 full sentences they abbreviate are the `.hokm-side` summary, which is screen-reader only. On a stage
 24rem tall or less - a phone sideways, or upright with the chat open - the chips, the centre caption and
 the last trick would sit on top of the plates, so they leave the felt and the chips move into the bar.
+One line of the caption stays: what takes the hand, which the bar has no room to say. A chip for it
+there was tried first and cost the bar a third row at 360 wide, where the clock alone is 123px - 32px
+that at 360x740 pushed the bottom of the bar under the open chat. The caption is as wide as its words,
+up to the medallion's width or nine rem, and never wider than the room between the two side plates
+(`93cqw - 2 * --side-w - 1rem`), so no line of it can sit on one; and a table 17.5rem tall or less -
+where the plates have already given up their piles - drops the caption's crown and name, which pays
+for the line where the room is shortest.
+Three hands pay sooner on the upright table. Their two top plates hang 17% down in the corners and all
+but meet over the middle - 44% of the width each, 13px apart at 360x640 - and the whole caption with
+its last line wrapped is 141px, which centred on the felt reaches them on any table under 342px and
+wedges its crown between the two. So an upright three-handed table 21.5rem tall or less drops the
+crown and the name as well, and one 19rem or less the piles under those two plates too, because the
+lines that are left sit 22px higher and the widest of them would reach a pile under 298px. The wide
+table keeps both - its corner plates stop well short of the middle, and at 1024x768 it is 343px tall
+with its crest clear.
 A narrow table does the same for the chips alone: upright at 360x740 the tall table is 289px wide under
 a 127px top plate, and both chips sat 16px under it. The board measures it rather than guessing a
 width - a chip touching a plate or a pile sets `data-felt="cramped"` on the stage, the chips go
@@ -1591,7 +1634,8 @@ them. Poker's tall table is drawn only in a fit cell at least 19.5rem tall, its 
 just under 9:8, and drew a 236x295 tall table where the wide one is 328x205.
 
 **While the half sheet is open the table takes its short layout explicitly** (`data-sheet`, `half`
-or `over`, on the arena), the same rules a stage 24rem tall gets: hokm's trump and score leave the felt for the bar,
+or `over`, on the arena), the same rules a stage 24rem tall gets: hokm's trump and score leave the felt for the bar
+and its caption keeps only the line that says what takes the hand,
 poker's blinds chip and cost line go, backgammon's match line and pick hint go and its two plates share
 one row above the board, and every board's coach line goes - a 44px note on a touch screen, and the
 difference between hokm-2's opening lead and ludo's first roll keeping their floors at 360x740 or
