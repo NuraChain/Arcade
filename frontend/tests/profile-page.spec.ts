@@ -383,13 +383,13 @@ describe('somebody else\'s profile page', () =>
         expect(container.querySelector('#profile-name')).toBeNull();
     });
 
-    it('says it could not load somebody the server did not answer about, and draws them on a retry', async () =>
+    it('says it could not load somebody it has never met when the server does not answer, and draws them on a retry', async () =>
     {
         const asked = vi.spyOn(client.social, 'person').mockRejectedValueOnce(new TypeError('Failed to fetch'));
 
         try
         {
-            const container = visit('mina');
+            const container = visit('peyman');
 
             await vi.waitFor(() => expect(container.textContent).toContain(useLocale().t('state.errorTitle')), { timeout: 4000 });
             expect(container.textContent).not.toContain(useLocale().t('person.notFound'));
@@ -399,6 +399,29 @@ describe('somebody else\'s profile page', () =>
 
             await vi.waitFor(() => expect(container.querySelector('#profile-name')).not.toBeNull(), { timeout: 4000 });
             expect(container.textContent).not.toContain(useLocale().t('state.errorTitle'));
+        }
+        finally
+        {
+            asked.mockRestore();
+        }
+    });
+
+    it('draws somebody it remembers when the server does not answer, rather than an error over them', async () =>
+    {
+        usePeople().remember([{ id: 'mina', handle: 'mina', displayName: 'Mina', bio: '', hue: 150, isMinor: false }]);
+
+        const asked = vi.spyOn(client.social, 'person').mockRejectedValue(new TypeError('Failed to fetch'));
+
+        try
+        {
+            const container = visit('mina');
+
+            await vi.waitFor(() => expect(asked).toHaveBeenCalled(), { timeout: 4000 });
+            await settle();
+
+            expect(container.querySelector('#profile-name')).not.toBeNull();
+            expect(container.textContent).not.toContain(useLocale().t('state.errorTitle'));
+            expect(container.textContent).not.toContain(useLocale().t('person.notFound'));
         }
         finally
         {
