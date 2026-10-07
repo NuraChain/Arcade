@@ -153,6 +153,68 @@ try
     await dana.api('POST', `/matches/${ started.body?.id }/resign`, { key: randomUUID() });
     record('the spectator\'s page leaves the board once the game is over, without a reload', await soon(async () => await omid.page.locator('.table-stage').count() === 0, 10_000));
 
+    await clearTables(dana, mina, omid);
+
+    const hosted = await dana.api('POST', '/tables/', tableBody({
+        game: 'ludo', seats: 2, mode: 'live', privacy: 'public'
+    }));
+    const liveId = hosted.body?.id;
+    const players = [dana, mina];
+    const press = async (page, name) => await page.getByRole('button', { name, exact: true }).first().click();
+    const said = async (page, words) => await page.getByText(words, { exact: true }).count() > 0;
+    const chairOf = (page, name) => page.locator('.rounded-panel').filter({ hasText: name });
+    const revOf = async (page) => Number(await page.locator('.table-stage').first().getAttribute('data-rev').catch(() => null) ?? -1);
+    const rollOn = (page) => page.getByRole('button', { name: 'Roll the dice', exact: true });
+    const canRoll = async (page) => await rollOn(page).count() > 0 && await rollOn(page).isEnabled();
+
+    record('a live table opens for two', hosted.ok, String(hosted.status));
+
+    for (const player of players)
+    {
+        await player.page.goto(`${ BASE }/app/play/${ liveId }`);
+        await player.page.waitForSelector('main');
+        await player.page.evaluate(() => { window.__sameLoad = true; });
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+    await press(mina.page, 'Take a seat');
+    record('a chair taken in one browser fills in the other without a reload', await soon(async () => await chairOf(dana.page, 'Mina Sadeghi').count() > 0));
+
+    await press(mina.page, 'I’m ready');
+    record('Ready pressed in one browser shows on that chair in the other', await soon(async () => await chairOf(dana.page, 'Mina Sadeghi').getByText('Ready', { exact: true }).count() > 0));
+
+    await press(dana.page, 'I’m ready');
+    record('both browsers say everyone is ready', await soon(async () => await said(dana.page, 'Everyone is ready') && await said(mina.page, 'Everyone is ready')));
+
+    await press(dana.page, 'Start the game');
+    record('Start pressed in one browser puts the board in the other without a reload', await soon(async () => await mina.page.locator('.table-stage').count() > 0, 10_000));
+    record('and in the browser that pressed it', await soon(async () => await dana.page.locator('.table-stage').count() > 0, 10_000));
+
+    record('somebody is offered the dice', await soon(async () => await canRoll(dana.page) || await canRoll(mina.page), 10_000));
+
+    const [mover, waiter] = await canRoll(dana.page) ? [dana, mina] : [mina, dana];
+    const seen = await revOf(waiter.page);
+
+    await rollOn(mover.page).click();
+    record('a roll in one browser moves the board in the other without a reload', await soon(async () => await revOf(waiter.page) > seen, 10_000), `from revision ${ seen }`);
+
+    const playing = (await dana.api('GET', `/tables/${ liveId }`)).body?.matchId;
+
+    await mover.api('POST', `/matches/${ playing }/resign`, { key: randomUUID() });
+    const again = (page) => page.getByRole('button', { name: 'Play again', exact: true });
+
+    record('one player giving up puts the result in the other browser without a reload', await soon(async () => await again(waiter.page).count() > 0, 10_000));
+
+    await press(waiter.page, 'Play again');
+    record('whoever asks to play again is told who is waited for', await soon(async () => await waiter.page.getByText('to play again', { exact: false }).count() > 0, 10_000));
+
+    await press(mover.page, 'Play again');
+    record('the other pressing Play again deals the next game in the first browser without a reload', await soon(async () => await again(waiter.page).count() === 0 && await waiter.page.getByText('to play again', { exact: false }).count() === 0 && (await canRoll(dana.page) || await canRoll(mina.page)), 10_000));
+
+    const loads = await Promise.all(players.map((player) => player.page.evaluate(() => window.__sameLoad === true)));
+    record('neither browser was reloaded for any of it', loads.every(Boolean), loads.join(', '));
+    await clearTables(dana, mina);
+
     const second = await mina.context.newPage();
     await omid.page.goto(`${ BASE }/app/chats`);
     await omid.page.waitForSelector('main');
