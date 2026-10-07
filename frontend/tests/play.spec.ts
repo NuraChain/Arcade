@@ -157,7 +157,7 @@ describe('GameCard', () =>
         minPlayers: 2,
         maxPlayers: 8,
         status,
-        rules: { seats: [2, 4, 6, 8], modes: ['live'], targets: [], stakes: 'play-money', partners: false, hasCube: false, hasBlinds: true }
+        rules: { seats: [2, 4, 6, 8], modes: ['live'], targets: [], stakes: 'play-money', partners: 'none', hasCube: false, hasBlinds: true }
     });
 
     const mount = (id: string, onQuickPlay: (game: string) => void): HTMLElement =>
@@ -222,6 +222,7 @@ describe('PlayHeader', () =>
         blinds: 'low',
         chat: true,
         voice: false,
+        teams: false,
         status: 'playing',
         chairs: [],
         taken: 4,

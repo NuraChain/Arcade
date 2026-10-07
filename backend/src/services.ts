@@ -550,6 +550,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
             blinds: row.blinds,
             chat: row.chat,
             voice: row.voice,
+            teams: row.teams,
             status: row.status,
             chairs: row.chairs.map((chair) => ({
                 seat: chair.seat,

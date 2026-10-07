@@ -1,6 +1,7 @@
 import { Check, Column, Entity, JoinColumn, OneToOne, PrimaryColumn } from 'typeorm';
 
 import { Game } from './game.entity.ts';
+import type { Partners } from '../domains/table/teams.ts';
 
 /** How a game decides who goes first and what is random. */
 /** Whether anything is wagered. `play-money` is chips with no value; there is no real money. */
@@ -18,6 +19,7 @@ export type Stakes = 'none' | 'play-money';
  * and never queried across. A `game_seat_options` table would be four rows of ceremony.
  */
 @Check('game_rules_modes_present', `array_length(modes, 1) >= 1`)
+@Check('game_rules_partners_known', `partners in ('none', 'optional', 'required')`)
 @Check('game_rules_seats_present', `array_length(seats, 1) >= 1`)
 @Check('game_rules_stakes_known', `stakes in ('none', 'play-money')`)
 @Entity('game_rules')
@@ -49,9 +51,8 @@ export class GameRule
     @Column({ type: 'varchar', length: 16 })
     stakes!: Stakes;
 
-    /** Whether seats pair into teams. Hokm is the only one, and it is why seat order matters. */
-    @Column({ type: 'boolean' })
-    partners!: boolean;
+    @Column({ type: 'varchar', length: 16 })
+    partners!: Partners;
 
     /** Whether the doubling cube is offered. Backgammon only. */
     @Column({ name: 'has_cube', type: 'boolean', default: false })

@@ -57,6 +57,7 @@ const openTable = async (
         blinds: 'low',
         chat: true,
         voice: false,
+        teams: false,
         invitees: options.invitees ?? [],
         ...(options.roomId === undefined ? {} : { roomId: options.roomId })
     })).id;
@@ -94,7 +95,7 @@ describe.skipIf(!active)('claiming a seat, against a real database', () =>
         );
         await db.query(
             `insert into game_rules (game_id, seats, modes, targets, stakes, partners, has_cube, has_blinds)
-             values ('seat-fixture', '{2,3,4}', '{live}', '{7}', 'none', false, false, false)
+             values ('seat-fixture', '{2,3,4}', '{live}', '{7}', 'none', 'none', false, false)
              on conflict (game_id) do nothing`
         );
     }, 60_000);
@@ -120,7 +121,7 @@ describe.skipIf(!active)('claiming a seat, against a real database', () =>
     {
         const host = await makeUser();
         const table = await tables.create(host, {
-            game: 'seat-fixture', seats: 4, mode: 'live', privacy: 'public', target: 7, cube: false, blinds: 'low', chat: true, voice: false, invitees: []
+            game: 'seat-fixture', seats: 4, mode: 'live', privacy: 'public', target: 7, cube: false, blinds: 'low', chat: true, voice: false, teams: false, invitees: []
         });
 
         expect(table.chairs.length).toBe(4);
@@ -305,7 +306,7 @@ describe.skipIf(!active)('claiming a seat, against a real database', () =>
     {
         const host = await makeUser();
         const table = await tables.create(host, {
-            game: 'seat-fixture', seats: 4, mode: 'live', privacy: 'invite', target: 7, cube: false, blinds: 'low', chat: true, voice: false, invitees: []
+            game: 'seat-fixture', seats: 4, mode: 'live', privacy: 'invite', target: 7, cube: false, blinds: 'low', chat: true, voice: false, teams: false, invitees: []
         });
 
         const found = await tables.byCode(host, table.code.toUpperCase());
@@ -339,6 +340,7 @@ describe.skipIf(!active)('claiming a seat, against a real database', () =>
                 blinds: 'low',
                 chat: true,
                 voice: false,
+                teams: false,
                 invitees: [],
                 ...patch
             } as Parameters<typeof tables.create>[1]);

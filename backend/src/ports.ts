@@ -235,6 +235,7 @@ export interface TablePort
         blinds: string;
         chat: boolean;
         voice: boolean;
+        teams: boolean;
         invitees: string[];
         roomId?: string;
     }): Promise<TableSummary>;

@@ -4,6 +4,7 @@ import { Game, Table, TableSeat } from '../../entities/index.ts';
 
 import type { CataloguePort } from '../../ports.ts';
 import type { GameList, LiveCounts } from '../../schemas.ts';
+import type { Partners } from '../table/teams.ts';
 
 /**
  * Row shapes. Deliberately snake_case and local to this file: the database's names are the
@@ -24,7 +25,7 @@ interface GameRow
     modes: string[];
     targets: number[];
     stakes: 'none' | 'play-money';
-    partners: boolean;
+    partners: Partners;
     has_cube: boolean;
     has_blinds: boolean;
 }

@@ -14,6 +14,7 @@ import { TableSeat } from '../../entities/table-seat.entity.ts';
 import type { SocialService } from '../social/service.ts';
 import { cubeLive } from '../match/backgammon/cube.ts';
 import { TABLE_REFUSALS, type TableRefusal } from './refusals.ts';
+import { guestChairs, teamsOf, type Partners } from './teams.ts';
 
 /**
  * What the catalogue says a table of this game may be.
@@ -35,6 +36,7 @@ interface RulesRow
     seats: number[];
     modes: string[];
     targets: number[];
+    partners: Partners;
     has_cube: boolean;
     has_blinds: boolean;
 }
@@ -66,6 +68,7 @@ export interface TableRow
     blinds: string;
     chat: boolean;
     voice: boolean;
+    teams: boolean;
     status: TableStatus;
     host: string | null;
     created_at: Date;
@@ -140,6 +143,7 @@ const tableQuery = (db: DataSource, me: string) => db.getRepository(Table)
     .addSelect('t.blinds', 'blinds')
     .addSelect('t.chat', 'chat')
     .addSelect('t.voice', 'voice')
+    .addSelect('t.teams', 'teams')
     .addSelect('t.room_id', 'room_id')
     .addSelect('t.created_at', 'created_at')
 
@@ -510,11 +514,14 @@ export function createTableService(db: DataSource, social: SocialService)
             blinds: string;
             chat: boolean;
             voice: boolean;
+            teams: boolean;
             invitees: string[];
             roomId?: string | null;
         })
         {
             await mustHaveRoom(me);
+
+            const guests = [...new Set(input.invitees)];
 
             const rules = await db.getRepository(GameRule)
                 .createQueryBuilder('r')
@@ -522,6 +529,7 @@ export function createTableService(db: DataSource, social: SocialService)
                 .select('r.seats', 'seats')
                 .addSelect('r.modes', 'modes')
                 .addSelect('r.targets', 'targets')
+                .addSelect('r.partners', 'partners')
                 .addSelect('r.hasCube', 'has_cube')
                 .addSelect('r.hasBlinds', 'has_blinds')
                 .where('r.game_id = :game', { game: input.game })
@@ -612,8 +620,6 @@ export function createTableService(db: DataSource, social: SocialService)
                     );
                 }
 
-                const guests = [...new Set(input.invitees)];
-
                 if (guests.length > 0)
                 {
                     const inside = await db.getRepository(ConversationMember)
@@ -638,15 +644,16 @@ export function createTableService(db: DataSource, social: SocialService)
 
             const cube = cubeLive(input.target, rules.has_cube && input.cube);
             const blinds = rules.has_blinds ? input.blinds : 'low';
+            const teams = teamsOf(rules.partners, input.seats, input.teams);
 
-            if (input.invitees.length > input.seats - 1)
+            if (guests.length > input.seats - 1)
             {
                 throw new ValidationError({ invitees: 'More guests than chairs.' }, 'That is more people than seats.');
             }
 
             const friends = privacy === 'friends' ? (await social.edgesFor(me))?.friends ?? new Set<string>() : null;
 
-            for (const guest of new Set(input.invitees))
+            for (const guest of guests)
             {
                 await mustInvite(me, guest);
 
@@ -673,6 +680,7 @@ export function createTableService(db: DataSource, social: SocialService)
                             blinds,
                             chat: input.chat,
                             voice: input.voice,
+                            teams,
                             hostId: me,
                             roomId
                         });
@@ -691,11 +699,11 @@ export function createTableService(db: DataSource, social: SocialService)
                                     guests.who, case when gs.seat = 0 then now() else null end
                              from generate_series(0, $3::int - 1) as gs(seat)
                              left join (
-                                 select row_number() over () as at, u.id as who
-                                 from unnest($4::uuid[]) as g(id)
+                                 select g.seat as at, u.id as who
+                                 from unnest($4::uuid[], $5::int[]) as g(id, seat)
                                  join users u on u.id = g.id
                              ) guests on guests.at = gs.seat`,
-                            [id, me, input.seats, input.invitees]
+                            [id, me, input.seats, guests, guestChairs(input.seats, teams).slice(0, guests.length)]
                         );
 
                         const conversation = await tx.getRepository(Conversation).insert({

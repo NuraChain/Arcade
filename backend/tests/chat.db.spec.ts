@@ -374,8 +374,8 @@ describe.skipIf(!active)('chat, against a real database', () =>
         const room = async (chatOn: boolean) =>
         {
             const table = rowsOf<{ id: string }>(await db.query(
-                `insert into tables (game, code, host_id, seats, mode, privacy, target, cube, blinds, chat, voice)
-                 values ('ludo', $2, $1, 2, 'live', 'public', 0, false, 'low', $3, false)
+                `insert into tables (game, code, host_id, seats, mode, privacy, target, cube, blinds, chat, voice, teams)
+                 values ('ludo', $2, $1, 2, 'live', 'public', 0, false, 'low', $3, false, false)
                  returning id`,
                 [a, `q${ Math.floor(Math.random() * 1000000) }`, chatOn]
             ))[0].id;

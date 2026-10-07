@@ -1,7 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { cleanup, fire, renderTest } from '@azerothjs/testing';
+import { RouterProvider, createMemoryHistory, createRouter } from 'azerothjs';
 
 import CreateGameForm from '../src/components/games/create-game-form.component.azeroth';
+import GameHero from '../src/components/games/game-hero.component.azeroth';
 import { defaultTable, TABLE_RULES } from '../src/data/tables.ts';
 import { GAMES } from '../src/data/games.ts';
 import { manualClock } from '../src/lib/clock.ts';
@@ -32,6 +34,7 @@ beforeEach(async () =>
     clock = manualClock(2_000_000);
     setRuntime({ clock, seed: 5 });
     server.reset();
+    useCatalogue().reset();
     useRealtime().reset();
     socket.reset();
     useLocale().setLocale('en');
@@ -93,6 +96,81 @@ describe('the create form', () =>
         expect(cubeSwitch(container).disabled).toBe(false);
         expect(cubeSwitch(container).textContent).toContain('double what the game is worth');
     });
+
+    it('says whether the table it opens is two against two, from the seats on the form when it is sent', async () =>
+    {
+        const hokm = GAMES.find((game) => game.id === 'hokm')!;
+        const opened = (container: HTMLElement) => fire(container.querySelector<HTMLFormElement>('form')!, 'submit');
+
+        const four = renderTest(() => CreateGameForm({ game: hokm, onCreated: () => undefined }) as HTMLElement).container;
+
+        opened(four);
+        await settle();
+
+        cleanup();
+
+        const two = renderTest(() => CreateGameForm({ game: hokm, onCreated: () => undefined }) as HTMLElement).container;
+
+        fire(chip(two, '2 players'), 'click');
+        opened(two);
+        await settle();
+
+        expect(server.asked).toEqual([
+            { game: 'hokm', seats: 4, teams: true },
+            { game: 'hokm', seats: 2, teams: false }
+        ]);
+    });
+
+    it('still says it, as a plain no, for a game that leaves the choice to whoever opens the table', async () =>
+    {
+        const ludo = GAMES.find((game) => game.id === 'ludo')!;
+
+        server.games = [{
+            id: 'ludo',
+            slug: 'ludo',
+            nameKey: ludo.nameKey,
+            blurbKey: ludo.blurbKey,
+            categoryKey: ludo.categoryKey,
+            category: 'board',
+            minPlayers: 2,
+            maxPlayers: 4,
+            status: 'available',
+            rules: { seats: [2, 3, 4], modes: ['live', 'turns'], targets: [], stakes: 'none', partners: 'optional', hasCube: false, hasBlinds: false }
+        }];
+        useCatalogue().reset();
+        await settle();
+
+        const { container } = renderTest(() => CreateGameForm({ game: ludo, onCreated: () => undefined }) as HTMLElement);
+
+        await settle();
+        fire(container.querySelector<HTMLFormElement>('form')!, 'submit');
+        await settle();
+
+        expect(useCatalogue().rules('ludo').partners).toBe('optional');
+        expect(server.asked).toEqual([{ game: 'ludo', seats: 4, teams: false }]);
+        expect(server.asked[0].teams).toBe(false);
+    });
+});
+
+describe('a game that is played in pairs', () =>
+{
+    const chips = (id: 'hokm' | 'ludo' | 'poker' | 'backgammon') =>
+    {
+        const router = createRouter({ routes: [{ path: '/', component: () => document.createElement('div') }], history: createMemoryHistory('/'), scroll: false });
+        const hero = () => GameHero({ game: GAMES.find((game) => game.id === id)!, onQuickPlay: () => undefined });
+
+        return renderTest(() => RouterProvider({ router, children: hero }) as HTMLElement).container.textContent ?? '';
+    };
+
+    it('says so on its page, and no other game does', () =>
+    {
+        expect(chips('hokm')).toContain('Partners at four');
+
+        for (const id of ['ludo', 'poker', 'backgammon'] as const)
+        {
+            expect(chips(id), id).not.toContain('Partners at four');
+        }
+    });
 });
 
 describe('the lobby store', () =>
@@ -114,17 +192,44 @@ describe('the lobby store', () =>
         expect(server.calls).toContain('tables.create');
     });
 
-    it('holds a chair for each person the host invited', async () =>
+    it('holds a chair for each person the host invited, the first of them opposite the host at a team table', async () =>
     {
         const lobby = useLobby();
-        const id = await lobby.host('hokm', defaultTable('hokm'), ['sara.k', 'reza.t']);
+        const heldAt = async (game: 'hokm' | 'ludo') =>
+        {
+            const id = await lobby.host(game, defaultTable(game), ['sara.k', 'reza.t']);
 
-        lobby.open(id);
-        await settle();
+            lobby.open(id);
+            await settle();
 
-        const held = lobby.table()!.chairs.filter((chair) => chair.invited !== undefined);
-        expect(held.map((chair) => chair.invited)).toEqual(['sara.k', 'reza.t']);
+            return lobby.table()!.chairs.map((chair) => chair.invited);
+        };
+
+        expect(await heldAt('hokm')).toEqual([undefined, 'reza.t', 'sara.k', undefined]);
+        expect(await heldAt('ludo')).toEqual([undefined, 'sara.k', 'reza.t', undefined]);
     });
+
+    it('asks for the table the game makes at the seats it finally has, whatever the config it was handed said', async () =>
+    {
+        const lobby = useLobby();
+        const catalogue = useCatalogue();
+
+        expect(catalogue.defaults('hokm')).toMatchObject({ seats: 4, teams: true });
+        expect(catalogue.defaults('ludo')).toMatchObject({ seats: 4, teams: false });
+
+        await lobby.host('hokm', catalogue.defaults('hokm'), []);
+        await lobby.host('hokm', { ...catalogue.defaults('hokm'), seats: 2 }, []);
+        await lobby.host('hokm', { ...catalogue.defaults('hokm'), seats: 4, teams: false }, []);
+        await lobby.host('ludo', { ...catalogue.defaults('ludo'), teams: true }, []);
+
+        expect(server.asked).toEqual([
+            { game: 'hokm', seats: 4, teams: true },
+            { game: 'hokm', seats: 2, teams: false },
+            { game: 'hokm', seats: 4, teams: true },
+            { game: 'ludo', seats: 4, teams: false }
+        ]);
+    });
+
 
     it('remembers where this account is sitting, across a reload', async () =>
     {

@@ -36,7 +36,7 @@ const summary = (id: string, status: 'available' | 'coming-soon'): unknown => ({
     minPlayers: 2,
     maxPlayers: 4,
     status,
-    rules: { seats: [2, 4], modes: ['live'], targets: [], stakes: 'none', partners: false, hasCube: false, hasBlinds: false }
+    rules: { seats: [2, 4], modes: ['live'], targets: [], stakes: 'none', partners: 'none', hasCube: false, hasBlinds: false }
 });
 
 const show = async () =>

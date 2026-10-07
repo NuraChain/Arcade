@@ -6,6 +6,7 @@ import type { TableConfig } from '../data/tables.ts';
 import { useAccount } from './account.store.ts';
 import { useCatalogue } from './catalogue.store.ts';
 import { useRealtime } from './realtime.store.ts';
+import { teamsOf } from '../../../backend/src/domains/table/teams.ts';
 
 export interface LobbyApi
 {
@@ -150,6 +151,7 @@ export const useLobby = createStore((): LobbyApi =>
         blinds: TableConfig['blinds'];
         chat: boolean;
         voice: boolean;
+        teams: boolean;
         invitees: string[];
     }
 
@@ -171,6 +173,7 @@ export const useLobby = createStore((): LobbyApi =>
             blinds: config.blinds,
             chat: config.chat,
             voice: config.voice,
+            teams: teamsOf(catalogue.rules(game).partners, config.seats, config.teams),
             invitees: [...invitees],
             ...(config.roomId === undefined ? {} : { roomId: config.roomId })
         };

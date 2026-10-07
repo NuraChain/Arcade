@@ -20,7 +20,7 @@ the game is `coming-soon`.
 |---|---|---|---|
 | seats | `[4]` | 2, 3, 4 | widen to `[2, 3, 4]` |
 | targets | `[7, 13]` | match to 7 | **keep both.** 13 is a real Iranian variant and the repo already offers it; the canonical default is 7 |
-| partners | `true` | teams at 4 | true is correct and **nothing reads it** — `game_rules.partners` has zero functional readers server-side |
+| partners | `true` | teams at 4 | it was a boolean nothing read. It is `required` now, one of `none`, `optional` and `required`, and `table/service.ts` reads it when a table is opened |
 | modes | `live`, `turns` | — | `turns` (a 24-hour deadline) is questionable for a trick game but not wrong; keep it and let the sweep autoplay |
 
 ---
@@ -135,8 +135,9 @@ achievements, levels, the turn sweep, the idempotency ledger, the revision preco
 New actions on the generic route: `DECLARE_TRUMP`, `PLAY_CARD`, and at two players `KEEP` / `REJECT`.
 `match_actions.kind` must widen (see the seam doc).
 
-**Teams.** Built, with no column: partnerships are seat parity (`sideOf(seat, 4) = seat % 2`, the
-product rule), and the engine reports them through `Engine.sideOf`. `rating.ts` rates each SIDE as
+**Teams.** Built. A four-seat table is stored as two against two (`tables.teams`), forced by the
+game's `partners: required`; inside the engine a partnership is still seat parity
+(`sideOf(seat, 4) = seat % 2`, the product rule), reported through `Engine.sideOf`. `rating.ts` rates each SIDE as
 one player at its members' mean rating and moves every member by the same amount, so partners are
 never scored against each other (places `[1,2,1,2]` used to score them as a draw, HOKM-02); equal
 teams move ±16 each. `standings` is competition-ranked by side - a side with a seat out is last

@@ -4,6 +4,7 @@ import { threadSize } from '../../backend/src/domains/chat/pages.ts';
 import { NOTICE_OF } from '../../backend/src/domains/notify/notices.ts';
 import { candidatesFor, handleFromAddress, handleFromName } from '../../backend/src/domains/identity/handle.ts';
 import { TABLE_REFUSALS, type TableRefusal } from '../../backend/src/domains/table/refusals.ts';
+import { guestChairs, teamsOf } from '../../backend/src/domains/table/teams.ts';
 import type {
     Account,
     ChainProfile,
@@ -25,6 +26,7 @@ import {
     THREAD_FIXTURES
 } from './fixtures.ts';
 import { accountIdOf, buildSealedFixtures } from './sealed-fixtures.ts';
+import { TABLE_RULES } from '../src/data/tables.ts';
 
 export type Refusal = 'challenge-unreachable' | 'bad-signature' | 'wallet-unreachable' | 'guest-reserved' | 'guest-unreachable' | 'chain-unreachable';
 
@@ -87,6 +89,7 @@ interface TableWire
     blinds: string;
     chat: boolean;
     voice: boolean;
+    teams: boolean;
     status: 'open' | 'ready' | 'closed';
     host?: string;
     chairs: SeatWire[];
@@ -344,6 +347,7 @@ export const server =
     tables: [] as TableWire[],
 
     outOfGame: {} as Record<string, string[]>,
+    asked: [] as { game: string; seats: number; teams: boolean }[],
 
     watching: [] as { id: string; code: string; game: string; seats: number; players: string[]; startedAt: string }[],
 
@@ -381,6 +385,7 @@ export const server =
         server.refuseGroup = null;
         server.tables = [];
         server.outOfGame = {};
+        server.asked = [];
         server.tableSeq = 0;
         server.notifications = [];
         server.notifySeq = 0;
@@ -1397,10 +1402,12 @@ export const client =
             blinds: string;
             chat: boolean;
             voice: boolean;
+            teams: boolean;
             invitees: string[];
         } })
         {
             server.calls.push('tables.create');
+            server.asked.push({ game: input.game, seats: input.seats, teams: input.teams });
 
             if (input.invitees.some((handle) => !reachable(handle)))
             {
@@ -1408,6 +1415,9 @@ export const client =
             }
 
             server.tableSeq += 1;
+
+            const teams = teamsOf(TABLE_RULES[input.game as keyof typeof TABLE_RULES]?.partners ?? 'none', input.seats, input.teams);
+            const held = guestChairs(input.seats, teams);
 
             const made: TableWire = {
                 id: `table-${ server.tableSeq }`,
@@ -1421,6 +1431,7 @@ export const client =
                 blinds: input.blinds,
                 chat: input.chat,
                 voice: input.voice,
+                teams,
                 status: 'open',
                 host: server.me,
                 chairs: Array.from({ length: input.seats }, (_, seat) => ({
@@ -1428,7 +1439,7 @@ export const client =
                     ready: false,
                     host: seat === 0,
                     ...(seat === 0 ? { who: server.me } : {}),
-                    ...(input.invitees[seat - 1] === undefined ? {} : { invited: input.invitees[seat - 1] })
+                    ...(input.invitees[held.indexOf(seat)] === undefined ? {} : { invited: input.invitees[held.indexOf(seat)] })
                 })),
                 taken: 1,
                 createdAt: new Date(0).toISOString()

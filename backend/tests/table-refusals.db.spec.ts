@@ -77,6 +77,7 @@ const config = (privacy: 'invite' | 'public', invitees: string[] = [], seats = 4
     blinds: 'low' as const,
     chat: true,
     voice: false,
+    teams: false,
     invitees
 });
 

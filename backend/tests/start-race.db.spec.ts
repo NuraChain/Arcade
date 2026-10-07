@@ -72,6 +72,7 @@ const seated = async (seats: number) =>
         blinds: 'low',
         chat: true,
         voice: false,
+        teams: false,
         invitees: []
     });
 

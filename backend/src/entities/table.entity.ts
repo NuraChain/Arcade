@@ -36,6 +36,7 @@ export type TableStatus = 'open' | 'closed';
 @Check('tables_room_is_private', `room_id is null or privacy = 'room'`)
 @Check('tables_seats_range', `seats between 2 and 9`)
 @Check('tables_status_known', `status in ('open', 'closed')`)
+@Check('tables_teams_four', `not teams or seats = 4`)
 @Index('tables_code', ['code'], { unique: true })
 @Index('tables_host', ['hostId'])
 @Entity('tables')
@@ -74,6 +75,9 @@ export class Table
 
     @Column({ type: 'boolean' })
     voice!: boolean;
+
+    @Column({ type: 'boolean' })
+    teams!: boolean;
 
     @Column({ type: 'varchar', length: 16, default: 'open' })
     status!: TableStatus;

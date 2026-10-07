@@ -1,5 +1,6 @@
 import { array, boolean, enumOf, literal, number, object, record, string, union, type Infer } from '@azerothjs/schema';
 import { RARITY_IDS } from './domains/achieve/rarity.ts';
+import { PARTNERS } from './domains/table/teams.ts';
 
 /**
  * The wire shape, declared once.
@@ -35,7 +36,7 @@ export const tableRules = object({
     /** Empty means the game has no score target - true of poker and ludo, not a missing value. */
     targets: array(number()),
     stakes: enumOf(['none', 'play-money']),
-    partners: boolean(),
+    partners: enumOf(PARTNERS),
     hasCube: boolean(),
     hasBlinds: boolean()
 });
@@ -1086,6 +1087,7 @@ export const tableSummary = object({
     blinds: string(),
     chat: boolean(),
     voice: boolean(),
+    teams: boolean(),
     status: tableStatus,
     host: string().optional(),
     chairs: array(tableSeat),
@@ -1128,6 +1130,7 @@ export const tableCreateInput = object({
     blinds: tableBlinds,
     chat: boolean(),
     voice: boolean(),
+    teams: boolean(),
 
     /** Handles. Each one holds a chair until they take it or the host gives it away. */
     invitees: array(string({ max: 32 })),

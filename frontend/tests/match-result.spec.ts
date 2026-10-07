@@ -55,6 +55,7 @@ const table = (chairs: TableSummary['chairs'], extra: Partial<TableSummary> = {}
     blinds: 'low',
     chat: true,
     voice: false,
+    teams: false,
     status: 'ready',
     chairs,
     taken: chairs.filter((chair) => chair.who !== undefined).length,

@@ -63,6 +63,7 @@ const started = async () =>
         blinds: 'low',
         chat: true,
         voice: false,
+        teams: false,
         invitees: []
     });
 

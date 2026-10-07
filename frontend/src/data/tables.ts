@@ -1,4 +1,5 @@
 import type { GameId } from './games.ts';
+import { teamsOf, type Partners } from '../../../backend/src/domains/table/teams.ts';
 
 export type TableMode = 'live' | 'turns';
 
@@ -30,6 +31,7 @@ export interface TableConfig
     blinds: Blinds;
     chat: boolean;
     voice: boolean;
+    teams: boolean;
     quick: boolean;
 
     /**
@@ -49,22 +51,24 @@ export interface TableRules
     modes: readonly TableMode[];
     targets: readonly number[];
     stakes: Stakes;
-    partners: boolean;
+    partners: Partners;
 }
 
 export const TABLE_RULES: Record<GameId, TableRules> = {
-    hokm: { seats: [2, 3, 4], modes: ['live', 'turns'], targets: [7, 13], stakes: 'none', partners: true },
-    poker: { seats: [2, 6, 9], modes: ['live'], targets: [], stakes: 'play-money', partners: false },
-    backgammon: { seats: [2], modes: ['live', 'turns'], targets: [1, 3, 5], stakes: 'none', partners: false },
-    ludo: { seats: [2, 3, 4], modes: ['live', 'turns'], targets: [], stakes: 'none', partners: false }
+    hokm: { seats: [2, 3, 4], modes: ['live', 'turns'], targets: [7, 13], stakes: 'none', partners: 'required' },
+    poker: { seats: [2, 6, 9], modes: ['live'], targets: [], stakes: 'play-money', partners: 'none' },
+    backgammon: { seats: [2], modes: ['live', 'turns'], targets: [1, 3, 5], stakes: 'none', partners: 'none' },
+    ludo: { seats: [2, 3, 4], modes: ['live', 'turns'], targets: [], stakes: 'none', partners: 'none' }
 };
 
 export function defaultTable(game: GameId): TableConfig
 {
     const rules = TABLE_RULES[game];
+    const seats = rules.seats[rules.seats.length - 1];
+
     return {
         game,
-        seats: rules.seats[rules.seats.length - 1],
+        seats,
         mode: 'live',
         privacy: 'invite',
         target: rules.targets[0] ?? 0,
@@ -72,6 +76,7 @@ export function defaultTable(game: GameId): TableConfig
         blinds: 'low',
         chat: true,
         voice: false,
+        teams: teamsOf(rules.partners, seats, false),
         quick: false
     };
 }

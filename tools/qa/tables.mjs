@@ -8,6 +8,7 @@ const TABLE_DEFAULTS = Object.freeze({
     blinds: 'low',
     chat: true,
     voice: false,
+    teams: false,
     invitees: Object.freeze([])
 });
 

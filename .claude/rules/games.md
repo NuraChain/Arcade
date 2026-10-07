@@ -95,6 +95,55 @@ It caught a live bug the moment it existed: `lobby.quick()`'s fallback config wa
 seats, so quick-matching backgammon - which plays two - had always asked for a four-seat table. It
 asks `catalogue.defaults(game)` now.
 
+**Whether a table is two against two is a third thing `create` normalizes, and the game's row is
+what says it may be.** `tables.teams` is a boolean with no default, and `tables_teams_four` is its
+structural half: a team table has four chairs. The other half - does this game have partners - is in
+`game_rules`, which a CHECK cannot reach, so `create` asks it. `game_rules.partners` was a boolean
+that could only say "hokm"; it is `none`, `optional` or `required` now (`game_rules_partners_known`),
+because "forced at four seats" would otherwise be a game's name in `table/service.ts`, a domain that
+knows no game. Hokm is `required`, the rest are `none`, and ludo flips to `optional` in the commit
+that gives it a team game, the way `games.status` opened hokm.
+
+The answer is one pure function, `teamsOf(partners, seats, asked)` in `table/teams.ts`: four seats,
+and either the game forces it or the game allows it and the opener asked. It imports nothing, so the
+browser asks the same one, and it is NORMALIZED rather than refused for the reason the cube is:
+`teams` is a field on a config its callers start from `catalogue.defaults(game)`. Two of them, the
+sheet that opens a table in a chat and the group page, then change `seats`, so a hokm default turned
+into a table for two would carry a stale `true` and be refused by its own default. `asInput` in the
+lobby store resolves it from the seats the table finally has, the summary echoes what was STORED,
+and `table-teams.db.spec.ts` asks the row. The create form builds its own config, and built it with
+no `teams` at all behind an `as TableConfig`: harmless while every game is `none` or `required`,
+and an `undefined` the wire refuses the day one is `optional`. It names the field and is held by
+`satisfies` now, so the next required field fails the typecheck there, and `tables.spec.ts` submits
+the form for a game whose published rules leave the choice open.
+
+`matches.variant` is the RULES a game is played under, never the game's name - it once read
+`variant in ('ludo')`, a game id in a column that exists to say which ruleset of that game is on.
+It allows `teams` beside `standard` (`matches_variant_known`), only at four seats
+(`matches_teams_four`), and has no default any more: every insert says which. Nothing writes
+`teams` there yet - a start still writes the literal - and no engine is asked whether the pair makes
+sense for its game until the commit after this one teaches them the word, so for one commit the
+database would take a four-seat poker match called `teams` from anybody writing rows by hand.
+
+**At a team table the first chair dealt is the opener's partner's.** The create-time deal walked
+the chairs in order, so the first friend picked sat beside the host. `guestChairs(seats, teams)`
+gives the order - 2, 1, 3 at a team table, in order anywhere else - and the raw insert pairs each
+guest with a chair through a second `unnest` array instead of a `row_number()` with no order to
+stand on. Somebody named twice is one guest: the list is made unique once, at the top of `create`,
+and the count, the policy checks and the deal all read that one list. A name sent twice used to be
+dealt two chairs, one of which nobody could ever take. Somebody who sits down later still takes the lowest free chair, and their partner is
+whoever is opposite.
+
+**A truthy string is not a yes.** `game-hero` drew its "Partners at four" chip with
+`<Show when={ rules.partners }>`. `Show` takes any value, so the day that field became a word every
+game's page said it, `none` included, with `check` green. It reads `!== 'none'`, and `tables.spec.ts`
+renders the hero for all four games. The same trap is waiting in every `when` over a boolean that
+becomes a word.
+
+A sync cannot add a NOT NULL column with no default to a table that holds rows, and that goes for
+the disposable test database as much as the dev one: after this commit both were dropped and built
+from nothing, as the house rule says.
+
 **A wire field that reaches a bounded column says so in `schemas.ts`.** `crest` is `varchar(24)`,
 `hue` is `smallint`, `blinds` is one of three levels - and none of that was stated, so an over-long
 crest or an out-of-range hue reached Postgres and came back as 22001 or 22003, which is a 500. Any

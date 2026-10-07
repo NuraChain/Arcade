@@ -1,5 +1,6 @@
 import type { DataSource } from 'typeorm';
 import { RUNGS } from '../domains/achieve/families.ts';
+import type { Partners } from '../domains/table/teams.ts';
 
 /**
  * The reference catalogue.
@@ -29,7 +30,7 @@ interface GameSeed
     modes: string[];
     targets: number[];
     stakes: 'none' | 'play-money';
-    partners: boolean;
+    partners: Partners;
     hasCube: boolean;
     hasBlinds: boolean;
 }
@@ -71,7 +72,7 @@ export const GAME_SEEDS: GameSeed[] = [
         modes: ['live', 'turns'],
         targets: [7, 13],
         stakes: 'none',
-        partners: true,
+        partners: 'required',
         hasCube: false,
         hasBlinds: false
     },
@@ -86,7 +87,7 @@ export const GAME_SEEDS: GameSeed[] = [
         modes: ['live'],
         targets: [],
         stakes: 'play-money',
-        partners: false,
+        partners: 'none',
         hasCube: false,
         hasBlinds: true
     },
@@ -101,7 +102,7 @@ export const GAME_SEEDS: GameSeed[] = [
         modes: ['live', 'turns'],
         targets: [1, 3, 5],
         stakes: 'none',
-        partners: false,
+        partners: 'none',
         hasCube: true,
         hasBlinds: false
     },
@@ -116,7 +117,7 @@ export const GAME_SEEDS: GameSeed[] = [
         modes: ['live', 'turns'],
         targets: [],
         stakes: 'none',
-        partners: false,
+        partners: 'none',
         hasCube: false,
         hasBlinds: false
     }

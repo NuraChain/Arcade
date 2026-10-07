@@ -4,6 +4,8 @@ import { Table } from './table.entity.ts';
 
 export type MatchOutcome = 'won' | 'abandoned';
 
+export type MatchVariant = 'standard' | 'teams';
+
 /**
  * One game somebody actually played.
  *
@@ -22,15 +24,8 @@ export type MatchOutcome = 'won' | 'abandoned';
 @Check('matches_rev_matches_state', `(state ->> 'rev')::int = rev`)
 @Check('matches_rev_positive', `rev >= 0`)
 @Check('matches_seats_range', `seats between 2 and 9`)
-/**
- * The RULES variant within a game, which is not the game's name.
- *
- * It read `variant in ('ludo')` - a game id checked against a column that exists to say which
- * ruleset of that game is being played. Every canonical implementation is `standard`; a variant
- * that is genuinely different (hokm to 13 rather than 7, nackgammon) widens this in the commit that
- * implements it, and the engine validates that the pair makes sense for its own game.
- */
-@Check('matches_variant_known', `variant in ('standard')`)
+@Check('matches_teams_four', `variant <> 'teams' or seats = 4`)
+@Check('matches_variant_known', `variant in ('standard', 'teams')`)
 @Check('matches_winner_seat_range', `winner_seat is null or winner_seat >= 0`)
 @Index('matches_one_live', ['tableId'], { unique: true, where: `finished_at is null` })
 @Index('matches_due', ['deadlineAt'], { where: `finished_at is null` })
@@ -47,8 +42,8 @@ export class Match
     @Column({ type: 'varchar', length: 32 })
     game!: string;
 
-    @Column({ type: 'varchar', length: 24, default: 'standard' })
-    variant!: string;
+    @Column({ type: 'varchar', length: 24 })
+    variant!: MatchVariant;
 
     @Column({ type: 'smallint' })
     seats!: number;

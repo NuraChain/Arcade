@@ -5,6 +5,7 @@ import { drawable } from '../components/games/boards.ts';
 import { GAMES, gameBySlug, type Game, type GameId } from '../data/games.ts';
 import { TABLE_RULES, defaultTable, type TableConfig, type TableRules } from '../data/tables.ts';
 import { runtime } from '../lib/runtime.ts';
+import { teamsOf } from '../../../backend/src/domains/table/teams.ts';
 import { useSettings } from './settings.store.ts';
 
 /**
@@ -116,10 +117,13 @@ export const useCatalogue = createStore((): CatalogueApi =>
         {
             const rules = rulesFor(id);
             const base = defaultTable(id);
+            const seats = rules.seats.find((count) => count >= 4) ?? rules.seats[rules.seats.length - 1] ?? base.seats;
+
             return {
                 ...base,
-                seats: rules.seats.find((seats) => seats >= 4) ?? rules.seats[rules.seats.length - 1] ?? base.seats,
+                seats,
                 target: rules.targets[0] ?? 0,
+                teams: teamsOf(rules.partners, seats, false),
                 voice: useSettings().settings().voiceTables
             };
         },
