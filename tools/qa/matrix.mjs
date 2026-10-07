@@ -340,6 +340,7 @@ async function main()
 
         if (seen.ok() && (await seen.json()).matchId === undefined)
         {
+            await partner.request.post(`${ BASE }/api/tables/${ tables.poker }/seat`);
             await partner.request.post(`${ BASE }/api/tables/${ tables.poker }/ready`, { data: { ready: true } });
             await page.request.post(`${ BASE }/api/tables/${ tables.poker }/ready`, { data: { ready: true } });
             await page.request.post(`${ BASE }/api/tables/${ tables.poker }/start`);

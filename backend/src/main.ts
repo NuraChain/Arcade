@@ -131,9 +131,13 @@ const hub = createHub({
     }
 });
 
+let goingDown = false;
+
 // ONE instance, shared by the API and by the gateway. It used to be built twice here, once for
 // the manifest and once inside `buildApp`, and neither survived the expression it was created in.
-const ports = buildPorts(dataSource, config, hub, hub);
+const ports = buildPorts(dataSource, config, hub, {
+    present: (userIds) => goingDown ? new Set(userIds) : hub.present(userIds)
+});
 
 const serving = config.servePages;
 
@@ -286,6 +290,39 @@ const sweepTurns = () =>
 turns = setTimeout(sweepTurns, TURN_SWEEP_MS);
 turns.unref();
 
+const TABLE_SWEEP_MS = 30_000;
+
+let tables: NodeJS.Timeout | null = null;
+
+const sweepTables = () =>
+{
+    void ports.jobs.sweepTables()
+        .then(({ stoodUp, closed, failed }) =>
+        {
+            if (stoodUp > 0)
+            {
+                log.info('absent players stood up', { stoodUp, closed });
+            }
+
+            for (const one of failed)
+            {
+                log.error('chair not freed', one);
+            }
+        })
+        .catch((error: unknown) => log.error('table sweep failed', { error }))
+        .finally(() =>
+        {
+            if (tables !== null)
+            {
+                tables = setTimeout(sweepTables, TABLE_SWEEP_MS);
+                tables.unref();
+            }
+        });
+};
+
+tables = setTimeout(sweepTables, TABLE_SWEEP_MS);
+tables.unref();
+
 handleShutdownSignals(served, {
     /**
      * The window where connections are still live.
@@ -307,6 +344,13 @@ handleShutdownSignals(served, {
             clearTimeout(turns);
             turns = null;
         }
+        if (tables !== null)
+        {
+            clearTimeout(tables);
+            tables = null;
+        }
+
+        goingDown = true;
 
         const saidGoodbye = hub.closeAll(1001, 'Server restarting');
 

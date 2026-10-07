@@ -22,6 +22,7 @@ import { endingOf } from './domains/match/declare.ts';
 import { createMatchService, type MatchLoad } from './domains/match/service.ts';
 import { WATCH_DELAY_MS, createWatchService } from './domains/match/watch.ts';
 import { createTableService, noInvitee, type TableRow } from './domains/table/service.ts';
+import { strikes } from './domains/table/sweep.ts';
 import { createChainProfiles, recordValue } from './chain/profile.ts';
 import { createNftReader } from './chain/nfts.ts';
 import { createIdentityService } from './domains/identity/service.ts';
@@ -93,10 +94,18 @@ export interface TurnSweep
     stuck: { matchId: string; game: string; reason: string }[];
 }
 
+export interface TableSweep
+{
+    stoodUp: number;
+    closed: number;
+    failed: { tableId: string; reason: string }[];
+}
+
 export interface Services extends Ports
 {
     jobs: {
         sweepTurns(forMs: number): Promise<TurnSweep>;
+        sweepTables(): Promise<TableSweep>;
         tidy(): Promise<Record<string, number>>;
     };
 }
@@ -106,6 +115,8 @@ const TURN_TTL_SECONDS = 3600;
 const PUSH_AT_ONCE = 64;
 
 const WATCHABLE_MAX = 48;
+
+const WAITING_SEATS = 500;
 
 export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteListener, presence?: PresenceReader): Services
 {
@@ -918,6 +929,49 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         return { played, stuck };
     };
 
+    let struck: ReadonlySet<string> = new Set<string>();
+
+    const sweepTables = async (): Promise<TableSweep> =>
+    {
+        const waiting = await table.waitingSeats(WAITING_SEATS);
+        const around = here(waiting.map((seat) => seat.userId));
+        const { vacate, next } = strikes(struck, waiting.filter((seat) => !around.has(seat.userId)));
+        const failed: TableSweep['failed'] = [];
+        let stoodUp = 0;
+        let closed = 0;
+
+        struck = next;
+
+        for (const seat of vacate)
+        {
+            const gone = await table.vacate(seat.tableId, seat.userId, here).catch((error: unknown) =>
+            {
+                failed.push({ tableId: seat.tableId, reason: error instanceof Error ? error.message : String(error) });
+
+                return null;
+            });
+
+            if (gone === null)
+            {
+                continue;
+            }
+
+            stoodUp += 1;
+            closed += gone.closed ? 1 : 0;
+
+            await courtesy('table ring', async () =>
+            {
+                if (gone.conversationId !== null)
+                {
+                    live?.chatChanged(gone.conversationId, seat.userId);
+                }
+                live?.tableChanged(seat.tableId, [...await table.peopleAt(seat.tableId), seat.userId]);
+            });
+        }
+
+        return { stoodUp, closed, failed };
+    };
+
     const peers = createPeerDevices(db);
     const epochs = createEpochService(db);
     const recovery = createRecoveryService(db);
@@ -1134,7 +1188,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
     };
 
     return {
-        jobs: { sweepTurns, tidy },
+        jobs: { sweepTurns, sweepTables, tidy },
 
         meta: {
             info: () => ({ wire: 'nura-e2ee/v1', env: config.env })

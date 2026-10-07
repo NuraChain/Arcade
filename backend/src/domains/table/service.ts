@@ -356,6 +356,12 @@ const compatible = (tx: EntityManager, lead: string, game: string, filter: Quick
                          or (b.blocked_id = :lead and (b.user_id = t.host_id or b.user_id in (${ OCCUPANTS }))))`
     );
 
+const waitingChairs = (from: DataSource | EntityManager) => from.getRepository(TableSeat)
+    .createQueryBuilder('s')
+    .innerJoin(Table, 't', `t.id = s.table_id and t.status = 'open' and t.mode = 'live' and t.privacy in ('public', 'friends')`)
+    .where('s.user_id is not null')
+    .andWhere('not exists (select 1 from matches m where m.table_id = t.id and m.finished_at is null)');
+
 const sit = async (tx: EntityManager, tableId: string, teams: boolean, lead: string) =>
 {
     await lockTable(tx, tableId);
@@ -1045,6 +1051,42 @@ export function createTableService(db: DataSource, social: SocialService)
                 const walked = await forfeit(tx);
 
                 return { ...await standUp(tx, tableId, me), walked };
+            });
+        },
+
+        async waitingSeats(limit: number)
+        {
+            const rows = await waitingChairs(db)
+                .select('s.table_id', 'table_id')
+                .addSelect('s.user_id', 'user_id')
+                .orderBy('s.joined_at', 'ASC')
+                .addOrderBy('s.table_id', 'ASC')
+                .addOrderBy('s.seat', 'ASC')
+                .limit(limit)
+                .getRawMany<{ table_id: string; user_id: string }>();
+
+            return rows.map((row) => ({ tableId: row.table_id, userId: row.user_id }));
+        },
+
+        async vacate(tableId: string, userId: string, present: (userIds: readonly string[]) => ReadonlySet<string>)
+        {
+            return await db.transaction(async (tx) =>
+            {
+                await lockTable(tx, tableId);
+
+                const waiting = await waitingChairs(tx)
+                    .select(`(select c.id from conversations c where c.table_id = t.id and c.kind = 'game')`, 'conversation_id')
+                    .andWhere('s.table_id = :tableId and s.user_id = :userId', { tableId, userId })
+                    .getRawOne<{ conversation_id: string | null }>();
+
+                if (waiting === undefined || present([userId]).has(userId))
+                {
+                    return null;
+                }
+
+                const stood = await standUp(tx, tableId, userId);
+
+                return stood.left ? { closed: stood.closed, conversationId: waiting.conversation_id } : null;
             });
         },
 

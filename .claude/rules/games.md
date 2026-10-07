@@ -253,9 +253,10 @@ it. A close had the same window from the other side and left a game running on a
 `lockTable(tx, tableId)` in `table/service.ts` is `pg_advisory_xact_lock(hashtext($1::uuid::text))` -
 raw, because no repository can say it - and it is the first statement of the transaction in `start`,
 in `leave` before the walkout, and in `close`. A quick search takes it as well, at each table it
-tries, for the table that is emptied or closed as it sits down (*Matchmaking is one request*). It is
-the one-key form, a lock space of its own, so the claim's two-key lock on a table and a person never
-meets it. Under it the start reads the table and the chairs again and asks every question of THAT
+tries, for the table that is emptied or closed as it sits down (*Matchmaking is one request*), and so
+does the sweep that stands an absent player up (*A waiting chair belongs to somebody who is there*).
+It is the one-key form, a lock space of its own, so the claim's two-key lock on a table and a person
+never meets it. Under it the start reads the table and the chairs again and asks every question of THAT
 read - still in a chair, a game already on, closed, an engine, every chair taken, everybody ready -
 and deals the players from it. The key is the id as Postgres spells it: hashing the text a caller
 sent would give `/tables/<ID IN CAPITALS>/start` a lock of its own, and the route hands the start
@@ -515,7 +516,8 @@ Under the lock, in order:
   the one it should have filled. So an account with no socket at all - a browser behind a proxy
   that refuses WebSockets, a script that only posts - is seated like anybody else, and from then on
   that table is passed over by every later search, for the people already waiting there as much as
-  for the newcomer, until it leaves.
+  for the newcomer, until it leaves or the sweep stands it up (*A waiting chair belongs to somebody
+  who is there*).
 - **A chair.** The search takes the table's lock first - `lockTable`, the one a start, a leave and
   a close take - and the UPDATE that takes the chair asks that the table is still open. A join only
   fills a chair, which cannot hurt a start; what it could hurt is a table being emptied. The last
@@ -576,7 +578,8 @@ that has not closed, not only while a game is on the board. Ready is the whole o
 chair quick play took is ready, and so is one that pressed Play again; a chair a finished game left
 un-ready is waiting for nothing, and held, its hidden tab would be here for as long as it lived. The
 first chair freed there would then make it the fullest table with everybody here, and the next
-searcher would be seated ready beside people who are not looking.
+searcher would be seated ready beside people who are not looking. A seat that is not here does not
+keep its chair for long either way: *A waiting chair belongs to somebody who is there*.
 
 **Somebody who has left the page is told when the game starts.** The server starts a quick table the
 moment its last chair fills, and nobody sitting there has to be looking at it. Anybody seated who is
@@ -602,14 +605,126 @@ minors, presence, the chairs, the tables it opens, the limit and the refusals.
 tab of a seat that is ready, of one that is not and of one a finish left un-ready.
 `tour-pass.mjs` presses the button on the built server and counts the requests.
 
-Three limits, stated. A search sent again from where the store cannot see it - another tab, or a
+Two limits, stated. A search sent again from where the store cannot see it - another tab, or a
 press after a request the browser gave up on while the server went on to seat it - can find the
 first one's game already started, which is no longer waiting, and be seated a second time
 elsewhere. Answering it with the game that seat is in would close that, and would also send a
 poker seat that is out of chips back to the table it is out at for as long as the others play on,
-so it is not done. Sitting down by a link still asks whether the table has closed before its own
-transaction, and can land in one that closed in that instant. And an absent player keeps their
-chair: the table is invisible to quick play, and nothing stands them up yet.
+so it is not done. And sitting down by a link still asks whether the table has closed before its
+own transaction, and can land in one that closed in that instant.
+
+**A waiting chair belongs to somebody who is there.** An absent player used to keep their chair for
+as long as they liked. The table was passed over by every search, so the people sitting beside a
+closed tab were never found a fourth, and nothing but that player's own Leave gave the chair back.
+A chair at a waiting table whose occupant is not here on two sweeps in a row is stood up now.
+Waiting is the row saying `open` with no game on, so a full table nobody started and one a finished
+game left behind are both waiting; and it is only a `live` table that is `public` or `friends`, the
+ones a quick search can put somebody at. A `turns` table is correspondence, and nobody at one has to
+be here. An invite table and a table opened in a conversation are reached by a chair held for
+somebody or by a card in a chat, and emptying one would leave that card pointing at nothing.
+
+**Two sweeps, because one absence is ordinary.** Here is `hub.present`, which already forgives
+fifteen seconds: the hub forgets somebody fifteen to forty-five seconds after their last socket
+goes, its own sweep being every thirty. One strike on top of that would stand up a phone that
+locked for half a minute, and everybody whose socket had not come back when the first sweep ran
+after a restart, since a hub that has just started knows nobody. `main.ts` runs the sweep every
+thirty seconds (`TABLE_SWEEP_MS`) on a `setTimeout` that is set again only when a sweep has
+finished, the turn sweep's shape, so two never overlap; a chair goes back between forty-five and
+about a hundred and five seconds after its socket did. The arithmetic is `strikes(previous,
+absentNow)` in `table/sweep.ts`, which imports nothing: away now and struck before is stood up, away
+now for the first time is the next set, and everything else is forgotten - somebody who came back, a
+chair that emptied by itself, a table that started or closed. A strike is spent when it is used, so
+a chair that would not come free is suspected afresh and tried again two sweeps later. The key is
+the table and the person: a strike earned at one table says nothing about the same person at
+another.
+
+**The strikes are memory, because what they are about is.** The set is a variable inside
+`buildPorts`, for the reason presence is applied in Node: who is here is one process's memory, and
+a strike written to the database would outlive the hub it was a statement about - after a restart
+it would stand people up on the word of a process that no longer exists. A restart forgets every
+strike instead, and the first sweep is thirty seconds after boot. With no hub everybody counts as
+here, so nothing is ever struck. A server on its way down has no hub either: `hub.closeAll` empties
+it, and asked after that it would say nobody is here, to a sweep that was already out when the
+signal landed as much as to a new one. So `beforeShutdown` clears the timer and sets `goingDown`,
+both BEFORE `hub.closeAll`, and the reader `main.ts` hands `buildPorts` stops asking the hub from
+that moment and counts everybody as here. A sweep still out stands nobody else up, and a quick
+search answered in those last milliseconds is seated beside the people who were there until the
+server itself let them go.
+
+**`vacate` takes the table's lock first and reads again under it.** `jobs.sweepTables()` reads
+`table.waitingSeats(500)` - a QueryBuilder over the chairs in scope, longest sat first, so that two
+sweeps in a row look at the same ones - asks `present`, applies the strikes, and calls
+`table.vacate(tableId, userId, present)` for each chair that is owed one. That read is as stale as
+any read, so vacate is one transaction that takes `lockTable` FIRST, in the order every other writer
+keeps: the table's lock, then the match row, then chair rows, and nothing that holds a table's lock
+waits for the lock a game's searches take. Under it the same predicate is asked of that one chair -
+still waiting, still that person's - and anything else answers null and writes nothing. Who is here
+is asked again there too, of the reader the sweep hands it, as a quick search is handed one. The
+sweep asked once, before a loop that can be five hundred chairs long and can wait at any of them for
+a table's lock until the statement times out, and somebody whose phone woke up in the meantime is
+here: they keep the chair and the thread, nothing is rung, and the strike that brought the sweep to
+them is spent. Otherwise it goes through `standUp`, so the rule about a chair going back still
+exists once: the chair is freed, the person leaves the table's thread, and the table closes behind
+the last one out.
+
+**It is not a forfeit and it never touches a match.** A table with a game on is out of scope by
+construction, and the read under the lock is what makes that true when a start races the sweep: the
+start first, and vacate finds its game and leaves the chair alone; vacate first, and the start reads
+an empty chair and answers `chairs-empty`. Vacate locks no row of a match either: under the table's
+lock no game can begin, and one that is ending is still a game on, so its chairs wait for a later
+sweep.
+
+It then rings what a leave rings, through `courtesy()`: the table for everybody still sitting or
+invited there, whoever is looking at it and whoever was stood up, and the table's thread with
+whoever was stood up named, so that their chat list drops it. Nobody is notified. Whoever was stood
+up is away by definition, and when they come back `/tables/mine` no longer lists the table. A table
+that will not let go of its chair - its lock held until the statement times out - comes back in the
+sweep's `failed`, is logged as `chair not freed`, and the sweep goes on to the next one; a sweep
+that fails altogether is logged and the timer is set again.
+
+`table-sweep.spec.ts` holds the arithmetic with no Postgres, and reads `main.ts` for the caller - a
+sweep is the first of the *Five things that were written and never called* - and for the reader
+that stops asking the hub before the hub is emptied. `table-sweep.db.spec.ts` holds the rest against
+Postgres, with a presence the test owns: the first sweep and the second, somebody back in between,
+the table closed behind the last one out, no hub, the turn-based, invite, room and closed tables
+that keep their absent, a game on and the same table once it is over, the order and the bound of
+the read, a chair that has moved on, somebody who came back while the sweep waited for their
+table's lock (asked before the lock, they are stood up and that test fails), the rings and nobody
+notified, a ring that fails, and a table whose lock is held, through a second DataSource with a
+lock timeout. Two more race a start, ten rounds each, at a gate that holds `matches` in share mode
+and the absent player's row in the thread: the start parks at its insert, vacate at the first
+statement after it freed the chair, and which of them reached the table first is known. With
+`lockTable` deleted from `vacate` both fail in every round, the same way: a game dealt to a chair
+with nobody in it.
+
+`quick-pass.mjs` is the pass, over the api of the built server, every guest with a real socket:
+eight press quick play for ludo together and are two started tables of four; a guest who closes its
+socket at a public live table is stood up on the second sweep and not the first, the one whose
+socket stayed open keeps the chair and is rung, and a turn-based table keeps its absent player.
+
+The second sweep is told from the first by the hub's own word, because a time counted from the
+close tells them apart badly. On a server started for the pass the table sweep runs just behind the
+hub's, and the hub forgets somebody fifteen to forty-five seconds after their socket goes: the first
+sweep to find them away comes fifteen to forty-five seconds after the close and the second
+forty-five to seventy-five, and a pass that reads the table every five seconds cannot put a line
+between the two. So the guest who stays keeps the moment it is sent the `presence` frame that says
+the other has gone. Standing up on the first absence would free the chair with that frame, the
+second sweep is thirty seconds behind it, and the pass wants twenty-five between the frame and the
+first read that shows the chair free. On a server up long enough for the two sweeps to drift twenty
+seconds apart the pass can no longer tell, and the db spec is what holds the two strikes. The ring
+is waited for, up to two seconds: it leaves the hub a tick after the chair is free, and a read of
+the table can land in between.
+
+Four things it costs, stated. The socket hold is for a chair that is READY, so somebody who opens a
+public table, does not say ready and hides the tab is away a minute later and stood up within two
+more, and the table closes behind them if they were alone. An account with no socket at all cannot
+wait at a live table: quick play still seats it, and the second sweep stands it up unless the game
+has started by then. That goes for a browser behind a proxy, for one turned away because
+`WS_MAX_CONNECTIONS` is spent, and for a script: an API pass must not park its accounts at a waiting
+live table, and the matrix sits its partner down again before it restarts poker (*Poker*). A host
+stood up from a table for their friends can no longer see it, because nobody is their own friend,
+which was already true of a host who left. And five hundred chairs is all one sweep looks at: with
+more than that waiting at once, the newest wait for an older one to go.
 
 **The table's chat is the chat domain.** A table owns a `kind: 'game'` conversation, one per
 table by partial unique index, and membership moves with the seats inside the same transaction —
@@ -1755,10 +1870,13 @@ sent no cards.
 
 **Poker only runs live, so the matrix keeps a game going.** Its heads-up QA table is opened live and
 the sweep can finish it mid-run, so before each poker cell the matrix restarts the game on the same
-table rather than touring a lobby for the rest of the run. A finish clears readiness, so that is
-three requests: the partner's ready (the matrix keeps the partner's session for the whole run), the
+table rather than touring a lobby for the rest of the run. A finish clears readiness, and the
+partner is a session with no socket, which the sweep of the waiting tables stands up from a finished
+one (*A waiting chair belongs to somebody who is there*). So that is four requests: the partner's
+chair again, the partner's ready (the matrix keeps the partner's session for the whole run), the
 tour account's ready, then the start. `fit-pass.mjs` readies every player before it restarts a
-finished table for the same reason.
+finished table for the same reason, and looks before every cell, which is sooner than a second sweep
+can come round.
 
 ## Drawing the board
 
