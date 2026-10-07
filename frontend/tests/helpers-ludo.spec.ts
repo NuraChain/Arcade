@@ -16,7 +16,7 @@ const position = (pieces: number[][], die: number | null, turn = 0, sixes = die 
     return {
         v: 1,
         game: 'ludo',
-        players: pieces.map((row, seat) => ({ seat, colour: colours[seat], pieces: [...row], out: false })),
+        players: pieces.map((row, seat) => ({ seat, colour: colours[seat], pieces: [...row], out: false, side: seat })),
         turn,
         die,
         sixes,
@@ -82,7 +82,8 @@ describe('what a ludo move does', () =>
         {
             for (let game = 0; game < 6; game += 1)
             {
-                let state = create([0, 1, 2, 3].slice(0, count), game);
+                const seats = [0, 1, 2, 3].slice(0, count);
+                let state = create(seats, game, seats);
 
                 for (let step = 0; step < 4000 && state.winner === null; step += 1)
                 {

@@ -1,9 +1,9 @@
 import { FINISHED, cellAt } from '../ludo/board.ts';
 import { apply, create, indexOfSeat, legalMoves } from '../ludo/engine.ts';
-import { placementsOf } from '../ludo/standings.ts';
+import { placementsOf, trailingOf } from '../ludo/standings.ts';
 import type { EngineAction, GameEvent, LudoState } from '../ludo/state.ts';
 import { sideOf } from '../sides.ts';
-import type { Draws, Ending, Engine, ForfeitReason, Placement, Tally } from '../engine.ts';
+import type { Draws, Ending, Engine, ForfeitReason, Placement, TableConfig, Tally } from '../engine.ts';
 import type { MatchBoard, MatchLog, MatchPlay } from '../../../schemas.ts';
 
 /**
@@ -24,11 +24,16 @@ export const ludoEngine: Engine<LudoState, EngineAction> = {
     formats: [
         { seats: 2, variant: 'standard' },
         { seats: 3, variant: 'standard' },
-        { seats: 4, variant: 'standard' }
+        { seats: 4, variant: 'standard' },
+        { seats: 4, variant: 'teams' }
     ],
 
-    create: (seats: readonly number[], draws: Draws) =>
-        ({ state: create(seats, draws.die(seats.length) - 1), events: [] }),
+    create: (seats: readonly number[], draws: Draws, table: TableConfig) =>
+    {
+        const format = { seats: seats.length, variant: table.variant };
+
+        return { state: create(seats, draws.die(seats.length) - 1, seats.map((seat) => sideOf(seat, format))), events: [] };
+    },
 
 
 
@@ -110,9 +115,19 @@ export const ludoEngine: Engine<LudoState, EngineAction> = {
             return null;
         }
 
-        const champion = state.players[state.winner];
+        const winning = state.players.filter((player) => player.side === state.winner);
+        const winners = winning.map((player) => player.seat);
 
-        return { winners: champion === undefined ? [] : [champion.seat], unsettled: [], trailing: [] };
+        if (winning.every((player) => player.pieces.every((at) => at === FINISHED)))
+        {
+            return { winners, unsettled: [], trailing: [] };
+        }
+
+        return {
+            winners,
+            unsettled: state.players.filter((player) => !player.out).map((player) => player.seat),
+            trailing: trailingOf(state)
+        };
     },
 
     standings: (state: LudoState): Placement[] => placementsOf(state),
@@ -211,7 +226,6 @@ export const ludoEngine: Engine<LudoState, EngineAction> = {
 /** Sending somebody home. Two, because it happens several times a game. */
 const XP_CAPTURE = 2;
 
-/** Bringing a token all the way round. Four of these is a win. */
 const XP_HOME = 3;
 
 /**

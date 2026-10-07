@@ -140,7 +140,8 @@ const starShields = (board: LudoBoard, me: LudoSeat, die: number) =>
 const walkersOf = (board: LudoBoard): Walker[] =>
     board.seats.map((one) => ({
         colour: one.colour as LudoColour,
-        pieces: [...one.tokens].sort((a, b) => a.piece - b.piece).map((token) => token.at)
+        pieces: [...one.tokens].sort((a, b) => a.piece - b.piece).map((token) => token.at),
+        side: one.seat
     }));
 
 const stoppedBy = (board: LudoBoard, me: LudoSeat, die: number): Tip | null =>

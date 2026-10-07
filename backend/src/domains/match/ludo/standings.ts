@@ -1,22 +1,6 @@
 import { FINISHED } from './board.ts';
 import type { LudoState } from './state.ts';
 
-/**
- * Who came where, for a game that only ever declares a first.
- *
- * Ludo ends the moment somebody brings their fourth token home, so everybody else is unplaced - and
- * a rating needs an order over the whole field or three of the four players would move by the same
- * amount whatever they did. The order is the board itself: tokens home first, then total distance
- * travelled, both of which are facts about the position rather than a guess about intent.
- *
- * Somebody who is `out` is last whatever their board says. They stopped playing; the position they
- * left behind is not a placement they earned, and letting a forfeit finish second would make walking
- * out a strategy.
- *
- * Equal scores share a place, which the rating reads as a draw between exactly those players. Two
- * people who really did get the same distance are not separated by their seat number.
- */
-
 export interface Placement
 {
     seat: number;
@@ -27,6 +11,14 @@ export interface Placement
     home: number;
 
     /** Every token's progress added up, the tie-break and the only other thing the board says. */
+    distance: number;
+}
+
+interface Side
+{
+    side: number;
+    out: boolean;
+    home: number;
     distance: number;
 }
 
@@ -48,32 +40,50 @@ const scoreOf = (pieces: readonly number[]): { home: number; distance: number } 
     return { home, distance };
 };
 
-export function placementsOf(state: LudoState): Placement[]
+function sidesOf(state: LudoState)
 {
-    const champion = state.winner === null ? null : state.players[state.winner]?.seat ?? null;
+    const sides = new Map<number, Side>();
 
-    const scored = state.players.map((player) =>
+    for (const player of state.players)
     {
         const { home, distance } = scoreOf(player.pieces);
+        const held = sides.get(player.side) ?? { side: player.side, out: false, home: 0, distance: 0 };
 
-        return {
-            seat: player.seat,
-            home,
-            distance,
-            rank: player.seat === champion ? 2 : (player.out ? 0 : 1)
-        };
+        sides.set(player.side, {
+            side: player.side,
+            out: held.out || player.out,
+            home: held.home + home,
+            distance: held.distance + distance
+        });
+    }
+
+    return [...sides.values()];
+}
+
+const further = (a: Side, b: Side) => b.home - a.home || b.distance - a.distance;
+
+export function placementsOf(state: LudoState): Placement[]
+{
+    const rank = (one: Side) => (one.side === state.winner ? 2 : (one.out ? 0 : 1));
+    const better = (a: Side, b: Side) => rank(b) - rank(a) || (a.out ? 0 : further(a, b));
+    const sides = sidesOf(state);
+
+    return [...sides].sort(better).flatMap((mine) =>
+    {
+        const place = sides.filter((other) => better(other, mine) < 0).length + 1;
+
+        return state.players
+            .filter((player) => player.side === mine.side)
+            .map((player) => ({ seat: player.seat, ...scoreOf(player.pieces), place }));
     });
+}
 
-    type Scored = typeof scored[number];
+export function trailingOf(state: LudoState)
+{
+    const sides = sidesOf(state);
+    const trailing = sides.filter((mine) => sides.some((other) => other.side !== mine.side && !other.out && further(other, mine) < 0));
 
-    const better = (a: Scored, b: Scored) => b.rank - a.rank || b.home - a.home || b.distance - a.distance;
-
-    const order = [...scored].sort(better);
-
-    return order.map((one) => ({
-        seat: one.seat,
-        home: one.home,
-        distance: one.distance,
-        place: order.findIndex((candidate) => better(candidate, one) === 0) + 1
-    }));
+    return state.players
+        .filter((player) => !player.out && trailing.some((side) => side.side === player.side))
+        .map((player) => player.seat);
 }

@@ -133,7 +133,8 @@ const board = (pieces: number[][], winner: number | null, out: boolean[] = []): 
         seat: index,
         colour: (['red', 'green', 'yellow', 'blue'] as const)[index],
         pieces: set,
-        out: out[index] === true
+        out: out[index] === true,
+        side: index
     })),
     turn: 0,
     die: null,
@@ -212,7 +213,7 @@ describe('what a ludo game reports', () =>
             forfeited: true
         });
 
-        expect(ending).toEqual({ winners: [0], unsettled: [], trailing: [] });
+        expect(ending).toEqual({ winners: [0], unsettled: [0], trailing: [] });
         expect(plan.verdicts.find((one) => one.seat === 0)?.result).toBe('void');
         expect(plan.outcome).toBe('abandoned');
     });

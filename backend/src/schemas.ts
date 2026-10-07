@@ -1449,6 +1449,7 @@ export type MatchView = Infer<typeof matchView>;
 export const ludoMove = object({
     e: enumOf(['roll', 'enter', 'step', 'capture', 'home', 'pass', 'forfeit', 'finish']),
     seat: number().optional(),
+    owner: number().optional(),
     piece: number().optional(),
     from: number().optional(),
     to: number().optional(),
@@ -1457,7 +1458,8 @@ export const ludoMove = object({
     die: number().optional(),
     why: string().optional(),
     reason: string().optional(),
-    winner: number().optional()
+    side: number().optional(),
+    seats: array(number({ int: true, min: 0, max: 3 }), { max: 4 }).optional()
 });
 
 export const ludoLog = object({

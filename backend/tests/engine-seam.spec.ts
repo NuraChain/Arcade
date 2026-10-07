@@ -210,6 +210,7 @@ describe('the opening', () =>
 {
     const OPENINGS: readonly [Engine, Format][] = [
         [ludoEngine, { seats: 4, variant: 'standard' }],
+        [ludoEngine, { seats: 4, variant: 'teams' }],
         [hokmEngine, { seats: 4, variant: 'teams' }],
         [backgammonEngine, { seats: 2, variant: 'standard' }],
         [pokerEngine, { seats: 6, variant: 'standard' }]
@@ -222,7 +223,7 @@ describe('the opening', () =>
         return Array.isArray(one.cards) && one.seat !== reader ? { ...one, cards: one.cards.map((card) => (card + 26) % 52) } : event;
     });
 
-    it.each(OPENINGS.map(([engine, format]) => [engine.id, engine, format] as const))('%s hands back what happened at the opening beside the state, and no log of it shows a reader the cards of another seat', (_id, engine, format) =>
+    it.each(OPENINGS.map(([engine, format]) => [`${ engine.id } at ${ format.seats } ${ format.variant }`, engine, format] as const))('%s hands back what happened at the opening beside the state, and no log of it shows a reader the cards of another seat', (_name, engine, format) =>
     {
         const seats = Array.from({ length: format.seats }, (_, seat) => seat);
         const opened = engine.create(seats, { die: seeded(5) }, { target: 0, cube: true, blinds: 'low', variant: format.variant });
@@ -247,8 +248,69 @@ describe('the opening', () =>
             .events.map((event) => (event as { e: string }).e);
 
         expect(kinds(ludoEngine, { seats: 4, variant: 'standard' })).toEqual([]);
+        expect(kinds(ludoEngine, { seats: 4, variant: 'teams' })).toEqual([]);
         expect(kinds(hokmEngine, { seats: 4, variant: 'teams' })).toEqual(['deal']);
         expect(kinds(backgammonEngine, { seats: 2, variant: 'standard' })[0]).toBe('opening');
         expect(kinds(pokerEngine, { seats: 6, variant: 'standard' })).toEqual(['deal', 'blind', 'blind', 'hole', 'hole', 'hole', 'hole', 'hole', 'hole']);
     });
+});
+
+describe('ludo two against two, through the seam', () =>
+{
+    const PAIRED: Format = { seats: 4, variant: 'teams' };
+
+    it('says on the wire whose token moved beside who moved it, and which side finished with both its seats', () =>
+    {
+        const moves = [
+            { e: 'step', seat: 0, owner: 2, piece: 1, from: 3, to: 7 },
+            { e: 'capture', seat: 0, owner: 2, piece: 1, victim: 3, victimPiece: 0 },
+            { e: 'finish', side: 0, seats: [0, 2] }
+        ];
+
+        expect(matchLog.parse({ kind: 'ludo', moves })).toEqual({ kind: 'ludo', moves });
+        expect(matchLog.parse({ kind: 'ludo', moves: [{ e: 'finish', side: 0, seats: [0, 2], winner: 0 }] })).toEqual({ kind: 'ludo', moves: [moves[2]] });
+        expect(() => matchLog.parse({ kind: 'ludo', moves: [{ e: 'finish', side: 0, seats: [0, 2, 4] }] })).toThrow();
+    });
+
+    it('plays whole games in which a seat with its four home moves the tokens of its partner, and the finish in the log names the seats the ending does', () =>
+    {
+        let helped = 0;
+
+        for (let game = 0; game < 8; game += 1)
+        {
+            const die = seeded(game + 31);
+            const draws = { die };
+            let state = ludoEngine.create([0, 1, 2, 3], draws, { target: 0, cube: false, blinds: 'low', variant: 'teams' }).state;
+            const moves: { e: string; seat?: number; owner?: number; side?: number; seats?: number[] }[] = [];
+
+            while (ludoEngine.finish(state) === null)
+            {
+                const seat = ludoEngine.turnOf(state)!;
+                const legal = ludoEngine.legal(state, seat);
+                const applied = ludoEngine.apply(state, legal[Math.floor(die.next() * legal.length)], draws);
+
+                if (!applied.ok)
+                {
+                    throw new Error(applied.reason);
+                }
+
+                const log = matchLog.parse(ludoEngine.log(applied.events, seat));
+
+                state = applied.state;
+                moves.push(...(log.kind === 'ludo' ? log.moves : []));
+            }
+
+            const ending = ludoEngine.finish(state)!;
+            const acted = moves.filter((move) => move.owner !== undefined);
+
+            expect(moves.at(-1), `game ${ game }`).toEqual({ e: 'finish', side: ludoEngine.sideOf(ending.winners[0], PAIRED), seats: ending.winners });
+            expect(ending.winners.map((seat) => ludoEngine.sideOf(seat, PAIRED)), `game ${ game }`).toEqual([moves.at(-1)?.side, moves.at(-1)?.side]);
+            expect(ending).toMatchObject({ unsettled: [], trailing: [] });
+            expect(acted.every((move) => ludoEngine.sideOf(move.owner!, PAIRED) === ludoEngine.sideOf(move.seat!, PAIRED)), `game ${ game }`).toBe(true);
+
+            helped += acted.filter((move) => move.owner !== move.seat).length;
+        }
+
+        expect(helped).toBeGreaterThan(0);
+    }, 30_000);
 });

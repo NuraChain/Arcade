@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 
 import { envelopeOf } from '../src/domains/match/envelope.ts';
 import { hokmEngine } from '../src/domains/match/engines/hokm.ts';
+import { ludoEngine } from '../src/domains/match/engines/ludo.ts';
 import { pokerEngine } from '../src/domains/match/engines/poker.ts';
+import { FINISHED } from '../src/domains/match/ludo/board.ts';
 import type { PokerAction, PokerState } from '../src/domains/match/poker/state.ts';
 import { sideOf, type Format } from '../src/domains/match/sides.ts';
 import { matchPlayer, matchView } from '../src/schemas.ts';
@@ -81,6 +83,28 @@ describe('the envelope of a finished match', () =>
         const players = envelopeOf(hokmEngine, state, rowsOf([0, 1, 2, 3]), true, PAIRS);
 
         expect(players.map((player) => player.side)).toEqual([0, 1, 0, 1]);
+    });
+
+    it('puts ludo partners on one side and at one place when they played two against two', () =>
+    {
+        const dealt = ludoEngine.create([0, 1, 2, 3], draws(4), { target: 0, cube: false, blinds: 'low', variant: PAIRS.variant }).state;
+        const last = {
+            ...dealt,
+            turn: 3,
+            die: 1,
+            players: dealt.players.map((player) => (player.side === 1 ? { ...player, pieces: [FINISHED, FINISHED, FINISHED, player.seat === 3 ? FINISHED - 1 : FINISHED] } : player))
+        };
+        const won = ludoEngine.apply(last, { kind: 'move', seat: 3, piece: 3 }, draws(4));
+
+        if (!won.ok)
+        {
+            throw new Error(won.reason);
+        }
+
+        const players = envelopeOf(ludoEngine, won.state, rowsOf([0, 1, 2, 3]), true, PAIRS);
+
+        expect(ludoEngine.finish(won.state)?.winners).toEqual([1, 3]);
+        expect(players.map((player) => [player.side, player.place])).toEqual([[0, 2], [1, 1], [0, 2], [1, 1]]);
     });
 });
 

@@ -103,7 +103,8 @@ structural half: a team table has four chairs. The other half - does this game h
 that could only say "hokm"; it is `none`, `optional` or `required` now (`game_rules_partners_known`),
 because "forced at four seats" would otherwise be a game's name in `table/service.ts`, a domain that
 knows no game. Hokm is `required`, the rest are `none`, and ludo flips to `optional` in the commit
-that gives it a team game, the way `games.status` opened hokm.
+that puts its team game at a table, the way `games.status` opened hokm: the engine plays two against
+two before that, and the catalogue says so only once a board can show it.
 
 The answer is one pure function, `teamsOf(partners, seats, asked)` in `table/teams.ts`: four seats,
 and either the game forces it or the game allows it and the opener asked. It imports nothing, so the
@@ -1003,6 +1004,94 @@ home cells need an exact count, and an overshoot is simply absent from the legal
 refused after the fact; three consecutive sixes end the turn and the third grants no roll; a capture
 or a finish on a six still earns the roll.
 
+**Ludo is also played two against two, and it is the free-for-all's rules with "colour" read as
+"side".** `LudoPlayer.side` is who a player plays with, and the engine is HANDED its sides:
+`create(seats, first, sides)` takes them from the adapter, which asks `sideOf` in `match/sides.ts`,
+because `ludo/` may import nothing and the pairing rule must not have a second copy in there. With
+nobody playing together every seat is a side of its own, so each rule below is the old rule exactly,
+and `ludo-board.spec.ts` holds `obstacle` to the old count by colour over two thousand random
+positions. The rules are T1 to T15 under *Teams* in `docs/games/04-ludo.md`, each cited or labelled a
+house rule, and four of them are code:
+
+- **The seat on turn moves the tokens it controls**: its own until its four are home, its partner's
+  after (`controlled`). `legalMoves`, `move` and the entry of a yard token all ask it, so the roll
+  earned by the six that brought the fourth home already moves the partner's tokens with no rule
+  written for it, and a seat whose four are home is not `out` and keeps its turn. A play still names
+  a token 0 to 3 and never a colour: whose token that is, is the state's to say.
+- **A pair is counted by side** (D29, the owner, 2026-10-05, replacing D24's "partners never block").
+  One of your tokens and one of your partner's block like two of one colour, both partners pass and
+  break their side's pairs, and no third token of the side joins one - not even coming out, where two
+  of a partner's on your start square leave no room. `obstacle` is still the one statement of what
+  stops a move, D28 and D29 together. The start square stays a rule about COLOUR: one of your own
+  there holds your yard back, a partner's beside it does not.
+- **Nothing is sent home by its own side.** `captureAt` skips the mover's side where it skipped the
+  mover, and still asks `capturesAt` with the colour that moved, so a helper bringing out a partner's
+  token sends home the opponents on the PARTNER's start square, and a partner standing there stays
+  and makes a block with it.
+- **The winner is a side.** `state.winner` was an index into the players and is a side now. A move
+  ends the game when every token of the mover's side is home, eight in a team game, and the `finish`
+  event is `{ side, seats }`, the pair hokm's `hand` carries. A token event says `owner`, whose token
+  moved, beside `seat`, who moved it. `tally` keys on `seat`, so the roller is credited with what
+  they do with a partner's tokens and can bring eight home in one game; "four of these is a win" was
+  a comment on the XP constant and is gone.
+
+`ludo-rules.spec.ts` (*two against two*) holds every clause. `ludo-purity.spec.ts` plays forty team
+games and asks after every action that no ring square holds three tokens of one side, that no unsafe
+square holds two sides, that nothing was sent home by its own side, and that a seat moved somebody
+else's token only with its own four home. It asks the first two of the games at two, three and four
+seats as well, where the rulebook called them a consequence and nothing tested them.
+
+**A forfeit that ENDS a ludo game leaves the board as it stood, in both formats.** `apply` sent the
+quitter's tokens to the yard and then asked whether anybody was left. In a team game any forfeit ends
+the match - two against one is no game, hokm's precedent - and `finish` reports what hokm's does:
+everybody still at the table as `unsettled`, and those whose side was BEHIND as `trailing` (D25).
+Behind is read off the board, `trailingOf` in `ludo/standings.ts`, in the standings' own order:
+tokens home, then distance, added up over the side. A board with the quitter's tokens already swept
+off it would put the quitter's partner behind every time, and D25 charges a partner the rated loss
+only where the side really trailed. So the seat is marked out, `finish` is asked first, and the
+tokens go to the yard only when the game goes on, which is three and four seats on their own. What a
+free-for-all player sees of it is the last opponent's tokens staying on the finished board instead of
+vanishing, and nothing else. No place moves. Everybody who left used to share the last place because
+every one of them had been swept to the yard, and the last to leave is not swept any more, so
+`placementsOf` says it outright: two sides that are `out` are level whatever their boards say, the
+board of somebody who walked away being a picture and not a placement they earned. It is 1, 2, 2, 2
+at four seats as it was, `ludo-rules.spec.ts` holds it there and at three, and the result panel,
+which sorts its rows by the engine's places, lists the people who left in the order it always did.
+Among them the judge still orders by when they left (`placed` in `judge.ts`), so every result and
+every rating is what it was. The adapter's `finish` now reports the last seat standing as
+`unsettled` as well, and that changes no result either: every other side holds a quitter, and the
+judge asks about quitters before it asks about unsettled seats.
+
+Standings are by side for the same reason they are by seat: Ludo only ever declares a first, and a
+rating needs an order over the whole field. `placementsOf` ranks each side by its tokens home and
+then its distance, both partners added up, gives the pair one place, and puts a side with a seat out
+last, level with any other side that is out. Two sides that got exactly as far share a place, which
+the rating reads as a draw between them: nobody is separated by a seat number. Every row still carries its own seat's tokens home and
+distance. With a side each it is the old answer row for row; the docblock that said so in
+`standings.ts` opened with "Ludo ends the moment somebody brings their fourth token home", which a
+team game made false, and is gone. `rating.spec.ts` holds the free-for-all, `ludo-rules.spec.ts` the
+sides, and `judge.spec.ts` (*ludo two against two*) takes its facts from the engine itself: a side
+that brings eight home moves both partners by one amount, a walkout's partner shares the loss when
+the board had them behind, and is `void` when it had them ahead - on the quitter's own tokens
+included - or when the clock took the quitter.
+
+**No table can reach that game yet, and that is deliberate.** The seed keeps ludo's `partners` at
+`none`, so `create` stores no team table for it, and `engine-contract.spec.ts` asks only that every
+format the catalogue can open is one the engine plays, not the other way round. The board is not told
+a seat's side or whose tokens the seat on turn is moving, and the browser's helpers still read every
+other seat as an opponent: `walkersOf` hands `obstacle` each seat as its own side, which is true of
+every board the wire can carry today. All three come with the table, in the commit that flips the
+seed. The wire's `ludoMove` gains `owner`, `side` and `seats` now, because the ledger writes them
+now, and loses `winner`, which nothing ever read: a board's winner is the envelope's.
+`engine-seam.spec.ts` parses a log to hold both, and plays whole team games through the adapter, in
+which a seat moves its partner's tokens. `v` stays 1. Nothing has shipped, so a ludo match left live
+in a development database from before this has no sides in its state and is dropped, never migrated.
+It cannot be played out instead: read as it is, every seat is on the one side, so nothing in it is
+sent home, no pair blocks, and no forfeit can end it. With every seat gone it still has no winner,
+its table stays `playing`, which `close` refuses, and the sweep postpones it at every deadline as a
+match it cannot play. `matrix.mjs` reuses a live `turns` ludo match it finds by game, so the database
+behind a QA run is where one is most likely to be waiting.
+
 **The logical board is the authority and the renderer only draws it.** Collisions compare logical
 positions, never pixels, and an animation may interpolate but the final logical state always wins.
 That is the same split `ludo/` already enforces by importing nothing at all.
@@ -1050,9 +1139,10 @@ side's seats - and a counter it alone stopped producing would hide behind the fr
 beside it, with every partner's ladder at zero.
 `match.db.spec.ts` starts hokm at four as `teams` and every other table as `standard`, reading the
 row and what the engine was handed, and is refused a four-seat hokm table whose row says it is not
-teams and a team table for an engine that plays none, with no match written. `record.db.spec.ts`
-finishes one ledger under both variants: the partners move together under `teams`, and each seat
-stands alone under `standard`.
+teams and a team table for an engine that plays none, with no match written. `record.db.spec.ts` finishes a ludo game under each variant: under `teams` an ending that engine
+makes, both partners home and both named by its `finish`, and the pair moves together; under
+`standard` each seat stands alone. Either board read under the other variant is rated differently, so
+each half still holds the recorder to the variant on the match row.
 
 **The wire is an envelope and a board, and the split is the whole redaction story.** `matchPlayer`
 is who is in a chair - seat, handle, timeouts, result, rating - and carries nothing about what they
@@ -2427,13 +2517,13 @@ and ludo never - so the same walkout cost a different amount at every table, a t
 stop and be timed out to dodge a loss, and four-handed partners were rated against each other.
 `judge.ts` imports only `rating.ts` and decides from facts:
 
-- **Facts per seat.** `side` (the engine's `sideOf`; teams only in four-handed hokm), `place`
-  (`standings`, competition-ranked), `quitter` (a forfeit row in the ledger; it WALKED if the row
-  names a person, was timed out if it is null, and its `rev` is the exit order), `own` (the seat's
-  play rows that name a person and carry one of the engine's `engagement` verbs - the sweep writes
-  `user_id = null`, so autoplay never counts), `unsettled` (hokm only: everybody still at the table
-  when a forfeit stopped it) and `trailing` (hokm only: those of them whose side was behind a side
-  still in play).
+- **Facts per seat.** `side` (the engine's `sideOf`; teams in four-handed hokm and in ludo two
+  against two), `place` (`standings`, competition-ranked), `quitter` (a forfeit row in the ledger; it
+  WALKED if the row names a person, was timed out if it is null, and its `rev` is the exit order),
+  `own` (the seat's play rows that name a person and carry one of the engine's `engagement` verbs -
+  the sweep writes `user_id = null`, so autoplay never counts), `unsettled` (hokm and ludo: everybody
+  still at the table when a forfeit stopped it) and `trailing` (the same two: those of them whose
+  side was behind a side still in play).
 - **A quitter always takes a rated loss**, below everybody still playing when they left, a later
   leaver above an earlier one. That includes a TIMEOUT, or waiting out the clock would dodge the loss.
   A quitter is never rated against a seat that had quit BEFORE it: the first cut rated it against
@@ -2453,7 +2543,7 @@ stop and be timed out to dodge a loss, and four-handed partners were rated again
   its own side WALKED (the four-handed partner above).
 - **A forfeit win pays the rating and the finish (D26).** A match whose LAST ledger row is a forfeit
   ended because the last opponent quit, and that is the fact the recorder hands the judge as
-  `forfeited` (`unsettled` would only say so for hokm). Its winner's rating moves and the verdict pays
+  `forfeited` (`unsettled` would only say so for hokm and ludo). Its winner's rating moves and the verdict pays
   `finish` - the 10 XP and no engine bonus - with `credit` false: no win bonus, no `won` count and no
   `played` count either (a win that lowered the winner's win rate would read as a punishment), the
   streak kept rather than extended, and `achieve/service.ts` asks the same question of the ledger

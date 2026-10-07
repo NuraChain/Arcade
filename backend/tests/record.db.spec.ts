@@ -40,14 +40,15 @@ const makeUser = async () =>
     ))[0].id;
 };
 
-const board = (pieces: number[][], winner: number | null, out: boolean[] = []): LudoState => ({
+const board = (pieces: number[][], winner: number | null, out: boolean[] = [], sides: number[] = []): LudoState => ({
     v: 1,
     game: 'ludo',
     players: pieces.map((set, index) => ({
         seat: index,
         colour: (['red', 'green', 'yellow', 'blue'] as const)[index],
         pieces: set,
-        out: out[index] === true
+        out: out[index] === true,
+        side: sides[index] ?? index
     })),
     turn: 0,
     die: null,
@@ -61,6 +62,8 @@ const WON = () => board([HOME, [12, YARD, YARD, YARD]], 0);
 const EMPTIED = () => board([[3, YARD, YARD, YARD], [YARD, YARD, YARD, YARD]], 0, [false, true]);
 
 const FOUR = () => board([HOME, [12, YARD, YARD, YARD], [30, 5, YARD, YARD], [8, YARD, YARD, YARD]], 0);
+
+const PAIRS = () => board([HOME, [12, YARD, YARD, YARD], HOME, [8, YARD, YARD, YARD]], 0, [], [0, 1, 0, 1]);
 
 interface Ledger
 {
@@ -316,8 +319,8 @@ describe.skipIf(!active)('a record, against a real database', () =>
                  values ($1, 900, 0, 'play', '{"die": 6}'::jsonb, $2::jsonb, $3::jsonb)`,
                 [matchId, JSON.stringify([
                     { e: 'roll', seat: 0, die: 6 },
-                    { e: 'capture', seat: 0, piece: 1, victim: 1, victimPiece: 0 },
-                    { e: 'home', seat: 0, piece: 2 },
+                    { e: 'capture', seat: 0, owner: 0, piece: 1, victim: 1, victimPiece: 0 },
+                    { e: 'home', seat: 0, owner: 0, piece: 2 },
                     { e: 'roll', seat: 1, die: 3 }
                 ]), JSON.stringify(state)]
             );
@@ -405,12 +408,15 @@ describe.skipIf(!active)('a record, against a real database', () =>
 
         it('is rated side against side when the match row says teams, and seat against seat when it does not', async () =>
         {
-            const state = FOUR();
-            const paired = await played(state, { variant: 'teams' });
-            const alone = await played(state);
+            const pairs = PAIRS();
+            const four = FOUR();
+            const paired = await played(pairs, { variant: 'teams' });
+            const alone = await played(four);
 
-            await finish(paired.matchId, state);
-            await finish(alone.matchId, state);
+            expect(ludoEngine.finish(pairs)).toEqual({ winners: [0, 2], unsettled: [], trailing: [] });
+
+            await finish(paired.matchId, pairs);
+            await finish(alone.matchId, four);
 
             expect(await ratedAt(paired.matchId)).toEqual([
                 { result: 'won', rating_after: 1216 },

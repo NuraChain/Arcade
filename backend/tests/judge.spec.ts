@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
+import type { ForfeitReason } from '../src/domains/match/engine.ts';
+import { ludoEngine } from '../src/domains/match/engines/ludo.ts';
 import { movesOf, planOf, type Plan, type Quit, type SeatFacts } from '../src/domains/match/judge.ts';
+import { FINISHED, YARD } from '../src/domains/match/ludo/board.ts';
+import type { EngineAction, LudoState } from '../src/domains/match/ludo/state.ts';
+import type { Format } from '../src/domains/match/sides.ts';
 
 const seat = (facts: Partial<SeatFacts> & { seat: number; place: number }): SeatFacts => ({
     side: facts.seat,
@@ -471,6 +476,116 @@ describe('ludo', () =>
 
         expect(moved.get(1)).toBeLessThan(0);
         expect(moved.get(2)).toBeLessThan(0);
+    });
+});
+
+describe('ludo two against two, judged from what the engine reports', () =>
+{
+    const PAIRED: Format = { seats: 4, variant: 'teams' };
+
+    const SEATS = [0, 1, 2, 3];
+
+    const HOME = [FINISHED, FINISHED, FINISHED, FINISHED];
+
+    const EMPTY = [YARD, YARD, YARD, YARD];
+
+    const AFTER = ludoEngine.engagement(PAIRED).after;
+
+    const BEHIND = [[FINISHED, 20, YARD, YARD], [30, YARD, YARD, YARD], [5, YARD, YARD, YARD], [40, YARD, YARD, YARD]];
+
+    const AHEAD = [[20, YARD, YARD, YARD], [FINISHED, 30, YARD, YARD], [5, YARD, YARD, YARD], EMPTY];
+
+    const dealt = (rows: number[][], turn = 0, die: number | null = null): LudoState =>
+    {
+        const { state } = ludoEngine.create(SEATS, { die: () => 1 }, { target: 0, cube: false, blinds: 'low', variant: 'teams' });
+
+        return { ...state, turn, die, players: state.players.map((player, seat) => ({ ...player, pieces: rows[seat] })) };
+    };
+
+    const played = (state: LudoState, action: EngineAction) =>
+    {
+        const applied = ludoEngine.apply(state, action, { die: () => 1 });
+
+        if (!applied.ok)
+        {
+            throw new Error(applied.reason);
+        }
+
+        return applied.state;
+    };
+
+    const judged = (state: LudoState, quit: { seat: number; quitter: Quit } | null, own = [AFTER, AFTER, AFTER, AFTER]) =>
+    {
+        const ending = ludoEngine.finish(state)!;
+        const places = ludoEngine.standings(state);
+
+        return planOf({
+            seats: SEATS.map((at) => seat({
+                seat: at,
+                side: ludoEngine.sideOf(at, PAIRED),
+                place: places.find((one) => one.seat === at)!.place,
+                quitter: quit?.seat === at ? quit.quitter : null,
+                own: own[at],
+                unsettled: ending.unsettled.includes(at),
+                trailing: ending.trailing.includes(at)
+            })),
+            after: AFTER,
+            winners: ending.winners,
+            forfeited: quit !== null
+        });
+    };
+
+    const gone = (rows: number[][], quitter: Quit, reason: ForfeitReason, own?: number[]) =>
+        judged(played(dealt(rows), ludoEngine.forfeit(1, reason)), { seat: 1, quitter }, own);
+
+    it('moves both partners by the same amount when their side brings all eight home, never against each other', () =>
+    {
+        const won = played(dealt([HOME, [30, YARD, YARD, YARD], [FINISHED, FINISHED, FINISHED, FINISHED - 1], [10, YARD, YARD, YARD]], 2, 1), { kind: 'move', seat: 2, piece: 3 });
+        const plan = judged(won, null);
+        const moved = swings(plan, new Map([[0, 1300], [1, 1250], [2, 1100], [3, 1150]]));
+
+        expect(resultsOf(plan)).toEqual(['won', 'lost', 'won', 'lost']);
+        expect(plan.verdicts.map((one) => one.place)).toEqual([1, 2, 1, 2]);
+        expect(verdictOf(plan, 0)).toMatchObject({ counted: [1], paid: 'full', credit: true });
+        expect(plan.winnerSeat).toBe(0);
+        expect(moved.get(0)).toBe(moved.get(2));
+        expect(moved.get(1)).toBe(moved.get(3));
+        expect(swings(plan, evenly(4))).toEqual(new Map([[0, 16], [1, -16], [2, 16], [3, -16]]));
+    });
+
+    it('shares the rated loss of a walkout with the partner when their side was behind on the board', () =>
+    {
+        const plan = gone(BEHIND, walked(40), 'left');
+
+        expect(resultsOf(plan)).toEqual(['won', 'abandoned', 'won', 'lost']);
+        expect(verdictOf(plan, 3)).toMatchObject({ counted: [0], streak: 'reset', paid: 'finish' });
+        expect(verdictOf(plan, 0)).toMatchObject({ counted: [1], credit: false, paid: 'finish' });
+        expect(swings(plan, evenly(4))).toEqual(new Map([[0, 16], [1, -16], [2, 16], [3, -16]]));
+    });
+
+    it('leaves that partner out of it when their side was ahead on the board, the tokens the quitter left counted', () =>
+    {
+        const plan = gone(AHEAD, walked(40), 'resign');
+
+        expect(resultsOf(plan)).toEqual(['won', 'abandoned', 'won', 'void']);
+        expect(swings(plan, evenly(4)).has(3)).toBe(false);
+    });
+
+    it('leaves that partner out of it when the clock took the quitter, however far behind', () =>
+    {
+        const plan = gone(BEHIND, timedOut(40), 'timeout');
+
+        expect(resultsOf(plan)).toEqual(['won', 'abandoned', 'won', 'void']);
+        expect(swings(plan, evenly(4)).has(3)).toBe(false);
+    });
+
+    it('leaves everybody but the quitter out of it when the quitter had hardly rolled', () =>
+    {
+        const plan = gone(BEHIND, walked(4), 'left', [AFTER, AFTER - 1, AFTER, AFTER]);
+
+        expect(resultsOf(plan)).toEqual(['void', 'abandoned', 'void', 'void']);
+        expect(plan.outcome).toBe('abandoned');
+        expect([...swings(plan, evenly(4)).keys()]).toEqual([1]);
     });
 });
 

@@ -4,9 +4,9 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
-import { FINISHED, YARD } from '../src/domains/match/ludo/board.ts';
-import { apply, create, legalMoves } from '../src/domains/match/ludo/engine.ts';
-import type { LudoState } from '../src/domains/match/ludo/state.ts';
+import { FINISHED, RING, RING_STEPS, SAFE, YARD, ringIndex } from '../src/domains/match/ludo/board.ts';
+import { apply, controlled, create, legalMoves } from '../src/domains/match/ludo/engine.ts';
+import type { GameEvent, LudoState } from '../src/domains/match/ludo/state.ts';
 
 /**
  * Two things no example-based test can say.
@@ -91,7 +91,9 @@ function pick(moves: number[], random: () => number)
     return moves.length === 0 ? -1 : moves[Math.floor(random() * moves.length)];
 }
 
-function wrong(state: LudoState): string | null
+const home = (pieces: readonly number[]) => pieces.every((at) => at === FINISHED);
+
+function wrong(state: LudoState, events: readonly GameEvent[]): string | null
 {
     for (const player of state.players)
     {
@@ -119,25 +121,74 @@ function wrong(state: LudoState): string | null
         return `the turn is ${ state.turn }`;
     }
 
+    for (let square = 0; square < RING; square += 1)
+    {
+        const here = state.players.flatMap((player) => player.pieces
+            .filter((at) => at >= 0 && at < RING_STEPS && ringIndex(player.colour, at) === square)
+            .map(() => player.side));
+
+        if (here.some((side) => here.filter((one) => one === side).length > 2))
+        {
+            return `square ${ square } holds three tokens of one side`;
+        }
+
+        if (!SAFE.includes(square) && new Set(here).size > 1)
+        {
+            return `square ${ square } is not safe and holds two sides`;
+        }
+    }
+
+    const sideOf = (seat: number) => state.players.find((player) => player.seat === seat)?.side;
+
+    for (const event of events)
+    {
+        if ('owner' in event && sideOf(event.owner) !== sideOf(event.seat))
+        {
+            return `seat ${ event.seat } moved a token of seat ${ event.owner }, which is not on its side`;
+        }
+
+        if (event.e === 'capture' && sideOf(event.victim) === sideOf(event.owner))
+        {
+            return `seat ${ event.owner } sent home a token of its own side`;
+        }
+    }
+
+    const turn = state.players[state.turn];
+    const mover = state.players[controlled(state)];
+
+    if (state.winner === null && (mover.side !== turn.side || (mover !== turn) !== home(turn.pieces)))
+    {
+        return `${ turn.colour } is on turn and ${ mover.colour } is the colour that moves`;
+    }
+
     return null;
 }
 
+const TABLES: readonly { name: string; sides: readonly number[]; cap: number }[] = [
+    { name: '2', sides: [0, 1], cap: 12000 },
+    { name: '3', sides: [0, 1, 2], cap: 12000 },
+    { name: '4', sides: [0, 1, 2, 3], cap: 12000 },
+    { name: 'two against two', sides: [0, 1, 0, 1], cap: 24000 }
+];
+
 describe('a game always ends', () =>
 {
-    for (const seats of [2, 3, 4])
+    for (const { name, sides, cap } of TABLES)
     {
-        it(`plays ${ seats } to a winner, over and over, without ever going wrong`, () =>
+        it(`plays ${ name } to a winner, over and over, without ever going wrong`, () =>
         {
+            const paired = new Set(sides).size < sides.length;
             const faults: string[] = [];
             let longest = 0;
+            let helped = 0;
 
             for (let game = 0; game < 40; game += 1)
             {
-                const random = seeded(game * 7919 + seats);
-                let state = create(Array.from({ length: seats }, (_, seat) => seat), 0);
+                const random = seeded(game * 7919 + sides.length + (paired ? 4 : 0));
+                let state = create(sides.map((_, seat) => seat), 0, sides);
                 let actions = 0;
 
-                while (state.winner === null && actions < 12000)
+                while (state.winner === null && actions < cap)
                 {
                     const seat = state.players[state.turn].seat;
                     const before = state.rev;
@@ -160,7 +211,7 @@ describe('a game always ends', () =>
                         break;
                     }
 
-                    const fault = wrong(state);
+                    const fault = wrong(state, outcome.events);
 
                     if (fault !== null)
                     {
@@ -168,6 +219,7 @@ describe('a game always ends', () =>
                         break;
                     }
 
+                    helped += outcome.events.filter((event) => 'owner' in event && event.owner !== event.seat).length;
                     actions += 1;
                 }
 
@@ -177,14 +229,15 @@ describe('a game always ends', () =>
                 {
                     faults.push(`game ${ game } never ended, after ${ actions } actions`);
                 }
-                else if (!state.players[state.winner].pieces.every((at) => at === FINISHED))
+                else if (!state.players.filter((player) => player.side === state.winner).every((player) => home(player.pieces)))
                 {
-                    faults.push(`game ${ game } declared a winner who is not home`);
+                    faults.push(`game ${ game } declared a winner that is not home`);
                 }
             }
 
             expect(faults).toEqual([]);
             expect(longest).toBeGreaterThan(50);
+            expect(helped > 0, 'a seat moved a token of another seat').toBe(paired);
         }, 30_000);
     }
 });

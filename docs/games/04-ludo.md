@@ -2,7 +2,8 @@
 
 **Status:** playable. The engine, the board, the API pass (`tools/qa/ludo-pass.mjs`) and the browser
 pass (`tools/qa/play-pass.mjs`) are built, `games.status` is `available`, and the achievements are
-live. Teams (2v2) are not built; see *Teams (planned)*.
+live. The engine also plays two against two (see *Teams*), and no table can open that game yet: the
+catalogue still says ludo has no partners.
 
 Ruleset: **Variant B, the common Iranian rules** (the owner's decision). It is the Ludo cross with
 one die, played the way منچ is played in Iran: any yard token comes out on any six, eight squares are
@@ -42,7 +43,7 @@ six is a governing body: Ludo has none, and every source calls its own rules one
 
 | # | rule | basis |
 |---|---|---|
-| S1 | Two, three or four players, each on their own. | cited: [WP] "Two, three, or four can play, without partnerships."; [faWP] «این بازی می‌تواند توسط ۲، ۳، یا ۴ بازیکن انجام شود» ("2, 3 or 4 players can play it") |
+| S1 | Two, three or four players, each on their own. Four may also play as two pairs (*Teams*). | cited: [WP] "Two, three, or four can play, without partnerships."; [faWP] «این بازی می‌تواند توسط ۲، ۳، یا ۴ بازیکن انجام شود» ("2, 3 or 4 players can play it") |
 | S2 | Four tokens each, all four in the yard at the start. | cited: [WP] "To enter a token into play from its yard to its starting square, a player must roll a six."; [MoG] each player "places the 4 pieces of that colour in the corresponding starting circle". Against: [Schmidt] starts one token on the start square ("Einen Stein stellt er auf das Feld A seiner Farbe") |
 | S3 | The board is the Ludo cross on a 15x15 grid: a 52-square ring, then a five-cell home lane per colour and the centre triangle. | house rule: read off the board art (`ludo/board.ts`, held to the art by `ludo-board.spec.ts`). [fekravaran] counts the same board's 72 cells («صفحه بازی منچ شامل 72 خانه است»), which is 52 + 4 × 5 |
 | S4 | Colours by seat count: two players are red and yellow (opposite corners, 26 squares apart), three are red, green and yellow, four are all four. | house rule: so two players never start one behind the other |
@@ -98,13 +99,13 @@ six is a governing body: Ludo has none, and every source calls its own rules one
 |---|---|---|
 | E1 | The first player with all four tokens home wins. | cited: [WP] "The first player to bring all their tokens to the finish wins the game."; [faWP] «برندهٔ بازی فردیست که زودتر از دیگر بازیکنان موفق به تمام کردن مهره‌های خود بشود»; [setare]; [MoG] "The first person to move all 4 pieces into the home triangle wins." |
 | E2 | The game ends there. Nobody plays on for second place. | house rule. Against: [WP] "The others often continue to play to determine second-, third-, and fourth-place finishers."; [Schmidt] "Die anderen spielen weiter um die nächsten Plätze." |
-| E3 | A seat that forfeits (resigns, leaves, or misses three turns in a row) is out: its tokens go back to the yard and it is skipped. When one seat is left playing, that seat wins. | house rule (the platform's forfeit rule, the same at every game) |
+| E3 | A seat that forfeits (resigns, leaves, or misses three turns in a row) is out. While the game goes on, its tokens go back to the yard and it is skipped. When one seat is left playing, that seat wins, and the forfeit that ended the game leaves the board as it stood: the finished board shows the game that was played, and the position is what says who was behind (*Teams*, T14). | house rule (the platform's forfeit rule, the same at every game) |
 
 ### Scoring
 
 | # | rule | basis |
 |---|---|---|
-| R1 | Places after the winner come from the board: tokens home, then total distance travelled. A seat that forfeited is below every seat still playing. | house rule (`ludo/standings.ts`, `placementsOf`), because the game stops at E2 |
+| R1 | Places after the winner come from the board: tokens home, then total distance travelled. A seat that forfeited is below every seat still playing, and everybody who forfeited shares that last place whatever was left on the board. In a team game the places are the sides' (*Teams*, T13). | house rule (`ludo/standings.ts`, `placementsOf`), because the game stops at E2 |
 | R2 | The rating, the result and XP are the judge's (`judge.ts`), from those places and the ledger, as for every game. A seat counts as engaged after six rolls of its own. | house rule (platform); see `.claude/rules/games.md`, *What a game leaves behind* |
 | R3 | XP inside a game: a capture is 2, a token home is 3 (`Engine.points`), on top of the platform's finish and win. | house rule |
 | R4 | Tallies for achievements: `rolls`, `sixes`, `enters`, `captures`, `home`, credited to the seat that acted. | house rule; the names are a contract with `achieve/families.ts` |
@@ -156,6 +157,15 @@ token cannot move, and after a pass or a wasted six that a block caused. The boa
 one pawn standing on the other (`BLOCK` in `game/layout.ts`). `ludo-rules.spec.ts` pins it in *two
 tokens of one colour form a block* and *a start square holds one token of its own colour*.
 
+**D29 (2026-10-05, the owner): in a team game, partners block too.** One of your tokens and one of
+your partner's on a ring square are a block like two of one colour. It replaces D24's "partner
+tokens share a square and never block", and with it the research's "a mixed stack falls whole", as
+D28 replaced the same two rules for one colour. [Schmidt]'s team variant, the one accepted source
+with both blocks and partners, builds its walls this way: a partner's token joins one. `obstacle`
+counts a pair by side, and in a free-for-all a side is a colour, so D28 and D29 are one statement.
+The edges are T7a to T8 under *Teams*; `ludo-rules.spec.ts` pins them in *a pair of partners on one
+square*.
+
 ---
 
 ## Open choices
@@ -182,21 +192,22 @@ text and refuses `node:`, `typeorm`, `Math.random` and `Date.now`).
 
 ```
 board.ts      the grid, the ring, the entries, the safe squares, the home lanes, ringIndex, cellAt,
-              capturesAt (D27) and obstacle (D28), shared with the browser
+              capturesAt (D27) and obstacle (D28, D29), shared with the browser
 state.ts      LudoState, EngineAction, GameEvent, RefusalReason
-engine.ts     create, legalMoves, apply (never throws)
-standings.ts  placementsOf
+engine.ts     create, controlled, legalMoves, apply (never throws)
+standings.ts  placementsOf, trailingOf
 ```
 
 `engines/ludo.ts` is the adapter behind the seam (`docs/games/00-engine-seam.md`): it draws the die,
-composes the view and the log, and answers turn, autoplay, finish, standings, engagement and tally.
+deals the sides, composes the view and the log, and answers turn, autoplay, finish, standings,
+engagement and tally.
 
 ```ts
 interface LudoState
 {
     v: 1;
     game: 'ludo';
-    players: { seat: number; colour: LudoColour; pieces: number[]; out: boolean }[];
+    players: { seat: number; colour: LudoColour; pieces: number[]; out: boolean; side: number }[];
     turn: number;
     die: number | null;
     sixes: number;
@@ -205,7 +216,11 @@ interface LudoState
 }
 ```
 
-- `players` is ordered by seat. `turn` and `winner` are indexes into it, never seat numbers.
+- `players` is ordered by seat. `turn` is an index into it, never a seat number.
+- `side` is who a player plays with. Each player is a side of its own in a free-for-all, and partners
+  share one in a team game. The engine is handed the sides at `create` and never works them out:
+  the pairing rule is `sideOf` in `match/sides.ts`, which `ludo/` may not import.
+- `winner` is a side, not a seat and not an index.
 - A piece is one integer, its progress from its own start square: `-1` is the yard, `0..50` the
   ring (the ring square is `(ENTRY[colour] + progress) % 52`), `51..55` the five home-lane cells and
   `56` (`FINISHED`) the triangle.
@@ -213,13 +228,17 @@ interface LudoState
 - `sixes` counts the sixes rolled in the current turn.
 
 **Actions** (`EngineAction`): `roll` (the adapter fills the die from the server's draw), `move` naming
-one of the mover's own tokens 0-3 (never a destination), and `forfeit` (`timeout`, `resign`, `left`).
+one of the tokens the seat on turn controls, 0-3 (never a destination), and `forfeit` (`timeout`,
+`resign`, `left`). The tokens a seat controls are its own, or its partner's once its own four are
+home (`controlled`).
 
-**Events** (`GameEvent`, the ledger): `roll { seat, die }`, `enter { seat, piece }`,
-`step { seat, piece, from, to }`, `capture { seat, piece, victim, victimPiece }` (one per captured
-token: `piece` is the mover's token, `victim` the captured token's seat, `victimPiece` its token),
-`home { seat, piece }`, `pass { seat, why: 'no-move' | 'three-sixes' }`, `forfeit { seat, reason }`,
-`finish { winner }`.
+**Events** (`GameEvent`, the ledger): `roll { seat, die }`, `enter { seat, owner, piece }`,
+`step { seat, owner, piece, from, to }`, `capture { seat, owner, piece, victim, victimPiece }` (one per
+captured token: `piece` is the moving token, `victim` the captured token's seat, `victimPiece` its
+token), `home { seat, owner, piece }`, `pass { seat, why: 'no-move' | 'three-sixes' }`,
+`forfeit { seat, reason }`, `finish { side, seats }`. `seat` is always who acted and `owner` is whose
+token moved; they differ only when a player whose four are home moves a partner's token. `finish`
+names the winning side and every seat on it.
 
 **Refusals** (`RefusalReason`, each with a status in `REFUSALS` in `match/refusals.ts` and a sentence
 in `SAYS`; the word is the `code` of the answer): `not-your-turn`, `already-rolled`,
@@ -229,12 +248,14 @@ in `SAYS`; the word is the `code` of the answer): `not-your-turn`, `already-roll
 
 ## Turn order
 
-1. `create` sorts the seats, deals the colours (S4) and starts at the drawn seat (S6).
+1. `create` sorts the seats, deals the colours (S4), gives each player its side and starts at the
+   drawn seat (S6).
 2. The seat on turn **rolls**. On a six, `sixes` goes up; the third six passes the turn at once (T6).
 3. If the roll has a legal move (overshoots and blocks taken out), `die` stays and the seat must **move** (T8). If it has none, a six
    clears `die` for another roll (T5) and a one-to-five passes the turn.
-4. After a move: all four home ends the game (E1). Otherwise a six (below three) clears `die` for
-   another roll (T3) and anything else passes the turn (T4).
+4. After a move: every token of the mover's side home ends the game (E1; in a team game that is all
+   eight). Otherwise a six (below three) clears `die` for another roll (T3) and anything else passes
+   the turn (T4).
 5. Passing moves `turn` to the next seat clockwise that is not `out`, and resets `die` and `sixes`.
 
 `turnOf` is the seat at `turn` while nobody has won; `turnKey` is `turn`, so a roll and the moves that
@@ -246,34 +267,42 @@ follow it on the same seat are one turn with one deadline.
 
 1. **Table.** A two-, three- or four-seat table, `live` or `turns`; no target.
 2. **Start.** Every chair taken and ready; `POST /tables/:id/start` creates the match with
-   `create(seats, first)`.
+   `create(seats, first, sides)`, the sides from the table's variant.
 3. **Play.** `POST /matches/:id/play` (or the socket's `play` frame) carries `{ kind: 'ludo', verb:
    'roll' | 'move', piece? }`, applied in one transaction under the match row's lock, with the
    idempotency key and the revision precondition.
 4. **Timeouts.** The sweep plays an expired turn (X2), one miss per turn.
 5. **Finish.** A win (E1) or the last opponent's forfeit (E3) sets `winner`. `finish` reports the
-   winner; `standings` reports the places (R1); the judge rates and pays (R2).
+   winning seats, and after a forfeit the seats still at the table (`unsettled`) and those of them
+   whose side was behind (`trailing`); `standings` reports the places (R1); the judge rates and pays
+   (R2).
 6. **After.** The board stays on screen; readiness is spent, and Play again asks every chair again.
 
 ---
 
 ## Invariants
 
-The rules suite (`ludo-rules.spec.ts`) and the specs named below hold these; the one-colour square
-is a consequence of M5 and C1 rather than a test of its own.
+The rules suite (`ludo-rules.spec.ts`) and the specs named below hold these. `ludo-purity.spec.ts`
+plays forty random games at two, three and four seats and forty more two against two, and checks the
+squares, the captures and who moves whose tokens after every action.
 
 - `apply` never throws, never mutates its input, and moves `rev` by exactly one on every accepted
   action and never otherwise.
 - Every player has exactly four pieces, each in `-1..56`.
 - `die !== null` only when the seat on turn has a legal move: a roll with none clears it or passes.
 - `sixes` is 0, 1 or 2 between actions.
-- On a ring square that is not safe, the tokens all belong to one colour: a landing captures the
-  single opponent there (C1), and no move may land on a block (M5).
-- No ring square holds three tokens of one colour (M5c), and no start square holds two of its own
-  colour (M5d).
-- A token in the home lane or the triangle is never moved by anybody else.
-- An `out` player has every piece in the yard and is never on turn while anybody else is playing.
-- Once `winner` is set, `die` is null and every action is refused with `game-over`.
+- On a ring square that is not safe, the tokens all belong to one side (one colour, in a
+  free-for-all): a landing captures the single opponent there (C1), and no move may land on a block
+  (M5; *Teams*, T7).
+- No ring square holds three tokens of one side (M5c; *Teams*, T7b), and no start square holds two
+  of its own colour (M5d).
+- No token is ever sent home by its own side.
+- The seat on turn moves its own tokens, and its partner's only once its own four are home. A token
+  in the home lane or the triangle is never moved by an opponent.
+- An `out` player's tokens are in the yard while the game goes on, and it is never on turn while
+  anybody else is playing. The forfeit that ends a game leaves them where they stood (E3).
+- Once `winner` is set, `die` is null and every action is refused with `game-over`. The winning side
+  has every token home, or is the only side with nobody out.
 - The engine imports nothing (`ludo-purity.spec.ts`); the wire cannot carry a die
   (`ludo-dice.spec.ts`); the board matches the art (`ludo-board.spec.ts`); every prediction the
   browser makes matches the engine over self-played games (`helpers-ludo.spec.ts`).
@@ -282,9 +311,13 @@ is a consequence of M5 and C1 rather than a test of its own.
 
 ## Known limitations
 
-- **Teams are not built.** See below.
-- **The rules are fixed.** There is one ruleset (`matches.variant` is always `standard`) and no
-  per-table house rules: no capture bonus, no three-sixes penalty, no compulsory entry.
+- **No table can open a game of two against two yet.** The engine plays it and nothing reaches it:
+  the catalogue's `partners` for ludo is still `none`, the board is not told a seat's side or whose
+  tokens the seat on turn is moving, and the browser's helpers still read every other seat as an
+  opponent. See *Teams*.
+- **The rules are fixed.** `matches.variant` says only whether a game is a free-for-all (`standard`)
+  or two against two (`teams`), and there are no per-table house rules: no capture bonus, no
+  three-sixes penalty, no compulsory entry.
 - **Places after the winner are read off the board**, not played out (E2, R1).
 - **The first player is a server draw**, not a roll-off (S6).
 - **Autoplay is not a strategy.** An expired turn moves the first legal token, which is fair but
@@ -294,37 +327,67 @@ is a consequence of M5 and C1 rather than a test of its own.
 
 ---
 
-## Teams (planned)
+## Teams
 
-**Not built.** A 2v2 mode was researched on 2026-10-04 against the sources above and a wider set
-(Schmidt's team variant *Einigkeit macht stark*, Masters of Games' *Pachisi* and *Uckers*, Parchís
-tournament rules, پنکو's منچ گروهی). The research proposes the smallest change to Variant B; the clause
-numbers are its own. It was written against the first draft, so T7 and T8 (partners never block, a
-mixed stack falls whole) predate D28 and must be decided again: [Schmidt]'s team variant, the one
-source with both blocks and partners, lets a partner join a wall and keeps every wall standing.
+**Two against two, at a four-seat table.** The engine plays it (`4/teams` in `Engine.formats`) and
+no table can open it yet; see *Known limitations*. It was researched on 2026-10-04 against the
+sources above and a wider set (Schmidt's team variant *Einigkeit macht stark*, Masters of Games'
+*Pachisi* and *Uckers*, Parchís tournament rules, پنکو's منچ گروهی). The owner settled the rules (D24)
+and then T7 (D29, 2026-10-05); what a forfeit costs a partner is hokm's rule (D25), because every
+game here shares one forfeit rule. The clause numbers are this section's own: T1 to T8 here are not
+the turn rules above.
 
-| # | clause | basis |
+It is the smallest change to Variant B. In a free-for-all a side is a seat, so every clause below
+reads there as the rule it widens, and the free-for-all is played exactly as before.
+
+| # | rule | basis |
 |---|---|---|
-| T1 | Four-seat tables only. | house rule |
-| T2 | Partners sit opposite: red and yellow against green and blue. | cited: [Schmidt] team variant "die beiden diagonal gegenüberliegenden Farben als Partner"; [faWP] «یاران باید روبروی هم بنشینند»; Pachisi, Uckers, Parchís |
+| T1 | Four-seat tables only. | house rule (`tables_teams_four`, `matches_teams_four`) |
+| T2 | Partners sit opposite: red and yellow (seats 0 and 2) against green and blue (seats 1 and 3), each 26 squares from their partner. | cited: [Schmidt] team variant "die beiden diagonal gegenüberliegenden Farben als Partner"; [faWP] «یاران باید روبروی هم بنشینند»; Pachisi, Uckers, Parchís |
 | T3 | The rotation is unchanged, so the turns alternate between the sides. | cited: Pachisi, Parchís |
 | T4 | You move only your own tokens until all four are home. | cited: Parchís, Uckers, پنکو |
-| T5 | Then you stay in the rotation and move your partner's tokens with your own rolls. | cited: Parchís, پنکو, Pegs and Jokers |
-| T5a | That starts at once, including the roll a six earns. | house rule (open) |
-| T6 | Partners never capture each other. | cited: [Schmidt] team variant "Partner können sich nicht hinauswerfen!", پنکو (open: Parchís lets partners capture) |
-| T7 | Partner tokens share a square and never block, like your own (M5 widened to the side). | house rule |
-| T8 | An opponent landing on a mixed partner stack sends every token there home (C3, per side). | cited: Uckers ("mixed blob"), Pachisi |
-| T9-T11 | Safe squares, home lanes, exact counts and every die rule unchanged, judged over the tokens the roller controls. | house rule |
-| T12 | The side with all eight tokens home wins; one player's four no longer ends the game. | cited: [Schmidt] team variant "Gewinner ist das Partner-Paar, dessen acht Figuren zuerst ... stehen", Pachisi, Uckers, پنکو |
-| T13 | Standings by side: the pair shares a place. | house rule (hokm's shape) |
-| T14 | A forfeit ends the match; the quitter's partner comes out `void`. | house rule (open; hokm's precedent) |
-| T15 | Partners may talk; nothing is hidden. | cited: Parchís tournament rules |
+| T5 | Then you stay in the rotation, and every roll of yours moves your partner's tokens. | cited: Parchís, پنکو, Pegs and Jokers |
+| T5a | That starts at once: the roll earned by the six that brought your fourth token home already moves your partner's. | house rule (D24). Against: Uckers, which asks for a six first |
+| T6 | Partners never capture each other. Landing on a partner's token is an ordinary move. | cited: [Schmidt] team variant "Partner können sich nicht hinauswerfen!", پنکو (D24). Against: Parchís lets partners capture |
+| T7 | **One of your tokens and one of your partner's on a ring square are a block, exactly like two of one colour** (D29, replacing the research's "partner tokens never block"). No opponent lands on it or passes it, so no landing captures it. | cited: [Schmidt] team variant "Kommen zwei eigene Figuren – oder eine eigene Figur und eine Figur des Partners – auf einem Kreis zusammen, bilden sie eine Mauer!" |
+| T7a | Both partners pass their side's blocks, of one colour or of two, and may break them up (M5a, widened to the side). | consequence of M5a ([MoG]). Against: [Schmidt] team variant, whose walls stop their builders too, which M5a already declined |
+| T7b | No third token of a side joins a block (M5c, widened to the side). That includes coming out: no token comes out onto its own start square while two of its partner's stand there. | cited: [Schmidt] team variant "Drei Figuren können nie auf einem Kreis stehen." |
+| T7c | M5d stays a rule about colour: a start square holds one token of its own colour. One of the partner's may stand there beside it. | cited: [setare], [faWP], [Schmidt] |
+| T8 | C7 is unchanged: a token coming out sends home every **opponent** on its start square, a pair of opposing partners included. A partner standing there stays, and the two are a block. This replaces the research's "a mixed stack falls whole", which D28 and D29 retired. | D27 and [Schmidt] team variant, *Hausfriedensbruch* |
+| T9-T11 | Safe squares, home lanes, exact counts, entering as a choice (M2) and every rule about the die (a six's roll, a six with nothing to move, three sixes) are unchanged. They are judged over the tokens the roller controls, and the turn is the roller's. | house rule (D24) |
+| T12 | The side with all eight tokens home wins, the moment the eighth arrives. One player's four is a hand-over (T5), not an ending. | cited: [Schmidt] team variant "Gewinner ist das Partner-Paar, dessen acht Figuren zuerst ... stehen", Pachisi, Uckers, پنکو |
+| T13 | Standings are by side: tokens home and then distance, each added up over both partners, and the pair shares the place. A side with a seat out is last. | house rule (hokm's shape) |
+| T14 | A forfeit ends the match and the other side wins, with the board left as it stood (E3). Everybody still at the table is `unsettled`, and a seat whose side was behind on that board (fewer tokens home, or as many and less far round) is `trailing`. The judge decides from those facts as it does for hokm: the partner of somebody who walked out shares a trailing side's rated loss once both had played their share, and comes out `void` otherwise, a timeout included. | house rule (D24 and D25; `.claude/rules/games.md`, *What a game leaves behind*) |
+| T15 | Tallies and XP are credited to the roller, the seat that acted, whoever's token moved (R3, R4). | house rule (D24) |
 
-**Choices before building:** T6 (partner capture), T5a (helping starts at once) and T14 (forfeits).
-**What the engine needs:** the seam can tell a four-seat free-for-all from a 2v2 now -
-`Engine.sideOf(seat, format)` is asked with the variant, and a start hands it to `create` - so the
-adapter lists `4/teams` in `Engine.formats` and the state takes its sides from it; `legalMoves`,
-`move` and `captureAt` act on the controlled player and skip the mover's side; `winner` becomes a
-side and `finish` names both seats; the events name the token's
-owner as well as the actor; the browser's helpers (`outcomeOf`, `standingOn`, `pieceFor`) learn
-about sides.
+Partners may talk, in the table's chat and on its call, and nothing is hidden from anybody (X3);
+Parchís tournament rules say the same of talking.
+
+**Where each rule lives.** The engine is handed its sides and never works them out: the adapter asks
+`sideOf` in `match/sides.ts` and passes the answer to `create(seats, first, sides)`.
+
+- `controlled(state)` is T4, T5 and T5a: the seat on turn, or its partner once the seat's four are
+  home. `legalMoves` and `move` act on that player's tokens, so the roll after a finishing six needs
+  no rule of its own. `advance` is unchanged: a seat whose four are home is not `out` and keeps its
+  turn.
+- `obstacle` in `ludo/board.ts` counts a pair by side, which is D28 and D29 in one statement, with
+  T7a, T7b and T7c. The browser's helpers read the same function.
+- `captureAt` skips the mover's side (T6, T8), and still asks `capturesAt` with the colour that
+  moved, so a helper bringing out a partner's token captures on the partner's start square.
+- A move ends the game when every token of the mover's side is home, and a forfeit ends it when one
+  side is left with nobody out (T12, T14). `winner` is that side.
+- `placementsOf` ranks sides and `trailingOf` names the seats behind (T13, T14). The adapter's
+  `finish` reports `{ winners, unsettled, trailing }`: nothing unsettled when the winners' tokens are
+  all home, and otherwise every seat still at the table.
+- `tally` keys on `seat`, the actor, so T15 needs no code.
+
+`ludo-rules.spec.ts` pins the rules in *two against two*, `ludo-board.spec.ts` pins `obstacle` in
+*what stops a move* and holds it to the old count by colour wherever every colour is its own side,
+`ludo-purity.spec.ts` plays whole games, and `judge.spec.ts` judges forfeits from what the engine
+reports.
+
+**What is not built.** The table: the catalogue's `partners` for ludo is `none`, so `create`
+stores no team table for it. The board: `view` sends neither a seat's side nor which colour the seat
+on turn is moving, so a helper's moves would be offered against the wrong tokens on screen. The
+browser's helpers (`standingOn`, `outcomeOf`, `pieceFor`, the coach) act on the reader's own seat and
+treat every other seat as an opponent, which is right in a free-for-all only.

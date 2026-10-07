@@ -22,8 +22,8 @@ const position = (red: number[], yellow: number[], die: number): LudoState => ({
     v: 1,
     game: 'ludo',
     players: [
-        { seat: 0, colour: 'red', pieces: red, out: false },
-        { seat: 1, colour: 'yellow', pieces: yellow, out: false }
+        { seat: 0, colour: 'red', pieces: red, out: false, side: 0 },
+        { seat: 1, colour: 'yellow', pieces: yellow, out: false, side: 1 }
     ],
     turn: 0,
     die,

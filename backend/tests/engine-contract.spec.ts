@@ -20,7 +20,7 @@ const CLOCK_GAMES = 4;
 const UNBOUND = 10_000;
 
 const BOUND: Readonly<Record<string, Readonly<Partial<Record<Variant, number>>>>> = {
-    ludo: { standard: 6000 },
+    ludo: { standard: 6000, teams: 12_000 },
     hokm: { standard: 4000, teams: 4000 },
     backgammon: { standard: 3000 },
     poker: { standard: 20_000 }

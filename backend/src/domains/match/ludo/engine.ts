@@ -41,16 +41,17 @@ import type { EngineAction, GameEvent, LudoPlayer, LudoState, Outcome } from './
 
 const MAX_SIXES = 3;
 
-export function create(seats: readonly number[], first: number): LudoState
+export function create(seats: readonly number[], first: number, sides: readonly number[]): LudoState
 {
-    const ordered = [...seats].sort((a, b) => a - b);
+    const ordered = seats.map((seat, index) => ({ seat, side: sides[index] })).sort((a, b) => a.seat - b.seat);
     const colours = coloursFor(ordered.length);
 
-    const players: LudoPlayer[] = ordered.map((seat, index) => ({
+    const players: LudoPlayer[] = ordered.map(({ seat, side }, index) => ({
         seat,
         colour: colours[index] as LudoColour,
         pieces: Array.from({ length: TOKENS_PER_PLAYER }, () => YARD),
-        out: false
+        out: false,
+        side
     }));
 
     return {
@@ -88,6 +89,18 @@ function active(state: LudoState)
     return state.players
         .map((player, index) => (player.out ? -1 : index))
         .filter((index) => index >= 0);
+}
+
+const home = (player: LudoPlayer) => player.pieces.every((at) => at === FINISHED);
+
+const membersOf = (state: LudoState, side: number) => state.players.filter((player) => player.side === side);
+
+export function controlled(state: LudoState)
+{
+    const player = state.players[state.turn];
+    const partner = state.players.findIndex((other, index) => index !== state.turn && other.side === player.side);
+
+    return home(player) && partner >= 0 ? partner : state.turn;
 }
 
 function advance(state: LudoState)
@@ -138,13 +151,13 @@ export function legalMoves(state: LudoState): number[]
         return [];
     }
 
-    const player = state.players[state.turn];
-
-    if (player.out)
+    if (state.players[state.turn].out)
     {
         return [];
     }
 
+    const mover = controlled(state);
+    const player = state.players[mover];
     const moves: number[] = [];
     let entered = false;
 
@@ -152,7 +165,7 @@ export function legalMoves(state: LudoState): number[]
     {
         const to = destination(player, piece, state.die);
 
-        if (to === null || obstacle(state.players, state.turn, piece, to) !== null)
+        if (to === null || obstacle(state.players, mover, piece, to) !== null)
         {
             continue;
         }
@@ -175,12 +188,12 @@ export function legalMoves(state: LudoState): number[]
 
 function entering(state: LudoState, piece: number)
 {
-    const pieces = state.players[state.turn].pieces;
+    const pieces = state.players[controlled(state)].pieces;
 
     return pieces[piece] === YARD ? pieces.indexOf(YARD) : piece;
 }
 
-function captureAt(state: LudoState, mover: number, moving: number, progress: number, events: GameEvent[])
+function captureAt(state: LudoState, seat: number, mover: number, moving: number, progress: number, events: GameEvent[])
 {
     const player = state.players[mover];
 
@@ -191,14 +204,12 @@ function captureAt(state: LudoState, mover: number, moving: number, progress: nu
 
     const square = ringIndex(player.colour, progress);
 
-    for (let other = 0; other < state.players.length; other += 1)
+    for (const victim of state.players)
     {
-        if (other === mover)
+        if (victim.side === player.side)
         {
             continue;
         }
-
-        const victim = state.players[other];
 
         for (let token = 0; token < victim.pieces.length; token += 1)
         {
@@ -215,20 +226,26 @@ function captureAt(state: LudoState, mover: number, moving: number, progress: nu
             }
 
             victim.pieces[token] = YARD;
-            events.push({ e: 'capture', seat: player.seat, piece: moving, victim: victim.seat, victimPiece: token });
+            events.push({ e: 'capture', seat, owner: player.seat, piece: moving, victim: victim.seat, victimPiece: token });
         }
     }
 }
 
+function won(state: LudoState, side: number, events: GameEvent[])
+{
+    state.winner = side;
+    state.die = null;
+    events.push({ e: 'finish', side, seats: membersOf(state, side).map((player) => player.seat) });
+}
+
 function finish(state: LudoState, events: GameEvent[])
 {
-    const playing = active(state);
+    const live = [...new Set(state.players.map((player) => player.side))]
+        .filter((side) => membersOf(state, side).every((player) => !player.out));
 
-    if (playing.length === 1)
+    if (live.length === 1)
     {
-        state.winner = playing[0];
-        state.die = null;
-        events.push({ e: 'finish', winner: state.players[playing[0]].seat });
+        won(state, live[0], events);
     }
 }
 
@@ -266,7 +283,9 @@ function roll(state: LudoState, seat: number, die: number, events: GameEvent[])
 
 function move(state: LudoState, seat: number, piece: number, events: GameEvent[])
 {
-    const player = state.players[state.turn];
+    const mover = controlled(state);
+    const player = state.players[mover];
+    const owner = player.seat;
     const die = state.die ?? 0;
     const from = player.pieces[piece];
     const to = destination(player, piece, die) ?? from;
@@ -275,25 +294,23 @@ function move(state: LudoState, seat: number, piece: number, events: GameEvent[]
 
     if (from === YARD)
     {
-        events.push({ e: 'enter', seat, piece });
+        events.push({ e: 'enter', seat, owner, piece });
     }
     else
     {
-        events.push({ e: 'step', seat, piece, from, to });
+        events.push({ e: 'step', seat, owner, piece, from, to });
     }
 
-    captureAt(state, state.turn, piece, to, events);
+    captureAt(state, seat, mover, piece, to, events);
 
     if (to === FINISHED)
     {
-        events.push({ e: 'home', seat, piece });
+        events.push({ e: 'home', seat, owner, piece });
     }
 
-    if (player.pieces.every((at) => at === FINISHED))
+    if (membersOf(state, player.side).every(home))
     {
-        state.winner = state.turn;
-        state.die = null;
-        events.push({ e: 'finish', winner: seat });
+        won(state, player.side, events);
         return;
     }
 
@@ -327,15 +344,19 @@ export function apply(state: LudoState, action: EngineAction): Outcome
         const player = next.players[index];
 
         player.out = true;
-        player.pieces = player.pieces.map(() => YARD);
         events.push({ e: 'forfeit', seat: action.seat, reason: action.reason });
+        finish(next, events);
 
-        if (next.turn === index)
+        if (next.winner === null)
         {
-            advance(next);
+            player.pieces = player.pieces.map(() => YARD);
+
+            if (next.turn === index)
+            {
+                advance(next);
+            }
         }
 
-        finish(next, events);
         next.rev = state.rev + 1;
 
         return { ok: true, state: next, events };

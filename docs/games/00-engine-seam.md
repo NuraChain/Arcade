@@ -120,8 +120,9 @@ Engine<State, Action>
 **An engine reports facts and never decides what a result is worth.** `finish` used to return an
 `outcome` - `won` or `abandoned` - and each engine had its own threshold for when a forfeit counted
 (`RATED_AFTER`, backgammon's `acted`, poker's "anybody resigned"). Now `finish` names the winners and
-the seats the game stopped before ordering (`unsettled`, which only hokm ever fills, at a forfeit)
-and which of those seats' sides trailed a side still in play when it stopped (`trailing`, the same),
+the seats the game stopped before ordering (`unsettled`, which hokm and ludo fill, at a forfeit that
+ends the match) and which of those seats' sides trailed a side still in play when it stopped
+(`trailing`, the same two),
 and the one pure `domains/match/judge.ts` decides every game's results from those facts plus the
 ledger: a quitter always takes a rated loss (and is never rated against a seat that quit before it),
 a survivor is rated against a quitter only if both
