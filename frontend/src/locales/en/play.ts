@@ -17,6 +17,7 @@ export const play = {
     'home.table.ready': 'Ready',
     'home.table.playing': 'In play',
     'games.play': 'Play now',
+    'games.playGame': 'Play now: {game}',
     'games.livePill': 'Live',
     'games.live.playingLabel': { one: 'playing now', other: 'playing now' },
     'games.live.tablesLabel': { one: 'table open', other: 'tables open' },

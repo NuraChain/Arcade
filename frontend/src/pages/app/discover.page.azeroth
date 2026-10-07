@@ -1,4 +1,4 @@
-import { useHead, useNavigate } from 'azerothjs';
+import { useHead } from 'azerothjs';
 
 import Page from '../../components/app/page.component.azeroth';
 import PageHeader from '../../components/app/page-header.component.azeroth';
@@ -7,15 +7,12 @@ import GroupCard from '../../components/social/group-card.component.azeroth';
 import EmptyState from '../../components/ui/empty-state.component.azeroth';
 import UserCard from '../../components/social/user-card.component.azeroth';
 import SectionHeading from '../../components/ui/section-heading.component.azeroth';
-import type { GameId } from '../../data/games.ts';
 
 import { useCatalogue } from '../../stores/catalogue.store.ts';
 import { useGroups } from '../../stores/groups.store.ts';
-import { useLobby } from '../../stores/lobby.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { usePresence } from '../../stores/presence.store.ts';
 import { useSocial } from '../../stores/social.store.ts';
-import { openTable } from '../../lib/open-table.ts';
 import { attempt } from '../../lib/attempt.ts';
 
 export default component DiscoverPage()
@@ -25,8 +22,6 @@ export default component DiscoverPage()
     const presence = usePresence();
     const groups_ = useGroups();
     const catalogue = useCatalogue();
-    const lobby = useLobby();
-    const { navigate } = useNavigate();
 
     useHead({ title: () => locale.t('app.nav.discover') });
 
@@ -44,11 +39,6 @@ export default component DiscoverPage()
     derived joinable = groups.length > 0;
 
     derived trending = [...catalogue.games].sort((a, b) => catalogue.stats(b.id).playersOnline - catalogue.stats(a.id).playersOnline).slice(0, 3);
-
-    const quickPlay = (game: GameId) =>
-    {
-        openTable(lobby.quick(game), navigate);
-    };
 
     <Page
         label={ locale.t('app.nav.discover') }
@@ -97,7 +87,7 @@ export default component DiscoverPage()
 
             <section>
                 <SectionHeading title={ locale.t('discover.trending') } more={ locale.t('common.seeAll') } to="/app/games" />
-                <GameGrid games={ trending } compact label={ locale.t('discover.trending') } onQuickPlay={ quickPlay } />
+                <GameGrid games={ trending } compact label={ locale.t('discover.trending') } />
             </section>
         </div>
     </Page>

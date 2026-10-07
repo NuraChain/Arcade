@@ -633,6 +633,14 @@ The top bar's primary action is "Play now", to the
 games list, because starting a game is what the product is for; the sidebar and the rail already
 carry the chat count, so the top bar does not repeat it.
 
+**Nothing called "Play now" takes a chair.** A game's card says the same two words and leads to
+that game's page, as its picture and its name do and as the landing's card always has. Until the
+owner pressed one on Home, the card's button ran quick play: one press and the reader was seated at
+a table of a game, a size and a pace they had not chosen. The words for that are "Quick play", and
+they are on the game's page and in Home's hero, where the choice can be made. `GameCard` and
+`GameGrid` take no handler at all now, so a card cannot be given one by accident;
+`play.spec.ts` presses the card and wants a navigation and no request.
+
 **The 404 page waits while the router is still deciding.** On a cold load of any `/app` url the
 session guard is async, and until it settles the router has no match, so `<Routes>` rendered its
 fallback: every refresh of every signed-in page, and the sign-in page, opened on "There's no table

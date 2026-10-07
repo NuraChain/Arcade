@@ -20,6 +20,7 @@ export const play: Pick<Dictionary, keyof typeof reference> = {
     'home.table.ready': 'آماده',
     'home.table.playing': 'در حال بازی',
     'games.play': 'بازی کن',
+    'games.playGame': '{game} را بازی کن',
     'games.livePill': 'زنده',
     'games.live.playingLabel': { one: 'نفر در حال بازی', other: 'نفر در حال بازی' },
     'games.live.tablesLabel': { one: 'میز باز', other: 'میز باز' },

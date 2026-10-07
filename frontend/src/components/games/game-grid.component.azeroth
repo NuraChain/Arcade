@@ -1,4 +1,4 @@
-import type { Game, GameId } from '../../data/games.ts';
+import type { Game } from '../../data/games.ts';
 import GameCard from './game-card.component.azeroth';
 
 export default component GameGrid(props: {
@@ -7,7 +7,6 @@ export default component GameGrid(props: {
     detailed?: boolean;
     label: string;
     class?: string;
-    onQuickPlay: (game: GameId) => void;
 })
 {
     <ul
@@ -20,7 +19,7 @@ export default component GameGrid(props: {
     >
         <For each={ props.games } key={ (game) => game.id } let={ game }>
             <li class="flex min-w-0">
-                <GameCard game={ game } compact={ props.compact } detailed={ props.detailed } class="flex-1" onQuickPlay={ props.onQuickPlay } />
+                <GameCard game={ game } compact={ props.compact } detailed={ props.detailed } class="flex-1" />
             </li>
         </For>
     </ul>

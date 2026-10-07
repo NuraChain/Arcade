@@ -437,28 +437,26 @@ describe('a button that finds a seat', () =>
         });
     });
 
-    it('spins on the card of the game being searched for, and on no other card', async () =>
+    it('leaves a card alone while a search for its game is out: a card only leads to the game', async () =>
     {
         const lobby = useLobby();
-        const container = shown(() => GameGrid({ games: [game('hokm'), game('ludo')], label: 'Games', onQuickPlay: (id) => void lobby.quick(id) }));
+        const container = shown(() => GameGrid({ games: [game('hokm'), game('ludo')], label: 'Games' }));
 
         await settle();
 
-        const [hokm, ludo] = named(container, useLocale().t('games.play'));
-
         await parked(async (answers) =>
         {
-            fire(ludo, 'click');
+            void lobby.quick('ludo');
             await settle();
 
-            expect([busy(hokm), busy(ludo)]).toEqual([false, true]);
-            expect(said(container)).toEqual([useLocale().t('quickMatch.busy')]);
+            expect(lobby.finding()).toEqual(['ludo']);
+            expect(container.querySelectorAll('[aria-busy="true"]')).toHaveLength(0);
+            expect(said(container)).toEqual([]);
+            expect([...container.querySelectorAll('a')].filter((one) => one.textContent?.trim() === useLocale().t('games.play')).map((one) => one.getAttribute('href'))).toEqual(['/app/games/hokm', '/app/games/ludo']);
 
             answers[0]();
             lobby.open(await lobby.quick('ludo'));
             await settle();
-
-            expect([busy(hokm), busy(ludo)]).toEqual([false, false]);
         });
     });
 

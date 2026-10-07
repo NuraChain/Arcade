@@ -161,25 +161,55 @@ describe('GameCard', () =>
         rules: { seats: [2, 4, 6, 8], modes: ['live'], targets: [], stakes: 'play-money', partners: 'none', hasCube: false, hasBlinds: true }
     });
 
-    const mount = (id: string, onQuickPlay: (game: string) => void): HTMLElement =>
+    const shown = (id: string) =>
     {
         const Stub = (): HTMLElement => document.createElement('div');
         const table: Route[] = [{ path: '/app', component: Stub, children: [{ path: 'games/:slug', component: Stub }] }];
         const router = createRouter({ routes: table, history: createMemoryHistory('/app'), scroll: false });
         const game = GAMES.find((one) => one.id === id)!;
-        return renderTest(() => RouterProvider({ router, children: () => GameCard({ game, onQuickPlay }) }) as Rendered).container;
+        const { container } = renderTest(() => RouterProvider({ router, children: () => GameCard({ game }) }) as Rendered);
+
+        return { container, router };
     };
 
-    it('links to the game and quick-plays without leaving through the link', async () =>
+    const mount = (id: string) => shown(id).container;
+
+    it('opens the game from its Play now, as its picture and its name do, and looks for no table', async () =>
     {
-        const onQuickPlay = vi.fn();
-        const container = mount('hokm', onQuickPlay);
+        const { container, router } = shown('hokm');
         await settle();
 
         expect(container.querySelector('img')?.getAttribute('src')).toBe('/art/games/hokm.svg');
-        const button = container.querySelector('button')!;
-        fire(button, 'click');
-        expect(onQuickPlay).toHaveBeenCalledWith('hokm');
+        expect(container.querySelector('button'), 'a card leads to the game: nothing on it acts by itself').toBeNull();
+
+        const play = [...container.querySelectorAll('a')].find((one) => one.textContent?.trim() === 'Play now');
+
+        expect(play, 'the card says Play now').toBeDefined();
+        expect(play!.getAttribute('href')).toBe('/app/games/hokm');
+        expect(play!.getAttribute('aria-label')).toBe('Play now: Hokm');
+        expect([...container.querySelectorAll('a')].map((one) => one.getAttribute('href'))).toEqual(['/app/games/hokm', '/app/games/hokm', '/app/games/hokm']);
+
+        const asked = server.calls.length;
+
+        play!.click();
+        await settle();
+
+        expect(router.location().pathname).toBe('/app/games/hokm');
+        expect(server.calls.slice(asked), 'pressing Play now on a card looked for a table').not.toContain('tables.quick');
+        expect(useLobby().finding()).toEqual([]);
+    });
+
+    it('names the game in Persian on the same control', async () =>
+    {
+        useLocale().setLocale('fa');
+
+        const { container } = shown('hokm');
+        await settle();
+
+        const play = [...container.querySelectorAll('a')].find((one) => one.textContent?.trim() === useLocale().t('games.play'));
+
+        expect(play?.getAttribute('aria-label')).toBe(useLocale().t('games.playGame', { game: useLocale().t(GAMES.find((one) => one.id === 'hokm')!.nameKey) }));
+        expect(play?.getAttribute('aria-label')).not.toBe('Play now: Hokm');
     });
 
     it('offers no play and no Live pill for a game the server says is still coming', async () =>
@@ -187,24 +217,23 @@ describe('GameCard', () =>
         server.games = [summary('poker', 'coming-soon')];
         server.live = [{ game: 'poker', playing: 5, tables: 1 }];
         useCatalogue().reset();
-        const onQuickPlay = vi.fn();
-        const container = mount('poker', onQuickPlay);
+        const container = mount('poker');
         await settle();
 
         expect(container.textContent).not.toContain('Live');
         const button = container.querySelector('button')!;
         expect(button.disabled).toBe(true);
         expect(button.textContent).toContain('Coming soon');
-        fire(button, 'click');
-        expect(onQuickPlay).not.toHaveBeenCalled();
+        expect(container.textContent, 'a game that cannot be played yet says Play now').not.toContain('Play now');
     });
 
     it('holds its call to action until the catalogue has answered', () =>
     {
         useCatalogue().reset();
-        const container = mount('poker', vi.fn());
+        const container = mount('poker');
 
         expect(container.querySelector('button'), 'a Play button before the answer could be one the server refuses').toBeNull();
+        expect(container.textContent, 'a Play now before the answer could lead to a game that is not open yet').not.toContain('Play now');
         expect(container.textContent).not.toContain('Live');
     });
 });

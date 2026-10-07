@@ -1,22 +1,18 @@
-import { useHead, useNavigate } from 'azerothjs';
+import { useHead } from 'azerothjs';
 
 import Page from '../../components/app/page.component.azeroth';
 import PageHeader from '../../components/app/page-header.component.azeroth';
 import Button from '../../components/ui/button.component.azeroth';
 import GameGrid from '../../components/games/game-grid.component.azeroth';
 import FilterBar from '../../components/ui/filter-bar.component.azeroth';
-import type { GameCategory, GameId } from '../../data/games.ts';
+import type { GameCategory } from '../../data/games.ts';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
-import { useLobby } from '../../stores/lobby.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
-import { openTable } from '../../lib/open-table.ts';
 
 export default component GamesPage()
 {
     const locale = useLocale();
     const catalogue = useCatalogue();
-    const lobby = useLobby();
-    const { navigate } = useNavigate();
 
     useHead({ title: () => locale.t('app.nav.games') });
 
@@ -25,11 +21,6 @@ export default component GamesPage()
     derived games = catalogue.games.filter((game) => filter === 'all' || game.category === filter);
 
     derived totals = catalogue.totals();
-
-    const quickPlay = (game: GameId) =>
-    {
-        openTable(lobby.quick(game), navigate);
-    };
 
     <Page label={ locale.t('app.nav.games') } onRefresh={ () => catalogue.refresh() }>
         <PageHeader
@@ -61,6 +52,6 @@ export default component GamesPage()
             ] }
         />
 
-        <GameGrid games={ games } detailed label={ locale.t('app.nav.games') } onQuickPlay={ quickPlay } />
+        <GameGrid games={ games } detailed label={ locale.t('app.nav.games') } />
     </Page>
 }

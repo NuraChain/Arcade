@@ -162,7 +162,7 @@ export default component HomePage()
                 <SectionHeading id="home-featured" title={ locale.t('home.featured.title') } more={ locale.t('common.seeAll') } to="/app/games" />
                 <ul class="grid grid-cols-2 gap-4 @3xl:grid-cols-4">
                     <For each={ games } key={ (game) => game.id } let={ game }>
-                        <li class="flex min-w-0"><GameCard game={ game } class="flex-1" onQuickPlay={ quickPlay } /></li>
+                        <li class="flex min-w-0"><GameCard game={ game } class="flex-1" /></li>
                     </For>
                 </ul>
             </section>
