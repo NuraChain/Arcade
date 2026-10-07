@@ -15,7 +15,7 @@ import { useRealtime } from '../src/stores/realtime.store.ts';
 import { useSeal } from '../src/stores/seal.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
 import { useSettings } from '../src/stores/settings.store.ts';
-import { setVoiceCall, setVoiceMedia, useVoice } from '../src/stores/voice.store.ts';
+import { UNREACHED_MS, setVoiceCall, setVoiceMedia, useVoice } from '../src/stores/voice.store.ts';
 import { server } from './fake-api.ts';
 import { socket } from './fake-realtime.ts';
 
@@ -194,6 +194,56 @@ describe('the players beside a table’s chat, while a call is on', () =>
 
         expect(hers().querySelector('[title]'), 'the mark was drawn again').toBe(mark);
         expect(mark.innerHTML, 'a muted microphone is drawn the same as an open one').not.toBe(open);
+    });
+
+    it('says in words anybody can read that the call has not reached her, on the mark that was already there', async () =>
+    {
+        let link: (who: string, state: 'connecting' | 'connected' | 'failed' | null) => void = () => undefined;
+        const clock = manualClock(400_000);
+
+        setRuntime({ clock, seed: 12 });
+        setVoiceCall((deps) =>
+        {
+            link = deps.onLink;
+
+            return {
+                setMic: async () => undefined,
+                setMuted: () => undefined,
+                sync: () => undefined,
+                receive: async () => undefined,
+                setVolume: () => undefined,
+                setSink: () => undefined,
+                close: () => undefined
+            };
+        });
+
+        const { hers } = await atTheTable();
+        const mark = hers().querySelector<HTMLElement>('[title]')!;
+
+        const words = () =>
+        {
+            const said = mark.querySelector<HTMLElement>(':scope > span:last-child')!;
+
+            return said.classList.contains('sr-only') ? '' : said.textContent.trim();
+        };
+
+        link('sara.k', 'connecting');
+        await settle();
+
+        expect(mark.title).toBe(useLocale().t('voice.connecting'));
+        expect(words(), 'a call still being placed was put in words on the row').toBe('');
+
+        clock.advance(UNREACHED_MS);
+        await settle();
+
+        expect(hers().querySelector('[title]'), 'the mark was drawn again').toBe(mark);
+        expect(mark.title).toBe(useLocale().t('voice.failed'));
+        expect(words(), 'only a colour and a tooltip said the call could not reach her').toBe(useLocale().t('voice.failed'));
+
+        link('sara.k', 'connected');
+        await settle();
+
+        expect(words(), 'the row still said it of a line that has connected').toBe('');
     });
 
     it('takes both away when the call ends, and brings them back with it', async () =>

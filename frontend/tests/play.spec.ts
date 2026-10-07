@@ -36,7 +36,7 @@ import { useConnection } from '../src/stores/connection.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
 import { useSettings } from '../src/stores/settings.store.ts';
 import { useToasts } from '../src/stores/toasts.store.ts';
-import { setVoiceCall, setVoiceMedia, useVoice } from '../src/stores/voice.store.ts';
+import { UNREACHED_MS, setVoiceCall, setVoiceMedia, useVoice } from '../src/stores/voice.store.ts';
 import { leaveLead } from '../src/lib/open-table.ts';
 import { ApiError, client, server } from './fake-api.ts';
 import { socket } from './fake-realtime.ts';
@@ -1565,6 +1565,115 @@ describe('PlayPage', () =>
             await settle();
 
             expect(offers(), 'a Join button for the call of a table the reader has left').toHaveLength(0);
+        });
+    });
+
+    describe('somebody the call cannot reach', () =>
+    {
+        const microphone = { stop: () => undefined } as unknown as MediaStreamTrack;
+        const granted = { getTracks: () => [microphone], getAudioTracks: () => [microphone] } as unknown as MediaStream;
+        let stop: () => void = () => undefined;
+        let link: (who: string, state: 'connecting' | 'connected' | 'failed' | null) => void = () => undefined;
+
+        const told = () => useToasts().items().filter((toast) => toast.dedupe?.startsWith('voice-unreached-') === true);
+
+        const calling = async () =>
+        {
+            const lobby = useLobby();
+            const id = await lobby.host('ludo', { ...defaultTable('ludo'), voice: 'table' }, []);
+            const routes: Route[] = [{ path: '/app/play/:id', component: (): HTMLElement => PlayPage() as HTMLElement }];
+            const router = createRouter({ routes, history: createMemoryHistory(`/app/play/${ id }`), scroll: false });
+            const drawn = renderTest(() => RouterProvider({ router, children: () => Routes({}) }) as Rendered);
+
+            await vi.waitFor(() => expect(useVoice().table()).toBe(id), { timeout: 4000 });
+            await settle();
+
+            return drawn;
+        };
+
+        beforeEach(() =>
+        {
+            useSettings().reset();
+            useSettings().update({ voiceAutoJoin: true });
+            useToasts().reset();
+            setVoiceMedia(() => ({ getUserMedia: async () => granted }) as unknown as MediaDevices);
+            setVoiceCall((deps) =>
+            {
+                link = deps.onLink;
+
+                return {
+                    setMic: async () => undefined,
+                    setMuted: () => undefined,
+                    sync: () => undefined,
+                    receive: async () => undefined,
+                    setVolume: () => undefined,
+                    setSink: () => undefined,
+                    close: () => undefined
+                };
+            });
+            useVoice().reset();
+            stop = useVoice().start();
+        });
+
+        afterEach(() =>
+        {
+            stop();
+            useVoice().reset();
+            setVoiceCall(null);
+            setVoiceMedia(null);
+            useSettings().reset();
+            useToasts().reset();
+        });
+
+        it('is named in words once the wait is over, and the words are taken back when the line connects', async () =>
+        {
+            await calling();
+
+            usePeople().want(['sara.k']);
+            await vi.waitFor(() => expect(usePeople().byHandle('sara.k')).not.toBeNull(), { timeout: 4000 });
+
+            link('sara.k', 'connecting');
+            clock.advance(UNREACHED_MS - 1);
+            await settle();
+            expect(told(), 'the page gave up on a call it was still placing').toHaveLength(0);
+
+            clock.advance(1);
+            await settle();
+
+            expect(told().map((toast) => [toast.kind, toast.text, toast.detail]), 'a second line a toast cuts short held half of what it says').toEqual([[
+                'warning',
+                useLocale().t('voice.unreached', { name: 'Sara Kamali' }),
+                null
+            ]]);
+
+            link('sara.k', 'failed');
+            link('sara.k', 'connecting');
+            await settle();
+            expect(told(), 'another try said it all again').toHaveLength(1);
+
+            link('sara.k', 'connected');
+            await settle();
+            expect(told(), 'the page still said it could not reach somebody it is talking to').toHaveLength(0);
+        });
+
+        it('says it of each person by themselves, and does not follow the reader off the page', async () =>
+        {
+            const drawn = await calling();
+
+            link('sara.k', 'connecting');
+            link('reza.t', 'failed');
+            clock.advance(UNREACHED_MS);
+            await settle();
+
+            expect(told().map((toast) => toast.dedupe).sort()).toEqual(['voice-unreached-reza.t', 'voice-unreached-sara.k']);
+
+            link('reza.t', null);
+            await settle();
+            expect(told().map((toast) => toast.dedupe)).toEqual(['voice-unreached-sara.k']);
+
+            drawn.unmount();
+            await settle();
+            expect(told(), 'the words outlived the table they were about').toHaveLength(0);
         });
     });
 

@@ -463,6 +463,7 @@ export const play: Pick<Dictionary, keyof typeof reference> = {
     'voice.speaking': 'در حال صحبت',
     'voice.muted': 'بی‌صدا',
     'voice.connecting': 'در حال اتصال',
+    'voice.unreached': 'صدا بین تو و {name} وصل نشد. مشکل از شبکهٔ بین شما دوتاست، نه از میکروفونت.',
     'voice.failed': 'اتصال برقرار نشد',
     'voice.apart': 'نمی‌تواند با تو حرف بزند',
     'voice.silence': 'بی‌صدا کردن {name} برای خودت',

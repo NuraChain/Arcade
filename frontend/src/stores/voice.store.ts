@@ -42,6 +42,7 @@ export interface VoiceApi
     outputs: Getter<MediaChoice[]>;
     canPickSpeaker(): boolean;
     speaking(who: string): boolean;
+    unreached: Getter<readonly string[]>;
     mark(who: string): VoiceMark | null;
     volumeOf(who: string): number;
     join(table: string): Promise<void>;
@@ -63,6 +64,8 @@ export interface VoiceApi
 const SPEAKING = 0.08;
 
 export const SPEAKING_HOLD_MS = 400;
+
+export const UNREACHED_MS = 10_000;
 
 const QUIET = 0.04;
 
@@ -105,6 +108,27 @@ export const useVoice = createStore((): VoiceApi =>
     const [mine, setMine] = createSignal('');
     const [links, setLinks] = createSignal<Record<string, PeerLink>>({});
     const [loud, setLoud] = createSignal<ReadonlySet<string>>(new Set());
+    const [unreached, setUnreached] = createSignal<readonly string[]>([]);
+    const waits = new Map<string, () => void>();
+
+    const reached = (who: string) =>
+    {
+        waits.get(who)?.();
+        waits.delete(who);
+        setUnreached((held) => held.includes(who) ? held.filter((one) => one !== who) : held);
+    };
+
+    const awaited = (who: string) =>
+    {
+        if (!waits.has(who) && !untrack(unreached).includes(who))
+        {
+            waits.set(who, runtime().clock.after(UNREACHED_MS, () =>
+            {
+                waits.delete(who);
+                setUnreached((held) => held.includes(who) ? held : [...held, who]);
+            }));
+        }
+    };
     const [volumes, setVolumes] = createSignal<Readonly<Record<string, number>>>({});
     const [inputs, setInputs] = createSignal<MediaChoice[]>([]);
     const [outputs, setOutputs] = createSignal<MediaChoice[]>([]);
@@ -197,6 +221,14 @@ export const useVoice = createStore((): VoiceApi =>
 
         void context?.close().catch(() => undefined);
         context = null;
+
+        for (const cancel of waits.values())
+        {
+            cancel();
+        }
+
+        waits.clear();
+        setUnreached([]);
 
         setTable(null);
         setJoining(false);
@@ -300,13 +332,14 @@ export const useVoice = createStore((): VoiceApi =>
         const state = links();
         const speaking = loud();
         const own = volumes();
+        const lost = unreached();
 
         return roster().map((peer) => ({
             who: peer.who,
             me: peer.join === self,
             muted: peer.muted,
             talk: peer.talk,
-            link: peer.join === self ? 'connected' : (state[peer.who] ?? null),
+            link: peer.join === self ? 'connected' : (lost.includes(peer.who) ? 'failed' : (state[peer.who] ?? null)),
             speaking: speaking.has(peer.who) && !peer.muted,
             silenced: (own[peer.who] ?? 1) === 0,
             volume: own[peer.who] ?? 1
@@ -373,6 +406,8 @@ export const useVoice = createStore((): VoiceApi =>
         canPickSpeaker: () => typeof HTMLMediaElement !== 'undefined' && 'setSinkId' in HTMLMediaElement.prototype,
 
         speaking: (who) => loud().has(who) && roster().some((peer) => peer.who === who && !peer.muted),
+
+        unreached,
 
         mark(who)
         {
@@ -443,6 +478,15 @@ export const useVoice = createStore((): VoiceApi =>
                 send: (to, join, signal) => realtime.signal(next, to, join, signal.kind, signal.data),
                 onLink: (who, link) =>
                 {
+                    if (link === 'connected' || link === null)
+                    {
+                        reached(who);
+                    }
+                    else
+                    {
+                        awaited(who);
+                    }
+
                     setLinks((current) =>
                     {
                         const rest = Object.fromEntries(Object.entries(current).filter(([key]) => key !== who));

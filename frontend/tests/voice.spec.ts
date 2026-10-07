@@ -8,7 +8,7 @@ import { keyName } from '../src/lib/talk-key.ts';
 import { IDLE_MS, useRealtime } from '../src/stores/realtime.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
 import { useSettings } from '../src/stores/settings.store.ts';
-import { SPEAKING_HOLD_MS, setVoiceCall, setVoiceMedia, useVoice } from '../src/stores/voice.store.ts';
+import { SPEAKING_HOLD_MS, UNREACHED_MS, setVoiceCall, setVoiceMedia, useVoice } from '../src/stores/voice.store.ts';
 import { socket } from './fake-realtime.ts';
 import '../src/locales/app-catalogue.ts';
 
@@ -531,6 +531,79 @@ describe('voice at a table', () =>
         {
             vi.unstubAllGlobals();
         }
+    });
+
+    it('names somebody the call has not reached once that has gone on, however often the line is tried again', async () =>
+    {
+        const clock = manualClock(900_000);
+        setRuntime({ clock, seed: 9 });
+
+        await useVoice().join(TABLE);
+        socket.deliver({
+            v: 1,
+            t: 'voice',
+            n: 51,
+            table: TABLE,
+            joined: true,
+            mine: 'join-alex',
+            peers: [
+                { who: 'alex', muted: true, talk: true, join: 'join-alex' },
+                { who: 'sara.k', muted: false, talk: true, join: 'join-sara' }
+            ]
+        });
+        await settle();
+
+        const sara = () => useVoice().people().find((person) => person.who === 'sara.k')?.link;
+
+        calls[0].deps.onLink('sara.k', 'connecting');
+        clock.advance(UNREACHED_MS - 1000);
+        expect(useVoice().unreached(), 'a call still being placed was called one that cannot be made').toEqual([]);
+        expect(sara()).toBe('connecting');
+
+        calls[0].deps.onLink('sara.k', 'failed');
+        calls[0].deps.onLink('sara.k', 'connecting');
+        clock.advance(1000);
+        expect(useVoice().unreached(), 'a line that fails and is tried again never counted as not reached').toEqual(['sara.k']);
+        expect(sara(), 'the row went back to Connecting with every new try').toBe('failed');
+
+        calls[0].deps.onLink('sara.k', 'failed');
+        calls[0].deps.onLink('sara.k', 'connecting');
+        clock.advance(UNREACHED_MS * 3);
+        expect(useVoice().unreached()).toEqual(['sara.k']);
+
+        calls[0].deps.onLink('sara.k', 'connected');
+        expect(useVoice().unreached()).toEqual([]);
+        expect(sara()).toBe('connected');
+    });
+
+    it('never names a line that connects in time, or somebody who has gone, and forgets everybody when the call is over', async () =>
+    {
+        const clock = manualClock(900_000);
+        setRuntime({ clock, seed: 9 });
+
+        await useVoice().join(TABLE);
+
+        calls[0].deps.onLink('sara.k', 'connecting');
+        clock.advance(UNREACHED_MS - 1);
+        calls[0].deps.onLink('sara.k', 'connected');
+        clock.advance(UNREACHED_MS);
+        expect(useVoice().unreached()).toEqual([]);
+
+        calls[0].deps.onLink('reza.t', 'connecting');
+        calls[0].deps.onLink('reza.t', null);
+        clock.advance(UNREACHED_MS * 2);
+        expect(useVoice().unreached(), 'somebody who left the call was named as not reached').toEqual([]);
+
+        calls[0].deps.onLink('sara.k', 'connecting');
+        clock.advance(UNREACHED_MS);
+        expect(useVoice().unreached(), 'a line that was good and has dropped is given the same wait').toEqual(['sara.k']);
+
+        calls[0].deps.onLink('omid', 'failed');
+        useVoice().leave();
+        expect(useVoice().unreached()).toEqual([]);
+
+        clock.advance(UNREACHED_MS * 2);
+        expect(useVoice().unreached(), 'a wait outlived the call it was for').toEqual([]);
     });
 
     it('keeps the call on while the tab is hidden, and lets the socket sleep once it is over', async () =>

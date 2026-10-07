@@ -1016,6 +1016,35 @@ draws it as a small badge on the avatar; nobody in the call draws nothing. `voic
 person's own tables with voice on, quick play included - joining the call stays each player's
 decision, and the microphone is still asked for only on the press.
 
+**Whoever is heard wears a ring on every screen, and the meter behind it has to be woken.** The ring
+is on a lobby chair, on the whole plate on the felt (`.table-plate[data-speaking]`: round the picture
+alone it sat under the turn clock, so the player whose turn it was showed nothing) and in the Players
+list. Each browser measures it for itself, from its own microphone and from every line it receives,
+through analysers on ONE `AudioContext` that `join` makes before it asks for the microphone. A
+browser starts such a context suspended unless the page has been pressed or is already capturing, and
+nothing resumed it: a call joined with no press - "join automatically", which is every reload -
+measured silence for ever, and nobody was seen to speak. The store resumes it once the microphone is
+given (a page that is capturing may play) and at each press and key while it still sleeps, and the
+call layer starts a voice the browser held back at the next press. That last is the listen-only
+reader: no microphone and no press means neither sound nor ring until the first one, and nothing a
+page can do about it. The ring is held for `SPEAKING_HOLD_MS` after the last sound, or it goes out
+at every breath. `voice.spec.ts` hands the store a sleeping context, `voice-rtc.spec.ts` a refused
+`play()`, `table-plate.spec.ts` the ring on a plate that is kept. `voice-pass` ran Chromium with
+autoplay allowed for every page, which is what hid all of it; it does not now, and it runs on
+Firefox with `QA_BROWSER=firefox`. **Playwright's `evaluate` is a press as far as Chromium is
+concerned** (it runs with a user gesture), so a check of a page nobody has pressed asks that page
+nothing until the moment it judges it.
+
+**A call that cannot be made says so in words, and goes on saying it while it tries.** A line that
+has not connected for `UNREACHED_MS` is not reached: the Players list reads "Could not connect" for
+as long as that lasts, and the page says once who it is and that it is the network between the two,
+not the microphone. The wait is counted on NOT CONNECTED, never on `failed`: the side that called
+restarts ICE the moment a connection fails, so a line that will never work reads failed for an
+instant and connecting for the next half minute, for ever - the "Connecting" that never ended.
+Connecting takes the words back, and so does the person leaving. The server says at boot when it has
+neither a STUN nor a TURN server, because two players on two networks then cannot connect at all and
+nothing else would say why.
+
 **A `<Show>` with a thunk child rebuilds whenever its `when` re-evaluates, so a control inside one
 that reads a roster loses its focus.** The per-person volume slider sat in a `when` that read the
 voice roster, which changes on every speaking level, and the keyboard lost the slider after the first

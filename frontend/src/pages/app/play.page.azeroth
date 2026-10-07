@@ -26,7 +26,7 @@ import { useWatch } from '../../stores/watch.store.ts';
 import { useLocale } from '../../stores/locale.store.ts';
 import { useOverlay } from '../../stores/overlay.store.ts';
 import { useShell } from '../../stores/shell.store.ts';
-import { useToasts } from '../../stores/toasts.store.ts';
+import { TOAST_ACTION_DURATION, useToasts } from '../../stores/toasts.store.ts';
 import Panel from '../../components/ui/panel.component.azeroth';
 import type { MatchView, MatchWatch } from '../../api.ts';
 import { plainOf } from '../../lib/markdown.ts';
@@ -103,6 +103,8 @@ export default component PlayPage()
 
     let offer = '';
 
+    const stranded = new Map<string, string>();
+
     const withdraw = () =>
     {
         if (offer !== '')
@@ -141,6 +143,13 @@ export default component PlayPage()
         {
             release();
             withdraw();
+
+            for (const toast of stranded.values())
+            {
+                toasts.dismiss(toast);
+            }
+
+            stranded.clear();
 
             if (untrack(voice.table) === mine)
             {
@@ -200,6 +209,36 @@ export default component PlayPage()
     }
 
     derived amHost = table?.chairs.find((chair) => chair.seat === table!.mine)?.host === true;
+
+    effect
+    {
+        const apart = voice.unreached();
+
+        for (const who of apart)
+        {
+            if (!stranded.has(who))
+            {
+                const person = people.byHandle(who);
+
+                stranded.set(who, toasts.show({
+                    kind: 'warning',
+                    icon: 'voice-off',
+                    text: locale.t('voice.unreached', { name: person === null ? who : locale.text(person.displayName) }),
+                    duration: TOAST_ACTION_DURATION,
+                    dedupe: `voice-unreached-${ who }`
+                }));
+            }
+        }
+
+        for (const [who, toast] of [...stranded])
+        {
+            if (!apart.includes(who))
+            {
+                toasts.dismiss(toast);
+                stranded.delete(who);
+            }
+        }
+    }
 
     let offered = '';
 

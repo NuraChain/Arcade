@@ -150,6 +150,14 @@ if (!serving)
     });
 }
 
+if (config.voiceStunUrls === '' && config.voiceTurnUrls === '')
+{
+    log.warn('voice has no STUN or TURN server - a call connects only between players on one network', {
+        reason: 'VOICE_STUN_URLS and VOICE_TURN_URLS are empty',
+        fix: 'set VOICE_STUN_URLS, and VOICE_TURN_URLS with VOICE_TURN_SECRET for players behind strict routers'
+    });
+}
+
 const ssr = serving
     ? await import(pathToFileURL(config.ssrEntry).href)
         .catch((error: unknown) =>

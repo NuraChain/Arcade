@@ -461,6 +461,7 @@ export const play = {
     'voice.muted': 'Muted',
     'voice.connecting': 'Connecting',
     'voice.failed': 'Could not connect',
+    'voice.unreached': 'Voice could not connect you and {name}. It is the network between the two of you, not your microphone.',
     'voice.apart': 'Can\'t talk with you',
     'voice.silence': 'Mute {name} for you',
     'voice.unsilence': 'Unmute {name} for you',

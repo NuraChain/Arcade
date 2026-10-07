@@ -493,7 +493,7 @@ export default component TableChat(props: {
                                     title={ voiceLine(row.who) }
                                 >
                                     <Icon name={ caller.muted ? 'voice-off' : 'voice' } size={ 12 } />
-                                    <span class="sr-only">{ voiceLine(row.who) }</span>
+                                    <span class={ () => (!caller.talk || caller.link === 'failed' ? '' : 'sr-only') }>{ voiceLine(row.who) }</span>
                                 </span>
                             </Show>
                             <Show when={ silenceable(row.who) } let={ caller }>
