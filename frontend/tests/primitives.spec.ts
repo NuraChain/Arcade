@@ -436,7 +436,7 @@ describe('LoadMore', () =>
 
         const busy = renderTest(() => LoadMore({ label: 'Show more', loading: true, onMore }) as Rendered);
         await settle();
-        expect((busy.container.querySelector('button') as HTMLButtonElement).disabled).toBe(true);
+        expect(busy.container.querySelector('button')?.getAttribute('aria-disabled')).toBe('true');
     });
 });
 

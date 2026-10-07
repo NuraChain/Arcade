@@ -392,7 +392,7 @@ describe('a button that finds a seat', () =>
     const named = (container: HTMLElement, name: string) =>
         [...container.querySelectorAll<HTMLButtonElement>('button')].filter((one) => one.textContent?.trim() === name);
 
-    const busy = (button: HTMLButtonElement) => button.getAttribute('aria-busy') === 'true' && button.disabled;
+    const busy = (button: HTMLButtonElement) => button.getAttribute('aria-busy') === 'true' && button.getAttribute('aria-disabled') === 'true';
 
     const said = (container: HTMLElement) =>
         [...container.querySelectorAll('[role="status"]')].map((one) => one.textContent?.trim() ?? '').filter((text) => text !== '');

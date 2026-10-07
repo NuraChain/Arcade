@@ -90,8 +90,67 @@ describe('Button', () =>
         const { container } = renderTest(() => Button({ children: 'Join', onClick, loading: true }) as Rendered);
         const button = container.querySelector('button')!;
         expect(button.getAttribute('aria-busy')).toBe('true');
-        expect(button.disabled).toBe(true);
+        expect(button.getAttribute('aria-disabled')).toBe('true');
         expect(button.querySelector('.invisible')?.textContent).toContain('Join');
+        fire(button, 'click');
+        expect(onClick).not.toHaveBeenCalled();
+    });
+
+    it('keeps whoever pressed it while it works, and when it is done', async () =>
+    {
+        const [working, setWorking] = createSignal(false);
+        const { container } = renderTest(() => Button({
+            children: 'I am ready',
+            get loading()
+            {
+                return working();
+            }
+        }) as Rendered);
+        const button = container.querySelector('button')!;
+
+        button.focus();
+        setWorking(true);
+        await settle();
+
+        expect(button.disabled, 'a disabled button cannot hold the focus it had').toBe(false);
+        expect(document.activeElement).toBe(button);
+        expect(button.getAttribute('aria-disabled')).toBe('true');
+
+        setWorking(false);
+        await settle();
+
+        expect(document.activeElement).toBe(button);
+        expect(button.getAttribute('aria-disabled')).toBeNull();
+        expect(button.getAttribute('aria-busy')).not.toBe('true');
+    });
+
+    it('does not send its form again while it works', () =>
+    {
+        const sent = vi.fn((event: Event) => event.preventDefault());
+        const form = document.createElement('form');
+        const { container } = renderTest(() => Button({ children: 'Create', submit: true, loading: true }) as Rendered);
+
+        form.addEventListener('submit', sent);
+        container.replaceWith(form);
+        form.appendChild(container);
+
+        const button = form.querySelector('button')!;
+
+        expect(button.getAttribute('type')).toBe('submit');
+        button.click();
+
+        expect(sent, 'a second press sent the form while the first was still out').not.toHaveBeenCalled();
+        form.remove();
+    });
+
+    it('is really disabled when that is what it was told', () =>
+    {
+        const onClick = vi.fn();
+        const { container } = renderTest(() => Button({ children: 'Start', onClick, disabled: true }) as Rendered);
+        const button = container.querySelector('button')!;
+
+        expect(button.disabled).toBe(true);
+        expect(button.getAttribute('aria-disabled')).toBeNull();
         fire(button, 'click');
         expect(onClick).not.toHaveBeenCalled();
     });

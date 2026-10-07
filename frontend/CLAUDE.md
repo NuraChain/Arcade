@@ -765,6 +765,17 @@ the offer is still made again after a host switches voice off and on. `play.spec
 join the call*) holds the three. Any toast whose action does something only one page can undo owes
 the same.
 
+**A button that is working is not disabled.** `Button` set `disabled` while it was `loading`, and a
+disabled control cannot hold focus: every press of Start, Accept, Show more or Quick play from the
+keyboard put the reader back on the page body, to find the button again once it had answered. It is
+`aria-disabled` and `aria-busy` while it works now - it can be focused, it is dimmed the way it was,
+and it does nothing. The press is refused in the handler, and the `preventDefault` there is also what
+stops a `submit` button sending its form a second time: a submit button that is not disabled is
+still the form's default one, so Enter in a field would have reached it. `disabled` is kept for a
+button that cannot be pressed at all. `shell.spec.ts` (*Button*) holds the focus through a press
+and a form to one send, and the specs that asked a busy button for `.disabled` ask for
+`aria-disabled`. A spec or a pass that wants to know a button is busy asks `aria-busy`.
+
 **The wallet address has to be readable and copyable, because the whole peer story rests on it.**
 *Whose device is that?* asks a person to compare an address out of band "the way a safety number
 is" — and it was rendered `truncate`d, in full, with nothing to copy it with. A comparison nobody can

@@ -166,7 +166,7 @@ describe('the home page', () =>
             await settle();
 
             expect(button.getAttribute('aria-busy')).toBe('true');
-            expect(button.disabled).toBe(true);
+            expect(button.getAttribute('aria-disabled')).toBe('true');
             expect(hero.querySelector('[role="status"]')?.textContent).toBe('Finding you a seat');
             expect(answers).toHaveLength(1);
 

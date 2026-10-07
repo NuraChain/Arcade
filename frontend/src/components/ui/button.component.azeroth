@@ -24,12 +24,17 @@ export default component Button(props: {
     onClick?: () => void;
 })
 {
-    derived inert = props.disabled === true || props.loading === true;
+    derived off = props.disabled === true;
+
+    derived busy = props.loading === true && !off;
+
+    derived inert = off || busy;
 
     derived shell = [
         'relative inline-flex select-none items-center justify-center rounded-control font-semibold',
         'transition duration-150 ease-[var(--ease-ui)] active:scale-[0.985]',
         'disabled:cursor-not-allowed disabled:opacity-50',
+        'aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:active:scale-100',
         props.pressed === true ? 'border border-accent/60 bg-accent/15 text-accent' : BUTTON_VARIANT[props.variant ?? 'outline'],
         BUTTON_SIZE[props.size ?? 'md'],
         props.block === true ? 'w-full' : '',
@@ -51,11 +56,21 @@ export default component Button(props: {
                     <button
                         type={ props.submit === true ? 'submit' : 'button' }
                         class={ shell }
-                        disabled={ inert }
+                        disabled={ off }
+                        aria-disabled={ busy ? 'true' : undefined }
                         aria-busy={ props.loading === true }
                         aria-pressed={ props.pressed }
                         aria-label={ props.label }
-                        onClick={ () => (inert ? undefined : props.onClick?.()) }
+                        onClick={ (event) =>
+                        {
+                            if (inert)
+                            {
+                                event.preventDefault();
+                                return;
+                            }
+
+                            props.onClick?.();
+                        } }
                     >
                         <span class={ contentClass }>
                             <Show when={ props.leading !== undefined }>
