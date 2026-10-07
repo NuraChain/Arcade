@@ -5,6 +5,7 @@ import { NOTICE_OF } from '../../backend/src/domains/notify/notices.ts';
 import { candidatesFor, handleFromAddress, handleFromName } from '../../backend/src/domains/identity/handle.ts';
 import { TABLE_REFUSALS, type TableRefusal } from '../../backend/src/domains/table/refusals.ts';
 import { guestChairs, teamsOf } from '../../backend/src/domains/table/teams.ts';
+import type { VoiceScope } from '../../backend/src/domains/table/voices.ts';
 import type {
     Account,
     ChainProfile,
@@ -88,7 +89,7 @@ interface TableWire
     cube: boolean;
     blinds: string;
     chat: boolean;
-    voice: boolean;
+    voice: VoiceScope;
     teams: boolean;
     status: 'open' | 'ready' | 'closed';
     host?: string;
@@ -1401,7 +1402,7 @@ export const client =
             cube: boolean;
             blinds: string;
             chat: boolean;
-            voice: boolean;
+            voice: VoiceScope;
             teams: boolean;
             invitees: string[];
         } })
@@ -1568,7 +1569,7 @@ export const client =
             return { ok: true };
         },
 
-        async voice({ params, input }: { params: { id: string }; input: { on: boolean } })
+        async voice({ params, input }: { params: { id: string }; input: { voice: VoiceScope } })
         {
             server.calls.push('tables.voice');
             const table = mustTable(params.id);
@@ -1578,7 +1579,7 @@ export const client =
                 throw tableRefusal('table-closed', 'That table has closed.');
             }
 
-            table.voice = input.on;
+            table.voice = input.voice;
             return table;
         }
     },

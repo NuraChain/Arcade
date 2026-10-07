@@ -129,10 +129,10 @@ const dana = await seat('dana.w');
 const mina = await seat('mina');
 
 const made = await dana.context.request.post(`${ BASE }/api/tables`, {
-    data: tableBody({ game: 'ludo', seats: 2, mode: 'live', privacy: 'invite', voice: true, invitees: ['mina'] })
+    data: tableBody({ game: 'ludo', seats: 2, mode: 'live', privacy: 'invite', voice: 'table', invitees: ['mina'] })
 });
 const table = await made.json();
-record('a host can open a table with voice on', made.ok() && table.voice === true, made.ok() ? '' : String(made.status()));
+record('a host can open a table with voice on', made.ok() && table.voice === 'table', made.ok() ? '' : String(made.status()));
 
 await mina.context.request.post(`${ BASE }/api/tables/${ table.id }/seat`);
 

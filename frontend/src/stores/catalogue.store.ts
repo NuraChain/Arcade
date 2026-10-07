@@ -124,7 +124,7 @@ export const useCatalogue = createStore((): CatalogueApi =>
                 seats,
                 target: rules.targets[0] ?? 0,
                 teams: teamsOf(rules.partners, seats, false),
-                voice: useSettings().settings().voiceTables
+                voice: useSettings().settings().voiceTables ? 'table' : 'off'
             };
         },
 

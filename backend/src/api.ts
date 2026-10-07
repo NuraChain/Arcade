@@ -648,7 +648,7 @@ export function buildApi(ports: Ports)
             }),
 
             voice: routes.post('/:id/voice', { input: voiceSwitch, output: tableSummary },
-                (context) => ports.table.setVoice(context.principal.userId, context.params.id, context.input.on)),
+                (context) => ports.table.setVoice(context.principal.userId, context.params.id, context.input.voice)),
 
             /**
              * Deals the board.

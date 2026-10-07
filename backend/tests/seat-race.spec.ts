@@ -56,7 +56,7 @@ const openTable = async (
         cube: false,
         blinds: 'low',
         chat: true,
-        voice: false,
+        voice: 'off',
         teams: false,
         invitees: options.invitees ?? [],
         ...(options.roomId === undefined ? {} : { roomId: options.roomId })
@@ -121,7 +121,7 @@ describe.skipIf(!active)('claiming a seat, against a real database', () =>
     {
         const host = await makeUser();
         const table = await tables.create(host, {
-            game: 'seat-fixture', seats: 4, mode: 'live', privacy: 'public', target: 7, cube: false, blinds: 'low', chat: true, voice: false, teams: false, invitees: []
+            game: 'seat-fixture', seats: 4, mode: 'live', privacy: 'public', target: 7, cube: false, blinds: 'low', chat: true, voice: 'off', teams: false, invitees: []
         });
 
         expect(table.chairs.length).toBe(4);
@@ -306,7 +306,7 @@ describe.skipIf(!active)('claiming a seat, against a real database', () =>
     {
         const host = await makeUser();
         const table = await tables.create(host, {
-            game: 'seat-fixture', seats: 4, mode: 'live', privacy: 'invite', target: 7, cube: false, blinds: 'low', chat: true, voice: false, teams: false, invitees: []
+            game: 'seat-fixture', seats: 4, mode: 'live', privacy: 'invite', target: 7, cube: false, blinds: 'low', chat: true, voice: 'off', teams: false, invitees: []
         });
 
         const found = await tables.byCode(host, table.code.toUpperCase());
@@ -339,7 +339,7 @@ describe.skipIf(!active)('claiming a seat, against a real database', () =>
                 cube: false,
                 blinds: 'low',
                 chat: true,
-                voice: false,
+                voice: 'off',
                 teams: false,
                 invitees: [],
                 ...patch

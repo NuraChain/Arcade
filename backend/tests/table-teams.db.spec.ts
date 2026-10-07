@@ -48,7 +48,7 @@ const wanted = (game: string, seats: number, teams: boolean, invitees: string[] 
     cube: false,
     blinds: 'low',
     chat: true,
-    voice: false,
+    voice: 'off' as const,
     teams,
     invitees
 });
@@ -186,7 +186,7 @@ describe.skipIf(!active)('a table that is two against two, against a real databa
 
         await expect(db.query(
             `insert into tables (game, code, host_id, seats, mode, privacy, target, cube, blinds, chat, voice)
-             values ('ludo', $2, $1, 2, 'live', 'public', 0, false, 'low', true, false)`,
+             values ('ludo', $2, $1, 2, 'live', 'public', 0, false, 'low', true, 'off')`,
             [host, `n${ Math.floor(Math.random() * 1000000) }`]
         )).rejects.toThrow(/teams/);
     });

@@ -2,6 +2,7 @@ import { Check, Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, 
 import { Conversation } from './conversation.entity.ts';
 import { Game } from './game.entity.ts';
 import { User } from './user.entity.ts';
+import type { VoiceScope } from '../domains/table/voices.ts';
 
 export type TableMode = 'live' | 'turns';
 
@@ -37,6 +38,7 @@ export type TableStatus = 'open' | 'closed';
 @Check('tables_seats_range', `seats between 2 and 9`)
 @Check('tables_status_known', `status in ('open', 'closed')`)
 @Check('tables_teams_four', `not teams or seats = 4`)
+@Check('tables_voice_known', `voice in ('off', 'table')`)
 @Index('tables_code', ['code'], { unique: true })
 @Index('tables_host', ['hostId'])
 @Entity('tables')
@@ -73,8 +75,8 @@ export class Table
     @Column({ type: 'boolean' })
     chat!: boolean;
 
-    @Column({ type: 'boolean' })
-    voice!: boolean;
+    @Column({ type: 'varchar', length: 8 })
+    voice!: VoiceScope;
 
     @Column({ type: 'boolean' })
     teams!: boolean;

@@ -17,7 +17,7 @@ export async function voiceAllowed(db: DataSource, userId: string, tableId: stri
         .innerJoin(Table, 't', 't.id = s.table_id')
         .where('s.table_id = :tableId', { tableId })
         .andWhere('s.user_id = :userId', { userId })
-        .andWhere('t.voice = true')
+        .andWhere(`t.voice <> 'off'`)
         .andWhere('t.status = :open', { open: 'open' })
         .getExists();
 }

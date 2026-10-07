@@ -76,7 +76,7 @@ const config = (privacy: 'invite' | 'public', invitees: string[] = [], seats = 4
     cube: false,
     blinds: 'low' as const,
     chat: true,
-    voice: false,
+    voice: 'off' as const,
     teams: false,
     invitees
 });
@@ -334,7 +334,7 @@ describe.skipIf(!active)('what a table refuses, against a real database', () =>
             await ports.table.close(host.id, table.id);
 
             await expect(ports.table.claim(late.id, table.id)).rejects.toMatchObject({ status: 409, code: 'table-closed' });
-            await expect(ports.table.setVoice(host.id, table.id, true)).rejects.toMatchObject({ status: 409, code: 'table-closed' });
+            await expect(ports.table.setVoice(host.id, table.id, 'table')).rejects.toMatchObject({ status: 409, code: 'table-closed' });
         });
 
         it('says a game is being played to a host who closes it and to somebody reaching for a chair', async () =>

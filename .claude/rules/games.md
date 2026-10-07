@@ -498,6 +498,28 @@ create (`tables.voice`, off by default); seated players join a peer-to-peer call
 `RTCPeerConnection` per pair, Opus only, a full mesh of at most seven links per browser - and this
 server does nothing but introduce them.
 
+**A table's voice is a word from a list, not a switch.** `tables.voice` was a boolean, and the owner
+asked for a call that can be for the whole table or for a player's own side. The column and the wire
+take that shape first, with today's two answers and no change in what anybody hears, so that quick
+play and parties are never written against the boolean: `VOICE_SCOPES` in `table/voices.ts` is `off`
+and `table`, the module imports nothing so the browser reads the same list, `tables_voice_known`
+holds the column to it, the wire's `voiceScope` is `enumOf` that list, and the host's switch posts
+`{ voice }` where it posted `{ on }`. `team` joins the list only in the commit that teaches the hub
+to keep two sides apart: a word nothing can enforce is a promise the product would be making.
+`table-voices.spec.ts` holds the CHECK, the wire and the list to one set, and refuses a yes or a no
+at the door.
+
+Two things here had no test and would have passed every gate while broken. `voiceAllowed`'s
+predicate is SQL in a string - `t.voice = true` - that no compiler reads, and no spec had ever run
+that query: left as it was against a varchar column, every join and every recheck would have failed
+into `deps.report` with nobody let in and nobody taken out. It asks `t.voice <> 'off'`, and
+`table-voice.db.spec.ts` runs it on real rows: seated at a table with a call, at one without, a
+watcher, a chair that was left, a closed table, the host's switch both ways. And the truthy-string
+trap again, twice: `play-header` and `table-row` drew their voice mark with
+`<Show when={ props.table.voice }>`, which compiles with a word in it and is true for `off`, so
+every table would have said it had a call. Both read `!== 'off'`; `play.spec.ts` mounts the header
+for each word and `tables.spec.ts` the row.
+
 **The realtime socket carries the introductions and that is its first non-doorbell frame.** `voice`
 joins, leaves and reports a mute; `signal` relays one offer, answer or ICE candidate to one person.
 It is not a delivery path for content - an SDP says how to reach a browser, not what anybody said -

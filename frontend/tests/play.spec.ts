@@ -221,7 +221,7 @@ describe('PlayHeader', () =>
         cube: false,
         blinds: 'low',
         chat: true,
-        voice: false,
+        voice: 'off',
         teams: false,
         status: 'playing',
         chairs: [],
@@ -275,6 +275,15 @@ describe('PlayHeader', () =>
         expect(container.querySelector('h1')?.textContent).toBe('Hokm');
         expect(container.textContent).toContain('Turn-based');
         expect(container.querySelector('nav')).toBeNull();
+    });
+
+    it('says a table has a call only when it has one', () =>
+    {
+        const said = useLocale().t('voice.tableHas');
+
+        expect(mount(table('one', 'hokm'), []).textContent).not.toContain(said);
+        expect(mount(table('one', 'hokm', { voice: 'off' }), []).textContent).not.toContain(said);
+        expect(mount(table('one', 'hokm', { voice: 'table' }), []).textContent).toContain(said);
     });
 
     it('offers every other table as a switch, and marks the ones waiting on the reader', () =>
@@ -694,7 +703,26 @@ describe('PlayPage', () =>
                 await vi.waitFor(() => expect(said()).toEqual([['warning', useLocale().t('voice.switchFailed')]]), { timeout: 4000 });
             });
 
-            expect(held.voice).toBe(false);
+            expect(held.voice).toBe('off');
+        });
+
+        it('switches the call on for the whole table and off again, and says each', async () =>
+        {
+            const { container, held } = await hosting(false);
+            const button = (key: 'voice.hostOn' | 'voice.hostOff') =>
+                container.querySelector<HTMLButtonElement>(`button[aria-label="${ useLocale().t(key) }"]`);
+            const press = (key: 'voice.hostOn' | 'voice.hostOff') => fire(button(key)!, 'click');
+
+            press('voice.hostOn');
+            await vi.waitFor(() => expect(said()).toContainEqual(['success', useLocale().t('voice.turnedOn')]), { timeout: 4000 });
+            expect(held.voice).toBe('table');
+
+            useToasts().reset();
+            await vi.waitFor(() => expect(button('voice.hostOff')).not.toBeNull(), { timeout: 4000 });
+
+            press('voice.hostOff');
+            await vi.waitFor(() => expect(said()).toContainEqual(['success', useLocale().t('voice.turnedOff')]), { timeout: 4000 });
+            expect(held.voice).toBe('off');
         });
 
         it('says a game is still being played only when that is why the table would not close', async () =>

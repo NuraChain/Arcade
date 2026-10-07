@@ -1,6 +1,7 @@
 import { array, boolean, enumOf, literal, number, object, record, string, union, type Infer } from '@azerothjs/schema';
 import { RARITY_IDS } from './domains/achieve/rarity.ts';
 import { PARTNERS } from './domains/table/teams.ts';
+import { VOICE_SCOPES } from './domains/table/voices.ts';
 
 /**
  * The wire shape, declared once.
@@ -870,7 +871,9 @@ export type PersonView = Infer<typeof personView>;
 
 export const personRef = object({ id: string() });
 
-export const voiceSwitch = object({ on: boolean() });
+export const voiceScope = enumOf(VOICE_SCOPES);
+
+export const voiceSwitch = object({ voice: voiceScope });
 
 export const answerInput = object({ id: string(), outcome: enumOf(['accepted', 'declined']) });
 
@@ -1086,7 +1089,7 @@ export const tableSummary = object({
     cube: boolean(),
     blinds: string(),
     chat: boolean(),
-    voice: boolean(),
+    voice: voiceScope,
     teams: boolean(),
     status: tableStatus,
     host: string().optional(),
@@ -1129,7 +1132,7 @@ export const tableCreateInput = object({
     cube: boolean(),
     blinds: tableBlinds,
     chat: boolean(),
-    voice: boolean(),
+    voice: voiceScope,
     teams: boolean(),
 
     /** Handles. Each one holds a chair until they take it or the host gives it away. */

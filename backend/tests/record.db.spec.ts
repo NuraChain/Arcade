@@ -82,7 +82,7 @@ const played = async (state: LudoState | PokerState, ledger: Ledger = {}): Promi
 
     const tableId = rowsOf<{ id: string }>(await db.query(
         `insert into tables (game, code, host_id, seats, mode, privacy, target, cube, blinds, chat, voice, teams)
-         values ($4, $3, $1, $2, 'live', 'public', 0, false, 'low', true, false, false)
+         values ($4, $3, $1, $2, 'live', 'public', 0, false, 'low', true, 'off', false)
          returning id`,
         [players[0], seatsOf(state), `t${ seq }${ Math.floor(Math.random() * 1000000) }`, state.game]
     ))[0].id;

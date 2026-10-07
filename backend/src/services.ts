@@ -2019,9 +2019,9 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 live?.tableChanged(before.id, people);
             },
 
-            async setVoice(me, tableId, on)
+            async setVoice(me, tableId, voice)
             {
-                await table.setVoice(me, tableId, on);
+                await table.setVoice(me, tableId, voice);
                 const after = await mustTable(me, tableId);
                 await ringTable(after);
                 return asTable(after);

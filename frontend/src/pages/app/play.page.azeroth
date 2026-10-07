@@ -154,7 +154,7 @@ export default component PlayPage()
 
     derived seated = table?.mine !== undefined;
 
-    derived talkable = seated && table?.voice === true && table.status !== 'closed';
+    derived talkable = seated && table !== null && table.voice !== 'off' && table.status !== 'closed';
 
     effect
     {
@@ -209,9 +209,9 @@ export default component PlayPage()
             return;
         }
 
-        const on = !current.voice;
+        const on = current.voice === 'off';
 
-        void lobby.setVoice(current.id, on)
+        void lobby.setVoice(current.id, on ? 'table' : 'off')
             .then(() => toasts.show({ kind: 'success', text: locale.t(on ? 'voice.turnedOn' : 'voice.turnedOff'), dedupe: 'table-voice' }))
             .catch((error: unknown) => toasts.show({ kind: 'warning', text: locale.t(whyRefused(error, 'voice.switchFailed')), dedupe: 'table-voice' }));
     };
@@ -712,7 +712,7 @@ export default component PlayPage()
                                         onResign={ resigning ? () => void resign() : undefined }
                                         onLeave={ seated && showing ? () => void leave(board.match()) : undefined }
                                         voice={ talkable ? table!.id : undefined }
-                                        hostVoice={ amHost && table!.status !== 'closed' ? table!.voice : undefined }
+                                        hostVoice={ amHost && table!.status !== 'closed' ? table!.voice !== 'off' : undefined }
                                         onHostVoice={ switchVoice }
                                     />
                                     <Show when={ floating && hasChat && !cardOpen }>

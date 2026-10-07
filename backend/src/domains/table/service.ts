@@ -15,6 +15,7 @@ import type { SocialService } from '../social/service.ts';
 import { cubeLive } from '../match/backgammon/cube.ts';
 import { TABLE_REFUSALS, type TableRefusal } from './refusals.ts';
 import { guestChairs, teamsOf, type Partners } from './teams.ts';
+import type { VoiceScope } from './voices.ts';
 
 /**
  * What the catalogue says a table of this game may be.
@@ -67,7 +68,7 @@ export interface TableRow
     cube: boolean;
     blinds: string;
     chat: boolean;
-    voice: boolean;
+    voice: VoiceScope;
     teams: boolean;
     status: TableStatus;
     host: string | null;
@@ -513,7 +514,7 @@ export function createTableService(db: DataSource, social: SocialService)
             cube: boolean;
             blinds: string;
             chat: boolean;
-            voice: boolean;
+            voice: VoiceScope;
             teams: boolean;
             invitees: string[];
             roomId?: string | null;
@@ -972,7 +973,7 @@ export function createTableService(db: DataSource, social: SocialService)
             });
         },
 
-        async setVoice(me: string, tableId: string, on: boolean)
+        async setVoice(me: string, tableId: string, voice: VoiceScope)
         {
             const table = await mustSee(me, tableId);
             if (!table.is_host)
@@ -980,7 +981,7 @@ export function createTableService(db: DataSource, social: SocialService)
                 throw new ForbiddenError('Only the host can turn voice on or off.');
             }
 
-            const changed = await db.getRepository(Table).update({ id: tableId, hostId: me, status: Not('closed') }, { voice: on });
+            const changed = await db.getRepository(Table).update({ id: tableId, hostId: me, status: Not('closed') }, { voice });
 
             if (changed.affected === 0)
             {

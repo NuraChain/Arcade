@@ -201,7 +201,7 @@ export default component CreateGameForm(props: { game: Game; onCreated: (tableId
 
         <Toggle checked={ chat } label={ locale.t('create.chat') } description={ locale.t('create.chatHint') } onChange={ (checked) => chat = checked } />
 
-        <Toggle checked={ voice } label={ locale.t('create.voice') } description={ locale.t('create.voiceHint') } onChange={ (checked) => voice = checked } />
+        <Toggle checked={ voice !== 'off' } label={ locale.t('create.voice') } description={ locale.t('create.voiceHint') } onChange={ (checked) => voice = checked ? 'table' : 'off' } />
 
         <fieldset class="flex flex-col gap-3">
             <legend class="label mb-2 flex w-full items-center justify-between text-ui-sm text-muted">

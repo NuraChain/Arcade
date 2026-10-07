@@ -74,7 +74,7 @@ const seatedTable = async (seats: number, game = 'ludo'): Promise<{ tableId: str
         cube: false,
         blinds: 'low',
         chat: true,
-        voice: false,
+        voice: 'off',
         teams: false,
         invitees: []
     });
@@ -185,7 +185,7 @@ describe.skipIf(!active)('a match, against a real database', () =>
         it('refuses a fifty-first open table, and a fifty-first seat, with a code the browser can put into words', async () =>
         {
             const me = await makeUser();
-            const config = { game: 'ludo', seats: 2, mode: 'live' as const, privacy: 'public' as const, target: 0, cube: false, blinds: 'low', chat: false, voice: false, teams: false, invitees: [] };
+            const config = { game: 'ludo', seats: 2, mode: 'live' as const, privacy: 'public' as const, target: 0, cube: false, blinds: 'low', chat: false, voice: 'off' as const, teams: false, invitees: [] };
 
             for (let index = 0; index < SEATED_MAX; index += 1)
             {
@@ -265,7 +265,7 @@ describe.skipIf(!active)('a match, against a real database', () =>
             const host = await makeUser();
             const table = await tables.create(host, {
                 game: 'ludo', seats: 2, mode: 'live', privacy: 'public',
-                target: 0, cube: false, blinds: 'low', chat: true, voice: false, teams: false, invitees: []
+                target: 0, cube: false, blinds: 'low', chat: true, voice: 'off', teams: false, invitees: []
             });
 
             await tables.setReady(host, table.id, true);
@@ -343,7 +343,7 @@ describe.skipIf(!active)('a match, against a real database', () =>
             const other = await makeUser();
             const table = await tables.create(host, {
                 game: 'engineless', seats: 2, mode: 'live', privacy: 'public',
-                target: 0, cube: false, blinds: 'low', chat: true, voice: false, teams: false, invitees: []
+                target: 0, cube: false, blinds: 'low', chat: true, voice: 'off', teams: false, invitees: []
             });
 
             await tables.claimSeat(other, table.id);
@@ -869,13 +869,13 @@ describe.skipIf(!active)('a match, against a real database', () =>
         {
             const looker = await makeUser();
             const quiet = await tables.create(await makeUser(), {
-                game: 'ludo', seats: 4, mode: 'live', privacy: 'public', target: 0, cube: false, blinds: 'low', chat: true, voice: false, teams: false, invitees: []
+                game: 'ludo', seats: 4, mode: 'live', privacy: 'public', target: 0, cube: false, blinds: 'low', chat: true, voice: 'off', teams: false, invitees: []
             });
             const busy = await tables.create(await makeUser(), {
-                game: 'ludo', seats: 4, mode: 'live', privacy: 'public', target: 0, cube: false, blinds: 'low', chat: true, voice: false, teams: false, invitees: []
+                game: 'ludo', seats: 4, mode: 'live', privacy: 'public', target: 0, cube: false, blinds: 'low', chat: true, voice: 'off', teams: false, invitees: []
             });
             const slow = await tables.create(await makeUser(), {
-                game: 'ludo', seats: 4, mode: 'turns', privacy: 'public', target: 0, cube: false, blinds: 'low', chat: true, voice: false, teams: false, invitees: []
+                game: 'ludo', seats: 4, mode: 'turns', privacy: 'public', target: 0, cube: false, blinds: 'low', chat: true, voice: 'off', teams: false, invitees: []
             });
 
             await tables.claimSeat(await makeUser(), busy.id);
@@ -1161,7 +1161,7 @@ describe.skipIf(!active)('a match, against a real database', () =>
 
             const table = await tables.create(players[0], {
                 game: 'hokm', seats: 4, mode: 'live', privacy: 'public',
-                target: 7, cube: false, blinds: 'low', chat: true, voice: false, teams: false, invitees: []
+                target: 7, cube: false, blinds: 'low', chat: true, voice: 'off', teams: false, invitees: []
             });
 
             for (const player of players.slice(1))
@@ -1492,7 +1492,7 @@ describe.skipIf(!active)('a match, against a real database', () =>
             const players = [await makeUser(), await makeUser()];
             const table = await tables.create(players[0], {
                 game: 'hokm', seats: 2, mode: 'live', privacy: 'public',
-                target: 7, cube: false, blinds: 'low', chat: true, voice: false, teams: false, invitees: []
+                target: 7, cube: false, blinds: 'low', chat: true, voice: 'off', teams: false, invitees: []
             });
 
             await tables.claimSeat(players[1], table.id);

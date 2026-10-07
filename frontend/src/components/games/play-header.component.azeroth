@@ -63,7 +63,7 @@ export default component PlayHeader(props: { table: TableSummary; others: TableS
                                     <span class="shrink-0">{ locale.plural('common.players', props.table.seats) }</span>
                                     <span class="h-1 w-1 shrink-0 rounded-full bg-faint" aria-hidden="true"></span>
                                     <span class="truncate">{ locale.t(props.table.mode === 'turns' ? 'games.mode.turns' : 'games.mode.live') }</span>
-                                    <Show when={ props.table.voice }>
+                                    <Show when={ props.table.voice !== 'off' }>
                                         { () =>
                                             <span class="flex shrink-0 items-center gap-1 text-accent">
                                                 <Icon name="voice" size={ 12 } />

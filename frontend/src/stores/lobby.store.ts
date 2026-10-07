@@ -45,7 +45,7 @@ export interface LobbyApi
     ready(tableId: string, ready: boolean): Promise<void>;
     invite(tableId: string, handle: string): Promise<void>;
     end(tableId: string): Promise<void>;
-    setVoice(tableId: string, on: boolean): Promise<void>;
+    setVoice(tableId: string, voice: TableConfig['voice']): Promise<void>;
 
     /** Deals the board. Any seated player may, once every chair is taken and everybody is ready. */
     begin(tableId: string): Promise<void>;
@@ -150,7 +150,7 @@ export const useLobby = createStore((): LobbyApi =>
         cube: boolean;
         blinds: TableConfig['blinds'];
         chat: boolean;
-        voice: boolean;
+        voice: TableConfig['voice'];
         teams: boolean;
         invitees: string[];
     }
@@ -278,9 +278,9 @@ export const useLobby = createStore((): LobbyApi =>
             await revalidate();
         },
 
-        async setVoice(tableId, on)
+        async setVoice(tableId, voice)
         {
-            await client.tables.voice({ params: { id: tableId }, input: { on } });
+            await client.tables.voice({ params: { id: tableId }, input: { voice } });
             await revalidate();
         },
 

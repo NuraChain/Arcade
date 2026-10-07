@@ -32,7 +32,9 @@ for a product whose players include minors.
 
 ## Server
 
-- `tables.voice boolean`, no default, set at create, beside `tables.chat`.
+- `tables.voice` is a scope, `off` or `table`, held to that list by `tables_voice_known`; no default,
+  set at create, beside `tables.chat`. It was a boolean when this was written and became a word on
+  2026-10-07, so a call for one side of a team table has somewhere to be said.
 - Client frames:
   - `{ t: 'voice', table, on, muted }` - join, leave, or change my mute state.
   - `{ t: 'signal', table, to, kind: 'offer' | 'answer' | 'ice', data }` - relay one negotiation

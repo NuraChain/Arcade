@@ -54,7 +54,7 @@ const started = async ({ cube = false, target = 3, row }: { cube?: boolean; targ
     const players = [await makeUser(), await makeUser()];
     const table = await tables.create(players[0], {
         game: 'backgammon', seats: 2, mode: 'live', privacy: 'public',
-        target, cube, blinds: 'low', chat: true, voice: false, teams: false, invitees: []
+        target, cube, blinds: 'low', chat: true, voice: 'off', teams: false, invitees: []
     });
 
     if (row !== undefined)

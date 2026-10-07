@@ -4,6 +4,7 @@ import { RouterProvider, createMemoryHistory, createRouter } from 'azerothjs';
 
 import CreateGameForm from '../src/components/games/create-game-form.component.azeroth';
 import GameHero from '../src/components/games/game-hero.component.azeroth';
+import TableRow from '../src/components/games/table-row.component.azeroth';
 import { defaultTable, TABLE_RULES } from '../src/data/tables.ts';
 import { GAMES } from '../src/data/games.ts';
 import { manualClock } from '../src/lib/clock.ts';
@@ -121,6 +122,30 @@ describe('the create form', () =>
         ]);
     });
 
+    it('opens a table with no call unless its switch was turned on, and then with one for the whole table', async () =>
+    {
+        const ludo = GAMES.find((game) => game.id === 'ludo')!;
+        const voiceSwitch = (container: HTMLElement) =>
+            [...container.querySelectorAll<HTMLButtonElement>('[role="switch"]')].find((one) => one.textContent?.includes('Voice chat'))!;
+
+        const quiet = renderTest(() => CreateGameForm({ game: ludo, onCreated: () => undefined }) as HTMLElement).container;
+
+        expect(voiceSwitch(quiet).getAttribute('aria-checked')).toBe('false');
+        fire(quiet.querySelector<HTMLFormElement>('form')!, 'submit');
+        await settle();
+
+        cleanup();
+
+        const talking = renderTest(() => CreateGameForm({ game: ludo, onCreated: () => undefined }) as HTMLElement).container;
+
+        fire(voiceSwitch(talking), 'click');
+        expect(voiceSwitch(talking).getAttribute('aria-checked')).toBe('true');
+        fire(talking.querySelector<HTMLFormElement>('form')!, 'submit');
+        await settle();
+
+        expect(server.tables.map((table) => table.voice)).toEqual(['off', 'table']);
+    });
+
     it('still says it, as a plain no, for a game that leaves the choice to whoever opens the table', async () =>
     {
         const ludo = GAMES.find((game) => game.id === 'ludo')!;
@@ -170,6 +195,42 @@ describe('a game that is played in pairs', () =>
         {
             expect(chips(id), id).not.toContain('Partners at four');
         }
+    });
+});
+
+describe('a table in a list', () =>
+{
+    const row = (voice: 'off' | 'table') =>
+    {
+        const router = createRouter({ routes: [{ path: '/', component: () => document.createElement('div') }], history: createMemoryHistory('/'), scroll: false });
+        const table = {
+            id: 'one',
+            code: 'ONE',
+            game: 'hokm',
+            seats: 4,
+            mode: 'live',
+            privacy: 'public',
+            target: 7,
+            cube: false,
+            blinds: 'low',
+            chat: true,
+            voice,
+            teams: true,
+            status: 'open',
+            chairs: [],
+            taken: 1,
+            createdAt: '2026-09-22T00:00:00.000Z'
+        } as never;
+
+        return renderTest(() => RouterProvider({ router, children: () => TableRow({ table }) }) as HTMLElement).container;
+    };
+
+    it('wears the voice mark only when it has a call', () =>
+    {
+        const mark = `[aria-label="${ useLocale().t('voice.tableHas') }"]`;
+
+        expect(row('off').querySelector(mark)).toBeNull();
+        expect(row('table').querySelector(mark)).not.toBeNull();
     });
 });
 

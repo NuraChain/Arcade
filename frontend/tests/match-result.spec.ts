@@ -54,7 +54,7 @@ const table = (chairs: TableSummary['chairs'], extra: Partial<TableSummary> = {}
     cube: false,
     blinds: 'low',
     chat: true,
-    voice: false,
+    voice: 'off',
     teams: false,
     status: 'ready',
     chairs,

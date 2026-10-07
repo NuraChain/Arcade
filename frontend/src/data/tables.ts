@@ -1,5 +1,6 @@
 import type { GameId } from './games.ts';
 import { teamsOf, type Partners } from '../../../backend/src/domains/table/teams.ts';
+import type { VoiceScope } from '../../../backend/src/domains/table/voices.ts';
 
 export type TableMode = 'live' | 'turns';
 
@@ -30,7 +31,7 @@ export interface TableConfig
     cube: boolean;
     blinds: Blinds;
     chat: boolean;
-    voice: boolean;
+    voice: VoiceScope;
     teams: boolean;
     quick: boolean;
 
@@ -75,7 +76,7 @@ export function defaultTable(game: GameId): TableConfig
         cube: game === 'backgammon',
         blinds: 'low',
         chat: true,
-        voice: false,
+        voice: 'off',
         teams: teamsOf(rules.partners, seats, false),
         quick: false
     };

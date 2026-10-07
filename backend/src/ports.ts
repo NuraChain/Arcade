@@ -43,6 +43,7 @@ import type {
 } from './schemas.ts';
 import type { Infer } from '@azerothjs/schema';
 import type { matchEvent } from './schemas.ts';
+import type { VoiceScope } from './domains/table/voices.ts';
 
 /**
  * What the route declarations are allowed to know about the rest of the server.
@@ -234,7 +235,7 @@ export interface TablePort
         cube: boolean;
         blinds: string;
         chat: boolean;
-        voice: boolean;
+        voice: VoiceScope;
         teams: boolean;
         invitees: string[];
         roomId?: string;
@@ -252,7 +253,7 @@ export interface TablePort
     setReady(me: string, tableId: string, ready: boolean): Promise<TableSummary>;
     invite(me: string, tableId: string, handle: string): Promise<TableSummary>;
     close(me: string, tableId: string): Promise<void>;
-    setVoice(me: string, tableId: string, on: boolean): Promise<TableSummary>;
+    setVoice(me: string, tableId: string, voice: VoiceScope): Promise<TableSummary>;
 }
 
 /**

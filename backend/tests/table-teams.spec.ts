@@ -19,7 +19,7 @@ const wordsIn = (check: string) =>
 
 const rules = (partners: unknown) => ({ seats: [2, 4], modes: ['live'], targets: [], stakes: 'none', partners, hasCube: false, hasBlinds: false });
 
-const body = { game: 'hokm', seats: 4, mode: 'live', privacy: 'public', target: 7, cube: false, blinds: 'low', chat: true, voice: false, invitees: [] };
+const body = { game: 'hokm', seats: 4, mode: 'live', privacy: 'public', target: 7, cube: false, blinds: 'low', chat: true, voice: 'off', invitees: [] };
 
 describe('whether a table is two against two', () =>
 {
