@@ -281,13 +281,16 @@ try
         record('the sheet closes once it has saved', await soon(async () => await sheet.count() === 0, 5000));
 
         await reload(page);
-        const text = await page.locator('main').innerText();
-        record('after a reload the new display name is on the profile', await soon(async () => (await page.locator('main').innerText()).includes(newName), 5000), text.slice(0, 120).replace(/\n/g, ' | '));
-        record('after a reload the new bio is on the profile', (await page.locator('main').innerText()).includes(newBio));
+        const saved = await visitor.api('GET', '/auth/me');
+        record('after a reload the account holds the new display name and bio', saved.body?.account?.displayName === newName && saved.body?.account?.bio === newBio, `${ saved.body?.account?.displayName } | ${ saved.body?.account?.bio }`);
+
+        const title = page.locator('main h1').first();
+        record('a guest has no Nura Profile, so the page is titled by the handle', await soon(async () => (await title.innerText()).trim() === visitor.handle, 5000), (await title.innerText()).trim());
 
         await page.locator('main').getByRole('button', { name: 'Edit profile', exact: true }).click();
         await sheet.waitFor({ state: 'visible', timeout: 5000 });
         record('the sheet reopens holding the saved name', await sheet.locator('#profile-name').inputValue() === newName, await sheet.locator('#profile-name').inputValue());
+        record('and the saved bio', await sheet.locator('#profile-bio').inputValue() === newBio, await sheet.locator('#profile-bio').inputValue());
 
         await sheet.locator('#profile-handle').fill('omid.k');
         await sheet.getByRole('button', { name: 'Save', exact: true }).click();
@@ -322,8 +325,11 @@ try
 
             if (route === '/app/notifications')
             {
-                record('at 390 the top bar bell carries the current page on /app/notifications',
-                    await pocket.page.locator('header a[href="/app/notifications"][aria-current="page"]').count() > 0);
+                const bar = pocket.page.locator('header').first();
+
+                record('at 390 /app/notifications has a bar with a way back and the name of the page',
+                    await bar.getByRole('button', { name: 'Back', exact: true }).count() > 0 && (await bar.innerText()).includes('Notifications'),
+                    (await bar.innerText()).replace(/\s+/g, ' ').trim().slice(0, 60));
             }
         }
 
@@ -847,7 +853,7 @@ try
         record('blocking asks first', await soon(async () => await confirm.isVisible(), 5000));
         await confirm.getByRole('button', { name: /^Block (Leila|leila\.a)$/ }).click();
         record('blocking warns that it is done', await toasted(page, /(Leila|leila\.a) blocked, everywhere/, 'warning'), await toastText(page));
-        record('the person page says they are blocked', await soon(async () => (await page.locator('main').innerText()).includes('You blocked Leila.'), 6000));
+        record('the person page says they are blocked', await soon(async () => /You blocked (Leila|leila\.a)\./.test(await page.locator('main').innerText()), 6000));
 
         await go(page, '/app/me/settings');
         const unblock = page.locator('main').getByRole('button', { name: /^Unblock (Leila|leila\.a)$/ });
