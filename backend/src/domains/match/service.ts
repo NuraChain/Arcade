@@ -30,9 +30,7 @@ interface HistoryRow
 {
     id: string;
     game: string;
-    seats: number;
     finished_at: Date;
-    outcome: 'won' | 'abandoned' | 'closed';
     result: MatchResult;
     rating_before: number | null;
     rating_after: number | null;
@@ -262,7 +260,6 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
             { id: match.id, rev: match.rev },
             {
                 state: next as Record<string, unknown>,
-                ...(match.opening === null ? { opening: match.state as Record<string, unknown> } : {}),
                 rev: revOf(next),
                 ...(rearm ? { deadlineAt: deadlineFrom(mode) } : {})
             }
@@ -313,7 +310,7 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
      * and there is nothing secret in a timestamp the row already carries.
      */
     const HISTORY_SQL = `
-        select m.id, m.game, m.seats, m.finished_at, m.outcome,
+        select m.id, m.game, m.finished_at,
                p.result, p.rating_before, p.rating_after,
                (select array_agg(u.handle::text order by o.seat)
                   from match_players o
@@ -345,9 +342,7 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
                 matches: page.map((row) => ({
                     id: row.id,
                     game: row.game,
-                    seats: row.seats,
                     finishedAt: new Date(row.finished_at).toISOString(),
-                    outcome: row.outcome,
                     result: row.result,
                     players: row.players ?? [],
                     ...(row.rating_before === null ? {} : { ratingBefore: row.rating_before }),
@@ -497,8 +492,8 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
                 const { state, events } = engine.create(seats, draws, { target: table.target, cube: table.cube, blinds: table.blinds as TableConfig['blinds'] });
 
                 const inserted = firstRow<{ id: string }>(await tx.query(
-                    `insert into matches (table_id, game, variant, seats, state, opening, rev, deadline_at)
-                     select $1, $2, 'standard', $3::smallint, $4::jsonb, $4::jsonb, $7::int, now() + ($5 || ' milliseconds')::interval
+                    `insert into matches (table_id, game, variant, seats, state, rev, deadline_at)
+                     select $1, $2, 'standard', $3::smallint, $4::jsonb, $7::int, now() + ($5 || ' milliseconds')::interval
                       where not exists (select 1 from matches where table_id = $1 and finished_at is null)
                         and (select count(*) from table_seats s where s.table_id = $1 and s.user_id is not null) = $6::bigint
                         and not exists (select 1 from table_seats s where s.table_id = $1 and s.ready = false)
@@ -874,7 +869,7 @@ export function createMatchService(db: DataSource, achieve: AchieveService, engi
                             key: null
                         }, mode);
 
-                        return { ...at, rev: revOf(next), state: next, opening: at.opening ?? at.state };
+                        return { ...at, rev: revOf(next), state: next };
                     };
 
                     const turnGoesOn = (at: Match) => engine.finish(at.state) === null && sameTurn(engine, state, at.state);

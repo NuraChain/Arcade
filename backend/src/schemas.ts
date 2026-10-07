@@ -205,13 +205,10 @@ export const personRecord = object({
 
 export type PersonRecord = Infer<typeof personRecord>;
 
-/** One finished game, as a history row. `seat` is this reader's chair at it. */
 export const matchHistoryEntry = object({
     id: string(),
     game: string(),
-    seats: number(),
     finishedAt: string(),
-    outcome: enumOf(['won', 'abandoned', 'closed']),
     result: enumOf(['won', 'lost', 'abandoned', 'void']),
     ratingBefore: number().optional(),
     ratingAfter: number().optional(),
@@ -1410,7 +1407,7 @@ export const matchView = object({
 
     remainingMs: number({ int: true, min: 0 }).optional(),
     winner: number().optional(),
-    outcome: enumOf(['won', 'abandoned', 'closed']).optional(),
+    outcome: enumOf(['won', 'abandoned']).optional(),
     startedAt: string(),
     finishedAt: string().optional()
 });

@@ -376,6 +376,23 @@ describe.skipIf(!active)('a match, against a real database', () =>
                 [load.match.id]
             ))).toEqual([{ kind: 'open', seat: -1, user_id: null }]);
         });
+
+        it('keeps the board a game began with in the ledger, and no copy of it on the match', async () =>
+        {
+            const { tableId, players } = await seatedTable(2);
+            const load = await matches.start(players[0], tableId);
+
+            await matches.act(players[turnSeatOf(load.state)], load.match.id, { play: ROLL, key: 'moves-on' });
+
+            expect(rowsOf<{ rev: number; state: unknown }>(await db.query(
+                `select rev, state from match_actions where match_id = $1 and kind = 'open'`,
+                [load.match.id]
+            ))).toEqual([{ rev: load.match.rev, state: load.state }]);
+
+            expect(rowsOf<{ name: string }>(await db.query(
+                `select column_name::text as name from information_schema.columns where table_schema = 'public' and table_name = 'matches'`
+            )).map((column) => column.name)).not.toContain('opening');
+        });
     });
 
     describe('acting', () =>
@@ -827,11 +844,24 @@ describe.skipIf(!active)('a match, against a real database', () =>
             expect(await liveAt(players[0], tableId)).toBe(load.match.id);
 
             await db.query(
-                `update matches set finished_at = now(), outcome = 'closed', deadline_at = null where id = $1`,
+                `update matches set finished_at = now(), outcome = 'abandoned', deadline_at = null where id = $1`,
                 [load.match.id]
             );
 
             expect(await liveAt(players[0], tableId)).toBeNull();
+        });
+
+        it('cannot be ended any way but won or abandoned, whoever writes the row', async () =>
+        {
+            const { tableId, players } = await seatedTable(2);
+            const load = await matches.start(players[0], tableId);
+
+            await expect(db.query(
+                `update matches set finished_at = now(), outcome = 'closed', deadline_at = null where id = $1`,
+                [load.match.id]
+            )).rejects.toThrow(/matches_outcome_known/);
+
+            expect(await liveAt(players[0], tableId)).toBe(load.match.id);
         });
 
         it('is offered to quick play fullest first, and never with a game already running', async () =>
@@ -1079,6 +1109,41 @@ describe.skipIf(!active)('a match, against a real database', () =>
 
             expect(next.match.id).not.toBe(first.match.id);
             expect(next.match.finishedAt).toBeNull();
+        });
+    });
+
+    describe('the games somebody has finished', () =>
+    {
+        it('answers each player their own row of a finished game, and nothing of one still being played', async () =>
+        {
+            const { tableId, players } = await seatedTable(2);
+            const load = await matches.start(players[0], tableId);
+            const [stays, quits] = load.players;
+            const who = load.players.map((one) => one.who);
+
+            expect(await matches.history(quits.user_id, null)).toEqual({ matches: [] });
+
+            await matches.act(quits.user_id, load.match.id, { play: null, key: 'gives-up' });
+
+            const finishedAt = (await matches.peek(load.match.id))!.match.finishedAt!.toISOString();
+            const rated = (await matches.seatsOf(load.match.id)).find((one) => one.seat === quits.seat)!;
+
+            expect(rated.rating_after).toBeLessThan(1200);
+            expect(await matches.history(quits.user_id, null)).toEqual({
+                matches: [{
+                    id: load.match.id,
+                    game: 'ludo',
+                    finishedAt,
+                    result: 'abandoned',
+                    players: who,
+                    ratingBefore: rated.rating_before,
+                    ratingAfter: rated.rating_after
+                }]
+            });
+            expect(await matches.history(stays.user_id, null)).toEqual({
+                matches: [{ id: load.match.id, game: 'ludo', finishedAt, result: 'void', players: who }]
+            });
+            expect(await matches.history(await makeUser(), null)).toEqual({ matches: [] });
         });
     });
 

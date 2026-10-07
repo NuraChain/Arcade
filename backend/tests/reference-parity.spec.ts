@@ -6,8 +6,10 @@ import '../src/entities/index.ts';
 
 import { GAME_SEEDS } from '../src/db/seed-reference.ts';
 import { RUNGS } from '../src/domains/achieve/families.ts';
+import type { Plan } from '../src/domains/match/judge.ts';
 import { NOTICES, NOTICE_OF } from '../src/domains/notify/notices.ts';
-import { matchHistoryEntry, matchPlayer } from '../src/schemas.ts';
+import type { MatchOutcome } from '../src/entities/match.entity.ts';
+import { matchHistoryEntry, matchPlayer, matchView } from '../src/schemas.ts';
 import { GAMES } from '../../frontend/src/data/games.ts';
 import { TABLE_RULES } from '../../frontend/src/data/tables.ts';
 
@@ -170,7 +172,7 @@ describe('match results: the database and the wire name the same ones', () =>
 {
     const known = [...(getMetadataArgsStorage().checks.find((one) => one.name === 'match_players_result_known')?.expression ?? '').matchAll(/'([a-z-]+)'/g)].map((match) => match[1]);
 
-    const row = (result: string) => ({ id: 'm', game: 'ludo', seats: 2, finishedAt: '2026-10-04T00:00:00.000Z', outcome: 'won', result, players: [] });
+    const row = (result: string) => ({ id: 'm', game: 'ludo', finishedAt: '2026-10-04T00:00:00.000Z', result, players: [] });
     const seat = (result: string) => ({ seat: 0, who: 'dana.w', timeouts: 0, result });
 
     it('keeps a seat the match never judged as void', () =>
@@ -186,6 +188,49 @@ describe('match results: the database and the wire name the same ones', () =>
         {
             expect(matchHistoryEntry.safeParse(row(result)).ok, result).toBe(known.includes(result));
             expect(matchPlayer.safeParse(seat(result)).ok, result).toBe(known.includes(result));
+        }
+    });
+
+    it('sends a history row what its two screens read, and neither a seat count nor how the match ended', () =>
+    {
+        const sent = matchHistoryEntry.parse({ ...row('void'), seats: 2, outcome: 'abandoned', ratingBefore: 1200, ratingAfter: 1184 });
+
+        expect(Object.keys(sent).sort()).toEqual(['finishedAt', 'game', 'id', 'players', 'ratingAfter', 'ratingBefore', 'result']);
+    });
+});
+
+describe('match outcomes: the judge, the database and the wire name the same ones', () =>
+{
+    const judged: Record<Plan['outcome'], true> = { abandoned: true, won: true };
+    const stored: Record<MatchOutcome, true> = judged;
+
+    const known = [...(getMetadataArgsStorage().checks.find((one) => one.name === 'matches_outcome_known')?.expression ?? '').matchAll(/'([a-z-]+)'/g)].map((match) => match[1]);
+
+    const finished = (outcome: string) => ({
+        id: 'm',
+        tableId: 't',
+        game: 'ludo',
+        rev: 9,
+        seats: 2,
+        players: [{ seat: 0, who: 'dana.w', timeouts: 0 }, { seat: 1, who: 'mina', timeouts: 0 }],
+        view: { kind: 'ludo', moves: [], seats: [] },
+        outcome,
+        startedAt: '2026-10-07T00:00:00.000Z',
+        finishedAt: '2026-10-07T00:10:00.000Z'
+    });
+
+    it('lets a match end only the ways the judge ends one', () =>
+    {
+        expect([...known].sort()).toEqual(Object.keys(stored).sort());
+    });
+
+    it('carries exactly the outcomes the CHECK accepts on a finished match', () =>
+    {
+        const candidates = new Set([...known, 'won', 'abandoned', 'closed', 'lost', 'void', 'draw', 'Won', '']);
+
+        for (const outcome of candidates)
+        {
+            expect(matchView.safeParse(finished(outcome)).ok, outcome).toBe(known.includes(outcome));
         }
     });
 });

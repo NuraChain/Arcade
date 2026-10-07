@@ -20,9 +20,7 @@ type Rendered = HTMLElement;
 const voided: MatchHistoryEntry = {
     id: 'match-void',
     game: 'ludo',
-    seats: 2,
     finishedAt: new Date(4000).toISOString(),
-    outcome: 'abandoned',
     result: 'void',
     players: ['alex', 'sara.k']
 };

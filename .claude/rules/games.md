@@ -757,13 +757,22 @@ own words belong.
 
 **The opening is the first row of every ledger (PK-08).** `Engine.create` returns `{ state, events }`,
 and `start` writes those events as an `open` row at the opening revision - seat -1, no person, no
-key - in the transaction that inserts the match, and writes the same state to `matches.opening`. Every
-engine opens at revision 1, so the ledger is gapless from 1 and `since?rev=0` reads the whole game,
-opening included: poker's first deal and blinds (the `hole` events stay in the row and `log` drops
-them, exactly as for every later hand), hokm's first `deal`, backgammon's opening roll; ludo's opening
-has nothing to say and its row is empty. `start` pushes from the revision before it, so every seat is
-handed the opening through the same `game` frame as a move. It used to be thrown away: hand one began
-mid-hand in the feed, and a board's beats had no deal to draw.
+key - in the transaction that inserts the match. Every engine opens at revision 1, so the ledger is
+gapless from 1 and `since?rev=0` reads the whole game, opening included: poker's first deal and blinds
+(the `hole` events stay in the row and `log` drops them, exactly as for every later hand), hokm's
+first `deal`, backgammon's opening roll; ludo's opening has nothing to say and its row is empty.
+`start` pushes from the revision before it, so every seat is handed the opening through the same
+`game` frame as a move. It used to be thrown away: hand one began mid-hand in the feed, and a board's
+beats had no deal to draw.
+
+**That row is the only place the board a game began with is kept.** `matches.opening` was a second
+copy of it: `start` wrote the state there beside the `open` row, `commit` wrote it again whenever it
+found the column null, and the sweep's fold carried `opening ?? state` from one step to the next - two
+fallbacks for a column `start` always filled, so neither could run. Its one reader was the watch, for
+a game with no row old enough to show, and the watch takes the `open` row for that now (*A watcher is
+shown one revision*). The column is gone and both fallbacks with it. `match.db.spec.ts` (*the
+opening*) holds the `open` row to the state the game was dealt, read after a move has changed the
+match's own, and the match to having no column for it.
 
 **`asMatch` reads no state at all.** The seats come from `match_players`, the turn from
 `engine.turnOf`, and the winner from `matches.winner_seat`, which the recorder writes from the judge's
@@ -835,6 +844,15 @@ force, because playing has two ways to end - a win and a timeout cascade - and a
 go stale the first time one of them forgot. Closing is NOT a third: `close` refuses while a match is
 live, because a host who could close the table mid-game could erase a loss by leaving. Last one out
 still closes it, since everybody has gone and each of them has already forfeited.
+
+**A match ends `won` or `abandoned`, and the database knows no third way.** `matches.outcome` allowed
+`closed` as well: in the entity's type, in `matches_outcome_known` and on the wire, on a match view and
+on a history row. Nothing could write it. `close` refuses while a match is live, and the column has
+one writer, the recorder, which writes what the judge decided - `won` if any seat won, `abandoned` if
+none did. The only `closed` ever written was a line of test SQL. It is gone from all of them, and
+`reference-parity.spec.ts` holds the judge's type, the entity's type, the CHECK and the wire enum to
+one set, so an ending cannot be declared again without something that produces it; `match.db.spec.ts`
+asks the constraint itself, with the row written by hand.
 
 **Leaving a live match is a forfeit with reason `left`.** It used to free the chair and nothing else,
 so the leaver stayed in the match while the sweep played their turns and forfeited them three misses
@@ -2108,6 +2126,14 @@ description of their week - the social graph is already the thing E2EE cannot hi
 be a second copy of it that anybody could read. `GET /matches/history` takes no handle at all and
 pages by keyset over `(finished_at, id)`, like chat history and for the same reason.
 
+**A history row is what its two screens draw.** The game, when it finished, the reader's own `result`
+with the rating pair when the game counted for them, and who played, by handle in seat order. It
+carried the match's `outcome` and its seat count as well, and neither home's recent games nor the
+profile's Games tab read either: how it went for the reader is their `result`, which is also the only
+place `void` is said. Both are gone from the schema, the query and the row. `match.db.spec.ts` (*the
+games somebody has finished*) runs that query against Postgres, which no test did, and
+`reference-parity.spec.ts` parses a row carrying both and expects neither back.
+
 **The live counts are counted.** `catalogue.store.ts` drifted "627 people at the tables" on a seeded
 RNG, and the rule written beside it was that it goes the moment the server answers with real counts.
 `GET /catalogue/live` counts SEATED PEOPLE at open public tables, LEFT JOINed from `games` so a quiet
@@ -2261,6 +2287,15 @@ written hit a stale CHECK and turned a perfectly good roll into a 500: the game 
 row was written, and the person was told their move failed. Everything that runs after a move has
 landed - the result line, the invite line, the turn notice - goes through `courtesy()`, which is the
 rule `wake` already followed for push.
+
+**A contract member is not one of these.** `Engine.legal` and `Engine.seats` have no caller in the
+product either - a board is handed its plays by `view`, and a table's `create` checks a seat count
+against `game_rules` - and both stay. They are how the specs drive every engine through one seam:
+`legal` is the move generator under the self-play in `engine-contract.spec.ts`, the thirty games a
+seat count in `ladders.spec.ts` and the seam and poker specs, and `seats` is what those loops run over
+and what the contract spec holds to the catalogue's seed. The things above were runtime features wired
+to nothing; these two are the contract, and without them every generic spec would carry a move
+generator of its own.
 
 ## The second audit, and the rules it produced
 

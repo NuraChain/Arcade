@@ -2,7 +2,7 @@ import { Check, Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, 
 import { Game } from './game.entity.ts';
 import { Table } from './table.entity.ts';
 
-export type MatchOutcome = 'won' | 'abandoned' | 'closed';
+export type MatchOutcome = 'won' | 'abandoned';
 
 /**
  * One game somebody actually played.
@@ -15,14 +15,10 @@ export type MatchOutcome = 'won' | 'abandoned' | 'closed';
  * `rev` is the one derivable-looking number that is deliberately stored. It is the precondition a
  * `where rev = $n` uses to make a stale action write nothing, and `matches_rev_matches_state` holds
  * it equal to the copy inside the snapshot so a state lifted out of the row still describes itself.
- *
- * Whether a table is PLAYING is not stored anywhere. It is derived in `TABLE_COLUMNS` from the
- * existence of an unfinished match, for the same reason `ready` is derived from occupied chairs: a
- * stored copy goes stale the first time a match ends down one of the three paths that end one.
  */
 @Check('matches_finished_has_outcome', `(finished_at is null) = (outcome is null)`)
 @Check('matches_live_has_deadline', `(finished_at is null) = (deadline_at is not null)`)
-@Check('matches_outcome_known', `outcome is null or outcome in ('won', 'abandoned', 'closed')`)
+@Check('matches_outcome_known', `outcome is null or outcome in ('won', 'abandoned')`)
 @Check('matches_rev_matches_state', `(state ->> 'rev')::int = rev`)
 @Check('matches_rev_positive', `rev >= 0`)
 @Check('matches_seats_range', `seats between 2 and 9`)
@@ -62,9 +58,6 @@ export class Match
 
     @Column({ type: 'integer', default: 0 })
     rev!: number;
-
-    @Column({ type: 'jsonb', nullable: true })
-    opening!: unknown;
 
     @Column({ name: 'deadline_at', type: 'timestamptz', nullable: true })
     deadlineAt!: Date | null;
