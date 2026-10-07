@@ -855,6 +855,8 @@ describe('voice at a table', () =>
     const lastVoice = (wire: FakeWire) =>
         wire.framesOf('voice').at(-1) as Extract<ServerFrame, { t: 'voice' }> | undefined;
 
+    const joinOf = (wire: FakeWire, who: string) => lastVoice(wire)?.peers.find((peer) => peer.who === who)?.join ?? '';
+
     it('tells everybody in the room who else is in it, and who is muted', async () =>
     {
         seat('alex', 'sara.k');
@@ -896,14 +898,95 @@ describe('voice at a table', () =>
             await rest();
         }
 
-        world.hub.signal(alex.connection, TABLE, 'sara.k', 'offer', '{"sdp":"a"}');
-        world.hub.signal(alex.connection, TABLE, 'mina', 'offer', '{"sdp":"b"}');
-        world.hub.signal(outside.connection, TABLE, 'sara.k', 'offer', '{"sdp":"c"}');
+        world.hub.signal(alex.connection, TABLE, 'sara.k', joinOf(alex.wire, 'sara.k'), 'offer', '{"sdp":"a"}');
+        world.hub.signal(alex.connection, TABLE, 'mina', joinOf(alex.wire, 'mina'), 'offer', '{"sdp":"b"}');
+        world.hub.signal(outside.connection, TABLE, 'sara.k', joinOf(alex.wire, 'sara.k'), 'offer', '{"sdp":"c"}');
         await rest();
 
-        expect(sara.wire.framesOf('signal')).toEqual([expect.objectContaining({ from: 'alex', kind: 'offer', data: '{"sdp":"a"}' })]);
+        expect(sara.wire.framesOf('signal')).toEqual([expect.objectContaining({ from: 'alex', join: joinOf(sara.wire, 'alex'), kind: 'offer', data: '{"sdp":"a"}' })]);
         expect(mina.wire.framesOf('signal')).toEqual([]);
         expect(lastVoice(mina.wire)?.peers.find((peer) => peer.who === 'alex')?.talk).toBe(false);
+    });
+
+    it('gives every joining a name of its own, keeps it through a mute, and gives a new one to somebody who comes back', async () =>
+    {
+        seat('alex', 'sara.k');
+        const alex = await connect('alex');
+        const sara = await connect('sara.k');
+
+        world.hub.voice(alex.connection, TABLE, true, false);
+        await rest();
+        world.hub.voice(sara.connection, TABLE, true, false);
+        await rest();
+
+        const first = joinOf(alex.wire, 'sara.k');
+        const host = joinOf(alex.wire, 'alex');
+
+        expect(first).not.toBe('');
+        expect(host).not.toBe('');
+        expect(first).not.toBe(host);
+        expect(joinOf(sara.wire, 'sara.k')).toBe(first);
+
+        world.hub.voice(sara.connection, TABLE, true, true);
+        await rest();
+
+        expect(joinOf(alex.wire, 'sara.k')).toBe(first);
+
+        world.hub.release(sara.connection);
+        await rest();
+
+        const back = await connect('sara.k');
+
+        world.hub.voice(back.connection, TABLE, true, false);
+        await rest();
+
+        expect(joinOf(alex.wire, 'sara.k')).not.toBe('');
+        expect(joinOf(alex.wire, 'sara.k')).not.toBe(first);
+        expect(joinOf(alex.wire, 'alex')).toBe(host);
+    });
+
+    it('carries a signal from one joining to one joining, and drops one meant for a joining that is over', async () =>
+    {
+        seat('alex', 'sara.k');
+        const alex = await connect('alex');
+        const sara = await connect('sara.k');
+
+        world.hub.voice(alex.connection, TABLE, true, false);
+        await rest();
+        world.hub.voice(sara.connection, TABLE, true, false);
+        await rest();
+
+        const over = joinOf(alex.wire, 'sara.k');
+        const tab = await connect('sara.k');
+
+        world.hub.voice(tab.connection, TABLE, true, false);
+        await rest();
+
+        world.hub.signal(alex.connection, TABLE, 'sara.k', over, 'offer', '{"sdp":"old"}');
+        world.hub.signal(alex.connection, TABLE, 'sara.k', joinOf(alex.wire, 'sara.k'), 'offer', '{"sdp":"new"}');
+        await rest();
+
+        expect(sara.wire.framesOf('signal')).toEqual([]);
+        expect(tab.wire.framesOf('signal')).toEqual([expect.objectContaining({ from: 'alex', join: joinOf(alex.wire, 'alex'), data: '{"sdp":"new"}' })]);
+    });
+
+    it('lets a socket in once, however often it says it is in before it has been let in', async () =>
+    {
+        seat('alex', 'sara.k');
+        const alex = await connect('alex');
+        const sara = await connect('sara.k');
+
+        world.hub.voice(alex.connection, TABLE, true, false);
+        await rest();
+        world.hub.voice(sara.connection, TABLE, true, true);
+        world.hub.voice(sara.connection, TABLE, true, false);
+        await rest();
+
+        const named = alex.wire.framesOf('voice').flatMap((frame) => (frame.t === 'voice' ? frame.peers.filter((peer) => peer.who === 'sara.k').map((peer) => peer.join) : []));
+
+        expect(named.length).toBeGreaterThan(0);
+        expect(new Set(named).size).toBe(1);
+        expect(lastVoice(alex.wire)?.peers.find((peer) => peer.who === 'sara.k')?.muted).toBe(false);
     });
 
     it('takes a closed socket out of the room and tells the others', async () =>

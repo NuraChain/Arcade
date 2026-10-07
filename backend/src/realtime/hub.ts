@@ -115,7 +115,7 @@ export interface Hub
 
     typingIn(connection: Connection, conversationId: string): void;
     voice(connection: Connection, tableId: string, on: boolean, muted: boolean): void;
-    signal(connection: Connection, tableId: string, to: string, kind: SignalKind, data: string): void;
+    signal(connection: Connection, tableId: string, to: string, join: string, kind: SignalKind, data: string): void;
     voiceOf(tableId: string): string[];
     setState(connection: Connection, state: PresenceState): void;
     resync(connection: Connection): void;
@@ -165,7 +165,9 @@ export function createHub(deps: HubDeps): Hub
 
     const held = (connection: Connection) => connection as Held;
 
-    const rooms = new Map<string, Map<string, { socket: Held; muted: boolean }>>();
+    const rooms = new Map<string, Map<string, { socket: Held; muted: boolean; join: string }>>();
+
+    let joins = deps.now();
 
     const talks = new Map<string, boolean>();
 
@@ -187,7 +189,8 @@ export function createHub(deps: HubDeps): Hub
             const peers: VoicePeer[] = members.map((other) => ({
                 who: other.socket.handle,
                 muted: other.muted,
-                talk: other.socket.userId === member.socket.userId || talks.get(pairOf(member.socket.userId, other.socket.userId)) === true
+                talk: other.socket.userId === member.socket.userId || talks.get(pairOf(member.socket.userId, other.socket.userId)) === true,
+                join: other.join
             }));
 
             emit(member.socket, (n) => voice(n, tableId, true, peers));
@@ -885,7 +888,7 @@ export function createHub(deps: HubDeps): Hub
                         return;
                     }
 
-                    const room = rooms.get(tableId) ?? new Map<string, { socket: Held; muted: boolean }>();
+                    const room = rooms.get(tableId) ?? new Map<string, { socket: Held; muted: boolean; join: string }>();
                     const others = [...room.values()].filter((member) => member.socket.userId !== socket.userId);
 
                     const verdicts = await Promise.all(others.map((other) => deps.mayTalk(socket.userId, other.socket.userId)));
@@ -899,19 +902,27 @@ export function createHub(deps: HubDeps): Hub
 
                     const previous = room.get(socket.userId);
 
-                    if (previous !== undefined && previous.socket.id !== socket.id)
+                    if (previous !== undefined && previous.socket.id === socket.id)
+                    {
+                        previous.muted = muted;
+                        roster(tableId);
+                        return;
+                    }
+
+                    if (previous !== undefined)
                     {
                         emit(previous.socket, (n) => voice(n, tableId, false, []));
                     }
 
-                    room.set(socket.userId, { socket, muted });
+                    joins += 1;
+                    room.set(socket.userId, { socket, muted, join: joins.toString(36) });
                     rooms.set(tableId, room);
                     roster(tableId);
                 })
                 .catch((error) => deps.report(error, 'realtime.voice'));
         },
 
-        signal(connection, tableId, to, kind, data)
+        signal(connection, tableId, to, join, kind, data)
         {
             const socket = held(connection);
             const room = rooms.get(tableId);
@@ -924,12 +935,12 @@ export function createHub(deps: HubDeps): Hub
 
             const target = [...room.values()].find((member) => member.socket.handle === to);
 
-            if (target === undefined || target.socket.userId === socket.userId || talks.get(pairOf(socket.userId, target.socket.userId)) !== true)
+            if (target === undefined || target.join !== join || target.socket.userId === socket.userId || talks.get(pairOf(socket.userId, target.socket.userId)) !== true)
             {
                 return;
             }
 
-            emit(target.socket, (n) => signal(n, tableId, socket.handle, kind, data));
+            emit(target.socket, (n) => signal(n, tableId, socket.handle, sender.join, kind, data));
         },
 
         voiceOf(tableId)

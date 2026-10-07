@@ -37,12 +37,15 @@ for a product whose players include minors.
   2026-10-07, so a call for one side of a team table has somewhere to be said.
 - Client frames:
   - `{ t: 'voice', table, on, muted }` - join, leave, or change my mute state.
-  - `{ t: 'signal', table, to, kind: 'offer' | 'answer' | 'ice', data }` - relay one negotiation
-    message to one player in the same room. `data` is capped at 12 KB; every other frame keeps the
-    4 KB cap.
+  - `{ t: 'signal', table, to, join, kind: 'offer' | 'answer' | 'ice', data }` - relay one
+    negotiation message to one player in the same room. `join` names which of that player's joinings
+    it is for, and the hub drops one meant for a joining that is over. `data` is capped at 12 KB;
+    every other frame keeps the 4 KB cap.
 - Server frames:
-  - `{ t: 'voice', table, peers: [{ who, muted }] }` - the room, sent to everybody in it on change.
-  - `{ t: 'signal', table, from, kind, data }`.
+  - `{ t: 'voice', table, joined, peers: [{ who, muted, talk, join }] }` - the room, sent to
+    everybody in it on change. `join` is the name of that player's entry into the room: kept through
+    a mute, new when they come back.
+  - `{ t: 'signal', table, from, join, kind, data }`, where `join` is the sender's.
 - Joining checks, once, in the database: the caller is seated at the table and the table has voice
   on. The room lives in memory in the hub and empties itself when a socket closes; a server restart
   drops every call, and clients rejoin on reconnect.

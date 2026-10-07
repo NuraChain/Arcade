@@ -83,6 +83,11 @@ function fakeConnection()
                 await gate;
             }
 
+            if (connection.closed)
+            {
+                throw new Error('closed');
+            }
+
             applied.push(description);
 
             if (description.type === 'answer')
@@ -131,21 +136,42 @@ function fakeConnection()
 
 function side(me: string)
 {
-    const connection = fakeConnection();
-    const sent: { to: string; signal: VoiceSignal }[] = [];
+    const connections: ReturnType<typeof fakeConnection>[] = [];
+    const sent: { to: string; join: string; signal: VoiceSignal }[] = [];
     const links: [string, PeerLink | null][] = [];
 
     const call = createVoiceCall({
         me,
         iceServers: [],
-        send: (to, signal) => sent.push({ to, signal }),
+        send: (to, join, signal) => sent.push({ to, join, signal }),
         onLink: (who, link) => links.push([who, link]),
         onLevel: () => undefined,
-        connect: () => connection as unknown as RTCPeerConnection
+        connect: () =>
+        {
+            const made = fakeConnection();
+
+            connections.push(made);
+
+            return made as unknown as RTCPeerConnection;
+        }
     });
 
-    return { call, connection, sent, links };
+    return {
+        call,
+        connections,
+        sent,
+        links,
+
+        get connection()
+        {
+            return connections[connections.length - 1];
+        }
+    };
 }
+
+const MINA = { who: 'mina', join: 'm1' };
+
+const DANA = { who: 'dana', join: 'd1' };
 
 describe('a call between two players', () =>
 {
@@ -154,15 +180,15 @@ describe('a call between two players', () =>
         const asks = side('dana');
         const waits = side('mina');
 
-        asks.call.sync(['mina']);
-        waits.call.sync(['dana']);
+        asks.call.sync([MINA]);
+        waits.call.sync([DANA]);
 
         expect(asks.connection.lines.map((one) => one.direction)).toEqual(['sendrecv']);
         expect(waits.connection.lines).toEqual([]);
 
         await asks.connection.onnegotiationneeded?.();
 
-        expect(asks.sent.map((one) => [one.to, one.signal.kind])).toEqual([['mina', 'offer']]);
+        expect(asks.sent.map((one) => [one.to, one.join, one.signal.kind])).toEqual([['mina', 'm1', 'offer']]);
         expect(waits.sent).toEqual([]);
     });
 
@@ -171,19 +197,21 @@ describe('a call between two players', () =>
         const waits = side('mina');
 
         await waits.call.setMic(stream);
-        waits.call.sync(['dana']);
-        await waits.call.receive('dana', said('offer'));
+        waits.call.sync([DANA]);
+        await waits.call.receive('dana', 'd1', said('offer'));
 
         expect(waits.connection.lines.map((one) => [one.mid, one.direction, one.sender.track])).toEqual([['0', 'sendrecv', microphone]]);
-        expect(waits.sent.map((one) => [one.to, one.signal.kind, JSON.parse(one.signal.data).type])).toEqual([['dana', 'answer', 'answer']]);
+        expect(waits.sent.map((one) => [one.to, one.join, one.signal.kind, JSON.parse(one.signal.data).type])).toEqual([['dana', 'd1', 'answer', 'answer']]);
     });
 
     it('opens the peer on its first signal, when an offer beats the roster', async () =>
     {
         const waits = side('mina');
 
-        await waits.call.receive('dana', said('offer'));
+        await waits.call.receive('dana', 'd1', said('offer'));
+        waits.call.sync([DANA]);
 
+        expect(waits.connections.length).toBe(1);
         expect(waits.links).toEqual([['dana', 'connecting']]);
         expect(waits.connection.lines.map((one) => one.direction)).toEqual(['sendrecv']);
         expect(waits.sent.map((one) => one.signal.kind)).toEqual(['answer']);
@@ -194,8 +222,8 @@ describe('a call between two players', () =>
         const asks = side('dana');
         const waits = side('mina');
 
-        asks.call.sync(['mina']);
-        await waits.call.receive('dana', said('offer'));
+        asks.call.sync([MINA]);
+        await waits.call.receive('dana', 'd1', said('offer'));
 
         await asks.call.setMic(stream);
         await waits.call.setMic(stream);
@@ -208,13 +236,13 @@ describe('a call between two players', () =>
     {
         const asks = side('dana');
 
-        asks.call.sync(['mina']);
+        asks.call.sync([MINA]);
         await asks.connection.onnegotiationneeded?.();
 
         asks.connection.hold();
 
-        const answered = asks.call.receive('mina', said('answer'));
-        const offered = asks.call.receive('mina', said('offer'));
+        const answered = asks.call.receive('mina', 'm1', said('answer'));
+        const offered = asks.call.receive('mina', 'm1', said('offer'));
 
         asks.connection.release();
         await Promise.all([answered, offered]);
@@ -229,16 +257,16 @@ describe('a call between two players', () =>
         const asks = side('dana');
         const waits = side('mina');
 
-        asks.call.sync(['mina']);
+        asks.call.sync([MINA]);
         await asks.connection.onnegotiationneeded?.();
-        await asks.call.receive('mina', said('offer'));
+        await asks.call.receive('mina', 'm1', said('offer'));
 
         expect(asks.connection.applied).toEqual([]);
         expect(asks.sent.map((one) => one.signal.kind)).toEqual(['offer']);
 
-        await waits.call.receive('dana', said('offer'));
+        await waits.call.receive('dana', 'd1', said('offer'));
         await waits.connection.onnegotiationneeded?.();
-        await waits.call.receive('dana', said('offer', 'their-second-offer'));
+        await waits.call.receive('dana', 'd1', said('offer', 'their-second-offer'));
 
         expect(waits.connection.applied.map((one) => one.sdp)).toEqual(['their-offer', 'their-second-offer']);
         expect(waits.sent.map((one) => one.signal.kind)).toEqual(['answer', 'offer', 'answer']);
@@ -248,10 +276,78 @@ describe('a call between two players', () =>
     {
         const asks = side('dana');
 
-        asks.call.sync(['mina']);
+        asks.call.sync([MINA]);
         asks.call.sync([]);
 
         expect(asks.connection.closed).toBe(true);
         expect(asks.links).toEqual([['mina', 'connecting'], ['mina', null]]);
+    });
+
+    it('calls somebody again when they come back as a new joining, and keeps the line to somebody who never left', async () =>
+    {
+        const asks = side('dana');
+
+        asks.call.sync([MINA]);
+        asks.call.sync([MINA]);
+
+        expect(asks.connections.length).toBe(1);
+
+        asks.call.sync([{ who: 'mina', join: 'm2' }]);
+
+        expect(asks.connections.map((one) => one.closed)).toEqual([true, false]);
+        expect(asks.links).toEqual([['mina', 'connecting'], ['mina', null], ['mina', 'connecting']]);
+
+        await asks.connection.onnegotiationneeded?.();
+
+        expect(asks.sent.map((one) => [one.to, one.join, one.signal.kind])).toEqual([['mina', 'm2', 'offer']]);
+    });
+
+    it('waits again for somebody who comes back, on a line of its own', async () =>
+    {
+        const waits = side('mina');
+
+        waits.call.sync([DANA]);
+        await waits.call.receive('dana', 'd1', said('offer'));
+        waits.call.sync([{ who: 'dana', join: 'd2' }]);
+
+        expect(waits.connections.map((one) => [one.closed, one.lines.length])).toEqual([[true, 1], [false, 0]]);
+
+        await waits.call.receive('dana', 'd2', said('offer'));
+
+        expect(waits.connection.lines.map((one) => one.direction)).toEqual(['sendrecv']);
+        expect(waits.sent.map((one) => [one.join, one.signal.kind])).toEqual([['d1', 'answer'], ['d2', 'answer']]);
+    });
+
+    it('does not let a connection it has hung up speak for the one that replaced it', async () =>
+    {
+        const asks = side('dana');
+
+        asks.call.sync([MINA]);
+        await asks.connection.onnegotiationneeded?.();
+
+        const first = asks.connection;
+
+        first.hold();
+
+        const answered = asks.call.receive('mina', 'm1', said('answer'));
+
+        asks.call.sync([{ who: 'mina', join: 'm2' }]);
+        first.release();
+        await answered;
+
+        expect(asks.connections.map((one) => one.closed)).toEqual([true, false]);
+        expect(asks.links).toEqual([['mina', 'connecting'], ['mina', null], ['mina', 'connecting']]);
+    });
+
+    it('lets a signal from a joining it has hung up on fall', async () =>
+    {
+        const waits = side('mina');
+
+        waits.call.sync([{ who: 'dana', join: 'd2' }]);
+        await waits.call.receive('dana', 'd1', said('offer'));
+
+        expect(waits.connections.length).toBe(1);
+        expect(waits.connection.applied).toEqual([]);
+        expect(waits.sent).toEqual([]);
     });
 });

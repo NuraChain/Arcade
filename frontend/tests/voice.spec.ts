@@ -17,8 +17,8 @@ const TABLE = 'table-1';
 interface FakeCall
 {
     deps: VoiceCallDeps;
-    synced: string[][];
-    received: { from: string; signal: VoiceSignal }[];
+    synced: { who: string; join: string }[][];
+    received: { from: string; join: string; signal: VoiceSignal }[];
     muted: boolean[];
     mic: (MediaStream | null)[];
     volumes: Record<string, number>;
@@ -46,9 +46,9 @@ const fakeCall = (deps: VoiceCallDeps): VoiceCall =>
         {
             call.synced.push([...peers]);
         },
-        receive: async (from, signal) =>
+        receive: async (from, join, signal) =>
         {
-            call.received.push({ from, signal });
+            call.received.push({ from, join, signal });
         },
         setVolume: (who, volume) =>
         {
@@ -147,13 +147,13 @@ describe('voice at a table', () =>
         await useVoice().join(TABLE);
 
         socket.deliver({ v: 1, t: 'voice', n: 3, table: TABLE, joined: true, peers: [
-            { who: 'alex', muted: true, talk: true },
-            { who: 'sara.k', muted: false, talk: true },
-            { who: 'mina', muted: false, talk: false }
+            { who: 'alex', muted: true, talk: true, join: 'j1' },
+            { who: 'sara.k', muted: false, talk: true, join: 'j2' },
+            { who: 'mina', muted: false, talk: false, join: 'j3' }
         ] });
         await settle();
 
-        expect(calls[0].synced.at(-1)).toEqual(['sara.k']);
+        expect(calls[0].synced.at(-1)).toEqual([{ who: 'sara.k', join: 'j2' }]);
         expect(useVoice().people().map((person) => [person.who, person.me, person.talk])).toEqual([
             ['alex', true, true],
             ['sara.k', false, true],
@@ -165,11 +165,20 @@ describe('voice at a table', () =>
     {
         await useVoice().join(TABLE);
 
-        socket.deliver({ v: 1, t: 'signal', n: 4, table: TABLE, from: 'sara.k', kind: 'offer', data: '{"sdp":"x"}' });
-        socket.deliver({ v: 1, t: 'signal', n: 5, table: 'other', from: 'sara.k', kind: 'offer', data: '{"sdp":"y"}' });
+        socket.deliver({ v: 1, t: 'signal', n: 4, table: TABLE, from: 'sara.k', join: 'j2', kind: 'offer', data: '{"sdp":"x"}' });
+        socket.deliver({ v: 1, t: 'signal', n: 5, table: 'other', from: 'sara.k', join: 'j2', kind: 'offer', data: '{"sdp":"y"}' });
         await settle();
 
-        expect(calls[0].received).toEqual([{ from: 'sara.k', signal: { kind: 'offer', data: '{"sdp":"x"}' } }]);
+        expect(calls[0].received).toEqual([{ from: 'sara.k', join: 'j2', signal: { kind: 'offer', data: '{"sdp":"x"}' } }]);
+    });
+
+    it('sends a signal to the joining the call names, and to nobody else of that name', async () =>
+    {
+        await useVoice().join(TABLE);
+
+        calls[0].deps.send('sara.k', 'j2', { kind: 'offer', data: '{"sdp":"z"}' });
+
+        expect(socket.sent.filter((frame) => frame.t === 'signal')).toEqual([{ t: 'signal', table: TABLE, to: 'sara.k', join: 'j2', kind: 'offer', data: '{"sdp":"z"}' }]);
     });
 
     it('unmutes and tells the room', async () =>
@@ -200,10 +209,18 @@ describe('voice at a table', () =>
         expect(useVoice().table()).toBeNull();
     });
 
-    it('rejoins the room after the socket comes back', async () =>
+    it('rejoins the room after the socket comes back, having hung up on everybody its last joining was talking to', async () =>
     {
         await useVoice().join(TABLE);
+
+        socket.deliver({ v: 1, t: 'voice', n: 3, table: TABLE, joined: true, peers: [
+            { who: 'alex', muted: false, talk: true, join: 'j1' },
+            { who: 'sara.k', muted: false, talk: true, join: 'j2' }
+        ] });
+        await settle();
+
         const before = voiceFrames().length;
+        const synced = calls[0].synced.length;
 
         socket.drop();
         useRealtime().start();
@@ -212,13 +229,15 @@ describe('voice at a table', () =>
 
         expect(voiceFrames().length).toBeGreaterThan(before);
         expect(voiceFrames().at(-1)).toMatchObject({ table: TABLE, on: true });
+        expect(calls[0].synced.slice(synced)).toEqual([[]]);
+        expect(calls[0].closed).toBe(false);
     });
 
     const room = async () =>
     {
         socket.deliver({ v: 1, t: 'voice', n: 3, table: TABLE, joined: true, peers: [
-            { who: 'alex', muted: false, talk: true },
-            { who: 'sara.k', muted: false, talk: true }
+            { who: 'alex', muted: false, talk: true, join: 'j1' },
+            { who: 'sara.k', muted: false, talk: true, join: 'j2' }
         ] });
         await settle();
     };

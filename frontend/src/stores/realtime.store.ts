@@ -122,7 +122,7 @@ export interface RealtimeApi
 
     hold(): () => void;
 
-    signal(table: string, to: string, kind: SignalFrame['kind'], data: string): void;
+    signal(table: string, to: string, join: string, kind: SignalFrame['kind'], data: string): void;
 
     /**
      * Every status change, in order.
@@ -689,7 +689,7 @@ export const useRealtime = createStore((): RealtimeApi =>
             };
         },
 
-        signal: (table, to, kind, data) => active.send({ t: 'signal', table, to, kind, data }),
+        signal: (table, to, join, kind, data) => active.send({ t: 'signal', table, to, join, kind, data }),
 
         onTyping(listener)
         {

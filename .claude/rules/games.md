@@ -585,6 +585,28 @@ alone was enough:
 one, a microphone granted later, the offer that lands mid-answer, and the two halves of a real
 collision.
 
+**A joining has a name, and a signal travels from one joining to one.** The hub names every entry
+into a room - `join`, on each roster entry - keeps the name through a mute, and gives a new one to
+somebody who comes back, whether their socket dropped, another tab of theirs took the call or the
+server restarted. The call layer holds one connection per JOINING, not per handle: a roster that
+names a new one hangs up the old connection and opens another, so the side that calls calls again.
+A signal says which joining it is for, and the hub drops one meant for a joining that is over;
+relayed, it says which joining sent it, and the receiver lets one from a joining it has hung up on
+fall. A browser whose socket comes back hangs up on everybody BEFORE it asks to be let in again: its
+old joining ended with the socket, and anything its old connections sent now would go out under the
+new name.
+
+**Before that a peer was a handle, and coming back was luck.** A player whose socket blipped
+returned to a room where the other end had hung up and built a new connection while their own
+browser still held the old one. When the returning player was the one who calls, nobody offered:
+the call sat silent for nineteen seconds, until the dead connection failed and its ICE restart
+happened to be answered. When it was the other, the new offer landed on the old connection and
+worked only because Chromium rebuilds DTLS for a changed fingerprint. Both take about two seconds
+now, measured by closing the socket from the page in two browsers. `realtime-hub.spec.ts` holds the
+names and the relay, `voice-rtc.spec.ts` the hanging up and calling again, `voice.spec.ts` the
+hanging up before a rejoin, and `voice-pass` cuts each player's socket in turn and wants a new line
+at both ends with packets both ways.
+
 `tools/qa/voice-pass.mjs` is two real browsers on Chromium's fake microphone: join, a live remote
 track in each, the tone lighting "speaking" in the OTHER browser, mute, leave. Run it by hand against
 the built server with every change to this path. **A live remote track is not a connection**: the

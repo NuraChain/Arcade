@@ -8,11 +8,17 @@ export interface VoiceSignal
     data: string;
 }
 
+export interface VoiceJoin
+{
+    who: string;
+    join: string;
+}
+
 export interface VoiceCallDeps
 {
     me: string;
     iceServers: RTCIceServer[];
-    send(to: string, signal: VoiceSignal): void;
+    send(to: string, join: string, signal: VoiceSignal): void;
     onLink(who: string, link: PeerLink | null): void;
     onLevel(who: string, level: number): void;
     connect?(config: RTCConfiguration): RTCPeerConnection;
@@ -23,8 +29,8 @@ export interface VoiceCall
 {
     setMic(stream: MediaStream | null): Promise<void>;
     setMuted(muted: boolean): void;
-    sync(peers: readonly string[]): void;
-    receive(from: string, signal: VoiceSignal): Promise<void>;
+    sync(peers: readonly VoiceJoin[]): void;
+    receive(from: string, join: string, signal: VoiceSignal): Promise<void>;
     setVolume(who: string, volume: number): void;
     setSink(id: string): void;
     close(): void;
@@ -32,6 +38,7 @@ export interface VoiceCall
 
 interface Peer
 {
+    join: string;
     connection: RTCPeerConnection;
     sender: RTCRtpSender | null;
     audio: HTMLAudioElement | null;
@@ -123,11 +130,12 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
         }
     };
 
-    const open = (who: string) =>
+    const open = (who: string, join: string) =>
     {
         const connection = connect({ iceServers: deps.iceServers });
 
         const peer: Peer = {
+            join,
             connection,
             sender: null,
             audio: null,
@@ -155,12 +163,15 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
                 await connection.setLocalDescription();
                 if (connection.localDescription !== null)
                 {
-                    deps.send(who, { kind: connection.localDescription.type === 'answer' ? 'answer' : 'offer', data: JSON.stringify(connection.localDescription) });
+                    deps.send(who, join, { kind: connection.localDescription.type === 'answer' ? 'answer' : 'offer', data: JSON.stringify(connection.localDescription) });
                 }
             }
             catch
             {
-                deps.onLink(who, 'failed');
+                if (peers.get(who) === peer)
+                {
+                    deps.onLink(who, 'failed');
+                }
             }
             finally
             {
@@ -172,7 +183,7 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
         {
             if (event.candidate !== null)
             {
-                deps.send(who, { kind: 'ice', data: JSON.stringify(event.candidate) });
+                deps.send(who, join, { kind: 'ice', data: JSON.stringify(event.candidate) });
             }
         };
 
@@ -266,33 +277,38 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
                 return;
             }
 
-            const keep = new Set(wanted.filter((who) => who !== deps.me));
+            const keep = new Map(wanted.filter((one) => one.who !== deps.me).map((one) => [one.who, one.join]));
 
-            for (const who of [...peers.keys()])
+            for (const [who, peer] of [...peers])
             {
-                if (!keep.has(who))
+                if (keep.get(who) !== peer.join)
                 {
                     drop(who);
                 }
             }
 
-            for (const who of keep)
+            for (const [who, join] of keep)
             {
                 if (!peers.has(who))
                 {
-                    open(who);
+                    open(who, join);
                 }
             }
         },
 
-        async receive(from, signal)
+        async receive(from, join, signal)
         {
             if (closed || from === deps.me)
             {
                 return;
             }
 
-            const peer = peers.get(from) ?? open(from);
+            const peer = peers.get(from) ?? open(from, join);
+
+            if (peer.join !== join)
+            {
+                return;
+            }
 
             const connection = peer.connection;
 
@@ -354,13 +370,16 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
                     await connection.setLocalDescription();
                     if (connection.localDescription !== null)
                     {
-                        deps.send(from, { kind: 'answer', data: JSON.stringify(connection.localDescription) });
+                        deps.send(from, join, { kind: 'answer', data: JSON.stringify(connection.localDescription) });
                     }
                 }
             }
             catch
             {
-                deps.onLink(from, 'failed');
+                if (peers.get(from) === peer)
+                {
+                    deps.onLink(from, 'failed');
+                }
             }
         },
 

@@ -13,6 +13,10 @@
  * description is applied, before a single packet. So the pass also reads each page's own
  * RTCPeerConnection - connected, one line, packets counted out and in - and has both players leave
  * and join together three more times, because the call that never connected did so two times in five.
+ *
+ * It also cuts each player's realtime socket in turn, from the page, and wants a NEW connection at
+ * both ends carrying packets again: a player who comes back is a new joining, and both ends hang up
+ * and start over rather than one of them waiting on a line the other has dropped.
  */
 import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -76,6 +80,24 @@ async function seat(handle)
             return made;
         };
         window.RTCPeerConnection.prototype = Real.prototype;
+
+        const RealSocket = window.WebSocket;
+
+        window.__sockets = [];
+        window.WebSocket = function (...given)
+        {
+            const made = new RealSocket(...given);
+
+            window.__sockets.push(made);
+
+            return made;
+        };
+        window.WebSocket.prototype = RealSocket.prototype;
+
+        for (const state of ['CONNECTING', 'OPEN', 'CLOSING', 'CLOSED'])
+        {
+            window.WebSocket[state] = RealSocket[state];
+        }
     });
 
     const issued = await context.request.post(`${ BASE }/api/auth/challenge`, { data: { address: wallet.address } });
@@ -169,6 +191,19 @@ const through = (ms) => until(async () => flowing(await linked(dana.page)) && fl
 
 const told = async () => `dana: ${ JSON.stringify(await linked(dana.page)) }, mina: ${ JSON.stringify(await linked(mina.page)) }`;
 
+const built = (page) => page.evaluate(() => (window.__calls ?? []).length);
+
+const cut = (page) => page.evaluate(() =>
+{
+    for (const socket of window.__sockets ?? [])
+    {
+        if (new URL(socket.url).pathname === '/ws' && socket.readyState === 1)
+        {
+            socket.close();
+        }
+    }
+});
+
 const dana = await seat('dana.w');
 const mina = await seat('mina');
 
@@ -221,6 +256,17 @@ for (let round = 0; round < 3; round += 1)
 }
 
 record('leaving and joining together connects every time', again === 3, `${ again } of 3; ${ await told() }`);
+
+for (const [gone, stays] of [[dana, mina], [mina, dana]])
+{
+    const before = { gone: await built(gone.page), stays: await built(stays.page) };
+
+    await cut(gone.page);
+
+    const anew = await until(async () => (await built(gone.page)) > before.gone && (await built(stays.page)) > before.stays, 10_000);
+
+    record(`${ gone.handle } is called again on a new line at both ends when its socket drops and comes back`, anew && await through(10_000), await told());
+}
 
 await players(dana.page);
 const mutedFirst = await until(async () => (await pillOf(dana.page, 'Mina')).some((text) => text === 'Muted'));

@@ -239,7 +239,7 @@ export function attachRealtime(server: Server, deps: GatewayDeps): () => void
 
                 if (frame.t === 'signal')
                 {
-                    deps.hub.signal(connection, frame.table, frame.to, frame.kind, frame.data);
+                    deps.hub.signal(connection, frame.table, frame.to, frame.join, frame.kind, frame.data);
                     return;
                 }
 

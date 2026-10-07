@@ -204,14 +204,14 @@ export const useVoice = createStore((): VoiceApi =>
 
         const self = me();
 
-        call?.sync(frame.peers.filter((peer) => peer.talk && peer.who !== self).map((peer) => peer.who));
+        call?.sync(frame.peers.filter((peer) => peer.talk && peer.who !== self).map((peer) => ({ who: peer.who, join: peer.join })));
     };
 
     const signalled = (frame: SignalFrame) =>
     {
         if (frame.table === untrack(table))
         {
-            void call?.receive(frame.from, { kind: frame.kind, data: frame.data });
+            void call?.receive(frame.from, frame.join, { kind: frame.kind, data: frame.data });
         }
     };
 
@@ -401,7 +401,7 @@ export const useVoice = createStore((): VoiceApi =>
                     ...(server.username === undefined ? {} : { username: server.username }),
                     ...(server.credential === undefined ? {} : { credential: server.credential })
                 })),
-                send: (to, signal) => realtime.signal(next, to, signal.kind, signal.data),
+                send: (to, join, signal) => realtime.signal(next, to, join, signal.kind, signal.data),
                 onLink: (who, link) =>
                 {
                     setLinks((current) =>
@@ -588,6 +588,7 @@ export const useVoice = createStore((): VoiceApi =>
 
                     if (current !== null && !untrack(joining))
                     {
+                        call?.sync([]);
                         realtime.voice(current, true, untrack(muted));
                     }
                 })

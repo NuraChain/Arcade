@@ -16,6 +16,7 @@ export interface VoicePeer
     who: string;
     muted: boolean;
     talk: boolean;
+    join: string;
 }
 
 export type NudgeScope = 'chat' | 'social' | 'game' | 'table' | 'me';
@@ -32,7 +33,7 @@ export type ServerFrame =
     | { v: 1; t: 'nudge'; n: number; scope: NudgeScope; id?: string; at: number }
     | { v: 1; t: 'typing'; n: number; who: string; id: string }
     | { v: 1; t: 'voice'; n: number; table: string; joined: boolean; peers: VoicePeer[] }
-    | { v: 1; t: 'signal'; n: number; table: string; from: string; kind: SignalKind; data: string }
+    | { v: 1; t: 'signal'; n: number; table: string; from: string; join: string; kind: SignalKind; data: string }
     | { v: 1; t: 'game'; n: number; at: number; match: MatchView; events: MatchEvent[] }
     | { v: 1; t: 'ack'; n: number; key: string; match: MatchView; applied: Applied; events: MatchEvent[] }
     | { v: 1; t: 'refused'; n: number; key: string; match: string; status: number; code: string; message: string }
@@ -45,7 +46,7 @@ export type ClientFrame =
     | { t: 'presence'; state: PresenceState }
     | { t: 'typing'; id: string }
     | { t: 'voice'; table: string; on: boolean; muted: boolean }
-    | { t: 'signal'; table: string; to: string; kind: SignalKind; data: string }
+    | { t: 'signal'; table: string; to: string; join: string; kind: SignalKind; data: string }
     | { t: 'play'; match: string; key: string; rev?: number; play: unknown }
     | { t: 'ping' };
 
@@ -92,8 +93,8 @@ export const typing = (n: number, who: string, id: string): ServerFrame =>
 export const voice = (n: number, table: string, joined: boolean, peers: VoicePeer[]): ServerFrame =>
     ({ v: 1, t: 'voice', n, table, joined, peers });
 
-export const signal = (n: number, table: string, from: string, kind: SignalKind, data: string): ServerFrame =>
-    ({ v: 1, t: 'signal', n, table, from, kind, data });
+export const signal = (n: number, table: string, from: string, join: string, kind: SignalKind, data: string): ServerFrame =>
+    ({ v: 1, t: 'signal', n, table, from, join, kind, data });
 
 export const game = (n: number, at: number, match: MatchView, events: MatchEvent[]): ServerFrame =>
     ({ v: 1, t: 'game', n, at, match, events });
@@ -130,7 +131,7 @@ const SHAPES: Record<string, ReadonlySet<string>> = Object.assign(Object.create(
     presence: new Set(['v', 't', 'state']),
     typing: new Set(['v', 't', 'id']),
     voice: new Set(['v', 't', 'table', 'on', 'muted']),
-    signal: new Set(['v', 't', 'table', 'to', 'kind', 'data']),
+    signal: new Set(['v', 't', 'table', 'to', 'join', 'kind', 'data']),
     play: new Set(['v', 't', 'match', 'key', 'rev', 'play']),
     ping: new Set(['v', 't'])
 });
@@ -224,9 +225,9 @@ export function parseClientFrame(text: string): ClientFrame | null
 
     if (frame.t === 'signal')
     {
-        return idOf(frame.table) && idOf(frame.to) && typeof frame.kind === 'string' && KINDS.has(frame.kind)
+        return idOf(frame.table) && idOf(frame.to) && idOf(frame.join) && typeof frame.kind === 'string' && KINDS.has(frame.kind)
             && typeof frame.data === 'string' && frame.data.length > 0 && frame.data.length <= SIGNAL_DATA_MAX
-            ? { t: 'signal', table: frame.table, to: frame.to, kind: frame.kind as SignalKind, data: frame.data }
+            ? { t: 'signal', table: frame.table, to: frame.to, join: frame.join, kind: frame.kind as SignalKind, data: frame.data }
             : null;
     }
 
