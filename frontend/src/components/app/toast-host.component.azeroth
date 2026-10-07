@@ -64,7 +64,7 @@ export default component ToastHost()
     const people = usePeople();
     const overlay = useOverlay();
 
-    derived placement = sheeted(overlay.items(), device.posture() === 'phone') ? 'top' : 'bottom';
+    derived placement = toasts.lifted() || sheeted(overlay.items(), device.posture() === 'phone') ? 'top' : 'bottom';
 
     /**
      * One drag recogniser per toast on screen - and only per toast on screen.

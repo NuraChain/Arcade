@@ -1568,6 +1568,70 @@ describe('PlayPage', () =>
         });
     });
 
+    describe('where a toast is drawn at a table', () =>
+    {
+        const at = async (posture: 'phone' | 'sidebar', railOpen: boolean) =>
+        {
+            useDevice().override(posture);
+            useSettings().update({ railOpen });
+
+            const lobby = useLobby();
+            const id = await lobby.host('ludo', defaultTable('ludo'), []);
+            const routes: Route[] = [{ path: '/app/play/:id', component: (): HTMLElement => PlayPage() as HTMLElement }];
+            const router = createRouter({ routes, history: createMemoryHistory(`/app/play/${ id }`), scroll: false });
+            const drawn = renderTest(() => RouterProvider({ router, children: () => Routes({}) }) as Rendered);
+
+            await vi.waitFor(() => expect(useLobby().table()?.id).toBe(id), { timeout: 4000 });
+            await settle();
+
+            return drawn;
+        };
+
+        beforeEach(() =>
+        {
+            useSettings().reset();
+            useToasts().reset();
+        });
+
+        afterEach(() =>
+        {
+            useDevice().override(null);
+            useSettings().reset();
+            useToasts().reset();
+        });
+
+        it('is at the top on a phone, where the bottom is the reader’s hand and the chat, and back where it was once the page is left', async () =>
+        {
+            expect(useToasts().lifted()).toBe(false);
+
+            const drawn = await at('phone', false);
+
+            expect(useToasts().lifted(), 'a toast at a phone’s table lay over the hand').toBe(true);
+
+            drawn.unmount();
+            await settle();
+
+            expect(useToasts().lifted(), 'the page took the toasts’ place with it').toBe(false);
+        });
+
+        it('keeps its corner on a wide screen until the chat is open there, and takes it back when the chat is closed', async () =>
+        {
+            await at('sidebar', false);
+
+            expect(useToasts().lifted()).toBe(false);
+
+            useSettings().update({ railOpen: true });
+            await settle();
+
+            expect(useToasts().lifted(), 'a toast lay over the field somebody was typing in').toBe(true);
+
+            useSettings().update({ railOpen: false });
+            await settle();
+
+            expect(useToasts().lifted()).toBe(false);
+        });
+    });
+
     describe('somebody the call cannot reach', () =>
     {
         const microphone = { stop: () => undefined } as unknown as MediaStreamTrack;

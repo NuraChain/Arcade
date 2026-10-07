@@ -799,6 +799,13 @@ their corner. The store used to carry a `placement` and a `setPlacement` that no
 with the CSS for a top placement written and never drawn: both are gone, the host reads what it needs.
 `shell.spec.ts` (*beside a sheet*) holds the three cases.
 
+**At a table a toast keeps off the hand and the chat.** The foot of a phone is the reader's own cards
+and dice and, once it is open, the chat's field; the bottom corner of a wide screen is where the chat
+card's composer sits. A page that needs the toasts elsewhere holds them at the top with
+`toasts.lift()`, which answers the release: the holds are counted, so two holders do not let go of
+each other's, and one taken before a `reset()` cannot undo one taken after. The table's page holds
+it always on a phone and, on a wide screen, while the chat card is open.
+
 **An offer in a toast is taken back when it stops being true.** A table with voice offers the call
 in a toast with a Join button, and a toast outlives whatever raised it. The host switched voice off
 and "This table has voice" stayed beside "Voice is off at this table". A reader who joined from the

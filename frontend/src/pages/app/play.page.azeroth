@@ -352,6 +352,16 @@ export default component PlayPage()
 
     derived sheetVisible = !floating && hasChat && chatOpen;
 
+    derived aloft = !floating || cardOpen;
+
+    effect
+    {
+        if (aloft)
+        {
+            onCleanup(toasts.lift());
+        }
+    }
+
     derived halfSheet = sheetVisible && !sideways && !chatWide;
 
     state sheet: SheetSize | null = null;

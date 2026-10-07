@@ -425,6 +425,56 @@ describe('ToastHost', () =>
             expect(region().querySelector('[role="status"]')?.textContent).toContain('Invited Sara');
         });
 
+        it('goes to the top for as long as a page holds it there, on a wide screen too, and comes back when the last hold is let go', async () =>
+        {
+            useDevice().override('sidebar');
+            renderTest(() => ToastHost({}) as Rendered);
+            useToasts().show({ text: 'This table has voice' });
+            await settle();
+
+            const toast = region().querySelector('[role="status"]');
+
+            expect(region().dataset.placement).toBe('bottom');
+
+            const first = useToasts().lift();
+            const second = useToasts().lift();
+
+            await settle();
+
+            expect(region().dataset.placement).toBe('top');
+            expect(region().querySelector('[role="status"]'), 'the toast was drawn again to be moved').toBe(toast);
+
+            first();
+            first();
+            await settle();
+
+            expect(region().dataset.placement, 'one hold let go twice took the other with it').toBe('top');
+
+            second();
+            await settle();
+
+            expect(region().dataset.placement).toBe('bottom');
+
+            const before = useToasts().lift();
+
+            useToasts().reset();
+            await settle();
+
+            expect(region().dataset.placement, 'a hold outlived the reset').toBe('bottom');
+
+            const since = useToasts().lift();
+
+            before();
+            await settle();
+
+            expect(region().dataset.placement, 'a hold from before the reset let go of one taken after it').toBe('top');
+
+            since();
+            await settle();
+
+            expect(region().dataset.placement).toBe('bottom');
+        });
+
         it('stays in its corner beside a dialog on a wide screen', async () =>
         {
             useDevice().override('sidebar');

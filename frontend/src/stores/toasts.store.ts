@@ -77,6 +77,8 @@ export interface ToastsApi
     promise<T>(work: Promise<T>, copy: { pending: string; done: (value: T) => string; failed?: string }): Promise<T>;
     dismiss(id: string): void;
     dismissAll(): void;
+    lifted: Getter<boolean>;
+    lift(): () => void;
     pause(id: string): void;
     resume(id: string): void;
     progress(id: string, now: number): number;
@@ -120,6 +122,8 @@ export const useToasts = createStore(() =>
 {
     const [items, setItems] = createSignal<Toast[]>([]);
     const [queue, setQueue] = createSignal<Toast[]>([]);
+    const [lifts, setLifts] = createSignal(0);
+    let era = 0;
 
     const timers = new Map<string, () => void>();
     let counter = 0;
@@ -281,6 +285,26 @@ export const useToasts = createStore(() =>
             setQueue([]);
         },
 
+        lifted: () => lifts() > 0,
+
+        lift()
+        {
+            const born = era;
+            let held = true;
+
+            setLifts((count) => count + 1);
+
+            return () =>
+            {
+                if (held && born === era)
+                {
+                    setLifts((count) => count - 1);
+                }
+
+                held = false;
+            };
+        },
+
         /**
          * Stops the countdown, and does nothing at all if it is already stopped.
          *
@@ -374,8 +398,10 @@ export const useToasts = createStore(() =>
             }
             timers.clear();
             counter = 0;
+            era += 1;
             setItems([]);
             setQueue([]);
+            setLifts(0);
         }
     };
 
