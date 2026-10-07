@@ -114,8 +114,6 @@ export interface RealtimeApi
 
     play(match: string, key: string, rev: number | undefined, play: unknown): boolean;
 
-    resume(match: string, rev: number): boolean;
-
     rtt: Getter<number | null>;
 
     toLocal(serverAt: number): number;
@@ -651,8 +649,6 @@ export const useRealtime = createStore((): RealtimeApi =>
         },
 
         play: (match, key, rev, play) => sent(rev === undefined ? { t: 'play', match, key, play } : { t: 'play', match, key, rev, play }),
-
-        resume: (match, rev) => sent({ t: 'resume', match, rev }),
 
         rtt,
 

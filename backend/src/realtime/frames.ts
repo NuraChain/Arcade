@@ -47,7 +47,6 @@ export type ClientFrame =
     | { t: 'voice'; table: string; on: boolean; muted: boolean }
     | { t: 'signal'; table: string; to: string; kind: SignalKind; data: string }
     | { t: 'play'; match: string; key: string; rev?: number; play: unknown }
-    | { t: 'resume'; match: string; rev: number }
     | { t: 'ping' };
 
 /** The transport version, carried in the payload. Independent of `nura-e2ee/v1`, which seals. */
@@ -133,7 +132,6 @@ const SHAPES: Record<string, ReadonlySet<string>> = Object.assign(Object.create(
     voice: new Set(['v', 't', 'table', 'on', 'muted']),
     signal: new Set(['v', 't', 'table', 'to', 'kind', 'data']),
     play: new Set(['v', 't', 'match', 'key', 'rev', 'play']),
-    resume: new Set(['v', 't', 'match', 'rev']),
     ping: new Set(['v', 't'])
 });
 
@@ -208,11 +206,6 @@ export function parseClientFrame(text: string): ClientFrame | null
             && typeof frame.play === 'object' && frame.play !== null && !Array.isArray(frame.play)
             ? { t: 'play', match: frame.match, key: frame.key, ...(frame.rev === undefined ? {} : { rev: frame.rev as number }), play: frame.play }
             : null;
-    }
-
-    if (frame.t === 'resume')
-    {
-        return idOf(frame.match) && revOf(frame.rev) ? { t: 'resume', match: frame.match, rev: frame.rev } : null;
     }
 
     if (frame.t === 'presence')

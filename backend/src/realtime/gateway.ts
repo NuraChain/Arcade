@@ -10,7 +10,7 @@ import type { Ports } from '../ports.ts';
 import { admit, toWebRequest } from './admit.ts';
 import { createHandshakeLimit } from './handshake-limit.ts';
 import { matchPlayInput } from '../schemas.ts';
-import { ack, game, parseClientFrame, pong, refused, SIGNAL_DATA_MAX, type ClientFrame } from './frames.ts';
+import { ack, parseClientFrame, pong, refused, SIGNAL_DATA_MAX, type ClientFrame } from './frames.ts';
 import type { Connection, Hub } from './hub.ts';
 
 export interface GatewayDeps
@@ -34,7 +34,7 @@ const THROTTLES: Record<string, number> = { sync: 5000, presence: 2000, typing: 
 
 const BUDGET_WINDOW_MS = 10_000;
 
-const BUDGETS: Record<string, number> = { voice: 30, signal: 120, play: 40, resume: 20, ping: 10 };
+const BUDGETS: Record<string, number> = { voice: 30, signal: 120, play: 40, ping: 10 };
 
 const HEARTBEAT_MS = 15_000;
 
@@ -100,27 +100,6 @@ async function playOver(deps: GatewayDeps, connection: Connection, frame: Extrac
         }
 
         deps.hub.reply(connection, (n) => refused(n, frame.key, frame.match, refusal.status, refusal.message));
-    }
-}
-
-async function resumeOver(deps: GatewayDeps, connection: Connection, frame: Extract<ClientFrame, { t: 'resume' }>)
-{
-    try
-    {
-        const found = await deps.ports.match.since(connection.userId, frame.match, frame.rev);
-
-        if (found === null)
-        {
-            deps.hub.reply(connection, (n) => refused(n, '', frame.match, 404, 'No game there.'));
-            return;
-        }
-
-        deps.hub.reply(connection, (n) => game(n, Date.now(), found.match, found.events));
-    }
-    catch (error)
-    {
-        const refusal = refusalOf(error);
-        deps.hub.reply(connection, (n) => refused(n, '', frame.match, refusal.status, refusal.message));
     }
 }
 
@@ -269,12 +248,6 @@ export function attachRealtime(server: Server, deps: GatewayDeps): () => void
                 if (frame.t === 'play')
                 {
                     queue(line, () => playOver(deps, connection, frame));
-                    return;
-                }
-
-                if (frame.t === 'resume')
-                {
-                    queue(line, () => resumeOver(deps, connection, frame));
                     return;
                 }
 

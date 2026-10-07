@@ -693,7 +693,13 @@ The gateway checks a play twice: the frame shape strictly, then `matchPlayInput`
 refuses any key the schema would have stripped, so a `die` inside a play is refused rather than quietly
 dropped. One socket's plays run one after another, so a socket never holds two match transactions. Every
 frame kind that costs something is metered by one ten-second budget (`voice` 30, `signal` 120, `play`
-40, `resume` 20, `ping` 10), and past it the socket is closed 4429.
+40, `ping` 10), and past it the socket is closed 4429.
+
+**There is no catch-up verb on the socket.** The realtime store rings every scope once whenever a
+connection opens, and the match store answers that `game` ring by reading `since` from the revision
+it holds - the read it also polls while the socket is down. A `resume` frame was declared, budgeted
+and tested for the same job and no browser ever sent it. It is gone, so every `refused` frame answers
+a play and carries that play's key.
 
 **A turn that runs out is played, not punished.** The sweep finds due matches by Postgres `now()` -
 never `MoreThan(new Date())`, because the deadline is written by Postgres too (`commit` sets it as

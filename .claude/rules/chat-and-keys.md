@@ -1020,7 +1020,7 @@ have to be rewritten again the moment a body becomes ciphertext.
 
 `backend/src/realtime/frames.ts` is the whole wire. Server frames: `hello`, `presence`, `nudge`,
 `typing`, `voice`, `signal`, `game`, `ack`, `refused`, `pong`. Client frames: `sync`, `presence`,
-`typing`, `voice`, `signal`, `play`, `resume`, `ping`. And
+`typing`, `voice`, `signal`, `play`, `ping`. And
 `parseClientFrame` is total and strict — **unknown keys are refused**, because a frame carrying a
 field this version does not know is a frame from something that is not this client.
 

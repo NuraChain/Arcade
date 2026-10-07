@@ -254,13 +254,12 @@ describe('client frames', () =>
         expect(parseClientFrame('{"v":1,"t":"typing","id":"c-1"}')).toEqual({ t: 'typing', id: 'c-1' });
     });
 
-    it('accepts a play, a resume and a ping, and leaves the play itself to the match schema', () =>
+    it('accepts a play and a ping, and leaves the play itself to the match schema', () =>
     {
         expect(parseClientFrame('{"v":1,"t":"play","match":"m-1","key":"k-1","rev":3,"play":{"kind":"ludo","verb":"roll"}}'))
             .toEqual({ t: 'play', match: 'm-1', key: 'k-1', rev: 3, play: { kind: 'ludo', verb: 'roll' } });
         expect(parseClientFrame('{"v":1,"t":"play","match":"m-1","key":"k-1","play":{"kind":"ludo","verb":"roll"}}'))
             .toEqual({ t: 'play', match: 'm-1', key: 'k-1', play: { kind: 'ludo', verb: 'roll' } });
-        expect(parseClientFrame('{"v":1,"t":"resume","match":"m-1","rev":0}')).toEqual({ t: 'resume', match: 'm-1', rev: 0 });
         expect(parseClientFrame('{"v":1,"t":"ping"}')).toEqual({ t: 'ping' });
     });
 
@@ -270,7 +269,6 @@ describe('client frames', () =>
         expect(parseClientFrame('{"v":1,"t":"play","match":"m-1","key":"k","rev":-1,"play":{"kind":"ludo"}}')).toBeNull();
         expect(parseClientFrame('{"v":1,"t":"play","match":"m-1","key":"k","play":[1]}')).toBeNull();
         expect(parseClientFrame('{"v":1,"t":"play","match":"m-1","key":"k","play":{},"die":6}')).toBeNull();
-        expect(parseClientFrame('{"v":1,"t":"resume","match":"m-1"}')).toBeNull();
         expect(parseClientFrame('{"v":1,"t":"ping","at":1}')).toBeNull();
     });
 
@@ -286,6 +284,13 @@ describe('client frames', () =>
         expect(parseClientFrame('{"v":1,"t":"subscribe"}')).toBeNull();
         expect(parseClientFrame('{"v":1,"t":"presence","state":"playing"}')).toBeNull();
         expect(parseClientFrame('{"v":1,"t":"typing","id":""}')).toBeNull();
+    });
+
+    it('refuses a resume frame like any unknown verb', () =>
+    {
+        expect(parseClientFrame('{"v":1,"t":"resume","match":"m-1","rev":0}')).toBeNull();
+        expect(parseClientFrame('{"v":1,"t":"resume","match":"m-1"}')).toBeNull();
+        expect(parseClientFrame('{"v":1,"t":"resume"}')).toBeNull();
     });
 
     it('never throws, whatever arrives', () =>

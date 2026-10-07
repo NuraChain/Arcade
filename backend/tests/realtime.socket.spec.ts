@@ -127,8 +127,7 @@ beforeAll(async () =>
 
                 await settle(input.key === 'slow' ? 120 : 1);
                 return { match: { id: matchId, rev: 1 }, applied: 'now', events: [] };
-            },
-            since: async (_me: string, matchId: string) => ({ match: { id: matchId, rev: 4 }, events: [] })
+            }
         }
     } as unknown as Ports;
 
@@ -376,18 +375,6 @@ describe('a bound socket', () =>
         const refusals = talker.frames.flatMap((frame) => frame.t === 'refused' ? [[frame.key, frame.status]] : []);
         expect(refusals).toEqual([['k1', 409], ['k2', 422]]);
         expect(noted).not.toContain('played k2');
-        talker.end();
-    });
-
-    it('resumes a match from a revision with a game frame', async () =>
-    {
-        const talker = talk('/ws', { Origin: 'http://localhost:3100', Cookie: COOKIE });
-        await settle();
-
-        talker.send({ v: 1, t: 'resume', match: 'm1', rev: 3 });
-        await settle(100);
-
-        expect(talker.frames.some((frame) => frame.t === 'game' && frame.match.rev === 4)).toBe(true);
         talker.end();
     });
 
