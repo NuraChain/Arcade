@@ -94,6 +94,24 @@ export default component FriendsPage()
 
     derived listed = visible(found, LIST_PAGE, listPage, paging);
 
+    derived browsing = tab === 'all' || tab === 'online';
+
+    derived searchable = browsing && friends.length > SEARCH_FROM;
+
+    derived unmatched = browsing && pool.length > 0 && found.length === 0;
+
+    derived listing = browsing && (pool.length === 0 || found.length > 0);
+
+    derived peopled = pool.length > 0;
+
+    derived asked = incoming.length > 0 || outgoing.length > 0;
+
+    derived suggested = allSuggestions.length > 0;
+
+    derived grouped = groups.mine().length > 0;
+
+    derived discoverable = groups.elsewhere().length > 0;
+
     const playWith = (person: Person) =>
     {
         const game = catalogue.featured();
@@ -149,7 +167,7 @@ export default component FriendsPage()
             } }
         />
 
-        <Show when={ (tab === 'all' || tab === 'online') && friends.length > SEARCH_FROM }>
+        <Show when={ searchable }>
             { () =>
                 <SearchInput
                     value={ query }
@@ -165,14 +183,14 @@ export default component FriendsPage()
             }
         </Show>
 
-        <Show when={ (tab === 'all' || tab === 'online') && pool.length > 0 && found.length === 0 }>
+        <Show when={ unmatched }>
             { () => <EmptyState icon="search" title={ locale.t('search.empty', { query: query.trim() }) } lead={ locale.t('search.emptyLead') } class="py-10" /> }
         </Show>
 
-        <Show when={ (tab === 'all' || tab === 'online') && (pool.length === 0 || found.length > 0) }>
+        <Show when={ listing }>
             { () =>
                 <Show
-                    when={ pool.length > 0 }
+                    when={ peopled }
                     fallback={
                         <EmptyState
                             icon="people"
@@ -218,7 +236,7 @@ export default component FriendsPage()
             }
         </Show>
 
-        <Show when={ tab === 'all' || tab === 'online' }>
+        <Show when={ browsing }>
             { () =>
                 <Pagination
                     total={ found.length }
@@ -234,7 +252,7 @@ export default component FriendsPage()
         <Show when={ tab === 'requests' }>
             { () =>
                 <Show
-                    when={ incoming.length > 0 || outgoing.length > 0 }
+                    when={ asked }
                     fallback={ <EmptyState icon="friend-add" title={ locale.t('friends.empty.requests') } class="py-10" /> }
                 >
                     { () =>
@@ -243,23 +261,21 @@ export default component FriendsPage()
                                 <ul class="flex flex-col divide-y divide-line rounded-panel border border-line bg-field px-2" aria-label={ locale.t('friends.requests.incoming') }>
                                     <For each={ incoming } key={ (request) => request.id } let={ request }>
                                         <li>
-                                            <Show when={ people.byHandle(request.from) !== null }>
-                                                { () =>
-                                                    <FriendRow
-                                                        person={ people.byHandle(request.from)! }
-                                                        subtitle={ `${ locale.t('friends.requests.incoming') } · ${ locale.relative(request.at) }` }
-                                                        actions={
-                                                            <>
-                                                                <Button variant="primary" size="sm" class="whitespace-nowrap" loading={ social.working(request.id) } onClick={ () => void attempt(social.accept(request.id)) }>
-                                                                    { locale.t('person.accept') }
-                                                                </Button>
-                                                                <Button variant="ghost" size="sm" class="whitespace-nowrap" disabled={ social.working(request.id) } onClick={ () => void attempt(social.decline(request.id)) }>
-                                                                    { locale.t('person.decline') }
-                                                                </Button>
-                                                            </>
-                                                        }
-                                                    />
-                                                }
+                                            <Show when={ people.byHandle(request.from) } let={ sender }>
+                                                <FriendRow
+                                                    person={ sender }
+                                                    subtitle={ `${ locale.t('friends.requests.incoming') } · ${ locale.relative(request.at) }` }
+                                                    actions={
+                                                        <>
+                                                            <Button variant="primary" size="sm" class="whitespace-nowrap" loading={ social.working(request.id) } onClick={ () => void attempt(social.accept(request.id)) }>
+                                                                { locale.t('person.accept') }
+                                                            </Button>
+                                                            <Button variant="ghost" size="sm" class="whitespace-nowrap" disabled={ social.working(request.id) } onClick={ () => void attempt(social.decline(request.id)) }>
+                                                                { locale.t('person.decline') }
+                                                            </Button>
+                                                        </>
+                                                    }
+                                                />
                                             </Show>
                                         </li>
                                     </For>
@@ -270,18 +286,16 @@ export default component FriendsPage()
                                 <ul class="flex flex-col divide-y divide-line rounded-panel border border-line bg-field px-2" aria-label={ locale.t('friends.requests.outgoing') }>
                                     <For each={ outgoing } key={ (request) => request.id } let={ request }>
                                         <li>
-                                            <Show when={ people.byHandle(request.to) !== null }>
-                                                { () =>
-                                                    <FriendRow
-                                                        person={ people.byHandle(request.to)! }
-                                                        subtitle={ `${ locale.t('friends.requests.outgoing') } · ${ locale.relative(request.at) }` }
-                                                        actions={
-                                                            <Button variant="ghost" size="sm" class="whitespace-nowrap" loading={ social.working(request.to) } onClick={ () => void attempt(social.withdraw(request.to)) }>
-                                                                { locale.t('person.withdraw') }
-                                                            </Button>
-                                                        }
-                                                    />
-                                                }
+                                            <Show when={ people.byHandle(request.to) } let={ sent }>
+                                                <FriendRow
+                                                    person={ sent }
+                                                    subtitle={ `${ locale.t('friends.requests.outgoing') } · ${ locale.relative(request.at) }` }
+                                                    actions={
+                                                        <Button variant="ghost" size="sm" class="whitespace-nowrap" loading={ social.working(request.to) } onClick={ () => void attempt(social.withdraw(request.to)) }>
+                                                            { locale.t('person.withdraw') }
+                                                        </Button>
+                                                    }
+                                                />
                                             </Show>
                                         </li>
                                     </For>
@@ -296,7 +310,7 @@ export default component FriendsPage()
         <Show when={ tab === 'suggestions' }>
             { () =>
                 <Show
-                    when={ allSuggestions.length > 0 }
+                    when={ suggested }
                     fallback={ <EmptyState icon="discover" title={ locale.t('friends.empty.suggestions') } class="py-10" /> }
                 >
                     { () =>
@@ -327,7 +341,7 @@ export default component FriendsPage()
                         />
 
                         <Show
-                            when={ groups.mine().length > 0 }
+                            when={ grouped }
                             fallback={
                                 <EmptyState
                                     icon="people"
@@ -354,7 +368,7 @@ export default component FriendsPage()
                     <section>
                         <SectionHeading title={ locale.t('groups.discover') } />
                         <Show
-                            when={ groups.elsewhere().length > 0 }
+                            when={ discoverable }
                             fallback={ <p class="text-ui-base text-muted">{ locale.t('groups.discoverNone') }</p> }
                         >
                             { () =>

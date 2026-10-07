@@ -518,6 +518,14 @@ memory and then torn down and drawn again when the answer came. Nothing inside a
 change of person, because the router builds a page per route AND params (`identity` in its
 `routes.js`): another handle is another page.
 
+The friends page had it twice, and neither needed an object. Its search field sat in a branch whose
+condition counted the friends, an array that is new whenever anything about the people behind it is
+read again, so a friend request arriving took the field out from under the caret (on a phone, the
+keyboard with it). Its list sat in a branch that read the matches, so every keystroke drew every row
+again. An array is as fresh as a row: a condition that counts one is a derived boolean too, and then
+the rows are the keyed list's to keep. `friends-page.spec.ts` holds the field, the reader in it and
+the rows through a re-read and through typing.
+
 **A page that loads one thing has four states, and says in each only what it knows.** The profile
 page said "No such person." for three of them: while it was still asking, when it could not ask at
 all, and when there was nobody. A placeholder while it asks; the failure, with a way to try again,
