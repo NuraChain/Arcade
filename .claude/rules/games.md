@@ -553,14 +553,46 @@ the roster says "could not connect".
 
 **The microphone is asked for when somebody presses Join, never before**, and refused or missing it
 joins LISTEN-ONLY rather than failing. Everybody joins muted unless they turn that off in settings.
-`services/voice.rtc.ts` is framework-free (perfect negotiation, the lower handle is polite, a peer is
-opened on its first signal so an offer that beats the roster cannot deadlock), and
-`stores/voice.store.ts` takes it through `setVoiceCall` so a spec can observe the store without a
-real `RTCPeerConnection`.
+`services/voice.rtc.ts` is framework-free, and `stores/voice.store.ts` takes it through
+`setVoiceCall` so a spec can observe the store without a real `RTCPeerConnection`.
+
+**One side places the call.** Of two players the one whose handle sorts first adds the audio line and
+offers; the other opens a connection with nothing on it, and answers ON the line it was offered,
+turned to `sendrecv` with its own microphone on the sender. One offer, one answer, one line each. A
+peer is still opened on its first signal, so an offer that beats the roster cannot deadlock. Perfect
+negotiation stays for what can still cross - both ends asking for an ICE restart at once - and the
+side that waits is the polite one.
+
+**Both sides used to offer, on every call, and two times in five it never connected.** Each built
+its own line on the roster frame, so every setup was a glare: the polite side rolled its offer back,
+answered `recvonly`, then offered its own line as a second one. Two things broke in that, and either
+alone was enough:
+
+- On Chromium a connection whose FIRST offer is rolled back before it has gathered a candidate can
+  stop gathering for good. The descriptions finish crossing, both ends read `stable`, the gathering
+  state says `gathering` and no candidate ever comes, so ICE sits at `new` while the roster says
+  "Connecting". It is the browser's and not this code's: two bare pages with one connection each and
+  nothing of the app showed it once in ten early rollbacks and never in ten late ones (Chromium 151),
+  and at the app's own timing it was three calls in eight. How early the other offer arrives depends
+  on the caller's round trip to the server, not on two browsers sharing a machine.
+- The second offer left the polite side a few milliseconds behind its answer, so it could arrive
+  while the answer was still being applied. `signalingState` still read `have-local-offer`, the
+  asking side called that a collision and dropped it, and the other player's microphone was never
+  negotiated. `settling` is the WebRTC specification's own repair (its `isSettingRemoteAnswerPending`):
+  an offer that arrives during an answer is taken, because the connection is stable by the time it runs.
+
+`voice-rtc.spec.ts` holds it on a fake connection: who brings the line, the answer on the offered
+one, a microphone granted later, the offer that lands mid-answer, and the two halves of a real
+collision.
 
 `tools/qa/voice-pass.mjs` is two real browsers on Chromium's fake microphone: join, a live remote
 track in each, the tone lighting "speaking" in the OTHER browser, mute, leave. Run it by hand against
-the built server with every change to this path.
+the built server with every change to this path. **A live remote track is not a connection**: the
+browser hands one over when a description is applied, before a packet has moved, so that check
+passed on calls that carried nothing and the pass failed further down, on a label. It reads each
+page's own `RTCPeerConnection` now - connected, one line, packets counted out and in - and has both
+players leave and join together three more times, because a fault that shows two times in five passes
+a single try more often than not.
 
 ### Voice while the game plays
 

@@ -8,6 +8,11 @@
  * remote track arrived and that the speaking indicator lit - then mutes, then leaves, and checks the
  * room follows. Nothing here is mocked below the browser; the offer, answer and candidates cross the
  * realtime socket exactly as they do for a person.
+ *
+ * A remote track proves nothing about the connection: the browser hands one over the moment a
+ * description is applied, before a single packet. So the pass also reads each page's own
+ * RTCPeerConnection - connected, one line, packets counted out and in - and has both players leave
+ * and join together three more times, because the call that never connected did so two times in five.
  */
 import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -57,6 +62,21 @@ async function seat(handle)
     const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, locale: 'en-US', permissions: ['microphone'] });
 
     await context.addCookies([{ name: 'locale', value: 'en', url: BASE }]);
+    await context.addInitScript(() =>
+    {
+        const Real = window.RTCPeerConnection;
+
+        window.__calls = [];
+        window.RTCPeerConnection = function (...given)
+        {
+            const made = new Real(...given);
+
+            window.__calls.push(made);
+
+            return made;
+        };
+        window.RTCPeerConnection.prototype = Real.prototype;
+    });
 
     const issued = await context.request.post(`${ BASE }/api/auth/challenge`, { data: { address: wallet.address } });
     const challenge = await issued.json();
@@ -125,6 +145,30 @@ const loudness = (page) => page.evaluate(() =>
     return audio === undefined ? -1 : audio.volume;
 });
 
+const linked = (page) => page.evaluate(async () =>
+{
+    const calls = (window.__calls ?? []).filter((one) => one.connectionState !== 'closed');
+    let sent = 0;
+    let got = 0;
+
+    for (const one of calls)
+    {
+        for (const report of (await one.getStats()).values())
+        {
+            sent += report.type === 'outbound-rtp' ? report.packetsSent ?? 0 : 0;
+            got += report.type === 'inbound-rtp' ? report.packetsReceived ?? 0 : 0;
+        }
+    }
+
+    return { states: calls.map((one) => one.connectionState), lines: calls.map((one) => one.getTransceivers().length), sent, got };
+});
+
+const flowing = (seen) => seen.states.length === 1 && seen.states[0] === 'connected' && seen.lines[0] === 1 && seen.sent > 0 && seen.got > 0;
+
+const through = (ms) => until(async () => flowing(await linked(dana.page)) && flowing(await linked(mina.page)), ms);
+
+const told = async () => `dana: ${ JSON.stringify(await linked(dana.page)) }, mina: ${ JSON.stringify(await linked(mina.page)) }`;
+
 const dana = await seat('dana.w');
 const mina = await seat('mina');
 
@@ -154,6 +198,29 @@ record('both players join the call', bothIn);
 
 const heard = await until(async () => (await remoteAudio(dana.page)) === 'live' && (await remoteAudio(mina.page)) === 'live', 20_000);
 record('each browser receives the other one\'s live audio track', heard, `dana: ${ await remoteAudio(dana.page) }, mina: ${ await remoteAudio(mina.page) }`);
+
+record('the two connect on one line each, and packets travel both ways', await through(20_000), await told());
+
+let again = 0;
+
+for (let round = 0; round < 3; round += 1)
+{
+    for (const one of [dana, mina])
+    {
+        await one.page.getByRole('button', { name: 'Leave voice' }).first().click();
+    }
+
+    await until(async () => (await linked(dana.page)).states.length === 0 && (await linked(mina.page)).states.length === 0);
+
+    for (const one of [dana, mina])
+    {
+        await one.page.getByRole('button', { name: 'Join voice' }).first().click();
+    }
+
+    again += await through(15_000) ? 1 : 0;
+}
+
+record('leaving and joining together connects every time', again === 3, `${ again } of 3; ${ await told() }`);
 
 await players(dana.page);
 const mutedFirst = await until(async () => (await pillOf(dana.page, 'Mina')).some((text) => text === 'Muted'));

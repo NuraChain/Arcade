@@ -33,11 +33,12 @@ export interface VoiceCall
 interface Peer
 {
     connection: RTCPeerConnection;
-    sender: RTCRtpSender;
+    sender: RTCRtpSender | null;
     audio: HTMLAudioElement | null;
     meter: (() => void) | null;
     making: boolean;
     ignoring: boolean;
+    settling: boolean;
     polite: boolean;
     volume: number;
 }
@@ -111,18 +112,29 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
         deps.onLink(who, null);
     };
 
+    const carry = (peer: Peer, line: RTCRtpTransceiver) =>
+    {
+        line.direction = 'sendrecv';
+        peer.sender = line.sender;
+
+        if (track !== null)
+        {
+            void peer.sender.replaceTrack(track);
+        }
+    };
+
     const open = (who: string) =>
     {
         const connection = connect({ iceServers: deps.iceServers });
-        const transceiver = connection.addTransceiver('audio', { direction: 'sendrecv' });
 
         const peer: Peer = {
             connection,
-            sender: transceiver.sender,
+            sender: null,
             audio: null,
             meter: null,
             making: false,
             ignoring: false,
+            settling: false,
             polite: deps.me > who,
             volume: 1
         };
@@ -130,9 +142,9 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
         peers.set(who, peer);
         deps.onLink(who, 'connecting');
 
-        if (track !== null)
+        if (!peer.polite)
         {
-            void peer.sender.replaceTrack(track);
+            carry(peer, connection.addTransceiver('audio', { direction: 'sendrecv' }));
         }
 
         connection.onnegotiationneeded = async () =>
@@ -231,7 +243,7 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
                 }
             }
 
-            await Promise.all([...peers.values()].map((peer) => peer.sender.replaceTrack(track)));
+            await Promise.all([...peers.values()].map((peer) => peer.sender?.replaceTrack(track)));
         },
 
         setMuted(next)
@@ -303,7 +315,8 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
                 }
 
                 const description = JSON.parse(signal.data) as RTCSessionDescriptionInit;
-                const collision = description.type === 'offer' && (peer.making || connection.signalingState !== 'stable');
+                const free = !peer.making && (connection.signalingState === 'stable' || peer.settling);
+                const collision = description.type === 'offer' && !free;
 
                 peer.ignoring = !peer.polite && collision;
 
@@ -312,10 +325,32 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
                     return;
                 }
 
-                await connection.setRemoteDescription(description);
+                if (description.type === 'answer')
+                {
+                    peer.settling = true;
+                }
+
+                try
+                {
+                    await connection.setRemoteDescription(description);
+                }
+                finally
+                {
+                    if (description.type === 'answer')
+                    {
+                        peer.settling = false;
+                    }
+                }
 
                 if (description.type === 'offer')
                 {
+                    const offered = peer.sender === null ? connection.getTransceivers().find((line) => line.receiver.track.kind === 'audio') : undefined;
+
+                    if (offered !== undefined)
+                    {
+                        carry(peer, offered);
+                    }
+
                     await connection.setLocalDescription();
                     if (connection.localDescription !== null)
                     {

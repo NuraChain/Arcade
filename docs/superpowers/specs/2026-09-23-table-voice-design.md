@@ -55,9 +55,11 @@ for a product whose players include minors.
 
 ## Browser
 
-- `services/voice.rtc.ts` is framework-free: one `RTCPeerConnection` per peer, the perfect
-  negotiation pattern (the lower handle is polite), trickle ICE, a remote `<audio>` per peer, and an
-  `AnalyserNode` per stream for the speaking indicator.
+- `services/voice.rtc.ts` is framework-free: one `RTCPeerConnection` per peer, trickle ICE, a remote
+  `<audio>` per peer, and an `AnalyserNode` per stream for the speaking indicator. Of two players the
+  handle that sorts first places the call and the other answers on the offered line; the perfect
+  negotiation pattern covers a re-offer that crosses, with the side that waits as the polite one.
+  (As first built both sides offered on every call; `.claude/rules/games.md` says what that cost.)
 - `stores/voice.store.ts` owns the call for the open table: joined, mic muted, each peer's state
   (connecting, connected, failed, not allowed), speaking and my local volume for them.
 - The microphone is asked for when somebody presses Join, never before. Refused or absent, they join
