@@ -662,6 +662,14 @@ switch at a wide container and the table menu on a narrow one. Turning it back o
 lobby, so their page offers the call - a toast with Join, once per table per visit, and again after
 the host switches it off and on - without a reload.
 
+**"Join voice automatically" joins ONCE for each time the table offers a call**, the same rule as the
+toast. The effect used to join whenever the page found itself out of a call it could be in, and it
+could not tell why it was out. So Leave voice did nothing for a player with that setting on - the
+page walked straight back in - and two tabs of one account took the call from each other without
+end, each lap a new joining that made every other player hang up and call again, until one tab had
+spent its thirty voice frames and its socket was closed for good. `play.spec.ts` holds both, and the
+host's off and on, which still lets the page in again.
+
 **Nothing about holding the talk key reaches the server.** Push to talk is a GATE on the local track:
 the server hears `muted: false` once, when the call is joined, and the key or the hold button opens
 and closes the track in the browser. A frame per press would spend the voice-frame budget on every

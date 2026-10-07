@@ -156,10 +156,17 @@ export default component PlayPage()
 
     derived talkable = seated && table !== null && table.voice !== 'off' && table.status !== 'closed';
 
+    let entered = '';
+
     effect
     {
         const id = talkable ? table!.id : null;
         const joined = voice.table();
+
+        if (id === null)
+        {
+            entered = '';
+        }
 
         if (joined !== null && joined !== id)
         {
@@ -167,8 +174,9 @@ export default component PlayPage()
             return;
         }
 
-        if (id !== null && joined === null && untrack(settings.settings).voiceAutoJoin)
+        if (id !== null && joined === null && id !== entered && untrack(settings.settings).voiceAutoJoin)
         {
+            entered = id;
             void voice.join(id);
         }
     }

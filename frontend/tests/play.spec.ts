@@ -36,6 +36,7 @@ import { useConnection } from '../src/stores/connection.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
 import { useSettings } from '../src/stores/settings.store.ts';
 import { useToasts } from '../src/stores/toasts.store.ts';
+import { setVoiceCall, setVoiceMedia, useVoice } from '../src/stores/voice.store.ts';
 import { leaveLead } from '../src/lib/open-table.ts';
 import { ApiError, client, server } from './fake-api.ts';
 import { socket } from './fake-realtime.ts';
@@ -1034,6 +1035,92 @@ describe('PlayPage', () =>
             expect(held.chairs[0].who).toBe('alex');
             expect(router.location().pathname).toBe(`/app/play/${ held.id }`);
             expect(control(container, 'play.lobby.leave')).toBeDefined();
+        });
+    });
+
+    describe('joining the call without being asked', () =>
+    {
+        const microphone = { stop: () => undefined } as unknown as MediaStreamTrack;
+        const granted = { getTracks: () => [microphone], getAudioTracks: () => [microphone] } as unknown as MediaStream;
+        let stop: () => void = () => undefined;
+
+        const asked = () => socket.sent.filter((frame) => frame.t === 'voice').map((frame) => (frame.t === 'voice' && frame.on ? 'on' : 'off'));
+
+        const seated = async () =>
+        {
+            const lobby = useLobby();
+            const id = await lobby.host('ludo', { ...defaultTable('ludo'), voice: 'table' }, []);
+            const routes: Route[] = [{ path: '/app/play/:id', component: (): HTMLElement => PlayPage() as HTMLElement }];
+            const router = createRouter({ routes, history: createMemoryHistory(`/app/play/${ id }`), scroll: false });
+
+            renderTest(() => RouterProvider({ router, children: () => Routes({}) }) as Rendered);
+            await vi.waitFor(() => expect(useVoice().table()).toBe(id), { timeout: 4000 });
+            await settle();
+
+            return id;
+        };
+
+        beforeEach(() =>
+        {
+            useSettings().reset();
+            useSettings().update({ voiceAutoJoin: true });
+            setVoiceMedia(() => ({ getUserMedia: async () => granted }) as unknown as MediaDevices);
+            setVoiceCall(() => ({
+                setMic: async () => undefined,
+                setMuted: () => undefined,
+                sync: () => undefined,
+                receive: async () => undefined,
+                setVolume: () => undefined,
+                setSink: () => undefined,
+                close: () => undefined
+            }));
+            useVoice().reset();
+            stop = useVoice().start();
+        });
+
+        afterEach(() =>
+        {
+            stop();
+            useVoice().reset();
+            setVoiceCall(null);
+            setVoiceMedia(null);
+            useSettings().reset();
+        });
+
+        it('joins once, and stays out when the reader leaves', async () =>
+        {
+            await seated();
+
+            expect(asked()).toEqual(['on']);
+
+            useVoice().leave();
+            await settle();
+
+            expect(useVoice().table()).toBeNull();
+            expect(asked()).toEqual(['on', 'off']);
+        });
+
+        it('does not take the call back from another tab of the reader that took it', async () =>
+        {
+            const id = await seated();
+
+            socket.deliver({ v: 1, t: 'voice', n: 9, table: id, joined: false, mine: '', peers: [] });
+            await settle();
+
+            expect(useVoice().table()).toBeNull();
+            expect(asked()).toEqual(['on']);
+        });
+
+        it('joins again when the host turns voice off and back on', async () =>
+        {
+            const id = await seated();
+
+            await useLobby().setVoice(id, 'off');
+            await vi.waitFor(() => expect(useVoice().table()).toBeNull(), { timeout: 4000 });
+            await useLobby().setVoice(id, 'table');
+            await vi.waitFor(() => expect(useVoice().table()).toBe(id), { timeout: 4000 });
+
+            expect(asked()).toEqual(['on', 'off', 'on']);
         });
     });
 
