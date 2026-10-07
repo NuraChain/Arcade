@@ -242,18 +242,27 @@ describe('a table that would not open', () =>
 
     const told = async (error: unknown) => await answered(Promise.reject(error));
 
-    it('says the reader holds too many chairs, or that nobody by that name can be invited', async () =>
+    const SAID: Record<string, MessageKey> = {
+        'seated-max': 'play.seatedMax',
+        'no-invitee': 'tables.refused.no-invitee',
+        'quick-game': 'tables.refused.quick-game',
+        'quick-options': 'tables.refused.quick-options'
+    };
+
+    it('says the reader holds too many chairs, that nobody by that name can be invited, or what was wrong with a quick search', async () =>
     {
         const locale = useLocale();
 
-        expect(await told(refused('seated-max'))).toEqual([['warning', locale.t('play.seatedMax')]]);
-        expect(await told(refused('no-invitee'))).toEqual([['warning', locale.t('tables.refused.no-invitee')]]);
+        for (const [word, key] of Object.entries(SAID))
+        {
+            expect(await told(refused(word)), word).toEqual([['warning', locale.t(key)]]);
+        }
     });
 
     it('says only that it would not open for every other word, a setting, or a request that never arrived', async () =>
     {
         const failed = [['warning', useLocale().t('play.openFailed')]];
-        const others = WORDS.filter((word) => word !== 'seated-max' && word !== 'no-invitee');
+        const others = WORDS.filter((word) => !Object.hasOwn(SAID, word));
 
         expect(others).toEqual(expect.arrayContaining(['playing', 'table-closed']));
 
@@ -266,35 +275,50 @@ describe('a table that would not open', () =>
         expect(await told(new TypeError('Failed to fetch'))).toEqual(failed);
     });
 
-    it.each([
-        ['closed', { status: 'closed' as const }],
-        ['began its game', { matchId: 'live-1' }]
-    ])('says only that it would not open when quick play reached for a table that %s first', async (_how, change) =>
+    it.each(['en', 'fa'] as const)('says why the server would not run a quick search, in %s, and goes nowhere', async (language) =>
     {
+        useLocale().setLocale(language);
+
         const lobby = useLobby();
-        const id = await lobby.host('ludo', { ...defaultTable('ludo'), privacy: 'public' }, []);
-        const held = server.tables.find((one) => one.id === id)!;
+        const catalogue = language === 'en' ? en : fa;
 
-        held.host = 'sara.k';
-        held.chairs[0].who = 'sara.k';
+        try
+        {
+            for (const word of ['quick-game', 'quick-options', 'seated-max'])
+            {
+                await swapped('quick', async () =>
+                {
+                    throw refused(word);
+                }, async () =>
+                {
+                    expect(await answered(lobby.quick('ludo')), word).toEqual([['warning', messageText(catalogue[SAID[word]])]]);
+                });
 
-        const listed = await client.tables.open({ query: { game: 'ludo', mode: 'live' } });
+                expect([...lobby.finding()], word).toEqual([]);
+            }
+        }
+        finally
+        {
+            useLocale().setLocale('en');
+        }
 
-        expect(listed.tables.map((one) => one.id)).toEqual([id]);
+        expect(server.tables).toEqual([]);
+    });
+
+    it('opens the table quick play was seated at with one request, and no list of tables to walk', async () =>
+    {
+        const go = vi.fn();
+        const settled = vi.fn();
 
         server.calls = [];
+        openTable(useLobby().quick('ludo'), go, settled);
 
-        await swapped('open', async () =>
-        {
-            Object.assign(held, change);
+        await vi.waitFor(() => expect(settled).toHaveBeenCalledTimes(1));
 
-            return listed;
-        }, async () =>
-        {
-            expect(await answered(lobby.quick('ludo'))).toEqual([['warning', useLocale().t('play.openFailed')]]);
-        });
-
-        expect(server.calls).toContain('tables.claim');
+        expect(go).toHaveBeenCalledWith(`/app/play/${ server.tables[0].id }`);
+        expect(shown()).toEqual([]);
+        expect(server.calls.filter((call) => call.startsWith('tables.') && call !== 'tables.mine')).toEqual(['tables.quick']);
+        expect(Object.keys(client.tables)).not.toContain('open');
     });
 });
 

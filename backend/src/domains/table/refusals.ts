@@ -4,8 +4,10 @@ export const TABLE_REFUSALS = {
     'table-closed': 409,
     'chairs-empty': 409,
     'not-ready': 409,
-    'no-invitee': 404
-} as const satisfies Record<string, 404 | 409>;
+    'no-invitee': 404,
+    'quick-game': 422,
+    'quick-options': 422
+} as const satisfies Record<string, 404 | 409 | 422>;
 
 export type TableRefusal = keyof typeof TABLE_REFUSALS;
 

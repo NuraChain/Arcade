@@ -3,6 +3,7 @@ import { ApiError, applyFieldErrors } from '@azerothjs/http/api/shared';
 import { threadSize } from '../../backend/src/domains/chat/pages.ts';
 import { NOTICE_OF } from '../../backend/src/domains/notify/notices.ts';
 import { candidatesFor, handleFromAddress, handleFromName } from '../../backend/src/domains/identity/handle.ts';
+import { chairFor, quickOf, type QuickAsk } from '../../backend/src/domains/table/quick.ts';
 import { TABLE_REFUSALS, type TableRefusal } from '../../backend/src/domains/table/refusals.ts';
 import { guestChairs, teamsOf } from '../../backend/src/domains/table/teams.ts';
 import type { VoiceScope } from '../../backend/src/domains/table/voices.ts';
@@ -143,6 +144,59 @@ function mustTable(id: string)
 const tableRefusal = (word: TableRefusal, message: string) => new ApiError(TABLE_REFUSALS[word], word, message, undefined);
 
 const noInvitee = () => tableRefusal('no-invitee', 'No one by that name can be invited.');
+
+interface OpeningWire
+{
+    game: string;
+    seats: number;
+    mode: 'live' | 'turns';
+    privacy: 'invite' | 'room' | 'friends' | 'public';
+    target: number;
+    cube: boolean;
+    blinds: string;
+    chat: boolean;
+    voice: VoiceScope;
+    teams: boolean;
+    invitees: string[];
+}
+
+function newTable(input: OpeningWire)
+{
+    server.tableSeq += 1;
+
+    const teams = teamsOf(TABLE_RULES[input.game as keyof typeof TABLE_RULES]?.partners ?? 'none', input.seats, input.teams);
+    const held = guestChairs(input.seats, teams);
+
+    const made: TableWire = {
+        id: `table-${ server.tableSeq }`,
+        code: `code${ server.tableSeq }`,
+        game: input.game,
+        seats: input.seats,
+        mode: input.mode,
+        privacy: input.privacy,
+        target: input.target,
+        cube: input.cube,
+        blinds: input.blinds,
+        chat: input.chat,
+        voice: input.voice,
+        teams,
+        status: 'open',
+        host: server.me,
+        chairs: Array.from({ length: input.seats }, (_, seat) => ({
+            seat,
+            ready: false,
+            host: seat === 0,
+            ...(seat === 0 ? { who: server.me } : {}),
+            ...(input.invitees[held.indexOf(seat)] === undefined ? {} : { invited: input.invitees[held.indexOf(seat)] })
+        })),
+        taken: 1,
+        createdAt: new Date(0).toISOString()
+    };
+
+    server.tables.push(made);
+
+    return made;
+}
 
 function mustGroup(slug: string)
 {
@@ -349,6 +403,7 @@ export const server =
 
     outOfGame: {} as Record<string, string[]>,
     asked: [] as { game: string; seats: number; teams: boolean }[],
+    sought: [] as (QuickAsk & { game: string; voice: VoiceScope })[],
 
     watching: [] as { id: string; code: string; game: string; seats: number; players: string[]; startedAt: string }[],
 
@@ -387,6 +442,7 @@ export const server =
         server.tables = [];
         server.outOfGame = {};
         server.asked = [];
+        server.sought = [];
         server.tableSeq = 0;
         server.notifications = [];
         server.notifySeq = 0;
@@ -1347,20 +1403,6 @@ export const client =
 
     tables:
     {
-        async open({ query }: { query: { game?: string; mode?: string } })
-        {
-            server.calls.push('tables.open');
-            return {
-                tables: server.tables.filter((table) =>
-                    table.status === 'open'
-                    && table.privacy === 'public'
-                    && (query.game === undefined || table.game === query.game)
-                    && (query.mode === undefined || table.mode === query.mode)
-                    && table.chairs.some((chair) => chair.who === undefined)
-                    && !table.chairs.some((chair) => chair.who === server.me))
-            };
-        },
-
         async watchable({ query }: { query: { game?: string } })
         {
             server.calls.push('tables.watchable');
@@ -1415,38 +1457,64 @@ export const client =
                 throw noInvitee();
             }
 
-            server.tableSeq += 1;
+            return restate(newTable(input));
+        },
 
-            const teams = teamsOf(TABLE_RULES[input.game as keyof typeof TABLE_RULES]?.partners ?? 'none', input.seats, input.teams);
-            const held = guestChairs(input.seats, teams);
+        async quick({ input }: { input: QuickAsk & { game: string; voice: VoiceScope } })
+        {
+            server.calls.push('tables.quick');
+            server.sought.push({ ...input });
 
-            const made: TableWire = {
-                id: `table-${ server.tableSeq }`,
-                code: `code${ server.tableSeq }`,
-                game: input.game,
-                seats: input.seats,
-                mode: input.mode,
-                privacy: input.privacy,
-                target: input.target,
-                cube: input.cube,
-                blinds: input.blinds,
-                chat: input.chat,
-                voice: input.voice,
-                teams,
-                status: 'open',
-                host: server.me,
-                chairs: Array.from({ length: input.seats }, (_, seat) => ({
-                    seat,
-                    ready: false,
-                    host: seat === 0,
-                    ...(seat === 0 ? { who: server.me } : {}),
-                    ...(input.invitees[held.indexOf(seat)] === undefined ? {} : { invited: input.invitees[held.indexOf(seat)] })
-                })),
-                taken: 1,
-                createdAt: new Date(0).toISOString()
-            };
-            server.tables.push(made);
-            return restate(made);
+            const rules = TABLE_RULES[input.game as keyof typeof TABLE_RULES];
+
+            if (rules === undefined)
+            {
+                throw tableRefusal('quick-game', 'That game cannot be played right now.');
+            }
+
+            const want = quickOf(rules, input);
+
+            if (!want.ok)
+            {
+                throw tableRefusal('quick-options', 'That is not a table this game makes.');
+            }
+
+            const { filter } = want;
+            const fits = (table: TableWire) =>
+                table.status !== 'closed'
+                && table.matchId === undefined
+                && table.privacy === 'public'
+                && table.game === input.game
+                && table.mode === filter.mode
+                && (['seats', 'target', 'blinds', 'cube', 'teams'] as const).every((option) => filter[option] === null || filter[option] === table[option]);
+            const mine = (chair: SeatWire) => chair.who === server.me;
+            const free = (table: TableWire) => table.chairs.filter((chair) => chair.who === undefined && (chair.invited === undefined || chair.invited === server.me));
+            const waiting = server.tables.find((table) => fits(table) && table.chairs.some((chair) => mine(chair) && chair.ready));
+
+            if (waiting !== undefined)
+            {
+                return structuredClone(restate(waiting));
+            }
+
+            const joined = server.tables
+                .filter((table) => fits(table) && !table.chairs.some(mine) && free(table).length > 0)
+                .sort((a, b) => free(a).length - free(b).length)[0];
+
+            const table = joined ?? newTable({ ...want.make, game: input.game, privacy: 'public', chat: true, voice: input.voice, invitees: [] });
+            const seat = joined === undefined
+                ? 0
+                : chairFor(free(table).map((chair) => chair.seat), table.chairs.filter((chair) => chair.who !== undefined).map((chair) => chair.seat), table.teams);
+            const chair = table.chairs.find((one) => one.seat === seat)!;
+
+            chair.who = server.me;
+            chair.ready = true;
+
+            if (table.chairs.every((one) => one.who !== undefined && one.ready))
+            {
+                table.matchId = `match-${ table.id }`;
+            }
+
+            return structuredClone(restate(table));
         },
 
         async claim({ params }: { params: { id: string } })

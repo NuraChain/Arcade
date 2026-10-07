@@ -1149,6 +1149,17 @@ export const tableCreateInput = object({
     roomId: string({ max: 64 }).optional()
 });
 
+export const tableQuickInput = object({
+    game: string({ max: 32 }),
+    seats: number({ int: true, min: 2, max: 9 }).optional(),
+    mode: tableMode.optional(),
+    target: number({ int: true, min: 1, max: 9999 }).optional(),
+    blinds: tableBlinds.optional(),
+    cube: boolean().optional(),
+    teams: boolean().optional(),
+    voice: voiceScope
+});
+
 export const readyInput = object({ ready: boolean() });
 
 export const leaveInput = object({ forfeit: boolean() });

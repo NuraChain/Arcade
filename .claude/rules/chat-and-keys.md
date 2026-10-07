@@ -1097,12 +1097,13 @@ second forever. 4400, 4401 and 4429 are terminal and never retried.
 same jitter and a restart brought them all back in the same instant; tests set theirs explicitly.
 
 **A table holds the socket, and a held socket is probed.** The play page holds it while a live match is
-on screen, which keeps it through a hidden tab. Ten seconds without a frame sends a `ping`; four more
-without an answer hang it up and reopen it at once, because a socket whose far end has gone quiet
-without a FIN is otherwise trusted until TCP gives up minutes later. The pongs also give the round trip
-and the server clock's offset, from the fastest of the last eight. The server's own heartbeat is 15 s
-with a 10 s pong timeout. The fake socket answers pings the way the server does and has a `deaf`
-switch for the case where it does not.
+on screen, and while the reader sits ready at a live table waiting for one (*Somebody waiting at a live
+table keeps their socket* in `games.md`), which keeps it through a hidden tab. Ten seconds without a
+frame sends a `ping`; four more without an answer hang it up and reopen it at once, because a socket
+whose far end has gone quiet without a FIN is otherwise trusted until TCP gives up minutes later. The
+pongs also give the round trip and the server clock's offset, from the fastest of the last eight. The
+server's own heartbeat is 15 s with a 10 s pong timeout. The fake socket answers pings the way the
+server does and has a `deaf` switch for the case where it does not.
 
 `stores/connection.store.ts` reports only what it can see: the socket's own status plus
 `navigator.onLine`. The `latency` it used to publish was never measured by any request, and the

@@ -3,6 +3,7 @@ import { createStore, createResource, createSignal, untrack, type Getter } from 
 import { ApiError, client, type TableSummary } from '../api.ts';
 import type { GameId } from '../data/games.ts';
 import type { TableConfig } from '../data/tables.ts';
+import { runtime } from '../lib/runtime.ts';
 import { useAccount } from './account.store.ts';
 import { useCatalogue } from './catalogue.store.ts';
 import { useRealtime } from './realtime.store.ts';
@@ -36,7 +37,9 @@ export interface LobbyApi
      * Answers with the table's id either way, so the caller navigates to the same place whether
      * somebody was already waiting or nobody was.
      */
-    quick(game: GameId, config?: TableConfig): Promise<string>;
+    quick(game: GameId): Promise<string>;
+
+    finding: Getter<readonly GameId[]>;
 
     /** Takes a chair. Null means the table filled up first - an answer, not a failure. */
     claim(tableId: string): Promise<number | null>;
@@ -58,6 +61,8 @@ export interface LobbyApi
     reset(): void;
 }
 
+export const ARRIVAL_MS = 10_000;
+
 /**
  * Tables, according to the SERVER.
  *
@@ -78,6 +83,18 @@ export const useLobby = createStore((): LobbyApi =>
     const who = () => account.user()?.id ?? null;
 
     const [openId, setOpenId] = createSignal('');
+
+    const [finding, setFinding] = createSignal<readonly GameId[]>([]);
+
+    const searches = new Map<GameId, Promise<string>>();
+
+    const arriving = new Map<string, () => void>();
+
+    const done = (game: GameId) =>
+    {
+        searches.delete(game);
+        setFinding((current) => current.filter((one) => one !== game));
+    };
 
     const seated = createResource(who, () => client.tables.mine(), { name: 'tables.mine' });
 
@@ -202,6 +219,7 @@ export const useLobby = createStore((): LobbyApi =>
         {
             left.delete(tableId);
             setOpenId(tableId);
+            arriving.get(tableId)?.();
         },
         close: () => setOpenId(''),
         openId,
@@ -215,29 +233,44 @@ export const useLobby = createStore((): LobbyApi =>
             return made.id;
         },
 
-        async quick(game, config)
+        quick(game)
         {
-            const wanted = config ?? catalogue.defaults(game);
-            const { tables } = await client.tables.open({ query: { game, mode: wanted.mode } });
+            const out = searches.get(game);
 
-            for (const candidate of tables)
+            if (out !== undefined)
             {
-                const claimed = await client.tables.claim({ params: { id: candidate.id } });
-                if (claimed.seat !== undefined)
-                {
-                    await settle(candidate.id);
-                    await revalidate();
-                    return candidate.id;
-                }
+                return out;
             }
 
-            const made = await client.tables.create({
-                input: asInput(game, wanted, 'public', [])
-            });
-            await settle(made.id);
-            await revalidate();
-            return made.id;
+            const search = client.tables.quick({ input: { game, voice: catalogue.defaults(game).voice } })
+                .then(async (table) =>
+                {
+                    await revalidate();
+
+                    const late = runtime().clock.after(ARRIVAL_MS, () => arriving.get(table.id)?.());
+
+                    arriving.set(table.id, () =>
+                    {
+                        late();
+                        arriving.delete(table.id);
+                        done(game);
+                    });
+
+                    return table.id;
+                })
+                .catch((error: unknown) =>
+                {
+                    done(game);
+                    throw error;
+                });
+
+            searches.set(game, search);
+            setFinding((current) => [...current, game]);
+
+            return search;
         },
+
+        finding,
 
         async claim(tableId)
         {
@@ -340,6 +373,14 @@ export const useLobby = createStore((): LobbyApi =>
             left.clear();
             setOpenId('');
             inFlight = Promise.resolve();
+
+            for (const arrived of [...arriving.values()])
+            {
+                arrived();
+            }
+
+            searches.clear();
+            setFinding([]);
             void seated.refetch();
         }
     };

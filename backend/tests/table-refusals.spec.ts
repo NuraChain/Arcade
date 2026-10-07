@@ -95,6 +95,20 @@ describe('a table refusal', () =>
     });
 });
 
+describe('a quick search that cannot be run', () =>
+{
+    it('is a request that was wrong, never a table that stood in the way', () =>
+    {
+        expect(TABLE_REFUSALS['quick-game']).toBe(422);
+        expect(TABLE_REFUSALS['quick-options']).toBe(422);
+    });
+
+    it('has no word for finding nothing to join, or for a table it could not have', () =>
+    {
+        expect(WORDS.filter((word) => word.startsWith('quick-'))).toEqual(['quick-game', 'quick-options']);
+    });
+});
+
 describe('nobody to invite', () =>
 {
     it('answers as a missing thing, never as a forbidden one', () =>

@@ -127,6 +127,7 @@ export interface Hub
     flush(): Promise<void>;
 
     presenceOf(userId: string): PresenceEntry[];
+    present(userIds: readonly string[]): ReadonlySet<string>;
     size(): number;
     /**
      * Sends a close frame with a code to every connection, and answers how many it sent.
@@ -1028,6 +1029,8 @@ export function createHub(deps: HubDeps): Hub
         flush,
 
         presenceOf: (userId) => entriesFor(userId),
+
+        present: (userIds) => new Set(userIds.filter((userId) => online.has(userId))),
 
         size()
         {

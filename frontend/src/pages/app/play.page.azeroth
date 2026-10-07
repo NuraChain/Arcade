@@ -228,11 +228,23 @@ export default component PlayPage()
 
     derived awake = showing && board.match()!.finishedAt === undefined;
 
+    derived wired = awake || (seated
+        && table?.mode === 'live'
+        && table.status !== 'closed'
+        && table.chairs.find((chair) => chair.seat === table?.mine)?.ready === true);
+
     effect
     {
         if (awake)
         {
             onCleanup(holdScreen());
+        }
+    }
+
+    effect
+    {
+        if (wired)
+        {
             onCleanup(useRealtime().hold());
         }
     }

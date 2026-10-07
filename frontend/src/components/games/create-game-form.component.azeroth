@@ -48,11 +48,15 @@ export default component CreateGameForm(props: { game: Game; onCreated: (tableId
     state query = '';
     state pending = false;
 
+    derived hasCube = rules.hasCube;
+
+    derived hasBlinds = rules.hasBlinds;
+
     derived cubeOffered = cubeLive(target, true);
 
     derived cubed = cubeLive(target, cube);
 
-    derived config = { game: props.game.id, seats, mode, privacy, target, cube: cubed, blinds, chat, voice, teams: teamsOf(rules.partners, seats, false), quick: false } satisfies TableConfig;
+    derived config = { game: props.game.id, seats, mode, privacy, target, cube: cubed, blinds, chat, voice, teams: teamsOf(rules.partners, seats, false) } satisfies TableConfig;
 
     derived tooMany = invitees.length > seats - 1;
 
@@ -171,7 +175,7 @@ export default component CreateGameForm(props: { game: Game; onCreated: (tableId
             </fieldset>
         </Show>
 
-        <Show when={ props.game.id === 'backgammon' }>
+        <Show when={ hasCube }>
             <Toggle
                 checked={ cubed }
                 disabled={ !cubeOffered }
@@ -181,7 +185,7 @@ export default component CreateGameForm(props: { game: Game; onCreated: (tableId
             />
         </Show>
 
-        <Show when={ props.game.id === 'poker' }>
+        <Show when={ hasBlinds }>
             <fieldset class="flex flex-col gap-2">
                 <legend class="label mb-2 text-ui-sm text-muted">{ locale.t('create.blinds') }</legend>
                 <Segmented

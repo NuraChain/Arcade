@@ -650,6 +650,66 @@ describe('leaving', () =>
     });
 });
 
+describe('who is here', () =>
+{
+    it('answers for the accounts with a socket open, whichever of them were asked about', async () =>
+    {
+        await connect('alex');
+        await connect('sara.k');
+
+        expect([...world.hub.present(['alex', 'reza.t', 'sara.k'])].sort()).toEqual(['alex', 'sara.k']);
+        expect([...world.hub.present(['reza.t'])]).toEqual([]);
+        expect([...world.hub.present([])]).toEqual([]);
+    });
+
+    it('counts somebody who is away, and somebody whose last socket closed a moment ago', async () =>
+    {
+        const alex = await connect('alex');
+        const sara = await connect('sara.k');
+
+        world.hub.setState(alex.connection, 'away');
+        world.hub.release(sara.connection);
+
+        expect([...world.hub.present(['alex', 'sara.k'])].sort()).toEqual(['alex', 'sara.k']);
+
+        world.at += LINGER_MS - 1;
+        await world.hub.sweep();
+
+        expect(world.hub.present(['sara.k']).has('sara.k')).toBe(true);
+    });
+
+    it('stops counting somebody once the linger has run out', async () =>
+    {
+        const alex = await connect('alex');
+
+        await connect('sara.k');
+        world.hub.release(alex.connection);
+        world.at += LINGER_MS + 1;
+        await world.hub.sweep();
+
+        expect([...world.hub.present(['alex', 'sara.k'])]).toEqual(['sara.k']);
+    });
+
+    it('is asked whoever the account lets see it online, because the answer is never sent to anybody', async () =>
+    {
+        world.edges.set('minor', { party: party('minor', { isMinor: true, allowStrangerMessages: false }), friends: [], blocks: [] });
+        world.edges.set('hidden', { party: party('hidden', { showOnline: false }), friends: [], blocks: ['alex'] });
+
+        await connect('minor');
+        await connect('hidden');
+
+        const alex = await connect('alex');
+        const before = alex.wire.sent.length;
+
+        expect(world.hub.presenceOf('alex').map((entry) => entry.who)).toEqual(['alex']);
+        expect([...world.hub.present(['minor', 'hidden'])].sort()).toEqual(['hidden', 'minor']);
+
+        await settle();
+
+        expect(alex.wire.sent.length).toBe(before);
+    });
+});
+
 describe('sessions', () =>
 {
     it('closes a socket whose session was revoked, with a code rather than a destroy', async () =>

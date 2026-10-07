@@ -59,7 +59,7 @@ export function leaveLead(live: Pick<MatchView, 'finishedAt' | 'mine' | 'players
     return taken <= 1 ? 'play.leave.last' : 'play.leave.lead';
 }
 
-const ABOUT_THE_READER: readonly MessageKey[] = ['play.seatedMax', 'tables.refused.no-invitee'];
+const ABOUT_THE_ASK: readonly MessageKey[] = ['play.seatedMax', 'tables.refused.no-invitee', 'tables.refused.quick-game', 'tables.refused.quick-options'];
 
 export function openTable(made: Promise<string>, go: (to: string) => void, settled?: () => void)
 {
@@ -71,7 +71,7 @@ export function openTable(made: Promise<string>, go: (to: string) => void, settl
 
             useToasts().show({
                 kind: 'warning',
-                text: useLocale().t(ABOUT_THE_READER.includes(why) ? why : 'play.openFailed'),
+                text: useLocale().t(ABOUT_THE_ASK.includes(why) ? why : 'play.openFailed'),
                 dedupe: 'open-table'
             });
         })

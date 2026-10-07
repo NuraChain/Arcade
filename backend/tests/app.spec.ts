@@ -133,6 +133,91 @@ describe('api surface', () =>
     });
 });
 
+describe('quick play', () =>
+{
+    const answering = (told: unknown[][]) => buildApp({
+        db: fakeDb({ initialized: true }),
+        config,
+        log: silent,
+        ports: {
+            identity: {
+                principal: () => Promise.resolve({ userId: 'somebody', handle: 'somebody', kind: 'guest', isMinor: false, sessionId: 'a-session' })
+            },
+            table: {
+                quick: (...said: unknown[]) =>
+                {
+                    told.push(said);
+
+                    return Promise.resolve({
+                        id: 'a-table',
+                        code: 'abc234',
+                        game: 'ludo',
+                        seats: 4,
+                        mode: 'live',
+                        privacy: 'public',
+                        target: 0,
+                        cube: false,
+                        blinds: 'low',
+                        chat: true,
+                        voice: 'off',
+                        teams: false,
+                        status: 'open',
+                        chairs: [],
+                        taken: 1,
+                        mine: 0,
+                        createdAt: '2026-10-07T00:00:00.000Z'
+                    });
+                },
+                view: () => Promise.reject(new Error('quick was read as a table id'))
+            }
+        } as unknown as Ports
+    });
+
+    const quick = (app: ReturnType<typeof buildApp>, body: unknown) =>
+        app.handle(new Request('http://local/api/tables/quick', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify(body)
+        }));
+
+    it('is one request, answered with the table the caller was seated at', async () =>
+    {
+        const told: unknown[][] = [];
+        const response = await quick(answering(told), { game: 'ludo', voice: 'table', seats: 4 });
+
+        expect(response.status).toBe(200);
+        expect(await response.json()).toMatchObject({ id: 'a-table', mine: 0 });
+        expect(told).toEqual([['somebody', { game: 'ludo', voice: 'table', seats: 4 }]]);
+    });
+
+    it('is not passed on until it says the game and who the call is for', async () =>
+    {
+        const told: unknown[][] = [];
+        const app = answering(told);
+
+        for (const body of [{}, { game: 'ludo' }, { voice: 'off' }, { game: 'ludo', voice: true }, { game: 'ludo', voice: 'off', seats: 12 }])
+        {
+            const response = await quick(app, body);
+
+            expect(response.status, JSON.stringify(body)).toBe(422);
+            expect(await response.json(), JSON.stringify(body)).toMatchObject({ error: { code: 'validation-failed' } });
+        }
+
+        expect(told).toEqual([]);
+    });
+
+    it('left no list of open tables behind for a browser to walk', async () =>
+    {
+        const app = answering([]);
+        const manifest = await (await call(app, '/api/_manifest')).json() as Record<string, Record<string, { method: string; path: string }>>;
+
+        expect(Object.keys(manifest.tables)).toContain('quick');
+        expect(Object.keys(manifest.tables)).not.toContain('open');
+        expect(Object.values(manifest.tables).filter((route) => route.method === 'GET' && /\/tables\/?$/.test(route.path))).toEqual([]);
+        expect((await call(app, '/api/tables')).status).toBeGreaterThanOrEqual(400);
+    });
+});
+
 describe('leaving a table', () =>
 {
     const seatedAs = (told: unknown[][]) => buildApp({

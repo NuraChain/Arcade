@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { cleanup, renderTest } from '@azerothjs/testing';
+import { cleanup, fire, renderTest } from '@azerothjs/testing';
 import { RouterProvider, createMemoryHistory, createRouter, type Route } from 'azerothjs';
 
 import HomePage from '../src/pages/app/home.page.azeroth';
@@ -8,10 +8,11 @@ import { resetRuntime, setRuntime } from '../src/lib/runtime.ts';
 import '../src/locales/app-catalogue.ts';
 import { useAccount } from '../src/stores/account.store.ts';
 import { useCatalogue } from '../src/stores/catalogue.store.ts';
+import { useLobby } from '../src/stores/lobby.store.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
 import { useRecord } from '../src/stores/record.store.ts';
 import type { MatchHistoryEntry } from '../src/api.ts';
-import { server } from './fake-api.ts';
+import { client, server } from './fake-api.ts';
 
 vi.mock('../src/api.ts', async () => await import('./fake-api.ts'));
 
@@ -133,5 +134,58 @@ describe('the home page', () =>
         const container = await show();
 
         expect(container.querySelector('h1 .text-accent')?.textContent).toBe('به‌یادماندنی');
+    });
+
+    it('spins on its quick play button while a seat is being found, says so, and sends one request for two presses', async () =>
+    {
+        useLobby().reset();
+
+        const container = await show();
+        const hero = container.querySelector<HTMLElement>('section[aria-labelledby="home-hero"]')!;
+        const button = [...hero.querySelectorAll<HTMLButtonElement>('button')].find((one) => one.textContent?.trim() === 'Quick play')!;
+        const tables = client.tables as unknown as Record<string, (input: unknown) => Promise<unknown>>;
+        const real = tables.quick;
+        const answers: (() => void)[] = [];
+
+        tables.quick = async (input) =>
+        {
+            await new Promise<void>((resolve) =>
+            {
+                answers.push(resolve);
+            });
+
+            return await real(input);
+        };
+
+        try
+        {
+            expect(button.getAttribute('aria-busy')).not.toBe('true');
+
+            fire(button, 'click');
+            fire(button, 'click');
+            await settle();
+
+            expect(button.getAttribute('aria-busy')).toBe('true');
+            expect(button.disabled).toBe(true);
+            expect(hero.querySelector('[role="status"]')?.textContent).toBe('Finding you a seat');
+            expect(answers).toHaveLength(1);
+
+            answers[0]();
+            await settle();
+
+            expect(server.tables).toHaveLength(1);
+            expect(button.getAttribute('aria-busy'), 'the button was let go before the table’s page had arrived').toBe('true');
+
+            useLobby().open(server.tables[0].id);
+            await settle();
+
+            expect(button.getAttribute('aria-busy')).not.toBe('true');
+            expect(hero.querySelector('[role="status"]')?.textContent).toBe('');
+        }
+        finally
+        {
+            tables.quick = real;
+            useLobby().reset();
+        }
     });
 });

@@ -464,19 +464,38 @@ try
     await part('5 quick play', async () =>
     {
         const page = visitor.page;
+        const asked = [];
+        const heard = (request) =>
+        {
+            const { pathname } = new URL(request.url());
+
+            if (pathname.startsWith('/api/tables'))
+            {
+                asked.push(`${ request.method() } ${ pathname.replace(/\/$/, '').replace(/[0-9a-f-]{36}/, ':id') }`);
+            }
+        };
 
         await go(page, '/app/games/ludo');
         const quick = page.locator('main').getByRole('button', { name: 'Quick play', exact: true }).first();
 
         record('the Ludo page offers Quick play', await soon(async () => await quick.isVisible(), 5000));
+        page.on('request', heard);
         await quick.click();
         await page.waitForURL(/\/app\/play\/[0-9a-f-]{36}/, { timeout: 15000 }).catch(() => undefined);
         record('Quick play lands on a play page', /^\/app\/play\/[0-9a-f-]{36}$/.test(path(page)), path(page));
 
         const seated = await visitor.api('GET', '/tables/mine');
-        record('the guest is sitting at that table', (seated.body?.tables ?? []).some((one) => path(page).endsWith(one.id)));
+        const mine = (seated.body?.tables ?? []).find((one) => path(page).endsWith(one.id));
+        record('the guest is sitting at that table', mine !== undefined);
+        record('and is ready there without pressing anything', mine?.chairs?.find((chair) => chair.seat === mine.mine)?.ready === true);
 
         await settledOn(page);
+        page.off('request', heard);
+
+        const wrote = asked.filter((one) => !one.startsWith('GET '));
+        record('Quick play is one request the server answers', wrote.length === 1 && wrote[0] === 'POST /api/tables/quick', wrote.join(', '));
+        record('and the browser reads no list of open tables to walk', !asked.includes('GET /api/tables'), asked.filter((one) => one.startsWith('GET ')).join(', '));
+
         await clearTables(visitor);
         await pause(1500);
         await go(page, '/app/games');

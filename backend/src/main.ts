@@ -133,7 +133,7 @@ const hub = createHub({
 
 // ONE instance, shared by the API and by the gateway. It used to be built twice here, once for
 // the manifest and once inside `buildApp`, and neither survived the expression it was created in.
-const ports = buildPorts(dataSource, config, hub);
+const ports = buildPorts(dataSource, config, hub, hub);
 
 const serving = config.servePages;
 

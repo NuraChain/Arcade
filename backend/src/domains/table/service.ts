@@ -8,11 +8,13 @@ import { Match } from '../../entities/match.entity.ts';
 import { Table } from '../../entities/table.entity.ts';
 import type { TableMode } from '../../entities/table.entity.ts';
 import type { TablePrivacy, TableStatus } from '../../schemas.ts';
+import { keyedQueue } from '../../lib/keyed-queue.ts';
 import { firstRow } from '../../lib/rows.ts';
 import { ConversationMember } from '../../entities/conversation-member.entity.ts';
 import { TableSeat } from '../../entities/table-seat.entity.ts';
 import type { SocialService } from '../social/service.ts';
 import { cubeLive } from '../match/backgammon/cube.ts';
+import { chairFor, quickOf, type QuickAsk, type QuickFilter } from './quick.ts';
 import { TABLE_REFUSALS, type TableRefusal } from './refusals.ts';
 import { guestChairs, teamsOf, type Partners } from './teams.ts';
 import type { VoiceScope } from './voices.ts';
@@ -101,6 +103,8 @@ const ALPHABET = 'abcdefghjkmnpqrstuvwxyz23456789';
 const CODE_LENGTH = 6;
 
 const CLAIM_ATTEMPTS = 6;
+
+const QUICK_CANDIDATES = 32;
 
 const UNIQUE_VIOLATION = '23505';
 
@@ -276,11 +280,137 @@ const standUp = async (tx: EntityManager, tableId: string, userId: string) =>
     return { left: true, closed: false };
 };
 
+interface Opening
+{
+    game: string;
+    seats: number;
+    mode: TableMode;
+    privacy: TablePrivacy;
+    target: number;
+    cube: boolean;
+    blinds: string;
+    chat: boolean;
+    voice: VoiceScope;
+    teams: boolean;
+    roomId: string | null;
+}
+
+const openRow = async (tx: EntityManager, host: string, opening: Opening, guests: readonly string[], ready: boolean) =>
+{
+    const inserted = await tx.getRepository(Table).insert({ ...opening, code: codeFrom(Math.random), hostId: host });
+    const id = inserted.identifiers[0].id as string;
+
+    /**
+     * Raw, and one of the few that stays that way: it is an `INSERT ... SELECT`
+     * over `generate_series` joined to `unnest`, which builds every chair and
+     * deals the invitations out across them in one statement. A repository can
+     * only insert rows a caller has already built, and building these in Node
+     * would be the same statement with a round trip in the middle.
+     */
+    await tx.query(
+        `insert into table_seats (table_id, seat, user_id, invited_id, joined_at, ready)
+         select $1, gs.seat, case when gs.seat = 0 then $2::uuid else null end,
+                guests.who, case when gs.seat = 0 then now() else null end, gs.seat = 0 and $6::boolean
+         from generate_series(0, $3::int - 1) as gs(seat)
+         left join (
+             select g.seat as at, u.id as who
+             from unnest($4::uuid[], $5::int[]) as g(id, seat)
+             join users u on u.id = g.id
+         ) guests on guests.at = gs.seat`,
+        [id, host, opening.seats, guests, guestChairs(opening.seats, opening.teams).slice(0, guests.length), ready]
+    );
+
+    const conversation = await tx.getRepository(Conversation).insert({
+        kind: 'game',
+        tableId: id,
+        game: opening.game
+    });
+    await tx.getRepository(ConversationMember).insert({
+        conversationId: conversation.identifiers[0].id as string,
+        userId: host
+    });
+
+    return id;
+};
+
+const OCCUPANTS = 'select s.user_id from table_seats s where s.table_id = t.id and s.user_id is not null';
+
+const compatible = (tx: EntityManager, lead: string, game: string, filter: QuickFilter) => tx.getRepository(Table)
+    .createQueryBuilder('t')
+    .where(`t.game = :game and t.status = 'open' and t.mode = :mode`, { game, mode: filter.mode })
+    .andWhere(
+        `(t.privacy = 'public'
+          or (t.privacy = 'friends' and exists (select 1 from friendships f
+                                                 where f.user_id = :lead and f.friend_id = t.host_id)))`,
+        { lead }
+    )
+    .andWhere('(cast(:seats as int) is null or t.seats = :seats)', { seats: filter.seats })
+    .andWhere('(cast(:target as int) is null or t.target = :target)', { target: filter.target })
+    .andWhere('(cast(:blinds as varchar) is null or t.blinds = :blinds)', { blinds: filter.blinds })
+    .andWhere('(cast(:cube as boolean) is null or t.cube = :cube)', { cube: filter.cube })
+    .andWhere('(cast(:teams as boolean) is null or t.teams = :teams)', { teams: filter.teams })
+    .andWhere('not exists (select 1 from matches m where m.table_id = t.id and m.finished_at is null)')
+    .andWhere(
+        `not exists (select 1 from blocks b
+                      where (b.user_id = :lead and (b.blocked_id = t.host_id or b.blocked_id in (${ OCCUPANTS })))
+                         or (b.blocked_id = :lead and (b.user_id = t.host_id or b.user_id in (${ OCCUPANTS }))))`
+    );
+
+const sit = async (tx: EntityManager, tableId: string, teams: boolean, lead: string) =>
+{
+    await lockTable(tx, tableId);
+
+    const chairs = tx.getRepository(TableSeat);
+
+    const free = await chairs.find({
+        where: [{ tableId, userId: IsNull(), invitedId: IsNull() }, { tableId, userId: IsNull(), invitedId: lead }],
+        lock: { mode: 'pessimistic_write', onLocked: 'skip_locked' }
+    });
+    const held = free.filter((chair) => chair.invitedId === lead);
+    const taken = await chairs.find({ select: { tableId: true, seat: true }, where: { tableId, userId: Not(IsNull()) } });
+    const seat = chairFor((held.length > 0 ? held : free).map((chair) => chair.seat), taken.map((chair) => chair.seat), teams);
+
+    if (seat === null)
+    {
+        return false;
+    }
+
+    const sat = await chairs
+        .createQueryBuilder()
+        .update(TableSeat)
+        .set({ userId: lead, joinedAt: () => 'now()', ready: true })
+        .where('table_id = :tableId and seat = :seat and user_id is null', { tableId, seat })
+        .andWhere(`exists (select 1 from tables t where t.id = :tableId and t.status = 'open')`)
+        .andWhere('not exists (select 1 from matches m where m.table_id = :tableId and m.finished_at is null)')
+        .execute();
+
+    if (sat.affected !== 1)
+    {
+        return false;
+    }
+
+    const thread = await tx.getRepository(Conversation).findOne({ select: { id: true }, where: { tableId, kind: 'game' } });
+
+    if (thread !== null)
+    {
+        await tx.getRepository(ConversationMember)
+            .createQueryBuilder()
+            .insert()
+            .values({ conversationId: thread.id, userId: lead })
+            .orIgnore()
+            .execute();
+    }
+
+    return true;
+};
+
 export function createTableService(db: DataSource, social: SocialService)
 {
-    const mustHaveRoom = async (me: string) =>
+    const searches = keyedQueue();
+
+    const mustHaveRoom = async (me: string, from: DataSource | EntityManager = db) =>
     {
-        const seated = await db.getRepository(TableSeat)
+        const seated = await from.getRepository(TableSeat)
             .createQueryBuilder('seat')
             .innerJoin(Table, 't', `t.id = seat.table_id and t.status <> 'closed'`)
             .where('seat.user_id = :me', { me })
@@ -311,6 +441,19 @@ export function createTableService(db: DataSource, social: SocialService)
 
         throw noInvitee();
     };
+
+    const rulesOf = async (game: string) =>
+        await db.getRepository(GameRule)
+            .createQueryBuilder('r')
+            .innerJoin(Game, 'g', `g.id = r.game_id and g.status = 'available'`)
+            .select('r.seats', 'seats')
+            .addSelect('r.modes', 'modes')
+            .addSelect('r.targets', 'targets')
+            .addSelect('r.partners', 'partners')
+            .addSelect('r.hasCube', 'has_cube')
+            .addSelect('r.hasBlinds', 'has_blinds')
+            .where('r.game_id = :game', { game })
+            .getRawOne<RulesRow>() ?? null;
 
     const one = async (me: string, tableId: string): Promise<TableRow | null> =>
     {
@@ -364,52 +507,117 @@ export function createTableService(db: DataSource, social: SocialService)
         byId: one,
         byCode,
 
-        /**
-         * Every open table this viewer could walk up to, the nearest to starting first.
-         *
-         * `public` and `friends` and deliberately not the other two. This is the GLOBAL list -
-         * finding a table among strangers - and an invite and a room are the opposite of that:
-         * they are reached by the invitation and by the line written into the room, so putting
-         * them here would merge the two ways of starting a game back into one.
-         *
-         * `friends` is now a level that does something. It filtered on `public` strictly, so a
-         * table somebody opened for their friends was invisible to their friends as well as to
-         * everybody else - the setting did precisely nothing and told the person who picked it
-         * that their friends could find the table.
-         */
-        async open(me: string, filter: { game: string | null; mode: TableMode | null }, limit: number)
+        async quick(
+            lead: string,
+            ask: QuickAsk & { game: string; voice: VoiceScope },
+            present: (userIds: readonly string[]) => ReadonlySet<string>
+        )
         {
-            return await tableQuery(db, me)
-                .where(`t.status = 'open'`)
-                .andWhere(`(t.privacy = 'public'
-                            or (t.privacy = 'friends'
-                                and exists (select 1 from friendships f
-                                             where f.user_id = :me and f.friend_id = t.host_id)))`)
-                .andWhere('(cast(:game as varchar) is null or t.game = :game)', { game: filter.game })
-                .andWhere('(cast(:mode as varchar) is null or t.mode = :mode)', { mode: filter.mode })
-                .andWhere('not exists (select 1 from matches m where m.table_id = t.id and m.finished_at is null)')
-                .andWhere(
-                    `exists (select 1 from table_seats s
-                              where s.table_id = t.id and s.user_id is null
-                                and (s.invited_id is null or s.invited_id = :me))`
-                )
-                .andWhere(`not exists (select 1 from table_seats s
-                                        where s.table_id = t.id and s.user_id = :me)`)
-                .andWhere(`not exists (select 1 from blocks b
-                                        where (b.user_id = :me and b.blocked_id = t.host_id)
-                                           or (b.user_id = t.host_id and b.blocked_id = :me))`)
-                .orderBy('(select count(*) from table_seats s where s.table_id = t.id and s.user_id is null)', 'ASC')
-                .addOrderBy('t.created_at', 'ASC')
-                .limit(limit)
-                .getRawMany<TableRow>();
+            const rules = await rulesOf(ask.game);
+
+            if (rules === null)
+            {
+                throw tableRefusal('quick-game', 'That game cannot be played right now.');
+            }
+
+            const want = quickOf({ ...rules, hasCube: rules.has_cube, hasBlinds: rules.has_blinds }, ask);
+
+            if (!want.ok)
+            {
+                throw tableRefusal('quick-options', 'That is not a table this game makes.');
+            }
+
+            const search = async (tx: EntityManager) =>
+            {
+                await tx.query(`select pg_advisory_xact_lock(hashtext('quick'), hashtext($1))`, [ask.game]);
+
+                const waiting = await compatible(tx, lead, ask.game, want.filter)
+                    .innerJoin(TableSeat, 'mine', 'mine.table_id = t.id and mine.user_id = :lead and mine.ready')
+                    .select('t.id', 'id')
+                    .orderBy('mine.joined_at', 'DESC')
+                    .limit(1)
+                    .getRawOne<{ id: string }>();
+
+                if (waiting !== undefined)
+                {
+                    return { id: waiting.id, seated: false };
+                }
+
+                await mustHaveRoom(lead, tx);
+
+                const candidates = await compatible(tx, lead, ask.game, want.filter)
+                    .select('t.id', 'id')
+                    .addSelect('t.teams', 'teams')
+                    .addSelect(`(select coalesce(array_agg(s.user_id::text), '{}') from table_seats s where s.table_id = t.id and s.user_id is not null)`, 'occupants')
+                    .andWhere('not exists (select 1 from table_seats s where s.table_id = t.id and s.user_id = :lead)')
+                    .andWhere(
+                        `exists (select 1 from table_seats s
+                                  where s.table_id = t.id and s.user_id is null
+                                    and (s.invited_id is null or s.invited_id = :lead))`
+                    )
+                    .andWhere(
+                        `not exists (select 1 from table_seats s
+                                       join users o on o.id = s.user_id
+                                      where s.table_id = t.id
+                                        and o.is_minor <> (select u.is_minor from users u where u.id = :lead)
+                                        and not exists (select 1 from friendships f
+                                                         where f.user_id = :lead and f.friend_id = o.id))`
+                    )
+                    .orderBy('(select count(*) from table_seats s where s.table_id = t.id and s.user_id is null)', 'ASC')
+                    .addOrderBy('(select count(*) from table_seats s where s.table_id = t.id and s.user_id is not null and not s.ready)', 'ASC')
+                    .addOrderBy('t.created_at', 'ASC')
+                    .limit(QUICK_CANDIDATES)
+                    .getRawMany<{ id: string; teams: boolean; occupants: string[] }>();
+
+                const here = want.filter.mode === 'live' ? present(candidates.flatMap((candidate) => candidate.occupants)) : null;
+
+                for (const candidate of candidates)
+                {
+                    if ((here === null || candidate.occupants.every((occupant) => here.has(occupant))) && await sit(tx, candidate.id, candidate.teams, lead))
+                    {
+                        return { id: candidate.id, seated: true };
+                    }
+                }
+
+                const opened = await openRow(tx, lead, {
+                    ...want.make,
+                    game: ask.game,
+                    privacy: 'public',
+                    chat: true,
+                    voice: ask.voice,
+                    roomId: null
+                }, [], true);
+
+                return { id: opened, seated: true };
+            };
+
+            return await searches.run(ask.game, async () =>
+            {
+                for (let attempt = 0; attempt < CLAIM_ATTEMPTS; attempt += 1)
+                {
+                    try
+                    {
+                        return await db.transaction(search);
+                    }
+                    catch (error)
+                    {
+                        if ((error as { code?: string }).code !== UNIQUE_VIOLATION)
+                        {
+                            throw error;
+                        }
+                    }
+                }
+
+                throw new ConflictError('Could not open a table just now. Try again.');
+            });
         },
 
         /**
          * Public tables with a game running on them, for somebody looking for one to watch.
          *
-         * PUBLIC strictly, which is the same rule `open` follows and the same one a private group
-         * follows: a table somebody opened for their friends is not a thing a stranger gets to look
-         * at, and a 404 rather than a 403 is what stops a stranger telling a closed door from a typo.
+         * PUBLIC strictly, which is the same rule a private group follows: a table somebody opened
+         * for their friends is not a thing a stranger gets to look at, and a 404 rather than a 403
+         * is what stops a stranger telling a closed door from a typo.
          *
          * A block hides it in both directions, like every other read - watching somebody who blocked
          * you is a way of following them around, which is what a block is for.
@@ -465,7 +673,7 @@ export function createTableService(db: DataSource, social: SocialService)
          * The same `visibleTo` every other read by id uses, which is what lets the six people in a
          * group watch the four of them playing: a room table is visible to the room, so the two
          * who could not get a chair are not shut out of their own group's game. The list above
-         * stays public-only, exactly as `open` does, because that one is global discovery.
+         * stays public-only, because that one is global discovery.
          *
          * The block half is worth stating: watching somebody's games is a way of following them
          * around, which is precisely what a block is for - and the list already filters on it, so
@@ -524,17 +732,7 @@ export function createTableService(db: DataSource, social: SocialService)
 
             const guests = [...new Set(input.invitees)];
 
-            const rules = await db.getRepository(GameRule)
-                .createQueryBuilder('r')
-                .innerJoin(Game, 'g', `g.id = r.game_id and g.status = 'available'`)
-                .select('r.seats', 'seats')
-                .addSelect('r.modes', 'modes')
-                .addSelect('r.targets', 'targets')
-                .addSelect('r.partners', 'partners')
-                .addSelect('r.hasCube', 'has_cube')
-                .addSelect('r.hasBlinds', 'has_blinds')
-                .where('r.game_id = :game', { game: input.game })
-                .getRawOne<RulesRow>() ?? null;
+            const rules = await rulesOf(input.game);
 
             if (rules === null)
             {
@@ -668,57 +866,19 @@ export function createTableService(db: DataSource, social: SocialService)
             {
                 try
                 {
-                    const tableId = await db.transaction(async (tx) =>
-                    {
-                        const inserted = await tx.getRepository(Table).insert({
-                            code: codeFrom(Math.random),
-                            game: input.game,
-                            seats: input.seats,
-                            mode: input.mode,
-                            privacy,
-                            target: input.target,
-                            cube,
-                            blinds,
-                            chat: input.chat,
-                            voice: input.voice,
-                            teams,
-                            hostId: me,
-                            roomId
-                        });
-                        const id = inserted.identifiers[0].id as string;
-
-                        /**
-                         * Raw, and one of the few that stays that way: it is an `INSERT ... SELECT`
-                         * over `generate_series` joined to `unnest`, which builds every chair and
-                         * deals the invitations out across them in one statement. A repository can
-                         * only insert rows a caller has already built, and building these in Node
-                         * would be the same statement with a round trip in the middle.
-                         */
-                        await tx.query(
-                            `insert into table_seats (table_id, seat, user_id, invited_id, joined_at)
-                             select $1, gs.seat, case when gs.seat = 0 then $2::uuid else null end,
-                                    guests.who, case when gs.seat = 0 then now() else null end
-                             from generate_series(0, $3::int - 1) as gs(seat)
-                             left join (
-                                 select g.seat as at, u.id as who
-                                 from unnest($4::uuid[], $5::int[]) as g(id, seat)
-                                 join users u on u.id = g.id
-                             ) guests on guests.at = gs.seat`,
-                            [id, me, input.seats, guests, guestChairs(input.seats, teams).slice(0, guests.length)]
-                        );
-
-                        const conversation = await tx.getRepository(Conversation).insert({
-                            kind: 'game',
-                            tableId: id,
-                            game: input.game
-                        });
-                        await tx.getRepository(ConversationMember).insert({
-                            conversationId: conversation.identifiers[0].id as string,
-                            userId: me
-                        });
-
-                        return id;
-                    });
+                    const tableId = await db.transaction((tx) => openRow(tx, me, {
+                        game: input.game,
+                        seats: input.seats,
+                        mode: input.mode,
+                        privacy,
+                        target: input.target,
+                        cube,
+                        blinds,
+                        chat: input.chat,
+                        voice: input.voice,
+                        teams,
+                        roomId
+                    }, guests, false));
 
                     return await mustSee(me, tableId);
                 }

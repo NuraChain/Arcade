@@ -43,6 +43,7 @@ import type {
 } from './schemas.ts';
 import type { Infer } from '@azerothjs/schema';
 import type { matchEvent } from './schemas.ts';
+import type { QuickAsk } from './domains/table/quick.ts';
 import type { VoiceScope } from './domains/table/voices.ts';
 
 /**
@@ -210,8 +211,7 @@ export interface GroupPort
  */
 export interface TablePort
 {
-    /** Open public tables this viewer could sit at, optionally for one game. */
-    open(me: string, filter: { game?: string; mode?: TableSummary['mode'] }, limit: number): Promise<TableSummary[]>;
+    quick(me: string, input: QuickAsk & { game: string; voice: VoiceScope }): Promise<TableSummary>;
 
     /** The tables this account is sitting at. */
     mine(me: string): Promise<TableSummary[]>;

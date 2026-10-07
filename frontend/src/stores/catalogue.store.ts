@@ -5,6 +5,7 @@ import { drawable } from '../components/games/boards.ts';
 import { GAMES, gameBySlug, type Game, type GameId } from '../data/games.ts';
 import { TABLE_RULES, defaultTable, type TableConfig, type TableRules } from '../data/tables.ts';
 import { runtime } from '../lib/runtime.ts';
+import { seatsByDefault } from '../../../backend/src/domains/table/quick.ts';
 import { teamsOf } from '../../../backend/src/domains/table/teams.ts';
 import { useSettings } from './settings.store.ts';
 
@@ -90,13 +91,7 @@ export const useCatalogue = createStore((): CatalogueApi =>
             row.id,
             {
                 status: row.status,
-                rules: {
-                    seats: row.rules.seats,
-                    modes: row.rules.modes as TableRules['modes'],
-                    targets: row.rules.targets,
-                    stakes: row.rules.stakes,
-                    partners: row.rules.partners
-                }
+                rules: { ...row.rules, modes: row.rules.modes as TableRules['modes'] }
             }
         ]));
     };
@@ -116,11 +111,10 @@ export const useCatalogue = createStore((): CatalogueApi =>
         defaults: (id) =>
         {
             const rules = rulesFor(id);
-            const base = defaultTable(id);
-            const seats = rules.seats.find((count) => count >= 4) ?? rules.seats[rules.seats.length - 1] ?? base.seats;
+            const seats = seatsByDefault(rules);
 
             return {
-                ...base,
+                ...defaultTable(id),
                 seats,
                 target: rules.targets[0] ?? 0,
                 teams: teamsOf(rules.partners, seats, false),

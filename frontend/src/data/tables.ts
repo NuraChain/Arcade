@@ -33,7 +33,6 @@ export interface TableConfig
     chat: boolean;
     voice: VoiceScope;
     teams: boolean;
-    quick: boolean;
 
     /**
      * The conversation to open this table in, making its members the guest list.
@@ -53,13 +52,15 @@ export interface TableRules
     targets: readonly number[];
     stakes: Stakes;
     partners: Partners;
+    hasCube: boolean;
+    hasBlinds: boolean;
 }
 
 export const TABLE_RULES: Record<GameId, TableRules> = {
-    hokm: { seats: [2, 3, 4], modes: ['live', 'turns'], targets: [7, 13], stakes: 'none', partners: 'required' },
-    poker: { seats: [2, 6, 9], modes: ['live'], targets: [], stakes: 'play-money', partners: 'none' },
-    backgammon: { seats: [2], modes: ['live', 'turns'], targets: [1, 3, 5], stakes: 'none', partners: 'none' },
-    ludo: { seats: [2, 3, 4], modes: ['live', 'turns'], targets: [], stakes: 'none', partners: 'none' }
+    hokm: { seats: [2, 3, 4], modes: ['live', 'turns'], targets: [7, 13], stakes: 'none', partners: 'required', hasCube: false, hasBlinds: false },
+    poker: { seats: [2, 6, 9], modes: ['live'], targets: [], stakes: 'play-money', partners: 'none', hasCube: false, hasBlinds: true },
+    backgammon: { seats: [2], modes: ['live', 'turns'], targets: [1, 3, 5], stakes: 'none', partners: 'none', hasCube: true, hasBlinds: false },
+    ludo: { seats: [2, 3, 4], modes: ['live', 'turns'], targets: [], stakes: 'none', partners: 'none', hasCube: false, hasBlinds: false }
 };
 
 export function defaultTable(game: GameId): TableConfig
@@ -73,12 +74,11 @@ export function defaultTable(game: GameId): TableConfig
         mode: 'live',
         privacy: 'invite',
         target: rules.targets[0] ?? 0,
-        cube: game === 'backgammon',
+        cube: rules.hasCube,
         blinds: 'low',
         chat: true,
         voice: 'off',
-        teams: teamsOf(rules.partners, seats, false),
-        quick: false
+        teams: teamsOf(rules.partners, seats, false)
     };
 }
 

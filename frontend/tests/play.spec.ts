@@ -31,7 +31,7 @@ import { useLocale } from '../src/stores/locale.store.ts';
 import { useOverlay } from '../src/stores/overlay.store.ts';
 import { usePeople } from '../src/stores/people.store.ts';
 import { usePresence } from '../src/stores/presence.store.ts';
-import { useRealtime } from '../src/stores/realtime.store.ts';
+import { IDLE_MS, useRealtime } from '../src/stores/realtime.store.ts';
 import { useConnection } from '../src/stores/connection.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
 import { useSettings } from '../src/stores/settings.store.ts';
@@ -1157,6 +1157,126 @@ describe('PlayPage', () =>
 
             expect(lobbyOf(container)).toBeNull();
             expect(container.textContent).toContain(useLocale().t('play.closed'));
+        });
+    });
+
+    describe('the socket of somebody waiting for a game', () =>
+    {
+        let visibility: DocumentVisibilityState = 'visible';
+
+        const hidden = (forMs: number) =>
+        {
+            visibility = 'hidden';
+            document.dispatchEvent(new Event('visibilitychange'));
+            clock.advance(forMs);
+        };
+
+        const opened = async (patch: Partial<ReturnType<typeof defaultTable>>, viewer = 'alex', ready = true) =>
+        {
+            const id = await useLobby().host('ludo', { ...defaultTable('ludo'), privacy: 'public', ...patch }, []);
+
+            server.tables.find((one) => one.id === id)!.chairs[0].ready = ready;
+            server.me = viewer;
+
+            const routes: Route[] = [{ path: '/app/play/:id', component: (): HTMLElement => PlayPage() as HTMLElement }];
+            const router = createRouter({ routes, history: createMemoryHistory(`/app/play/${ id }`), scroll: false });
+            const { container } = renderTest(() => RouterProvider({ router, children: () => Routes({}) }) as Rendered);
+
+            await vi.waitFor(() => expect(container.querySelector('h1')).not.toBeNull(), { timeout: 4000 });
+            await settle();
+
+            return server.tables.find((one) => one.id === id)!;
+        };
+
+        beforeEach(() =>
+        {
+            visibility = 'visible';
+            Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => visibility });
+        });
+
+        afterEach(() =>
+        {
+            delete (document as { visibilityState?: unknown }).visibilityState;
+            server.me = 'alex';
+        });
+
+        it('is kept through a hidden tab while they sit ready at a live table that has not started', async () =>
+        {
+            await opened({});
+
+            hidden(IDLE_MS * 3);
+
+            expect(socket.closed, 'a hidden tab dropped a waiting player’s socket').toEqual([]);
+        });
+
+        it('is let go for somebody sitting there who is not ready', async () =>
+        {
+            await opened({}, 'alex', false);
+
+            hidden(IDLE_MS + 1000);
+
+            expect(socket.closed, 'a seat that is not waiting for a game kept its socket').toHaveLength(1);
+        });
+
+        it('is let go a minute after a finished game has taken their readiness back, in a tab that was already hidden', async () =>
+        {
+            const held = await opened({});
+
+            hidden(IDLE_MS * 3);
+            held.chairs[0].ready = false;
+            await useLobby().refresh();
+            await settle();
+
+            expect(socket.closed).toEqual([]);
+
+            clock.advance(IDLE_MS - 1000);
+
+            expect(socket.closed).toEqual([]);
+
+            clock.advance(2000);
+
+            expect(socket.closed).toHaveLength(1);
+        });
+
+        it('is let go once they have left the page', async () =>
+        {
+            await opened({});
+
+            cleanup();
+            await settle();
+            hidden(IDLE_MS + 1000);
+
+            expect(socket.closed).toHaveLength(1);
+        });
+
+        it('is let go for somebody only looking at the table', async () =>
+        {
+            await opened({}, 'omid.k');
+
+            hidden(IDLE_MS + 1000);
+
+            expect(socket.closed).toHaveLength(1);
+        });
+
+        it('is let go at a table played a turn a day', async () =>
+        {
+            await opened({ mode: 'turns' });
+
+            hidden(IDLE_MS + 1000);
+
+            expect(socket.closed).toHaveLength(1);
+        });
+
+        it('is let go once the table has closed', async () =>
+        {
+            const held = await opened({});
+
+            held.status = 'closed';
+            await useLobby().refresh();
+            await settle();
+            hidden(IDLE_MS + 1000);
+
+            expect(socket.closed).toHaveLength(1);
         });
     });
 

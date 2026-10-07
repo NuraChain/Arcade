@@ -131,6 +131,10 @@ export const play = {
     'tables.refused.chairs-empty': 'Every chair has to be taken first.',
     'tables.refused.not-ready': 'Everybody has to be ready first.',
     'tables.refused.no-invitee': 'No one by that name can be invited.',
+    'tables.refused.quick-game': 'That game cannot be played right now.',
+    'tables.refused.quick-options': 'That is not a table this game makes.',
+
+    'quickMatch.busy': 'Finding you a seat',
 
     'play.notFound': 'No such table.',
     'play.notFoundLead': 'That link points at a table that was never opened, or one that has closed since.',

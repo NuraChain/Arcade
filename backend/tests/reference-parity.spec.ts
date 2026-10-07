@@ -8,6 +8,7 @@ import { GAME_SEEDS } from '../src/db/seed-reference.ts';
 import { RUNGS } from '../src/domains/achieve/families.ts';
 import type { Plan } from '../src/domains/match/judge.ts';
 import { NOTICES, NOTICE_OF } from '../src/domains/notify/notices.ts';
+import { quickOf, seatsByDefault } from '../src/domains/table/quick.ts';
 import type { MatchOutcome } from '../src/entities/match.entity.ts';
 import { matchHistoryEntry, matchPlayer, matchView } from '../src/schemas.ts';
 import { GAMES } from '../../frontend/src/data/games.ts';
@@ -85,10 +86,27 @@ describe('games: the server and the landing agree', () =>
 
     it('offers a cube and blinds exactly where the create form does', () =>
     {
-        // `create-game-form.component.azeroth` branches on the game id for these two. Moving the
-        // decision to a column is what lets a fifth game arrive without editing that component.
         expect(GAME_SEEDS.filter((game) => game.hasCube).map((game) => game.id)).toEqual(['backgammon']);
         expect(GAME_SEEDS.filter((game) => game.hasBlinds).map((game) => game.id)).toEqual(['poker']);
+
+        for (const seed of GAME_SEEDS)
+        {
+            const rules = TABLE_RULES[seed.id as keyof typeof TABLE_RULES];
+
+            expect(rules.hasCube, `${ seed.id } cube`).toBe(seed.hasCube);
+            expect(rules.hasBlinds, `${ seed.id } blinds`).toBe(seed.hasBlinds);
+        }
+    });
+
+    it('opens a table nobody chose the seats of at the same count in the browser as on the server', () =>
+    {
+        for (const seed of GAME_SEEDS)
+        {
+            const rules = TABLE_RULES[seed.id as keyof typeof TABLE_RULES];
+
+            expect(seatsByDefault(rules), seed.id).toBe(seatsByDefault(seed));
+            expect(quickOf(rules, {}), seed.id).toEqual(quickOf(seed, {}));
+        }
     });
 
     it('never lets a seat count fall outside the advertised range', () =>

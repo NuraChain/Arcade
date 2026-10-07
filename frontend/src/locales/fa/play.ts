@@ -134,6 +134,10 @@ export const play: Pick<Dictionary, keyof typeof reference> = {
     'tables.refused.chairs-empty': 'اول باید همهٔ صندلی‌ها پر شود.',
     'tables.refused.not-ready': 'اول باید همه آماده باشند.',
     'tables.refused.no-invitee': 'کسی با این نام را نمی‌شود دعوت کرد.',
+    'tables.refused.quick-game': 'این بازی الان در دسترس نیست.',
+    'tables.refused.quick-options': 'این بازی چنین میزی ندارد.',
+
+    'quickMatch.busy': 'داریم برایت صندلی پیدا می‌کنیم',
 
     'play.notFound': 'چنین میزی نداریم.',
     'play.notFoundLead': 'این نشانی به میزی اشاره می‌کند که هیچ‌وقت باز نشده، یا از آن‌وقت بسته شده.',

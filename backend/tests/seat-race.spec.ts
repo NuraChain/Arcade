@@ -247,23 +247,7 @@ describe.skipIf(!active)('claiming a seat, against a real database', () =>
         expect((await tables.byId(host, tableId))!.status).toBe('closed');
     });
 
-    it('keeps a private table out of the open list and a joined one out of it too', async () =>
-    {
-        const host = await makeUser();
-        const looker = await makeUser();
-
-        const priv = await openTable(host, 4, { privacy: 'invite' });
-        const pub = await openTable(host, 4);
-
-        const listed = (await tables.open(looker, { game: 'seat-fixture', mode: null }, 20)).map((table) => table.id);
-        expect(listed).toContain(pub);
-        expect(listed).not.toContain(priv);
-
-        await tables.claimSeat(looker, pub);
-        expect((await tables.open(looker, { game: 'seat-fixture', mode: null }, 20)).map((table) => table.id)).not.toContain(pub);
-    });
-
-    it('does not offer a table hosted by somebody either side has blocked', async () =>
+    it('refuses a chair at a table hosted by somebody the claimer has blocked', async () =>
     {
         const host = await makeUser();
         const looker = await makeUser();
@@ -271,7 +255,6 @@ describe.skipIf(!active)('claiming a seat, against a real database', () =>
 
         await social.block(looker, host);
 
-        expect((await tables.open(looker, { game: 'seat-fixture', mode: null }, 20)).map((table) => table.id)).not.toContain(tableId);
         await expect(tables.claimSeat(looker, tableId)).rejects.toThrow();
     });
 
@@ -444,23 +427,6 @@ describe.skipIf(!active)('claiming a seat, against a real database', () =>
             expect(await tables.byId(stranger, id)).toBeNull();
         });
 
-        /**
-         * The half that did nothing at all. A friends table was absent from every open list,
-         * including its friends', so the setting was indistinguishable from a private one.
-         */
-        it('puts a friends table in a friend open list and not in a stranger one', async () =>
-        {
-            const host = await makeUser();
-            const friend = await makeUser();
-            const stranger = await makeUser();
-            await befriend(host, friend);
-
-            const id = await openTable(host, 4, { privacy: 'friends' });
-
-            expect((await tables.open(friend, { game: 'seat-fixture', mode: null }, 20)).map((row) => row.id)).toContain(id);
-            expect((await tables.open(stranger, { game: 'seat-fixture', mode: null }, 20)).map((row) => row.id)).not.toContain(id);
-        });
-
         it('shows a room table to the room and to nobody outside it', async () =>
         {
             const host = await makeUser();
@@ -472,22 +438,6 @@ describe.skipIf(!active)('claiming a seat, against a real database', () =>
 
             expect(await tables.byId(member, id)).not.toBeNull();
             expect(await tables.byId(stranger, id)).toBeNull();
-        });
-
-        /**
-         * The separation the whole feature is for. A table opened in a room is reached through the
-         * line written into that room, never by quick play - so somebody who said "let us play" to
-         * four friends does not get a fifth stranger dropped into the chair.
-         */
-        it('keeps a room table out of the open list, even for the room', async () =>
-        {
-            const host = await makeUser();
-            const member = await makeUser();
-            const room = await makeRoom(host, member);
-
-            const id = await openTable(host, 2, { roomId: room });
-
-            expect((await tables.open(member, { game: 'seat-fixture', mode: null }, 20)).map((row) => row.id)).not.toContain(id);
         });
 
         it('refuses to open a table in a conversation the caller is not in', async () =>

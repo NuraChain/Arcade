@@ -930,40 +930,6 @@ describe.skipIf(!active)('a match, against a real database', () =>
             expect(await liveAt(players[0], tableId)).toBe(load.match.id);
         });
 
-        it('is offered to quick play fullest first, and never with a game already running', async () =>
-        {
-            const looker = await makeUser();
-            const quiet = await tables.create(await makeUser(), {
-                game: 'ludo', seats: 4, mode: 'live', privacy: 'public', target: 0, cube: false, blinds: 'low', chat: true, voice: 'off', teams: false, invitees: []
-            });
-            const busy = await tables.create(await makeUser(), {
-                game: 'ludo', seats: 4, mode: 'live', privacy: 'public', target: 0, cube: false, blinds: 'low', chat: true, voice: 'off', teams: false, invitees: []
-            });
-            const slow = await tables.create(await makeUser(), {
-                game: 'ludo', seats: 4, mode: 'turns', privacy: 'public', target: 0, cube: false, blinds: 'low', chat: true, voice: 'off', teams: false, invitees: []
-            });
-
-            await tables.claimSeat(await makeUser(), busy.id);
-            await tables.claimSeat(await makeUser(), busy.id);
-
-            const listed = (await tables.open(looker, { game: 'ludo', mode: 'live' }, 20)).map((row) => row.id);
-
-            expect(listed).toEqual([busy.id, quiet.id]);
-            expect(listed).not.toContain(slow.id);
-
-            const { tableId } = await seatedTable(3);
-
-            await db.query(`update tables set seats = 4 where id = $1`, [tableId]);
-            await db.query(`insert into table_seats (table_id, seat) values ($1, 3)`, [tableId]);
-            await db.query(
-                `insert into matches (table_id, game, variant, seats, state, rev, deadline_at)
-                 values ($1, 'ludo', 'standard', 3, '{"rev":0}'::jsonb, 0, now() + interval '1 hour')`,
-                [tableId]
-            );
-
-            expect((await tables.open(looker, { game: 'ludo', mode: null }, 20)).map((row) => row.id)).not.toContain(tableId);
-        });
-
         it('cannot be closed under a game somebody is still playing', async () =>
         {
             const { tableId, players } = await seatedTable(2);
@@ -1039,16 +1005,21 @@ describe.skipIf(!active)('a match, against a real database', () =>
             const { tableId, players } = await seatedTable(3);
             const load = await matches.start(players[0], tableId);
             const newcomer = await makeUser();
+            const searching = () => tables.quick(newcomer, { game: 'ludo', voice: 'off' }, (ids) => new Set(ids));
 
             await walkOut(players[1], tableId);
 
             await expect(tables.claimSeat(newcomer, tableId)).rejects.toMatchObject({ status: 409, code: 'playing' });
-            expect((await tables.open(newcomer, { game: 'ludo', mode: null }, 20)).map((row) => row.id)).not.toContain(tableId);
 
+            const elsewhere = await searching();
+
+            expect(elsewhere.id).not.toBe(tableId);
+
+            await tables.leave(newcomer, elsewhere.id, async () => null);
             await matches.act(players[2], load.match.id, { play: null, key: 'gives-up' });
 
             expect(await liveAt(newcomer, tableId)).toBeNull();
-            expect((await tables.open(newcomer, { game: 'ludo', mode: null }, 20)).map((row) => row.id)).toContain(tableId);
+            expect(await searching()).toEqual({ id: tableId, seated: true });
             expect(await tables.claimSeat(newcomer, tableId)).toBe(1);
         });
 

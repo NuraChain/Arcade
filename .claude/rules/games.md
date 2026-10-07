@@ -92,8 +92,9 @@ NORMALIZED rather than refused, because the form sends both on every table - the
 config object, not claims about the game.
 
 It caught a live bug the moment it existed: `lobby.quick()`'s fallback config was a literal four
-seats, so quick-matching backgammon - which plays two - had always asked for a four-seat table. It
-asks `catalogue.defaults(game)` now.
+seats, so quick-matching backgammon - which plays two - had always asked for a four-seat table.
+Quick play sends no seat count at all now: the server opens what `seatsByDefault` makes of the
+game's rules, and `catalogue.defaults` asks the same function (*Matchmaking is one request*).
 
 **Whether a table is two against two is a third thing `create` normalizes, and the game's row is
 what says it may be.** `tables.teams` is a boolean with no default, and `tables_teams_four` is its
@@ -162,7 +163,8 @@ any more* in `frontend/CLAUDE.md`.
 
 **A table refusal is a word, and it has one spelling.** `table/refusals.ts` imports nothing and lists
 each with its status - `seated-max`, `playing`, `table-closed`, `chairs-empty` and `not-ready` at 409,
-`no-invitee` at 404 - and `tableRefusal(word, sentence)` in `table/service.ts` is the only way the
+`no-invitee` at 404, `quick-game` and `quick-options` at 422 - and `tableRefusal(word, sentence)` in
+`table/service.ts` is the only way the
 table service, the start, the walkout and the invite port throw one: the word is checked where it is
 thrown and the status is read off the list. `seated-max` and `playing` used to be three free literals
 each - the server's, the browser's predicate and the fake server's - with nothing binding them, so a
@@ -175,15 +177,15 @@ said in the words of where they happened: `seated-max` is `play.seatedMax`, and 
 its caller says - `play.table.playing` for a chair, `play.leave.started` for a leave,
 `play.close.refused` for a close, the caller's own fallback anywhere else. A framework code, a match
 word and a request that never arrived are the fallback as well. A table that would not open keeps fewer of those answers than anybody: `openTable`
-says the two sentences that are about the reader - too many chairs, nobody to invite - and "That table
-would not open" for every other word, because the rest reach it from a table Quick play tried and the
-reader never chose. A candidate that closed between the list and the claim and one whose game began
-first are one race, and somebody who picked no table is not told that "that table" has closed.
+says the four sentences that are about what was asked - too many chairs, nobody to invite, a game
+that cannot be played, a table the game does not make - and "That table would not open" for every
+other word. Quick play used to reach it with the rest, from a table the browser tried and the reader
+never chose; the server picks the table now and never answers with one of those.
 `table-refusals.spec.ts` on each side holds it: on the server every word's status and code, no word
 shared with a refused play or with a code the framework answers on its own, no code spelled by hand in
 the three files that throw, and somebody throwing every word; in the browser a sentence for every
 word, none for a word the table does not have, a fake server that answers with the list's own words
-and statuses, and Quick play losing a table either way.
+and statuses, and a refused quick search saying its own sentence in both languages.
 
 **A refused start says why, and so does a closed table.** `POST /tables/:id/start` answered each of its
 refusals as a bare 409 and the play page said "If this keeps happening, check your connection." for
@@ -215,12 +217,14 @@ it. A close had the same window from the other side and left a game running on a
 
 `lockTable(tx, tableId)` in `table/service.ts` is `pg_advisory_xact_lock(hashtext($1::uuid::text))` -
 raw, because no repository can say it - and it is the first statement of the transaction in `start`,
-in `leave` before the walkout, and in `close`. It is the one-key form, a lock space of its own, so the
-claim's two-key lock on a table and a person never meets it. Under it the start reads the table and
-the chairs again and asks every question of THAT read - still in a chair, a game already on, closed,
-an engine, every chair taken, everybody ready - and deals the players from it. The key is the id as
-Postgres spells it: hashing the text a caller sent would give `/tables/<ID IN CAPITALS>/start` a lock
-of its own, and the route hands the start the id as it arrived.
+in `leave` before the walkout, and in `close`. A quick search takes it as well, at each table it
+tries, for the table that is emptied or closed as it sits down (*Matchmaking is one request*). It is
+the one-key form, a lock space of its own, so the claim's two-key lock on a table and a person never
+meets it. Under it the start reads the table and the chairs again and asks every question of THAT
+read - still in a chair, a game already on, closed, an engine, every chair taken, everybody ready -
+and deals the players from it. The key is the id as Postgres spells it: hashing the text a caller
+sent would give `/tables/<ID IN CAPITALS>/start` a lock of its own, and the route hands the start
+the id as it arrived.
 
 Being seated is still asked BEFORE the transaction, so somebody with no chair is answered 404 without
 holding the table or waiting for it; and it is asked again under the lock, so somebody whose own leave
@@ -406,30 +410,164 @@ no music, no settings gear because it would be a link out of the game wearing th
 control in it, no overflow because there is nothing left to put in one. The code is there because it
 is how a table is reached when it is in no list, which is every table opened from a chat or a group.
 
-**Matchmaking is a query.** `quick(game)` reads the open LIVE tables for that game, claims a chair
-at the first one that still has one, and opens a table to wait in only when there is nothing to
-join. Nobody is invented to fill it. Three things about that list were wrong for as long as there was
-one game, and each put somebody at the wrong table silently:
+**Matchmaking is one request.** `POST /tables/quick` takes the game and who the call is for, finds the
+searcher a chair or opens a table to wait at, and answers with that table. Nobody is invented to
+fill it. The browser used to do this itself: read a list of open tables, claim a chair at each in
+turn, say ready, and press Start if it had taken the last chair - up to twenty-eight requests a
+press. Two people pressing together both found nothing and both opened a table, which no browser
+can prevent; only the game and the pace narrowed the list, so a table of the wrong size was as good
+as any; a table whose host closed the tab hours ago was offered first; only the HOST was checked for
+a block; and the game started only if the browser that filled the last chair lived long enough to
+say so. `GET /tables`, its port and `table.open()` are gone with their one caller.
 
-- **A table with a game running is not open.** A player who left mid-game frees a chair, and the list
-  offered it - to a newcomer who would sit in a chair with no seat in the match. `open()` excludes any
-  table with an unfinished match, and the chair itself cannot be taken until the match is over:
-  `claimSeat` refuses with the code `playing`, which the browser turns into its own sentence, and the
-  claim's UPDATE carries `not exists` over an unfinished match as the belt. The play page no longer
-  offers a watcher "Sit down" while a game is on.
-- **Quick play means live.** A `turns` table is a day per move, and landing in one from a button
-  called Quick play is a correspondence game nobody chose. The list takes a `mode` and quick play
-  asks for `live`.
-- **Fullest first, then oldest.** Newest-first scattered a burst of quick players across a burst of
-  fresh tables, one each, all waiting. Filling the nearest-to-full table first is what actually starts
-  games.
+**What may be asked, and what is opened when nothing fits, is one pure module.** `table/quick.ts`
+imports nothing, so the browser reads it too. `quickOf(rules, ask)` answers a FILTER and a table to
+MAKE, or refuses, and never throws. Seats, target, blinds, cube and sides are each exact when chosen
+and "any" when not. The pace is the exception: absent means `live`, never either, because a `turns`
+table is a day a move and nobody pressing Quick play chose a correspondence game. The cube is
+matched as the table stores it, so `cube: true` only ever means a match long enough to have one.
+Sides are forced where the game's partners are `required` and the search names four seats, and a
+search that names neither finds both kinds at a game that leaves it open and opens the plain game.
+What it makes is what `create` would store unchanged - `quick-options.spec.ts` asks the real
+`cubeLive` and `teamsOf` about every table it makes over a grid of asks, because `quick.ts` restates
+both rules to stay free of imports - and it is a table the same search would then find, or the next
+searcher would open a second one beside it. `seatsByDefault` is the smallest seat count of four or
+more, or the largest the game plays (the largest was nine-seat poker, which a quick player would
+wait at all evening); `catalogue.defaults` asks it too, so the rule is written once. The browser's
+copy of a game's rules is a `QuickRules` now: `TableRules` carries `hasCube` and `hasBlinds`,
+`reference-parity.spec.ts` holds both to the seed and asks `quickOf` the same question of both
+copies, and the create form asks them where it asked for a game by name.
 
-Quick play also sits down READY, and whoever takes the last chair presses Start - `matches_one_live`
-already makes that idempotent, so two people filling the last two chairs at once still make one
-match. A quick-play table waiting on somebody to press Ready is a table that never starts because
-nobody was told they had to. `catalogue.defaults` opens the SMALLEST seat count of four or more, or
-the largest the game plays: the largest was nine-seat poker, which a quick player would wait at all
-evening.
+**Every search for one game takes one lock, because the row it would lock does not exist yet.** Two
+searchers who both find nothing both insert a table; that is a phantom, and no row lock stops it.
+Skipping locked tables would make it worse: concurrent searchers would pass over each other's
+candidates and each open a table, the scatter "fullest first" exists to prevent. So the first
+statement of the search is `pg_advisory_xact_lock(hashtext('quick'), hashtext(game))` - raw, because
+no repository can say it - keyed by the GAME and not by the options, because "any" crosses options:
+a searcher who chose four seats and one who chose nothing must each see the table the other opens.
+It is the two-key form the seat claim uses, and the two could only meet if a table's id hashed like
+`quick` and a person's like the game; the table's own lock is the one-key form and never meets
+either. Waiting for it must not hold a connection, or ten presses for one game would park the whole
+pool, so `lib/keyed-queue.ts` takes one search a game at a time inside the process and the lock is
+what holds across processes.
+
+Under the lock, in order:
+
+- **Already waiting.** A table that fits the search where the searcher sits READY is the answer, and
+  nothing is written. That is what makes a second press, a reload during the first and a request
+  sent twice one chair. Ready is part of it on purpose: a finish clears every chair's readiness, so
+  somebody still sitting where their last game ended is not waiting for one, and is found a table
+  where everybody is here rather than sent back to that one. It is asked before the fifty-table
+  limit, or the second of two presses would be refused by the chair the first one took.
+- **Candidates.** Open, of that game and pace, public or opened for the host's friends when the
+  searcher is one, with no game on, a chair the searcher may take, and no chair of theirs already.
+  Never one where the searcher and the host or ANYBODY sitting have blocked each other, either way:
+  the host alone was checked before, and a block means two people do not share a table, a chat and a
+  call. Never one where the searcher and somebody sitting are an adult and a minor who are not
+  friends (D30): the table's thread has no per-pair messaging policy, and server-side quick play would
+  have made a stranger landing beside a child routine. Two minors still meet, friends still meet, and
+  sitting down by a link is unchanged. Fullest first, then fewest chairs not ready, then oldest, and
+  thirty-two of them.
+- **Presence, for live tables only.** A candidate is passed over if anybody sitting at it is not
+  here. `hub.present(ids)` answers for every account with a socket open or lingering, away included,
+  with none of the privacy `presenceOf` applies, because the answer is never sent to anybody: all a
+  searcher can learn from it is which table they were put at. It reaches the service as a
+  `PresenceReader`, the fourth argument of `buildPorts`, and with no hub everybody counts as here. A
+  `turns` table skips it, since its players are told when the game starts. It is applied in Node
+  over the thirty-two because presence is memory in one process, the limit the hub already states.
+  The SEARCHER is never asked about: the request is proof enough that their browser is alive, and a
+  socket that binds a moment after a cold page load would otherwise open a table of its own beside
+  the one it should have filled. So an account with no socket at all - a browser behind a proxy
+  that refuses WebSockets, a script that only posts - is seated like anybody else, and from then on
+  that table is passed over by every later search, for the people already waiting there as much as
+  for the newcomer, until it leaves.
+- **A chair.** The search takes the table's lock first - `lockTable`, the one a start, a leave and
+  a close take - and the UPDATE that takes the chair asks that the table is still open. A join only
+  fills a chair, which cannot hurt a start; what it could hurt is a table being emptied. The last
+  one out closes the table on a count of chairs that cannot see one nobody has committed, so a
+  searcher was seated, ready, at a table that closed under it, and a host's close had the same
+  window. Whoever holds the lock first decides: the search, and the leaver counts its chair and the
+  table stays open; the leave or the close, and the search finds the table closed and goes on to the
+  next candidate. Nothing that holds a table's lock waits for the lock a game's searches take, and a
+  search waits for no chair, so no cycle follows. The free chairs the searcher may take are then
+  read `for update skip locked`, so a chair somebody is taking by hand is looked past rather than
+  waited for, and `chairFor` picks: one held for the searcher first, then at a table of two sides
+  the one opposite somebody already sitting, then the lowest. Filling a side first is what leaves
+  the other side whole for two friends who come together, and sitting down by a link keeps the
+  lowest chair. The search holds every free chair of that table until it commits, a few statements
+  later, so a claim by hand in that moment is told there was no chair, as it always was when every
+  free one was taken that instant. The chair is taken READY, by an UPDATE that still refuses a table
+  with a game on, and the thread gains its member in the same transaction.
+- **Or a table.** `openRow`, the body `create` shares: public, chat on, the call the request asked
+  for, the searcher in the first chair and ready.
+
+A unique violation - a table code already in use, or the same person's own claim by hand landing
+first - rolls the transaction back and the search runs again. It refuses three ways and never names
+a table: `quick-game` for a game nobody has heard of or one that is not open (422, the same bytes
+for both), `quick-options` for a table the game does not make (422), and `seated-max`. There is no
+refusal for finding nothing, and a block or an absence changes only which table somebody gets.
+
+**The server starts the game, and that is a courtesy.** The port reads the table back, and if every
+chair is taken and ready with no game on it calls the same `startPushed` the Start button reaches.
+The chair is the fact: a start that fails is logged and the answer is still the table, full and
+ready, with Start on every seat's page. Two searchers taking the last two chairs together both ask,
+and `matches_one_live` and the table's lock make it one game. A press that changed nothing rings
+nobody. At a `turns` table the start is followed by the `turn` notice for whoever goes first, unless
+that is the searcher: nobody else there has to be here, so nothing else would tell them. The Start
+button still writes none.
+
+**The browser sends one request and shows that it is out.** `lobby.quick(game)` posts the game and
+the device's voice preference and answers with the table's id. A second press while the first is
+out is handed the SAME promise, so a double tap is one request, and `lobby.finding()` names the
+games being searched for: the card, the game's hero, the bar a phone keeps at the foot of the game
+page and the home hero spin on it, and a `role="status"` line says "Finding you a seat" to a screen
+reader, because a button that is busy hides its own words. A refused search clears it and says the
+refusal's sentence through `openTable`.
+
+**A search is out until its table is on screen, not until it is answered.** It ended with the
+answer, one microtask before `openTable` navigated, and the play route is a lazy chunk: on a phone
+that had not loaded it yet the button stopped spinning, nothing moved, and a second tap sent a
+second request. When the first press had taken the last chair its game was already on - at a table
+for two that is every join - so the server found nobody waiting, opened a second table and the
+browser went there, while the game the first press had started ran its clock at the other one. The
+store keeps the search, its promise and its place in `finding()` until the play page opens that
+table (`lobby.open`, which only that page calls), or for `ARRIVAL_MS`, ten seconds, if no page
+ever does. A press in between is handed the table it was already given and asks the server nothing.
+
+**Somebody waiting at a live table keeps their socket.** A hidden tab lets its socket go after a
+minute, and a seat whose socket is gone is not here: the table is passed over by every search until
+they come back. The play page holds the socket for as long as the reader sits READY at a live table
+that has not closed, not only while a game is on the board. Ready is the whole of the difference. A
+chair quick play took is ready, and so is one that pressed Play again; a chair a finished game left
+un-ready is waiting for nothing, and held, its hidden tab would be here for as long as it lived. The
+first chair freed there would then make it the fullest table with everybody here, and the next
+searcher would be seated ready beside people who are not looking.
+
+`quick.db.spec.ts` holds the server half against Postgres, and every race in it runs through
+separate instances of the service so the queue is out of the way and the database's lock is what is
+proven: ten searchers at once make tables of four, four and two with two games started, two presses
+from one person are one chair, and two searchers on the last two chairs start one game. With the
+lock line deleted all three fail. Three more park a leave, a close and a search at a gate, so that
+which of them reached the table first is known: the last one there getting up after the search has
+taken its chair, getting up before it, and a host closing the table before it. With the table's
+lock deleted from `sit` all three fail, and with the UPDATE's question about the table the last
+two. It also holds the ordering, each option, the pace, the tables it never joins, the blocks, the
+minors, presence, the chairs, the tables it opens, the limit and the refusals.
+`quick-options.spec.ts` and `quick-chairs.spec.ts` hold the pure half with no Postgres,
+`realtime-hub.spec.ts` who is here, `app.spec.ts` the route and the list that is gone, and
+`tables.spec.ts`, `table-refusals.spec.ts`, `home.spec.ts` and `play.spec.ts` the browser's:
+`tables.spec.ts` presses twice around a game the first press started, and `play.spec.ts` hides the
+tab of a seat that is ready, of one that is not and of one a finish left un-ready.
+`tour-pass.mjs` presses the button on the built server and counts the requests.
+
+Three limits, stated. A search sent again from where the store cannot see it - another tab, or a
+press after a request the browser gave up on while the server went on to seat it - can find the
+first one's game already started, which is no longer waiting, and be seated a second time
+elsewhere. Answering it with the game that seat is in would close that, and would also send a
+poker seat that is out of chips back to the table it is out at for as long as the others play on,
+so it is not done. Sitting down by a link still asks whether the table has closed before its own
+transaction, and can land in one that closed in that instant. And an absent player keeps their
+chair: the table is invisible to quick play, and nothing stands them up yet.
 
 **The table's chat is the chat domain.** A table owns a `kind: 'game'` conversation, one per
 table by partial unique index, and membership moves with the seats inside the same transaction —
@@ -2377,7 +2515,7 @@ table is true throughout.
 
 **The rematch is asked for, not started.** A finish leaves every seat where it was and every chair
 unready, so Play again is `lobby.again`: this seat says ready, and the start is sent only when that
-was the last chair owed - the same `settle` quick play sits down with. The result panel then walks
+was the last chair owed. The result panel then walks
 Play again, "Waiting for {names}" while anybody else has not said so, and Start once everybody has
 and no game began (a start that was dropped on the way), and it says a chair is free when somebody
 left. `rematchOf` in `boards.ts` reads all of that off the table's chairs and trusts none of it while

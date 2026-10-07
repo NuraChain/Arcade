@@ -75,6 +75,11 @@ export interface WriteListener
     sessionsRevoked(sessionIds: readonly string[]): void;
 }
 
+export interface PresenceReader
+{
+    present(userIds: readonly string[]): ReadonlySet<string>;
+}
+
 /**
  * Everything the composition root gets: the ports the API may call, plus the periodic work.
  *
@@ -102,8 +107,10 @@ const PUSH_AT_ONCE = 64;
 
 const WATCHABLE_MAX = 48;
 
-export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteListener): Services
+export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteListener, presence?: PresenceReader): Services
 {
+    const here = (userIds: readonly string[]) => presence?.present(userIds) ?? new Set(userIds);
+
     // Secure cookies require TLS, and the browser silently drops a Secure cookie on plain http -
     // which in development is every request. Decided from configuration, never from a header a
     // caller controls.
@@ -739,6 +746,16 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         {
             process.stderr.write(`${ what } failed: ${ error instanceof Error ? error.message : String(error) }\n`);
         });
+
+    const startPushed = async (me: string, tableId: string) =>
+    {
+        const load = await match.start(me, tableId);
+
+        await courtesy('game push', () => pushMatch(load.match.id, load.match.rev - 1));
+        live?.tableChanged(tableId, await table.peopleAt(tableId));
+
+        return load;
+    };
 
     /**
      * Writes the line that says how a game ended, into the table's own thread.
@@ -1825,9 +1842,28 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
         },
 
         table: {
-            async open(me, filter, limit)
+            async quick(me, input)
             {
-                return (await table.open(me, { game: filter.game ?? null, mode: filter.mode ?? null }, limit)).map(asTable);
+                const found = await table.quick(me, input, here);
+                let after = await mustTable(me, found.id);
+
+                if (after.status === 'ready' && after.chairs.every((chair) => chair.ready))
+                {
+                    await courtesy('quick start', async () =>
+                    {
+                        const load = await startPushed(me, found.id);
+
+                        await courtesy('turn notice', () => nudgeTurn(load, me));
+                    });
+                    after = await mustTable(me, found.id);
+                }
+
+                if (found.seated)
+                {
+                    await ringTable(after);
+                }
+
+                return asTable(after);
             },
 
             async mine(me)
@@ -2048,15 +2084,7 @@ export function buildPorts(db: DataSource, config: ServerConfig, live?: WriteLis
                 return { match: asMatch(found.load), events: logged(found.events) };
             },
 
-            start: async (me, tableId) =>
-            {
-                const load = await match.start(me, tableId);
-
-                await courtesy('game push', () => pushMatch(load.match.id, load.match.rev - 1));
-                live?.tableChanged(tableId, await table.peopleAt(tableId));
-
-                return asMatch(load);
-            },
+            start: async (me, tableId) => asMatch(await startPushed(me, tableId)),
 
             play: async (me, matchId, input) =>
                 await played(me, matchId, { play: input.play, key: input.key, rev: input.rev }),

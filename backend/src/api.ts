@@ -87,6 +87,7 @@ import {
     serverInfo,
     tableCreateInput,
     tableList,
+    tableQuickInput,
     tableSummary,
     sessionState,
     signOutResult,
@@ -573,11 +574,6 @@ export function buildApi(ports: Ports)
          * and a table this caller cannot see answers exactly as one that does not exist.
          */
         tables: feature('/tables', [session], (routes) => ({
-            /** Open public tables with a chair going. The lobby's whole search. */
-            open: routes.get('/', { output: tableList, query: openQuery }, async (context) => ({
-                tables: await ports.table.open(context.principal.userId, context.query, 24)
-            })),
-
             /** Where this account is already sitting. Survives a reload and a second device. */
             mine: routes.get('/mine', { output: tableList }, async (context) => ({
                 tables: await ports.table.mine(context.principal.userId)
@@ -585,6 +581,9 @@ export function buildApi(ports: Ports)
 
             create: routes.post('/', { input: tableCreateInput, output: tableSummary },
                 (context) => ports.table.create(context.principal.userId, context.input)),
+
+            quick: routes.post('/quick', { input: tableQuickInput, output: tableSummary },
+                (context) => ports.table.quick(context.principal.userId, context.input)),
 
             /** Resolves the short code somebody pasted into a chat. */
             byCode: routes.get('/code/:code', { output: tableSummary }, async (context) =>
