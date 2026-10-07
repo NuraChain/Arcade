@@ -16,7 +16,7 @@ export interface VoiceJoin
 
 export interface VoiceCallDeps
 {
-    me: string;
+    me(): string;
     iceServers: RTCIceServer[];
     send(to: string, join: string, signal: VoiceSignal): void;
     onLink(who: string, link: PeerLink | null): void;
@@ -29,8 +29,8 @@ export interface VoiceCall
 {
     setMic(stream: MediaStream | null): Promise<void>;
     setMuted(muted: boolean): void;
-    sync(peers: readonly VoiceJoin[]): void;
-    receive(from: string, join: string, signal: VoiceSignal): Promise<void>;
+    sync(mine: string, peers: readonly VoiceJoin[]): void;
+    receive(join: string, signal: VoiceSignal): Promise<void>;
     setVolume(who: string, volume: number): void;
     setSink(id: string): void;
     close(): void;
@@ -38,7 +38,9 @@ export interface VoiceCall
 
 interface Peer
 {
+    who: string;
     join: string;
+    link: PeerLink;
     connection: RTCPeerConnection;
     sender: RTCRtpSender | null;
     audio: HTMLAudioElement | null;
@@ -83,6 +85,7 @@ function measure(context: AudioContext, stream: MediaStream, report: (level: num
 export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
 {
     const peers = new Map<string, Peer>();
+    let own = '';
     let track: MediaStreamTrack | null = null;
     let muted = true;
     let localMeter: (() => void) | null = null;
@@ -101,14 +104,23 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
 
     const connect = deps.connect ?? ((config: RTCConfiguration) => new RTCPeerConnection(config));
 
-    const drop = (who: string) =>
+    const mark = (peer: Peer, link: PeerLink) =>
     {
-        const peer = peers.get(who);
+        if (peers.get(peer.join) === peer)
+        {
+            peer.link = link;
+            deps.onLink(peer.who, link);
+        }
+    };
+
+    const drop = (join: string) =>
+    {
+        const peer = peers.get(join);
         if (peer === undefined)
         {
             return;
         }
-        peers.delete(who);
+        peers.delete(join);
         peer.meter?.();
         if (peer.audio !== null)
         {
@@ -116,7 +128,7 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
             peer.audio.remove();
         }
         peer.connection.close();
-        deps.onLink(who, null);
+        deps.onLink(peer.who, null);
     };
 
     const carry = (peer: Peer, line: RTCRtpTransceiver) =>
@@ -130,12 +142,14 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
         }
     };
 
-    const open = (who: string, join: string) =>
+    const open = (join: string, who: string) =>
     {
         const connection = connect({ iceServers: deps.iceServers });
 
         const peer: Peer = {
+            who,
             join,
+            link: 'connecting',
             connection,
             sender: null,
             audio: null,
@@ -143,11 +157,11 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
             making: false,
             ignoring: false,
             settling: false,
-            polite: deps.me > who,
+            polite: own > join,
             volume: 1
         };
 
-        peers.set(who, peer);
+        peers.set(join, peer);
         deps.onLink(who, 'connecting');
 
         if (!peer.polite)
@@ -163,15 +177,12 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
                 await connection.setLocalDescription();
                 if (connection.localDescription !== null)
                 {
-                    deps.send(who, join, { kind: connection.localDescription.type === 'answer' ? 'answer' : 'offer', data: JSON.stringify(connection.localDescription) });
+                    deps.send(peer.who, join, { kind: connection.localDescription.type === 'answer' ? 'answer' : 'offer', data: JSON.stringify(connection.localDescription) });
                 }
             }
             catch
             {
-                if (peers.get(who) === peer)
-                {
-                    deps.onLink(who, 'failed');
-                }
+                mark(peer, 'failed');
             }
             finally
             {
@@ -183,7 +194,7 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
         {
             if (event.candidate !== null)
             {
-                deps.send(who, join, { kind: 'ice', data: JSON.stringify(event.candidate) });
+                deps.send(peer.who, join, { kind: 'ice', data: JSON.stringify(event.candidate) });
             }
         };
 
@@ -193,16 +204,20 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
 
             if (state === 'connected')
             {
-                deps.onLink(who, 'connected');
+                mark(peer, 'connected');
             }
             else if (state === 'failed')
             {
-                deps.onLink(who, 'failed');
-                connection.restartIce();
+                mark(peer, 'failed');
+
+                if (!peer.polite)
+                {
+                    connection.restartIce();
+                }
             }
             else if (state === 'disconnected' || state === 'connecting' || state === 'new')
             {
-                deps.onLink(who, 'connecting');
+                mark(peer, 'connecting');
             }
         };
 
@@ -230,10 +245,8 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
 
             const context = deps.context?.() ?? null;
             peer.meter?.();
-            peer.meter = context === null ? null : measure(context, stream, (level) => deps.onLevel(who, level));
+            peer.meter = context === null ? null : measure(context, stream, (level) => deps.onLevel(peer.who, level));
         };
-
-        return peer;
     };
 
     return {
@@ -250,7 +263,7 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
                 const context = deps.context?.() ?? null;
                 if (context !== null && stream !== null)
                 {
-                    localMeter = measure(context, stream, (level) => deps.onLevel(deps.me, muted ? 0 : level));
+                    localMeter = measure(context, stream, (level) => deps.onLevel(deps.me(), muted ? 0 : level));
                 }
             }
 
@@ -266,46 +279,59 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
             }
             if (next)
             {
-                deps.onLevel(deps.me, 0);
+                deps.onLevel(deps.me(), 0);
             }
         },
 
-        sync(wanted)
+        sync(mine, wanted)
         {
             if (closed)
             {
                 return;
             }
 
-            const keep = new Map(wanted.filter((one) => one.who !== deps.me).map((one) => [one.who, one.join]));
-
-            for (const [who, peer] of [...peers])
+            if (mine !== own)
             {
-                if (keep.get(who) !== peer.join)
+                for (const join of [...peers.keys()])
                 {
-                    drop(who);
+                    drop(join);
+                }
+
+                own = mine;
+            }
+
+            const keep = new Map(wanted.filter((one) => one.join !== mine).map((one) => [one.join, one.who]));
+
+            for (const [join, peer] of [...peers])
+            {
+                const who = keep.get(join);
+
+                if (who === undefined)
+                {
+                    drop(join);
+                }
+                else if (who !== peer.who)
+                {
+                    deps.onLink(peer.who, null);
+                    peer.who = who;
+                    deps.onLink(who, peer.link);
                 }
             }
 
-            for (const [who, join] of keep)
+            for (const [join, who] of keep)
             {
-                if (!peers.has(who))
+                if (!peers.has(join))
                 {
-                    open(who, join);
+                    open(join, who);
                 }
             }
         },
 
-        async receive(from, join, signal)
+        async receive(join, signal)
         {
-            if (closed || from === deps.me)
-            {
-                return;
-            }
+            const peer = peers.get(join);
 
-            const peer = peers.get(from) ?? open(from, join);
-
-            if (peer.join !== join)
+            if (closed || peer === undefined)
             {
                 return;
             }
@@ -370,22 +396,19 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
                     await connection.setLocalDescription();
                     if (connection.localDescription !== null)
                     {
-                        deps.send(from, join, { kind: 'answer', data: JSON.stringify(connection.localDescription) });
+                        deps.send(peer.who, join, { kind: 'answer', data: JSON.stringify(connection.localDescription) });
                     }
                 }
             }
             catch
             {
-                if (peers.get(from) === peer)
-                {
-                    deps.onLink(from, 'failed');
-                }
+                mark(peer, 'failed');
             }
         },
 
         setVolume(who, volume)
         {
-            const peer = peers.get(who);
+            const peer = [...peers.values()].find((one) => one.who === who);
             if (peer !== undefined)
             {
                 peer.volume = volume;
@@ -414,9 +437,9 @@ export function createVoiceCall(deps: VoiceCallDeps): VoiceCall
             closed = true;
             localMeter?.();
             localMeter = null;
-            for (const who of [...peers.keys()])
+            for (const join of [...peers.keys()])
             {
-                drop(who);
+                drop(join);
             }
         }
     };

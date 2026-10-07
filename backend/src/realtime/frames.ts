@@ -32,7 +32,7 @@ export type ServerFrame =
     | { v: 1; t: 'presence'; n: number; full: boolean; people: PresenceEntry[]; gone?: string[] }
     | { v: 1; t: 'nudge'; n: number; scope: NudgeScope; id?: string; at: number }
     | { v: 1; t: 'typing'; n: number; who: string; id: string }
-    | { v: 1; t: 'voice'; n: number; table: string; joined: boolean; peers: VoicePeer[] }
+    | { v: 1; t: 'voice'; n: number; table: string; joined: boolean; mine: string; peers: VoicePeer[] }
     | { v: 1; t: 'signal'; n: number; table: string; from: string; join: string; kind: SignalKind; data: string }
     | { v: 1; t: 'game'; n: number; at: number; match: MatchView; events: MatchEvent[] }
     | { v: 1; t: 'ack'; n: number; key: string; match: MatchView; applied: Applied; events: MatchEvent[] }
@@ -90,8 +90,8 @@ export const nudge = (n: number, scope: NudgeScope, at: number, id?: string): Se
 export const typing = (n: number, who: string, id: string): ServerFrame =>
     ({ v: 1, t: 'typing', n, who, id });
 
-export const voice = (n: number, table: string, joined: boolean, peers: VoicePeer[]): ServerFrame =>
-    ({ v: 1, t: 'voice', n, table, joined, peers });
+export const voice = (n: number, table: string, joined: boolean, mine: string, peers: VoicePeer[]): ServerFrame =>
+    ({ v: 1, t: 'voice', n, table, joined, mine, peers });
 
 export const signal = (n: number, table: string, from: string, join: string, kind: SignalKind, data: string): ServerFrame =>
     ({ v: 1, t: 'signal', n, table, from, join, kind, data });

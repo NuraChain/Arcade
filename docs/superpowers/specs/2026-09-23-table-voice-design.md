@@ -42,9 +42,10 @@ for a product whose players include minors.
     it is for, and the hub drops one meant for a joining that is over. `data` is capped at 12 KB;
     every other frame keeps the 4 KB cap.
 - Server frames:
-  - `{ t: 'voice', table, joined, peers: [{ who, muted, talk, join }] }` - the room, sent to
-    everybody in it on change. `join` is the name of that player's entry into the room: kept through
-    a mute, new when they come back.
+  - `{ t: 'voice', table, joined, mine, peers: [{ who, muted, talk, join }] }` - the room, sent to
+    everybody in it on change. `join` is the name of that player's entry into the room: random,
+    kept through a mute and through a change of handle, new when they come back. `mine` is the
+    reader's own.
   - `{ t: 'signal', table, from, join, kind, data }`, where `join` is the sender's.
 - Joining checks, once, in the database: the caller is seated at the table and the table has voice
   on. The room lives in memory in the hub and empties itself when a socket closes; a server restart
@@ -60,7 +61,7 @@ for a product whose players include minors.
 
 - `services/voice.rtc.ts` is framework-free: one `RTCPeerConnection` per peer, trickle ICE, a remote
   `<audio>` per peer, and an `AnalyserNode` per stream for the speaking indicator. Of two players the
-  handle that sorts first places the call and the other answers on the offered line; the perfect
+  joining that sorts first places the call and the other answers on the offered line; the perfect
   negotiation pattern covers a re-offer that crosses, with the side that waits as the polite one.
   (As first built both sides offered on every call; `.claude/rules/games.md` says what that cost.)
 - `stores/voice.store.ts` owns the call for the open table: joined, mic muted, each peer's state
@@ -76,9 +77,16 @@ for a product whose players include minors.
 
 ## Testing
 
-- `backend/tests/voice.spec.ts`: frame parsing (sizes, kinds, unknown keys), room membership, relay
-  only within a room, the pair policy refusing a minor and a stranger.
+- `backend/tests/voice-frames.spec.ts`: frame parsing (sizes, kinds, unknown keys, a signal that
+  does not say which joining it is for).
+- `backend/tests/realtime-hub.spec.ts`, *voice at a table*: room membership, relay only within a
+  room and only between two current joinings, the pair policy, the names, the roster ahead of the
+  signal, and arrivals taken one at a time.
 - `frontend/tests/voice.spec.ts`: the store against a fake RTC layer - join, listen-only on a
-  refused mic, a peer leaving tears its connection down, mute is sent and shown.
-- The browser: two real browsers at one table, join, hear the tone of a fake microphone
-  (`--use-fake-device-for-media-stream`), mute, leave.
+  refused mic, a peer leaving tears its connection down, mute is sent and shown, hanging up before
+  a rejoin.
+- `frontend/tests/voice-rtc.spec.ts`: the call layer against a fake connection - who places the
+  call, the answer on the offered line, a joining that comes back, a handle that changes.
+- The browser, `tools/qa/voice-pass.mjs`: two real browsers at one table, join, each page's own
+  connection read for packets out and in, the tone of a fake microphone
+  (`--use-fake-device-for-media-stream`), mute, a cut socket, another tab taking the call, leave.

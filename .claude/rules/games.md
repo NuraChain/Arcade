@@ -556,12 +556,20 @@ joins LISTEN-ONLY rather than failing. Everybody joins muted unless they turn th
 `services/voice.rtc.ts` is framework-free, and `stores/voice.store.ts` takes it through
 `setVoiceCall` so a spec can observe the store without a real `RTCPeerConnection`.
 
-**One side places the call.** Of two players the one whose handle sorts first adds the audio line and
-offers; the other opens a connection with nothing on it, and answers ON the line it was offered,
-turned to `sendrecv` with its own microphone on the sender. One offer, one answer, one line each. A
-peer is still opened on its first signal, so an offer that beats the roster cannot deadlock. Perfect
-negotiation stays for what can still cross - both ends asking for an ICE restart at once - and the
-side that waits is the polite one.
+**One side places the call.** Of two players the one whose JOINING sorts first adds the audio line
+and offers; the other opens a connection with nothing on it, and answers ON the line it was offered,
+turned to `sendrecv` with its own microphone on the sender. One offer, one answer, one line each.
+Both ends read the same two names off the roster, so nothing a player can change - a handle least of
+all - moves who calls. Only the side that called restarts ICE when a connection fails, so the two
+ends never offer at once; the crossing rule (perfect negotiation, the side that waits is the polite
+one) stays as the net under that.
+
+**An offer cannot beat the roster that names its sender, and the call layer counts on it.** The hub
+seats a joining and sends the roster in one synchronous step, into an outbox that is first in, first
+out for each socket, and only a seated joining can signal. So a signal from a joining the roster has
+not named is let fall rather than answered. `realtime-hub.spec.ts` pins the order on one wire: a
+change that coalesced rosters the way nudges are coalesced would strand every call it touched with
+every other gate green.
 
 **Both sides used to offer, on every call, and two times in five it never connected.** Each built
 its own line on the roster frame, so every setup was a glare: the polite side rolled its offer back,
@@ -586,10 +594,18 @@ one, a microphone granted later, the offer that lands mid-answer, and the two ha
 collision.
 
 **A joining has a name, and a signal travels from one joining to one.** The hub names every entry
-into a room - `join`, on each roster entry - keeps the name through a mute, and gives a new one to
-somebody who comes back, whether their socket dropped, another tab of theirs took the call or the
-server restarted. The call layer holds one connection per JOINING, not per handle: a roster that
-names a new one hangs up the old connection and opens another, so the side that calls calls again.
+into a room - `join`, on each roster entry, and `mine` to tell each reader which one is its own -
+keeps the name through a mute, and gives a new one to somebody who comes back, whether their socket
+dropped, another tab of theirs took the call or the server restarted. The names are random and say
+nothing: the first version counted up from the server's start, which handed every player a clock
+and a count of every voice join on the deployment. The call layer holds one connection per JOINING,
+not per handle: a roster that names a new one hangs up the old connection and opens another, so the
+side that calls calls again, and a roster that changes its own reader's joining hangs up on
+everybody. A handle is only the label on a joining. Somebody who changes theirs mid-call keeps the
+joining and the line, the link is said again under the new name, and nobody finds themselves on a
+roster by a handle: the first version keyed the connection by handle and decided who calls from
+handles, so a rename made one end hang up and call a connection the other end had kept, or left
+both ends waiting for the other to ring.
 A signal says which joining it is for, and the hub drops one meant for a joining that is over;
 relayed, it says which joining sent it, and the receiver lets one from a joining it has hung up on
 fall. A browser whose socket comes back hangs up on everybody BEFORE it asks to be let in again: its
@@ -605,7 +621,9 @@ worked only because Chromium rebuilds DTLS for a changed fingerprint. Both take 
 now, measured by closing the socket from the page in two browsers. `realtime-hub.spec.ts` holds the
 names and the relay, `voice-rtc.spec.ts` the hanging up and calling again, `voice.spec.ts` the
 hanging up before a rejoin, and `voice-pass` cuts each player's socket in turn and wants a new line
-at both ends with packets both ways.
+at both ends with packets both ways. A cut is seen by the server at once, so the other end hangs up
+because a roster left the player out: the roster in which a joining changes IN PLACE is another tab
+of the same player taking the call, and the pass does that as well.
 
 **The room takes one arrival at a time.** Every `voice` frame for a table - a join, a leave, a mute -
 runs through `lib/keyed-queue.ts`, keyed by the table, in the order it arrived, and the room is read

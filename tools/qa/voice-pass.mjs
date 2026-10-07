@@ -16,7 +16,10 @@
  *
  * It also cuts each player's realtime socket in turn, from the page, and wants a NEW connection at
  * both ends carrying packets again: a player who comes back is a new joining, and both ends hang up
- * and start over rather than one of them waiting on a line the other has dropped.
+ * and start over rather than one of them waiting on a line the other has dropped. A cut is seen by
+ * the server at once, so the other end hangs up for a different reason: the roster that leaves the
+ * player out. The one roster in which a joining changes IN PLACE is another tab of the same player
+ * taking the call, and the pass does that too.
  */
 import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -268,6 +271,28 @@ for (const [gone, stays] of [[dana, mina], [mina, dana]])
     record(`${ gone.handle } is called again on a new line at both ends when its socket drops and comes back`, anew && await through(10_000), await told());
 }
 
+const tab = await mina.context.newPage();
+
+await tab.goto(`${ BASE }/app/play/${ table.id }`);
+await tab.waitForLoadState('networkidle');
+
+const stood = await built(dana.page);
+
+await tab.getByRole('button', { name: 'Join voice' }).first().click();
+
+const taken = await until(async () =>
+    (await mina.page.getByRole('button', { name: 'Join voice' }).count()) > 0
+    && (await built(dana.page)) > stood
+    && flowing(await linked(dana.page))
+    && flowing(await linked(tab)), 15_000);
+
+record('another tab of one player takes the call: the first tab is out and the other player calls the new one', taken, `dana: ${ JSON.stringify(await linked(dana.page)) }, the new tab: ${ JSON.stringify(await linked(tab)) }`);
+
+await tab.close();
+await until(async () => (await linked(dana.page)).states.length === 0);
+await mina.page.getByRole('button', { name: 'Join voice' }).first().click();
+record('the first tab takes the call back once the other is closed', await through(15_000), await told());
+
 await players(dana.page);
 const mutedFirst = await until(async () => (await pillOf(dana.page, 'Mina')).some((text) => text === 'Muted'));
 record('a player joins muted, and the other one sees it', mutedFirst, (await pillOf(dana.page, 'Mina')).join(', '));
@@ -286,13 +311,19 @@ for (const one of [dana, mina])
 {
     await one.context.request.post(`${ BASE }/api/tables/${ table.id }/ready`, { data: { ready: true } });
 }
+const heardBefore = { dana: (await linked(dana.page)).got, mina: (await linked(mina.page)).got };
+const builtBefore = { dana: await built(dana.page), mina: await built(mina.page) };
 const started = await dana.context.request.post(`${ BASE }/api/tables/${ table.id }/start`);
 await wait(3000);
 const throughStart = started.ok()
-    && (await remoteAudio(dana.page)) === 'live'
-    && (await remoteAudio(mina.page)) === 'live'
+    && flowing(await linked(dana.page))
+    && flowing(await linked(mina.page))
+    && (await linked(dana.page)).got > heardBefore.dana
+    && (await linked(mina.page)).got > heardBefore.mina
+    && (await built(dana.page)) === builtBefore.dana
+    && (await built(mina.page)) === builtBefore.mina
     && (await dana.page.getByRole('button', { name: 'Leave voice' }).count()) > 0;
-record('the call carries on when the match starts', throughStart, started.ok() ? '' : `start ${ started.status() }`);
+record('the call carries on when the match starts, on the same line with packets still arriving', throughStart, started.ok() ? await told() : `start ${ started.status() }`);
 
 const marked = await until(async () => (await dana.page.locator('.table-plate-voice[data-mark]').count()) >= 2);
 record('every player in the call carries a voice mark on their plate', marked, String(await dana.page.locator('.table-plate-voice').count()));

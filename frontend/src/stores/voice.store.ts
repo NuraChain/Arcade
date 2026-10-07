@@ -99,6 +99,7 @@ export const useVoice = createStore((): VoiceApi =>
     const [talking, setTalking] = createSignal(false);
     const [mic, setMic] = createSignal<MicState>('off');
     const [roster, setRoster] = createSignal<VoiceFrame['peers']>([]);
+    const [mine, setMine] = createSignal('');
     const [links, setLinks] = createSignal<Record<string, PeerLink>>({});
     const [loud, setLoud] = createSignal<ReadonlySet<string>>(new Set());
     const [volumes, setVolumes] = createSignal<Readonly<Record<string, number>>>({});
@@ -179,6 +180,7 @@ export const useVoice = createStore((): VoiceApi =>
         setTable(null);
         setJoining(false);
         setRoster([]);
+        setMine('');
         setLinks({});
         setLoud(new Set<string>());
         setMic('off');
@@ -201,17 +203,16 @@ export const useVoice = createStore((): VoiceApi =>
         }
 
         setRoster(frame.peers);
+        setMine(frame.mine);
 
-        const self = me();
-
-        call?.sync(frame.peers.filter((peer) => peer.talk && peer.who !== self).map((peer) => ({ who: peer.who, join: peer.join })));
+        call?.sync(frame.mine, frame.peers.filter((peer) => peer.talk && peer.join !== frame.mine).map((peer) => ({ who: peer.who, join: peer.join })));
     };
 
     const signalled = (frame: SignalFrame) =>
     {
         if (frame.table === untrack(table))
         {
-            void call?.receive(frame.from, frame.join, { kind: frame.kind, data: frame.data });
+            void call?.receive(frame.join, { kind: frame.kind, data: frame.data });
         }
     };
 
@@ -268,17 +269,17 @@ export const useVoice = createStore((): VoiceApi =>
 
     const people = (): VoicePerson[] =>
     {
-        const self = account.user()?.id ?? '';
+        const self = mine();
         const state = links();
         const speaking = loud();
         const own = volumes();
 
         return roster().map((peer) => ({
             who: peer.who,
-            me: peer.who === self,
+            me: peer.join === self,
             muted: peer.muted,
             talk: peer.talk,
-            link: peer.who === self ? 'connected' : (state[peer.who] ?? null),
+            link: peer.join === self ? 'connected' : (state[peer.who] ?? null),
             speaking: speaking.has(peer.who) && !peer.muted,
             silenced: (own[peer.who] ?? 1) === 0,
             volume: own[peer.who] ?? 1
@@ -395,7 +396,7 @@ export const useVoice = createStore((): VoiceApi =>
             context = Context === null ? null : new Context();
 
             call = makeCall({
-                me: me(),
+                me,
                 iceServers: ice.servers.map((server) => ({
                     urls: server.urls,
                     ...(server.username === undefined ? {} : { username: server.username }),
@@ -588,7 +589,7 @@ export const useVoice = createStore((): VoiceApi =>
 
                     if (current !== null && !untrack(joining))
                     {
-                        call?.sync([]);
+                        call?.sync('', []);
                         realtime.voice(current, true, untrack(muted));
                     }
                 })

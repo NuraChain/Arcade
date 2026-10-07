@@ -1,3 +1,5 @@
+import { randomBytes } from 'node:crypto';
+
 import { maySeeOnline, type Party, type Relation } from '../domains/social/policy.ts';
 import type { Principal } from '../http/auth.ts';
 import { keyedQueue } from '../lib/keyed-queue.ts';
@@ -168,8 +170,6 @@ export function createHub(deps: HubDeps): Hub
 
     const rooms = new Map<string, Map<string, { socket: Held; muted: boolean; join: string }>>();
 
-    let joins = deps.now();
-
     const arrivals = keyedQueue();
 
     const talks = new Map<string, boolean>();
@@ -196,7 +196,7 @@ export function createHub(deps: HubDeps): Hub
                 join: other.join
             }));
 
-            emit(member.socket, (n) => voice(n, tableId, true, peers));
+            emit(member.socket, (n) => voice(n, tableId, true, member.join, peers));
         }
     };
 
@@ -239,7 +239,7 @@ export function createHub(deps: HubDeps): Hub
 
             if (tell)
             {
-                emit(member.socket, (n) => voice(n, tableId, false, []));
+                emit(member.socket, (n) => voice(n, tableId, false, '', []));
             }
 
             if (room.size === 0)
@@ -889,7 +889,7 @@ export function createHub(deps: HubDeps): Hub
 
                     if (!allowed || !socket.alive)
                     {
-                        emit(socket, (n) => voice(n, tableId, false, []));
+                        emit(socket, (n) => voice(n, tableId, false, '', []));
                         return;
                     }
 
@@ -908,11 +908,10 @@ export function createHub(deps: HubDeps): Hub
 
                     if (previous !== undefined)
                     {
-                        emit(previous.socket, (n) => voice(n, tableId, false, []));
+                        emit(previous.socket, (n) => voice(n, tableId, false, '', []));
                     }
 
-                    joins += 1;
-                    room.set(socket.userId, { socket, muted, join: joins.toString(36) });
+                    room.set(socket.userId, { socket, muted, join: randomBytes(9).toString('base64url') });
                     rooms.set(tableId, room);
                     roster(tableId);
                 })

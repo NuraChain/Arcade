@@ -945,6 +945,96 @@ describe('voice at a table', () =>
         expect(joinOf(alex.wire, 'alex')).toBe(host);
     });
 
+    it('tells each reader which joining is its own, and nothing of the kind to somebody it turns away', async () =>
+    {
+        seat('alex', 'sara.k');
+        const alex = await connect('alex');
+        const sara = await connect('sara.k');
+        const stranger = await connect('omid.k');
+
+        world.hub.voice(alex.connection, TABLE, true, false);
+        await rest();
+        world.hub.voice(sara.connection, TABLE, true, false);
+        world.hub.voice(stranger.connection, TABLE, true, false);
+        await rest();
+
+        expect(lastVoice(alex.wire)?.mine).toBe(joinOf(alex.wire, 'alex'));
+        expect(lastVoice(sara.wire)?.mine).toBe(joinOf(sara.wire, 'sara.k'));
+        expect(lastVoice(sara.wire)?.mine).not.toBe(lastVoice(alex.wire)?.mine);
+        expect(lastVoice(stranger.wire)).toMatchObject({ joined: false, mine: '' });
+    });
+
+    it('gives a joining a name that says nothing about the clock or about how many came before it', async () =>
+    {
+        seat('alex', 'sara.k');
+        const alex = await connect('alex');
+        const sara = await connect('sara.k');
+
+        world.hub.voice(alex.connection, TABLE, true, false);
+        await rest();
+        world.hub.voice(sara.connection, TABLE, true, false);
+        await rest();
+
+        const here = [joinOf(alex.wire, 'alex'), joinOf(alex.wire, 'sara.k')];
+
+        world = build();
+        seat('alex');
+
+        const again = await connect('alex');
+
+        world.hub.voice(again.connection, TABLE, true, false);
+        await rest();
+
+        expect(here[0]).not.toBe(joinOf(again.wire, 'alex'));
+        expect(here.every((name) => name.length >= 12)).toBe(true);
+        expect(Number.parseInt(here[1], 36) - Number.parseInt(here[0], 36)).not.toBe(1);
+    });
+
+    it('names a joining on the roster before any signal that carries it reaches the same wire', async () =>
+    {
+        seat('alex', 'sara.k');
+        const alex = await connect('alex');
+        const sara = await connect('sara.k');
+
+        world.hub.voice(alex.connection, TABLE, true, false);
+        await rest();
+        world.hub.voice(sara.connection, TABLE, true, false);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        world.hub.signal(sara.connection, TABLE, 'alex', joinOf(sara.wire, 'alex'), 'offer', '{"sdp":"first"}');
+        await rest();
+
+        const name = joinOf(sara.wire, 'sara.k');
+        const named = alex.wire.sent.findIndex((frame) => frame.t === 'voice' && frame.peers.some((peer) => peer.join === name));
+        const carried = alex.wire.sent.findIndex((frame) => frame.t === 'signal' && frame.join === name);
+
+        expect(name).not.toBe('');
+        expect(named).toBeGreaterThanOrEqual(0);
+        expect(carried).toBeGreaterThan(named);
+    });
+
+    it('keeps the joining of somebody who changes their handle, so nobody hangs up on them', async () =>
+    {
+        seat('alex', 'sara.k');
+        const alex = await connect('alex');
+        const sara = await connect('sara.k');
+
+        world.hub.voice(alex.connection, TABLE, true, false);
+        await rest();
+        world.hub.voice(sara.connection, TABLE, true, false);
+        await rest();
+
+        const before = joinOf(alex.wire, 'sara.k');
+
+        world.edges.set('sara.k', { party: party('sara.k'), handle: 'sara.new', friends: [], blocks: [] });
+        world.hub.edgesChanged('sara.k');
+        await settle();
+        await rest();
+
+        expect(lastVoice(alex.wire)?.peers.map((peer) => peer.who)).toEqual(['alex', 'sara.new']);
+        expect(joinOf(alex.wire, 'sara.new')).toBe(before);
+        expect(lastVoice(sara.wire)?.mine).toBe(before);
+    });
+
     it('carries a signal from one joining to one joining, and drops one meant for a joining that is over', async () =>
     {
         seat('alex', 'sara.k');
