@@ -1,4 +1,5 @@
 import { BASE, clearTables, launch, pressable, recorder, seat, waitFor } from './seats.mjs';
+import { tableBody } from './tables.mjs';
 import { turns } from '../../backend/src/domains/match/backgammon/moves.ts';
 
 const CLICKED_TURNS = 8;
@@ -18,9 +19,9 @@ try
 
     await clearTables(dana, mina);
 
-    const made = await dana.api('POST', '/tables/', {
-        game: 'backgammon', seats: 2, mode: 'turns', privacy: 'public', target: 3, cube: true, blinds: 'low', chat: true, voice: false, invitees: []
-    });
+    const made = await dana.api('POST', '/tables/', tableBody({
+        game: 'backgammon', seats: 2, mode: 'turns', privacy: 'public', target: 3, cube: true
+    }));
 
     record('opens a backgammon table to three points with the cube', made.ok, `${ made.status }`);
 

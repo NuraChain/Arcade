@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { join } from 'node:path';
 
 import { BASE, guestSeat, launch, seat } from './seats.mjs';
+import { tableBody } from './tables.mjs';
 
 const OUT = 'tools/qa/out/parity';
 
@@ -117,7 +118,7 @@ const tablesFor = async (browser, dana) =>
     for (const [game, seats, target] of [['ludo', 2, 0], ['backgammon', 2, 1], ['hokm', 2, 7]])
     {
         const guest = await guestSeat(browser, `Parity ${ game }`);
-        const made = await dana.api('POST', '/tables/', { game, seats, mode: 'turns', privacy: 'public', target, cube: game === 'backgammon', blinds: 'low', chat: true, voice: false, invitees: [] });
+        const made = await dana.api('POST', '/tables/', tableBody({ game, seats, mode: 'turns', privacy: 'public', target, cube: game === 'backgammon' }));
         await guest.api('POST', `/tables/${ made.body.id }/seat`);
         await dana.api('POST', `/tables/${ made.body.id }/ready`, { ready: true });
         await guest.api('POST', `/tables/${ made.body.id }/ready`, { ready: true });

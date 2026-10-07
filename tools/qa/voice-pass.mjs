@@ -15,6 +15,7 @@ import { chromium } from 'playwright';
 import { privateKeyToAccount } from 'viem/accounts';
 
 import { WALLET_FIXTURES } from '../../backend/src/db/wallet-fixtures.ts';
+import { tableBody } from './tables.mjs';
 
 function cachedChromium()
 {
@@ -128,7 +129,7 @@ const dana = await seat('dana.w');
 const mina = await seat('mina');
 
 const made = await dana.context.request.post(`${ BASE }/api/tables`, {
-    data: { game: 'ludo', seats: 2, mode: 'live', privacy: 'invite', target: 0, cube: false, blinds: 'low', chat: true, voice: true, invitees: ['mina'] }
+    data: tableBody({ game: 'ludo', seats: 2, mode: 'live', privacy: 'invite', voice: true, invitees: ['mina'] })
 });
 const table = await made.json();
 record('a host can open a table with voice on', made.ok() && table.voice === true, made.ok() ? '' : String(made.status()));

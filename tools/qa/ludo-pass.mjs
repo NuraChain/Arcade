@@ -14,6 +14,7 @@
  *   PORT=5300 ... npm start
  *   node tools/qa/ludo-pass.mjs
  */
+import { tableBody } from './tables.mjs';
 
 const ROLL = { kind: 'ludo', verb: 'roll' };
 
@@ -115,18 +116,12 @@ const run = async () =>
             players.push(await guest(`Ludo ${ seats }${ 'abcd'[index] }${ Math.floor(Math.random() * 10000) }`));
         }
 
-        const made = await players[0].post('/tables/', {
+        const made = await players[0].post('/tables/', tableBody({
             game: 'ludo',
             seats,
             mode: 'live',
-            privacy: 'public',
-            target: 0,
-            cube: false,
-            blinds: 'low',
-            chat: true,
-            voice: false,
-            invitees: []
-        });
+            privacy: 'public'
+        }));
 
         if (!ok('the table opens', made.status === 200, `${ made.status } ${ made.text.slice(0, 120) }`))
         {

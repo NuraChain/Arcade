@@ -26,6 +26,7 @@ import { chromium } from 'playwright';
 import { privateKeyToAccount } from 'viem/accounts';
 
 import { WALLET_FIXTURES } from '../../backend/src/db/wallet-fixtures.ts';
+import { tableBody } from './tables.mjs';
 
 function cachedChromium()
 {
@@ -171,10 +172,7 @@ try
         }
 
         const made = await dana.request.post(`${ BASE }/api/tables/`, {
-            data: {
-                game: 'ludo', seats: 2, mode: 'live', privacy: 'public',
-                target: 0, cube: false, blinds: 'low', chat: true, voice: false, invitees: []
-            }
+            data: tableBody({ game: 'ludo', seats: 2, mode: 'live', privacy: 'public' })
         });
 
         record('opens a ludo table', made.ok(), `${ made.status() }`);

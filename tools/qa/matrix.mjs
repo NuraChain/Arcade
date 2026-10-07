@@ -5,6 +5,8 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 
+import { tableBody } from './tables.mjs';
+
 const HERE = dirname(fileURLToPath(import.meta.url));
 const OUT = resolve(HERE, 'out', 'matrix');
 
@@ -141,18 +143,13 @@ async function playableTable(browser, storageState, game)
     }
 
     const made = await mine.request.post(`${ BASE }/api/tables/`, {
-        data: {
+        data: tableBody({
             game,
             seats: 2,
             mode: game === 'poker' ? 'live' : 'turns',
             privacy: 'public',
-            target: { backgammon: 1, hokm: 7 }[game] ?? 0,
-            cube: false,
-            blinds: 'low',
-            chat: true,
-            voice: false,
-            invitees: []
-        }
+            target: { backgammon: 1, hokm: 7 }[game] ?? 0
+        })
     });
 
     if (!made.ok())

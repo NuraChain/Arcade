@@ -1,4 +1,5 @@
 import { turns } from '../../backend/src/domains/match/backgammon/moves.ts';
+import { tableBody } from './tables.mjs';
 
 const BASE = process.env.QA_BASE ?? 'http://localhost:5300';
 
@@ -113,18 +114,14 @@ const play = async (target, cube) =>
         await guest(`Nard ${ target }b${ Math.floor(random() * 10000) }`)
     ];
 
-    const made = await players[0].post('/tables/', {
+    const made = await players[0].post('/tables/', tableBody({
         game: 'backgammon',
         seats: 2,
         mode: 'live',
         privacy: 'public',
         target,
-        cube,
-        blinds: 'low',
-        chat: true,
-        voice: false,
-        invitees: []
-    });
+        cube
+    }));
 
     if (!ok('the table opens', made.status === 200, `${ made.status } ${ made.text.slice(0, 160) }`))
     {

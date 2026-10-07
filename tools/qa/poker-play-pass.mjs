@@ -1,4 +1,5 @@
 import { BASE, clearTables, launch, pressable, recorder, seat, waitFor } from './seats.mjs';
+import { tableBody } from './tables.mjs';
 
 const CLICKED_ACTIONS = 8;
 
@@ -17,9 +18,9 @@ try
 
     await clearTables(dana, mina);
 
-    const made = await dana.api('POST', '/tables/', {
-        game: 'poker', seats: 2, mode: 'live', privacy: 'public', target: 0, cube: false, blinds: 'low', chat: true, voice: false, invitees: []
-    });
+    const made = await dana.api('POST', '/tables/', tableBody({
+        game: 'poker', seats: 2, mode: 'live', privacy: 'public'
+    }));
 
     record('opens a two-seat Sit & Go', made.ok, `${ made.status }`);
 

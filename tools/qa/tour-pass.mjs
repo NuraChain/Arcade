@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { privateKeyToAccount } from 'viem/accounts';
 
 import { BASE, clearTables, launch, recorder, seat } from './seats.mjs';
+import { tableBody } from './tables.mjs';
 
 const { record, finish } = recorder('tour-pass');
 
@@ -43,7 +44,7 @@ const ROUTES = [
     ['/app/notifications', ['/app/notifications'], []],
     ['/app/search', [], []]
 ];
-const TABLE = { game: 'ludo', seats: 2, mode: 'turns', privacy: 'invite', target: 0, cube: false, blinds: 'low', chat: true, voice: false, invitees: [] };
+const TABLE = tableBody({ game: 'ludo', seats: 2, mode: 'turns', privacy: 'invite' });
 
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 

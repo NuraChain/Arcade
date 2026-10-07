@@ -1,3 +1,5 @@
+import { tableBody } from './tables.mjs';
+
 const BASE = process.env.QA_BASE ?? 'http://localhost:5300';
 
 const STACK = 1500;
@@ -115,9 +117,9 @@ const play = async (count) =>
         players.push(await guest(`Poker ${ count }${ 'abcdefghi'[index] }${ Math.floor(random() * 10000) }`));
     }
 
-    const made = await players[0].post('/tables/', {
-        game: 'poker', seats: count, mode: 'live', privacy: 'public', target: 0, cube: false, blinds: 'mid', chat: true, voice: false, invitees: []
-    });
+    const made = await players[0].post('/tables/', tableBody({
+        game: 'poker', seats: count, mode: 'live', privacy: 'public', blinds: 'mid'
+    }));
 
     if (!ok('the table opens', made.status === 200, `${ made.status } ${ made.text.slice(0, 160) }`))
     {

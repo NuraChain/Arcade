@@ -16,6 +16,7 @@
  *   PORT=5300 PUBLIC_ORIGIN=http://localhost:5300 SERVE_PAGES=true NODE_ENV=production npm start
  *   node tools/qa/hokm-pass.mjs
  */
+import { tableBody } from './tables.mjs';
 
 const BASE = process.env.QA_BASE ?? 'http://localhost:5300';
 
@@ -114,18 +115,13 @@ const run = async () =>
             players.push(await guest(`Hokm ${ seats }${ 'abcd'[index] }${ Math.floor(Math.random() * 10000) }`));
         }
 
-        const made = await players[0].post('/tables/', {
+        const made = await players[0].post('/tables/', tableBody({
             game: 'hokm',
             seats,
             mode: 'live',
             privacy: 'public',
-            target: 7,
-            cube: false,
-            blinds: 'low',
-            chat: true,
-            voice: false,
-            invitees: []
-        });
+            target: 7
+        }));
 
         if (!ok('the table opens', made.status === 200, `${ made.status } ${ made.text.slice(0, 140) }`))
         {

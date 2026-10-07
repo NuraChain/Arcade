@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { play as englishPlay } from '../../frontend/src/locales/en/play.ts';
 import { play as persianPlay } from '../../frontend/src/locales/fa/play.ts';
 import { BASE, clearTables, guestSeat, launch, recorder, seat, waitFor } from './seats.mjs';
+import { tableBody } from './tables.mjs';
 
 const OUT = join(import.meta.dirname, 'out', 'fit', new Date().toISOString().replace(/[:.]/g, '-'));
 
@@ -198,18 +199,14 @@ const advance = async (spec, table) =>
 
 const create = async (host, spec, label) =>
 {
-    const made = await host.api('POST', '/tables/', {
+    const made = await host.api('POST', '/tables/', tableBody({
         game: spec.game,
         seats: spec.seats,
         mode: spec.mode,
         privacy: 'public',
         target: spec.target,
-        cube: spec.game === 'backgammon',
-        blinds: 'low',
-        chat: true,
-        voice: false,
-        invitees: []
-    });
+        cube: spec.game === 'backgammon'
+    }));
 
     if (!made.ok)
     {

@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { BASE, launch, recorder, seat } from './seats.mjs';
+import { tableBody } from './tables.mjs';
 
 const TARGET = new URL(BASE);
 const SAMPLES = Number(process.env.QA_SAMPLES ?? 24);
@@ -129,10 +130,9 @@ try
         }
     }
 
-    const made = await reza.api('POST', '/tables', {
-        game: 'ludo', seats: 2, mode: 'turns', privacy: 'public', target: 0,
-        cube: false, blinds: 'mid', chat: true, voice: false, invitees: []
-    });
+    const made = await reza.api('POST', '/tables', tableBody({
+        game: 'ludo', seats: 2, mode: 'turns', privacy: 'public', blinds: 'mid'
+    }));
     record('opens a turn-based ludo table for two', made.ok, `${ made.status }`);
     const table = made.body.id;
     const took = await leila.api('POST', `/tables/${ table }/seat`);

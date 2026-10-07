@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import { BASE, clearTables, launch, recorder, seat } from './seats.mjs';
+import { tableBody } from './tables.mjs';
 
 const { record, finish } = recorder('realtime-pass');
 
@@ -119,18 +120,18 @@ try
     await dana.api('POST', '/auth/profile', { displayName: 'Dana Whitfield', bio: danaBio });
 
     const bell = await badge(mina.page, '/app/notifications');
-    const invited = await dana.api('POST', '/tables/', {
-        game: 'ludo', seats: 2, mode: 'turns', privacy: 'invite', target: 0, cube: false, blinds: 'low', chat: true, voice: false, invitees: ['mina']
-    });
+    const invited = await dana.api('POST', '/tables/', tableBody({
+        game: 'ludo', seats: 2, mode: 'turns', privacy: 'invite', invitees: ['mina']
+    }));
     record('a table opens with somebody invited', invited.ok, String(invited.status));
     record('an invitation at create rings the invitee\'s bell', await soon(async () => await badge(mina.page, '/app/notifications') > bell));
     const told = (await mina.api('GET', '/notifications/')).body?.items ?? [];
     record('the invitation is a table-invite notice', told.some((item) => item.kind === 'table-invite'));
     await clearTables(dana);
 
-    const opened = await dana.api('POST', '/tables/', {
-        game: 'ludo', seats: 2, mode: 'turns', privacy: 'public', target: 0, cube: false, blinds: 'low', chat: true, voice: false, invitees: []
-    });
+    const opened = await dana.api('POST', '/tables/', tableBody({
+        game: 'ludo', seats: 2, mode: 'turns', privacy: 'public'
+    }));
     const tableId = opened.body?.id;
     await mina.api('POST', `/tables/${ tableId }/seat`);
 

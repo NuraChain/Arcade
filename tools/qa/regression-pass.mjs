@@ -18,6 +18,8 @@ import { join } from 'node:path';
 import { chromium } from 'playwright';
 import { privateKeyToAccount } from 'viem/accounts';
 
+import { tableBody } from './tables.mjs';
+
 function cachedChromium()
 {
     const home = process.env.LOCALAPPDATA ?? process.env.HOME ?? '';
@@ -297,7 +299,7 @@ console.log('\n[6] the server decides what a table may be');
     try
     {
         await signInWithWallet(page);
-        const attempts = await page.evaluate(async () =>
+        const attempts = await page.evaluate(async (legal) =>
         {
             const post = async (body) =>
             {
@@ -315,7 +317,6 @@ console.log('\n[6] the server decides what a table may be');
              * that has nothing to do with the config being checked. Pointing the legal case at a
              * game the server will not open is how this check came to assert 422 and pass.
              */
-            const legal = { game: 'ludo', seats: 4, mode: 'live', privacy: 'invite', target: 0, cube: false, blinds: 'low', chat: true, voice: false, invitees: [] };
             return {
                 badSeats: await post({ ...legal, seats: 5 }),
                 badMode: await post({ ...legal, mode: 'nonsense' }),
@@ -323,7 +324,7 @@ console.log('\n[6] the server decides what a table may be');
                 hugeSeats: await post({ ...legal, seats: 99999 }),
                 noGame: await post({ ...legal, game: 'not-a-game' })
             };
-        });
+        }, tableBody({ game: 'ludo', seats: 4, mode: 'live', privacy: 'invite' }));
 
         for (const [name, r] of Object.entries(attempts))
         {

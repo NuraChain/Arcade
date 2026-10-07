@@ -27,6 +27,7 @@ import { chromium } from 'playwright';
 import { privateKeyToAccount } from 'viem/accounts';
 
 import { WALLET_FIXTURES } from '../../backend/src/db/wallet-fixtures.ts';
+import { tableBody } from './tables.mjs';
 
 function cachedChromium()
 {
@@ -201,10 +202,7 @@ try
          * have its cards played for it halfway through and report a product defect.
          */
         const made = await dana.request.post(`${ BASE }/api/tables/`, {
-            data: {
-                game: 'hokm', seats: 2, mode: 'turns', privacy: 'public',
-                target: 7, cube: false, blinds: 'low', chat: true, voice: false, invitees: []
-            }
+            data: tableBody({ game: 'hokm', seats: 2, mode: 'turns', privacy: 'public', target: 7 })
         });
 
         record('opens a two-handed hokm table', made.ok(), `${ made.status() }`);
