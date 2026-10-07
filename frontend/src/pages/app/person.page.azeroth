@@ -1,7 +1,7 @@
 import PersonRecord from '../../components/social/person-record.component.azeroth';
 import { createResource, useHead, useNavigate, useParams } from 'azerothjs';
 
-import { client } from '../../api.ts';
+import { ApiError, client } from '../../api.ts';
 import Page from '../../components/app/page.component.azeroth';
 import ChainFaceFailed from '../../components/social/chain-face-failed.component.azeroth';
 import PersonActions from '../../components/social/person-actions.component.azeroth';
@@ -10,6 +10,8 @@ import PicturePreview from '../../components/social/picture-preview.component.az
 import Badge from '../../components/ui/badge.component.azeroth';
 import Button from '../../components/ui/button.component.azeroth';
 import EmptyState from '../../components/ui/empty-state.component.azeroth';
+import ErrorState from '../../components/ui/error-state.component.azeroth';
+import Skeleton from '../../components/ui/skeleton.component.azeroth';
 import Icon from '../../icons/icon.component.azeroth';
 import { usePeople } from '../../stores/people.store.ts';
 import { useCatalogue } from '../../stores/catalogue.store.ts';
@@ -42,7 +44,21 @@ export default component PersonPage()
 
     const view = createResource(
         () => params().handle ?? null,
-        (handle) => client.social.person({ params: { handle } }),
+        async (handle) =>
+        {
+            try
+            {
+                return await client.social.person({ params: { handle } });
+            }
+            catch (error)
+            {
+                if (error instanceof ApiError && error.status === 404)
+                {
+                    return null;
+                }
+                throw error;
+            }
+        },
         { name: 'social.person' }
     );
 
@@ -56,7 +72,13 @@ export default component PersonPage()
         }
     }
 
-    derived person = view.data()?.person ?? people.byHandle(params().handle ?? '') ?? null;
+    derived missing = view.data() === null;
+
+    derived person = missing ? null : view.data()?.person ?? people.byHandle(params().handle ?? '') ?? null;
+
+    derived failed = person === null && view.error() !== null;
+
+    derived loading = person === null && !missing && !failed;
 
     const face = createResource(
         () => params().handle === undefined ? null : { handle: params().handle!, lang: locale.locale() },
@@ -67,7 +89,7 @@ export default component PersonPage()
     derived shown = face.data()?.profile;
 
     derived name = person === null
-        ? locale.t('person.notFound')
+        ? missing ? locale.t('person.notFound') : params().handle ?? ''
         : (shown?.displayName ?? '') === '' ? person.handle : shown!.displayName;
 
     useHead({ title: () => name });
@@ -84,6 +106,12 @@ export default component PersonPage()
     derived mutual = view.data()?.mutual ?? 0;
 
     derived dot = person === null ? null : presence.dot(person.id);
+
+    derived minor = person?.isMinor === true;
+
+    derived faceFailed = face.error() !== null;
+
+    derived blocked = relation === 'blocked';
 
     derived held = record.record();
 
@@ -120,95 +148,107 @@ export default component PersonPage()
     };
 
     <Page label={ name }>
-        <Show
-            when={ person !== null }
-            fallback={ <EmptyState icon="people" title={ locale.t('person.notFound') } action={ locale.t('app.nav.friends') } to="/app/friends" class="py-12" /> }
-        >
+        <Show when={ loading }>
             { () =>
                 <div class="flex flex-col gap-6">
-                    <ProfileHeader
-                        person={ { ...person!, displayName: shown?.displayName ?? '', avatar: shown?.avatar ?? '' } }
-                        presence={ dot }
-                        bio={ shown?.bio ?? '' }
-                        stats={ stats }
-                        progress={ held?.progress ?? null }
-                        joined={ view.data()?.joinedAt ?? '' }
-                        pictureLabel={ locale.t('profile.pictureView') }
-                        onPicture={ (shown?.avatar ?? '') === '' ? undefined : viewPicture }
-                        badges={
-                            <span class="contents">
-                                <Show when={ dot === 'online' || dot === 'away' }>
-                                    <Badge dot text={ dot === 'away' ? locale.t('common.away') : locale.t('common.online') } tone={ dot === 'away' ? 'gold' : 'live' } />
-                                </Show>
-                                <Show when={ mutual > 0 }>
-                                    <Badge dot text={ locale.plural('person.mutual', mutual) } tone="accent" />
-                                </Show>
-                                <Show when={ person?.isMinor === true }>
-                                    <span class="inline-flex h-6 items-center gap-1.5 rounded-full border border-live/30 bg-live/12 px-2.5 text-ui-xs font-semibold text-live">
-                                        <Icon name="shield" size={ 12 } />
-                                        { locale.t('person.minor') }
-                                    </span>
-                                </Show>
-                            </span>
-                        }
-                        actions={
-                            <span class="contents">
-                                <Show when={ relation !== 'blocked' }>
-                                    <span class="contents">
-                                        <Button variant="primary" leading="play" block class="col-span-2" onClick={ play }>{ locale.t('person.play') }</Button>
-                                        <Button variant="secondary" leading="chats" block onClick={ message }>{ locale.t('person.message') }</Button>
-                                        <Show when={ relation === 'none' }>
-                                            <Button
-                                                variant="outline"
-                                                leading="friend-add"
-                                                block
-                                                loading={ social.working(person!.id) }
-                                                onClick={ () => void attempt(social.add(person!.id), locale.t('person.added')) }
-                                            >
-                                                { locale.t('person.add') }
-                                            </Button>
-                                        </Show>
-                                        <Show when={ relation === 'outgoing' }>
-                                            <Button variant="outline" leading="clock" block loading={ social.working(person!.id) } onClick={ () => void attempt(social.withdraw(person!.id)) }>{ locale.t('person.withdraw') }</Button>
-                                        </Show>
-                                        <Show when={ relation === 'incoming' }>
-                                            <Button variant="outline" leading="friend-check" block loading={ social.working(asked) } onClick={ () => void attempt(social.accept(asked)) }>{ locale.t('person.accept') }</Button>
-                                        </Show>
-                                        <Show when={ relation === 'friend' }>
-                                            <Button variant="outline" leading="friend-check" block disabled>{ locale.t('person.friends') }</Button>
-                                        </Show>
-                                    </span>
-                                </Show>
-                                <Button variant="ghost" leading="more" block class="col-span-2" onClick={ () => overlay.open(PersonActions, { personId: person!.id }, { label: locale.t('actions.title') }) }>{ locale.t('actions.title') }</Button>
-                            </span>
-                        }
-                    />
-
-                    <Show when={ face.error() !== null }>
-                        { () => <ChainFaceFailed onRetry={ () => face.refetch() } /> }
-                    </Show>
-
-                    <Show when={ relation === 'blocked' }>
-                        { () =>
-                            <Panel tone="danger" class="text-center">
-                                <p class="text-ui-md font-semibold text-text">{ locale.t('person.blockedTitle', { name: name.split(' ')[0] }) }</p>
-                                <p class="mt-1 text-ui-sm text-muted">{ locale.t('person.blockedLead') }</p>
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    class="mt-3"
-                                    loading={ social.working(person!.id) }
-                                    onClick={ () => void attempt(social.unblock(person!.id), locale.t('actions.unblocked', { name: name.split(' ')[0] })) }
-                                >
-                                    { locale.t('actions.unblock', { name: name.split(' ')[0] }) }
-                                </Button>
-                            </Panel>
-                        }
-                    </Show>
-
-                    <PersonRecord handle={ person!.id } show={ ['record', 'achievements'] } />
+                    <Skeleton avatar lines={ 3 } class="rounded-hero border border-line bg-field p-5" />
+                    <Skeleton lines={ 4 } class="rounded-panel border border-line bg-field p-5" />
                 </div>
             }
+        </Show>
+
+        <Show when={ failed }>
+            { () => <ErrorState title={ locale.t('state.errorTitle') } lead={ locale.t('state.errorLead') } onRetry={ () => view.refetch() } class="py-12" /> }
+        </Show>
+
+        <Show when={ missing }>
+            { () => <EmptyState icon="people" title={ locale.t('person.notFound') } action={ locale.t('app.nav.friends') } to="/app/friends" class="py-12" /> }
+        </Show>
+
+        <Show when={ person } let={ them }>
+            <div class="flex flex-col gap-6">
+                <ProfileHeader
+                    person={ { ...them, displayName: shown?.displayName ?? '', avatar: shown?.avatar ?? '' } }
+                    presence={ dot }
+                    bio={ shown?.bio ?? '' }
+                    stats={ stats }
+                    progress={ held?.progress ?? null }
+                    joined={ view.data()?.joinedAt ?? '' }
+                    pictureLabel={ locale.t('profile.pictureView') }
+                    onPicture={ (shown?.avatar ?? '') === '' ? undefined : viewPicture }
+                    badges={
+                        <span class="contents">
+                            <Show when={ dot === 'online' || dot === 'away' }>
+                                <Badge dot text={ dot === 'away' ? locale.t('common.away') : locale.t('common.online') } tone={ dot === 'away' ? 'gold' : 'live' } />
+                            </Show>
+                            <Show when={ mutual > 0 }>
+                                <Badge dot text={ locale.plural('person.mutual', mutual) } tone="accent" />
+                            </Show>
+                            <Show when={ minor }>
+                                <span class="inline-flex h-6 items-center gap-1.5 rounded-full border border-live/30 bg-live/12 px-2.5 text-ui-xs font-semibold text-live">
+                                    <Icon name="shield" size={ 12 } />
+                                    { locale.t('person.minor') }
+                                </span>
+                            </Show>
+                        </span>
+                    }
+                    actions={
+                        <span class="contents">
+                            <Show when={ relation !== 'blocked' }>
+                                <span class="contents">
+                                    <Button variant="primary" leading="play" block class="col-span-2" onClick={ play }>{ locale.t('person.play') }</Button>
+                                    <Button variant="secondary" leading="chats" block onClick={ message }>{ locale.t('person.message') }</Button>
+                                    <Show when={ relation === 'none' }>
+                                        <Button
+                                            variant="outline"
+                                            leading="friend-add"
+                                            block
+                                            loading={ social.working(them.id) }
+                                            onClick={ () => void attempt(social.add(them.id), locale.t('person.added')) }
+                                        >
+                                            { locale.t('person.add') }
+                                        </Button>
+                                    </Show>
+                                    <Show when={ relation === 'outgoing' }>
+                                        <Button variant="outline" leading="clock" block loading={ social.working(them.id) } onClick={ () => void attempt(social.withdraw(them.id)) }>{ locale.t('person.withdraw') }</Button>
+                                    </Show>
+                                    <Show when={ relation === 'incoming' }>
+                                        <Button variant="outline" leading="friend-check" block loading={ social.working(asked) } onClick={ () => void attempt(social.accept(asked)) }>{ locale.t('person.accept') }</Button>
+                                    </Show>
+                                    <Show when={ relation === 'friend' }>
+                                        <Button variant="outline" leading="friend-check" block disabled>{ locale.t('person.friends') }</Button>
+                                    </Show>
+                                </span>
+                            </Show>
+                            <Button variant="ghost" leading="more" block class="col-span-2" onClick={ () => overlay.open(PersonActions, { personId: them.id }, { label: locale.t('actions.title') }) }>{ locale.t('actions.title') }</Button>
+                        </span>
+                    }
+                />
+
+                <Show when={ faceFailed }>
+                    { () => <ChainFaceFailed onRetry={ () => face.refetch() } /> }
+                </Show>
+
+                <Show when={ blocked }>
+                    { () =>
+                        <Panel tone="danger" class="text-center">
+                            <p class="text-ui-md font-semibold text-text">{ locale.t('person.blockedTitle', { name: name.split(' ')[0] }) }</p>
+                            <p class="mt-1 text-ui-sm text-muted">{ locale.t('person.blockedLead') }</p>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                class="mt-3"
+                                loading={ social.working(them.id) }
+                                onClick={ () => void attempt(social.unblock(them.id), locale.t('actions.unblocked', { name: name.split(' ')[0] })) }
+                            >
+                                { locale.t('actions.unblock', { name: name.split(' ')[0] }) }
+                            </Button>
+                        </Panel>
+                    }
+                </Show>
+
+                <PersonRecord handle={ them.id } show={ ['record', 'achievements'] } />
+            </div>
         </Show>
     </Page>
 }

@@ -1,17 +1,20 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, renderTest } from '@azerothjs/testing';
-import { createMemoryHistory, createRouter, RouterProvider, type Route } from 'azerothjs';
+import { createMemoryHistory, createRouter, RouterProvider, Routes, type Route } from 'azerothjs';
 
 import ProfileSheet from '../src/components/app/profile-sheet.component.azeroth';
 import ProfileHeader from '../src/components/social/profile-header.component.azeroth';
 import AchievementTile from '../src/components/social/achievement-tile.component.azeroth';
 import MePage from '../src/pages/app/me.page.azeroth';
+import PersonPage from '../src/pages/app/person.page.azeroth';
 import '../src/locales/app-catalogue.ts';
 import { useLocale } from '../src/stores/locale.store.ts';
 import { useOverlay } from '../src/stores/overlay.store.ts';
+import { usePeople } from '../src/stores/people.store.ts';
 import { useSession } from '../src/stores/session.store.ts';
 import type { Account } from '../../backend/src/schemas.ts';
-import { server } from './fake-api.ts';
+import { useSocial } from '../src/stores/social.store.ts';
+import { client, server } from './fake-api.ts';
 
 vi.mock('../src/api.ts', async () => await import('./fake-api.ts'));
 
@@ -319,6 +322,115 @@ describe('signing out from my profile', () =>
         expect(server.calls).toContain('auth.sign-out');
         expect(useSession().signedIn()).toBe(false);
         expect(replace).toHaveBeenCalledWith('/sign-in');
+    });
+});
+
+describe('somebody else\'s profile page', () =>
+{
+    const visit = (handle: string) =>
+    {
+        const routes: Route[] = [{ path: '/app/people/:handle', component: (): HTMLElement => PersonPage() as HTMLElement }];
+        const router = createRouter({ routes, history: createMemoryHistory(`/app/people/${ handle }`), scroll: false });
+
+        return renderTest(() => RouterProvider({ router, children: () => Routes({}) }) as HTMLElement).container;
+    };
+
+    beforeEach(() =>
+    {
+        const account: Account = { id: 'u-dana', handle: 'dana.w', displayName: 'Dana', bio: '', hue: 12, kind: 'guest', isMinor: false };
+        server.account = account;
+        useSession().establish(account);
+        usePeople().reset();
+        useSocial().reset();
+    });
+
+    it('draws somebody it already knows once, and asks for their record once', async () =>
+    {
+        usePeople().remember([{ id: 'mina', handle: 'mina', displayName: 'Mina', bio: '', hue: 150, isMinor: false }]);
+
+        const container = visit('mina');
+        const drawn = container.querySelector('#profile-name');
+
+        expect(drawn).not.toBeNull();
+
+        await vi.waitFor(() => expect(server.calls).toContain('social.person'), { timeout: 4000 });
+        await settle();
+
+        expect(container.querySelector('#profile-name')).toBe(drawn);
+        expect(server.calls.filter((one) => one === 'social.record')).toHaveLength(1);
+    });
+
+    it('does not say there is nobody while it is still asking, and then draws them', async () =>
+    {
+        const container = visit('mina');
+
+        expect(container.textContent).not.toContain(useLocale().t('person.notFound'));
+
+        await vi.waitFor(() => expect(container.querySelector('#profile-name')).not.toBeNull(), { timeout: 4000 });
+
+        expect(container.textContent).not.toContain(useLocale().t('person.notFound'));
+    });
+
+    it('says there is nobody by a handle nobody has, and does not offer to try again', async () =>
+    {
+        const container = visit('nobody-by-this-name');
+
+        await vi.waitFor(() => expect(server.calls).toContain('social.person'), { timeout: 4000 });
+        await settle();
+
+        expect(container.textContent).toContain(useLocale().t('person.notFound'));
+        expect(container.textContent).not.toContain(useLocale().t('state.errorTitle'));
+        expect(container.querySelector('#profile-name')).toBeNull();
+    });
+
+    it('says it could not load somebody the server did not answer about, and draws them on a retry', async () =>
+    {
+        const asked = vi.spyOn(client.social, 'person').mockRejectedValueOnce(new TypeError('Failed to fetch'));
+
+        try
+        {
+            const container = visit('mina');
+
+            await vi.waitFor(() => expect(container.textContent).toContain(useLocale().t('state.errorTitle')), { timeout: 4000 });
+            expect(container.textContent).not.toContain(useLocale().t('person.notFound'));
+
+            const again = [...container.querySelectorAll('button')].find((one) => one.textContent?.includes(useLocale().t('common.retry')));
+            again!.click();
+
+            await vi.waitFor(() => expect(container.querySelector('#profile-name')).not.toBeNull(), { timeout: 4000 });
+            expect(container.textContent).not.toContain(useLocale().t('state.errorTitle'));
+        }
+        finally
+        {
+            asked.mockRestore();
+        }
+    });
+
+    it('believes the server over what it remembers when the account is gone', async () =>
+    {
+        usePeople().remember([{ id: 'left-long-ago', handle: 'left-long-ago', displayName: 'Left Long Ago', bio: '', hue: 20, isMinor: false }]);
+
+        const container = visit('left-long-ago');
+
+        await vi.waitFor(() => expect(server.calls).toContain('social.person'), { timeout: 4000 });
+        await settle();
+
+        expect(container.textContent).toContain(useLocale().t('person.notFound'));
+        expect(container.querySelector('#profile-name')).toBeNull();
+    });
+
+    it('still has a page for somebody the reader blocked, with the way to unblock them', async () =>
+    {
+        await useSocial().refresh();
+        await useSocial().block('mina');
+
+        const container = visit('mina');
+
+        await vi.waitFor(() => expect(container.querySelector('#profile-name')).not.toBeNull(), { timeout: 4000 });
+        await settle();
+
+        expect(container.textContent).toContain(useLocale().t('actions.unblock', { name: 'mina' }));
+        expect(container.textContent).not.toContain(useLocale().t('person.notFound'));
     });
 });
 

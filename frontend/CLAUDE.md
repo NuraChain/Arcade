@@ -512,6 +512,21 @@ its spec from seeing anything: the specs' server handed back the SAME group obje
 and a signal set to the object it already holds tells nobody. It answers with a copy now, as a real
 server answers with new JSON; a fake that keeps identity can show neither a rebuild nor an update.
 
+Somebody else's profile was the third, by another road: its person is the server's copy once there
+is one and what `people.store` remembers until then, so anybody opened from a list was drawn from
+memory and then torn down and drawn again when the answer came. Nothing inside a page has to follow a
+change of person, because the router builds a page per route AND params (`identity` in its
+`routes.js`): another handle is another page.
+
+**A page that loads one thing has four states, and says in each only what it knows.** The profile
+page said "No such person." for three of them: while it was still asking, when it could not ask at
+all, and when there was nobody. A placeholder while it asks; the failure, with a way to try again,
+when the fetch did not come back; the missing thing only when the server ANSWERED 404, which the page
+then believes over anything it remembers; and the thing. The title follows the same rule: the handle
+out of the URL until there is something better to say. `profile-page.spec.ts` holds each one, and
+the page of somebody the reader blocked, which the server still answers for because that page is
+where a block is undone - the specs' server used to refuse it, and answers as the real one does now.
+
 **An error that reaches a person has already failed; throwing it away makes it fail twice.** The
 boundary in `App.azeroth` named its first argument `_error` and dropped it, so a crash anywhere
 under `<Routes>` produced that screen and nothing else - no console line, no stack, no clue which

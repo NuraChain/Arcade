@@ -1652,11 +1652,12 @@ export const client =
         async person({ params }: { params: { handle: string } })
         {
             server.calls.push('social.person');
-            if (!reachable(params.handle) || !PEOPLE_FIXTURES.some((one) => one.handle === params.handle))
+            if (!PEOPLE_FIXTURES.some((one) => one.handle === params.handle))
             {
-                throw new ApiError(404, 'not-found', 'No such person.', undefined);
+                throw new ApiError(404, 'not-found', 'No account with that name.', undefined);
             }
-            const relation = server.friends.includes(params.handle) ? 'friend' as const : 'none' as const;
+            const relation = server.blocks.includes(params.handle) ? 'blocked' as const
+                : server.friends.includes(params.handle) ? 'friend' as const : 'none' as const;
             return { person: personWire(params.handle), relation, mutual: 0 };
         },
 
