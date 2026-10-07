@@ -349,7 +349,7 @@ const run = async () =>
 
         ok('the match reaches a winner', state.finishedAt !== undefined, `after ${ turns } turns`);
         ok('and names one', state.winner !== undefined, `seat ${ state.winner }`);
-        ok('over hands that were really scored', hands >= 7, `${ hands } hands, ${ kots } of them kot`);
+        ok('over hands that were really scored', hands >= 7 - 2 * kots, `${ hands } hands, ${ kots } of them kot`);
 
         const top = Math.max(...state.view.points);
 
