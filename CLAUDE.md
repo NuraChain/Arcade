@@ -153,8 +153,8 @@ which binds the account uuid because a signature must name something a rename ca
 
 `npm run check` · `npm test` · `npm run test:shuffle` · `npm run build` · `npm run qa`, then the
 hand-run passes in `tools/qa/` against the built server: `regression`, `ludo`, `hokm`, `play`,
-`hokm-play`, `voice`, `backgammon`, `poker`, `backgammon-play`, `poker-play`, `realtime`, `tour`
-(development server, disposable database), `latency`, and `chain` (local chain). Then a browser pass:
+`hokm-play`, `voice`, `backgammon`, `poker`, `backgammon-play`, `poker-play`, `realtime`, `chat`,
+`keep`, `tour` (development server, disposable database), `latency`, and `chain` (local chain). Then a browser pass:
 every route at 390, 1280 and 1440 in both languages against `design.jpg`, a clean console, and the
 WebGL disposal check (no "Too many active WebGL contexts" after repeated create and dispose).
 

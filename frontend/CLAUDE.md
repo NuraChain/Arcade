@@ -573,6 +573,37 @@ where it draws. `notifications-page.spec.ts` holds the rows through a read, a di
 arrival - and could only once the specs' server stopped handing back the same row objects, which is
 the group page's lesson again: a row set to the object it already holds is told nothing.
 
+The first run of the node-marking pass (`tools/qa/keep-pass.mjs`, below) found the same fault one
+level in, on nine routes, in five shapes worth knowing by sight:
+
+- **A `<Switch>` whose `<Match>` counts an array builds its FALLBACK again**, and the fallback is
+  usually the list. The conversation list beside every open thread was drawn again, every row, by
+  every chat doorbell. A `<Match when>` reads a derived boolean exactly as a `<Show when>` does.
+- **A ternary between two elements in a row's markup** (`{ group ? <GroupCrest/> : <Avatar/> }`)
+  is one reactive expression, built again by a read of anything inside it. A choice of element is
+  a `<Show>`. Where the branch needs the object it is `<Show when={ thing } let={ it }>`, and a
+  `fallback` beside `let=` is kept as well - measured: in the value form truthiness drives the
+  swap on BOTH sides, so `when={ others.length === 1 ? others[0] : null }` keeps the avatar while
+  there is one other person and the group of avatars while there is not.
+- **A component that tests a prop in a `when`** (`props.person.isMinor`, `props.state !==
+  'locked'`, `props.current`) re-runs it whenever the PARENT's expression for that prop does, and
+  inside a keyed list that is every time the row is handed its item. The child takes a derived
+  boolean of its own: `FriendRow`, `UserCard`, `DeviceRow`, `SeatCard`, `Avatar`, `Pagination`.
+- **Two things rode on those rebuilds and had to be put right with them.** A `Link`'s `to` is read
+  ONCE unless it is a function (`to={ () => ... }`): a click follows the prop, the `href` does not,
+  so a link that is kept now and whose address can change (the other person's handle, at the head
+  of a thread) takes the function form. And the pager's mark for the current page was an
+  array-and-`join` class, bound once, right only because each turn of the page drew the whole
+  pager again; `primitives.spec.ts` turns the page and wants the same buttons, the reader still on
+  Next, and the mark moved.
+- **A loading flag that is true on every re-read takes an empty state away and brings it back.**
+  `chat.threadLoading()` is true only until the open thread has answered once (the answer carries
+  the id it is for), so "No messages yet" stays put through a re-read, in a conversation and beside
+  a table.
+
+`chat-page.spec.ts` and `pages-kept.spec.ts` hold these the way the pass does: remember every
+element under a page, read its lists again for the answer they already gave, and name whatever left.
+
 **A page that loads one thing has four states, and says in each only what it knows.** The profile
 page said "No such person." for three of them: while it was still asking, when it could not ask at
 all, and when there was nobody. A placeholder while it asks; the failure, with a way to try again,
@@ -788,6 +819,19 @@ writes "4 · " in front of that. It compares with the exact string it last wrote
 parse a title to find its own number in it. Stopping it puts the page's title back and lets go of
 the observer. `cues.spec.ts` writes a page title under a running count, changes it, reads
 everything, and stops the store.
+
+**`tools/qa/keep-pass.mjs` is the pass for a page drawn twice.** A branch that is built again
+though nothing changed looks exactly as it did, so no screenshot, no matrix cell and no spec that
+was not written for that one branch can see it; every one of them here was found by hand, by
+marking nodes on one page and watching them leave. The pass does that to every signed-in route. It
+remembers every element on the page, closes the realtime socket from inside the page and lets the
+product reconnect - which rings every scope once, so every store reads itself again and gets the
+answer it already had - and then asks which remembered elements left the document after the socket
+came back and whether a twin now stands where each one stood. A node with a twin was drawn again for
+nothing and is named, largest first. What leaves while the socket is down is the page being right
+about the connection and is not counted. Run it by hand against a server with data on it
+(`QA_BASE=... node tools/qa/keep-pass.mjs`, `--only=` for one route, `--all` to list every node),
+and after any change to a page's outer branches.
 
 **The wallet address has to be readable and copyable, because the whole peer story rests on it.**
 *Whose device is that?* asks a person to compare an address out of band "the way a safety number
