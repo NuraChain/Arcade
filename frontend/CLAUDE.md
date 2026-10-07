@@ -216,7 +216,10 @@ footprint including the safe area - which is also what anything placed above it 
 `--nav-h`, which is only the pill. On a phone the top bar is gone from the five top-level pages;
 a sub-page keeps a slim back-and-title bar, and Home carries the brand, search and the bell.
 Scrollbars are hidden below 768px and on any coarse pointer; the areas still scroll, and `base.css`
-keeps the thin custom bar for a mouse on a wide screen.
+keeps the thin custom bar for a mouse on a wide screen. The same file hides the cross a browser
+draws in a search field of its own accord (`::-webkit-search-cancel-button`): `Input` draws the
+clear control when it is `clearable`, Chromium and Safari drew theirs beside it, and Firefox draws
+none.
 
 **Game art is illustration, not a render.** `frontend/public/art/games/<game>.svg` (a 3:2 scene)
 and `<game>-icon.svg` (the tile) are hand-built vector: sharp at any width and a few kilobytes each.
